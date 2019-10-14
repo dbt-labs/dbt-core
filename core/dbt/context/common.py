@@ -1,7 +1,8 @@
 import agate
 import json
 import os
-from typing import Union, Callable
+from typing import Union, Callable, Type
+from typing_extensions import Protocol
 
 import dbt.clients.agate_helper
 from dbt.contracts.graph.compiled import CompiledSeedNode
@@ -18,7 +19,7 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.clients.jinja import get_rendered
 from dbt.context.base import (
-    debug_here, env_var, get_context_modules, add_tracking
+    debug_here, env_var, get_context_modules, add_tracking, Var
 )
 
 
@@ -80,6 +81,20 @@ class BaseResolver:
     @property
     def Relation(self):
         return self.db_wrapper.Relation
+
+
+class Config(Protocol):
+    def __init__(self, model, source_config):
+        ...
+
+
+class Provider(Protocol):
+    execute: bool
+    Config: Type[Config]
+    DatabaseWrapper: Type[BaseDatabaseWrapper]
+    Var: Type[Var]
+    ref: Type[BaseResolver]
+    source: Type[BaseResolver]
 
 
 def _add_macro_map(context, package_name, macro_map):

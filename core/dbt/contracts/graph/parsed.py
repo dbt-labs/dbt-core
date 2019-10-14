@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field
 from typing import (
     Optional, Union, List, Dict, Any, Type, Tuple, NewType, MutableMapping
 )
@@ -15,7 +15,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     AdditionalPropertiesAllowed
 )
-from dbt.contracts.util import Replaceable
+from dbt.contracts.util import Replaceable, list_str
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
@@ -61,7 +61,7 @@ class NodeConfig(
     vars: Dict[str, Any] = field(default_factory=dict)
     quoting: Dict[str, Any] = field(default_factory=dict)
     column_types: Dict[str, Any] = field(default_factory=dict)
-    tags: Union[List[str], str] = field(default_factory=list)
+    tags: Union[List[str], str] = field(default_factory=list_str)
 
     @classmethod
     def field_mapping(cls):
@@ -257,7 +257,7 @@ class ParsedSeedNode(ParsedNode):
 
 @dataclass
 class TestConfig(NodeConfig):
-    severity: Severity = 'error'
+    severity: Severity = Severity('error')
 
 
 @dataclass
@@ -277,8 +277,8 @@ class ParsedTestNode(ParsedNode):
 
 @dataclass(init=False)
 class _SnapshotConfig(NodeConfig):
-    unique_key: str
-    target_schema: str
+    unique_key: str = field(init=False, metadata=dict(init_required=True))
+    target_schema: str = field(init=False, metadata=dict(init_required=True))
     target_database: Optional[str] = None
 
     def __init__(
@@ -288,15 +288,30 @@ class _SnapshotConfig(NodeConfig):
         target_database: Optional[str] = None,
         **kwargs
     ) -> None:
-        self.target_database = target_database
-        self.target_schema = target_schema
         self.unique_key = unique_key
+        self.target_schema = target_schema
+        self.target_database = target_database
         super().__init__(**kwargs)
+
+    # type hacks...
+    @classmethod
+    def _get_fields(cls) -> List[Tuple[Field, str]]:  # type: ignore
+        fields: List[Tuple[Field, str]] = []
+        for old_field, name in super()._get_fields():
+            new_field = old_field
+            # tell hologram we're really an initvar
+            if old_field.metadata and old_field.metadata.get('init_required'):
+                new_field = field(init=True, metadata=old_field.metadata)
+                new_field.name = old_field.name
+                new_field.type = old_field.type
+                new_field._field_type = old_field._field_type  # type: ignore
+            fields.append((new_field, name))
+        return fields
 
 
 @dataclass(init=False)
 class GenericSnapshotConfig(_SnapshotConfig):
-    strategy: str
+    strategy: str = field(init=False, metadata=dict(init_required=True))
 
     def __init__(self, strategy: str, **kwargs) -> None:
         self.strategy = strategy
@@ -305,10 +320,14 @@ class GenericSnapshotConfig(_SnapshotConfig):
 
 @dataclass(init=False)
 class TimestampSnapshotConfig(_SnapshotConfig):
-    strategy: str = field(metadata={
-        'restrict': [str(SnapshotStrategy.Timestamp)]
-    })
-    updated_at: str
+    strategy: str = field(
+        init=False,
+        metadata=dict(
+            restrict=[str(SnapshotStrategy.Timestamp)],
+            init_required=True,
+        ),
+    )
+    updated_at: str = field(init=False, metadata=dict(init_required=True))
 
     def __init__(
         self, strategy: str, updated_at: str, **kwargs
@@ -320,9 +339,13 @@ class TimestampSnapshotConfig(_SnapshotConfig):
 
 @dataclass(init=False)
 class CheckSnapshotConfig(_SnapshotConfig):
-    strategy: str = field(metadata={
-        'restrict': [str(SnapshotStrategy.Check)]
-    })
+    strategy: str = field(
+        init=False,
+        metadata=dict(
+            restrict=[str(SnapshotStrategy.Check)],
+            init_required=True,
+        ),
+    )
     # TODO: is there a way to get this to accept tuples of strings? Adding
     # `Tuple[str, ...]` to the list of types results in this:
     # ['email'] is valid under each of {'type': 'array', 'items':
@@ -330,7 +353,10 @@ class CheckSnapshotConfig(_SnapshotConfig):
     # but without it, parsing gets upset about values like `('email',)`
     # maybe hologram itself should support this behavior? It's not like tuples
     # are meaningful in json
-    check_cols: Union[All, List[str]]
+    check_cols: Union[All, List[str]] = field(
+        init=False,
+        metadata=dict(init_required=True),
+    )
 
     def __init__(
         self, strategy: str, check_cols: Union[All, List[str]],
@@ -361,7 +387,8 @@ def _create_if_else_chain(
     'if-then-else' chain. This results is much better/more consistent errors
     from jsonschema.
     """
-    result = schema = {}
+    schema: Dict[str, Any] = {}
+    result: Dict[str, Any] = {}
     criteria = criteria[:]
     while criteria:
         if_clause, then_clause = criteria.pop()
@@ -492,7 +519,12 @@ class ParsedSourceDefinition(
         return bool(self.freshness) and self.loaded_at_field is not None
 
 
-PARSED_TYPES = {
+ParsedResource = Union[
+    ParsedMacro, ParsedNode, ParsedDocumentation, ParsedSourceDefinition
+]
+
+
+PARSED_TYPES: Dict[NodeType, Type[ParsedResource]] = {
     NodeType.Analysis: ParsedAnalysisNode,
     NodeType.Documentation: ParsedDocumentation,
     NodeType.Macro: ParsedMacro,

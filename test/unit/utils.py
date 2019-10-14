@@ -59,10 +59,10 @@ def inject_adapter(value):
     """Inject the given adapter into the adapter factory, so your hand-crafted
     artisanal adapter will be available from get_adapter() as if dbt loaded it.
     """
-    from dbt.adapters import factory
+    from dbt.adapters.factory import FACTORY
     key = value.type()
-    factory._ADAPTERS[key] = value
-    factory.ADAPTER_TYPES[key] = type(value)
+    FACTORY.adapters[key] = value
+    FACTORY.adapter_types[key] = type(value)
 
 
 class ContractTestCase(TestCase):

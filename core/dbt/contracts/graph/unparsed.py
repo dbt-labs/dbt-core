@@ -68,11 +68,7 @@ class NamedTested(JsonSchemaMixin, Replaceable):
 
 @dataclass
 class ColumnDescription(JsonSchemaMixin, Replaceable):
-    columns: Optional[List[NamedTested]] = field(default_factory=list)
-
-    def __post_init__(self):
-        if self.columns is None:
-            self.columns = []
+    columns: List[NamedTested] = field(default_factory=list)
 
 
 @dataclass
@@ -84,7 +80,6 @@ class NodeDescription(NamedTested):
 class UnparsedNodeUpdate(ColumnDescription, NodeDescription):
     def __post_init__(self):
         NodeDescription.__post_init__(self)
-        ColumnDescription.__post_init__(self)
 
 
 class TimePeriod(StrEnum):
@@ -205,7 +200,6 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
 
     def __post_init__(self):
         NodeDescription.__post_init__(self)
-        ColumnDescription.__post_init__(self)
 
 
 @dataclass

@@ -17,7 +17,7 @@ from dbt.logger import (
 )
 from dbt.compilation import compile_manifest
 from dbt.contracts.results import ExecutionResult
-from dbt.loader import GraphLoader
+from dbt.perf_utils import get_full_manifest
 
 import dbt.exceptions
 import dbt.flags
@@ -31,23 +31,9 @@ MANIFEST_FILE_NAME = 'manifest.json'
 RUNNING_STATE = DbtProcessState('running')
 
 
-def write_manifest(manifest, config):
+def write_manifest(config, manifest):
     if dbt.flags.WRITE_JSON:
         manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
-
-
-def load_manifest(config):
-    # performance trick: if the adapter has a manifest loaded, use that to
-    # avoid parsing internal macros twice. Also, when loading the adapter's
-    # manifest, load the internal manifest to avoid running the graph laoder
-    # twice.
-    adapter = get_adapter(config)
-
-    internal = adapter.load_internal_manifest()
-    manifest = GraphLoader.load_all(config, internal_manifest=internal)
-
-    write_manifest(manifest, config)
-    return manifest
 
 
 class ManifestTask(ConfiguredTask):
@@ -57,7 +43,8 @@ class ManifestTask(ConfiguredTask):
         self.linker = None
 
     def load_manifest(self):
-        self.manifest = load_manifest(self.config)
+        self.manifest = get_full_manifest(self.config)
+        write_manifest(self.config, self.manifest)
 
     def compile_manifest(self):
         self.linker = compile_manifest(self.config, self.manifest)

@@ -24,7 +24,8 @@ from dbt.contracts.rpc import (
 from dbt.logger import LogMessage
 from dbt.rpc.error import dbt_error, RPCException
 from dbt.rpc.task_handler import TaskHandlerState, RequestTaskHandler
-from dbt.rpc.task import RemoteCallable, RPCTask
+from dbt.rpc.method import RemoteMethod
+
 from dbt.utils import restrict_to
 
 # import this to make sure our timedelta encoder is registered
@@ -329,7 +330,7 @@ class TaskManager:
         self.args = args
         self.config = config
         self.tasks: Dict[uuid.UUID, RequestTaskHandler] = {}
-        self._rpc_task_map: Dict[str, RPCTask] = {}
+        self._rpc_task_map: Dict[str, RemoteMethod] = {}
         self._builtins: Dict[str, UnmanagedHandler] = {}
         self.last_compile = LastCompile(status=ManifestStatus.Init)
         self._lock = multiprocessing.Lock()
@@ -343,7 +344,7 @@ class TaskManager:
     def reserve_handler(self, task):
         self._rpc_task_map[task.METHOD_NAME] = None
 
-    def _assert_unique_task(self, task_type: Type[RPCTask]):
+    def _assert_unique_task(self, task_type: Type[RemoteMethod]):
         method = task_type.METHOD_NAME
         if method not in self._rpc_task_map:
             # this is weird, but hey whatever
@@ -357,7 +358,7 @@ class TaskManager:
             'should be unique'.format(task_type, other_task)
         )
 
-    def add_task_handler(self, task: Type[RPCTask], manifest: Manifest):
+    def add_task_handler(self, task: Type[RemoteMethod], manifest: Manifest):
         if task.METHOD_NAME is None:
             raise dbt.exceptions.InternalException(
                 'Task {} has no method name, cannot add it'.format(task)
@@ -547,7 +548,7 @@ class TaskManager:
 
     def get_handler(
         self, method, http_request, json_rpc_request
-    ) -> Optional[Union[WrappedHandler, RemoteCallable]]:
+    ) -> Optional[Union[WrappedHandler, RemoteMethod]]:
         # get_handler triggers a GC check. TODO: does this go somewhere else?
         self.gc_as_required()
         # the dispatcher's keys are method names and its values are functions

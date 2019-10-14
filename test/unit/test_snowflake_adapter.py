@@ -4,6 +4,7 @@ from unittest import mock
 
 import dbt.flags as flags
 
+import dbt.parser.manifest
 from dbt.adapters.snowflake import SnowflakeAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
@@ -51,7 +52,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.snowflake = self.patcher.start()
 
-        self.load_patch = mock.patch('dbt.loader.make_parse_result')
+        self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 

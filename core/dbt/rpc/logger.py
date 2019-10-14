@@ -16,7 +16,7 @@ from dbt.exceptions import InternalException
 from dbt.utils import restrict_to
 
 
-RemoteCallableResult = Union[
+RPCResult = Union[
     RemoteCompileResult,
     RemoteExecutionResult,
     RemoteCatalogResults,
@@ -73,10 +73,10 @@ class QueueResultMessage(QueueMessage):
     message_type: QueueMessageType = field(
         metadata=restrict_to(QueueMessageType.Result)
     )
-    result: RemoteCallableResult
+    result: RPCResult
 
     @classmethod
-    def from_result(cls, result: RemoteCallableResult):
+    def from_result(cls, result: RPCResult):
         return cls(
             message_type=QueueMessageType.Result,
             result=result,
@@ -101,7 +101,7 @@ class QueueLogHandler(logbook.queues.MultiProcessingHandler):
     def emit_error(self, error: JSONRPCError):
         self.queue.put_nowait(QueueErrorMessage.from_error(error))
 
-    def emit_result(self, result: RemoteCallableResult):
+    def emit_result(self, result: RPCResult):
         self.queue.put_nowait(QueueResultMessage.from_result(result))
 
 

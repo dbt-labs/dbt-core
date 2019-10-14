@@ -1,6 +1,5 @@
 from typing import List, Optional, Type
 
-from dbt.config.project import Project
 from dbt.adapters.base import BaseAdapter, Credentials
 
 
@@ -18,6 +17,9 @@ class AdapterPlugin:
         include_path: str,
         dependencies: Optional[List[str]] = None
     ):
+        # avoid an import cycle
+        from dbt.config.project import Project
+
         self.adapter: Type[BaseAdapter] = adapter
         self.credentials: Type[Credentials] = credentials
         self.include_path: str = include_path

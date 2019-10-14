@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import (
     Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType
 )
+from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import (
@@ -28,10 +29,11 @@ class ConnectionState(StrEnum):
 class Connection(ExtensibleJsonSchemaMixin, Replaceable):
     type: Identifier
     name: Optional[str]
-    _credentials: JsonSchemaMixin = None  # underscore to prevent serialization
     state: ConnectionState = ConnectionState.INIT
     transaction_open: bool = False
-    _handle: Optional[Any] = None  # underscore to prevent serialization
+    # prevent serialization
+    _handle: Optional[Any] = None
+    _credentials: JsonSchemaMixin = field(init=False)
 
     def __init__(
         self,
@@ -44,8 +46,8 @@ class Connection(ExtensibleJsonSchemaMixin, Replaceable):
     ) -> None:
         self.type = type
         self.name = name
-        self.credentials = credentials
         self.state = state
+        self.credentials = credentials
         self.transaction_open = transaction_open
         self.handle = handle
 
@@ -70,8 +72,8 @@ class Connection(ExtensibleJsonSchemaMixin, Replaceable):
 # and https://github.com/python/mypy/issues/5374
 # for why we have type: ignore. Maybe someday dataclasses + abstract classes
 # will work.
-@dataclass
-class Credentials(  # type: ignore
+@dataclass  # type: ignore
+class Credentials(
     ExtensibleJsonSchemaMixin,
     Replaceable,
     metaclass=abc.ABCMeta
@@ -116,3 +118,7 @@ class Credentials(  # type: ignore
                 if canonical_name in serialized
             })
         return serialized
+
+
+class HasCredentials(Protocol):
+    credentials: Credentials

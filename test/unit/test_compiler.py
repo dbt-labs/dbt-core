@@ -74,7 +74,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[InjectedCTE(id='model.root.ephemeral')],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
                     compiled_sql=(
                         'with cte as (select * from something_else) '
@@ -240,7 +240,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[InjectedCTE(id='model.root.ephemeral')],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
                     compiled_sql='select * from __dbt__CTE__ephemeral'
                 ),
@@ -318,7 +318,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[InjectedCTE(id='model.root.ephemeral')],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
                     compiled_sql='select * from __dbt__CTE__ephemeral'
                 ),
@@ -342,7 +342,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral_level_two")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[InjectedCTE(id='model.root.ephemeral_level_two')],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral_level_two', sql='select * from source_table')],
                     injected_sql='',
                     compiled_sql='select * from __dbt__CTE__ephemeral_level_two' # noqa
                 ),

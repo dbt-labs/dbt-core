@@ -1,3 +1,7 @@
+# import these so we can find them
+from . import sql_commands  # noqa
+from . import project_commands  # noqa
+from .base import RPCTask
 import json
 import os
 import signal
@@ -16,11 +20,11 @@ from dbt.logger import (
     log_manager,
 )
 from dbt.task.base import ConfiguredTask
-from dbt.task.compile import CompileTask
-from dbt.task.remote import RPCTask
 from dbt.utils import ForgivingJSONEncoder, env_set_truthy
-from dbt import rpc
+from dbt.rpc.response_manager import ResponseManager
+from dbt.rpc.task_manager import TaskManager
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
+from dbt.perf_utils import get_full_manifest
 
 
 SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
@@ -34,11 +38,8 @@ SIG_IGN = signal.SIG_IGN
 def reload_manager(task_manager, tasks):
     logs = []
     try:
-        compile_task = CompileTask(task_manager.args, task_manager.config)
         with list_handler(logs):
-            compile_task.run()
-        manifest = compile_task.manifest
-        manifest.build_flat_graph()
+            manifest = get_full_manifest(task_manager.config)
 
         for cls in tasks:
             task_manager.add_task_handler(cls, manifest)
@@ -99,7 +100,7 @@ class RPCServerTask(ConfiguredTask):
             )
         super().__init__(args, config)
         self._tasks = tasks or self._default_tasks()
-        self.task_manager = rpc.TaskManager(self.args, self.config)
+        self.task_manager = TaskManager(self.args, self.config)
         self._reloader = None
         self._reload_task_manager()
         signal.signal(signal.SIGHUP, self._sighup_handler)
@@ -189,7 +190,7 @@ class RPCServerTask(ConfiguredTask):
     @Request.application
     def handle_jsonrpc_request(self, request):
         with HTTPRequest(request):
-            jsonrpc_response = rpc.ResponseManager.handle(
+            jsonrpc_response = ResponseManager.handle(
                 request, self.task_manager
             )
             json_data = json.dumps(

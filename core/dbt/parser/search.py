@@ -32,6 +32,7 @@ class FileBlock:
 
 @dataclass
 class BlockContents(FileBlock):
+    file: SourceFile  # if you remove this, mypy will get upset
     block: BlockTag
 
     @property
@@ -45,6 +46,7 @@ class BlockContents(FileBlock):
 
 @dataclass
 class FullBlock(FileBlock):
+    file: SourceFile  # if you remove this, mypy will get upset
     block: BlockTag
 
     @property

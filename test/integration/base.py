@@ -6,7 +6,6 @@ import tempfile
 import time
 import traceback
 import unittest
-import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
@@ -17,7 +16,7 @@ from unittest.mock import patch
 
 import dbt.main as dbt
 import dbt.flags as flags
-from dbt.adapters.factory import get_adapter, reset_adapters
+from dbt.adapters.factory import get_adapter, reset_adapters, register_adapter
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
 from dbt.context import common
@@ -396,6 +395,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         config = RuntimeConfig.from_args(TestArgs(kwargs))
 
+        register_adapter(config)
         adapter = get_adapter(config)
         adapter.cleanup_connections()
         self.adapter_type = adapter.type()
@@ -412,6 +412,7 @@ class DBTIntegrationTest(unittest.TestCase):
         # get any current run adapter and clean up its connections before we
         # reset them. It'll probably be different from ours because
         # handle_and_check() calls reset_adapters().
+        register_adapter(self.config)
         adapter = get_adapter(self.config)
         if adapter is not self.adapter:
             adapter.cleanup_connections()

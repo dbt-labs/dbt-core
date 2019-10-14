@@ -179,7 +179,6 @@ def _coerce_decimal(value):
 
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
-        # manifest = dbt.loader.GraphLoader.load_all(self.config)
         return self.manifest
 
     def run(self):
@@ -215,7 +214,7 @@ class GenerateTask(CompileTask):
 
         path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         results.write(path)
-        write_manifest(self.manifest, self.config)
+        write_manifest(self.config, self.manifest)
 
         dbt.ui.printer.print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))

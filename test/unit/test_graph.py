@@ -4,17 +4,17 @@ from unittest.mock import MagicMock, patch
 
 import dbt.clients.system
 import dbt.compilation
+import dbt.context.parser
 import dbt.exceptions
 import dbt.flags
 import dbt.linker
 import dbt.parser
 import dbt.config
 import dbt.utils
-import dbt.loader
+import dbt.parser.manifest
 from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
-from dbt.parser.search import FileBlock
 
 try:
     from queue import Empty
@@ -33,6 +33,7 @@ class GraphTest(unittest.TestCase):
         self.load_projects_patcher.stop()
         self.file_system_patcher.stop()
         self.get_adapter_patcher.stop()
+        self.get_adapter_patcher_cmn.stop()
         self.mock_filesystem_constructor.stop()
         self.mock_hook_constructor.stop()
         self.load_patch.stop()
@@ -43,7 +44,7 @@ class GraphTest(unittest.TestCase):
         self.graph_result = None
 
         self.write_gpickle_patcher = patch('networkx.write_gpickle')
-        self.load_projects_patcher = patch('dbt.loader._load_projects')
+        self.load_projects_patcher = patch('dbt.parser.manifest._load_projects')
         self.file_system_patcher = patch.object(
             dbt.parser.search.FilesystemSearcher, '__new__'
         )
@@ -52,6 +53,10 @@ class GraphTest(unittest.TestCase):
         )
         self.get_adapter_patcher = patch('dbt.context.parser.get_adapter')
         self.factory = self.get_adapter_patcher.start()
+        # also patch this one
+
+        self.get_adapter_patcher_cmn = patch('dbt.context.common.get_adapter')
+        self.factory_cmn = self.get_adapter_patcher_cmn.start()
 
         def mock_write_gpickle(graph, outfile):
             self.graph_result = graph
@@ -81,7 +86,7 @@ class GraphTest(unittest.TestCase):
 
         self.mock_models = []
 
-        self.load_patch = patch('dbt.loader.make_parse_result')
+        self.load_patch = patch('dbt.parser.manifest.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 
@@ -140,7 +145,7 @@ class GraphTest(unittest.TestCase):
             self.mock_models.append(source_file)
 
     def load_manifest(self, config):
-        loader = dbt.loader.GraphLoader(config, {config.project_name: config})
+        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.load()
         return loader.create_manifest()
 
@@ -275,6 +280,7 @@ class GraphTest(unittest.TestCase):
             n: MagicMock(unique_id=n)
             for n in model_ids
         })
+        manifest.expect.side_effect = lambda n: MagicMock(unique_id=n)
         queue = linker.as_graph_queue(manifest)
 
         for model_id in model_ids:

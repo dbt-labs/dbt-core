@@ -276,11 +276,95 @@ class HasRPCServer(DBTIntegrationTest):
             self.assertEqual(result['table'], table)
         self.assertResultHasTimings(result, 'compile', 'execute')
 
+    def assertHasErrorData(self, error, expected_error_data):
+        self.assertIn('data', error)
+        error_data = error['data']
+        for key, value in expected_error_data.items():
+            self.assertIn(key, error_data)
+            self.assertEqual(error_data[key], value)
+        return error_data
+
+    def assertRunning(self, sleepers):
+        sleeper_ps_result = self.query('ps', completed=False, active=True).json()
+        result = self.assertIsResult(sleeper_ps_result)
+        self.assertEqual(len(result['rows']), len(sleepers))
+        result_map = {rd['request_id']: rd for rd in result['rows']}
+        for _, request_id in sleepers:
+            found = result_map[request_id]
+            self.assertEqual(found['request_id'], request_id)
+            self.assertEqual(found['method'], 'run_sql')
+            self.assertEqual(found['state'], 'running')
+            self.assertEqual(found['timeout'], None)
+
+    def kill_and_assert(self, request_token, request_id):
+        kill_response = self.query('kill', task_id=request_token).json()
+        result = self.assertIsResult(kill_response)
+        self.assertEqual(result['status'], 'killed')
+
+        poll_id = 90891
+
+        poll_response = self.poll_for_result(request_token, poll_id).json()
+        error = self.assertIsErrorWithCode(poll_response, 10009, poll_id)
+        self.assertEqual(error['message'], 'RPC process killed')
+        self.assertIn('data', error)
+        error_data = error['data']
+        self.assertEqual(error_data['signum'], 2)
+        self.assertEqual(error_data['message'], 'RPC process killed by signal 2')
+        self.assertIn('logs', error_data)
+        return error_data
+
+    def get_sleep_query(self, duration=15, request_id=90890):
+        sleep_query = self.query(
+            'run_sql',
+            'select * from pg_sleep({})'.format(duration),
+            name='sleeper',
+            _test_request_id=request_id
+        ).json()
+        result = self.assertIsResult(sleep_query, id_=request_id)
+        self.assertIn('request_token', result)
+        request_token = result['request_token']
+        return request_token, request_id
+
+    def wait_for_running(self, timeout=25, raise_on_timeout=True):
+        started = time.time()
+        time.sleep(0.5)
+        elapsed = time.time() - started
+
+        while elapsed < timeout:
+            status = self.assertIsResult(self.query('status').json())
+            if status['status'] == 'running':
+                return status
+            time.sleep(0.5)
+            elapsed = time.time() - started
+
+        status = self.assertIsResult(self.query('status').json())
+        if raise_on_timeout:
+            self.assertEqual(
+                status['status'],
+                'ready',
+                f'exceeded max time of {timeout}: {elapsed} seconds elapsed'
+            )
+        return status
+
+    def run_command_with_id(self, cmd, id_):
+        self.assertIsResult(self.async_query(cmd, _test_request_id=id_).json(), id_)
+
+    def make_many_requests(self, num_requests):
+        stored = []
+        for idx in range(num_requests):
+            response = self.query('run_sql', 'select 1 as id', name='run').json()
+            result = self.assertIsResult(response)
+            self.assertIn('request_token', result)
+            token = result['request_token']
+            self.poll_for_result(token)
+            stored.append(token)
+        return stored
+
 
 @mark.flaky(rerun_filter=addr_in_use)
-class TestRPCServer(HasRPCServer):
+class TestRPCServerCompileRun(HasRPCServer):
     @use_profile('postgres')
-    def test_compile_postgres(self):
+    def test_compile_sql_postgres(self):
         trivial = self.async_query(
             'compile_sql',
             'select 1 as id',
@@ -364,7 +448,7 @@ class TestRPCServer(HasRPCServer):
         )
 
     @use_profile('postgres')
-    def test_run_postgres(self):
+    def test_run_sql_postgres(self):
         # seed + run dbt to make models before using them!
         self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
@@ -486,18 +570,6 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
-    def _get_sleep_query(self, duration=15, request_id=90890):
-        sleep_query = self.query(
-            'run_sql',
-            'select * from pg_sleep({})'.format(duration),
-            name='sleeper',
-            _test_request_id=request_id
-        ).json()
-        result = self.assertIsResult(sleep_query, id_=request_id)
-        self.assertIn('request_token', result)
-        request_token = result['request_token']
-        return request_token, request_id
-
     @mark.flaky(rerun_filter=None)
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
@@ -512,7 +584,7 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('tags', done_result)
         self.assertEqual(done_result['tags'], task_tags)
 
-        request_token, request_id = self._get_sleep_query()
+        request_token, request_id = self.get_sleep_query()
 
         empty_ps_result = self.query('ps', completed=False, active=False).json()
         result = self.assertIsResult(empty_ps_result)
@@ -585,27 +657,10 @@ class TestRPCServer(HasRPCServer):
         self.assertGreater(rowdict[1]['elapsed'], 0)
         self.assertIsNone(rowdict[1]['tags'])
 
-    def kill_and_assert(self, request_token, request_id):
-        kill_response = self.query('kill', task_id=request_token).json()
-        result = self.assertIsResult(kill_response)
-        self.assertEqual(result['status'], 'killed')
-
-        poll_id = 90891
-
-        poll_response = self.poll_for_result(request_token, poll_id).json()
-        error = self.assertIsErrorWithCode(poll_response, 10009, poll_id)
-        self.assertEqual(error['message'], 'RPC process killed')
-        self.assertIn('data', error)
-        error_data = error['data']
-        self.assertEqual(error_data['signum'], 2)
-        self.assertEqual(error_data['message'], 'RPC process killed by signal 2')
-        self.assertIn('logs', error_data)
-        return error_data
-
     @mark.flaky(rerun_filter=lambda *a, **kw: True)
     @use_profile('postgres')
     def test_ps_kill_longwait_postgres(self):
-        request_token, request_id = self._get_sleep_query()
+        request_token, request_id = self.get_sleep_query()
 
         # the test above frequently kills the process during parsing of the
         # requested node. That's also a useful test, but we should test that
@@ -667,14 +722,6 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
-    def assertHasErrorData(self, error, expected_error_data):
-        self.assertIn('data', error)
-        error_data = error['data']
-        for key, value in expected_error_data.items():
-            self.assertIn(key, error_data)
-            self.assertEqual(error_data[key], value)
-        return error_data
-
     @use_profile('postgres')
     def test_timeout_postgres(self):
         data = self.async_query(
@@ -694,144 +741,201 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
+
+@mark.flaky(rerun_filter=addr_in_use)
+class TestRPCServerProjects(HasRPCServer):
+    def assertHasResults(self, result, expected, *, missing=None, num_expected=None):
+        dct = self.assertIsResult(result)
+        self.assertIn('results', dct)
+        results = dct['results']
+
+        if num_expected is None:
+            num_expected = len(expected)
+        actual = {r['node']['name'] for r in results}
+        self.assertEqual(len(actual), num_expected)
+        self.assertTrue(expected.issubset(actual))
+        if missing:
+            for item in missing:
+                self.assertNotIn(item, actual)
+
+    def correct_seed_result(self, result):
+        self.assertTablesEqual('source', 'seed_expected')
+        self.assertHasResults(
+            result,
+            {'expected_multi_source', 'other_source_table', 'other_table', 'source'}
+        )
+
+    def assertHasTestResults(self, results, expected, pass_results=None):
+        self.assertEqual(len(results), expected)
+
+        if pass_results is None:
+            pass_results = expected
+
+        passes = 0
+        for result in results:
+            # TODO: should this be included even when it's 'none'? Should
+            # results have all these crazy keys? (no)
+            self.assertIn('fail', result)
+            if result['status'] == 0.0:
+                self.assertIsNone(result['fail'])
+                passes += 1
+            else:
+                self.assertTrue(result['fail'])
+        self.assertEqual(passes, pass_results)
+
     @use_profile('postgres')
     def test_seed_project_postgres(self):
         # testing "dbt seed" is tricky so we'll just jam some sql in there
         self.run_sql_file("seed.sql")
+
         result = self.async_query('seed', show=True).json()
-        dct = self.assertIsResult(result)
-        self.assertTablesEqual('source', 'seed_expected')
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 4)
-        self.assertEqual(
-            set(r['node']['name'] for r in results),
-            {'expected_multi_source', 'other_source_table', 'other_table', 'source'}
-        )
+        self.correct_seed_result(result)
+
+        result = self.async_query('seed', show=False).json()
+        self.correct_seed_result(result)
 
     @use_profile('postgres')
     def test_seed_project_cli_postgres(self):
         self.run_sql_file("seed.sql")
+
         result = self.async_query('cli_args', cli='seed --show').json()
-        dct = self.assertIsResult(result)
-        self.assertTablesEqual('source', 'seed_expected')
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 4)
-        self.assertEqual(
-            set(r['node']['name'] for r in results),
-            {'expected_multi_source', 'other_source_table', 'other_table', 'source'}
-        )
+        self.correct_seed_result(result)
+        result = self.async_query('cli_args', cli='seed').json()
+        self.correct_seed_result(result)
 
     @use_profile('postgres')
     def test_compile_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
+
         result = self.async_query('compile').json()
-        dct = self.assertIsResult(result)
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 11)
-        compiled = set(r['node']['name'] for r in results)
-        self.assertTrue(compiled.issuperset(
-            {'descendant_model', 'multi_source_model', 'nonsource_descendant'}
-        ))
-        self.assertNotIn('ephemeral_model', compiled)
+        self.assertHasResults(
+            result,
+            {'descendant_model', 'multi_source_model', 'nonsource_descendant'},
+            missing=['ephemeral_model'],
+            num_expected=11,
+        )
+
+        result = self.async_query('compile', models=['source:test_source+']).json()
+        self.assertHasResults(
+            result,
+            {'descendant_model', 'multi_source_model'},
+            missing=['ephemeral_model', 'nonsource_descendant'],
+            num_expected=6,
+        )
 
     @use_profile('postgres')
     def test_compile_project_cli_postgres(self):
         self.run_dbt_with_vars(['seed'])
+        result = self.async_query('cli_args', cli='compile').json()
+        self.assertHasResults(
+            result,
+            {'descendant_model', 'multi_source_model', 'nonsource_descendant'},
+            missing=['ephemeral_model'],
+            num_expected=11,
+        )
+
         result = self.async_query('cli_args', cli='compile --models=source:test_source+').json()
-        dct = self.assertIsResult(result)
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 6)
-        compiled = set(r['node']['name'] for r in results)
-        self.assertTrue(compiled.issuperset(
-            {'descendant_model', 'multi_source_model'}
-        ))
-        self.assertNotIn('ephemeral_model', compiled)
-        self.assertNotIn('nonsource_descendant', compiled)
+        self.assertHasResults(
+            result,
+            {'descendant_model', 'multi_source_model'},
+            missing=['ephemeral_model', 'nonsource_descendant'],
+            num_expected=6,
+        )
 
     @use_profile('postgres')
     def test_run_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
         result = self.async_query('run').json()
-        dct = self.assertIsResult(result)
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 3)
-        self.assertEqual(
-            set(r['node']['name'] for r in results),
-            {'descendant_model', 'multi_source_model', 'nonsource_descendant'}
-        )
+        self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
     @use_profile('postgres')
     def test_run_project_cli_postgres(self):
         self.run_dbt_with_vars(['seed'])
         result = self.async_query('cli_args', cli='run').json()
-        dct = self.assertIsResult(result)
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 3)
-        self.assertEqual(
-            set(r['node']['name'] for r in results),
-            {'descendant_model', 'multi_source_model', 'nonsource_descendant'}
-        )
+        self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
     @use_profile('postgres')
     def test_test_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
-        result = self.async_query('run').json()
+        self.run_dbt_with_vars(['run'])
+        data = self.async_query('test').json()
+        result = self.assertIsResult(data)
+        self.assertIn('results', result)
+        self.assertHasTestResults(result['results'], 4)
+
+    @use_profile('postgres')
+    def test_test_project_cli_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        data = self.async_query('cli_args', cli='test').json()
+        result = self.assertIsResult(data)
+        self.assertIn('results', result)
+        self.assertHasTestResults(result['results'], 4)
+
+    def assertManifestExists(self, length):
+        self.assertTrue(os.path.exists('target/manifest.json'))
+        with open('target/manifest.json') as fp:
+            manifest = json.load(fp)
+        self.assertIn('nodes', manifest)
+        self.assertEqual(len(manifest['nodes']), length)
+
+    def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
-        result = self.async_query('test').json()
-        dct = self.assertIsResult(result)
-        self.assertIn('results', dct)
-        results = dct['results']
-        self.assertEqual(len(results), 4)
-        for result in results:
-            self.assertEqual(result['status'], 0.0)
-            # TODO: should this be included even when it's 'none'? Should
-            # results have all these crazy keys? (no)
-            self.assertIn('fail', result)
-            self.assertIsNone(result['fail'])
+        self.assertIn('status', dct)
+        self.assertTrue(dct['status'])
+        self.assertIn('nodes', dct)
+        nodes = dct['nodes']
+        self.assertEqual(set(nodes), expected)
 
-    def _wait_for_running(self, timeout=25, raise_on_timeout=True):
-        started = time.time()
-        time.sleep(0.5)
-        elapsed = time.time() - started
 
-        while elapsed < timeout:
-            status = self.assertIsResult(self.query('status').json())
-            if status['status'] == 'running':
-                return status
-            time.sleep(0.5)
-            elapsed = time.time() - started
+    def assertCatalogExists(self):
+        self.assertTrue(os.path.exists('target/catalog.json'))
+        with open('target/catalog.json') as fp:
+            catalog = json.load(fp)
 
-        status = self.assertIsResult(self.query('status').json())
-        if raise_on_timeout:
-            self.assertEqual(
-                status['status'],
-                'ready',
-                f'exceeded max time of {timeout}: {elapsed} seconds elapsed'
-            )
-        return status
+    def _correct_docs_generate_result(self, result):
+        expected = {
+            'model.test.descendant_model',
+            'model.test.multi_source_model',
+            'model.test.nonsource_descendant',
+            'seed.test.expected_multi_source',
+            'seed.test.other_source_table',
+            'seed.test.other_table',
+            'seed.test.source',
+            'source.test.other_source.test_table',
+            'source.test.test_source.other_test_table',
+            'source.test.test_source.test_table',
+        }
+        self.assertHasDocsGenerated(result, expected)
+        self.assertCatalogExists()
+        self.assertManifestExists(17)
 
-    def assertRunning(self, sleepers):
-        sleeper_ps_result = self.query('ps', completed=False, active=True).json()
-        result = self.assertIsResult(sleeper_ps_result)
-        self.assertEqual(len(result['rows']), len(sleepers))
-        result_map = {rd['request_id']: rd for rd in result['rows']}
-        for _, request_id in sleepers:
-            found = result_map[request_id]
-            self.assertEqual(found['request_id'], request_id)
-            self.assertEqual(found['method'], 'run_sql')
-            self.assertEqual(found['state'], 'running')
-            self.assertEqual(found['timeout'], None)
 
-    def _add_command(self, cmd, id_):
-        self.assertIsResult(self.async_query(cmd, _test_request_id=id_).json(), id_)
+    @use_profile('postgres')
+    def test_docs_generate_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        self.assertFalse(os.path.exists('target/catalog.json'))
+        if os.path.exists('target/manifest.json'):
+            os.remove('target/manifest.json')
+        result = self.async_query('cli_args', cli='docs generate').json()
+        self._correct_docs_generate_result(result)
+
+    @use_profile('postgres')
+    def test_docs_generate_postgres_cli(self):
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        self.assertFalse(os.path.exists('target/catalog.json'))
+        if os.path.exists('target/manifest.json'):
+            os.remove('target/manifest.json')
+        result = self.async_query('cli_args', cli='docs generate').json()
+        self._correct_docs_generate_result(result)
+
+
+@mark.flaky(rerun_filter=addr_in_use)
+class TestRPCTaskManagement(HasRPCServer):
 
     @mark.flaky(rerun_filter=lambda *a, **kw: True)
     @use_profile('postgres')
@@ -849,32 +953,27 @@ class TestRPCServer(HasRPCServer):
         done_query = self.async_query('compile_sql', 'select 1 as id', name='done').json()
         self.assertIsResult(done_query)
         sleepers = []
-        command_ids = []
 
-        sleepers.append(self._get_sleep_query(duration=60, request_id=1000))
+        sleepers.append(self.get_sleep_query(duration=60, request_id=1000))
         self.assertRunning(sleepers)
 
-        self._add_command('seed', 20)
-        command_ids.append(20)
-        self._add_command('run', 21)
-        command_ids.append(21)
+        self.run_command_with_id('seed', 20)
+        self.run_command_with_id('run', 21)
 
         # sighup a few times
         for _ in range(10):
             os.kill(status['pid'], signal.SIGHUP)
 
-        status = self._wait_for_running()
+        status = self.wait_for_running()
 
         # we should still still see our service:
         self.assertRunning(sleepers)
 
-        self._add_command('seed', 30)
-        command_ids.append(30)
-        self._add_command('run', 31)
-        command_ids.append(31)
+        self.run_command_with_id('seed', 30)
+        self.run_command_with_id('run', 31)
 
         # start a new one too
-        sleepers.append(self._get_sleep_query(duration=60, request_id=1001))
+        sleepers.append(self.get_sleep_query(duration=60, request_id=1001))
 
         # now we should see both
         self.assertRunning(sleepers)
@@ -885,22 +984,11 @@ class TestRPCServer(HasRPCServer):
         self.assertRunning([alive])
         self.kill_and_assert(*alive)
 
-    def _make_any_requests(self, num_requests):
-        stored = []
-        for idx in range(num_requests):
-            response = self.query('run_sql', 'select 1 as id', name='run').json()
-            result = self.assertIsResult(response)
-            self.assertIn('request_token', result)
-            token = result['request_token']
-            self.poll_for_result(token)
-            stored.append(token)
-        return stored
-
     @use_profile('postgres')
     def test_gc_by_time_postgres(self):
         # make a few normal requests
         num_requests = 10
-        self._make_any_requests(num_requests)
+        self.make_many_requests(num_requests)
 
         resp = self.query('ps', completed=True, active=True).json()
         result = self.assertIsResult(resp)
@@ -920,7 +1008,7 @@ class TestRPCServer(HasRPCServer):
     def test_gc_by_id_postgres(self):
         # make 10 requests, then gc half of them
         num_requests = 10
-        stored = self._make_any_requests(num_requests)
+        stored = self.make_many_requests(num_requests)
 
         resp = self.query('ps', completed=True, active=True).json()
         result = self.assertIsResult(resp)
@@ -951,7 +1039,7 @@ class TestRPCServer(HasRPCServer):
     @use_profile('postgres')
     def test_postgres_gc_change_interval(self):
         num_requests = 10
-        self._make_any_requests(num_requests)
+        self.make_many_requests(num_requests)
 
         # all present
         resp = self.query('ps', completed=True, active=True).json()
@@ -978,82 +1066,12 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(len(result['running']), 0)
 
         # make more requests
-        self._make_any_requests(num_requests)
+        self.make_many_requests(num_requests)
         time.sleep(0.5)
         # there should be 2 left!
         resp = self.query('ps', completed=True, active=True).json()
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['rows']), 2)
-
-    @use_profile('postgres')
-    def test_docs_generate_postgres(self):
-        self.run_dbt_with_vars(['seed'])
-        self.run_dbt_with_vars(['run'])
-        self.assertFalse(os.path.exists('target/catalog.json'))
-        if os.path.exists('target/manifest.json'):
-            os.remove('target/manifest.json')
-        result = self.async_query('docs.generate').json()
-        dct = self.assertIsResult(result)
-        self.assertTrue(os.path.exists('target/catalog.json'))
-        self.assertIn('status', dct)
-        self.assertTrue(dct['status'])
-        self.assertIn('nodes', dct)
-        nodes = dct['nodes']
-        self.assertEqual(len(nodes), 10)
-        expected = {
-            'model.test.descendant_model',
-            'model.test.multi_source_model',
-            'model.test.nonsource_descendant',
-            'seed.test.expected_multi_source',
-            'seed.test.other_source_table',
-            'seed.test.other_table',
-            'seed.test.source',
-            'source.test.other_source.test_table',
-            'source.test.test_source.other_test_table',
-            'source.test.test_source.test_table',
-        }
-        for uid in expected:
-            self.assertIn(uid, nodes)
-        self.assertTrue(os.path.exists('target/manifest.json'))
-        with open('target/manifest.json') as fp:
-            manifest = json.load(fp)
-        self.assertIn('nodes', manifest)
-        self.assertEqual(len(manifest['nodes']), 17)
-
-    @use_profile('postgres')
-    def test_docs_generate_postgres(self):
-        self.run_dbt_with_vars(['seed'])
-        self.run_dbt_with_vars(['run'])
-        self.assertFalse(os.path.exists('target/catalog.json'))
-        if os.path.exists('target/manifest.json'):
-            os.remove('target/manifest.json')
-        result = self.async_query('cli_args', cli='docs generate').json()
-        dct = self.assertIsResult(result)
-        self.assertTrue(os.path.exists('target/catalog.json'))
-        self.assertIn('status', dct)
-        self.assertTrue(dct['status'])
-        self.assertIn('nodes', dct)
-        nodes = dct['nodes']
-        self.assertEqual(len(nodes), 10)
-        expected = {
-            'model.test.descendant_model',
-            'model.test.multi_source_model',
-            'model.test.nonsource_descendant',
-            'seed.test.expected_multi_source',
-            'seed.test.other_source_table',
-            'seed.test.other_table',
-            'seed.test.source',
-            'source.test.other_source.test_table',
-            'source.test.test_source.other_test_table',
-            'source.test.test_source.test_table',
-        }
-        for uid in expected:
-            self.assertIn(uid, nodes)
-        self.assertTrue(os.path.exists('target/manifest.json'))
-        with open('target/manifest.json') as fp:
-            manifest = json.load(fp)
-        self.assertIn('nodes', manifest)
-        self.assertEqual(len(manifest['nodes']), 17)
 
 
 class FailedServerProcess(ServerProcess):
@@ -1069,6 +1087,12 @@ class TestRPCServerFailed(HasRPCServer):
     @property
     def models(self):
         return "malformed_models"
+
+    def tearDown(self):
+        # prevent an OperationalError where the server closes on us in the
+        # background
+        self.adapter.cleanup_connections()
+        super().tearDown()
 
     @use_profile('postgres')
     def test_postgres_status_error(self):
@@ -1092,9 +1116,3 @@ class TestRPCServerFailed(HasRPCServer):
             None)
         self.assertIn('message', data)
         self.assertIn('Invalid test config', str(data['message']))
-
-    def tearDown(self):
-        # prevent an OperationalError where the server closes on us in the
-        # background
-        self.adapter.cleanup_connections()
-        super().tearDown()

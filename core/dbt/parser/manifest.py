@@ -15,18 +15,18 @@ from dbt.config import Project, RuntimeConfig
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash
 from dbt.parser.base import BaseParser
-from dbt.parser import AnalysisParser
-from dbt.parser import DataTestParser
-from dbt.parser import DocumentationParser
-from dbt.parser import HookParser
-from dbt.parser import MacroParser
-from dbt.parser import ModelParser
-from dbt.parser import ParseResult
-from dbt.parser import SchemaParser
-from dbt.parser import SeedParser
-from dbt.parser import SnapshotParser
-from dbt.parser import ParserUtils
+from dbt.parser.analysis import AnalysisParser
+from dbt.parser.data_test import DataTestParser
+from dbt.parser.docs import DocumentationParser
+from dbt.parser.hooks import HookParser
+from dbt.parser.macros import MacroParser
+from dbt.parser.models import ModelParser
+from dbt.parser.results import ParseResult
+from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
+from dbt.parser.seeds import SeedParser
+from dbt.parser.snapshots import SnapshotParser
+from dbt.parser.util import ParserUtils
 from dbt.version import __version__
 
 
@@ -82,7 +82,7 @@ def make_parse_result(
     )
 
 
-class GraphLoader:
+class ManifestLoader:
     def __init__(
         self, root_project: RuntimeConfig, all_projects: Mapping[str, Project]
     ) -> None:
@@ -263,7 +263,7 @@ class GraphLoader:
             macros=self.results.macros,
             docs=self.results.docs,
             generated_at=datetime.utcnow(),
-            config=self.root_project,
+            metadata=self.root_project.get_metadata(),
             disabled=disabled,
             files=self.results.files,
         )
@@ -292,6 +292,7 @@ class GraphLoader:
             loader.write_parse_results()
             manifest = loader.create_manifest()
             _check_manifest(manifest, root_config)
+            manifest.build_flat_graph()
             return manifest
 
     @classmethod
@@ -388,3 +389,13 @@ def load_all_projects(config) -> Mapping[str, Project]:
 
 def load_internal_projects(config):
     return dict(_load_projects(config, internal_project_names()))
+
+
+def load_internal_manifest(config: RuntimeConfig) -> Manifest:
+    return ManifestLoader.load_internal(config)
+
+
+def load_manifest(
+    config: RuntimeConfig, internal_manifest: Optional[Manifest]
+) -> Manifest:
+    return ManifestLoader.load_all(config, internal_manifest)

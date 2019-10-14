@@ -3,10 +3,10 @@ from unittest import mock
 
 from .utils import config_from_parts_or_dicts, normalize
 
-from dbt import loader
 from dbt.contracts.graph.manifest import FileHash, FilePath, SourceFile
 from dbt.parser import ParseResult
 from dbt.parser.search import FileBlock
+from dbt.parser import manifest
 
 
 class MatchingHash(FileHash):
@@ -56,10 +56,10 @@ class TestLoader(unittest.TestCase):
             cli_vars='{"test_schema_name": "foo"}'
         )
         self.parser = mock.MagicMock()
-        self.patched_result_builder = mock.patch('dbt.loader.make_parse_result')
+        self.patched_result_builder = mock.patch('dbt.parser.manifest.make_parse_result')
         self.mock_result_builder = self.patched_result_builder.start()
         self.patched_result_builder.return_value = self._new_results()
-        self.loader = loader.GraphLoader(
+        self.loader = manifest.ManifestLoader(
             self.root_project_config,
             {'root': self.root_project_config}
         )

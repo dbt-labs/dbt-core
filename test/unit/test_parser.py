@@ -88,10 +88,13 @@ class BaseParserTest(unittest.TestCase):
         }
         self.patcher = mock.patch('dbt.context.parser.get_adapter')
         self.factory = self.patcher.start()
+        self.patcher_cmn = mock.patch('dbt.context.common.get_adapter')
+        self.factory_cmn = self.patcher_cmn.start()
 
         self.macro_manifest = Manifest.from_macros()
 
     def tearDown(self):
+        self.patcher_cmn.stop()
         self.patcher.stop()
 
     def file_block_for(self, data: str, filename: str, searched: str):

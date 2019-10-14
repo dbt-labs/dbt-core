@@ -259,7 +259,7 @@ class ParserUtils:
         insert the new node into it as if it were part of regular ref
         processing
         """
-        manifest = manifest.deepcopy(config=current_project)
+        manifest = manifest.deepcopy()
         # it's ok for macros to silently override a local project macro name
         manifest.macros.update(macros)
 
