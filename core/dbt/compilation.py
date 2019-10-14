@@ -13,7 +13,6 @@ import dbt.context.runtime
 import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
-import dbt.loader
 import dbt.config
 from dbt.contracts.graph.compiled import InjectedCTE, COMPILED_TYPES
 from dbt.contracts.graph.parsed import ParsedNode

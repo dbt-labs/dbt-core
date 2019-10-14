@@ -82,7 +82,7 @@ def make_parse_result(
     )
 
 
-class GraphLoader:
+class ManifestLoader:
     def __init__(
         self, root_project: RuntimeConfig, all_projects: Mapping[str, Project]
     ) -> None:
@@ -292,6 +292,7 @@ class GraphLoader:
             loader.write_parse_results()
             manifest = loader.create_manifest()
             _check_manifest(manifest, root_config)
+            manifest.build_flat_graph()
             return manifest
 
     @classmethod
@@ -388,3 +389,13 @@ def load_all_projects(config) -> Mapping[str, Project]:
 
 def load_internal_projects(config):
     return dict(_load_projects(config, internal_project_names()))
+
+
+def load_internal_manifest(config: RuntimeConfig) -> Manifest:
+    return ManifestLoader.load_internal(config)
+
+
+def load_manifest(
+    config: RuntimeConfig, internal_manifest: Optional[Manifest]
+) -> Manifest:
+    return ManifestLoader.load_all(config, internal_manifest)

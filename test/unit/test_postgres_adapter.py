@@ -2,6 +2,7 @@ import unittest
 from unittest import mock
 
 import dbt.flags as flags
+import dbt.parser.manifest
 from dbt.task.debug import DebugTask
 
 from dbt.adapters.postgres import PostgresAdapter
@@ -235,7 +236,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
 
-        self.load_patch = mock.patch('dbt.loader.make_parse_result')
+        self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 

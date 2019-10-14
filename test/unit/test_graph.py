@@ -10,7 +10,7 @@ import dbt.linker
 import dbt.parser
 import dbt.config
 import dbt.utils
-import dbt.loader
+import dbt.parser.manifest
 from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
@@ -43,7 +43,7 @@ class GraphTest(unittest.TestCase):
         self.graph_result = None
 
         self.write_gpickle_patcher = patch('networkx.write_gpickle')
-        self.load_projects_patcher = patch('dbt.loader._load_projects')
+        self.load_projects_patcher = patch('dbt.parser.manifest._load_projects')
         self.file_system_patcher = patch.object(
             dbt.parser.search.FilesystemSearcher, '__new__'
         )
@@ -81,7 +81,7 @@ class GraphTest(unittest.TestCase):
 
         self.mock_models = []
 
-        self.load_patch = patch('dbt.loader.make_parse_result')
+        self.load_patch = patch('dbt.parser.manifest.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 
@@ -140,7 +140,7 @@ class GraphTest(unittest.TestCase):
             self.mock_models.append(source_file)
 
     def load_manifest(self, config):
-        loader = dbt.loader.GraphLoader(config, {config.project_name: config})
+        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.load()
         return loader.create_manifest()
 

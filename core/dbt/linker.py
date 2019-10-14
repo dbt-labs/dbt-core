@@ -166,6 +166,7 @@ class GraphQueue:
         """
         self.inner.join()
 
+
 def _subset_graph(graph, include_nodes):
     """Create and return a new graph that is a shallow copy of graph but with
     only the nodes in include_nodes. Transitive edges across removed nodes are
@@ -186,6 +187,7 @@ def _subset_graph(graph, include_nodes):
                 "it disabled?".format(node)
             )
     return new_graph
+
 
 class Linker:
     def __init__(self, data=None):
