@@ -23,7 +23,7 @@ class RemoteMethod(Generic[Parameters, Result]):
     def __init__(self, args, config, manifest):
         self.args = args
         self.config = config
-        self.manifest = manifest.deepcopy(config=config)
+        self.manifest = manifest.deepcopy()
 
     @classmethod
     def get_parameters(cls) -> Type[Parameters]:

@@ -2,7 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Union, Mapping
+from typing import Dict, List, Optional, Union, Mapping, Any
 from uuid import UUID
 
 from hologram import JsonSchemaMixin
@@ -11,7 +11,6 @@ from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
     ParsedDocumentation
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.util import Writable, Replaceable
-from dbt.config import Project
 from dbt.exceptions import raise_duplicate_resource_name, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -166,9 +165,21 @@ class SourceFile(JsonSchemaMixin):
 
 @dataclass
 class ManifestMetadata(JsonSchemaMixin, Replaceable):
-    project_id: Optional[str]
-    user_id: Optional[UUID]
-    send_anonymous_usage_stats: Optional[bool]
+    project_id: Optional[str] = None
+    user_id: Optional[UUID] = None
+    send_anonymous_usage_stats: Optional[bool] = None
+
+    def __post_init__(self):
+        if tracking.active_user is None:
+            return
+
+        if self.user_id is None:
+            self.user_id = tracking.active_user.id
+
+        if self.send_anonymous_usage_stats is None:
+            self.send_anonymous_usage_stats = (
+                not tracking.active_user.do_not_track
+            )
 
 
 def _sort_values(dct):
@@ -197,7 +208,7 @@ def _deepcopy(value):
     return value.from_dict(value.to_dict())
 
 
-@dataclass(init=False)
+@dataclass
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
@@ -207,27 +218,8 @@ class Manifest:
     generated_at: datetime
     disabled: List[ParsedNode]
     files: Mapping[str, SourceFile]
-    metadata: ManifestMetadata = field(init=False)
-
-    def __init__(
-        self,
-        nodes: Mapping[str, CompileResultNode],
-        macros: Mapping[str, ParsedMacro],
-        docs: Mapping[str, ParsedDocumentation],
-        generated_at: datetime,
-        disabled: List[ParsedNode],
-        files: Mapping[str, SourceFile],
-        config: Optional[Project] = None,
-    ) -> None:
-        self.metadata = self.get_metadata(config)
-        self.nodes = nodes
-        self.macros = macros
-        self.docs = docs
-        self.generated_at = generated_at
-        self.disabled = disabled
-        self.files = files
-        self.flat_graph = None
-        super(Manifest, self).__init__()
+    metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
+    flat_graph: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_macros(cls, macros=None, files=None) -> 'Manifest':
@@ -242,7 +234,6 @@ class Manifest:
             generated_at=datetime.utcnow(),
             disabled=[],
             files=files,
-            config=None,
         )
 
     def update_node(self, new_node):
@@ -258,25 +249,6 @@ class Manifest:
                 'cannot update a node to have a new file path!'
             )
         self.nodes[unique_id] = new_node
-
-    @staticmethod
-    def get_metadata(config: Optional[Project]) -> ManifestMetadata:
-        project_id = None
-        user_id = None
-        send_anonymous_usage_stats = None
-
-        if config is not None:
-            project_id = config.hashed_name()
-
-        if tracking.active_user is not None:
-            user_id = tracking.active_user.id
-            send_anonymous_usage_stats = not tracking.active_user.do_not_track
-
-        return ManifestMetadata(
-            project_id=project_id,
-            user_id=user_id,
-            send_anonymous_usage_stats=send_anonymous_usage_stats,
-        )
 
     def build_flat_graph(self):
         """This attribute is used in context.common by each node, so we want to
@@ -431,14 +403,14 @@ class Manifest:
     def get_used_databases(self):
         return frozenset(node.database for node in self.nodes.values())
 
-    def deepcopy(self, config=None):
+    def deepcopy(self):
         return Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             generated_at=self.generated_at,
             disabled=[_deepcopy(n) for n in self.disabled],
-            config=config,
+            metadata=self.metadata,
             files={k: _deepcopy(v) for k, v in self.files.items()},
         )
 

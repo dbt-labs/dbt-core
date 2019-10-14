@@ -19,6 +19,7 @@ from dbt.utils import deep_map
 from dbt.utils import parse_cli_vars
 from dbt.source_config import SourceConfig
 
+from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Project as ProjectContract
 from dbt.contracts.project import PackageConfig
 
@@ -453,3 +454,6 @@ class Project:
                 ]
             )
             raise DbtProjectError(msg)
+
+    def get_metadata(self) -> ManifestMetadata:
+        return ManifestMetadata(self.hashed_name())
