@@ -1,4 +1,4 @@
-import multiprocessing
+from multiprocessing import Lock
 from contextlib import contextmanager
 from typing import NewType
 
@@ -6,6 +6,7 @@ from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 import dbt.exceptions
+import dbt.flags
 
 import boto3
 
@@ -15,7 +16,7 @@ from hologram.helpers import StrEnum
 from dataclasses import dataclass, field
 from typing import Optional
 
-drop_lock = multiprocessing.Lock()
+drop_lock: Lock = dbt.flags.MP_CONTEXT.Lock()
 
 
 IAMDuration = NewType('IAMDuration', int)

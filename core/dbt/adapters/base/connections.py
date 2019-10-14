@@ -1,5 +1,5 @@
 import abc
-import multiprocessing
+from multiprocessing import RLock
 import os
 from threading import get_ident
 from typing import (
@@ -34,7 +34,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def __init__(self, profile: HasCredentials):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
-        self.lock = multiprocessing.RLock()
+        self.lock: RLock = dbt.flags.MP_CONTEXT.RLock()
 
     @staticmethod
     def get_thread_identifier() -> Hashable:
