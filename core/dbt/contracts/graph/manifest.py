@@ -806,7 +806,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         else:
             # something terrible has happened
             raise dbt.exceptions.InternalException(
-                'Expected node {} not found in manifest'.format(unique_id)
+                "Expected node {} not found in manifest".format(unique_id)
             )
 
     @property
