@@ -6,7 +6,6 @@ import tempfile
 import time
 import traceback
 import unittest
-import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
