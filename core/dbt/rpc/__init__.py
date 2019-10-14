@@ -1,6 +1,6 @@
 """The `rpc` package handles most aspects of the actual execution of dbt's RPC
 server (except for the server itself and the client tasks, which are defined in
-the `task.remote` and `task.rpc_server` modules).
+the `task.remote` package).
 
 The general idea from a thread/process management perspective (ignoring the
 --single-threaded flag!) is as follows:

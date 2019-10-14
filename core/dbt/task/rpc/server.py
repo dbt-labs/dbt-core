@@ -1,3 +1,7 @@
+# import these so we can find them
+from . import sql_commands  # noqa
+from . import project_commands  # noqa
+from .base import RPCTask
 import json
 import os
 import signal
@@ -16,7 +20,6 @@ from dbt.logger import (
     log_manager,
 )
 from dbt.task.base import ConfiguredTask
-from dbt.task.remote import RPCTask
 from dbt.utils import ForgivingJSONEncoder, env_set_truthy
 from dbt.rpc.response_manager import ResponseManager
 from dbt.rpc.task_manager import TaskManager

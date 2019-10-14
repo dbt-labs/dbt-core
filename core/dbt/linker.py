@@ -1,5 +1,5 @@
 from queue import PriorityQueue
-from typing import Iterable, Optional
+from typing import Iterable, Set, Optional
 import networkx as nx
 import threading
 
@@ -17,6 +17,11 @@ def from_file(graph_file):
 
 def is_blocking_dependency(node):
     return node.resource_type == NodeType.Model
+
+
+def is_ephemeral_dependency(node):
+    return (node.resource_type == NodeType.Model and
+            node.get_materialization() == 'ephemeral')
 
 
 class GraphQueue:
@@ -167,28 +172,6 @@ class GraphQueue:
         self.inner.join()
 
 
-def _subset_graph(graph, include_nodes):
-    """Create and return a new graph that is a shallow copy of graph but with
-    only the nodes in include_nodes. Transitive edges across removed nodes are
-    preserved as explicit new edges.
-    """
-    new_graph = nx.algorithms.transitive_closure(graph)
-
-    include_nodes = set(include_nodes)
-
-    for node in graph.nodes():
-        if node not in include_nodes:
-            new_graph.remove_node(node)
-
-    for node in include_nodes:
-        if node not in new_graph:
-            raise RuntimeError(
-                "Couldn't find model '{}' -- does it exist or is "
-                "it disabled?".format(node)
-            )
-    return new_graph
-
-
 class Linker:
     def __init__(self, data=None):
         if data is None:
@@ -215,6 +198,27 @@ class Linker:
 
         return None
 
+    def build_subset_graph(self, include_nodes: Iterable[str]):
+        """Create and return a new graph that is a shallow copy of the graph,
+        but with only the nodes in include_nodes. Transitive edges across
+        removed nodes are preserved as explicit new edges.
+        """
+        new_graph = nx.algorithms.transitive_closure(self.graph)
+
+        include_nodes = set(include_nodes)
+
+        for node in self.graph.nodes():
+            if node not in include_nodes:
+                new_graph.remove_node(node)
+
+        for node in include_nodes:
+            if node not in new_graph:
+                raise RuntimeError(
+                    "Couldn't find model '{}' -- does it exist or is "
+                    "it disabled?".format(node)
+                )
+        return new_graph
+
     def as_graph_queue(
         self, manifest: Manifest, limit_to: Optional[Iterable[str]] = None
     ) -> GraphQueue:
@@ -226,8 +230,40 @@ class Linker:
         else:
             graph_nodes = limit_to
 
-        new_graph = _subset_graph(self.graph, graph_nodes)
+        new_graph = self.build_subset_graph(graph_nodes)
         return GraphQueue(new_graph, manifest)
+
+    def sorted_ephemeral_ancestors(
+        self, manifest: Manifest, unique_id: str
+    ) -> Iterable[str]:
+        """Get the ephemeral ancestors of unique_id, stopping at the first
+        non-ephemeral node in each chain, in graph-topological order.
+        """
+        to_check: Set[str] = {unique_id}
+        ephemerals: Set[str] = set()
+        visited: Set[str] = set()
+
+        while to_check:
+            # note that this avoids collecting unique_id itself
+            nextval = to_check.pop()
+            for pred in self.graph.predecessors(nextval):
+                if pred in visited:
+                    continue
+                visited.add(pred)
+                node = manifest.expect(pred)
+
+                if node.resource_type != NodeType.Model:
+                    continue
+                if node.get_materialization() != 'ephemeral':
+                    continue
+                # this is an ephemeral model! We have to find everything it
+                # refs and do it all over again until we exhaust them all
+                ephemerals.add(pred)
+                to_check.add(pred)
+
+        ephemeral_graph = self.build_subset_graph(ephemerals)
+        # we can just topo sort this because we know there are no cycles.
+        return nx.topological_sort(ephemeral_graph)
 
     def get_dependent_nodes(self, node):
         return nx.descendants(self.graph, node)

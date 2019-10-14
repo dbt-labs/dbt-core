@@ -22,7 +22,7 @@ import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
 from dbt.task.list import ListTask
-from dbt.task.rpc_server import RPCServerTask
+from dbt.task.rpc.server import RPCServerTask
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
 import dbt.tracking
