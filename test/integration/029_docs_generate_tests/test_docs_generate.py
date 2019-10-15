@@ -215,9 +215,16 @@ class TestDocsGenerate(DBTIntegrationTest):
             'has_stats': {
                 'id': 'has_stats',
                 'label': 'Has Stats?',
-                'value': (is_table or partition is not None or cluster is not None),
+                'value': True,
                 'description': 'Indicates whether there are statistics for this table',
                 'include': False,
+            },
+            'location': {
+                'id': 'location',
+                'label': 'Location',
+                'value': 'US',
+                'description': 'The geographic location of this table',
+                'include': True,
             }
         }
         if is_table:
