@@ -5,7 +5,7 @@ from datetime import datetime
 from unittest.mock import ANY, patch
 
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
-    AnyStringWith, normalize
+    AnyString, AnyStringWith, normalize
 
 
 def _read_file(path):
@@ -215,49 +215,51 @@ class TestDocsGenerate(DBTIntegrationTest):
             'has_stats': {
                 'id': 'has_stats',
                 'label': 'Has Stats?',
-                'value': True,
+                'value': (is_table or partition is not None or cluster is not None),
                 'description': 'Indicates whether there are statistics for this table',
                 'include': False,
-            },
-            'location': {
-                'id': 'location',
-                'label': 'Location',
-                'value': 'US',
-                'description': 'The geographic location of this table',
-                'include': True,
-            },
+            }
         }
         if is_table:
             stats.update({
                 'num_bytes': {
                     'id': 'num_bytes',
-                    'label': 'Number of bytes',
+                    'label': AnyString(),
                     'value': AnyFloat(),
-                    'description': 'The number of bytes this table consumes',
+                    'description': AnyString(),
                     'include': True,
                 },
                 'num_rows': {
                     'id': 'num_rows',
-                    'label': 'Number of rows',
+                    'label': AnyString(),
                     'value': AnyFloat(),
-                    'description': 'The number of rows in this table',
+                    'description': AnyString(),
                     'include': True,
-                },
+                }
+            })
+
+        if partition is not None:
+            stats.update({
                 'partitioning_type': {
                     'id': 'partitioning_type',
-                    'label': 'Partitioning Type',
+                    'label': AnyString(),
                     'value': partition,
-                    'description': 'The partitioning type used for this table',
-                    'include': True,
-                },
+                    'description': AnyString(),
+                    'include': True
+                }
+            })
+
+        if cluster is not None:
+            stats.update({
                 'clustering_fields': {
                     'id': 'clustering_fields',
-                    'label': 'Clustering Fields',
+                    'label': AnyString(),
                     'value': cluster,
-                    'description': 'The clustering fields for this table',
-                    'include': True,
-                },
+                    'description': AnyString(),
+                    'include': True
+                }
             })
+
         return stats
 
     def _expected_catalog(self, id_type, text_type, time_type, view_type,
@@ -535,10 +537,10 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         role = self.get_role()
         table_stats = self._bigquery_stats(True)
-        clustering_stats = self._bigquery_stats(True, partition='DAY',
+        clustering_stats = self._bigquery_stats(True, partition='updated_at',
                                                 cluster='first_name')
-        multi_clustering_stats = self._bigquery_stats(True, partition='DAY',
-                                                      cluster='first_name,email')
+        multi_clustering_stats = self._bigquery_stats(True, partition='updated_at',
+                                                      cluster='first_name, email')
         nesting_columns = {
             'field_1': {
                 'name': 'field_1',

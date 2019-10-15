@@ -1,5 +1,3 @@
-import copy
-
 import dbt.deprecations
 import dbt.exceptions
 import dbt.flags as flags
@@ -23,6 +21,9 @@ import google.cloud.bigquery
 
 import time
 import agate
+
+
+GET_CATALOG_MACRO_NAME = 'get_catalog'
 
 
 def _stub_relation(*args, **kwargs):
@@ -387,127 +388,31 @@ class BigQueryAdapter(BaseAdapter):
         with self.connections.exception_handler("LOAD TABLE"):
             self.poll_until_job_completes(job, timeout)
 
-    ###
-    # The get_catalog implementation for bigquery
-    ###
-    def _flat_columns_in_table(self, table):
-        """An iterator over the flattened columns for a given schema and table.
-        Resolves child columns as having the name "parent.child".
-        """
-        for col in self._get_dbt_columns_from_bq_table(table):
-            yield from col.flatten()
-
-    @classmethod
-    def _get_stats_column_names(cls):
-        """Construct a tuple of the column names for stats. Each stat has 4
-        columns of data.
-        """
-        columns = []
-        stats = ('num_bytes', 'num_rows', 'location', 'partitioning_type',
-                 'clustering_fields')
-        stat_components = ('label', 'value', 'description', 'include')
-        for stat_id in stats:
-            for stat_component in stat_components:
-                columns.append('stats:{}:{}'.format(stat_id, stat_component))
-        return tuple(columns)
-
-    @classmethod
-    def _get_stats_columns(cls, table, relation_type):
-        """Given a table, return an iterator of key/value pairs for stats
-        column names/values.
-        """
-        column_names = cls._get_stats_column_names()
-
-        # agate does not handle the array of column names gracefully
-        clustering_value = None
-        if table.clustering_fields is not None:
-            clustering_value = ','.join(table.clustering_fields)
-        # cast num_bytes/num_rows to str before they get to agate, or else
-        # agate will incorrectly decide they are booleans.
-        column_values = (
-            'Number of bytes',
-            str(table.num_bytes),
-            'The number of bytes this table consumes',
-            relation_type == 'table',
-
-            'Number of rows',
-            str(table.num_rows),
-            'The number of rows in this table',
-            relation_type == 'table',
-
-            'Location',
-            table.location,
-            'The geographic location of this table',
-            True,
-
-            'Partitioning Type',
-            table.partitioning_type,
-            'The partitioning type used for this table',
-            relation_type == 'table',
-
-            'Clustering Fields',
-            clustering_value,
-            'The clustering fields for this table',
-            relation_type == 'table',
-        )
-        return zip(column_names, column_values)
-
     def get_catalog(self, manifest):
-        connection = self.connections.get_thread_connection()
-        client = connection.handle
+        """Get the catalog for this manifest by running the get catalog macro.
+        Returns an agate.Table of catalog information.
+        """
 
-        schemas = manifest.get_used_schemas()
+        information_schemas = []
+        for database, schema in manifest.get_used_schemas():
+            information_schemas.append(self.Relation.create(
+                database=database,
+                schema=schema,
+                quote_policy={
+                    'database': True,
+                    'schema': True
+                }
+            ))
 
-        column_names = (
-            'table_database',
-            'table_schema',
-            'table_name',
-            'table_type',
-            'table_comment',
-            # does not exist in bigquery, but included for consistency
-            'table_owner',
-            'column_name',
-            'column_index',
-            'column_type',
-            'column_comment',
-        )
-        all_names = column_names + self._get_stats_column_names()
-        columns = []
+        # make it a list so macros can index into it.
+        kwargs = {'information_schemas': information_schemas}
+        table = self.execute_macro(GET_CATALOG_MACRO_NAME,
+                                   kwargs=kwargs,
+                                   release=True)
 
-        for database_name, schema_name in schemas:
-            relations = self.list_relations(database_name, schema_name)
-            for relation in relations:
+        # BigQuery doesn't allow ":" chars in column names -- remap them here.
+        table = table.rename(column_names={
+            col.name: col.name.replace('__', ':') for col in table.columns
+        })
 
-                # This relation contains a subset of the info we care about.
-                # Fetch the full table object here
-                table_ref = self.connections.table_ref(
-                    database_name,
-                    relation.schema,
-                    relation.identifier,
-                    connection
-                )
-                table = client.get_table(table_ref)
-
-                flattened = self._flat_columns_in_table(table)
-                relation_stats = dict(self._get_stats_columns(table,
-                                                              relation.type))
-
-                for index, column in enumerate(flattened, start=1):
-                    column_data = (
-                        relation.database,
-                        relation.schema,
-                        relation.name,
-                        relation.type,
-                        None,
-                        None,
-                        column.name,
-                        index,
-                        column.data_type,
-                        None,
-                    )
-                    column_dict = dict(zip(column_names, column_data))
-                    column_dict.update(copy.deepcopy(relation_stats))
-
-                    columns.append(column_dict)
-
-        return dbt.clients.agate_helper.table_from_data(columns, all_names)
+        return self._catalog_filter_table(table, manifest)
