@@ -97,9 +97,7 @@ class PostgresAdapter(SQLAdapter):
                 database=database, schema=dep_schema, identifier=dep_name
             )
             referenced = self.Relation.create(
-                database=database,
-                schema=refed_schema,
-                identifier=refed_name
+                database=database, schema=refed_schema, identifier=refed_name
             )
 
             # don't record in cache if this relation isn't in a relevant
