@@ -346,7 +346,7 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
-    @available.parse_none
+    @available.parse(lambda *a, **k: True)
     def is_replaceable(self, relation, conf_partition, conf_cluster):
         """
         Check if a given partition and clustering column spec for a table
