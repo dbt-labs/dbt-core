@@ -346,23 +346,6 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
-    def _get_table(self, relation):
-        logger.debug('Fetching metadata for relation {}'.format(relation))
-        conn = self.connections.get_thread_connection()
-        client = conn.handle
-        table_ref = self.connections.table_ref(
-            relation.database,
-            relation.schema,
-            relation.identifier,
-            conn
-        )
-
-        # Handle 404
-        try:
-            return client.get_table(table_ref)
-        except (google.cloud.exceptions.NotFound) as e:
-            return None
-
     @available.parse_none
     def is_replaceable(self, relation, conf_partition, conf_cluster):
         """
@@ -372,8 +355,13 @@ class BigQueryAdapter(BaseAdapter):
         partitioning spec. This method returns True if the given config spec is
         identical to that of the existing table.
         """
-        table = self._get_table(relation)
-        if not table:
+        try:
+            table = self.connections.get_bq_table(
+                database=relation.database,
+                schema=relation.schema,
+                identifier=relation.identifier
+            )
+        except google.cloud.exceptions.NotFound:
             return True
 
         table_partition = table.time_partitioning
