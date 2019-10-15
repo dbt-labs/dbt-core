@@ -37,9 +37,12 @@
     {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
   {% endif %}
 
-  OPTIONS({% for opt_key, opt_val in opts.items() %}
-    {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
-  {% endfor %})
+  {% set options -%}
+    OPTIONS({% for opt_key, opt_val in opts.items() %}
+      {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
+    {% endfor %})
+  {%- endset %}
+  {% do return(options) %}
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}

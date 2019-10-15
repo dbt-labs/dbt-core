@@ -344,6 +344,36 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
+    @available.parse(lambda *a, **k: True)
+    def is_replaceable(self, relation, conf_partition, conf_cluster):
+        """
+        Check if a given partition and clustering column spec for a table
+        can replace an existing relation in the database. BigQuery does not
+        allow tables to be replaced with another table that has a different
+        partitioning spec. This method returns True if the given config spec is
+        identical to that of the existing table.
+        """
+        try:
+            table = self.connections.get_bq_table(
+                database=relation.database,
+                schema=relation.schema,
+                identifier=relation.identifier
+            )
+        except google.cloud.exceptions.NotFound:
+            return True
+
+        table_partition = table.time_partitioning
+        if table_partition is not None:
+            table_partition = table_partition.field
+
+        table_cluster = table.clustering_fields
+
+        if isinstance(conf_cluster, str):
+            conf_cluster = [conf_cluster]
+
+        return table_partition == conf_partition \
+            and table_cluster == conf_cluster
+
     @available.parse_none
     def alter_table_add_columns(self, relation, columns):
 
