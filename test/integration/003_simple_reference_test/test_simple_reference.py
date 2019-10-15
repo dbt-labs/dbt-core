@@ -19,10 +19,13 @@ class TestSimpleReference(DBTIntegrationTest):
             }
         }
 
+    def setUp(self):
+        super().setUp()
+        # self.use_default_config()
+        self.run_sql_file("seed.sql")
+
     @use_profile('postgres')
     def test__postgres__simple_reference(self):
-        self.use_default_project()
-        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         # ephemeral_copy doesn't show up in results
@@ -59,8 +62,6 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__simple_reference(self):
-        self.use_default_project()
-        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results),  8)
@@ -83,8 +84,6 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__simple_reference_with_models(self):
-        self.use_default_project()
-        self.run_sql_file("seed.sql")
 
         # Run materialized_copy, ephemeral_copy, and their dependents
         # ephemeral_copy should not actually be materialized b/c it is ephemeral
@@ -101,8 +100,6 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__simple_reference_with_models_and_children(self):
-        self.use_default_project()
-        self.run_sql_file("seed.sql")
 
         # Run materialized_copy, ephemeral_copy, and their dependents
         # ephemeral_copy should not actually be materialized b/c it is ephemeral
@@ -139,8 +136,6 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__simple_reference_with_models(self):
-        self.use_default_project()
-        self.run_sql_file("seed.sql")
 
         # Run materialized_copy & ephemeral_copy
         # ephemeral_copy should not actually be materialized b/c it is ephemeral
@@ -157,8 +152,6 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__simple_reference_with_models_and_children(self):
-        self.use_default_project()
-        self.run_sql_file("seed.sql")
 
         # Run materialized_copy, ephemeral_copy, and their dependents
         # ephemeral_copy should not actually be materialized b/c it is ephemeral

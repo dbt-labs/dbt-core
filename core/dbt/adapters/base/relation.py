@@ -389,17 +389,21 @@ class BaseRelation(FakeAPIObject, Hashable):
         return self.type == RelationType.View
 
     @classproperty
-    def Table(self) -> str:
+    def Table(cls) -> str:
         return str(RelationType.Table)
 
     @classproperty
-    def CTE(self) -> str:
+    def CTE(cls) -> str:
         return str(RelationType.CTE)
 
     @classproperty
-    def View(self) -> str:
+    def View(cls) -> str:
         return str(RelationType.View)
 
     @classproperty
-    def External(self) -> str:
+    def External(cls) -> str:
         return str(RelationType.External)
+
+    @classproperty
+    def RelationType(cls) -> Type[RelationType]:
+        return RelationType

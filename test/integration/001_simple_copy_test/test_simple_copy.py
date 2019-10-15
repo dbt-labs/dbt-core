@@ -17,10 +17,12 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
 
 class TestSimpleCopy(BaseTestSimpleCopy):
 
+    @property
+    def project_config(self):
+        return {"data-paths": [self.dir("seed-initial")]}
+
     @use_profile("postgres")
     def test__postgres__simple_copy(self):
-        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
-
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
@@ -36,10 +38,30 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
+    @use_profile('postgres')
+    def test__postgres__simple_copy_with_materialized_views(self):
+        self.run_sql('''
+            create table {schema}.unrelated_table (id int)
+        '''.format(schema=self.unique_schema())
+        )
+        self.run_sql('''
+            create materialized view {schema}.unrelated_materialized_view as (
+                select * from {schema}.unrelated_table
+            )
+        '''.format(schema=self.unique_schema()))
+        self.run_sql('''
+            create view {schema}.unrelated_view as (
+                select * from {schema}.unrelated_materialized_view
+            )
+        '''.format(schema=self.unique_schema()))
+
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  7)
+
     @use_profile("postgres")
     def test__postgres__dbt_doesnt_run_empty_models(self):
-        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
-
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
@@ -66,8 +88,6 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
     @use_profile("snowflake")
     def test__snowflake__simple_copy(self):
-        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
-
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
@@ -92,7 +112,6 @@ class TestSimpleCopy(BaseTestSimpleCopy):
     @use_profile("snowflake")
     def test__snowflake__simple_copy__quoting_off(self):
         self.use_default_project({
-            "data-paths": [self.dir("seed-initial")],
             "quoting": {"identifier": False},
         })
 
@@ -124,7 +143,6 @@ class TestSimpleCopy(BaseTestSimpleCopy):
     @use_profile("snowflake")
     def test__snowflake__seed__quoting_switch(self):
         self.use_default_project({
-            "data-paths": [self.dir("seed-initial")],
             "quoting": {"identifier": False},
         })
 
@@ -145,8 +163,6 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
     @use_profile("bigquery")
     def test__bigquery__simple_copy(self):
-        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
-
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()

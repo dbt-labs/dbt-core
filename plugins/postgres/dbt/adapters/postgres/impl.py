@@ -43,22 +43,22 @@ class PostgresAdapter(SQLAdapter):
         database = self.config.credentials.database
         table = self.execute_macro(GET_RELATIONS_MACRO_NAME)
 
-        for (refed_schema, refed_name, dep_schema, dep_name) in table:
-            referenced = self.Relation.create(
-                database=database,
-                schema=refed_schema,
-                identifier=refed_name
-            )
+        for (dep_schema, dep_name, refed_schema, refed_name) in table:
             dependent = self.Relation.create(
                 database=database,
                 schema=dep_schema,
                 identifier=dep_name
             )
+            referenced = self.Relation.create(
+                database=database,
+                schema=refed_schema,
+                identifier=refed_name
+            )
 
             # don't record in cache if this relation isn't in a relevant
             # schema
             if refed_schema.lower() in schemas:
-                self.cache.add_link(dependent, referenced)
+                self.cache.add_link(referenced, dependent)
 
     def _get_cache_schemas(self, manifest, exec_only=False):
         # postgres/redshift only allow one database (the main one)
