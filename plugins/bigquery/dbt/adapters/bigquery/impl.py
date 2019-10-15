@@ -23,9 +23,6 @@ import time
 import agate
 
 
-GET_CATALOG_MACRO_NAME = 'get_catalog'
-
-
 def _stub_relation(*args, **kwargs):
     return BigQueryRelation.create(
         database='',
@@ -388,31 +385,10 @@ class BigQueryAdapter(BaseAdapter):
         with self.connections.exception_handler("LOAD TABLE"):
             self.poll_until_job_completes(job, timeout)
 
-    def get_catalog(self, manifest):
-        """Get the catalog for this manifest by running the get catalog macro.
-        Returns an agate.Table of catalog information.
-        """
-
-        information_schemas = []
-        for database, schema in manifest.get_used_schemas():
-            information_schemas.append(self.Relation.create(
-                database=database,
-                schema=schema,
-                quote_policy={
-                    'database': True,
-                    'schema': True
-                }
-            ))
-
-        # make it a list so macros can index into it.
-        kwargs = {'information_schemas': information_schemas}
-        table = self.execute_macro(GET_CATALOG_MACRO_NAME,
-                                   kwargs=kwargs,
-                                   release=True)
-
+    def _catalog_filter_table(self, table, manifest):
         # BigQuery doesn't allow ":" chars in column names -- remap them here.
         table = table.rename(column_names={
             col.name: col.name.replace('__', ':') for col in table.columns
         })
 
-        return self._catalog_filter_table(table, manifest)
+        return super()._catalog_filter_table(table, manifest)

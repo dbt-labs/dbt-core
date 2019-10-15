@@ -11,7 +11,7 @@
               schema_name as table_schema,
               location
 
-            from `{{ information_schema.database }}`.INFORMATION_SCHEMA.SCHEMATA
+            from {{ information_schema.include(schema=False) }}.SCHEMATA
 
         ),
 
@@ -35,7 +35,7 @@
                 REGEXP_EXTRACT(table_id, '^(.+)[0-9]{8}$') as shard_base_name,
                 REGEXP_EXTRACT(table_id, '^.+([0-9]{8})$') as shard_name
 
-            from {{ information_schema }}.__TABLES__
+            from {{ information_schema.include(identifier=False) }}.__TABLES__
 
         ),
 
@@ -92,7 +92,7 @@
                 is_partitioning_column,
                 clustering_ordinal_position
 
-            from {{ information_schema }}.INFORMATION_SCHEMA.COLUMNS
+            from {{ information_schema }}.COLUMNS
             where ordinal_position is not null
 
         ),
@@ -105,7 +105,7 @@
                 data_type as column_type,
                 column_name as base_column_name
 
-            from {{ information_schema }}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS
+            from {{ information_schema }}.COLUMN_FIELD_PATHS
             where data_type not like 'STRUCT%'
 
         ),
