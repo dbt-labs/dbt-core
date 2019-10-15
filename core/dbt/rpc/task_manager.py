@@ -1,4 +1,3 @@
-import multiprocessing
 import operator
 import os
 import signal
@@ -14,6 +13,7 @@ from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import StrEnum
 
 import dbt.exceptions
+import dbt.flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.rpc import (
     RemoteCompileResult,
@@ -333,7 +333,7 @@ class TaskManager:
         self._rpc_task_map: Dict[str, RemoteMethod] = {}
         self._builtins: Dict[str, UnmanagedHandler] = {}
         self.last_compile = LastCompile(status=ManifestStatus.Init)
-        self._lock = multiprocessing.Lock()
+        self._lock: dbt.flags.MP_CONTEXT.Lock = dbt.flags.MP_CONTEXT.Lock()
         self._gc_settings = GCSettings(
             maxsize=1000, reapsize=500, auto_reap_age=timedelta(days=30)
         )

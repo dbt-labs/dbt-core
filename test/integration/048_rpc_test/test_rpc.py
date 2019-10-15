@@ -1,5 +1,4 @@
 import json
-import multiprocessing
 import os
 import random
 import signal
@@ -12,12 +11,13 @@ import requests
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
+import dbt.flags
 from dbt.version import __version__
 from dbt.logger import log_manager
 from dbt.main import handle_and_check
 
 
-class ServerProcess(multiprocessing.Process):
+class ServerProcess(dbt.flags.MP_CONTEXT.Process):
     def __init__(self, port, profiles_dir, cli_vars=None):
         self.port = port
         handle_and_check_args = [
@@ -64,7 +64,7 @@ class ServerProcess(multiprocessing.Process):
 
     def start(self):
         super().start()
-        for _ in range(20):
+        for _ in range(30):
             if self.is_up():
                 break
             time.sleep(0.5)
@@ -75,7 +75,9 @@ class ServerProcess(multiprocessing.Process):
             {'method': 'status', 'id': 1, 'jsonrpc': '2.0'}
         ).json()
         if not self._compare_result(status_result):
-            raise Exception('Got invalid status result: {}'.format(status_result))
+            raise Exception(
+                'Got invalid status result: {}'.format(status_result)
+            )
 
 
 def query_url(url, query):

@@ -10,7 +10,10 @@ from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import StrEnum
 
 import dbt.exceptions
-from dbt.adapters.factory import cleanup_connections
+import dbt.flags
+from dbt.adapters.factory import (
+    cleanup_connections, load_plugin, register_adapter
+)
 from dbt.contracts.rpc import RPCParameters
 from dbt.logger import (
     GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler
@@ -94,6 +97,25 @@ def sigterm_handler(signum, frame):
     raise dbt.exceptions.RPCKilledException(signum)
 
 
+def _spawn_setup(config, args):
+    """
+    Because we're using spawn, we have to do a some things that dbt does
+    dynamically at process load.
+
+    These things are inherited automatically in fork mode, where fork() keeps
+    everything in memory.
+    """
+    # reset flags
+    dbt.flags.set_from_args(args)
+    # reload the active plugin
+    load_plugin(config.credentials.type)
+    # register it
+    register_adapter(config)
+
+    # reset tracking, etc
+    config.config.set_values(args.profiles_dir)
+
+
 def _task_bootstrap(
     task: RemoteMethod,
     queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
@@ -104,6 +126,7 @@ def _task_bootstrap(
     # the first thing we do in a new process: push logging back over our queue
     handler = QueueLogHandler(queue)
     with handler.applicationbound():
+        _spawn_setup(task.config, task.args)
         rpc_exception = None
         result = None
         try:
@@ -357,8 +380,8 @@ class RequestTaskHandler(threading.Thread):
             raise dbt.exceptions.InternalException(
                 'Task params set to None!'
             )
-        self.subscriber = QueueSubscriber()
-        self.process = multiprocessing.Process(
+        self.subscriber = QueueSubscriber(dbt.flags.MP_CONTEXT.Queue())
+        self.process = dbt.flags.MP_CONTEXT.Process(
             target=_task_bootstrap,
             args=(self.task, self.subscriber.queue, self.task_params)
         )
