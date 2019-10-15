@@ -1157,6 +1157,13 @@ class AnyFloat:
         return isinstance(other, float)
 
 
+class AnyString:
+    """Any string. Use this in assertEqual() calls to assert that it is a string.
+    """
+    def __eq__(self, other):
+        return isinstance(other, str)
+
+
 class AnyStringWith:
     def __init__(self, contains=None):
         self.contains = contains
