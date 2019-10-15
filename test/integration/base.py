@@ -1158,7 +1158,7 @@ class AnyFloat:
 
 
 class AnyString:
-    """Any string. Use this in assertEqual() calls to assert that it is a float.
+    """Any string. Use this in assertEqual() calls to assert that it is a string.
     """
     def __eq__(self, other):
         return isinstance(other, str)
