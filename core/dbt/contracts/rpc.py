@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from numbers import Real
 from typing import Optional, Union, List, Any, Dict
 
@@ -55,21 +55,34 @@ class RPCCliParameters(RPCParameters):
     cli: str
 
 
+@dataclass
+class RPCNoParameters(RPCParameters):
+    pass
+
+
 # Outputs
 
+@dataclass
+class RemoteResult(JsonSchemaMixin):
+    logs: List[LogMessage]
+
 
 @dataclass
-class RemoteCatalogResults(CatalogResults):
-    logs: List[LogMessage] = field(default_factory=list)
+class RemoteEmptyResult(RemoteResult):
+    pass
 
 
 @dataclass
-class RemoteCompileResult(JsonSchemaMixin):
+class RemoteCatalogResults(CatalogResults, RemoteResult):
+    pass
+
+
+@dataclass
+class RemoteCompileResult(RemoteResult):
     raw_sql: str
     compiled_sql: str
     node: CompileResultNode
     timing: List[TimingInfo]
-    logs: List[LogMessage]
 
     @property
     def error(self):
@@ -77,8 +90,8 @@ class RemoteCompileResult(JsonSchemaMixin):
 
 
 @dataclass
-class RemoteExecutionResult(ExecutionResult):
-    logs: List[LogMessage]
+class RemoteExecutionResult(ExecutionResult, RemoteResult):
+    pass
 
 
 @dataclass
@@ -90,3 +103,11 @@ class ResultTable(JsonSchemaMixin):
 @dataclass
 class RemoteRunResult(RemoteCompileResult):
     table: ResultTable
+
+
+RPCResult = Union[
+    RemoteCompileResult,
+    RemoteExecutionResult,
+    RemoteCatalogResults,
+    RemoteEmptyResult,
+]

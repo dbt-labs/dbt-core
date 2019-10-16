@@ -2,28 +2,25 @@ import inspect
 from abc import abstractmethod
 from typing import List, Optional, Type, TypeVar, Generic
 
-from dbt.contracts.rpc import RPCParameters
+from dbt.contracts.rpc import RPCParameters, RemoteResult
 from dbt.exceptions import NotImplementedException, InternalException
-from dbt.rpc.logger import RPCResult
 
 
 Parameters = TypeVar('Parameters', bound=RPCParameters)
-Result = TypeVar('Result', bound=RPCResult)
+Result = TypeVar('Result', bound=RemoteResult)
 
 
-# If you call recursive_subclasses on a subclass of RemoteMethod, it should
+# If you call recursive_subclasses on a subclass of BaseRemoteMethod, it should
 # only return subtypes of the given subclass.
 T = TypeVar('T', bound='RemoteMethod')
 
 
 class RemoteMethod(Generic[Parameters, Result]):
     METHOD_NAME: Optional[str] = None
-    is_async = False
 
-    def __init__(self, args, config, manifest):
+    def __init__(self, args, config):
         self.args = args
         self.config = config
-        self.manifest = manifest
 
     @classmethod
     def get_parameters(cls) -> Type[Parameters]:
@@ -74,3 +71,9 @@ class RemoteMethod(Generic[Parameters, Result]):
         raise NotImplementedException(
             'handle_request not implemented'
         )
+
+
+class RemoteManifestMethod(RemoteMethod[Parameters, Result]):
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        self.manifest = manifest

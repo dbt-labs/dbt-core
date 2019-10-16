@@ -14,7 +14,7 @@ import dbt.flags
 from dbt.adapters.factory import (
     cleanup_connections, load_plugin, register_adapter
 )
-from dbt.contracts.rpc import RPCParameters
+from dbt.contracts.rpc import RPCParameters, RemoteResult
 from dbt.logger import (
     GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler
 )
@@ -25,7 +25,6 @@ from dbt.rpc.error import (
     timeout_error,
 )
 from dbt.rpc.logger import (
-    RPCResult,
     QueueSubscriber,
     QueueLogHandler,
     QueueErrorMessage,
@@ -97,7 +96,7 @@ def sigterm_handler(signum, frame):
     raise dbt.exceptions.RPCKilledException(signum)
 
 
-def _spawn_setup(config, args):
+def _spawn_setup(task):
     """
     Because we're using spawn, we have to do a some things that dbt does
     dynamically at process load.
@@ -106,14 +105,14 @@ def _spawn_setup(config, args):
     everything in memory.
     """
     # reset flags
-    dbt.flags.set_from_args(args)
+    dbt.flags.set_from_args(task.args)
     # reload the active plugin
-    load_plugin(config.credentials.type)
+    load_plugin(task.config.credentials.type)
     # register it
-    register_adapter(config)
+    register_adapter(task.config)
 
     # reset tracking, etc
-    config.config.set_values(args.profiles_dir)
+    task.config.config.set_values(task.args.profiles_dir)
 
 
 def _task_bootstrap(
@@ -126,7 +125,7 @@ def _task_bootstrap(
     # the first thing we do in a new process: push logging back over our queue
     handler = QueueLogHandler(queue)
     with handler.applicationbound():
-        _spawn_setup(task.config, task.args)
+        _spawn_setup(task)
         rpc_exception = None
         result = None
         try:
@@ -264,7 +263,7 @@ class RequestTaskHandler(threading.Thread):
             return None
         return self.task_params.task_tags
 
-    def _wait_for_results(self) -> RPCResult:
+    def _wait_for_results(self) -> RemoteResult:
         """Wait for results off the queue. If there is an exception raised,
         raise an appropriate RPC exception.
 
@@ -302,7 +301,7 @@ class RequestTaskHandler(threading.Thread):
                 'Invalid message type {} (result={})'.format(msg)
             )
 
-    def get_result(self) -> RPCResult:
+    def get_result(self) -> RemoteResult:
         if self.process is None:
             raise dbt.exceptions.InternalException(
                 'get_result() called before handle()'

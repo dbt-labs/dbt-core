@@ -1,0 +1,144 @@
+import os
+import hashlib
+from typing import List
+
+from dbt.clients import git, system
+from dbt.contracts.project import (
+    ProjectPackageMetadata,
+    GitPackage,
+)
+from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
+from dbt.exceptions import (
+    ExecutableError, warn_or_error, raise_dependency_error
+)
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.ui import printer
+
+PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
+
+
+def md5sum(s: str):
+    return hashlib.md5(s.encode('latin-1')).hexdigest()
+
+
+class GitPackageMixin:
+    def __init__(self, git: str) -> None:
+        super().__init__()
+        self.git = git
+
+    @property
+    def name(self):
+        return self.git
+
+    def source_type(self) -> str:
+        return 'git'
+
+
+class GitPinnedPackage(GitPackageMixin, PinnedPackage):
+    def __init__(
+        self, git: str, revision: str, warn_unpinned: bool = True
+    ) -> None:
+        super().__init__(git)
+        self.revision = revision
+        self.warn_unpinned = warn_unpinned
+        self._checkout_name = md5sum(self.git)
+
+    def get_version(self):
+        return self.revision
+
+    def nice_version_name(self):
+        return 'revision {}'.format(self.revision)
+
+    def _checkout(self):
+        """Performs a shallow clone of the repository into the downloads
+        directory. This function can be called repeatedly. If the project has
+        already been checked out at this version, it will be a no-op. Returns
+        the path to the checked out directory."""
+        try:
+            dir_ = git.clone_and_checkout(
+                self.git, get_downloads_path(), branch=self.revision,
+                dirname=self._checkout_name
+            )
+        except ExecutableError as exc:
+            if exc.cmd and exc.cmd[0] == 'git':
+                logger.error(
+                    'Make sure git is installed on your machine. More '
+                    'information: '
+                    'https://docs.getdbt.com/docs/package-management'
+                )
+            raise
+        return os.path.join(get_downloads_path(), dir_)
+
+    def _fetch_metadata(self, project) -> ProjectPackageMetadata:
+        path = self._checkout()
+        if self.revision == 'master' and self.warn_unpinned:
+            warn_or_error(
+                'The git package "{}" is not pinned.\n\tThis can introduce '
+                'breaking changes into your project without warning!\n\nSee {}'
+                .format(self.git, PIN_PACKAGE_URL),
+                log_fmt=printer.yellow('WARNING: {}')
+            )
+        loaded = project.from_project_root(path, {})
+        return ProjectPackageMetadata.from_project(loaded)
+
+    def install(self, project):
+        dest_path = self.get_installation_path(project)
+        if os.path.exists(dest_path):
+            if system.path_is_symlink(dest_path):
+                system.remove_file(dest_path)
+            else:
+                system.rmdir(dest_path)
+
+        system.move(self._checkout(), dest_path)
+
+
+class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
+    def __init__(
+        self, git: str, revisions: List[str], warn_unpinned: bool = True
+    ) -> None:
+        super().__init__(git)
+        self.revisions = revisions
+        self.warn_unpinned = warn_unpinned
+
+    @classmethod
+    def from_contract(
+        cls, contract: GitPackage
+    ) -> 'GitUnpinnedPackage':
+        revisions = [contract.revision] if contract.revision else []
+
+        # we want to map None -> True
+        warn_unpinned = contract.warn_unpinned is not False
+        return cls(git=contract.git, revisions=revisions,
+                   warn_unpinned=warn_unpinned)
+
+    def all_names(self) -> List[str]:
+        if self.git.endswith('.git'):
+            other = self.git[:-4]
+        else:
+            other = self.git + '.git'
+        return [self.git, other]
+
+    def incorporate(
+        self, other: 'GitUnpinnedPackage'
+    ) -> 'GitUnpinnedPackage':
+        warn_unpinned = self.warn_unpinned and other.warn_unpinned
+
+        return GitUnpinnedPackage(
+            git=self.git,
+            revisions=self.revisions + other.revisions,
+            warn_unpinned=warn_unpinned,
+        )
+
+    def resolved(self) -> GitPinnedPackage:
+        requested = set(self.revisions)
+        if len(requested) == 0:
+            requested = {'master'}
+        elif len(requested) > 1:
+            raise_dependency_error(
+                'git dependencies should contain exactly one version. '
+                '{} contains: {}'.format(self.git, requested))
+
+        return GitPinnedPackage(
+            git=self.git, revision=requested.pop(),
+            warn_unpinned=self.warn_unpinned
+        )

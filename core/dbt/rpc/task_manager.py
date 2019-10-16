@@ -20,11 +20,12 @@ from dbt.contracts.rpc import (
     RemoteRunResult,
     RemoteExecutionResult,
     RemoteCatalogResults,
+    RemoteEmptyResult,
 )
 from dbt.logger import LogMessage
 from dbt.rpc.error import dbt_error, RPCException
 from dbt.rpc.task_handler import TaskHandlerState, RequestTaskHandler
-from dbt.rpc.method import RemoteMethod
+from dbt.rpc.method import RemoteMethod, RemoteManifestMethod
 
 from dbt.utils import restrict_to
 
@@ -167,6 +168,27 @@ TaskTags = Optional[Dict[str, Any]]
 
 
 @dataclass
+class PollRemoteEmptySuccessResult(PollResult, RemoteEmptyResult):
+    status: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success),
+        default=TaskHandlerState.Success,
+    )
+
+    @classmethod
+    def from_result(
+        cls: Type['PollRemoteEmptySuccessResult'],
+        status: TaskHandlerState,
+        base: RemoteEmptyResult,
+        tags: TaskTags,
+    ) -> 'PollRemoteEmptySuccessResult':
+        return cls(
+            status=status,
+            logs=base.logs,
+            tags=tags,
+        )
+
+
+@dataclass
 class PollExecuteSuccessResult(PollResult, RemoteExecutionResult):
     status: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success),
@@ -282,6 +304,8 @@ def poll_success(
         return PollCompileSuccessResult.from_result(status, result, tags)
     elif isinstance(result, RemoteCatalogResults):
         return PollCatalogSuccessResult.from_result(status, result, tags)
+    elif isinstance(result, RemoteEmptyResult):
+        return PollRemoteEmptySuccessResult.from_result(status, result, tags)
     else:
         raise dbt.exceptions.InternalException(
             'got invalid result in poll_success: {}'.format(result)
@@ -325,12 +349,17 @@ def _wrap_builtin(func: UnmanagedHandler) -> WrappedHandler:
     return inner
 
 
+class Reserved:
+    # a dummy class
+    pass
+
+
 class TaskManager:
     def __init__(self, args, config):
         self.args = args
         self.config = config
         self.tasks: Dict[uuid.UUID, RequestTaskHandler] = {}
-        self._rpc_task_map: Dict[str, RemoteMethod] = {}
+        self._rpc_task_map: Dict[str, Union[Reserved, RemoteMethod]] = {}
         self._builtins: Dict[str, UnmanagedHandler] = {}
         self.last_compile = LastCompile(status=ManifestStatus.Init)
         self._lock: dbt.flags.MP_CONTEXT.Lock = dbt.flags.MP_CONTEXT.Lock()
@@ -342,15 +371,19 @@ class TaskManager:
         self.tasks[request_handler.task_id] = request_handler
 
     def reserve_handler(self, task):
-        self._rpc_task_map[task.METHOD_NAME] = None
+        self._rpc_task_map[task.METHOD_NAME] = Reserved()
 
-    def _assert_unique_task(self, task_type: Type[RemoteMethod]):
+    def _check_task_handler(self, task_type: Type[RemoteMethod]) -> None:
+        if task_type.METHOD_NAME is None:
+            raise dbt.exceptions.InternalException(
+                'Task {} has no method name, cannot add it'.format(task_type)
+            )
         method = task_type.METHOD_NAME
         if method not in self._rpc_task_map:
             # this is weird, but hey whatever
             return
         other_task = self._rpc_task_map[method]
-        if other_task is None or type(other_task) is task_type:
+        if isinstance(other_task, Reserved) or type(other_task) is task_type:
             return
         raise dbt.exceptions.InternalException(
             'Got two tasks with the same method name! {0} and {1} both '
@@ -358,32 +391,41 @@ class TaskManager:
             'should be unique'.format(task_type, other_task)
         )
 
-    def add_task_handler(self, task: Type[RemoteMethod], manifest: Manifest):
-        if task.METHOD_NAME is None:
-            raise dbt.exceptions.InternalException(
-                'Task {} has no method name, cannot add it'.format(task)
-            )
-        self._assert_unique_task(task)
+    def add_manifest_task_handler(
+        self, task: Type[RemoteManifestMethod], manifest: Manifest
+    ) -> None:
+        self._check_task_handler(task)
         assert task.METHOD_NAME is not None
         self._rpc_task_map[task.METHOD_NAME] = task(
             self.args, self.config, manifest
         )
 
-    def rpc_task(self, method_name):
+    def add_basic_task_handler(self, task: Type[RemoteMethod]) -> None:
+        if issubclass(task, RemoteManifestMethod):
+            raise dbt.exceptions.InternalException(
+                f'Task {task} requires a manifest, cannot add it as a basic '
+                f'handler'
+            )
+
+        self._check_task_handler(task)
+        assert task.METHOD_NAME is not None
+        self._rpc_task_map[task.METHOD_NAME] = task(self.args, self.config)
+
+    def rpc_task(self, method_name: str) -> Union[Reserved, RemoteMethod]:
         with self._lock:
             return self._rpc_task_map[method_name]
 
-    def ready(self):
+    def ready(self) -> bool:
         with self._lock:
             return self.last_compile.status == ManifestStatus.Ready
 
-    def set_compiling(self):
+    def set_compiling(self) -> None:
         assert self.last_compile.status != ManifestStatus.Compiling, \
             f'invalid state {self.last_compile.status}'
         with self._lock:
             self.last_compile = LastCompile(status=ManifestStatus.Compiling)
 
-    def set_compile_exception(self, exc, logs=List[Dict[str, Any]]):
+    def set_compile_exception(self, exc, logs=List[Dict[str, Any]]) -> None:
         assert self.last_compile.status == ManifestStatus.Compiling, \
             f'invalid state {self.last_compile.status}'
         self.last_compile = LastCompile(
@@ -546,6 +588,11 @@ class TaskManager:
             dbt.exceptions.RPCLoadException(self.last_compile.error)
         )
 
+    def internal_error_for(self, msg) -> WrappedHandler:
+        def _error(*args, **kwargs):
+            raise dbt.exceptions.InternalException(msg)
+        return _wrap_builtin(_error)
+
     def get_handler(
         self, method, http_request, json_rpc_request
     ) -> Optional[Union[WrappedHandler, RemoteMethod]]:
@@ -558,13 +605,25 @@ class TaskManager:
             return _wrap_builtin(_builtins[method])
         elif method not in self._rpc_task_map:
             return None
-        # if we have no manifest we want to return an error about why
-        elif self.last_compile.status == ManifestStatus.Compiling:
-            return self.currently_compiling
-        elif self.last_compile.status == ManifestStatus.Error:
-            return self.compilation_error
+
+        task = self.rpc_task(method)
+        # If the task we got back was reserved, it must be a task that requires
+        # a manifest and we don't have one. So we had better have a state of
+        # compiling or error.
+
+        if isinstance(task, Reserved):
+            status = self.last_compile.status
+            if status == ManifestStatus.Compiling:
+                return self.currently_compiling
+            elif status == ManifestStatus.Error:
+                return self.compilation_error
+            else:
+                # if we got here, there is an error in dbt :(
+                return self.internal_error_for(
+                    f'Got a None task for {method}, state is {status}'
+                )
         else:
-            return self.rpc_task(method)
+            return task
 
     def _remove_task_if_finished(self, task_id: uuid.UUID) -> GCResultState:
         """Remove the task if it was finished. Raises a KeyError if the entry

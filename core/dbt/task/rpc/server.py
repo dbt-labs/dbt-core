@@ -1,7 +1,7 @@
 # import these so we can find them
 from . import sql_commands  # noqa
 from . import project_commands  # noqa
-from .base import RPCTask
+from . import deps # noqa
 import json
 import os
 import signal
@@ -21,6 +21,7 @@ from dbt.logger import (
 )
 from dbt.task.base import ConfiguredTask
 from dbt.utils import ForgivingJSONEncoder, env_set_truthy
+from dbt.rpc.method import RemoteMethod, RemoteManifestMethod
 from dbt.rpc.response_manager import ResponseManager
 from dbt.rpc.task_manager import TaskManager
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
@@ -41,8 +42,8 @@ def reload_manager(task_manager, tasks):
         with list_handler(logs):
             manifest = get_full_manifest(task_manager.config)
 
-        for cls in tasks:
-            task_manager.add_task_handler(cls, manifest)
+            for cls in tasks:
+                task_manager.add_manifest_task_handler(cls, manifest)
     except Exception as exc:
         logs = [r.to_dict() for r in logs]
         task_manager.set_compile_exception(exc, logs=logs)
@@ -102,6 +103,9 @@ class RPCServerTask(ConfiguredTask):
         self._tasks = tasks or self._default_tasks()
         self.task_manager = TaskManager(self.args, self.config)
         self._reloader = None
+        for handler in self._non_manifest_tasks():
+            self.task_manager.add_basic_task_handler(handler)
+
         self._reload_task_manager()
         signal.signal(signal.SIGHUP, self._sighup_handler)
 
@@ -113,22 +117,47 @@ class RPCServerTask(ConfiguredTask):
         else:
             log_manager.format_json()
 
-    def _reload_task_manager(self):
+    def _manifest_tasks(self):
+        return [
+            t for t in self._tasks
+            if issubclass(t, RemoteManifestMethod)
+        ]
+
+    def _non_manifest_tasks(self):
+        return [
+            t for t in self._tasks
+            if not issubclass(t, RemoteManifestMethod)
+        ]
+
+    def _reload_task_manager_thread(self):
         """This function can only be running once at a time, as it runs in the
         signal handler we replace
         """
-        # mark the task manager invalid for task running
-        self.task_manager.set_compiling()
-        for task in self._tasks:
-            self.task_manager.reserve_handler(task)
         # compile in a thread that will fix up the tag manager when it's done
         reloader = threading.Thread(
             target=reload_manager,
-            args=(self.task_manager, self._tasks),
+            args=(self.task_manager, self._manifest_tasks()),
         )
         reloader.start()
         # only assign to _reloader here, to avoid calling join() before start()
         self._reloader = reloader
+
+    def _reload_task_manager_fg(self):
+        """Override for single-threaded mode to run in the foreground"""
+        # just reload directly
+        reload_manager(self.task_manager, self._manifest_tasks())
+
+    def _reload_task_manager(self):
+        # mark the task manager invalid for task running
+        self.task_manager.set_compiling()
+        for task in self._manifest_tasks():
+            # reserve any tasks that are invalid
+            self.task_manager.reserve_handler(task)
+        # perform the reload
+        if self.single_threaded():
+            self._reload_task_manager_fg()
+        else:
+            self._reload_task_manager_thread()
 
     def _sighup_handler(self, signum, frame):
         with signhup_replace() as run_task_manger:
@@ -142,7 +171,7 @@ class RPCServerTask(ConfiguredTask):
 
     @staticmethod
     def _default_tasks():
-        return RPCTask.recursive_subclasses(named_only=True)
+        return RemoteMethod.recursive_subclasses(named_only=True)
 
     def single_threaded(self):
         return SINGLE_THREADED_WEBSERVER or self.args.single_threaded

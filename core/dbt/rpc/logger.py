@@ -7,20 +7,13 @@ from hologram.helpers import StrEnum
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from queue import Empty
-from typing import Optional, Any, Union
+from typing import Optional, Any
 
 from dbt.contracts.rpc import (
-    RemoteCompileResult, RemoteExecutionResult, RemoteCatalogResults
+    RemoteResult,
 )
 from dbt.exceptions import InternalException
 from dbt.utils import restrict_to
-
-
-RPCResult = Union[
-    RemoteCompileResult,
-    RemoteExecutionResult,
-    RemoteCatalogResults,
-]
 
 
 class QueueMessageType(StrEnum):
@@ -73,10 +66,10 @@ class QueueResultMessage(QueueMessage):
     message_type: QueueMessageType = field(
         metadata=restrict_to(QueueMessageType.Result)
     )
-    result: RPCResult
+    result: RemoteResult
 
     @classmethod
-    def from_result(cls, result: RPCResult):
+    def from_result(cls, result: RemoteResult):
         return cls(
             message_type=QueueMessageType.Result,
             result=result,
@@ -101,7 +94,7 @@ class QueueLogHandler(logbook.queues.MultiProcessingHandler):
     def emit_error(self, error: JSONRPCError):
         self.queue.put_nowait(QueueErrorMessage.from_error(error))
 
-    def emit_result(self, result: RPCResult):
+    def emit_result(self, result: RemoteResult):
         self.queue.put_nowait(QueueResultMessage.from_result(result))
 
 
