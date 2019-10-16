@@ -23,12 +23,12 @@ def downloads_directory():
     # the user might have set an environment variable. Set it to that, and do
     # not remove it when finished.
     if DOWNLOADS_PATH is None:
-        DOWNLOADS_PATH = os.getenv('DBT_DOWNLOADS_DIR')
+        DOWNLOADS_PATH = os.getenv("DBT_DOWNLOADS_DIR")
         remove_downloads = False
     # if we are making a per-run temp directory, remove it at the end of
     # successful runs
     if DOWNLOADS_PATH is None:
-        DOWNLOADS_PATH = tempfile.mkdtemp(prefix='dbt-downloads-')
+        DOWNLOADS_PATH = tempfile.mkdtemp(prefix="dbt-downloads-")
         remove_downloads = True
 
     system.make_directory(DOWNLOADS_PATH)
@@ -63,7 +63,7 @@ class PinnedPackage(BasePackage):
         if not version:
             return self.name
 
-        return '{}@{}'.format(self.name, version)
+        return "{}@{}".format(self.name, version)
 
     @abc.abstractmethod
     def get_version(self) -> Optional[str]:
@@ -98,8 +98,8 @@ class PinnedPackage(BasePackage):
         return None
 
 
-SomePinned = TypeVar('SomePinned', bound=PinnedPackage)
-SomeUnpinned = TypeVar('SomeUnpinned', bound='UnpinnedPackage')
+SomePinned = TypeVar("SomePinned", bound=PinnedPackage)
+SomeUnpinned = TypeVar("SomeUnpinned", bound="UnpinnedPackage")
 
 
 class UnpinnedPackage(Generic[SomePinned], BasePackage):

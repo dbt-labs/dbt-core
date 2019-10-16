@@ -28,7 +28,7 @@ class RegistryPackageMixin:
         return self.package
 
     def source_type(self) -> str:
-        return 'hub'
+        return "hub"
 
 
 class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
@@ -45,7 +45,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         return self.package
 
     def source_type(self):
-        return 'hub'
+        return "hub"
 
     def get_version(self):
         return self.version
@@ -54,7 +54,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         return self.version_latest
 
     def nice_version_name(self):
-        return 'version {}'.format(self.version)
+        return "version {}".format(self.version)
 
     def _fetch_metadata(self, project, renderer) -> RegistryPackageMetadata:
         dct = registry.package_version(self.package, self.version)
@@ -63,10 +63,8 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
     def install(self, project, renderer):
         metadata = self.fetch_metadata(project, renderer)
 
-        tar_name = '{}.{}.tar.gz'.format(self.package, self.version)
-        tar_path = os.path.realpath(
-            os.path.join(get_downloads_path(), tar_name)
-        )
+        tar_name = "{}.{}.tar.gz".format(self.package, self.version)
+        tar_path = os.path.realpath(os.path.join(get_downloads_path(), tar_name))
         system.make_directory(os.path.dirname(tar_path))
 
         download_url = metadata.downloads.tarball
@@ -91,9 +89,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         system.untar_package(tar_path, deps_path, package_name)
 
 
-class RegistryUnpinnedPackage(
-    RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]
-):
+class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]):
     def __init__(
         self,
         package: str,
@@ -110,24 +106,17 @@ class RegistryUnpinnedPackage(
             package_not_found(self.package)
 
     @classmethod
-    def from_contract(
-        cls, contract: RegistryPackage
-    ) -> 'RegistryUnpinnedPackage':
+    def from_contract(cls, contract: RegistryPackage) -> "RegistryUnpinnedPackage":
         raw_version = contract.get_versions()
 
-        versions = [
-            semver.VersionSpecifier.from_version_string(v)
-            for v in raw_version
-        ]
+        versions = [semver.VersionSpecifier.from_version_string(v) for v in raw_version]
         return cls(
             package=contract.package,
             versions=versions,
             install_prerelease=contract.install_prerelease
         )
 
-    def incorporate(
-        self, other: 'RegistryUnpinnedPackage'
-    ) -> 'RegistryUnpinnedPackage':
+    def incorporate(self, other: "RegistryUnpinnedPackage") -> "RegistryUnpinnedPackage":
         return RegistryUnpinnedPackage(
             package=self.package,
             install_prerelease=self.install_prerelease,
@@ -139,8 +128,7 @@ class RegistryUnpinnedPackage(
         try:
             range_ = semver.reduce_versions(*self.versions)
         except VersionsNotCompatibleException as e:
-            new_msg = ('Version error for package {}: {}'
-                       .format(self.name, e))
+            new_msg = "Version error for package {}: {}".format(self.name, e)
             raise DependencyException(new_msg) from e
 
         available = registry.get_available_versions(self.package)

@@ -48,12 +48,10 @@ class PackageListing:
         key_str: str = self._pick_key(key)
         self.packages[key_str] = value
 
-    def _mismatched_types(
-        self, old: UnpinnedPackage, new: UnpinnedPackage
-    ) -> NoReturn:
+    def _mismatched_types(self, old: UnpinnedPackage, new: UnpinnedPackage) -> NoReturn:
         raise_dependency_error(
-            f'Cannot incorporate {new} ({new.__class__.__name__}) in {old} '
-            f'({old.__class__.__name__}): mismatched types'
+            f"Cannot incorporate {new} ({new.__class__.__name__}) in {old} "
+            f"({old.__class__.__name__}): mismatched types"
         )
 
     def incorporate(self, package: UnpinnedPackage):
@@ -76,15 +74,13 @@ class PackageListing:
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
-                raise InternalException(
-                    'Invalid package type {}'.format(type(contract))
-                )
+                raise InternalException("Invalid package type {}".format(type(contract)))
             self.incorporate(pkg)
 
     @classmethod
     def from_contracts(
-        cls: Type['PackageListing'], src: List[PackageContract]
-    ) -> 'PackageListing':
+        cls: Type["PackageListing"], src: List[PackageContract]
+    ) -> "PackageListing":
         self = cls({})
         self.update_from(src)
         return self
