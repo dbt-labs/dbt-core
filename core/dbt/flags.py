@@ -53,7 +53,7 @@ def set_from_args(args):
 
     TEST_NEW_PARSER = getattr(args, 'test_new_parser', TEST_NEW_PARSER)
     WRITE_JSON = getattr(args, 'write_json', WRITE_JSON)
-    PARTIAL_PARSE = getattr(args, 'partial_parse', PARTIAL_PARSE)
+    PARTIAL_PARSE = getattr(args, 'partial_parse', None)
     MP_CONTEXT = _get_context()
 
 

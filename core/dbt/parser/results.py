@@ -9,11 +9,12 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedAnalysisNode, ParsedHookNode, ParsedRPCNode,
     ParsedModelNode, ParsedSeedNode, ParsedTestNode, ParsedSnapshotNode,
 )
-from dbt.contracts.util import Writable
+from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
     CompilationException, InternalException
 )
+from dbt.version import __version__
 
 
 # Parsers can return anything as long as it's a unique ID
@@ -43,7 +44,7 @@ def dict_field():
 
 
 @dataclass
-class ParseResult(JsonSchemaMixin, Writable):
+class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     vars_hash: FileHash
     profile_hash: FileHash
     project_hashes: MutableMapping[str, FileHash]
@@ -54,6 +55,7 @@ class ParseResult(JsonSchemaMixin, Writable):
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
     disabled: MutableMapping[str, List[ParsedNode]] = dict_field()
+    dbt_version: str = __version__
 
     def get_file(self, source_file: SourceFile) -> SourceFile:
         key = source_file.search_key

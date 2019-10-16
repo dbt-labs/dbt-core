@@ -32,6 +32,7 @@ from dbt.version import __version__
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
 PARSING_STATE = DbtProcessState('parsing')
+DEFAULT_PARTIAL_PARSE = False
 
 
 _parser_types = [
@@ -174,6 +175,8 @@ class ManifestLoader:
 
     def load(self, internal_manifest: Optional[Manifest] = None):
         old_results = self.read_parse_results()
+        if old_results is not None:
+            logger.debug('Got an acceptable cached parse result')
         self._load_macros(old_results, internal_manifest=internal_manifest)
         # make a manifest with just the macros to get the context
         macro_manifest = Manifest.from_macros(
@@ -192,11 +195,23 @@ class ManifestLoader:
         with open(path, 'wb') as fp:
             pickle.dump(self.results, fp)
 
-    def _matching_parse_results(self, result: ParseResult) -> bool:
+    def matching_parse_results(self, result: ParseResult) -> bool:
         """Compare the global hashes of the read-in parse results' values to
         the known ones, and return if it is ok to re-use the results.
         """
+        try:
+            if result.dbt_version != __version__:
+                logger.debug(
+                    'dbt version mismatch: {} != {}, cache invalidated'
+                    .format(result.dbt_version, __version__)
+                )
+                return False
+        except AttributeError:
+            logger.debug('malformed result file, cache invalidated')
+            return False
+
         valid = True
+
         if self.results.vars_hash != result.vars_hash:
             logger.debug('vars hash mismatch, cache invalidated')
             valid = False
@@ -227,8 +242,19 @@ class ManifestLoader:
                     valid = False
         return valid
 
+    def _partial_parse_enabled(self):
+        # if the CLI is set, follow that
+        if dbt.flags.PARTIAL_PARSE is not None:
+            return dbt.flags.PARTIAL_PARSE
+        # if the config is set, follow that
+        elif self.root_project.config.partial_parse is not None:
+            return self.root_project.config.partial_parse
+        else:
+            return DEFAULT_PARTIAL_PARSE
+
     def read_parse_results(self) -> Optional[ParseResult]:
-        if not dbt.flags.PARTIAL_PARSE:
+        if not self._partial_parse_enabled():
+            logger.debug('Partial parsing not enabled')
             return None
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
@@ -240,7 +266,7 @@ class ManifestLoader:
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
-                if self._matching_parse_results(result):
+                if self.matching_parse_results(result):
                     return result
             except Exception as exc:
                 logger.debug(
