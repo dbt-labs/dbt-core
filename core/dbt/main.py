@@ -789,14 +789,29 @@ def parse_args(args, cls=DBTArgumentParser):
         '''
     )
 
-    p.add_argument(
+    partial_flag = p.add_mutually_exclusive_group()
+    partial_flag.add_argument(
         '--partial-parse',
-        action='store_true',
+        action='store_const',
+        const=True,
+        dest='partial_parse',
+        default=None,
         help='''
         Allow for partial parsing by looking for and writing to a pickle file
-        in the target directory.
+        in the target directory. This overrides the user configuration file.
 
         WARNING: This can result in unexpected behavior if you use env_var()!
+        '''
+    )
+
+    partial_flag.add_argument(
+        '--no-partial-parse',
+        action='store_const',
+        const=False,
+        default=None,
+        dest='partial_parse',
+        help='''
+        Disallow partial parsing. This overrides the user configuration file.
         '''
     )
 

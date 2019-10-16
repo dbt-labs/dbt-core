@@ -174,6 +174,7 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
 class UserConfig(ExtensibleJsonSchemaMixin, Replaceable):
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
     use_colors: bool = DEFAULT_USE_COLORS
+    partial_parse: Optional[bool] = None
     printer_width: Optional[int] = None
 
     def set_values(self, cookie_dir):

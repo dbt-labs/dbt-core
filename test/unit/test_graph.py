@@ -37,7 +37,7 @@ class GraphTest(unittest.TestCase):
         self.mock_filesystem_constructor.stop()
         self.mock_hook_constructor.stop()
         self.load_patch.stop()
-        self.load_source_file_ptcher.stop()
+        self.load_source_file_patcher.stop()
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -57,6 +57,7 @@ class GraphTest(unittest.TestCase):
 
         self.get_adapter_patcher_cmn = patch('dbt.context.common.get_adapter')
         self.factory_cmn = self.get_adapter_patcher_cmn.start()
+
 
         def mock_write_gpickle(graph, outfile):
             self.graph_result = graph
@@ -86,12 +87,19 @@ class GraphTest(unittest.TestCase):
 
         self.mock_models = []
 
+        def _mock_parse_result(config, all_projects):
+            return ParseResult(
+                vars_hash=FileHash.from_contents('vars'),
+                project_hashes={name: FileHash.from_contents(name) for name in all_projects},
+                profile_hash=FileHash.from_contents('profile'),
+            )
+
         self.load_patch = patch('dbt.parser.manifest.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
-        self.mock_parse_result.return_value = ParseResult.rpc()
+        self.mock_parse_result.side_effect = _mock_parse_result
 
-        self.load_source_file_ptcher = patch.object(BaseParser, 'load_file')
-        self.mock_source_file = self.load_source_file_ptcher.start()
+        self.load_source_file_patcher = patch.object(BaseParser, 'load_file')
+        self.mock_source_file = self.load_source_file_patcher.start()
         self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 
         def filesystem_iter(iter_self):
@@ -291,3 +299,17 @@ class GraphTest(unittest.TestCase):
                 queue.get(block=False)
             queue.mark_done(got.unique_id)
         self.assertTrue(queue.empty())
+
+    def test__partial_parse(self):
+        config = self.get_config()
+
+        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
+        loader.load()
+        loader.create_manifest()
+        results = loader.results
+
+        self.assertTrue(loader.matching_parse_results(results))
+        too_low = results.replace(dbt_version='0.0.1a1')
+        self.assertFalse(loader.matching_parse_results(too_low))
+        too_high = results.replace(dbt_version='99999.99.99')
+        self.assertFalse(loader.matching_parse_results(too_high))
