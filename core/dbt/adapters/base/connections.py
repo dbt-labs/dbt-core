@@ -70,9 +70,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         with self.lock:
             if key not in self.thread_connections:
-                raise dbt.exceptions.InvalidConnectionException(
-                    key, list(self.thread_connections)
-                )
+                raise dbt.exceptions.InvalidConnectionException(key, list(self.thread_connections))
             return self.thread_connections[key]
 
     def set_thread_connection(self, conn: Connection) -> None:
