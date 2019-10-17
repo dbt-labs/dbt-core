@@ -99,7 +99,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise dbt.exceptions.RuntimeException(e.msg)
+            raise dbt.exceptions.RuntimeException(str(e)) from e
 
     @classmethod
     def open(cls, connection):

@@ -64,7 +64,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         error_msg = "\n".join(
             [item['message'] for item in error.errors])
 
-        raise dbt.exceptions.DatabaseException(error_msg)
+        raise dbt.exceptions.DatabaseException(error_msg) from error
 
     def clear_transaction(self):
         pass
@@ -90,7 +90,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise dbt.exceptions.RuntimeException(str(e))
+            raise dbt.exceptions.RuntimeException(str(e)) from e
 
     def cancel_open(self) -> None:
         pass
