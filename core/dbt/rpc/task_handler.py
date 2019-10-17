@@ -47,11 +47,13 @@ class TaskHandlerState(StrEnum):
     Running = 'running'
     Success = 'success'
     Error = 'error'
+    Killed = 'killed'
+    Failed = 'failed'
 
     def __lt__(self, other) -> bool:
         """A logical ordering for TaskHandlerState:
 
-        NotStarted < Initializing < Running < (Success, Error)
+        NotStarted < Initializing < Running < (Success, Error, Killed, Failed)
         """
         if not isinstance(other, TaskHandlerState):
             raise TypeError('cannot compare to non-TaskHandlerState')
@@ -89,7 +91,7 @@ class TaskHandlerState(StrEnum):
 
     @property
     def finished(self) -> bool:
-        return self == self.Error or self == self.Success
+        return self in (self.Error, self.Success, self.Killed, self.Failed)
 
 
 def sigterm_handler(signum, frame):
@@ -118,7 +120,6 @@ def _spawn_setup(task):
 def _task_bootstrap(
     task: RemoteMethod,
     queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
-    params: JsonSchemaMixin,
 ) -> None:
     """_task_bootstrap runs first inside the child process"""
     signal.signal(signal.SIGTERM, sigterm_handler)
@@ -129,7 +130,6 @@ def _task_bootstrap(
         rpc_exception = None
         result = None
         try:
-            task.set_args(params=params)
             result = task.handle_request()
         except RPCException as exc:
             rpc_exception = exc
@@ -168,23 +168,31 @@ class StateHandler:
     def set_end(self):
         self.handler.ended = datetime.utcnow()
 
-    def handle_success(self):
-        self.handler.state = TaskHandlerState.Success
+    def handle_completed(self):
+        if self.handler.state != TaskHandlerState.Killed:
+            if self.handler.result is None:
+                logger.critical(
+                    'got an invalid result=None in handle_completed'
+                )
+                assert False, 'Invalid result'
+            if self.handler.task.interpret_results(self.handler.result):
+                self.handler.state = TaskHandlerState.Success
+            else:
+                self.handler.state = TaskHandlerState.Failed
         self.set_end()
 
     def handle_error(self, exc_type, exc_value, exc_tb) -> bool:
         if isinstance(exc_value, RPCException):
             self.handler.error = exc_value
-            self.handler.state = TaskHandlerState.Error
         elif isinstance(exc_value, dbt.exceptions.Exception):
             self.handler.error = dbt_error(exc_value)
-            self.handler.state = TaskHandlerState.Error
         else:
             # we should only get here if we got a BaseException that is not
             # an Exception (we caught those in _wait_for_results), or a bug
             # in get_result's call stack. Either way, we should set an
             # error so we can figure out what happened on thread death
             self.handler.error = server_error(exc_value)
+        if self.handler.state != TaskHandlerState.Killed:
             self.handler.state = TaskHandlerState.Error
         self.set_end()
         return False
@@ -193,13 +201,13 @@ class StateHandler:
         if exc_type is not None:
             return self.handle_error(exc_type, exc_value, exc_tb)
 
-        self.handle_success()
+        self.handle_completed()
         return False
 
 
 class ErrorOnlyStateHandler(StateHandler):
     """A state handler that does not touch state on success."""
-    def handle_success(self):
+    def handle_completed(self):
         pass
 
 
@@ -375,6 +383,7 @@ class RequestTaskHandler(threading.Thread):
         with ErrorOnlyStateHandler(self):
             # this will raise a TypeError if you provided bad arguments.
             self.task_params = self._collect_parameters()
+            self.task.set_args(self.task_params)
         if self.task_params is None:
             raise dbt.exceptions.InternalException(
                 'Task params set to None!'
@@ -382,7 +391,7 @@ class RequestTaskHandler(threading.Thread):
         self.subscriber = QueueSubscriber(dbt.flags.MP_CONTEXT.Queue())
         self.process = dbt.flags.MP_CONTEXT.Process(
             target=_task_bootstrap,
-            args=(self.task, self.subscriber.queue, self.task_params)
+            args=(self.task, self.subscriber.queue)
         )
 
         if self._single_threaded:

@@ -168,19 +168,20 @@ TaskTags = Optional[Dict[str, Any]]
 
 
 @dataclass
-class PollRemoteEmptySuccessResult(PollResult, RemoteEmptyResult):
+class PollRemoteEmptyCompleteResult(PollResult, RemoteEmptyResult):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success),
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
         default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
-        cls: Type['PollRemoteEmptySuccessResult'],
+        cls: Type['PollRemoteEmptyCompleteResult'],
         status: TaskHandlerState,
         base: RemoteEmptyResult,
         tags: TaskTags,
-    ) -> 'PollRemoteEmptySuccessResult':
+    ) -> 'PollRemoteEmptyCompleteResult':
         return cls(
             status=status,
             logs=base.logs,
@@ -188,20 +189,29 @@ class PollRemoteEmptySuccessResult(PollResult, RemoteEmptyResult):
         )
 
 
-@dataclass
-class PollExecuteSuccessResult(PollResult, RemoteExecutionResult):
+class PollKilledResult(PollResult):
+    logs: List[LogMessage] = field(default_factory=list)
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success),
+        metadata=restrict_to(TaskHandlerState.Killed),
+        default=TaskHandlerState.Killed,
+    )
+
+
+@dataclass
+class PollExecuteCompleteResult(PollResult, RemoteExecutionResult):
+    status: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
         default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
-        cls: Type['PollExecuteSuccessResult'],
+        cls: Type['PollExecuteCompleteResult'],
         status: TaskHandlerState,
         base: RemoteExecutionResult,
         tags: TaskTags,
-    ) -> 'PollExecuteSuccessResult':
+    ) -> 'PollExecuteCompleteResult':
         return cls(
             status=status,
             results=base.results,
@@ -213,19 +223,20 @@ class PollExecuteSuccessResult(PollResult, RemoteExecutionResult):
 
 
 @dataclass
-class PollCompileSuccessResult(PollResult, RemoteCompileResult):
+class PollCompileCompleteResult(PollResult, RemoteCompileResult):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success),
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
         default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
-        cls: Type['PollCompileSuccessResult'],
+        cls: Type['PollCompileCompleteResult'],
         status: TaskHandlerState,
         base: RemoteCompileResult,
         tags: TaskTags,
-    ) -> 'PollCompileSuccessResult':
+    ) -> 'PollCompileCompleteResult':
         return cls(
             status=status,
             raw_sql=base.raw_sql,
@@ -238,19 +249,20 @@ class PollCompileSuccessResult(PollResult, RemoteCompileResult):
 
 
 @dataclass
-class PollRunSuccessResult(PollResult, RemoteRunResult):
+class PollRunCompleteResult(PollResult, RemoteRunResult):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success),
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
         default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
-        cls: Type['PollRunSuccessResult'],
+        cls: Type['PollRunCompleteResult'],
         status: TaskHandlerState,
         base: RemoteRunResult,
         tags: TaskTags,
-    ) -> 'PollRunSuccessResult':
+    ) -> 'PollRunCompleteResult':
         return cls(
             status=status,
             raw_sql=base.raw_sql,
@@ -264,19 +276,20 @@ class PollRunSuccessResult(PollResult, RemoteRunResult):
 
 
 @dataclass
-class PollCatalogSuccessResult(PollResult, RemoteCatalogResults):
+class PollCatalogCompleteResult(PollResult, RemoteCatalogResults):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success),
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
         default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
-        cls: Type['PollCatalogSuccessResult'],
+        cls: Type['PollCatalogCompleteResult'],
         status: TaskHandlerState,
         base: RemoteCatalogResults,
         tags: TaskTags,
-    ) -> 'PollCatalogSuccessResult':
+    ) -> 'PollCatalogCompleteResult':
         return cls(
             status=status,
             nodes=base.nodes,
@@ -287,28 +300,28 @@ class PollCatalogSuccessResult(PollResult, RemoteCatalogResults):
         )
 
 
-def poll_success(
+def poll_complete(
     status: TaskHandlerState, result: Any, tags: TaskTags
 ) -> PollResult:
-    if status != TaskHandlerState.Success:
+    if status not in (TaskHandlerState.Success, TaskHandlerState.Failed):
         raise dbt.exceptions.InternalException(
-            'got invalid result status in poll_success: {}'.format(status)
+            'got invalid result status in poll_complete: {}'.format(status)
         )
 
     if isinstance(result, RemoteExecutionResult):
-        return PollExecuteSuccessResult.from_result(status, result, tags)
+        return PollExecuteCompleteResult.from_result(status, result, tags)
     # order matters here, as RemoteRunResult subclasses RemoteCompileResult
     elif isinstance(result, RemoteRunResult):
-        return PollRunSuccessResult.from_result(status, result, tags)
+        return PollRunCompleteResult.from_result(status, result, tags)
     elif isinstance(result, RemoteCompileResult):
-        return PollCompileSuccessResult.from_result(status, result, tags)
+        return PollCompileCompleteResult.from_result(status, result, tags)
     elif isinstance(result, RemoteCatalogResults):
-        return PollCatalogSuccessResult.from_result(status, result, tags)
+        return PollCatalogCompleteResult.from_result(status, result, tags)
     elif isinstance(result, RemoteEmptyResult):
-        return PollRemoteEmptySuccessResult.from_result(status, result, tags)
+        return PollRemoteEmptyCompleteResult.from_result(status, result, tags)
     else:
         raise dbt.exceptions.InternalException(
-            'got invalid result in poll_success: {}'.format(result)
+            'got invalid result in poll_complete: {}'.format(result)
         )
 
 
@@ -471,7 +484,7 @@ class TaskManager:
 
         status = KillResultStatus.Missing
         try:
-            task = self.tasks[task_id_uuid]
+            task: RequestTaskHandler = self.tasks[task_id_uuid]
         except KeyError:
             # nothing to do!
             return KillResult(status)
@@ -485,10 +498,13 @@ class TaskManager:
             return KillResult(status)
 
         if task.process.is_alive():
-            os.kill(pid, signal.SIGINT)
             status = KillResultStatus.Killed
+            task.ended = datetime.utcnow()
+            os.kill(pid, signal.SIGINT)
+            task.state = TaskHandlerState.Killed
         else:
             status = KillResultStatus.Finished
+            # the status must be "Completed"
 
         return KillResult(status)
 
@@ -514,12 +530,17 @@ class TaskManager:
         # "forward-compatible" so if the state has transitioned to error/result
         # but we aren't there yet, the logs will still be valid.
         state = task.state
-        if state == TaskHandlerState.Error:
+        if state <= TaskHandlerState.Running:
+            return PollInProgressResult(
+                status=state,
+                tags=task.tags,
+                logs=task_logs,
+            )
+        elif state == TaskHandlerState.Error:
             err = task.error
             if err is None:
                 exc = dbt.exceptions.InternalException(
-                    'At end of task {}, state={} but error is None'
-                    .format(state, task_id)
+                    f'At end of task {task_id}, error state but error is None'
                 )
                 raise RPCException.from_error(
                     dbt_error(exc, logs=[l.to_dict() for l in task_logs])
@@ -527,27 +548,32 @@ class TaskManager:
             # the exception has logs already attached from the child, don't
             # overwrite those
             raise err
-        elif state == TaskHandlerState.Success:
+        elif state in (TaskHandlerState.Success, TaskHandlerState.Failed):
+
             if task.result is None:
                 exc = dbt.exceptions.InternalException(
-                    'At end of task {}, state={} but result is None'
-                    .format(state, task_id)
+                    f'At end of task {task_id}, state={state} but result is '
+                    'None'
                 )
                 raise RPCException.from_error(
                     dbt_error(exc, logs=[l.to_dict() for l in task_logs])
                 )
-
-            return poll_success(
+            return poll_complete(
                 status=state,
                 result=task.result,
                 tags=task.tags,
             )
-
-        return PollInProgressResult(
-            status=state,
-            tags=task.tags,
-            logs=task_logs,
-        )
+        elif state == TaskHandlerState.Killed:
+            return PollKilledResult(
+                status=state, tags=task.tags, logs=task_logs
+            )
+        else:
+            exc = dbt.exceptions.InternalException(
+                f'Got unknown value state={state} for task {task_id}'
+            )
+            raise RPCException.from_error(
+                dbt_error(exc, logs=[l.to_dict() for l in task_logs])
+            )
 
     def _rpc_builtins(self) -> Dict[str, UnmanagedHandler]:
         if self._builtins:

@@ -34,10 +34,11 @@ class RemoteRPCParameters(RPCTask[RPCCliParameters]):
         from dbt.main import parse_args, RPCArgumentParser
         split = shlex.split(params.cli)
         self.args = parse_args(split, RPCArgumentParser)
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
+        cls = self.get_rpc_task_cls()
+        if issubclass(cls, RemoteManifestMethod):
+            self.real_task = cls(self.args, self.config, self.manifest)
+        else:
+            self.real_task = cls(self.args, self.config)
 
     def get_rpc_task_cls(self) -> Type[HasCLI]:
         # This is obnoxious, but we don't have actual access to the TaskManager
@@ -53,11 +54,17 @@ class RemoteRPCParameters(RPCTask[RPCCliParameters]):
             .format(self.args.rpc_method, self.args.which)
         )
 
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
     def handle_request(self) -> Result:
-        cls = self.get_rpc_task_cls()
         # we parsed args from the cli, so we're set on that front
-        if issubclass(cls, RemoteManifestMethod):
-            task = cls(self.args, self.config, self.manifest)
-        else:
-            task = cls(self.args, self.config)
-        return task.handle_request()
+        return self.real_task.handle_request()
+
+    def interpret_results(self, results):
+        if self.real_task is None:
+            # I don't know what happened, but it was surely some flavor of
+            # failure
+            return False
+        return self.real_task.interpret_results(results)
