@@ -424,8 +424,9 @@ class InvalidConnectionException(RuntimeException):
         self.thread_id = thread_id
         self.known = known
         super().__init__(
-            msg='connection never acquired for thread {}, have {}'
-            .format(self.thread_id, self.known)
+            msg="connection never acquired for thread {}, have {}".format(
+                self.thread_id, self.known
+            )
         )
 
 
