@@ -52,7 +52,7 @@ class PostgresConnectionManager(SQLConnectionManager):
                 logger.debug("Failed to release connection!")
                 pass
 
-            raise dbt.exceptions.DatabaseException(str(e).strip())
+            raise dbt.exceptions.DatabaseException(str(e).strip()) from e
 
         except Exception as e:
             logger.debug("Error running SQL: {}", sql)
@@ -64,7 +64,7 @@ class PostgresConnectionManager(SQLConnectionManager):
                 # useful information, so raise it without modification.
                 raise
 
-            raise dbt.exceptions.RuntimeException(e)
+            raise dbt.exceptions.RuntimeException(e) from e
 
     @classmethod
     def open(cls, connection):

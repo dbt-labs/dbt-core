@@ -46,9 +46,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         with self.lock:
             if key not in self.thread_connections:
-                raise RuntimeError(
-                    'connection never acquired for thread {}, have {}'
-                    .format(key, list(self.thread_connections))
+                raise dbt.exceptions.InvalidConnectionException(
+                    key, list(self.thread_connections)
                 )
             return self.thread_connections[key]
 

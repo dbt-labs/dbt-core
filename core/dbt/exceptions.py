@@ -338,6 +338,16 @@ class CommandResultError(CommandError):
         return '{} running: {}'.format(self.msg, self.cmd)
 
 
+class InvalidConnectionException(RuntimeException):
+    def __init__(self, thread_id, known, node=None):
+        self.thread_id = thread_id
+        self.known = known
+        super().__init__(
+            msg='connection never acquired for thread {}, have {}'
+            .format(self.thread_id, self.known)
+        )
+
+
 def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 

@@ -219,7 +219,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.connections.commit_if_has_connection()
 
     def nice_connection_name(self):
-        conn = self.connections.get_thread_connection()
+        conn = self.connections.get_if_exists()
         if conn is None or conn.name is None:
             return '<None>'
         return conn.name
