@@ -189,6 +189,7 @@ class PollRemoteEmptyCompleteResult(PollResult, RemoteEmptyResult):
         )
 
 
+@dataclass
 class PollKilledResult(PollResult):
     logs: List[LogMessage] = field(default_factory=list)
     status: TaskHandlerState = field(
@@ -309,20 +310,21 @@ def poll_complete(
         )
 
     if isinstance(result, RemoteExecutionResult):
-        return PollExecuteCompleteResult.from_result(status, result, tags)
+        cls = PollExecuteCompleteResult
     # order matters here, as RemoteRunResult subclasses RemoteCompileResult
     elif isinstance(result, RemoteRunResult):
-        return PollRunCompleteResult.from_result(status, result, tags)
+        cls = PollRunCompleteResult
     elif isinstance(result, RemoteCompileResult):
-        return PollCompileCompleteResult.from_result(status, result, tags)
+        cls = PollCompileCompleteResult
     elif isinstance(result, RemoteCatalogResults):
-        return PollCatalogCompleteResult.from_result(status, result, tags)
+        cls = PollCatalogCompleteResult
     elif isinstance(result, RemoteEmptyResult):
-        return PollRemoteEmptyCompleteResult.from_result(status, result, tags)
+        cls = PollRemoteEmptyCompleteResult
     else:
         raise dbt.exceptions.InternalException(
             'got invalid result in poll_complete: {}'.format(result)
         )
+    return cls.from_result(status, result, tags)
 
 
 @dataclass

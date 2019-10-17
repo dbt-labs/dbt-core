@@ -173,7 +173,7 @@ class HasRPCServer(DBTIntegrationTest):
     def url(self):
         return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
-    def poll_for_result(self, request_token, request_id=1, timeout=60):
+    def poll_for_result(self, request_token, status='success', request_id=1, timeout=60):
         start = time.time()
         while True:
             time.sleep(0.5)
@@ -183,11 +183,10 @@ class HasRPCServer(DBTIntegrationTest):
                 return response
             result = self.assertIsResult(response_json, request_id)
             self.assertIn('status', result)
-            if result['status'] == 'success':
+            if result['status'] == status:
                 return response
             if timeout is not None:
                 self.assertGreater(timeout, (time.time() - start))
-
 
     def async_query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
@@ -306,7 +305,9 @@ class HasRPCServer(DBTIntegrationTest):
 
         poll_id = 90891
 
-        poll_response = self.poll_for_result(request_token, poll_id).json()
+        poll_response = self.poll_for_result(
+            request_token, poll_id, status='killed'
+        ).json()
         error = self.assertIsErrorWithCode(poll_response, 10009, poll_id)
         self.assertEqual(error['message'], 'RPC process killed')
         self.assertIn('data', error)
