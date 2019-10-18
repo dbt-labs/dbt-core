@@ -169,6 +169,11 @@ class RPCCompiling(RuntimeException):
         ' compile status'
     )
 
+    def __init__(self, msg=None, node=None):
+        if msg is None:
+            msg = 'compile in progress'
+        super().__init__(msg, node)
+
 
 class RPCLoadException(RuntimeException):
     CODE = 10011

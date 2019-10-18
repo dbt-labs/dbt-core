@@ -1,6 +1,6 @@
 import abc
 import shlex
-from typing import Type
+from typing import Type, Optional
 
 
 from dbt.contracts.rpc import RPCCliParameters
@@ -26,19 +26,34 @@ class HasCLI(RemoteMethod[Parameters, Result]):
         pass
 
 
-class RemoteRPCParameters(RPCTask[RPCCliParameters]):
+class RemoteRPCCli(RPCTask[RPCCliParameters]):
     METHOD_NAME = 'cli_args'
+
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config, manifest)
+        self.task_type: Optional[Type[RemoteMethod]] = None
+        self.real_task: Optional[RemoteMethod] = None
+
+    def set_config(self, config):
+        super().set_config(config)
+        if issubclass(self.task_type, RemoteManifestMethod):
+            self.real_task = self.task_type(
+                self.args, self.config, self.manifest
+            )
+        else:
+            self.real_task = self.task_type(
+                self.args, self.config
+            )
 
     def set_args(self, params: RPCCliParameters) -> None:
         # more import cycles :(
         from dbt.main import parse_args, RPCArgumentParser
         split = shlex.split(params.cli)
         self.args = parse_args(split, RPCArgumentParser)
-        cls = self.get_rpc_task_cls()
-        if issubclass(cls, RemoteManifestMethod):
-            self.real_task = cls(self.args, self.config, self.manifest)
-        else:
-            self.real_task = cls(self.args, self.config)
+        self.task_type = self.get_rpc_task_cls()
+
+    def get_flags(self):
+        return self.task_type.get_flags(self)
 
     def get_rpc_task_cls(self) -> Type[HasCLI]:
         # This is obnoxious, but we don't have actual access to the TaskManager
@@ -59,6 +74,11 @@ class RemoteRPCParameters(RPCTask[RPCCliParameters]):
         pass
 
     def handle_request(self) -> Result:
+        if self.real_task is None:
+            raise InternalException(
+                'CLI task is in a bad state: handle_request called with no '
+                'real_task set!'
+            )
         # we parsed args from the cli, so we're set on that front
         return self.real_task.handle_request()
 

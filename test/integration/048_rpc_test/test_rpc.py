@@ -173,11 +173,17 @@ class HasRPCServer(DBTIntegrationTest):
     def url(self):
         return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
-    def poll_for_result(self, request_token, status='success', request_id=1, timeout=60):
+    def poll_for_result(self, request_token, request_id=1, timeout=60, status='success', logs=None):
         start = time.time()
+        kwargs = {
+            'request_token': request_token,
+        }
+        if logs is not None:
+            kwargs['logs'] = logs
+
         while True:
             time.sleep(0.5)
-            response = self.query('poll', request_token=request_token, _test_request_id=request_id)
+            response = self.query('poll', _test_request_id=request_id, **kwargs)
             response_json = response.json()
             if 'error' in response_json:
                 return response
@@ -186,7 +192,12 @@ class HasRPCServer(DBTIntegrationTest):
             if result['status'] == status:
                 return response
             if timeout is not None:
-                self.assertGreater(timeout, (time.time() - start))
+                delta = (time.time() - start)
+                self.assertGreater(
+                    timeout, delta,
+                    'At time {}, never saw {}.\nLast response: {}'
+                    .format(delta, status, result)
+                )
 
     def async_query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
@@ -306,16 +317,12 @@ class HasRPCServer(DBTIntegrationTest):
         poll_id = 90891
 
         poll_response = self.poll_for_result(
-            request_token, poll_id, status='killed'
+            request_token, request_id=poll_id, status='killed', logs=True
         ).json()
-        error = self.assertIsErrorWithCode(poll_response, 10009, poll_id)
-        self.assertEqual(error['message'], 'RPC process killed')
-        self.assertIn('data', error)
-        error_data = error['data']
-        self.assertEqual(error_data['signum'], 2)
-        self.assertEqual(error_data['message'], 'RPC process killed by signal 2')
-        self.assertIn('logs', error_data)
-        return error_data
+
+        result = self.assertIsResult(poll_response, id_=poll_id)
+        self.assertIn('logs', result)
+        return result
 
     def get_sleep_query(self, duration=15, request_id=90890):
         sleep_query = self.query(
@@ -660,7 +667,7 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertEqual(rowdict[0]['tags'], task_tags)
         self.assertEqual(rowdict[1]['request_id'], request_id)
         self.assertEqual(rowdict[1]['method'], 'run_sql')
-        self.assertEqual(rowdict[1]['state'], 'error')
+        self.assertEqual(rowdict[1]['state'], 'killed')
         self.assertIsNone(rowdict[1]['timeout'])
         self.assertGreater(rowdict[1]['elapsed'], 0)
         self.assertIsNone(rowdict[1]['tags'])
@@ -675,8 +682,8 @@ class TestRPCServerCompileRun(HasRPCServer):
         # we cancel the in-progress sleep query.
         time.sleep(3)
 
-        error_data = self.kill_and_assert(request_token, request_id)
-        self.assertTrue(len(error_data['logs']) > 0)
+        result_data = self.kill_and_assert(request_token, request_id)
+        self.assertTrue(len(result_data['logs']) > 0)
 
     @use_profile('postgres')
     def test_invalid_requests_postgres(self):
@@ -832,6 +839,7 @@ class TestRPCServerProjects(HasRPCServer):
 
     @use_profile('postgres')
     def test_compile_project_cli_postgres(self):
+        self.run_dbt_with_vars(['compile'])
         result = self.async_query('cli_args', cli='compile').json()
         self.assertHasResults(
             result,

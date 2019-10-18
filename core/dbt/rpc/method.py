@@ -1,10 +1,10 @@
 import inspect
 from abc import abstractmethod
 from typing import List, Optional, Type, TypeVar, Generic
+from typing import Any  # noqa
 
-from dbt.contracts.rpc import RPCParameters, RemoteResult
+from dbt.contracts.rpc import RPCParameters, RemoteResult, RemoteMethodFlags
 from dbt.exceptions import NotImplementedException, InternalException
-
 
 Parameters = TypeVar('Parameters', bound=RPCParameters)
 Result = TypeVar('Result', bound=RemoteResult)
@@ -45,9 +45,13 @@ class RemoteMethod(Generic[Parameters, Result]):
             )
         return params_type
 
+    def get_flags(self) -> RemoteMethodFlags:
+        return RemoteMethodFlags.Empty
+
     @classmethod
     def recursive_subclasses(
-        cls: Type[T], named_only: bool = True
+        cls: Type[T],
+        named_only: bool = True,
     ) -> List[Type[T]]:
         classes = []
         current = [cls]
@@ -62,18 +66,51 @@ class RemoteMethod(Generic[Parameters, Result]):
 
     @abstractmethod
     def set_args(self, params: Parameters):
-        raise NotImplementedException(
-            'set_args not implemented'
-        )
+        """set_args executes in the parent process for an RPC call"""
+        raise NotImplementedException('set_args not implemented')
 
     @abstractmethod
     def handle_request(self) -> Result:
-        raise NotImplementedException(
-            'handle_request not implemented'
-        )
+        """handle_request executes inside the child process for an RPC call"""
+        raise NotImplementedException('handle_request not implemented')
+
+    def cleanup(self, result: Optional[Result]):
+        """cleanup is an optional method that executes inside the parent
+        process for an RPC call.
+
+        This will always be executed if set_args was.
+
+        It's optional, and by default it does nothing.
+        """
+
+    def set_config(self, config):
+        self.config = config
 
 
 class RemoteManifestMethod(RemoteMethod[Parameters, Result]):
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
         self.manifest = manifest
+
+
+class TaskList(List[Type[RemoteMethod]]):
+    def __init__(
+        self,
+        tasks: Optional[List[Type[RemoteMethod]]] = None
+    ):
+        task_list: List[Type[RemoteMethod]]
+        if tasks is None:
+            task_list = RemoteMethod.recursive_subclasses(named_only=True)
+        else:
+            task_list = tasks
+        return super().__init__(task_list)
+
+    def manifest(self) -> List[Type[RemoteManifestMethod]]:
+        return [
+            t for t in self if issubclass(t, RemoteManifestMethod)
+        ]
+
+    def non_manifest(self) -> List[Type[RemoteMethod]]:
+        return [
+            t for t in self if not issubclass(t, RemoteManifestMethod)
+        ]

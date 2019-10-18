@@ -1,8 +1,9 @@
 import operator
 import os
 import signal
+import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import (
@@ -10,27 +11,50 @@ from typing import (
 )
 
 from hologram import JsonSchemaMixin, ValidationError
-from hologram.helpers import StrEnum
 
 import dbt.exceptions
 import dbt.flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.rpc import (
-    RemoteCompileResult,
-    RemoteRunResult,
+    TaskTags,
+    LastParse,
+    ManifestStatus,
+    GCSettings,
+    KillResult,
+    KillResultStatus,
+    GCResultState,
+    GCResultSet,
+    TaskRow,
+    PSResult,
     RemoteExecutionResult,
+    RemoteRunResult,
+    RemoteCompileResult,
     RemoteCatalogResults,
     RemoteEmptyResult,
+    PollResult,
+    PollInProgressResult,
+    PollKilledResult,
+    PollExecuteCompleteResult,
+    PollRunCompleteResult,
+    PollCompileCompleteResult,
+    PollCatalogCompleteResult,
+    PollRemoteEmptyCompleteResult,
 )
-from dbt.logger import LogMessage
+from dbt.logger import LogMessage, list_handler
+from dbt.perf_utils import get_full_manifest
 from dbt.rpc.error import dbt_error, RPCException
-from dbt.rpc.task_handler import TaskHandlerState, RequestTaskHandler
-from dbt.rpc.method import RemoteMethod, RemoteManifestMethod
+from dbt.rpc.task_handler import (
+    TaskHandlerState, RequestTaskHandler, set_parse_state_with
+)
+from dbt.rpc.method import RemoteMethod, RemoteManifestMethod, TaskList
 
-from dbt.utils import restrict_to
 
 # import this to make sure our timedelta encoder is registered
 from dbt import helper_types  # noqa
+from dbt.utils import env_set_truthy
+
+
+SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
 
 
 def _assert_started(task_handler: RequestTaskHandler) -> datetime:
@@ -49,256 +73,73 @@ def _assert_ended(task_handler: RequestTaskHandler) -> datetime:
     return task_handler.ended
 
 
-@dataclass
-class TaskRow(JsonSchemaMixin):
-    task_id: uuid.UUID
-    request_id: Union[str, int]
-    request_source: str
-    method: str
-    state: TaskHandlerState
-    start: Optional[datetime]
-    end: Optional[datetime]
-    elapsed: Optional[float]
-    timeout: Optional[float]
-    tags: Optional[Dict[str, Any]]
+def make_task(task_handler: RequestTaskHandler, now_time: datetime) -> TaskRow:
+    # get information about the task in a way that should not provide any
+    # conflicting information. Calculate elapsed time based on `now_time`
+    state = task_handler.state
+    # store end/start so 'ps' output always makes sense:
+    # not started -> no start time/elapsed, running -> no end time, etc
+    end = None
+    start = None
+    elapsed = None
+    if state > TaskHandlerState.NotStarted:
+        start = _assert_started(task_handler)
+        elapsed_end = now_time
 
-    @classmethod
-    def from_task(cls, task_handler: RequestTaskHandler, now_time: datetime):
-        # get information about the task in a way that should not provide any
-        # conflicting information. Calculate elapsed time based on `now_time`
-        state = task_handler.state
-        # store end/start so 'ps' output always makes sense:
-        # not started -> no start time/elapsed, running -> no end time, etc
-        end = None
-        start = None
-        elapsed = None
-        if state > TaskHandlerState.NotStarted:
-            start = _assert_started(task_handler)
-            elapsed_end = now_time
+        if state.finished:
+            elapsed_end = _assert_ended(task_handler)
+            end = elapsed_end
 
-            if state.finished:
-                elapsed_end = _assert_ended(task_handler)
-                end = elapsed_end
+        elapsed = (elapsed_end - start).total_seconds()
 
-            elapsed = (elapsed_end - start).total_seconds()
-
-        return cls(
-            task_id=task_handler.task_id,
-            request_id=task_handler.request_id,
-            request_source=task_handler.request_source,
-            method=task_handler.method,
-            state=state,
-            start=start,
-            end=end,
-            elapsed=elapsed,
-            timeout=task_handler.timeout,
-            tags=task_handler.tags,
-        )
+    return TaskRow(
+        task_id=task_handler.task_id,
+        request_id=task_handler.request_id,
+        request_source=task_handler.request_source,
+        method=task_handler.method,
+        state=state,
+        start=start,
+        end=end,
+        elapsed=elapsed,
+        timeout=task_handler.timeout,
+        tags=task_handler.tags,
+    )
 
 
-class KillResultStatus(StrEnum):
-    Missing = 'missing'
-    NotStarted = 'not_started'
-    Killed = 'killed'
-    Finished = 'finished'
+UnmanagedHandler = Callable[..., JsonSchemaMixin]
+WrappedHandler = Callable[..., Dict[str, Any]]
 
 
-@dataclass
-class KillResult(JsonSchemaMixin):
-    status: KillResultStatus
+def _wrap_builtin(func: UnmanagedHandler) -> WrappedHandler:
+    @wraps(func)
+    def inner(*args, **kwargs):
+        return func(*args, **kwargs).to_dict(omit_none=False)
+    return inner
 
 
-@dataclass
-class PollResult(JsonSchemaMixin):
-    tags: Optional[Dict[str, Any]] = None
-    status: TaskHandlerState = TaskHandlerState.NotStarted
+class Reserved:
+    # a dummy class
+    pass
 
 
-class GCResultState(StrEnum):
-    Deleted = 'deleted'  # successful GC
-    Missing = 'missing'  # nothing to GC
-    Running = 'running'  # can't GC
+class ManifestReloader(threading.Thread):
+    def __init__(self, task_manager: 'TaskManager') -> None:
+        super().__init__()
+        self.task_manager = task_manager
 
-
-@dataclass
-class _GCResult(JsonSchemaMixin):
-    task_id: uuid.UUID
-    status: GCResultState
-
-
-@dataclass
-class GCResultSet(JsonSchemaMixin):
-    deleted: List[uuid.UUID] = field(default_factory=list)
-    missing: List[uuid.UUID] = field(default_factory=list)
-    running: List[uuid.UUID] = field(default_factory=list)
-
-    def add_result(self, result: _GCResult):
-        if result.status == GCResultState.Missing:
-            self.missing.append(result.task_id)
-        elif result.status == GCResultState.Running:
-            self.running.append(result.task_id)
-        elif result.status == GCResultState.Deleted:
-            self.deleted.append(result.task_id)
-        else:
-            raise dbt.exceptions.InternalException(
-                'Got invalid _GCResult in add_result: {!r}'
-                .format(result)
-            )
-
-
-@dataclass
-class GCSettings(JsonSchemaMixin):
-    # start evicting the longest-ago-ended tasks here
-    maxsize: int
-    # start evicting all tasks before now - auto_reap_age when we have this
-    # many tasks in the table
-    reapsize: int
-    # a positive timedelta indicating how far back we should go
-    auto_reap_age: timedelta
+    def run(self) -> None:
+        logs: List[LogMessage] = []
+        with set_parse_state_with(self.task_manager, lambda: logs):
+            with list_handler(logs):
+                self.task_manager.parse_manifest()
 
 
 @dataclass
 class _GCArguments(JsonSchemaMixin):
+    """An argument validation helper"""
     task_ids: Optional[List[uuid.UUID]]
     before: Optional[datetime]
     settings: Optional[GCSettings]
-
-
-TaskTags = Optional[Dict[str, Any]]
-
-
-@dataclass
-class PollRemoteEmptyCompleteResult(PollResult, RemoteEmptyResult):
-    status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success,
-                             TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
-    )
-
-    @classmethod
-    def from_result(
-        cls: Type['PollRemoteEmptyCompleteResult'],
-        status: TaskHandlerState,
-        base: RemoteEmptyResult,
-        tags: TaskTags,
-    ) -> 'PollRemoteEmptyCompleteResult':
-        return cls(
-            status=status,
-            logs=base.logs,
-            tags=tags,
-        )
-
-
-@dataclass
-class PollKilledResult(PollResult):
-    logs: List[LogMessage] = field(default_factory=list)
-    status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Killed),
-        default=TaskHandlerState.Killed,
-    )
-
-
-@dataclass
-class PollExecuteCompleteResult(PollResult, RemoteExecutionResult):
-    status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success,
-                             TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
-    )
-
-    @classmethod
-    def from_result(
-        cls: Type['PollExecuteCompleteResult'],
-        status: TaskHandlerState,
-        base: RemoteExecutionResult,
-        tags: TaskTags,
-    ) -> 'PollExecuteCompleteResult':
-        return cls(
-            status=status,
-            results=base.results,
-            generated_at=base.generated_at,
-            elapsed_time=base.elapsed_time,
-            logs=base.logs,
-            tags=tags,
-        )
-
-
-@dataclass
-class PollCompileCompleteResult(PollResult, RemoteCompileResult):
-    status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success,
-                             TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
-    )
-
-    @classmethod
-    def from_result(
-        cls: Type['PollCompileCompleteResult'],
-        status: TaskHandlerState,
-        base: RemoteCompileResult,
-        tags: TaskTags,
-    ) -> 'PollCompileCompleteResult':
-        return cls(
-            status=status,
-            raw_sql=base.raw_sql,
-            compiled_sql=base.compiled_sql,
-            node=base.node,
-            timing=base.timing,
-            logs=base.logs,
-            tags=tags,
-        )
-
-
-@dataclass
-class PollRunCompleteResult(PollResult, RemoteRunResult):
-    status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success,
-                             TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
-    )
-
-    @classmethod
-    def from_result(
-        cls: Type['PollRunCompleteResult'],
-        status: TaskHandlerState,
-        base: RemoteRunResult,
-        tags: TaskTags,
-    ) -> 'PollRunCompleteResult':
-        return cls(
-            status=status,
-            raw_sql=base.raw_sql,
-            compiled_sql=base.compiled_sql,
-            node=base.node,
-            timing=base.timing,
-            logs=base.logs,
-            table=base.table,
-            tags=tags,
-        )
-
-
-@dataclass
-class PollCatalogCompleteResult(PollResult, RemoteCatalogResults):
-    status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success,
-                             TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
-    )
-
-    @classmethod
-    def from_result(
-        cls: Type['PollCatalogCompleteResult'],
-        status: TaskHandlerState,
-        base: RemoteCatalogResults,
-        tags: TaskTags,
-    ) -> 'PollCatalogCompleteResult':
-        return cls(
-            status=status,
-            nodes=base.nodes,
-            generated_at=base.generated_at,
-            _compile_results=base._compile_results,
-            logs=base.logs,
-            tags=tags,
-        )
 
 
 def poll_complete(
@@ -308,6 +149,14 @@ def poll_complete(
         raise dbt.exceptions.InternalException(
             'got invalid result status in poll_complete: {}'.format(status)
         )
+
+    cls: Type[Union[
+        PollExecuteCompleteResult,
+        PollRunCompleteResult,
+        PollCompileCompleteResult,
+        PollCatalogCompleteResult,
+        PollRemoteEmptyCompleteResult,
+    ]]
 
     if isinstance(result, RemoteExecutionResult):
         cls = PollExecuteCompleteResult
@@ -327,65 +176,80 @@ def poll_complete(
     return cls.from_result(status, result, tags)
 
 
-@dataclass
-class PollInProgressResult(PollResult):
-    logs: List[LogMessage] = field(default_factory=list)
-
-
-@dataclass
-class PSResult(JsonSchemaMixin):
-    rows: List[TaskRow]
-
-
-class ManifestStatus(StrEnum):
-    Init = 'init'
-    Compiling = 'compiling'
-    Ready = 'ready'
-    Error = 'error'
-
-
-@dataclass
-class LastCompile(JsonSchemaMixin):
-    status: ManifestStatus
-    error: Optional[Dict[str, Any]] = None
-    logs: Optional[List[Dict[str, Any]]] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-    pid: int = field(default_factory=os.getpid)
-
-
-UnmanagedHandler = Callable[..., JsonSchemaMixin]
-WrappedHandler = Callable[..., Dict[str, Any]]
-
-
-def _wrap_builtin(func: UnmanagedHandler) -> WrappedHandler:
-    @wraps(func)
-    def inner(*args, **kwargs):
-        return func(*args, **kwargs).to_dict(omit_none=False)
-    return inner
-
-
-class Reserved:
-    # a dummy class
-    pass
-
-
 class TaskManager:
-    def __init__(self, args, config):
+    def __init__(self, args, config, task_types: TaskList) -> None:
         self.args = args
         self.config = config
-        self.tasks: Dict[uuid.UUID, RequestTaskHandler] = {}
+        self._task_types: TaskList = task_types
+        self.active_tasks: Dict[uuid.UUID, RequestTaskHandler] = {}
         self._rpc_task_map: Dict[str, Union[Reserved, RemoteMethod]] = {}
         self._builtins: Dict[str, UnmanagedHandler] = {}
-        self.last_compile = LastCompile(status=ManifestStatus.Init)
+        self.last_parse: LastParse = LastParse(status=ManifestStatus.Init)
         self._lock: dbt.flags.MP_CONTEXT.Lock = dbt.flags.MP_CONTEXT.Lock()
-        self._gc_settings = GCSettings(
+        self._gc_settings: GCSettings = GCSettings(
             maxsize=1000, reapsize=500, auto_reap_age=timedelta(days=30)
         )
+        self._reloader: Optional[threading.Thread] = None
 
-    def add_request(self, request_handler):
-        self.tasks[request_handler.task_id] = request_handler
+    def _reload_task_manager_thread(self, reloader: threading.Thread):
+        """This function can only be running once at a time, as it runs in the
+        signal handler we replace
+        """
+        # compile in a thread that will fix up the tag manager when it's done
+        reloader.start()
+        # only assign to _reloader here, to avoid calling join() before start()
+        self._reloader = reloader
 
-    def reserve_handler(self, task):
+    def _reload_task_manager_fg(self, reloader: threading.Thread):
+        """Override for single-threaded mode to run in the foreground"""
+        # just reload directly
+        reloader.run()
+
+    def reload_manifest_tasks(self) -> bool:
+        """Reload the manifest using a manifest reloader. Returns False if the
+        reload was not started because it was already running.
+        """
+        if not self.set_parsing():
+            return False
+        if self._reloader is not None:
+            # join() the existing reloader
+            self._reloader.join()
+        # perform the reload
+        reloader = ManifestReloader(self)
+        if self.single_threaded():
+            self._reload_task_manager_fg(reloader)
+        else:
+            self._reload_task_manager_thread(reloader)
+        return True
+
+    def single_threaded(self):
+        return SINGLE_THREADED_WEBSERVER or self.args.single_threaded
+
+    def reload_non_manifest_tasks(self):
+        # reload all the non-manifest tasks because the config changed.
+        # manifest tasks are still blocked so we can ignore them
+        for task_cls in self._task_types.non_manifest():
+            self.add_basic_task_handler(task_cls)
+
+    def reload_config(self):
+        config = self.config.from_args(self.args)
+        self.config = config
+        # reload all the non-manifest tasks because the config changed.
+        # manifest tasks are still blocked so we can ignore them
+        self.reload_non_manifest_tasks()
+        return config
+
+    def add_request(self, request_handler: RequestTaskHandler):
+        self.active_tasks[request_handler.task_id] = request_handler
+
+    def reserve_handler(self, task: Type[RemoteMethod]) -> None:
+        """Reserved tasks will return a status indicating that the manifest is
+        compiling.
+        """
+        if task.METHOD_NAME is None:
+            raise dbt.exceptions.InternalException(
+                f'Cannot add task {task} as it has no method name'
+            )
         self._rpc_task_map[task.METHOD_NAME] = Reserved()
 
     def _check_task_handler(self, task_type: Type[RemoteMethod]) -> None:
@@ -432,34 +296,46 @@ class TaskManager:
 
     def ready(self) -> bool:
         with self._lock:
-            return self.last_compile.status == ManifestStatus.Ready
+            return self.last_parse.status == ManifestStatus.Ready
 
-    def set_compiling(self) -> None:
-        assert self.last_compile.status != ManifestStatus.Compiling, \
-            f'invalid state {self.last_compile.status}'
+    def set_parsing(self) -> bool:
         with self._lock:
-            self.last_compile = LastCompile(status=ManifestStatus.Compiling)
+            if self.last_parse.status == ManifestStatus.Compiling:
+                return False
+            self.last_parse = LastParse(status=ManifestStatus.Compiling)
+        for task in self._task_types.manifest():
+            # reserve any tasks that are invalid
+            self.reserve_handler(task)
+        return True
+
+    def parse_manifest(self) -> None:
+        manifest = get_full_manifest(self.config)
+
+        for task_cls in self._task_types.manifest():
+            self.add_manifest_task_handler(
+                task_cls, manifest
+            )
 
     def set_compile_exception(self, exc, logs=List[Dict[str, Any]]) -> None:
-        assert self.last_compile.status == ManifestStatus.Compiling, \
-            f'invalid state {self.last_compile.status}'
-        self.last_compile = LastCompile(
+        assert self.last_parse.status == ManifestStatus.Compiling, \
+            f'invalid state {self.last_parse.status}'
+        self.last_parse = LastParse(
             error={'message': str(exc)},
             status=ManifestStatus.Error,
             logs=logs
         )
 
     def set_ready(self, logs=List[Dict[str, Any]]) -> None:
-        assert self.last_compile.status == ManifestStatus.Compiling, \
-            f'invalid state {self.last_compile.status}'
-        self.last_compile = LastCompile(
+        assert self.last_parse.status == ManifestStatus.Compiling, \
+            f'invalid state {self.last_parse.status}'
+        self.last_parse = LastParse(
             status=ManifestStatus.Ready,
             logs=logs
         )
 
-    def process_status(self) -> LastCompile:
+    def process_status(self) -> LastParse:
         with self._lock:
-            last_compile = self.last_compile
+            last_compile = self.last_parse
         return last_compile
 
     def process_ps(
@@ -470,8 +346,8 @@ class TaskManager:
         rows = []
         now = datetime.utcnow()
         with self._lock:
-            for task in self.tasks.values():
-                row = TaskRow.from_task(task, now)
+            for task in self.active_tasks.values():
+                row = make_task(task, now)
                 if row.state.finished and completed:
                     rows.append(row)
                 elif not row.state.finished and active:
@@ -486,7 +362,7 @@ class TaskManager:
 
         status = KillResultStatus.Missing
         try:
-            task: RequestTaskHandler = self.tasks[task_id_uuid]
+            task: RequestTaskHandler = self.active_tasks[task_id_uuid]
         except KeyError:
             # nothing to do!
             return KillResult(status)
@@ -518,7 +394,7 @@ class TaskManager:
     ) -> PollResult:
         task_id = uuid.UUID(request_token)
         try:
-            task: RequestTaskHandler = self.tasks[task_id]
+            task: RequestTaskHandler = self.active_tasks[task_id]
         except KeyError:
             # We don't recognize that ID.
             raise dbt.exceptions.UnknownAsyncIDException(task_id) from None
@@ -613,7 +489,7 @@ class TaskManager:
     def compilation_error(self, *args, **kwargs):
         """Raise an RPC exception to trigger the error handler."""
         raise dbt_error(
-            dbt.exceptions.RPCLoadException(self.last_compile.error)
+            dbt.exceptions.RPCLoadException(self.last_parse.error)
         )
 
     def internal_error_for(self, msg) -> WrappedHandler:
@@ -640,7 +516,7 @@ class TaskManager:
         # compiling or error.
 
         if isinstance(task, Reserved):
-            status = self.last_compile.status
+            status = self.last_parse.status
             if status == ManifestStatus.Compiling:
                 return self.currently_compiling
             elif status == ManifestStatus.Error:
@@ -657,17 +533,17 @@ class TaskManager:
         """Remove the task if it was finished. Raises a KeyError if the entry
         is removed during operation (so hold the lock).
         """
-        if task_id not in self.tasks:
+        if task_id not in self.active_tasks:
             return GCResultState.Missing
 
-        task = self.tasks[task_id]
+        task = self.active_tasks[task_id]
         if not task.state.finished:
             return GCResultState.Running
 
-        del self.tasks[task_id]
+        del self.active_tasks[task_id]
         return GCResultState.Deleted
 
-    def _gc_task_id(self, task_id: uuid.UUID) -> _GCResult:
+    def _gc_task_id(self, result: GCResultSet, task_id: uuid.UUID) -> None:
         """To 'gc' a task ID, we just delete it from the tasks dict.
 
         You must hold the lock, as this mutates `tasks`.
@@ -682,11 +558,11 @@ class TaskManager:
                 .format(task_id)
             )
 
-        return _GCResult(task_id=task_id, status=status)
+        return result.add_result(task_id=task_id, status=status)
 
     def _get_gc_before_list(self, when: datetime) -> List[uuid.UUID]:
         removals: List[uuid.UUID] = []
-        for task in self.tasks.values():
+        for task in self.active_tasks.values():
             if not task.state.finished:
                 continue
             elif task.ended is None:
@@ -698,7 +574,7 @@ class TaskManager:
 
     def _get_oldest_ended_list(self, num: int) -> List[uuid.UUID]:
         candidates: List[Tuple[datetime, uuid.UUID]] = []
-        for task in self.tasks.values():
+        for task in self.active_tasks.values():
             if not task.state.finished:
                 continue
             elif task.ended is None:
@@ -713,8 +589,7 @@ class TaskManager:
     ) -> GCResultSet:
         result = GCResultSet()
         for task_id in task_ids:
-            gc_result = self._gc_task_id(task_id)
-            result.add_result(gc_result)
+            self._gc_task_id(result, task_id)
         return result
 
     def gc_safe(
@@ -735,7 +610,7 @@ class TaskManager:
 
     def _gc_as_required_unsafe(self) -> None:
         to_remove: List[uuid.UUID] = []
-        num_tasks = len(self.tasks)
+        num_tasks = len(self.active_tasks)
         if num_tasks > self._gc_settings.maxsize:
             num = self._gc_settings.maxsize - num_tasks
             to_remove = self._get_oldest_ended_list(num)

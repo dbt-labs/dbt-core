@@ -3,20 +3,25 @@ import signal
 import sys
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, Union, Optional, List, Type
+from typing import (
+    Any, Dict, Union, Optional, List, Type, Callable, Iterator
+)
+from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin, ValidationError
-from hologram.helpers import StrEnum
 
 import dbt.exceptions
 import dbt.flags
 from dbt.adapters.factory import (
-    cleanup_connections, load_plugin, register_adapter
+    cleanup_connections, load_plugin, register_adapter,
 )
-from dbt.contracts.rpc import RPCParameters, RemoteResult
+from dbt.contracts.rpc import (
+    RPCParameters, RemoteResult, TaskHandlerState, RemoteMethodFlags,
+)
 from dbt.logger import (
-    GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler
+    GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler,
 )
 from dbt.rpc.error import (
     dbt_error,
@@ -39,59 +44,6 @@ from queue import Queue  # noqa
 
 
 SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
-
-
-class TaskHandlerState(StrEnum):
-    NotStarted = 'not started'
-    Initializing = 'initializing'
-    Running = 'running'
-    Success = 'success'
-    Error = 'error'
-    Killed = 'killed'
-    Failed = 'failed'
-
-    def __lt__(self, other) -> bool:
-        """A logical ordering for TaskHandlerState:
-
-        NotStarted < Initializing < Running < (Success, Error, Killed, Failed)
-        """
-        if not isinstance(other, TaskHandlerState):
-            raise TypeError('cannot compare to non-TaskHandlerState')
-        order = (self.NotStarted, self.Initializing, self.Running)
-        smaller = set()
-        for value in order:
-            smaller.add(value)
-            if self == value:
-                return other not in smaller
-
-        return False
-
-    def __le__(self, other) -> bool:
-        # so that ((Success <= Error) is True)
-        return ((self < other) or
-                (self == other) or
-                (self.finished and other.finished))
-
-    def __gt__(self, other) -> bool:
-        if not isinstance(other, TaskHandlerState):
-            raise TypeError('cannot compare to non-TaskHandlerState')
-        order = (self.NotStarted, self.Initializing, self.Running)
-        smaller = set()
-        for value in order:
-            smaller.add(value)
-            if self == value:
-                return other in smaller
-        return other in smaller
-
-    def __ge__(self, other) -> bool:
-        # so that ((Success <= Error) is True)
-        return ((self > other) or
-                (self == other) or
-                (self.finished and other.finished))
-
-    @property
-    def finished(self) -> bool:
-        return self in (self.Error, self.Success, self.Killed, self.Failed)
 
 
 def sigterm_handler(signum, frame):
@@ -157,6 +109,71 @@ def _task_bootstrap(
             handler.emit_error(error.error)
 
 
+class TaskManagerProtocol(Protocol):
+    config: Any
+
+    def set_parsing(self):
+        pass
+
+    def set_compile_exception(
+        self, exc: Exception, logs: List[Dict[str, Any]]
+    ):
+        pass
+
+    def set_ready(self, logs: List[Dict[str, Any]]):
+        pass
+
+    def add_request(self, request: 'RequestTaskHandler') -> Dict[str, Any]:
+        pass
+
+    def parse_manifest(self):
+        pass
+
+    def reload_config(self):
+        pass
+
+
+@contextmanager
+def set_parse_state_with(
+    manager: TaskManagerProtocol,
+    logs: Callable[[], List[LogMessage]]
+) -> Iterator[None]:
+    """Given a task manager and either a list of logs or a callable that
+    returns said list, set appropriate state on the manager upon exiting.
+    """
+    try:
+        yield
+    except Exception as exc:
+        log_dicts = [r.to_dict() for r in logs()]
+        manager.set_compile_exception(exc, logs=log_dicts)
+    else:
+        log_dicts = [r.to_dict() for r in logs()]
+        manager.set_ready(log_dicts)
+
+
+@contextmanager
+def _noop_context() -> Iterator[None]:
+    yield
+
+
+@contextmanager
+def get_results_context(
+    flags: RemoteMethodFlags,
+    manager: TaskManagerProtocol,
+    logs: Callable[[], List[LogMessage]]
+) -> Iterator[None]:
+
+    if RemoteMethodFlags.BlocksManifestTasks in flags:
+        manifest_blocking = set_parse_state_with(manager, logs)
+    else:
+        manifest_blocking = _noop_context()
+
+    with manifest_blocking:
+        yield
+        if RemoteMethodFlags.RequiresManifestReloadAfter:
+            manager.parse_manifest()
+
+
 class StateHandler:
     """A helper context manager to manage task handler state."""
     def __init__(self, task_handler: 'RequestTaskHandler') -> None:
@@ -169,13 +186,17 @@ class StateHandler:
         self.handler.ended = datetime.utcnow()
 
     def handle_completed(self):
+        # killed handlers don't get a result.
         if self.handler.state != TaskHandlerState.Killed:
             if self.handler.result is None:
-                logger.critical(
-                    'got an invalid result=None in handle_completed'
+                # there wasn't an error before, but there sure is one now
+                self.handler.error = dbt_error(
+                    dbt.exceptions.InternalException(
+                        'got an invalid result=None, but state was {}'
+                        .format(self.handler.state)
+                    )
                 )
-                assert False, 'Invalid result'
-            if self.handler.task.interpret_results(self.handler.result):
+            elif self.handler.task.interpret_results(self.handler.result):
                 self.handler.state = TaskHandlerState.Success
             else:
                 self.handler.state = TaskHandlerState.Failed
@@ -197,25 +218,43 @@ class StateHandler:
         self.set_end()
         return False
 
+    def task_teardown(self):
+        self.handler.task.cleanup(self.handler.result)
+
     def __exit__(self, exc_type, exc_value, exc_tb) -> bool:
-        if exc_type is not None:
-            return self.handle_error(exc_type, exc_value, exc_tb)
+        try:
+            if exc_type is not None:
+                self.handle_error(exc_type, exc_value, exc_tb)
+            else:
+                self.handle_completed()
+            return False
+        finally:
+            # we really really promise to run your teardown
+            self.task_teardown()
 
-        self.handle_completed()
-        return False
 
-
-class ErrorOnlyStateHandler(StateHandler):
-    """A state handler that does not touch state on success."""
+class SetArgsStateHandler(StateHandler):
+    """A state handler that does not touch state on success and does not
+    execute the teardown
+    """
     def handle_completed(self):
+        pass
+
+    def handle_teardown(self):
         pass
 
 
 class RequestTaskHandler(threading.Thread):
     """Handler for the single task triggered by a given jsonrpc request."""
-    def __init__(self, manager, task, http_request, json_rpc_request):
-        self.manager = manager
-        self.task = task
+    def __init__(
+        self,
+        manager: TaskManagerProtocol,
+        task: RemoteMethod,
+        http_request,
+        json_rpc_request,
+    ) -> None:
+        self.manager: TaskManagerProtocol = manager
+        self.task: RemoteMethod = task
         self.http_request = http_request
         self.json_rpc_request = json_rpc_request
         self.subscriber: Optional[QueueSubscriber] = None
@@ -251,11 +290,16 @@ class RequestTaskHandler(threading.Thread):
 
     @property
     def method(self) -> str:
+        if self.task.METHOD_NAME is None:  # mypy appeasement
+            raise dbt.exceptions.InternalException(
+                f'In the request handler, got a task({self.task}) with no '
+                'METHOD_NAME'
+            )
         return self.task.METHOD_NAME
 
     @property
     def _single_threaded(self):
-        return self.task.args.single_threaded or SINGLE_THREADED_HANDLER
+        return bool(self.task.args.single_threaded or SINGLE_THREADED_HANDLER)
 
     @property
     def timeout(self) -> Optional[float]:
@@ -315,23 +359,28 @@ class RequestTaskHandler(threading.Thread):
                 'get_result() called before handle()'
             )
 
-        try:
-            with list_handler(self.logs):
-                try:
-                    result = self._wait_for_results()
-                finally:
-                    if not self._single_threaded:
-                        self.process.join()
-        except RPCException as exc:
-            # RPC Exceptions come already preserialized for the jsonrpc
-            # framework
-            exc.logs = [l.to_dict() for l in self.logs]
-            exc.tags = self.tags
-            raise
+        flags = self.task.get_flags()
 
-        # results get real logs
-        result.logs = self.logs[:]
-        return result
+        # If we blocked the manifest tasks, we need to un-set them on exit.
+        # threaded mode handles this on its own.
+        with get_results_context(flags, self.manager, lambda: self.logs):
+            try:
+                with list_handler(self.logs):
+                    try:
+                        result = self._wait_for_results()
+                    finally:
+                        if not self._single_threaded:
+                            self.process.join()
+            except RPCException as exc:
+                # RPC Exceptions come already preserialized for the jsonrpc
+                # framework
+                exc.logs = [l.to_dict() for l in self.logs]
+                exc.tags = self.tags
+                raise
+
+            # results get real logs
+            result.logs = self.logs[:]
+            return result
 
     def run(self):
         try:
@@ -340,11 +389,17 @@ class RequestTaskHandler(threading.Thread):
         except RPCException:
             pass  # rpc exceptions are fine, the managing thread will handle it
 
-    def handle_singlethreaded(self, kwargs):
+    def handle_singlethreaded(
+        self, kwargs: Dict[str, Any], flags: RemoteMethodFlags
+    ):
         # in single-threaded mode, we're going to remain synchronous, so call
         # `run`, not `start`, and return an actual result.
         # note this shouldn't call self.run() as that has different semantics
         # (we want errors to raise)
+        if self.process is None:  # mypy appeasement
+            raise dbt.exceptions.InternalException(
+                'Cannot run a None process'
+            )
         self.process.run()
         with StateHandler(self):
             self.result = self.get_result()
@@ -380,24 +435,39 @@ class RequestTaskHandler(threading.Thread):
         self.started = datetime.utcnow()
         self.state = TaskHandlerState.Initializing
         self.task_kwargs = kwargs
-        with ErrorOnlyStateHandler(self):
+
+        with SetArgsStateHandler(self):
             # this will raise a TypeError if you provided bad arguments.
             self.task_params = self._collect_parameters()
             self.task.set_args(self.task_params)
-        if self.task_params is None:
-            raise dbt.exceptions.InternalException(
-                'Task params set to None!'
-            )
+            # now that we have called set_args, we can figure out our flags
+            flags: RemoteMethodFlags = self.task.get_flags()
+            if RemoteMethodFlags.RequiresConfigReloadBefore in flags:
+                # tell the manager to reload the config.
+                self.manager.reload_config()
+            # set our task config to the version on our manager now. RPCCLi
+            # tasks use this to set their `real_task`.
+            self.task.set_config(self.manager.config)
+            if self.task_params is None:  # mypy appeasement
+                raise dbt.exceptions.InternalException(
+                    'Task params set to None!'
+                )
+
         self.subscriber = QueueSubscriber(dbt.flags.MP_CONTEXT.Queue())
         self.process = dbt.flags.MP_CONTEXT.Process(
             target=_task_bootstrap,
             args=(self.task, self.subscriber.queue)
         )
 
+        if RemoteMethodFlags.BlocksManifestTasks in flags:
+            # got a request to do some compiling, but we already are!
+            if not self.manager.set_parsing():
+                raise dbt_error(dbt.exceptions.RPCCompiling())
+
         if self._single_threaded:
             # all requests are synchronous in single-threaded mode. No need to
             # create a process...
-            return self.handle_singlethreaded(kwargs)
+            return self.handle_singlethreaded(kwargs, flags)
 
         self.start()
         return {'request_token': str(self.task_id)}
