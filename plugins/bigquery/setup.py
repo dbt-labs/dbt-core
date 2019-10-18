@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from setuptools import find_packages
+from setuptools import find_namespace_packages
 from distutils.core import setup
 import os
 
@@ -20,7 +20,7 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_packages(),
+    packages=find_namespace_packages(include=['dbt.*']),
     package_data={
         'dbt': [
             'include/bigquery/dbt_project.yml',
