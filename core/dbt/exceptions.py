@@ -176,7 +176,7 @@ class RPCCompiling(RuntimeException):
 
     def __init__(self, msg=None, node=None):
         if msg is None:
-            msg = 'compile in progress'
+            msg = "compile in progress"
         super().__init__(msg, node)
 
 
