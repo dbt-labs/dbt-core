@@ -122,7 +122,8 @@ class GraphRunnableTask(ManifestTask):
             startctx = TimestampNamed('node_started_at')
             extended_metadata = NodeMetadata(runner.node, runner.node_index)
             with startctx, extended_metadata:
-                logger.info('Began running model')
+                logger.debug('Began running node {}'.format(
+                    runner.node.unique_id))
             status = 'error'  # we must have an error if we don't see this
             try:
                 result = runner.run_with_hooks(self.manifest)
@@ -130,7 +131,8 @@ class GraphRunnableTask(ManifestTask):
             finally:
                 finishctx = TimestampNamed('node_finished_at')
                 with finishctx, DbtModelState(status):
-                    logger.info('Finished running model')
+                    logger.debug('Finished running node {}'.format(
+                        runner.node.unique_id))
         if result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
