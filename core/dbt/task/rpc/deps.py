@@ -1,10 +1,18 @@
+import os
+import shutil
 
 from .cli import HasCLI
 from dbt.contracts.rpc import (
     RPCNoParameters, RemoteEmptyResult, RemoteMethodFlags,
 )
-from dbt.task.clean import CleanTask
 from dbt.task.deps import DepsTask
+
+
+def _clean_deps(config):
+    modules_dir = os.path.join(config.project_root, config.modules_path)
+    if os.path.exists(modules_dir):
+        shutil.rmtree(modules_dir)
+    os.makedirs(modules_dir)
 
 
 class RemoteDepsTask(HasCLI[RPCNoParameters, RemoteEmptyResult], DepsTask):
@@ -20,6 +28,6 @@ class RemoteDepsTask(HasCLI[RPCNoParameters, RemoteEmptyResult], DepsTask):
         pass
 
     def handle_request(self) -> RemoteEmptyResult:
-        CleanTask(self.args, self.config).run()
+        _clean_deps(self.config)
         self.run()
         return RemoteEmptyResult([])

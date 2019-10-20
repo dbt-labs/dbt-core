@@ -199,11 +199,15 @@ class HasRPCServer(DBTIntegrationTest):
                     .format(delta, status, result)
                 )
 
-    def async_query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
+    def async_query(self, _method, _sql=None, _test_request_id=1, _poll_timeout=60, macros=None, **kwargs):
         response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
         result = self.assertIsResult(response, _test_request_id)
         self.assertIn('request_token', result)
-        return self.poll_for_result(result['request_token'], _test_request_id)
+        return self.poll_for_result(
+            result['request_token'],
+            request_id=_test_request_id,
+            timeout=_poll_timeout,
+        )
 
     def query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         built = self.build_query(_method, kwargs, _sql, _test_request_id, macros)
@@ -366,9 +370,11 @@ class HasRPCServer(DBTIntegrationTest):
 
     def make_many_requests(self, num_requests):
         stored = []
-        for idx in range(num_requests):
-            response = self.query('run_sql', 'select 1 as id', name='run').json()
-            result = self.assertIsResult(response)
+        for idx in range(1, num_requests+1):
+            response = self.query(
+                'run_sql', 'select 1 as id', name='run', _test_request_id=idx
+            ).json()
+            result = self.assertIsResult(response, id_=idx)
             self.assertIn('request_token', result)
             token = result['request_token']
             self.poll_for_result(token)
@@ -1080,7 +1086,7 @@ class TestRPCTaskManagement(HasRPCServer):
         self.assertEqual(len(result['running']), 0)
 
         # make more requests
-        self.make_many_requests(num_requests)
+        stored = self.make_many_requests(num_requests)
         time.sleep(0.5)
         # there should be 2 left!
         resp = self.query('ps', completed=True, active=True).json()
@@ -1145,7 +1151,7 @@ class TestRPCServerDeps(HasRPCServer):
         status = self._check_start_predeps()
 
         # do a dbt deps, wait for the result
-        self.assertIsResult(self.async_query('deps').json())
+        self.assertIsResult(self.async_query('deps', _poll_timeout=120).json())
 
         self._check_deps_ok(status)
 
@@ -1154,7 +1160,7 @@ class TestRPCServerDeps(HasRPCServer):
         status = self._check_start_predeps()
 
         # do a dbt deps, wait for the result
-        self.assertIsResult(self.async_query('cli_args', cli='deps').json())
+        self.assertIsResult(self.async_query('cli_args', cli='deps', _poll_timeout=120).json())
 
         self._check_deps_ok(status)
 
@@ -1203,4 +1209,4 @@ class TestRPCServerFailed(HasRPCServer):
         self.assertIn('Invalid test config', str(data['message']))
 
         # deps should work
-        self.assertIsResult(self.async_query('deps').json())
+        self.assertIsResult(self.async_query('deps', _poll_timeout=120).json())

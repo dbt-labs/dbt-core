@@ -99,6 +99,7 @@ class RPCServerTask(ConfiguredTask):
             if not run_task_manger:
                 # a sighup handler is already active.
                 return
+            self.task_manager.reload_config()
             self.task_manager.reload_manifest_tasks()
 
     def single_threaded(self):
