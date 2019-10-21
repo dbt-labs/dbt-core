@@ -20,7 +20,7 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_namespace_packages(include=['dbt.*']),
+    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [
             'include/redshift/dbt_project.yml',
@@ -34,5 +34,6 @@ setup(
         'boto3>=1.6.23,<1.10.0',
         'botocore>=1.9.23,<1.13.0',
         'psycopg2>=2.7.5,<2.8',
-    ]
+    ],
+    zip_safe=False,
 )

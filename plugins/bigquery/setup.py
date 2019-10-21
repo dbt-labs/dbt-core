@@ -20,7 +20,7 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_namespace_packages(include=['dbt.*']),
+    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [
             'include/bigquery/dbt_project.yml',
@@ -31,5 +31,6 @@ setup(
     install_requires=[
         'dbt-core=={}'.format(package_version),
         'google-cloud-bigquery>=1.0.0,<2',
-    ]
+    ],
+    zip_safe=False,
 )

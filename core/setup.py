@@ -22,7 +22,7 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_namespace_packages(include=['dbt.*']),
+    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [
             'include/index.html',
@@ -60,5 +60,6 @@ setup(
         'logbook>=1.5,<1.6',
         'pytest-logbook>=1.2.0,<1.3',
         'typing-extensions>=3.7.4,<3.8',
-    ]
+    ],
+    zip_safe=False,
 )

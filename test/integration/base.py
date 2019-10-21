@@ -39,6 +39,20 @@ def normalize(path):
     return os.path.normcase(os.path.normpath(path))
 
 
+class Normalized:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return f'Normalized({self.value!r})'
+
+    def __str__(self):
+        return f'Normalized({self.value!s})'
+
+    def __eq__(self, other):
+        return normalize(self.value) == normalize(other)
+
+
 class FakeArgs:
     def __init__(self):
         self.threads = 1
@@ -304,6 +318,7 @@ class DBTIntegrationTest(unittest.TestCase):
         os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
     def setUp(self):
+        self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
         self.initial_dir = INITIAL_ROOT
         os.chdir(self.initial_dir)
