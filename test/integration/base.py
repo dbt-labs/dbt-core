@@ -39,6 +39,20 @@ def normalize(path):
     return os.path.normcase(os.path.normpath(path))
 
 
+class Normalized:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return f'Normalized({self.value!r})'
+
+    def __str__(self):
+        return f'Normalized({self.value!s})'
+
+    def __eq__(self, other):
+        return normalize(self.value) == normalize(other)
+
+
 class FakeArgs:
     def __init__(self):
         self.threads = 1
