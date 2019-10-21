@@ -2,7 +2,7 @@ version: 2
 jobs:
   unit:
     docker: &test_and_postgres
-      - image: fishtownjacob/test-container
+      - image: fishtownjacob/test-container:2
       - image: postgres
         name: database
         environment: &pgenv
@@ -19,7 +19,7 @@ jobs:
             PGUSER: root
             PGPASSWORD: password
             PGDATABASE: postgres
-      - run: tox -e flake8,mypy,unit-py36
+      - run: tox -e flake8,mypy,unit-py36,unit-py38
   integration-postgres-py36:
     docker: *test_and_postgres
     steps:
@@ -32,7 +32,7 @@ jobs:
           path: ./logs
   integration-snowflake-py36:
     docker: &test_only
-      - image: fishtownjacob/test-container
+      - image: fishtownjacob/test-container:2
     steps:
       - checkout
       - run:
@@ -70,8 +70,7 @@ jobs:
       - store_artifacts:
           path: ./logs
   integration-snowflake-py38:
-    docker: &test_only
-      - image: fishtownjacob/test-container
+    docker: *test_only
     steps:
       - checkout
       - run:
