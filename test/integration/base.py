@@ -304,6 +304,7 @@ class DBTIntegrationTest(unittest.TestCase):
         os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
     def setUp(self):
+        self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
         self.initial_dir = INITIAL_ROOT
         os.chdir(self.initial_dir)

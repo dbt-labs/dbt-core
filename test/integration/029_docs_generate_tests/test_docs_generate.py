@@ -793,7 +793,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'original_file_path': helpers_path,
                 'package_name': 'dbt',
                 'root_path': normalize(os.path.join(
-                    self.initial_dir, 'core', 'dbt','include', 'global_project'
+                    self.dbt_core_install_root, 'include', 'global_project'
                 )),
                 'name': 'column_list',
                 'unique_id': 'macro.dbt.column_list',
