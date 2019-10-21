@@ -59,7 +59,7 @@ setup(
     author="dbt Labs",
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
-    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
+    packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     package_data={
         "dbt": [
             "include/postgres/dbt_project.yml",
