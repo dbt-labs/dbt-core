@@ -21,6 +21,7 @@ from dbt.utils import restrict_to
 
 
 TaskTags = Optional[Dict[str, Any]]
+TaskID = uuid.UUID
 
 # Inputs
 
@@ -68,6 +69,56 @@ class RPCCliParameters(RPCParameters):
 @dataclass
 class RPCNoParameters(RPCParameters):
     pass
+
+
+@dataclass
+class KillParameters(RPCParameters):
+    task_id: TaskID
+
+
+@dataclass
+class PollParameters(RPCParameters):
+    request_token: TaskID
+    logs: bool = False
+    logs_start: int = 0
+
+
+@dataclass
+class PSParameters(RPCParameters):
+    active: bool = True
+    completed: bool = False
+
+
+@dataclass
+class StatusParameters(RPCParameters):
+    pass
+
+
+@dataclass
+class GCSettings(JsonSchemaMixin):
+    # start evicting the longest-ago-ended tasks here
+    maxsize: int
+    # start evicting all tasks before now - auto_reap_age when we have this
+    # many tasks in the table
+    reapsize: int
+    # a positive timedelta indicating how far back we should go
+    auto_reap_age: timedelta
+
+
+@dataclass
+class GCParameters(RPCParameters):
+    """The gc endpoint takes three arguments, any of which may be present:
+
+    - task_ids: An optional list of task ID UUIDs to try to GC
+    - before: If provided, should be a datetime string. All tasks that finished
+        before that datetime will be GCed
+    - settings: If provided, should be a GCSettings object in JSON form. It
+        will be applied to the task manager before GC starts. By default the
+        existing gc settings remain.
+    """
+    task_ids: Optional[List[TaskID]]
+    before: Optional[datetime]
+    settings: Optional[GCSettings]
 
 
 # Outputs
@@ -133,12 +184,13 @@ class GCResultState(StrEnum):
 
 
 @dataclass
-class GCResultSet(JsonSchemaMixin):
-    deleted: List[uuid.UUID] = field(default_factory=list)
-    missing: List[uuid.UUID] = field(default_factory=list)
-    running: List[uuid.UUID] = field(default_factory=list)
+class GCResult(RemoteResult):
+    logs: List[LogMessage] = field(default_factory=list)
+    deleted: List[TaskID] = field(default_factory=list)
+    missing: List[TaskID] = field(default_factory=list)
+    running: List[TaskID] = field(default_factory=list)
 
-    def add_result(self, task_id: uuid.UUID, status: GCResultState):
+    def add_result(self, task_id: TaskID, status: GCResultState):
         if status == GCResultState.Missing:
             self.missing.append(task_id)
         elif status == GCResultState.Running:
@@ -149,18 +201,6 @@ class GCResultSet(JsonSchemaMixin):
             raise InternalException(
                 f'Got invalid status in add_result: {status}'
             )
-
-
-@dataclass
-class GCSettings(JsonSchemaMixin):
-    # start evicting the longest-ago-ended tasks here
-    maxsize: int
-    # start evicting all tasks before now - auto_reap_age when we have this
-    # many tasks in the table
-    reapsize: int
-    # a positive timedelta indicating how far back we should go
-    auto_reap_age: timedelta
-
 
 # Task management types
 
@@ -220,7 +260,7 @@ class TaskHandlerState(StrEnum):
 
 @dataclass
 class TaskRow(JsonSchemaMixin):
-    task_id: uuid.UUID
+    task_id: TaskID
     request_id: Union[str, int]
     request_source: str
     method: str
@@ -233,7 +273,7 @@ class TaskRow(JsonSchemaMixin):
 
 
 @dataclass
-class PSResult(JsonSchemaMixin):
+class PSResult(RemoteResult):
     rows: List[TaskRow]
 
 
@@ -245,8 +285,9 @@ class KillResultStatus(StrEnum):
 
 
 @dataclass
-class KillResult(JsonSchemaMixin):
-    status: KillResultStatus
+class KillResult(RemoteResult):
+    status: KillResultStatus = KillResultStatus.Missing
+    logs: List[LogMessage] = field(default_factory=list)
 
 
 # this is kind of carefuly structured: BlocksManifestTasks is implied by
@@ -256,13 +297,14 @@ class RemoteMethodFlags(enum.Flag):
     BlocksManifestTasks = 1
     RequiresConfigReloadBefore = 3
     RequiresManifestReloadAfter = 5
+    Builtin = 8
 
 
 # Polling types
 
 
 @dataclass
-class PollResult(JsonSchemaMixin):
+class PollResult(RemoteResult):
     tags: TaskTags = None
     status: TaskHandlerState = TaskHandlerState.NotStarted
 
@@ -416,9 +458,9 @@ class ManifestStatus(StrEnum):
 
 
 @dataclass
-class LastParse(JsonSchemaMixin):
-    status: ManifestStatus
+class LastParse(RemoteResult):
+    status: ManifestStatus = ManifestStatus.Init
+    logs: List[LogMessage] = field(default_factory=list)
     error: Optional[Dict[str, Any]] = None
-    logs: Optional[List[Dict[str, Any]]] = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
     pid: int = field(default_factory=os.getpid)

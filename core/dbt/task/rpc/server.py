@@ -19,7 +19,7 @@ from dbt.logger import (
     log_manager,
 )
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
-from dbt.rpc.method import TaskList
+from dbt.rpc.method import TaskTypes
 from dbt.rpc.response_manager import ResponseManager
 from dbt.rpc.task_manager import TaskManager
 from dbt.task.base import ConfiguredTask
@@ -73,17 +73,15 @@ def signhup_replace() -> Iterator[bool]:
 class RPCServerTask(ConfiguredTask):
     DEFAULT_LOG_FORMAT = 'json'
 
-    def __init__(self, args, config, tasks: Optional[TaskList] = None):
+    def __init__(self, args, config, tasks: Optional[TaskTypes] = None):
         if os.name == 'nt':
             raise RuntimeException(
                 'The dbt RPC server is not supported on windows'
             )
         super().__init__(args, config)
         self.task_manager = TaskManager(
-            self.args, self.config, TaskList(tasks)
+            self.args, self.config, TaskTypes(tasks)
         )
-        self.task_manager.reload_non_manifest_tasks()
-        self.task_manager.reload_manifest_tasks()
         signal.signal(signal.SIGHUP, self._sighup_handler)
 
     @classmethod
@@ -100,10 +98,7 @@ class RPCServerTask(ConfiguredTask):
                 # a sighup handler is already active.
                 return
             self.task_manager.reload_config()
-            self.task_manager.reload_manifest_tasks()
-
-    def single_threaded(self):
-        return self.task_manager.single_threaded()
+            self.task_manager.reload_manifest()
 
     def run_forever(self):
         host = self.args.host

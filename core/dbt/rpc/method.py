@@ -1,7 +1,8 @@
 import inspect
 from abc import abstractmethod
-from typing import List, Optional, Type, TypeVar, Generic
-from typing import Any  # noqa
+from typing import List, Optional, Type, TypeVar, Generic, Dict, Any
+
+from hologram import JsonSchemaMixin, ValidationError
 
 from dbt.contracts.rpc import RPCParameters, RemoteResult, RemoteMethodFlags
 from dbt.exceptions import NotImplementedException, InternalException
@@ -93,24 +94,55 @@ class RemoteManifestMethod(RemoteMethod[Parameters, Result]):
         self.manifest = manifest
 
 
-class TaskList(List[Type[RemoteMethod]]):
+class RemoteBuiltinMethod(RemoteMethod[Parameters, Result]):
+    def __init__(self, task_manager):
+        self.task_manager = task_manager
+        super().__init__(task_manager.args, task_manager.config)
+        self.params: Optional[Parameters] = None
+
+    def set_args(self, params: Parameters):
+        self.params = params
+
+    def __call__(self, **kwargs: Dict[str, Any]) -> JsonSchemaMixin:
+        try:
+            params = self.get_parameters().from_dict(kwargs)
+        except ValidationError as exc:
+            raise TypeError(exc) from exc
+        self.set_args(params)
+        return self.handle_request()
+
+
+class TaskTypes(Dict[str, Type[RemoteMethod]]):
     def __init__(
-        self,
-        tasks: Optional[List[Type[RemoteMethod]]] = None
-    ):
+        self, tasks: Optional[List[Type[RemoteMethod]]] = None
+    ) -> None:
         task_list: List[Type[RemoteMethod]]
         if tasks is None:
             task_list = RemoteMethod.recursive_subclasses(named_only=True)
         else:
             task_list = tasks
-        return super().__init__(task_list)
+        super().__init__(
+            (t.METHOD_NAME, t) for t in task_list
+            if t.METHOD_NAME is not None
+        )
 
-    def manifest(self) -> List[Type[RemoteManifestMethod]]:
-        return [
-            t for t in self if issubclass(t, RemoteManifestMethod)
-        ]
+    def manifest(self) -> Dict[str, Type[RemoteManifestMethod]]:
+        return {
+            k: t for k, t in self.items()
+            if issubclass(t, RemoteManifestMethod)
+        }
 
-    def non_manifest(self) -> List[Type[RemoteMethod]]:
-        return [
-            t for t in self if not issubclass(t, RemoteManifestMethod)
-        ]
+    def builtin(self) -> Dict[str, Type[RemoteBuiltinMethod]]:
+        return {
+            k: t for k, t in self.items()
+            if issubclass(t, RemoteBuiltinMethod)
+        }
+
+    def non_manifest(self) -> Dict[str, Type[RemoteMethod]]:
+        return {
+            k: t for k, t in self.items()
+            if (
+                not issubclass(t, RemoteManifestMethod) and
+                not issubclass(t, RemoteBuiltinMethod)
+            )
+        }
