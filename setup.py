@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from distutils.core import setup
+from setuptools import setup
 import os
 
 
@@ -9,7 +9,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 package_name = "dbt"
-package_version = "0.15.0b1"
+package_version = "0.15.0b2"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 

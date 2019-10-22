@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from setuptools import find_namespace_packages
-from distutils.core import setup
+from setuptools import setup
 import os
 
 
@@ -9,7 +9,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.15.0b1"
+package_version = "0.15.0b2"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 

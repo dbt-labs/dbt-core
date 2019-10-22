@@ -21,7 +21,7 @@ __path__ = __import__('pkgutil').extend_path(__path__, __name__)
 SETUP_PY_TEMPLATE = '''
 #!/usr/bin/env python
 from setuptools import find_packages
-from distutils.core import setup
+from setuptools import setup
 
 package_name = "dbt-{adapter}"
 package_version = "{version}"
