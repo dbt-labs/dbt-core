@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from setuptools import find_namespace_packages
-from distutils.core import setup
+from setuptools import setup
 import os
 
 package_name = "dbt-bigquery"
