@@ -26,7 +26,7 @@
 
 {%- endmacro -%}
 
-{% macro bigquery_table_options(persist_docs, temporary) %}
+{% macro bigquery_table_options(persist_docs, temporary, kms_key_name) %}
   {% set opts = {} %}
 
   {% set description = get_relation_comment(persist_docs, model) %}
@@ -36,24 +36,25 @@
   {% if temporary %}
     {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
   {% endif %}
+  {% if kms_key_name %}
+    {% do opts.update({'kms_key_name': "'" ~ kms_key_name ~ "'"}) %}
+  {% endif %}
 
-  {% set options -%}
-    OPTIONS({% for opt_key, opt_val in opts.items() %}
-      {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
-    {% endfor %})
-  {%- endset %}
-  {% do return(options) %}
+  OPTIONS({% for opt_key, opt_val in opts.items() %}
+    {{ opt_key }}={{ opt_val }}
+  {% endfor %})
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
   {%- set raw_partition_by = config.get('partition_by', none) -%}
   {%- set raw_cluster_by = config.get('cluster_by', none) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+  {%- set raw_kms_key_name = config.get('kms_key_name', none) -%}
 
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
-  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=temporary) }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name) }}
   as (
     {{ sql }}
   );
