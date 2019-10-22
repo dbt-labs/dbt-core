@@ -1,10 +1,10 @@
 import os
 import shutil
 
-from .cli import HasCLI
 from dbt.contracts.rpc import (
     RPCNoParameters, RemoteEmptyResult, RemoteMethodFlags,
 )
+from dbt.rpc.method import RemoteMethod
 from dbt.task.deps import DepsTask
 
 
@@ -15,7 +15,10 @@ def _clean_deps(config):
     os.makedirs(modules_dir)
 
 
-class RemoteDepsTask(HasCLI[RPCNoParameters, RemoteEmptyResult], DepsTask):
+class RemoteDepsTask(
+    RemoteMethod[RPCNoParameters, RemoteEmptyResult],
+    DepsTask,
+):
     METHOD_NAME = 'deps'
 
     def get_flags(self) -> RemoteMethodFlags:

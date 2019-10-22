@@ -949,6 +949,7 @@ class TestRPCServerProjects(HasRPCServer):
     def test_deps_postgres(self):
         self.async_query('deps').json()
 
+    @mark.skip(reason='cli_args + deps not supported for now')
     @use_profile('postgres')
     def test_deps_postgres_cli(self):
         self.async_query('cli_args', cli='deps').json()
@@ -1056,43 +1057,6 @@ class TestRPCTaskManagement(HasRPCServer):
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['rows']), 0)
 
-    @use_profile('postgres')
-    def test_postgres_gc_change_interval(self):
-        num_requests = 10
-        self.make_many_requests(num_requests)
-
-        # all present
-        resp = self.query('ps', completed=True, active=True).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['rows']), num_requests)
-
-        resp = self.query('gc', settings=dict(maxsize=1000, reapsize=5, auto_reap_age=0.1)).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['deleted']), 0)
-        self.assertEqual(len(result['missing']), 0)
-        self.assertEqual(len(result['running']), 0)
-        time.sleep(0.5)
-
-        # all cleared up
-        test_resp = self.query('ps', completed=True, active=True)
-        resp = test_resp.json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['rows']), 0)
-
-        resp = self.query('gc', settings=dict(maxsize=2, reapsize=5, auto_reap_age=10000)).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['deleted']), 0)
-        self.assertEqual(len(result['missing']), 0)
-        self.assertEqual(len(result['running']), 0)
-
-        # make more requests
-        stored = self.make_many_requests(num_requests)
-        time.sleep(0.5)
-        # there should be 2 left!
-        resp = self.query('ps', completed=True, active=True).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['rows']), 2)
-
 
 class CompletingServerProcess(ServerProcess):
     def _compare_result(self, result):
@@ -1155,6 +1119,7 @@ class TestRPCServerDeps(HasRPCServer):
 
         self._check_deps_ok(status)
 
+    @mark.skip(reason='cli_args + deps not supported for now')
     @use_profile('postgres')
     def test_deps_cli_compilation_postgres(self):
         status = self._check_start_predeps()
@@ -1163,50 +1128,3 @@ class TestRPCServerDeps(HasRPCServer):
         self.assertIsResult(self.async_query('cli_args', cli='deps', _poll_timeout=120).json())
 
         self._check_deps_ok(status)
-
-
-class FailedServerProcess(ServerProcess):
-    def _compare_result(self, result):
-        return result['result']['status'] == 'error'
-
-
-@mark.flaky(rerun_filter=addr_in_use)
-class TestRPCServerFailed(HasRPCServer):
-    ServerProcess = FailedServerProcess
-    should_seed = False
-
-    @property
-    def models(self):
-        return "malformed_models"
-
-    def tearDown(self):
-        # prevent an OperationalError where the server closes on us in the
-        # background
-        self.adapter.cleanup_connections()
-        super().tearDown()
-
-    @use_profile('postgres')
-    def test_postgres_status_error(self):
-        status = self.assertIsResult(self.query('status').json())
-        self.assertEqual(status['status'], 'error')
-        self.assertIn('logs', status)
-        logs = status['logs']
-        self.assertTrue(len(logs) > 0)
-        for key in ('message', 'timestamp', 'levelname', 'level'):
-            self.assertIn(key, logs[0])
-        self.assertIn('pid', status)
-        self.assertEqual(self._server.pid, status['pid'])
-        self.assertIn('error', status)
-        self.assertIn('message', status['error'])
-
-        compile_result = self.query('compile_sql', 'select 1 as id').json()
-        data = self.assertIsErrorWith(
-            compile_result,
-            10011,
-            'RPC server failed to compile project, call the "status" method for compile status',
-            None)
-        self.assertIn('message', data)
-        self.assertIn('Invalid test config', str(data['message']))
-
-        # deps should work
-        self.assertIsResult(self.async_query('deps', _poll_timeout=120).json())

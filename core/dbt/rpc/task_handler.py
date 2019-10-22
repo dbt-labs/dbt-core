@@ -146,6 +146,11 @@ def set_parse_state_with(
     except Exception as exc:
         log_dicts = [r.to_dict() for r in logs()]
         manager.set_compile_exception(exc, logs=log_dicts)
+        # re-raise to ensure any exception handlers above trigger. We might be
+        # in an API call that set the parse state, in which case we don't want
+        # to swallow the exception - it also should report its failure to the
+        # task manager.
+        raise
     else:
         log_dicts = [r.to_dict() for r in logs()]
         manager.set_ready(log_dicts)
