@@ -1,13 +1,59 @@
 ## dbt 0.15.0 (TBD)
 
 ### Breaking changes
- - The 'table_name' parameter to relations has been removed
- - Cache management changes:
-  - Materialization macros should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
-  - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped`
-      - `adapter.drop_relation` already does this
-  - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed`
-      - `adapter.rename_relation` already does this
+- The 'table_name' field field has been removed from Relations
+- Cache management changes:
+    - Materializations should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
+    - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped`
+        - `adapter.drop_relation` already does this
+    - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed`
+        - `adapter.rename_relation` already does this
+- RPC server changes:
+    - The `compile` and `execute` tasks have been renamed to `compile_sql` and `execute_sql` ([#1779](https://github.com/fishtown-analytics/dbt/issues/1779), [#1798](https://github.com/fishtown-analytics/dbt/pull/1798))
+
+## Fixes
+- Fix for confusing error message when errors are encountered during compilation ([#1807](https://github.com/fishtown-analytics/dbt/issues/1807), [#1839](https://github.com/fishtown-analytics/dbt/pull/1839))
+- Fix logic error affecting the two-argument flavor of the `ref` function ([#1504](https://github.com/fishtown-analytics/dbt/issues/1504), [#1515](https://github.com/fishtown-analytics/dbt/pull/1515))
+- Fix for invalid reference to dbt.exceptions ([#1569](https://github.com/fishtown-analytics/dbt/issues/1569), [#1609](https://github.com/fishtown-analytics/dbt/pull/1609))
+- Fix for "cannot run empty query" error when pre/post-hooks are empty ([#1108](https://github.com/fishtown-analytics/dbt/issues/1108), [#1719](https://github.com/fishtown-analytics/dbt/pull/1719))
+- Fix for confusing error when project names shadow context attributes ([#1696](https://github.com/fishtown-analytics/dbt/issues/1696), [#1748](https://github.com/fishtown-analytics/dbt/pull/1748))
+- Fix for unclosed connections preventing dbt from exiting when Snowflake is used with client_session_keep_alive ([#1271](https://github.com/fishtown-analytics/dbt/issues/1271), [#1749](https://github.com/fishtown-analytics/dbt/pull/1749))
+- Fix for incorrect database logic in docs generation which resulted in columns being "merged" together across tables ([#1708](https://github.com/fishtown-analytics/dbt/issues/1708), [#1774](https://github.com/fishtown-analytics/dbt/pull/1774))
+- Fix for seed errors located in dependency packages ([#1723](https://github.com/fishtown-analytics/dbt/issues/1723), [#1723](https://github.com/fishtown-analytics/dbt/issues/1723))
+
+## Features
+- Make full-refreshes of incremental models atomic ([#525](https://github.com/fishtown-analytics/dbt/issues/525), [#1682](https://github.com/fishtown-analytics/dbt/pull/1682))
+- Support running dbt against schemas which contain materialized views on Postgres ([#1698](https://github.com/fishtown-analytics/dbt/issues/1698), [#1833](https://github.com/fishtown-analytics/dbt/pull/1833))
+- Improved error message for malformed source/ref inputs ([#1660](https://github.com/fishtown-analytics/dbt/issues/1660), [#1809](https://github.com/fishtown-analytics/dbt/pull/1809))
+- Add a JSON logger ([#1237](https://github.com/fishtown-analytics/dbt/issues/1237), [#1791](https://github.com/fishtown-analytics/dbt/pull/1791))
+- Add structured logging ([#1704](https://github.com/fishtown-analytics/dbt/issues/1704), [#1715](https://github.com/fishtown-analytics/dbt/pull/1715))
+- Add partial parsing option to the profiles.yml file ([#1835](https://github.com/fishtown-analytics/dbt/issues/1835), [#1836](https://github.com/fishtown-analytics/dbt/pull/1836), [#1487](https://github.com/fishtown-analytics/dbt/issues/1487))
+- RPC Server updates:
+    - support docs generation ([#1781](https://github.com/fishtown-analytics/dbt/issues/1781), [#1801](https://github.com/fishtown-analytics/dbt/pull/1801))
+    - support custom tags ([#1822](https://github.com/fishtown-analytics/dbt/issues/1822), [#1828](https://github.com/fishtown-analytics/dbt/pull/1828))
+    - improve re-compilation performance ([#1824](https://github.com/fishtown-analytics/dbt/issues/1824), [#1830](https://github.com/fishtown-analytics/dbt/pull/1830))
+    - reload the manifest when a SIGHUP signal is received ([#1684](https://github.com/fishtown-analytics/dbt/issues/1684), [#1699](https://github.com/fishtown-analytics/dbt/pull/1699))
+    - support invoking `compile`,  `run`, `test`, and `seed` on the rpc server ([#1488](https://github.com/fishtown-analytics/dbt/issues/1488), [#1652](https://github.com/fishtown-analytics/dbt/pull/1652))
+    - Changed compile_sql and run_sql endpoints to be async ([#1706](https://github.com/fishtown-analytics/dbt/issues/1706), [#1735](https://github.com/fishtown-analytics/dbt/pull/1735))
+- Support snapshot configs in dbt_project.yml ([#1613](https://github.com/fishtown-analytics/dbt/issues/1613), [#1759](https://github.com/fishtown-analytics/dbt/pull/1759))
+- Support Snowflake secure views ([#1730](https://github.com/fishtown-analytics/dbt/issues/1730), [#1743](https://github.com/fishtown-analytics/dbt/pull/1743))
+- Improve CLI output when running snapshots ([#1768](https://github.com/fishtown-analytics/dbt/issues/1768), [#1769](https://github.com/fishtown-analytics/dbt/pull/1769))
+- Add `copy grants` option to Snowflake materializations ([#1744](https://github.com/fishtown-analytics/dbt/issues/1744), [#1747](https://github.com/fishtown-analytics/dbt/pull/1747))
+- Support cache modifications in materializations ([#1683](https://github.com/fishtown-analytics/dbt/issues/1683), [#1770](https://github.com/fishtown-analytics/dbt/pull/1770))
+
+## Under the hood
+
+- Drop support for NetworkX 1.x ([#1577](https://github.com/fishtown-analytics/dbt/issues/1577), [#1814](https://github.com/fishtown-analytics/dbt/pull/1814))
+- Upgrade werkzeug to 0.15.6 ([#1697](https://github.com/fishtown-analytics/dbt/issues/1697), [#1814](https://github.com/fishtown-analytics/dbt/pull/1814))
+- Provide test names and kwargs in the manifest ([#1154](https://github.com/fishtown-analytics/dbt/issues/1154), [#1816](https://github.com/fishtown-analytics/dbt/pull/1816))
+- printer.print_run_result_error now logs at the `warning` or `error` level instead of `info` ([#1818](https://github.com/fishtown-analytics/dbt/issues/1818), [#1823](https://github.com/fishtown-analytics/dbt/pull/1823))
+- Replace JSON Schemas with data classes ([#1447](https://github.com/fishtown-analytics/dbt/issues/1447), [#1589](https://github.com/fishtown-analytics/dbt/pull/1589))
+- Do not try to re-compile contents of `statement` blocks ([#1717](https://github.com/fishtown-analytics/dbt/issues/1717), [#1719](https://github.com/fishtown-analytics/dbt/pull/1719))
+- Add compilation exception for invalid .yml files (previously just a warning) ([#1493](https://github.com/fishtown-analytics/dbt/issues/1493), [#1751](https://github.com/fishtown-analytics/dbt/pull/1751))
+
+## Contributors
+ - To come
+
 
 ## dbt 0.14.3 (Unreleased)
 
