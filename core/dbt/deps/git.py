@@ -3,6 +3,7 @@ import hashlib
 from typing import List
 
 from dbt.clients import git, system
+from dbt.config import Project
 from dbt.contracts.project import (
     ProjectPackageMetadata,
     GitPackage,
@@ -78,7 +79,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
                 .format(self.git, PIN_PACKAGE_URL),
                 log_fmt=printer.yellow('WARNING: {}')
             )
-        loaded = project.from_project_root(path, {})
+        loaded = Project.from_project_root(path, {})
         return ProjectPackageMetadata.from_project(loaded)
 
     def install(self, project):

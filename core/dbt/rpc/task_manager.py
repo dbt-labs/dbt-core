@@ -127,11 +127,18 @@ class ManifestReloader(threading.Thread):
         super().__init__()
         self.task_manager = task_manager
 
-    def run(self) -> None:
+    def reload_manifest(self):
         logs: List[LogMessage] = []
         with set_parse_state_with(self.task_manager, lambda: logs):
             with list_handler(logs):
                 self.task_manager.parse_manifest()
+
+    def run(self) -> None:
+        try:
+            self.reload_manifest()
+        except Exception:
+            # ignore ugly thread-death error messages to stderr
+            pass
 
 
 @dataclass
@@ -189,9 +196,9 @@ class TaskManager:
         self._gc_settings: GCSettings = GCSettings(
             maxsize=1000, reapsize=500, auto_reap_age=timedelta(days=30)
         )
-        self._reloader: Optional[threading.Thread] = None
+        self._reloader: Optional[ManifestReloader] = None
 
-    def _reload_task_manager_thread(self, reloader: threading.Thread):
+    def _reload_task_manager_thread(self, reloader: ManifestReloader):
         """This function can only be running once at a time, as it runs in the
         signal handler we replace
         """
@@ -200,10 +207,10 @@ class TaskManager:
         # only assign to _reloader here, to avoid calling join() before start()
         self._reloader = reloader
 
-    def _reload_task_manager_fg(self, reloader: threading.Thread):
+    def _reload_task_manager_fg(self, reloader: ManifestReloader):
         """Override for single-threaded mode to run in the foreground"""
         # just reload directly
-        reloader.run()
+        reloader.reload_manifest()
 
     def reload_manifest_tasks(self) -> bool:
         """Reload the manifest using a manifest reloader. Returns False if the

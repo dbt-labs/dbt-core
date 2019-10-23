@@ -1,4 +1,3 @@
-import multiprocessing
 import signal
 import sys
 import threading
@@ -50,63 +49,73 @@ def sigterm_handler(signum, frame):
     raise dbt.exceptions.RPCKilledException(signum)
 
 
-def _spawn_setup(task):
-    """
-    Because we're using spawn, we have to do a some things that dbt does
-    dynamically at process load.
+class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
+    def __init__(
+        self,
+        task: RemoteMethod,
+        queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
+    ) -> None:
+        self.task = task
+        self.queue = queue
+        super().__init__()
 
-    These things are inherited automatically in fork mode, where fork() keeps
-    everything in memory.
-    """
-    # reset flags
-    dbt.flags.set_from_args(task.args)
-    # reload the active plugin
-    load_plugin(task.config.credentials.type)
-    # register it
-    register_adapter(task.config)
+    def _spawn_setup(self):
+        """
+        Because we're using spawn, we have to do a some things that dbt does
+        dynamically at process load.
 
-    # reset tracking, etc
-    task.config.config.set_values(task.args.profiles_dir)
+        These things are inherited automatically in fork mode, where fork()
+        keeps everything in memory.
+        """
+        # reset flags
+        dbt.flags.set_from_args(self.task.args)
+        # reload the active plugin
+        load_plugin(self.task.config.credentials.type)
+        # register it
+        register_adapter(self.task.config)
 
+        # reset tracking, etc
+        self.task.config.config.set_values(self.task.args.profiles_dir)
 
-def _task_bootstrap(
-    task: RemoteMethod,
-    queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
-) -> None:
-    """_task_bootstrap runs first inside the child process"""
-    signal.signal(signal.SIGTERM, sigterm_handler)
-    # the first thing we do in a new process: push logging back over our queue
-    handler = QueueLogHandler(queue)
-    with handler.applicationbound():
-        _spawn_setup(task)
-        rpc_exception = None
-        result = None
-        try:
-            result = task.handle_request()
-        except RPCException as exc:
-            rpc_exception = exc
-        except dbt.exceptions.RPCKilledException as exc:
-            # do NOT log anything here, you risk triggering a deadlock on the
-            # queue handler we inserted above
-            rpc_exception = dbt_error(exc)
-        except dbt.exceptions.Exception as exc:
-            logger.debug('dbt runtime exception', exc_info=True)
-            rpc_exception = dbt_error(exc)
-        except Exception as exc:
-            with OutputHandler(sys.stderr).applicationbound():
-                logger.error('uncaught python exception', exc_info=True)
-            rpc_exception = server_error(exc)
+    def task_exec(self) -> None:
+        """task_exec runs first inside the child process"""
+        signal.signal(signal.SIGTERM, sigterm_handler)
+        # the first thing we do in a new process: push logging back over our
+        # queue
+        handler = QueueLogHandler(self.queue)
+        with handler.applicationbound():
+            self._spawn_setup()
+            rpc_exception = None
+            result = None
+            try:
+                result = self.task.handle_request()
+            except RPCException as exc:
+                rpc_exception = exc
+            except dbt.exceptions.RPCKilledException as exc:
+                # do NOT log anything here, you risk triggering a deadlock on
+                # the queue handler we inserted above
+                rpc_exception = dbt_error(exc)
+            except dbt.exceptions.Exception as exc:
+                logger.debug('dbt runtime exception', exc_info=True)
+                rpc_exception = dbt_error(exc)
+            except Exception as exc:
+                with OutputHandler(sys.stderr).applicationbound():
+                    logger.error('uncaught python exception', exc_info=True)
+                rpc_exception = server_error(exc)
 
-        # put whatever result we got onto the queue as well.
-        if rpc_exception is not None:
-            handler.emit_error(rpc_exception.error)
-        elif result is not None:
-            handler.emit_result(result)
-        else:
-            error = dbt_error(dbt.exceptions.InternalException(
-                'after request handling, neither result nor error is None!'
-            ))
-            handler.emit_error(error.error)
+            # put whatever result we got onto the queue as well.
+            if rpc_exception is not None:
+                handler.emit_error(rpc_exception.error)
+            elif result is not None:
+                handler.emit_result(result)
+            else:
+                error = dbt_error(dbt.exceptions.InternalException(
+                    'after request handling, neither result nor error is None!'
+                ))
+                handler.emit_error(error.error)
+
+    def run(self):
+        self.task_exec()
 
 
 class TaskManagerProtocol(Protocol):
@@ -136,7 +145,7 @@ class TaskManagerProtocol(Protocol):
 @contextmanager
 def set_parse_state_with(
     manager: TaskManagerProtocol,
-    logs: Callable[[], List[LogMessage]]
+    logs: Callable[[], List[LogMessage]],
 ) -> Iterator[None]:
     """Given a task manager and either a list of logs or a callable that
     returns said list, set appropriate state on the manager upon exiting.
@@ -263,7 +272,7 @@ class RequestTaskHandler(threading.Thread):
         self.http_request = http_request
         self.json_rpc_request = json_rpc_request
         self.subscriber: Optional[QueueSubscriber] = None
-        self.process: Optional[multiprocessing.Process] = None
+        self.process: Optional[BootstrapProcess] = None
         self.thread: Optional[threading.Thread] = None
         self.started: Optional[datetime] = None
         self.ended: Optional[datetime] = None
@@ -391,8 +400,11 @@ class RequestTaskHandler(threading.Thread):
         try:
             with StateHandler(self):
                 self.result = self.get_result()
-        except RPCException:
-            pass  # rpc exceptions are fine, the managing thread will handle it
+        except (dbt.exceptions.Exception, RPCException):
+            # we probably got an error after the RPC call ran (and it was
+            # probably deps...). By now anyone who wanted to see it has seen it
+            # so we can suppress it to avoid stderr stack traces
+            pass
 
     def handle_singlethreaded(
         self, kwargs: Dict[str, Any], flags: RemoteMethodFlags
@@ -405,7 +417,7 @@ class RequestTaskHandler(threading.Thread):
             raise dbt.exceptions.InternalException(
                 'Cannot run a None process'
             )
-        self.process.run()
+        self.process.task_exec()
         with StateHandler(self):
             self.result = self.get_result()
         return self.result
@@ -459,10 +471,7 @@ class RequestTaskHandler(threading.Thread):
                 )
 
         self.subscriber = QueueSubscriber(dbt.flags.MP_CONTEXT.Queue())
-        self.process = dbt.flags.MP_CONTEXT.Process(
-            target=_task_bootstrap,
-            args=(self.task, self.subscriber.queue)
-        )
+        self.process = BootstrapProcess(self.task, self.subscriber.queue)
 
         if RemoteMethodFlags.BlocksManifestTasks in flags:
             # got a request to do some compiling, but we already are!

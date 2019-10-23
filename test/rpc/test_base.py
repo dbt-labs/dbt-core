@@ -31,25 +31,18 @@ def test_rpc_basics(project_dir, profiles_dir, postgres_profile, unique_schema):
         querier.is_error(querier.async_wait(token))
 
 
-def test_rpc_deps(project_dir, profiles_dir, postgres_profile, unique_schema):
+def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema):
     project = ProjectDefinition(
         models={
             'my_model.sql': 'select 1 as id',
         },
-        packages={
-            'packages': [
-                {
-                    'package': 'fishtown-analytics/dbt_utils',
-                    'version': '0.2.1',
-                },
-            ],
-        },
+        packages={'packages': packages},
     )
     server_ctx = rpc_server(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir
     )
     schema_ctx = built_schema(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
     )
     with schema_ctx, server_ctx as server:
         querier = Querier(server)
@@ -72,8 +65,8 @@ def test_rpc_deps(project_dir, profiles_dir, postgres_profile, unique_schema):
         querier.is_result(querier.async_wait(tok2))
         querier.is_result(querier.async_wait(tok1))
 
-        # now break the project by giving an invalid URL (`dbt_util` instead of `utils`)
-        project.packages['packages'][0]['package'] = 'fishtown-analytics/dbt_util'
+        # now break the project
+        project.packages['packages'] = bad_packages
         project.write_packages(project_dir, remove=True)
 
         # queries should still work because we haven't reloaded
@@ -91,7 +84,7 @@ def test_rpc_deps(project_dir, profiles_dir, postgres_profile, unique_schema):
         assert result['rows'] == []
 
         # fix packages again
-        project.packages['packages'][0]['package'] = 'fishtown-analytics/dbt_utils'
+        project.packages['packages'] = packages
         project.write_packages(project_dir, remove=True)
         # keep queries broken, we haven't run deps yet
         querier.is_error(querier.run())
@@ -106,6 +99,31 @@ def test_rpc_deps(project_dir, profiles_dir, postgres_profile, unique_schema):
 
         querier.is_result(querier.async_wait(tok2))
         querier.is_result(querier.async_wait(tok1))
+
+
+def test_rpc_deps_packages(project_dir, profiles_dir, postgres_profile, unique_schema):
+    packages = [{
+        'package': 'fishtown-analytics/dbt_utils',
+        'version': '0.2.1',
+    }]
+    bad_packages = [{
+        'package': 'fishtown-analytics/dbt_util',
+        'version': '0.2.1',
+    }]
+    deps_with_packages(packages, bad_packages, project_dir, profiles_dir, unique_schema)
+
+
+def test_rpc_deps_git(project_dir, profiles_dir, postgres_profile, unique_schema):
+    packages = [{
+        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+        'revision': '0.2.1'
+    }]
+    # if you use a bad URL, git thinks it's a private repo and prompts for auth
+    bad_packages = [{
+        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+        'revision': 'not-a-real-revision'
+    }]
+    deps_with_packages(packages, bad_packages, project_dir, profiles_dir, unique_schema)
 
 
 bad_schema_yml = '''
