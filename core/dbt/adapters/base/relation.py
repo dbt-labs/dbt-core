@@ -43,7 +43,6 @@ class FakeAPIObject(JsonSchemaMixin, Replaceable, Mapping):
         return True
 
     def __getitem__(self, key):
-        # deprecations.warn('not-a-dictionary', obj=self)
         try:
             return getattr(self, key)
         except AttributeError:
@@ -155,6 +154,16 @@ class BaseRelation(FakeAPIObject, Hashable):
     @classmethod
     def get_relation_type_class(cls: Type[Self]) -> Type[RelationType]:
         return cls._get_field_named('type')
+
+    def get(self, key, default=None):
+        """Override `.get` to return a metadata object so we don't break
+        dbt_utils.
+        """
+        if key == 'metadata':
+            return {
+                'type': self.__class__.__name__
+            }
+        return super().get(key, default)
 
     def matches(
         self,
