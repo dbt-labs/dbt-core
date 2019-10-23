@@ -17,7 +17,7 @@ from dbt.adapters.factory import (
     cleanup_connections, load_plugin, register_adapter,
 )
 from dbt.contracts.rpc import (
-    RPCParameters, RemoteResult, TaskHandlerState, RemoteMethodFlags,
+    RPCParameters, RemoteResult, TaskHandlerState, RemoteMethodFlags, TaskTags,
 )
 from dbt.logger import (
     GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler,
@@ -28,6 +28,7 @@ from dbt.rpc.error import (
     RPCException,
     timeout_error,
 )
+from dbt.rpc.gc import Collectible
 from dbt.rpc.logger import (
     QueueSubscriber,
     QueueLogHandler,
@@ -125,11 +126,11 @@ class TaskManagerProtocol(Protocol):
         pass
 
     def set_compile_exception(
-        self, exc: Exception, logs: List[Dict[str, Any]]
+        self, exc: Exception, logs: List[LogMessage]
     ):
         pass
 
-    def set_ready(self, logs: List[Dict[str, Any]]):
+    def set_ready(self, logs: List[LogMessage]):
         pass
 
     def add_request(self, request: 'RequestTaskHandler') -> Dict[str, Any]:
@@ -153,16 +154,10 @@ def set_parse_state_with(
     try:
         yield
     except Exception as exc:
-        log_dicts = [r.to_dict() for r in logs()]
-        manager.set_compile_exception(exc, logs=log_dicts)
-        # re-raise to ensure any exception handlers above trigger. We might be
-        # in an API call that set the parse state, in which case we don't want
-        # to swallow the exception - it also should report its failure to the
-        # task manager.
+        manager.set_compile_exception(exc, logs=logs())
         raise
     else:
-        log_dicts = [r.to_dict() for r in logs()]
-        manager.set_ready(log_dicts)
+        manager.set_ready(logs=logs())
 
 
 @contextmanager
@@ -258,7 +253,7 @@ class SetArgsStateHandler(StateHandler):
         pass
 
 
-class RequestTaskHandler(threading.Thread):
+class RequestTaskHandler(threading.Thread, Collectible):
     """Handler for the single task triggered by a given jsonrpc request."""
     def __init__(
         self,
@@ -324,7 +319,7 @@ class RequestTaskHandler(threading.Thread):
         return float(self.task_params.timeout)
 
     @property
-    def tags(self) -> Optional[Dict[str, Any]]:
+    def tags(self) -> Optional[TaskTags]:
         if self.task_params is None:
             return None
         return self.task_params.task_tags
@@ -470,6 +465,10 @@ class RequestTaskHandler(threading.Thread):
                     'Task params set to None!'
                 )
 
+            if RemoteMethodFlags.Builtin in flags:
+                # bypass the queue, logging, etc: Straight to the method
+                return self.task.handle_request()
+
         self.subscriber = QueueSubscriber(dbt.flags.MP_CONTEXT.Queue())
         self.process = BootstrapProcess(self.task, self.subscriber.queue)
 
@@ -486,7 +485,7 @@ class RequestTaskHandler(threading.Thread):
         self.start()
         return {'request_token': str(self.task_id)}
 
-    def __call__(self, **kwargs) -> Dict[str, Any]:
+    def __call__(self, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
         # __call__ happens deep inside jsonrpc's framework
         self.manager.add_request(self)
         return self.handle(kwargs)
