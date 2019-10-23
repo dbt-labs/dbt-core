@@ -298,3 +298,30 @@ class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):
 
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  1)
+
+
+class TestShouting(BaseTestSimpleCopy):
+    @property
+    def models(self):
+        return self.dir('shouting_models')
+
+    @property
+    def project_config(self):
+        return {"data-paths": [self.dir("seed-initial")]}
+
+    @use_profile("postgres")
+    def test__postgres__simple_copy_loud(self):
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  7)
+
+        self.assertManyTablesEqual(["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
+
+        self.use_default_project({"data-paths": [self.dir("seed-update")]})
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  7)
+
+        self.assertManyTablesEqual(["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
