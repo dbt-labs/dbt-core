@@ -31,6 +31,7 @@ from dbt.contracts.rpc import (
     PollCatalogCompleteResult,
     PollRemoteEmptyCompleteResult,
     TaskHandlerState,
+    TaskTiming,
 )
 from dbt.logger import LogMessage
 from dbt.rpc.error import dbt_error, RPCException
@@ -71,7 +72,7 @@ class Kill(RemoteBuiltinMethod[KillParameters, KillResult]):
             # nothing to do!
             return result
 
-        result.status = KillResultStatus.NotStarted
+        result.state = KillResultStatus.NotStarted
 
         if task.process is None:
             return result
@@ -80,13 +81,13 @@ class Kill(RemoteBuiltinMethod[KillParameters, KillResult]):
             return result
 
         if task.process.is_alive():
-            result.status = KillResultStatus.Killed
+            result.state = KillResultStatus.Killed
             task.ended = datetime.utcnow()
             os.kill(pid, signal.SIGINT)
             task.state = TaskHandlerState.Killed
         else:
-            result.status = KillResultStatus.Finished
-            # the status must be "Completed"
+            result.state = KillResultStatus.Finished
+            # the state must be "Completed"
 
         return result
 
@@ -127,11 +128,11 @@ class PS(RemoteBuiltinMethod[PSParameters, PSResult]):
 
 
 def poll_complete(
-    status: TaskHandlerState, result: Any, tags: TaskTags
+    timing: TaskTiming, result: Any, tags: TaskTags
 ) -> PollResult:
-    if status not in (TaskHandlerState.Success, TaskHandlerState.Failed):
+    if timing.state not in (TaskHandlerState.Success, TaskHandlerState.Failed):
         raise dbt.exceptions.InternalException(
-            'got invalid result status in poll_complete: {}'.format(status)
+            f'got invalid result state in poll_complete: {timing.state}'
         )
 
     cls: Type[Union[
@@ -157,7 +158,7 @@ def poll_complete(
         raise dbt.exceptions.InternalException(
             'got invalid result in poll_complete: {}'.format(result)
         )
-    return cls.from_result(status, result, tags)
+    return cls.from_result(result, tags, timing)
 
 
 class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
@@ -170,7 +171,7 @@ class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
         if self.params is None:
             raise dbt.exceptions.InternalException('Poll: params not set')
         task_id = self.params.request_token
-        task = self.task_manager.get_request(task_id)
+        task: RequestTaskHandler = self.task_manager.get_request(task_id)
 
         task_logs: List[LogMessage] = []
         if self.params.logs:
@@ -180,12 +181,17 @@ class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
         # otherwise things will get confusing. States should always be
         # "forward-compatible" so if the state has transitioned to error/result
         # but we aren't there yet, the logs will still be valid.
-        state = task.state
+
+        timing = task.make_task_timing(datetime.utcnow())
+        state = timing.state
         if state <= TaskHandlerState.Running:
             return PollInProgressResult(
-                status=state,
                 tags=task.tags,
                 logs=task_logs,
+                state=timing.state,
+                start=timing.start,
+                end=timing.end,
+                elapsed=timing.elapsed,
             )
         elif state == TaskHandlerState.Error:
             err = task.error
@@ -210,13 +216,18 @@ class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
                     dbt_error(exc, logs=[l.to_dict() for l in task_logs])
                 )
             return poll_complete(
-                status=state,
+                timing=timing,
                 result=task.result,
                 tags=task.tags,
             )
         elif state == TaskHandlerState.Killed:
             return PollKilledResult(
-                status=state, tags=task.tags, logs=task_logs
+                tags=task.tags,
+                logs=task_logs,
+                state=timing.state,
+                start=timing.start,
+                end=timing.end,
+                elapsed=timing.elapsed,
             )
         else:
             exc = dbt.exceptions.InternalException(

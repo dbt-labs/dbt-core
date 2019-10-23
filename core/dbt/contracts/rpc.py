@@ -190,16 +190,16 @@ class GCResult(RemoteResult):
     missing: List[TaskID] = field(default_factory=list)
     running: List[TaskID] = field(default_factory=list)
 
-    def add_result(self, task_id: TaskID, status: GCResultState):
-        if status == GCResultState.Missing:
+    def add_result(self, task_id: TaskID, state: GCResultState):
+        if state == GCResultState.Missing:
             self.missing.append(task_id)
-        elif status == GCResultState.Running:
+        elif state == GCResultState.Running:
             self.running.append(task_id)
-        elif status == GCResultState.Deleted:
+        elif state == GCResultState.Deleted:
             self.deleted.append(task_id)
         else:
             raise InternalException(
-                f'Got invalid status in add_result: {status}'
+                f'Got invalid state in add_result: {state}'
             )
 
 # Task management types
@@ -259,15 +259,19 @@ class TaskHandlerState(StrEnum):
 
 
 @dataclass
-class TaskRow(JsonSchemaMixin):
-    task_id: TaskID
-    request_id: Union[str, int]
-    request_source: str
-    method: str
+class TaskTiming(JsonSchemaMixin):
     state: TaskHandlerState
     start: Optional[datetime]
     end: Optional[datetime]
     elapsed: Optional[float]
+
+
+@dataclass
+class TaskRow(TaskTiming):
+    task_id: TaskID
+    request_id: Union[str, int]
+    request_source: str
+    method: str
     timeout: Optional[float]
     tags: TaskTags
 
@@ -286,7 +290,7 @@ class KillResultStatus(StrEnum):
 
 @dataclass
 class KillResult(RemoteResult):
-    status: KillResultStatus = KillResultStatus.Missing
+    state: KillResultStatus = KillResultStatus.Missing
     logs: List[LogMessage] = field(default_factory=list)
 
 
@@ -304,110 +308,115 @@ class RemoteMethodFlags(enum.Flag):
 
 
 @dataclass
-class PollResult(RemoteResult):
-    tags: TaskTags = None
-    status: TaskHandlerState = TaskHandlerState.NotStarted
+class PollResult(RemoteResult, TaskTiming):
+    state: TaskHandlerState
+    tags: TaskTags
+    start: Optional[datetime]
+    end: Optional[datetime]
+    elapsed: Optional[float]
 
 
 @dataclass
 class PollRemoteEmptyCompleteResult(PollResult, RemoteEmptyResult):
-    status: TaskHandlerState = field(
+    state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
         cls: Type['PollRemoteEmptyCompleteResult'],
-        status: TaskHandlerState,
         base: RemoteEmptyResult,
         tags: TaskTags,
+        timing: TaskTiming,
     ) -> 'PollRemoteEmptyCompleteResult':
         return cls(
-            status=status,
             logs=base.logs,
             tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
         )
 
 
 @dataclass
 class PollKilledResult(PollResult):
-    logs: List[LogMessage] = field(default_factory=list)
-    status: TaskHandlerState = field(
+    state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Killed),
-        default=TaskHandlerState.Killed,
     )
 
 
 @dataclass
-class PollExecuteCompleteResult(PollResult, RemoteExecutionResult):
-    status: TaskHandlerState = field(
+class PollExecuteCompleteResult(RemoteExecutionResult, PollResult):
+    state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
         cls: Type['PollExecuteCompleteResult'],
-        status: TaskHandlerState,
         base: RemoteExecutionResult,
         tags: TaskTags,
+        timing: TaskTiming,
     ) -> 'PollExecuteCompleteResult':
         return cls(
-            status=status,
             results=base.results,
             generated_at=base.generated_at,
             elapsed_time=base.elapsed_time,
             logs=base.logs,
             tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
         )
 
 
 @dataclass
-class PollCompileCompleteResult(PollResult, RemoteCompileResult):
-    status: TaskHandlerState = field(
+class PollCompileCompleteResult(RemoteCompileResult, PollResult):
+    state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
         cls: Type['PollCompileCompleteResult'],
-        status: TaskHandlerState,
         base: RemoteCompileResult,
         tags: TaskTags,
+        timing: TaskTiming,
     ) -> 'PollCompileCompleteResult':
         return cls(
-            status=status,
             raw_sql=base.raw_sql,
             compiled_sql=base.compiled_sql,
             node=base.node,
             timing=base.timing,
             logs=base.logs,
             tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
         )
 
 
 @dataclass
-class PollRunCompleteResult(PollResult, RemoteRunResult):
-    status: TaskHandlerState = field(
+class PollRunCompleteResult(RemoteRunResult, PollResult):
+    state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
         cls: Type['PollRunCompleteResult'],
-        status: TaskHandlerState,
         base: RemoteRunResult,
         tags: TaskTags,
+        timing: TaskTiming,
     ) -> 'PollRunCompleteResult':
         return cls(
-            status=status,
             raw_sql=base.raw_sql,
             compiled_sql=base.compiled_sql,
             node=base.node,
@@ -415,37 +424,43 @@ class PollRunCompleteResult(PollResult, RemoteRunResult):
             logs=base.logs,
             table=base.table,
             tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
         )
 
 
 @dataclass
-class PollCatalogCompleteResult(PollResult, RemoteCatalogResults):
-    status: TaskHandlerState = field(
+class PollCatalogCompleteResult(RemoteCatalogResults, PollResult):
+    state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
-        default=TaskHandlerState.Success,
     )
 
     @classmethod
     def from_result(
         cls: Type['PollCatalogCompleteResult'],
-        status: TaskHandlerState,
         base: RemoteCatalogResults,
         tags: TaskTags,
+        timing: TaskTiming,
     ) -> 'PollCatalogCompleteResult':
         return cls(
-            status=status,
             nodes=base.nodes,
             generated_at=base.generated_at,
             _compile_results=base._compile_results,
             logs=base.logs,
             tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
         )
 
 
 @dataclass
 class PollInProgressResult(PollResult):
-    logs: List[LogMessage] = field(default_factory=list)
+    pass
 
 
 # Manifest parsing types
@@ -459,7 +474,7 @@ class ManifestStatus(StrEnum):
 
 @dataclass
 class LastParse(RemoteResult):
-    status: ManifestStatus = ManifestStatus.Init
+    state: ManifestStatus = ManifestStatus.Init
     logs: List[LogMessage] = field(default_factory=list)
     error: Optional[Dict[str, Any]] = None
     timestamp: datetime = field(default_factory=datetime.utcnow)

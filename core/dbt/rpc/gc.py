@@ -1,10 +1,6 @@
-import multiprocessing
 import operator
 from datetime import datetime, timedelta
-from typing import (
-    MutableMapping, Optional, List, Iterable, Tuple, Union,
-)
-from typing_extensions import Protocol
+from typing import Optional, List, Iterable, Tuple
 
 import dbt.exceptions
 import dbt.flags
@@ -12,50 +8,21 @@ from dbt.contracts.rpc import (
     GCSettings,
     GCResultState,
     GCResult,
-    TaskHandlerState,
     TaskID,
-    TaskTags,
 )
+from dbt.rpc.task_handler_protocol import TaskHandlerMap
 
 # import this to make sure our timedelta encoder is registered
 from dbt import helper_types  # noqa
 
 
-class Collectible(Protocol):
-    started: Optional[datetime]
-    ended: Optional[datetime]
-    state: TaskHandlerState
-    task_id: TaskID
-    process: Optional[multiprocessing.Process]
-
-    @property
-    def request_id(self) -> Union[str, int]:
-        pass
-
-    @property
-    def request_source(self) -> str:
-        pass
-
-    @property
-    def timeout(self) -> Optional[float]:
-        pass
-
-    @property
-    def method(self) -> str:
-        pass
-
-    @property
-    def tags(self) -> Optional[TaskTags]:
-        pass
-
-
 class GarbageCollector:
     def __init__(
         self,
-        active_tasks: MutableMapping[TaskID, Collectible],
+        active_tasks: TaskHandlerMap,
         settings: Optional[GCSettings] = None,
     ) -> None:
-        self.active_tasks: MutableMapping[TaskID, Collectible] = active_tasks
+        self.active_tasks: TaskHandlerMap = active_tasks
         self.settings: GCSettings
 
         if settings is None:
@@ -111,7 +78,7 @@ class GarbageCollector:
         You must hold the lock, as this mutates `tasks`.
         """
         try:
-            status = self._remove_task_if_finished(task_id)
+            state = self._remove_task_if_finished(task_id)
         except KeyError:
             # someone was mutating tasks while we had the lock, that's
             # not right!
@@ -120,7 +87,7 @@ class GarbageCollector:
                 .format(task_id)
             )
 
-        return result.add_result(task_id=task_id, status=status)
+        return result.add_result(task_id=task_id, state=state)
 
     def collect_multiple_task_ids(
         self, task_ids: Iterable[TaskID]

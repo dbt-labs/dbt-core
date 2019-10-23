@@ -28,7 +28,7 @@ from dbt.rpc.error import (
     RPCException,
     timeout_error,
 )
-from dbt.rpc.gc import Collectible
+from dbt.rpc.task_handler_protocol import TaskHandlerProtocol
 from dbt.rpc.logger import (
     QueueSubscriber,
     QueueLogHandler,
@@ -253,7 +253,7 @@ class SetArgsStateHandler(StateHandler):
         pass
 
 
-class RequestTaskHandler(threading.Thread, Collectible):
+class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
     """Handler for the single task triggered by a given jsonrpc request."""
     def __init__(
         self,

@@ -176,8 +176,8 @@ def test_rpc_status_error(project_dir, profiles_dir, postgres_profile, unique_sc
         assert 'error' in result
         assert 'message' in result['error']
         assert 'Invalid test config' in result['error']['message']
-        assert 'status' in result
-        assert result['status'] == 'error'
+        assert 'state' in result
+        assert result['state'] == 'error'
         assert 'logs' in result
         logs = result['logs']
         assert len(logs) > 0
@@ -218,8 +218,8 @@ def test_rpc_status_error(project_dir, profiles_dir, postgres_profile, unique_sc
 
         result = querier.is_result(querier.status())
         assert result.get('error') is None
-        assert 'status' in result
-        assert result['status'] == 'ready'
+        assert 'state' in result
+        assert result['state'] == 'ready'
 
         querier.is_result(querier.compile_sql('select 1 as id'))
 
@@ -269,3 +269,30 @@ def test_gc_change_interval(project_dir, profiles_dir, postgres_profile, unique_
         time.sleep(0.5)
         result = querier.is_result(querier.ps(True, True))
         assert len(result['rows']) == 2
+
+
+def test_ps_poll_output_match(project_dir, profiles_dir, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'}
+    )
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+    )
+
+    with schema_ctx, server_ctx as server:
+        querier = Querier(server)
+
+        token = querier.is_async_result(querier.run())
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        result = querier.is_result(querier.ps(active=True, completed=True))
+        assert 'rows' in result
+        rows = result['rows']
+        assert len(rows) == 1
+        ps_result = rows[0]
+
+        for key in ('start', 'end', 'elapsed', 'state'):
+            assert ps_result[key] == poll_result[key]

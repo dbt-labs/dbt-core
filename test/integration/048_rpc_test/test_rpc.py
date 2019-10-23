@@ -49,7 +49,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         return True
 
     def _compare_result(self, result):
-        return result['result']['status'] == 'ready'
+        return result['result']['state'] == 'ready'
 
     def status_ok(self):
         result = query_url(
@@ -173,7 +173,7 @@ class HasRPCServer(DBTIntegrationTest):
     def url(self):
         return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
-    def poll_for_result(self, request_token, request_id=1, timeout=60, status='success', logs=None):
+    def poll_for_result(self, request_token, request_id=1, timeout=60, state='success', logs=None):
         start = time.time()
         kwargs = {
             'request_token': request_token,
@@ -188,15 +188,15 @@ class HasRPCServer(DBTIntegrationTest):
             if 'error' in response_json:
                 return response
             result = self.assertIsResult(response_json, request_id)
-            self.assertIn('status', result)
-            if result['status'] == status:
+            self.assertIn('state', result)
+            if result['state'] == state:
                 return response
             if timeout is not None:
                 delta = (time.time() - start)
                 self.assertGreater(
                     timeout, delta,
                     'At time {}, never saw {}.\nLast response: {}'
-                    .format(delta, status, result)
+                    .format(delta, state, result)
                 )
 
     def async_query(self, _method, _sql=None, _test_request_id=1, _poll_timeout=60, macros=None, **kwargs):
@@ -316,12 +316,12 @@ class HasRPCServer(DBTIntegrationTest):
     def kill_and_assert(self, request_token, request_id):
         kill_response = self.query('kill', task_id=request_token).json()
         result = self.assertIsResult(kill_response)
-        self.assertEqual(result['status'], 'killed')
+        self.assertEqual(result['state'], 'killed')
 
         poll_id = 90891
 
         poll_response = self.poll_for_result(
-            request_token, request_id=poll_id, status='killed', logs=True
+            request_token, request_id=poll_id, state='killed', logs=True
         ).json()
 
         result = self.assertIsResult(poll_response, id_=poll_id)
@@ -350,7 +350,7 @@ class HasRPCServer(DBTIntegrationTest):
         while elapsed < timeout:
             status = self.assertIsResult(self.query('status').json())
             self.assertTrue(status['timestamp'] >= timestamp)
-            if status['timestamp'] != timestamp and status['status'] == state:
+            if status['timestamp'] != timestamp and status['state'] == state:
                 return status
             time.sleep(0.5)
             elapsed = time.time() - started
@@ -359,7 +359,7 @@ class HasRPCServer(DBTIntegrationTest):
         self.assertTrue(status['timestamp'] >= timestamp)
         if raise_on_timeout:
             self.assertEqual(
-                status['status'],
+                status['state'],
                 state,
                 f'exceeded max time of {timeout}: {elapsed} seconds elapsed'
             )
@@ -899,8 +899,8 @@ class TestRPCServerProjects(HasRPCServer):
 
     def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
-        self.assertIn('status', dct)
-        self.assertTrue(dct['status'])
+        self.assertIn('state', dct)
+        self.assertTrue(dct['state'])
         self.assertIn('nodes', dct)
         nodes = dct['nodes']
         self.assertEqual(set(nodes), expected)
@@ -962,7 +962,7 @@ class TestRPCTaskManagement(HasRPCServer):
     @use_profile('postgres')
     def test_sighup_postgres(self):
         status = self.assertIsResult(self.query('status').json())
-        self.assertEqual(status['status'], 'ready')
+        self.assertEqual(status['state'], 'ready')
         self.assertIn('logs', status)
         logs = status['logs']
         self.assertTrue(len(logs) > 0)
@@ -1060,7 +1060,7 @@ class TestRPCTaskManagement(HasRPCServer):
 
 class CompletingServerProcess(ServerProcess):
     def _compare_result(self, result):
-        return result['result']['status'] in ('error', 'ready')
+        return result['result']['state'] in ('error', 'ready')
 
 
 @mark.flaky(rerun_filter=addr_in_use)
@@ -1094,7 +1094,7 @@ class TestRPCServerDeps(HasRPCServer):
     def _check_start_predeps(self):
         self.assertFalse(os.path.exists('./dbt_modules'))
         status = self.assertIsResult(self.query('status').json())
-        self.assertEqual(status['status'], 'ready')
+        self.assertEqual(status['state'], 'ready')
 
         self.assertIsError(self.async_query('compile').json())
         if os.path.exists('./dbt_modules'):
