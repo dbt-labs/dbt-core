@@ -1,12 +1,18 @@
 import unittest
 from unittest import mock
 
+import dbt.deps
 import dbt.exceptions
-from dbt.task.deps import (
-    GitUnpinnedPackage, LocalUnpinnedPackage, RegistryUnpinnedPackage,
-    LocalPackageContract, GitPackageContract, RegistryPackageContract,
-    resolve_packages
+from dbt.deps.git import GitUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.deps.resolver import resolve_packages
+from dbt.contracts.project import (
+    LocalPackage,
+    GitPackage,
+    RegistryPackage,
 )
+
 from dbt.contracts.project import PackageConfig
 from dbt.semver import VersionSpecifier
 
@@ -15,7 +21,7 @@ from hologram import ValidationError
 
 class TestLocalPackage(unittest.TestCase):
     def test_init(self):
-        a_contract = LocalPackageContract.from_dict({'local': '/path/to/package'})
+        a_contract = LocalPackage.from_dict({'local': '/path/to/package'})
         self.assertEqual(a_contract.local, '/path/to/package')
         a = LocalUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.local, '/path/to/package')
@@ -26,7 +32,7 @@ class TestLocalPackage(unittest.TestCase):
 
 class TestGitPackage(unittest.TestCase):
     def test_init(self):
-        a_contract = GitPackageContract.from_dict(
+        a_contract = GitPackage.from_dict(
             {'git': 'http://example.com', 'revision': '0.0.1'}
         )
         self.assertEqual(a_contract.git, 'http://example.com')
@@ -46,15 +52,15 @@ class TestGitPackage(unittest.TestCase):
 
     def test_invalid(self):
         with self.assertRaises(ValidationError):
-            GitPackageContract.from_dict(
+            GitPackage.from_dict(
                 {'git': 'http://example.com', 'version': '0.0.1'}
             )
 
     def test_resolve_ok(self):
-        a_contract = GitPackageContract.from_dict(
+        a_contract = GitPackage.from_dict(
             {'git': 'http://example.com', 'revision': '0.0.1'}
         )
-        b_contract = GitPackageContract.from_dict(
+        b_contract = GitPackage.from_dict(
             {'git': 'http://example.com', 'revision': '0.0.1',
              'warn-unpinned': False}
         )
@@ -71,10 +77,10 @@ class TestGitPackage(unittest.TestCase):
         self.assertFalse(c_pinned.warn_unpinned)
 
     def test_resolve_fail(self):
-        a_contract = GitPackageContract.from_dict(
+        a_contract = GitPackage.from_dict(
             {'git': 'http://example.com', 'revision': '0.0.1'}
         )
-        b_contract = GitPackageContract.from_dict(
+        b_contract = GitPackage.from_dict(
             {'git': 'http://example.com', 'revision': '0.0.2'}
         )
         a = GitUnpinnedPackage.from_contract(a_contract)
@@ -87,7 +93,7 @@ class TestGitPackage(unittest.TestCase):
             c.resolved()
 
     def test_default_revision(self):
-        a_contract = GitPackageContract.from_dict({'git': 'http://example.com'})
+        a_contract = GitPackage.from_dict({'git': 'http://example.com'})
         self.assertEqual(a_contract.revision, None)
         self.assertIs(a_contract.warn_unpinned, None)
 
@@ -105,7 +111,7 @@ class TestGitPackage(unittest.TestCase):
 
 class TestHubPackage(unittest.TestCase):
     def setUp(self):
-        self.patcher = mock.patch('dbt.task.deps.registry')
+        self.patcher = mock.patch('dbt.deps.registry.registry')
         self.registry = self.patcher.start()
         self.index_cached = self.registry.index_cached
         self.get_available_versions = self.registry.get_available_versions
@@ -136,7 +142,7 @@ class TestHubPackage(unittest.TestCase):
         self.patcher.stop()
 
     def test_init(self):
-        a_contract = RegistryPackageContract(
+        a_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.2',
         )
@@ -164,16 +170,16 @@ class TestHubPackage(unittest.TestCase):
 
     def test_invalid(self):
         with self.assertRaises(ValidationError):
-            RegistryPackageContract.from_dict(
+            RegistryPackage.from_dict(
                 {'package': 'namespace/name', 'key': 'invalid'}
             )
 
     def test_resolve_ok(self):
-        a_contract = RegistryPackageContract(
+        a_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        b_contract = RegistryPackageContract(
+        b_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
@@ -210,7 +216,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(c_pinned.source_type(), 'hub')
 
     def test_resolve_missing_package(self):
-        a = RegistryUnpinnedPackage.from_contract(RegistryPackageContract(
+        a = RegistryUnpinnedPackage.from_contract(RegistryPackage(
             package='fishtown-analytics-test/b',
             version='0.1.2'
         ))
@@ -221,7 +227,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_missing_version(self):
-        a = RegistryUnpinnedPackage.from_contract(RegistryPackageContract(
+        a = RegistryUnpinnedPackage.from_contract(RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.4'
         ))
@@ -236,11 +242,11 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_conflict(self):
-        a_contract = RegistryPackageContract(
+        a_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        b_contract = RegistryPackageContract(
+        b_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.3'
         )
@@ -257,11 +263,11 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_ranges(self):
-        a_contract = RegistryPackageContract(
+        a_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        b_contract = RegistryPackageContract(
+        b_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='<0.1.4'
         )
@@ -321,7 +327,7 @@ class MockRegistry:
 
 class TestPackageSpec(unittest.TestCase):
     def setUp(self):
-        self.patcher = mock.patch('dbt.task.deps.registry')
+        self.patcher = mock.patch('dbt.deps.registry.registry')
         self.registry = self.patcher.start()
         self.mock_registry = MockRegistry(packages={
             'fishtown-analytics-test/a': {

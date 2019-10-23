@@ -303,7 +303,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
                 '\n\t{}\n\t@: {}'
                 .format(block.path.original_file_path, exc.msg, context)
             )
-            raise CompilationException(msg)
+            raise CompilationException(msg) from exc
 
     def _calculate_freshness(
         self,

@@ -1,12 +1,12 @@
 # import these so we can find them
 from . import sql_commands  # noqa
 from . import project_commands  # noqa
-from .base import RPCTask
+from . import deps # noqa
 import json
 import os
 import signal
-import threading
 from contextlib import contextmanager
+from typing import Iterator, Optional
 
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Request, Response
@@ -16,18 +16,14 @@ from werkzeug.exceptions import NotFound
 from dbt.exceptions import RuntimeException
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
-    list_handler,
     log_manager,
 )
-from dbt.task.base import ConfiguredTask
-from dbt.utils import ForgivingJSONEncoder, env_set_truthy
+from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
+from dbt.rpc.method import TaskList
 from dbt.rpc.response_manager import ResponseManager
 from dbt.rpc.task_manager import TaskManager
-from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
-from dbt.perf_utils import get_full_manifest
-
-
-SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
+from dbt.task.base import ConfiguredTask
+from dbt.utils import ForgivingJSONEncoder
 
 
 # SIG_DFL ends up killing the process if multiple build up, but SIG_IGN just
@@ -35,24 +31,8 @@ SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
 SIG_IGN = signal.SIG_IGN
 
 
-def reload_manager(task_manager, tasks):
-    logs = []
-    try:
-        with list_handler(logs):
-            manifest = get_full_manifest(task_manager.config)
-
-        for cls in tasks:
-            task_manager.add_task_handler(cls, manifest)
-    except Exception as exc:
-        logs = [r.to_dict() for r in logs]
-        task_manager.set_compile_exception(exc, logs=logs)
-    else:
-        logs = [r.to_dict() for r in logs]
-        task_manager.set_ready(logs=logs)
-
-
 @contextmanager
-def signhup_replace():
+def signhup_replace() -> Iterator[bool]:
     """A context manager. Replace the current sighup handler with SIG_IGN on
     entering, and (if the current handler was not SIG_IGN) replace it on
     leaving. This is meant to be used inside a sighup handler itself to
@@ -93,16 +73,17 @@ def signhup_replace():
 class RPCServerTask(ConfiguredTask):
     DEFAULT_LOG_FORMAT = 'json'
 
-    def __init__(self, args, config, tasks=None):
+    def __init__(self, args, config, tasks: Optional[TaskList] = None):
         if os.name == 'nt':
             raise RuntimeException(
                 'The dbt RPC server is not supported on windows'
             )
         super().__init__(args, config)
-        self._tasks = tasks or self._default_tasks()
-        self.task_manager = TaskManager(self.args, self.config)
-        self._reloader = None
-        self._reload_task_manager()
+        self.task_manager = TaskManager(
+            self.args, self.config, TaskList(tasks)
+        )
+        self.task_manager.reload_non_manifest_tasks()
+        self.task_manager.reload_manifest_tasks()
         signal.signal(signal.SIGHUP, self._sighup_handler)
 
     @classmethod
@@ -113,39 +94,16 @@ class RPCServerTask(ConfiguredTask):
         else:
             log_manager.format_json()
 
-    def _reload_task_manager(self):
-        """This function can only be running once at a time, as it runs in the
-        signal handler we replace
-        """
-        # mark the task manager invalid for task running
-        self.task_manager.set_compiling()
-        for task in self._tasks:
-            self.task_manager.reserve_handler(task)
-        # compile in a thread that will fix up the tag manager when it's done
-        reloader = threading.Thread(
-            target=reload_manager,
-            args=(self.task_manager, self._tasks),
-        )
-        reloader.start()
-        # only assign to _reloader here, to avoid calling join() before start()
-        self._reloader = reloader
-
     def _sighup_handler(self, signum, frame):
         with signhup_replace() as run_task_manger:
             if not run_task_manger:
                 # a sighup handler is already active.
                 return
-            if self._reloader is not None and self._reloader.is_alive():
-                # a reloader is already active.
-                return
-            self._reload_task_manager()
-
-    @staticmethod
-    def _default_tasks():
-        return RPCTask.recursive_subclasses(named_only=True)
+            self.task_manager.reload_config()
+            self.task_manager.reload_manifest_tasks()
 
     def single_threaded(self):
-        return SINGLE_THREADED_WEBSERVER or self.args.single_threaded
+        return self.task_manager.single_threaded()
 
     def run_forever(self):
         host = self.args.host
@@ -181,7 +139,12 @@ class RPCServerTask(ConfiguredTask):
         # metadata+state in a multiprocessing.Manager, adds polling the
         # manager to the request  task handler and in general gets messy
         # fast.
-        run_simple(host, port, app, threaded=not self.single_threaded)
+        run_simple(
+            host,
+            port,
+            app,
+            threaded=not self.task_manager.single_threaded(),
+        )
 
     def run(self):
         with ServerContext().applicationbound():
