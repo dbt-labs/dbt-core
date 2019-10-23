@@ -62,10 +62,8 @@ class BaseRelation(FakeAPIObject, Hashable):
         """Override `.get` to return a metadata object so we don't break
         dbt_utils.
         """
-        if key == 'metadata':
-            return {
-                'type': self.__class__.__name__
-            }
+        if key == "metadata":
+            return {"type": self.__class__.__name__}
         return super().get(key, default)
 
     def matches(
