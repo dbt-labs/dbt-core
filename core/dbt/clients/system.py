@@ -71,9 +71,9 @@ def find_matching(
                     fire_event(SystemErrorRetrievingModTime(path=absolute_path))
                 if reobj.match(local_file):
                     matching.append(
-                        'searched_path': relative_path_to_search,
-                        'absolute_path': absolute_path,
-                        'relative_path': relative_path,
+                        {
+                            "searched_path": relative_path_to_search,
+                            "absolute_path": absolute_path,
                         'modification_time': modification_time,
                             "modification_time": modification_time,
                         }
