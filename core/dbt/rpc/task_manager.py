@@ -2,7 +2,7 @@ import threading
 import uuid
 from datetime import datetime
 from typing import (
-    Any, Dict, Optional, List, Union, Set, Callable, Type, MutableMapping
+    Any, Dict, Optional, List, Union, Set, Callable, Type
 )
 
 
@@ -15,16 +15,14 @@ from dbt.contracts.rpc import (
     GCSettings,
     GCResult,
     TaskRow,
-    TaskHandlerState,
     TaskID,
 )
 from dbt.logger import LogMessage, list_handler
 from dbt.perf_utils import get_full_manifest
 from dbt.rpc.error import dbt_error
-from dbt.rpc.gc import GarbageCollector, Collectible
-from dbt.rpc.task_handler import (
-    RequestTaskHandler, set_parse_state_with
-)
+from dbt.rpc.gc import GarbageCollector
+from dbt.rpc.task_handler_protocol import TaskHandlerProtocol, TaskHandlerMap
+from dbt.rpc.task_handler import set_parse_state_with
 from dbt.rpc.method import (
     RemoteMethod, RemoteManifestMethod, RemoteBuiltinMethod, TaskTypes,
 )
@@ -41,57 +39,6 @@ SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
 
 
 WrappedHandler = Callable[..., Dict[str, Any]]
-
-TaskDict = MutableMapping[uuid.UUID, RequestTaskHandler]
-
-
-def _assert_started(task_handler: Collectible) -> datetime:
-    if task_handler.started is None:
-        raise dbt.exceptions.InternalException(
-            'task handler started but start time is not set'
-        )
-    return task_handler.started
-
-
-def _assert_ended(task_handler: Collectible) -> datetime:
-    if task_handler.ended is None:
-        raise dbt.exceptions.InternalException(
-            'task handler finished but end time is not set'
-        )
-    return task_handler.ended
-
-
-def make_task(task_handler: Collectible, now_time: datetime) -> TaskRow:
-    # get information about the task in a way that should not provide any
-    # conflicting information. Calculate elapsed time based on `now_time`
-    state = task_handler.state
-    # store end/start so 'ps' output always makes sense:
-    # not started -> no start time/elapsed, running -> no end time, etc
-    end = None
-    start = None
-    elapsed = None
-    if state > TaskHandlerState.NotStarted:
-        start = _assert_started(task_handler)
-        elapsed_end = now_time
-
-        if state.finished:
-            elapsed_end = _assert_ended(task_handler)
-            end = elapsed_end
-
-        elapsed = (elapsed_end - start).total_seconds()
-
-    return TaskRow(
-        task_id=task_handler.task_id,
-        request_id=task_handler.request_id,
-        request_source=task_handler.request_source,
-        method=task_handler.method,
-        state=state,
-        start=start,
-        end=end,
-        elapsed=elapsed,
-        timeout=task_handler.timeout,
-        tags=task_handler.tags,
-    )
 
 
 class UnconditionalError:
@@ -139,9 +86,9 @@ class TaskManager:
         self.config = config
         self.manifest: Optional[Manifest] = None
         self._task_types: TaskTypes = task_types
-        self.active_tasks: MutableMapping[uuid.UUID, Collectible] = {}
+        self.active_tasks: TaskHandlerMap = {}
         self.gc = GarbageCollector(active_tasks=self.active_tasks)
-        self.last_parse: LastParse = LastParse(status=ManifestStatus.Init)
+        self.last_parse: LastParse = LastParse(state=ManifestStatus.Init)
         self._lock: dbt.flags.MP_CONTEXT.Lock = dbt.flags.MP_CONTEXT.Lock()
         self._reloader: Optional[ManifestReloader] = None
         self.reload_manifest()
@@ -191,10 +138,10 @@ class TaskManager:
         self.config = config
         return config
 
-    def add_request(self, request_handler: RequestTaskHandler):
+    def add_request(self, request_handler: TaskHandlerProtocol):
         self.active_tasks[request_handler.task_id] = request_handler
 
-    def get_request(self, task_id: TaskID) -> Collectible:
+    def get_request(self, task_id: TaskID) -> TaskHandlerProtocol:
         try:
             return self.active_tasks[task_id]
         except KeyError:
@@ -204,16 +151,16 @@ class TaskManager:
     def _get_manifest_callable(
         self, task: Type[RemoteManifestMethod]
     ) -> Union[UnconditionalError, RemoteManifestMethod]:
-        status = self.last_parse.status
-        if status == ManifestStatus.Compiling:
+        state = self.last_parse.state
+        if state == ManifestStatus.Compiling:
             return CurrentlyCompiling()
-        elif status == ManifestStatus.Error:
+        elif state == ManifestStatus.Error:
             return ParseError(self.last_parse.error)
         else:
             if self.manifest is None:
                 raise dbt.exceptions.InternalException(
-                    f'Manifest should not be None if the last parse status is '
-                    f'{status}'
+                    f'Manifest should not be None if the last parse state is '
+                    f'{state}'
                 )
             return task(self.args, self.config, self.manifest)
 
@@ -237,32 +184,32 @@ class TaskManager:
 
     def ready(self) -> bool:
         with self._lock:
-            return self.last_parse.status == ManifestStatus.Ready
+            return self.last_parse.state == ManifestStatus.Ready
 
     def set_parsing(self) -> bool:
         with self._lock:
-            if self.last_parse.status == ManifestStatus.Compiling:
+            if self.last_parse.state == ManifestStatus.Compiling:
                 return False
-            self.last_parse = LastParse(status=ManifestStatus.Compiling)
+            self.last_parse = LastParse(state=ManifestStatus.Compiling)
         return True
 
     def parse_manifest(self) -> None:
         self.manifest = get_full_manifest(self.config)
 
     def set_compile_exception(self, exc, logs=List[LogMessage]) -> None:
-        assert self.last_parse.status == ManifestStatus.Compiling, \
-            f'invalid state {self.last_parse.status}'
+        assert self.last_parse.state == ManifestStatus.Compiling, \
+            f'invalid state {self.last_parse.state}'
         self.last_parse = LastParse(
             error={'message': str(exc)},
-            status=ManifestStatus.Error,
+            state=ManifestStatus.Error,
             logs=logs
         )
 
     def set_ready(self, logs=List[LogMessage]) -> None:
-        assert self.last_parse.status == ManifestStatus.Compiling, \
-            f'invalid state {self.last_parse.status}'
+        assert self.last_parse.state == ManifestStatus.Compiling, \
+            f'invalid state {self.last_parse.state}'
         self.last_parse = LastParse(
-            status=ManifestStatus.Ready,
+            state=ManifestStatus.Ready,
             logs=logs
         )
 
@@ -297,7 +244,7 @@ class TaskManager:
         now = datetime.utcnow()
         with self._lock:
             for task in self.active_tasks.values():
-                rows.append(make_task(task, now))
+                rows.append(task.make_task_row(now))
         return rows
 
     def gc_as_required(self) -> None:

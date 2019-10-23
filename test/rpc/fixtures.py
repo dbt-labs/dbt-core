@@ -63,7 +63,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         return True
 
     def _compare_result(self, result):
-        return result['result']['status'] in self.criteria
+        return result['result']['state'] in self.criteria
 
     def status_ok(self):
         result = self.query(
@@ -308,7 +308,7 @@ class Querier:
         assert 'error' in data
         return data['error']
 
-    def async_wait(self, token: str, timeout: int = 60, status='success') -> Dict[str, Any]:
+    def async_wait(self, token: str, timeout: int = 60, state='success') -> Dict[str, Any]:
         start = time.time()
         while True:
             time.sleep(0.5)
@@ -316,12 +316,12 @@ class Querier:
             if 'error' in response:
                 return response
             result = self.is_result(response)
-            assert 'status' in result
-            if result['status'] == status:
+            assert 'state' in result
+            if result['state'] == state:
                 return response
             delta = (time.time() - start)
             assert timeout > delta, \
-                f'At time {delta}, never saw {status}.\nLast response: {result}'
+                f'At time {delta}, never saw {state}.\nLast response: {result}'
 
 
 def _first_server(cwd, cli_vars, profiles_dir, criteria):
