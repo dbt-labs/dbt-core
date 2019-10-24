@@ -1,0 +1,112 @@
+import abc
+import os
+import tempfile
+from contextlib import contextmanager
+from typing import List, Optional, Generic, TypeVar
+
+from dbt.clients import system
+from dbt.contracts.project import ProjectPackageMetadata
+from dbt.logger import GLOBAL_LOGGER as logger
+
+DOWNLOADS_PATH = None
+
+
+def get_downloads_path():
+    return DOWNLOADS_PATH
+
+
+@contextmanager
+def downloads_directory():
+    global DOWNLOADS_PATH
+    remove_downloads = False
+    # the user might have set an environment variable. Set it to that, and do
+    # not remove it when finished.
+    if DOWNLOADS_PATH is None:
+        DOWNLOADS_PATH = os.getenv('DBT_DOWNLOADS_DIR')
+        remove_downloads = False
+    # if we are making a per-run temp directory, remove it at the end of
+    # successful runs
+    if DOWNLOADS_PATH is None:
+        DOWNLOADS_PATH = tempfile.mkdtemp(prefix='dbt-downloads-')
+        remove_downloads = True
+
+    system.make_directory(DOWNLOADS_PATH)
+    logger.debug("Set downloads directory='{}'".format(DOWNLOADS_PATH))
+
+    yield DOWNLOADS_PATH
+
+    if remove_downloads:
+        system.rmtree(DOWNLOADS_PATH)
+        DOWNLOADS_PATH = None
+
+
+class BasePackage(metaclass=abc.ABCMeta):
+    @abc.abstractproperty
+    def name(self) -> str:
+        raise NotImplementedError
+
+    def all_names(self) -> List[str]:
+        return [self.name]
+
+    @abc.abstractmethod
+    def source_type(self) -> str:
+        raise NotImplementedError
+
+
+class PinnedPackage(BasePackage):
+    def __init__(self) -> None:
+        self._cached_metadata: Optional[ProjectPackageMetadata] = None
+
+    def __str__(self) -> str:
+        version = self.get_version()
+        if not version:
+            return self.name
+
+        return '{}@{}'.format(self.name, version)
+
+    @abc.abstractmethod
+    def get_version(self) -> Optional[str]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _fetch_metadata(self, project):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def install(self, project):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def nice_version_name(self):
+        raise NotImplementedError
+
+    def fetch_metadata(self, project):
+        if not self._cached_metadata:
+            self._cached_metadata = self._fetch_metadata(project)
+        return self._cached_metadata
+
+    def get_project_name(self, project):
+        metadata = self.fetch_metadata(project)
+        return metadata.name
+
+    def get_installation_path(self, project):
+        dest_dirname = self.get_project_name(project)
+        return os.path.join(project.modules_path, dest_dirname)
+
+
+SomePinned = TypeVar('SomePinned', bound=PinnedPackage)
+SomeUnpinned = TypeVar('SomeUnpinned', bound='UnpinnedPackage')
+
+
+class UnpinnedPackage(Generic[SomePinned], BasePackage):
+    @abc.abstractclassmethod
+    def from_contract(cls, contract):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def incorporate(self: SomeUnpinned, other: SomeUnpinned) -> SomeUnpinned:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def resolved(self) -> SomePinned:
+        raise NotImplementedError

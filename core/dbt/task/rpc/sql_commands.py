@@ -181,6 +181,9 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
             generated_at=ended,
         )
 
+    def interpret_results(self, results):
+        return True
+
 
 class RemoteCompileTask(RemoteRunSQLTask, CompileTask):
     METHOD_NAME = 'compile_sql'

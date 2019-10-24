@@ -1,0 +1,7 @@
+version: 2
+models:
+- name: DISABLED
+  columns:
+  - name: id
+    tests:
+    - unique

@@ -364,7 +364,7 @@ def _build_deps_subparser(subparsers, base_subparser):
         Pull the most recent version of the dependencies listed in packages.yml
         '''
     )
-    sub.set_defaults(cls=deps_task.DepsTask, which='deps', rpc_method=None)
+    sub.set_defaults(cls=deps_task.DepsTask, which='deps', rpc_method='deps')
     return sub
 
 

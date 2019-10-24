@@ -50,6 +50,9 @@ class RequestDispatcher(Dict[str, Callable[..., Dict[str, Any]]]):
         )
         if handler is None:
             raise KeyError(key)
+        if callable(handler):
+            # either an error or a builtin
+            return handler
         elif isinstance(handler, RemoteMethod):
             # the handler must be a task. Wrap it in a task handler so it can
             # go async
@@ -57,7 +60,10 @@ class RequestDispatcher(Dict[str, Callable[..., Dict[str, Any]]]):
                 self.manager, handler, self.http_request, self.json_rpc_request
             )
         else:
-            return handler
+            raise dbt.exceptions.InternalException(
+                f'Got an invalid handler from get_handler. Expected None, '
+                f'callable, or RemoteMethod, got {handler}'
+            )
 
 
 class ResponseManager(JSONRPCResponseManager):

@@ -1,10 +1,8 @@
 from datetime import datetime
-import shlex
-from typing import Type, List, Optional, Union
+from typing import List, Optional, Union
 
 
 from dbt.contracts.rpc import (
-    RPCCliParameters,
     RPCCompileParameters,
     RPCDocsGenerateParameters,
     RPCSeedParameters,
@@ -12,17 +10,23 @@ from dbt.contracts.rpc import (
     RemoteCatalogResults,
     RemoteExecutionResult,
 )
-from dbt.exceptions import InternalException
+from dbt.rpc.method import (
+    Parameters,
+)
 from dbt.task.compile import CompileTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
 from dbt.task.seed import SeedTask
 from dbt.task.test import TestTask
 
-from .base import RPCTask, Parameters
+from .base import RPCTask
+from .cli import HasCLI
 
 
-class RPCCommandTask(RPCTask[Parameters]):
+class RPCCommandTask(
+    RPCTask[Parameters],
+    HasCLI[Parameters, RemoteExecutionResult],
+):
     @staticmethod
     def _listify(
         value: Optional[Union[str, List[str]]]
@@ -33,10 +37,6 @@ class RPCCommandTask(RPCTask[Parameters]):
             return [value]
         else:
             return value
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
 
     def handle_request(self) -> RemoteExecutionResult:
         return self.run()
@@ -97,33 +97,3 @@ class RemoteDocsGenerateProjectTask(
             _compile_results=compile_results,
             logs=[],
         )
-
-
-class RemoteRPCParameters(RPCCommandTask[RPCCliParameters]):
-    METHOD_NAME = 'cli_args'
-
-    def set_args(self, params: RPCCliParameters) -> None:
-        # more import cycles :(
-        from dbt.main import parse_args, RPCArgumentParser
-        split = shlex.split(params.cli)
-        self.args = parse_args(split, RPCArgumentParser)
-
-    def get_rpc_task_cls(self) -> Type[RPCCommandTask]:
-        # This is obnoxious, but we don't have actual access to the TaskManager
-        # so instead we get to dig through all the subclasses of RPCTask
-        # (recursively!) looking for a matching METHOD_NAME
-        candidate: Type[RPCCommandTask]
-        for candidate in RPCCommandTask.recursive_subclasses():
-            if candidate.METHOD_NAME == self.args.rpc_method:
-                return candidate
-        # this shouldn't happen
-        raise InternalException(
-            'No matching handler found for rpc method {} (which={})'
-            .format(self.args.rpc_method, self.args.which)
-        )
-
-    def handle_request(self) -> RemoteExecutionResult:
-        cls = self.get_rpc_task_cls()
-        # we parsed args from the cli, so we're set on that front
-        task = cls(self.args, self.config, self.manifest)
-        return task.handle_request()
