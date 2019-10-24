@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import shutil
 import signal
 import socket
 import time
@@ -48,7 +49,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         return True
 
     def _compare_result(self, result):
-        return result['result']['status'] == 'ready'
+        return result['result']['state'] == 'ready'
 
     def status_ok(self):
         result = query_url(
@@ -172,27 +173,41 @@ class HasRPCServer(DBTIntegrationTest):
     def url(self):
         return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
-    def poll_for_result(self, request_token, request_id=1, timeout=60):
+    def poll_for_result(self, request_token, request_id=1, timeout=60, state='success', logs=None):
         start = time.time()
+        kwargs = {
+            'request_token': request_token,
+        }
+        if logs is not None:
+            kwargs['logs'] = logs
+
         while True:
             time.sleep(0.5)
-            response = self.query('poll', request_token=request_token, _test_request_id=request_id)
+            response = self.query('poll', _test_request_id=request_id, **kwargs)
             response_json = response.json()
             if 'error' in response_json:
                 return response
             result = self.assertIsResult(response_json, request_id)
-            self.assertIn('status', result)
-            if result['status'] == 'success':
+            self.assertIn('state', result)
+            if result['state'] == state:
                 return response
             if timeout is not None:
-                self.assertGreater(timeout, (time.time() - start))
+                delta = (time.time() - start)
+                self.assertGreater(
+                    timeout, delta,
+                    'At time {}, never saw {}.\nLast response: {}'
+                    .format(delta, state, result)
+                )
 
-
-    def async_query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
+    def async_query(self, _method, _sql=None, _test_request_id=1, _poll_timeout=60, macros=None, **kwargs):
         response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
         result = self.assertIsResult(response, _test_request_id)
         self.assertIn('request_token', result)
-        return self.poll_for_result(result['request_token'], _test_request_id)
+        return self.poll_for_result(
+            result['request_token'],
+            request_id=_test_request_id,
+            timeout=_poll_timeout,
+        )
 
     def query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         built = self.build_query(_method, kwargs, _sql, _test_request_id, macros)
@@ -301,19 +316,17 @@ class HasRPCServer(DBTIntegrationTest):
     def kill_and_assert(self, request_token, request_id):
         kill_response = self.query('kill', task_id=request_token).json()
         result = self.assertIsResult(kill_response)
-        self.assertEqual(result['status'], 'killed')
+        self.assertEqual(result['state'], 'killed')
 
         poll_id = 90891
 
-        poll_response = self.poll_for_result(request_token, poll_id).json()
-        error = self.assertIsErrorWithCode(poll_response, 10009, poll_id)
-        self.assertEqual(error['message'], 'RPC process killed')
-        self.assertIn('data', error)
-        error_data = error['data']
-        self.assertEqual(error_data['signum'], 2)
-        self.assertEqual(error_data['message'], 'RPC process killed by signal 2')
-        self.assertIn('logs', error_data)
-        return error_data
+        poll_response = self.poll_for_result(
+            request_token, request_id=poll_id, state='killed', logs=True
+        ).json()
+
+        result = self.assertIsResult(poll_response, id_=poll_id)
+        self.assertIn('logs', result)
+        return result
 
     def get_sleep_query(self, duration=15, request_id=90890):
         sleep_query = self.query(
@@ -327,23 +340,27 @@ class HasRPCServer(DBTIntegrationTest):
         request_token = result['request_token']
         return request_token, request_id
 
-    def wait_for_running(self, timeout=25, raise_on_timeout=True):
+    def wait_for_state(
+        self, state, timestamp, timeout=25, raise_on_timeout=True
+    ):
         started = time.time()
         time.sleep(0.5)
         elapsed = time.time() - started
 
         while elapsed < timeout:
             status = self.assertIsResult(self.query('status').json())
-            if status['status'] == 'running':
+            self.assertTrue(status['timestamp'] >= timestamp)
+            if status['timestamp'] != timestamp and status['state'] == state:
                 return status
             time.sleep(0.5)
             elapsed = time.time() - started
 
         status = self.assertIsResult(self.query('status').json())
+        self.assertTrue(status['timestamp'] >= timestamp)
         if raise_on_timeout:
             self.assertEqual(
-                status['status'],
-                'ready',
+                status['state'],
+                state,
                 f'exceeded max time of {timeout}: {elapsed} seconds elapsed'
             )
         return status
@@ -353,9 +370,11 @@ class HasRPCServer(DBTIntegrationTest):
 
     def make_many_requests(self, num_requests):
         stored = []
-        for idx in range(num_requests):
-            response = self.query('run_sql', 'select 1 as id', name='run').json()
-            result = self.assertIsResult(response)
+        for idx in range(1, num_requests+1):
+            response = self.query(
+                'run_sql', 'select 1 as id', name='run', _test_request_id=idx
+            ).json()
+            result = self.assertIsResult(response, id_=idx)
             self.assertIn('request_token', result)
             token = result['request_token']
             self.poll_for_result(token)
@@ -654,7 +673,7 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertEqual(rowdict[0]['tags'], task_tags)
         self.assertEqual(rowdict[1]['request_id'], request_id)
         self.assertEqual(rowdict[1]['method'], 'run_sql')
-        self.assertEqual(rowdict[1]['state'], 'error')
+        self.assertEqual(rowdict[1]['state'], 'killed')
         self.assertIsNone(rowdict[1]['timeout'])
         self.assertGreater(rowdict[1]['elapsed'], 0)
         self.assertIsNone(rowdict[1]['tags'])
@@ -669,8 +688,8 @@ class TestRPCServerCompileRun(HasRPCServer):
         # we cancel the in-progress sleep query.
         time.sleep(3)
 
-        error_data = self.kill_and_assert(request_token, request_id)
-        self.assertTrue(len(error_data['logs']) > 0)
+        result_data = self.kill_and_assert(request_token, request_id)
+        self.assertTrue(len(result_data['logs']) > 0)
 
     @use_profile('postgres')
     def test_invalid_requests_postgres(self):
@@ -807,7 +826,6 @@ class TestRPCServerProjects(HasRPCServer):
 
     @use_profile('postgres')
     def test_compile_project_postgres(self):
-        self.run_dbt_with_vars(['seed'])
 
         result = self.async_query('compile').json()
         self.assertHasResults(
@@ -827,7 +845,7 @@ class TestRPCServerProjects(HasRPCServer):
 
     @use_profile('postgres')
     def test_compile_project_cli_postgres(self):
-        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['compile'])
         result = self.async_query('cli_args', cli='compile').json()
         self.assertHasResults(
             result,
@@ -846,21 +864,18 @@ class TestRPCServerProjects(HasRPCServer):
 
     @use_profile('postgres')
     def test_run_project_postgres(self):
-        self.run_dbt_with_vars(['seed'])
         result = self.async_query('run').json()
         self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
     @use_profile('postgres')
     def test_run_project_cli_postgres(self):
-        self.run_dbt_with_vars(['seed'])
         result = self.async_query('cli_args', cli='run').json()
         self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
     @use_profile('postgres')
     def test_test_project_postgres(self):
-        self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
         data = self.async_query('test').json()
         result = self.assertIsResult(data)
@@ -869,7 +884,6 @@ class TestRPCServerProjects(HasRPCServer):
 
     @use_profile('postgres')
     def test_test_project_cli_postgres(self):
-        self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
         data = self.async_query('cli_args', cli='test').json()
         result = self.assertIsResult(data)
@@ -885,12 +899,11 @@ class TestRPCServerProjects(HasRPCServer):
 
     def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
-        self.assertIn('status', dct)
-        self.assertTrue(dct['status'])
+        self.assertIn('state', dct)
+        self.assertTrue(dct['state'])
         self.assertIn('nodes', dct)
         nodes = dct['nodes']
         self.assertEqual(set(nodes), expected)
-
 
     def assertCatalogExists(self):
         self.assertTrue(os.path.exists('target/catalog.json'))
@@ -914,26 +927,32 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertCatalogExists()
         self.assertManifestExists(17)
 
-
     @use_profile('postgres')
     def test_docs_generate_postgres(self):
-        self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
         self.assertFalse(os.path.exists('target/catalog.json'))
         if os.path.exists('target/manifest.json'):
             os.remove('target/manifest.json')
-        result = self.async_query('cli_args', cli='docs generate').json()
+        result = self.async_query('docs.generate').json()
         self._correct_docs_generate_result(result)
 
     @use_profile('postgres')
     def test_docs_generate_postgres_cli(self):
-        self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
         self.assertFalse(os.path.exists('target/catalog.json'))
         if os.path.exists('target/manifest.json'):
             os.remove('target/manifest.json')
         result = self.async_query('cli_args', cli='docs generate').json()
         self._correct_docs_generate_result(result)
+
+    @use_profile('postgres')
+    def test_deps_postgres(self):
+        self.async_query('deps').json()
+
+    @mark.skip(reason='cli_args + deps not supported for now')
+    @use_profile('postgres')
+    def test_deps_postgres_cli(self):
+        self.async_query('cli_args', cli='deps').json()
 
 
 @mark.flaky(rerun_filter=addr_in_use)
@@ -943,7 +962,7 @@ class TestRPCTaskManagement(HasRPCServer):
     @use_profile('postgres')
     def test_sighup_postgres(self):
         status = self.assertIsResult(self.query('status').json())
-        self.assertEqual(status['status'], 'ready')
+        self.assertEqual(status['state'], 'ready')
         self.assertIn('logs', status)
         logs = status['logs']
         self.assertTrue(len(logs) > 0)
@@ -966,7 +985,7 @@ class TestRPCTaskManagement(HasRPCServer):
         for _ in range(10):
             os.kill(status['pid'], signal.SIGHUP)
 
-        status = self.wait_for_running()
+        self.wait_for_state('ready', timestamp=status['timestamp'])
 
         # we should still still see our service:
         self.assertRunning(sleepers)
@@ -1038,83 +1057,74 @@ class TestRPCTaskManagement(HasRPCServer):
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['rows']), 0)
 
-    @use_profile('postgres')
-    def test_postgres_gc_change_interval(self):
-        num_requests = 10
-        self.make_many_requests(num_requests)
 
-        # all present
-        resp = self.query('ps', completed=True, active=True).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['rows']), num_requests)
-
-        resp = self.query('gc', settings=dict(maxsize=1000, reapsize=5, auto_reap_age=0.1)).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['deleted']), 0)
-        self.assertEqual(len(result['missing']), 0)
-        self.assertEqual(len(result['running']), 0)
-        time.sleep(0.5)
-
-        # all cleared up
-        test_resp = self.query('ps', completed=True, active=True)
-        resp = test_resp.json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['rows']), 0)
-
-        resp = self.query('gc', settings=dict(maxsize=2, reapsize=5, auto_reap_age=10000)).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['deleted']), 0)
-        self.assertEqual(len(result['missing']), 0)
-        self.assertEqual(len(result['running']), 0)
-
-        # make more requests
-        self.make_many_requests(num_requests)
-        time.sleep(0.5)
-        # there should be 2 left!
-        resp = self.query('ps', completed=True, active=True).json()
-        result = self.assertIsResult(resp)
-        self.assertEqual(len(result['rows']), 2)
-
-
-class FailedServerProcess(ServerProcess):
+class CompletingServerProcess(ServerProcess):
     def _compare_result(self, result):
-        return result['result']['status'] == 'error'
+        return result['result']['state'] in ('error', 'ready')
 
 
 @mark.flaky(rerun_filter=addr_in_use)
-class TestRPCServerFailed(HasRPCServer):
-    ServerProcess = FailedServerProcess
+class TestRPCServerDeps(HasRPCServer):
+    ServerProcess = CompletingServerProcess
     should_seed = False
 
-    @property
-    def models(self):
-        return "malformed_models"
+    def setUp(self):
+        super().setUp()
+        if os.path.exists('./dbt_modules'):
+            shutil.rmtree('./dbt_modules')
 
     def tearDown(self):
-        # prevent an OperationalError where the server closes on us in the
-        # background
+        if os.path.exists('./dbt_modules'):
+            shutil.rmtree('./dbt_modules')
         self.adapter.cleanup_connections()
         super().tearDown()
 
-    @use_profile('postgres')
-    def test_postgres_status_error(self):
-        status = self.assertIsResult(self.query('status').json())
-        self.assertEqual(status['status'], 'error')
-        self.assertIn('logs', status)
-        logs = status['logs']
-        self.assertTrue(len(logs) > 0)
-        for key in ('message', 'timestamp', 'levelname', 'level'):
-            self.assertIn(key, logs[0])
-        self.assertIn('pid', status)
-        self.assertEqual(self._server.pid, status['pid'])
-        self.assertIn('error', status)
-        self.assertIn('message', status['error'])
+    @property
+    def packages_config(selF):
+        return {
+            'packages': [
+                {'package': 'fishtown-analytics/dbt_utils', 'version': '0.2.1'},
+            ]
+        }
 
-        compile_result = self.query('compile_sql', 'select 1 as id').json()
-        data = self.assertIsErrorWith(
-            compile_result,
-            10011,
-            'RPC server failed to compile project, call the "status" method for compile status',
-            None)
-        self.assertIn('message', data)
-        self.assertIn('Invalid test config', str(data['message']))
+    @property
+    def models(self):
+        return "deps_models"
+
+    def _check_start_predeps(self):
+        self.assertFalse(os.path.exists('./dbt_modules'))
+        status = self.assertIsResult(self.query('status').json())
+        self.assertEqual(status['state'], 'ready')
+
+        self.assertIsError(self.async_query('compile').json())
+        if os.path.exists('./dbt_modules'):
+            self.assertEqual(len(os.listdir('./dbt_modules')), 0)
+        return status
+
+    def _check_deps_ok(self, status):
+        os.kill(status['pid'], signal.SIGHUP)
+
+        self.wait_for_state('ready', timestamp=status['timestamp'])
+
+        self.assertTrue(os.path.exists('./dbt_modules'))
+        self.assertEqual(len(os.listdir('./dbt_modules')), 1)
+        self.assertIsResult(self.async_query('compile').json())
+
+    @use_profile('postgres')
+    def test_deps_compilation_postgres(self):
+        status = self._check_start_predeps()
+
+        # do a dbt deps, wait for the result
+        self.assertIsResult(self.async_query('deps', _poll_timeout=120).json())
+
+        self._check_deps_ok(status)
+
+    @mark.skip(reason='cli_args + deps not supported for now')
+    @use_profile('postgres')
+    def test_deps_cli_compilation_postgres(self):
+        status = self._check_start_predeps()
+
+        # do a dbt deps, wait for the result
+        self.assertIsResult(self.async_query('cli_args', cli='deps', _poll_timeout=120).json())
+
+        self._check_deps_ok(status)

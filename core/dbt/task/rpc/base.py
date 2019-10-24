@@ -1,15 +1,19 @@
 from dbt.contracts.rpc import RemoteExecutionResult
 from dbt.task.runnable import GraphRunnableTask
-from dbt.rpc.method import RemoteMethod, Parameters
+from dbt.rpc.method import RemoteManifestMethod, Parameters
 
 
 class RPCTask(
     GraphRunnableTask,
-    RemoteMethod[Parameters, RemoteExecutionResult]
+    RemoteManifestMethod[Parameters, RemoteExecutionResult]
 ):
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
-        RemoteMethod.__init__(self, args, config, manifest)
+        RemoteManifestMethod.__init__(self, args, config, manifest)
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
 
     def get_result(
         self, results, elapsed_time, generated_at

@@ -50,11 +50,9 @@ def find_matching(root_path,
 
                 if fnmatch.fnmatch(local_file, file_pattern):
                     matching.append({
-                        'searched_path': os.path.normcase(
-                            relative_path_to_search
-                        ),
-                        'absolute_path': os.path.normcase(absolute_path),
-                        'relative_path': os.path.normcase(relative_path),
+                        'searched_path': relative_path_to_search,
+                        'absolute_path': absolute_path,
+                        'relative_path': relative_path,
                     })
 
     return matching

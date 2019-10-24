@@ -34,13 +34,13 @@ class FilePath(JsonSchemaMixin):
     @property
     def full_path(self) -> str:
         # useful for symlink preservation
-        return os.path.normcase(os.path.join(
+        return os.path.join(
             self.project_root, self.searched_path, self.relative_path
-        ))
+        )
 
     @property
     def absolute_path(self) -> str:
-        return os.path.normcase(os.path.abspath(self.full_path))
+        return os.path.abspath(self.full_path)
 
     @property
     def original_file_path(self) -> str:
