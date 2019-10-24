@@ -42,10 +42,10 @@
 
   {% set options -%}
     OPTIONS({% for opt_key, opt_val in opts.items() %}
-      {{ opt_key }}={{ opt_val }}
+      {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
     {% endfor %})
   {%- endset %}
-  {% do return(options)%}
+  {% do return(options) %}
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
