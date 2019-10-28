@@ -56,7 +56,7 @@ setup(
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<0.17',
         'dataclasses==0.6;python_version<"3.7"',
-        'hologram==0.0.4',
+        'hologram==0.0.5',
         'logbook>=1.5,<1.6',
         'pytest-logbook>=1.2.0,<1.3',
         'typing-extensions>=3.7.4,<3.8',
