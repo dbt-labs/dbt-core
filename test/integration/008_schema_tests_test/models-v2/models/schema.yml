@@ -32,9 +32,9 @@ models:
         - name: fav_number
           description: "The user's favorite number"
           tests:
-              - accepted_values:
-                  values: [3.14159265]
-                  quote: false
+            - accepted_values:
+                values: [3.14159265]
+                quote: false
 
 
     - name: table_summary
