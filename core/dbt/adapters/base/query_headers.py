@@ -11,22 +11,15 @@ from dbt.contracts.graph.compiled import CompileResultNode
 
 default_query_comment = '''
 {%- set comment_dict = {} -%}
-{%- do comment_dict.update(target) -%}
 {%- do comment_dict.update(
     app='dbt',
     dbt_version=dbt_version,
+    profile_name=target.get('profile_name'),
+    target_name=target.get('target_name'),
 ) -%}
 {%- if node is not none -%}
   {%- do comment_dict.update(
-    file=node.original_file_path,
     node_id=node.unique_id,
-    node_name=node.name,
-    resource_type=node.resource_type,
-    package_name=node.package_name,
-    tags=node.tags,
-    identifier=node.identifier,
-    schema=node.schema,
-    database=node.database,
   ) -%}
 {% else %}
   {# in the node context, the connection name is the node_id #}
