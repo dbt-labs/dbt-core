@@ -397,6 +397,9 @@ class DBTIntegrationTest(unittest.TestCase):
             with open('packages.yml', 'w') as f:
                 yaml.safe_dump(self.packages_config, f, default_flow_style=True)
 
+    def test_only_config(self):
+        return None
+
     def load_config(self):
         # we've written our profile and project. Now we want to instantiate a
         # fresh adapter for the tests.

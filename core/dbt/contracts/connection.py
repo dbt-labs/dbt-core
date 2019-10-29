@@ -131,3 +131,7 @@ class Credentials(
 
 class HasCredentials(Protocol):
     credentials: Credentials
+
+
+class AdapterRequiredConfig(HasCredentials):
+    query_comment: Optional[str]

@@ -3,9 +3,9 @@ from typing import Optional, Callable
 
 from dbt.clients.jinja import QueryStringGenerator
 
-from dbt.contracts.connection import HasCredentials
 # this generates an import cycle, as usual
 from dbt.context.base import QueryHeaderContext
+from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.compiled import CompileResultNode
 
 
@@ -70,9 +70,9 @@ QueryStringFunc = Callable[[str, Optional[CompileResultNode]], str]
 
 
 class QueryStringSetter:
-    def __init__(self, config: HasCredentials):
-        if config.config.query_comment is not None:
-            comment = config.config.query_comment
+    def __init__(self, config: AdapterRequiredConfig):
+        if config.query_comment is not None:
+            comment = config.query_comment
         else:
             comment = default_query_comment
         macro = '\n'.join((

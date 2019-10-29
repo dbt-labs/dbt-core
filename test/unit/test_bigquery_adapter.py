@@ -25,9 +25,6 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
         flags.STRICT_MODE = True
 
         self.raw_profile = {
-            'config': {
-                'query_comment': 'dbt'
-            },
             'outputs': {
                 'oauth': {
                     'type': 'bigquery',
@@ -62,6 +59,7 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             'version': '0.1',
             'project-root': '/tmp/dbt/does-not-exist',
             'profile': 'default',
+            'query-comment': 'dbt',
         }
 
     def get_adapter(self, target):

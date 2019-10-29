@@ -11,7 +11,7 @@ import agate
 import dbt.exceptions
 import dbt.flags
 from dbt.contracts.connection import (
-    Connection, Identifier, ConnectionState, HasCredentials
+    Connection, Identifier, ConnectionState, AdapterRequiredConfig
 )
 from dbt.adapters.base.query_headers import QueryStringSetter
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -32,7 +32,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     """
     TYPE: str = NotImplemented
 
-    def __init__(self, profile: HasCredentials):
+    def __init__(self, profile: AdapterRequiredConfig):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock: RLock = dbt.flags.MP_CONTEXT.RLock()

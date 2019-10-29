@@ -158,6 +158,7 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     seeds: Dict[str, Any] = field(default_factory=dict)
     snapshots: Dict[str, Any] = field(default_factory=dict)
     packages: List[PackageSpec] = field(default_factory=list)
+    query_comment: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data, validate=True):
@@ -176,7 +177,6 @@ class UserConfig(ExtensibleJsonSchemaMixin, Replaceable):
     use_colors: bool = DEFAULT_USE_COLORS
     partial_parse: Optional[bool] = None
     printer_width: Optional[int] = None
-    query_comment: Optional[str] = None
 
     def set_values(self, cookie_dir):
         if self.send_anonymous_usage_stats:

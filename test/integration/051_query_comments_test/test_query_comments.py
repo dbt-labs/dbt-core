@@ -74,8 +74,8 @@ class QueryComments(DBTIntegrationTest):
 
 class TestQueryComments(QueryComments):
     @property
-    def profile_config(self):
-        return {'config': {'query_comment': 'dbt\nrules!\n'}}
+    def project_config(self):
+        return {'query-comment': 'dbt\nrules!\n'}
 
     def matches_comment(self, msg) -> bool:
         self.assertTrue(

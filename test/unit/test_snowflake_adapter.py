@@ -18,9 +18,6 @@ class TestSnowflakeAdapter(unittest.TestCase):
         flags.STRICT_MODE = False
 
         profile_cfg = {
-            'config': {
-                'query_comment': 'dbt'
-            },
             'outputs': {
                 'test': {
                     'type': 'snowflake',
@@ -42,10 +39,11 @@ class TestSnowflakeAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
+            'query-comment': 'dbt',
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
-        self.assertEqual(self.config.config.query_comment, 'dbt')
+        self.assertEqual(self.config.query_comment, 'dbt')
 
         self.handle = mock.MagicMock(
             spec=snowflake_connector.SnowflakeConnection)

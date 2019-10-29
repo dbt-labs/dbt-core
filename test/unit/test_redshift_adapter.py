@@ -26,9 +26,6 @@ class TestRedshiftAdapter(unittest.TestCase):
         flags.STRICT_MODE = True
 
         profile_cfg = {
-            'config': {
-                'query_comment': 'dbt'
-            },
             'outputs': {
                 'test': {
                     'type': 'redshift',
@@ -51,7 +48,8 @@ class TestRedshiftAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
+            'query-comment': 'dbt',
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)

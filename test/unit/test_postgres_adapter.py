@@ -25,11 +25,9 @@ class TestPostgresAdapter(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': '/tmp/dbt/does-not-exist',
+            'query-comment': 'dbt',
         }
         profile_cfg = {
-            'config': {
-                'query_comment': 'dbt'
-            },
             'outputs': {
                 'test': {
                     'type': 'postgres',
@@ -207,9 +205,6 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         }
 
         profile_cfg = {
-            'config': {
-                'query_comment': 'dbt'
-            },
             'outputs': {
                 'test': self.target_dict,
             },
@@ -223,7 +218,8 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
+            'query-comment': 'dbt',
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)

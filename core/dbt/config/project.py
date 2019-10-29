@@ -149,7 +149,7 @@ class Project:
                  analysis_paths, docs_paths, target_path, snapshot_paths,
                  clean_targets, log_path, modules_path, quoting, models,
                  on_run_start, on_run_end, seeds, snapshots, dbt_version,
-                 packages):
+                 packages, query_comment):
         self.project_name = project_name
         self.version = version
         self.project_root = project_root
@@ -173,6 +173,7 @@ class Project:
         self.snapshots = snapshots
         self.dbt_version = dbt_version
         self.packages = packages
+        self.query_comment = query_comment
 
     @staticmethod
     def _preprocess(project_dict):
@@ -257,6 +258,7 @@ class Project:
         seeds = project_dict.get('seeds', {})
         snapshots = project_dict.get('snapshots', {})
         dbt_raw_version = project_dict.get('require-dbt-version', '>=0.0.0')
+        query_comment = project_dict.get('query-comment')
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)
@@ -291,7 +293,8 @@ class Project:
             seeds=seeds,
             snapshots=snapshots,
             dbt_version=dbt_version,
-            packages=packages
+            packages=packages,
+            query_comment=query_comment,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -340,6 +343,7 @@ class Project:
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
+            'query-comment': self.query_comment,
         })
         if with_packages:
             result.update(self.packages.to_dict())
