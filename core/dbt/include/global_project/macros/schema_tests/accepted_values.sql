@@ -24,7 +24,7 @@ validation_errors as (
             {% if quote_values -%}
             '{{ value }}'
             {%- else -%}
-            {{ val }}
+            {{ value }}
             {%- endif -%}
             {%- if not loop.last -%},{%- endif %}
         {%- endfor %}
