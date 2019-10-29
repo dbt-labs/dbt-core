@@ -31,8 +31,7 @@ models:
         - name: favorite_color
           description: "The user's favorite color"
           tests:
-            - accepted_values: { values: ['blue', 'green'] }
-                quote: true
+            - accepted_values: { values: ['blue', 'green'], quote: trues }
 
     - name: table_summary
       description: "The summary table"
