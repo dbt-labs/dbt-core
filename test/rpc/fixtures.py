@@ -216,12 +216,40 @@ class Querier:
             method='run', params=params, request_id=request_id
         )
 
+    def run_operation(
+        self,
+        macro: str,
+        args: Optional[Dict[str, Any]],
+        request_id: int = 1,
+    ):
+        params = {'macro': macro}
+        if args is not None:
+            params['args'] = args
+        return self.request(
+            method='run-operation', params=params, request_id=request_id
+        )
+
     def seed(self, show: bool = None, request_id: int = 1):
         params = {}
         if show is not None:
             params['show'] = show
         return self.request(
             method='seed', params=params, request_id=request_id
+        )
+
+    def snapshot(
+        self,
+        models: Optional[Union[str, List[str]]] = None,
+        exclude: Optional[Union[str, List[str]]] = None,
+        request_id: int = 1,
+    ):
+        params = {}
+        if models is not None:
+            params['models'] = models
+        if exclude is not None:
+            params['exclude'] = exclude
+        return self.request(
+            method='snapshot', params=params, request_id=request_id
         )
 
     def test(
@@ -241,7 +269,7 @@ class Querier:
             params['data'] = data
         if schema is not None:
             params['schema'] = schema
-        return self.requuest(
+        return self.request(
             method='test', params=params, request_id=request_id
         )
 
@@ -419,6 +447,7 @@ class ProjectDefinition:
         packages=None,
         models=None,
         macros=None,
+        snapshots=None,
     ):
         self.project = {
             'name': name,
@@ -430,6 +459,7 @@ class ProjectDefinition:
         self.packages = packages
         self.models = models
         self.macros = macros
+        self.snapshots = snapshots
 
     def _write_recursive(self, path, inputs):
         for name, value in inputs.items():
@@ -460,19 +490,22 @@ class ProjectDefinition:
             cfg.remove()
         cfg.write(yaml.safe_dump(self.project))
 
-    def write_models(self, project_dir, remove=False):
+    def _write_values(self, project_dir, remove, name, value):
         if remove:
-            project_dir.join('models').remove()
+            project_dir.join(name).remove()
 
-        if self.models is not None:
-            self._write_recursive(project_dir.mkdir('models'), self.models)
+        if value is not None:
+            self._write_recursive(project_dir.mkdir(name), value)
+
+
+    def write_models(self, project_dir, remove=False):
+        self._write_values(project_dir, remove, 'models', self.models)
 
     def write_macros(self, project_dir, remove=False):
-        if remove:
-            project_dir.join('macros').remove()
+        self._write_values(project_dir, remove, 'macros', self.macros)
 
-        if self.macros is not None:
-            self._write_recursive(project_dir.mkdir('macros'), self.macros)
+    def write_snapshots(self, project_dir, remove=False):
+        self._write_values(project_dir, remove, 'snapshots', self.snapshots)
 
     def write_to(self, project_dir, remove=False):
         if remove:
@@ -482,6 +515,7 @@ class ProjectDefinition:
         self.write_config(project_dir)
         self.write_models(project_dir)
         self.write_macros(project_dir)
+        self.write_snapshots(project_dir)
 
 
 class TestArgs:

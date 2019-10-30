@@ -116,9 +116,15 @@ class GCParameters(RPCParameters):
         will be applied to the task manager before GC starts. By default the
         existing gc settings remain.
     """
-    task_ids: Optional[List[TaskID]]
-    before: Optional[datetime]
-    settings: Optional[GCSettings]
+    task_ids: Optional[List[TaskID]] = None
+    before: Optional[datetime] = None
+    settings: Optional[GCSettings] = None
+
+
+@dataclass
+class RPCRunOperationParameters(RPCParameters):
+    macro: str
+    args: Dict[str, Any] = field(default_factory=dict)
 
 
 # Outputs
@@ -159,6 +165,11 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
 class ResultTable(JsonSchemaMixin):
     column_names: List[str]
     rows: List[Any]
+
+
+@dataclass
+class RemoteRunOperationResult(RemoteResult):
+    success: bool
 
 
 @dataclass
@@ -423,6 +434,31 @@ class PollRunCompleteResult(RemoteRunResult, PollResult):
             timing=base.timing,
             logs=base.logs,
             table=base.table,
+            tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
+        )
+
+
+@dataclass
+class PollRunOperationCompleteResult(RemoteRunOperationResult, PollResult):
+    state: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
+    )
+
+    @classmethod
+    def from_result(
+        cls: Type['PollRunOperationCompleteResult'],
+        base: RemoteRunOperationResult,
+        tags: TaskTags,
+        timing: TaskTiming,
+    ) -> 'PollRunOperationCompleteResult':
+        return cls(
+            success=base.success,
+            logs=base.logs,
             tags=tags,
             state=timing.state,
             start=timing.start,

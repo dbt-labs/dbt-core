@@ -296,3 +296,152 @@ def test_ps_poll_output_match(project_dir, profiles_dir, postgres_profile, uniqu
 
         for key in ('start', 'end', 'elapsed', 'state'):
             assert ps_result[key] == poll_result[key]
+
+
+macros_data = '''
+{% macro foo() %}
+    {{ return(1) }}
+{% endmacro %}
+{% macro bar(value) %}
+    {{ return(value + 1) }}
+{% endmacro %}
+{% macro quux(value) %}
+    {{ return(asdf) }}
+{% endmacro %}
+'''
+
+
+def test_run_operation(project_dir, profiles_dir, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'},
+        macros={
+            'my_macros.sql': macros_data,
+        }
+    )
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+    )
+    with schema_ctx, server_ctx as server:
+        querier = Querier(server)
+        token = querier.is_async_result(querier.run_operation(macro='foo', args={}))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.run_operation(macro='bar', args={'value': 10}))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.run_operation(macro='baz', args={}))
+        poll_result = querier.is_result(querier.async_wait(token, state='failed'))
+        assert 'state' in poll_result
+        assert poll_result['state'] == 'failed'
+
+        token = querier.is_async_result(querier.run_operation(macro='quux', args={}))
+        poll_result = querier.is_result(querier.async_wait(token))
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+
+def test_run_operation_cli(project_dir, profiles_dir, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'},
+        macros={
+            'my_macros.sql': macros_data,
+        }
+    )
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+    )
+    with schema_ctx, server_ctx as server:
+        querier = Querier(server)
+        token = querier.is_async_result(querier.cli_args(cli='run-operation foo'))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.cli_args(cli='''run-operation bar --args="{'value': 10}"'''))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.cli_args(cli='run-operation baz'))
+        poll_result = querier.is_result(querier.async_wait(token, state='failed'))
+        assert 'state' in poll_result
+        assert poll_result['state'] == 'failed'
+
+        token = querier.is_async_result(querier.cli_args(cli='run-operation quux'))
+        poll_result = querier.is_result(querier.async_wait(token))
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+
+snapshot_data = '''
+{% snapshot snapshot_actual %}
+
+    {{
+        config(
+            target_database=database,
+            target_schema=schema,
+            unique_key='id',
+            strategy='timestamp',
+            updated_at='updated_at',
+        )
+    }}
+    select 1 as id, '2019-10-31 23:59:40' as updated_at
+
+{% endsnapshot %}
+'''
+
+
+def test_snapshots(project_dir, profiles_dir, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        snapshots={'my_snapshots.sql': snapshot_data},
+    )
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+    )
+    with schema_ctx, server_ctx as server:
+        querier = Querier(server)
+        token = querier.is_async_result(querier.snapshot())
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 1
+
+        token = querier.is_async_result(querier.snapshot(exclude=['snapshot_actual']))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 0
+
+
+def test_snapshots_cli(project_dir, profiles_dir, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        snapshots={'my_snapshots.sql': snapshot_data},
+    )
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+    )
+    with schema_ctx, server_ctx as server:
+        querier = Querier(server)
+        token = querier.is_async_result(querier.cli_args(cli='snapshot'))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 1
+
+        token = querier.is_async_result(querier.cli_args(cli='snapshot --exclude=snapshot_actual'))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 0
