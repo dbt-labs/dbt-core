@@ -868,8 +868,6 @@ def _build_run_operation_subparser(subparsers, base_subparser):
     sub.set_defaults(
         cls=run_operation_task.RunOperationTask, which="run-operation", rpc_method="run-operation"
     )
-    sub.set_defaults(cls=run_operation_task.RunOperationTask,
-                     which='run-operation', rpc_method='run-operation')
     return sub
 
 
