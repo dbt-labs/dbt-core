@@ -473,8 +473,7 @@ def _build_snapshot_subparser(subparsers, base_subparser):
         Overrides settings in profiles.yml.
         """,
     )
-    sub.set_defaults(cls=snapshot_task.SnapshotTask, which='snapshot',
-                     rpc_method='snapshot')
+    sub.set_defaults(cls=snapshot_task.SnapshotTask, which="snapshot", rpc_method="snapshot")
     return sub
 
 
