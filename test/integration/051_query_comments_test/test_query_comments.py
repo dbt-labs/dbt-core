@@ -79,7 +79,7 @@ class TestQueryComments(QueryComments):
 
     def matches_comment(self, msg) -> bool:
         self.assertTrue(
-            msg.startswith('-- dbt\n-- rules!\n'),
+            msg.startswith('/* dbt\nrules! */\n'),
             f'{msg} did not start with query comment'
         )
 
@@ -102,10 +102,10 @@ class TestQueryComments(QueryComments):
 
 class TestDefaultQueryComments(QueryComments):
     def matches_comment(self, msg):
-        if not msg.startswith('-- '):
+        if not msg.startswith('/* '):
             return False
-        # our blob is the first line of the query comments, minus the '-- '
-        json_str = msg.split('\n')[0][3:]
+        # our blob is the first line of the query comments, minus the comment
+        json_str = msg.split('\n')[0][3:-3]
         data = json.loads(json_str)
         self.assertEqual(data['app'], 'dbt')
         self.assertEqual(data['dbt_version'], dbt_version)

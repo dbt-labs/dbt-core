@@ -47,13 +47,7 @@ class _QueryComment(local):
         self.query_comment: str = initial
 
     def add(self, sql: str) -> str:
-        # Make sure there are no trailing newlines.
-        # For every newline, add a comment after it in case query_comment
-        # is multiple lines.
-        # Then add a comment to the first line of the query comment, and
-        # put the sql on a fresh line.
-        comment_split = self.query_comment.strip().replace('\n', '\n-- ')
-        return '-- {}\n{}'.format(comment_split, sql)
+        return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
 
     def set(self, comment: str):
         self.query_comment = comment

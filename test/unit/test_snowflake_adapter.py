@@ -77,7 +77,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
 
         self.mock_execute.assert_has_calls([
-            mock.call('-- dbt\ndrop schema if exists test_database."test_schema" cascade', None)
+            mock.call('/* dbt */\ndrop schema if exists test_database."test_schema" cascade', None)
         ])
 
     def test_quoting_on_drop(self):
@@ -92,7 +92,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.mock_execute.assert_has_calls([
             mock.call(
-                '-- dbt\ndrop table if exists test_database."test_schema".test_table cascade',
+                '/* dbt */\ndrop table if exists test_database."test_schema".test_table cascade',
                 None
             )
         ])
@@ -108,7 +108,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.adapter.truncate_relation(relation)
 
         self.mock_execute.assert_has_calls([
-            mock.call('-- dbt\ntruncate table test_database."test_schema".test_table', None)
+            mock.call('/* dbt */\ntruncate table test_database."test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
@@ -133,7 +133,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.mock_execute.assert_has_calls([
             mock.call(
-                '-- dbt\nalter table test_database."test_schema".table_a rename to test_database."test_schema".table_b',
+                '/* dbt */\nalter table test_database."test_schema".table_a rename to test_database."test_schema".table_b',
                 None
             )
         ])
@@ -145,7 +145,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         execute_side_effect = self.mock_execute.side_effect
 
         def execute_effect(sql, *args, **kwargs):
-            if sql == '-- dbt\nselect current_warehouse() as warehouse':
+            if sql == '/* dbt */\nselect current_warehouse() as warehouse':
                 self.cursor.description = [['name']]
                 self.cursor.fetchall.return_value = [[response]]
             else:
@@ -180,12 +180,12 @@ class TestSnowflakeAdapter(unittest.TestCase):
             result = self.adapter.pre_model_hook(config)
             self.assertIsNotNone(result)
             calls = [
-                mock.call('-- dbt\nselect current_warehouse() as warehouse', None),
-                mock.call('-- dbt\nuse warehouse other_warehouse', None)
+                mock.call('/* dbt */\nselect current_warehouse() as warehouse', None),
+                mock.call('/* dbt */\nuse warehouse other_warehouse', None)
             ]
             self.mock_execute.assert_has_calls(calls)
             self.adapter.post_model_hook(config, result)
-            calls.append(mock.call('-- dbt\nuse warehouse warehouse', None))
+            calls.append(mock.call('/* dbt */\nuse warehouse warehouse', None))
             self.mock_execute.assert_has_calls(calls)
 
     def test_pre_post_hooks_no_warehouse(self):
