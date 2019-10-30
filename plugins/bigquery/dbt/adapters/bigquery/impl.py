@@ -294,7 +294,10 @@ class BigQueryAdapter(BaseAdapter):
                 'schema': True,
                 'identifier': True
             },
-            type=self.RELATION_TYPES.get(bq_table.table_type))
+            type=self.RELATION_TYPES.get(
+                bq_table.table_type, RelationType.External
+            ),
+        )
 
     @classmethod
     def warning_on_hooks(hook_type):
