@@ -245,7 +245,7 @@ class SQLAdapter(BaseAdapter):
         information_schema = self.Relation.create(
             database=database,
             schema=schema,
-            identifier='INFORMATION_SCHEMA',
+            identifier="INFORMATION_SCHEMA",
             quote_policy=self.config.quoting
         ).information_schema()
 

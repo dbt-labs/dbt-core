@@ -141,7 +141,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         new_include_policy = self.include_policy.replace_dict(policy)
         return self.replace(include_policy=new_include_policy)
 
-    def information_schema(self, view_name=None) -> 'InformationSchema':
+    def information_schema(self, view_name=None) -> "InformationSchema":
         # some of our data comes from jinja, where things can be `Undefined`.
         if not isinstance(view_name, str):
             view_name = None
@@ -151,7 +151,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         info_schema = InformationSchema.from_relation(self, view_name)
         return info_schema.incorporate(path={"schema": None})
 
-    def information_schema_only(self) -> 'InformationSchema':
+    def information_schema_only(self) -> "InformationSchema":
         return self.information_schema()
 
     def without_identifier(self) -> 'BaseRelation':
@@ -164,9 +164,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         """
         return self.include(identifier=False).replace_path(identifier=None)
 
-    def _render_iterator(
-        self
-    ) -> Iterator[Tuple[Optional[ComponentName], Optional[str]]]:
+    def _render_iterator(self) -> Iterator[Tuple[Optional[ComponentName], Optional[str]]]:
 
         for key in ComponentName:
             path_part: Optional[str] = None
@@ -359,17 +357,15 @@ class InformationSchema(BaseRelation):
     def __post_init__(self):
         if not isinstance(self.information_schema_view, (type(None), str)):
             raise dbt.exceptions.CompilationException(
-                'Got an invalid name: {}'.format(self.information_schema_view)
+                "Got an invalid name: {}".format(self.information_schema_view)
             )
 
     @classmethod
-    def get_path(
-        cls, relation: BaseRelation, information_schema_view: Optional[str]
-    ) -> Path:
+    def get_path(cls, relation: BaseRelation, information_schema_view: Optional[str]) -> Path:
         return Path(
             database=relation.database,
             schema=relation.schema,
-            identifier='INFORMATION_SCHEMA',
+            identifier="INFORMATION_SCHEMA",
         )
 
     @classmethod
@@ -400,9 +396,7 @@ class InformationSchema(BaseRelation):
         relation: BaseRelation,
         information_schema_view: Optional[str],
     ) -> Info:
-        include_policy = cls.get_include_policy(
-            relation, information_schema_view
-        )
+        include_policy = cls.get_include_policy(relation, information_schema_view)
         quote_policy = cls.get_quote_policy(relation, information_schema_view)
         path = cls.get_path(relation, information_schema_view)
         return cls(
