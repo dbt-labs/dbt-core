@@ -469,12 +469,13 @@ class RelationsCache:
         :return List[BaseRelation]: The list of relations with the given
             schema
         """
+        database = _lower(database)
         schema = _lower(schema)
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if (r.schema == _lower(schema) and
-                    r.database == _lower(database))
+                if (_lower(r.schema) == schema and
+                    _lower(r.database) == database)
             ]
 
         if None in results:

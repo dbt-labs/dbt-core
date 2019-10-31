@@ -334,7 +334,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         # result is a map whose keys are information_schema Relations without
         # identifiers that have appropriate database prefixes, and whose values
         # are sets of lowercase schema names that are valid members of those
-        # schemas
+        # databases
         return info_schema_name_map
 
     def _relations_cache_for_schemas(self, manifest: Manifest) -> None:

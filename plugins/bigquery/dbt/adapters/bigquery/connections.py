@@ -296,7 +296,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
         client = conn.handle
 
         with self.exception_handler('drop dataset'):
-            for table in client.list_tables(dataset):
+            try:
+                tables = list(client.list_tables(dataset))
+            except google.api_core.exceptions.NotFound:
+                # the dataset doesn't exist. return here to match
+                # 'drop schema if exists' behavior. If anything 404s after this
+                # then there are real problems that should cause us to raise.
+                return
+            for table in tables:
                 client.delete_table(table.reference)
             client.delete_dataset(dataset)
 
