@@ -105,45 +105,23 @@
 {% endmacro %}
 
 
-{%- macro bigquery_similar_schemas(database, schema) -%}
-  {%- set sql -%}
-    select distinct schema_name
-    from {{ information_schema_name(database) }}.SCHEMATA
-    where UPPER(catalog_name) like UPPER('{{ database }}')
-      and UPPER(schema_name) like UPPER('{{ schema }}')
-  {%- endset -%}
-  {%- set schemas = [] -%}
-  {%- for row in run_query(sql) -%}
-    {%- do schemas.append(row['schema_name']) %}
-  {%- endfor -%}
-  {{ return(schemas) }}
-{%- endmacro -%}
-
-
 {% macro bigquery__list_relations_without_caching(information_schema, schema) -%}
   {# In bigquery, you can't query the full information schema, you can only do so
   by schema (so 'database.schema.information_schema.tables'). But our schema
   value is case-insensitive for annoying reasons involving quoting. So you
   have figure out what schemas match the given schema first, and query them each.
   #}
-  {%- set schema_candidates = bigquery_similar_schemas(information_schema.database, schema) -%}
-  {%- if (schema_candidates | length) == 0 -%}
-    {{ return(empty_table()) }}
-  {%- endif -%}
   {%- set query -%}
-    {%- for s in schema_candidates %}
-      select
-        table_catalog as database,
-        table_name as name,
-        table_schema as schema,
-        case when table_type = 'BASE TABLE' then 'table'
-             when table_type = 'VIEW' then 'view'
-             when table_type = 'EXTERNAL TABLE' then 'external'
-             else table_type
-        end as table_type
-      from {{ information_schema.replace(information_schema_view='TABLES') }}
-      {% if not loop.last %}union all{% endif %}
-    {%- endfor %}
+    select
+      table_catalog as database,
+      table_name as name,
+      table_schema as schema,
+      case when table_type = 'BASE TABLE' then 'table'
+           when table_type = 'VIEW' then 'view'
+           when table_type = 'EXTERNAL TABLE' then 'external'
+           else table_type
+      end as table_type
+    from {{ information_schema.replace(information_schema_view='TABLES') }}
   {%- endset -%}
   {{ return(run_query(query)) }}
 {%- endmacro %}

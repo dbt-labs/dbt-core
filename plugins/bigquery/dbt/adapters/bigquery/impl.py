@@ -83,6 +83,27 @@ class BigQueryAdapter(SQLAdapter):
             '`rename_relation` is not implemented for this adapter!'
         )
 
+    @available.parse(lambda *a, **k: False)
+    def check_schema_exists(self, database: str, schema: str) -> bool:
+        conn = self.connections.get_thread_connection()
+        client = conn.handle
+
+        bigquery_dataset = self.connections.dataset(
+            database, schema, conn
+        )
+        # try to do things with the dataset. If it doesn't exist it will 404.
+        # we have to do it this way to handle underscore-prefixed datasets,
+        # which appear in neither the information_schema.schemata view nor the
+        # list_datasets method.
+        try:
+            next(client.list_tables(bigquery_dataset, max_results=1))
+        except StopIteration:
+            pass
+        except google.api_core.exceptions.NotFound:
+            # the schema does not exist
+            return False
+        return True
+
     def get_columns_in_relation(self, relation):
         try:
             table = self.connections.get_bq_table(
