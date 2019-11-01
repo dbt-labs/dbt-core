@@ -2,6 +2,7 @@
 {% macro test_accepted_values(model, values) %}
 
 {% set column_name = kwargs.get('column_name', kwargs.get('field')) %}
+{% set quote_values = kwargs.get('quote', True) %}
 
 with all_values as (
 
@@ -20,9 +21,12 @@ validation_errors as (
     from all_values
     where value_field not in (
         {% for value in values -%}
-
-            '{{ value }}' {% if not loop.last -%} , {%- endif %}
-
+            {% if quote_values -%}
+            '{{ value }}'
+            {%- else -%}
+            {{ value }}
+            {%- endif -%}
+            {%- if not loop.last -%},{%- endif %}
         {%- endfor %}
     )
 )
