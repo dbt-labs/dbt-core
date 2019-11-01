@@ -29,7 +29,9 @@ class NoServerException(Exception):
 
 
 class ServerProcess(dbt.flags.MP_CONTEXT.Process):
-    def __init__(self, cwd, port, profiles_dir, cli_vars=None, criteria=('ready',)):
+    def __init__(
+        self, cwd, port, profiles_dir, cli_vars=None, criteria=('ready',)
+    ):
         self.cwd = cwd
         self.port = port
         self.criteria = criteria
@@ -44,7 +46,8 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         super().__init__(
             target=handle_and_check,
             args=(handle_and_check_args,),
-            name='ServerProcess')
+            name='ServerProcess',
+        )
 
     def run(self):
         os.chdir(self.cwd)
@@ -239,13 +242,13 @@ class Querier:
 
     def snapshot(
         self,
-        models: Optional[Union[str, List[str]]] = None,
+        select: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
         request_id: int = 1,
     ):
         params = {}
-        if models is not None:
-            params['models'] = models
+        if select is not None:
+            params['select'] = select
         if exclude is not None:
             params['exclude'] = exclude
         return self.request(
@@ -336,7 +339,9 @@ class Querier:
         assert 'error' in data
         return data['error']
 
-    def async_wait(self, token: str, timeout: int = 60, state='success') -> Dict[str, Any]:
+    def async_wait(
+        self, token: str, timeout: int = 60, state='success'
+    ) -> Dict[str, Any]:
         start = time.time()
         while True:
             time.sleep(0.5)
@@ -388,53 +393,6 @@ def rpc_server(project_dir, schema, profiles_dir, criteria='ready'):
     if proc.is_alive():
         os.kill(proc.pid, signal.SIGKILL)
         proc.join()
-
-
-@pytest.fixture
-def unique_schema() -> str:
-    return "test{}{:04}".format(int(time.time()), random.randint(0, 9999))
-
-
-@pytest.fixture
-def profiles_dir(tmpdir):
-    return tmpdir.mkdir('profile')
-
-
-@pytest.fixture
-def postgres_profile_data(unique_schema):
-    return {
-        'config': {
-            'send_anonymous_usage_stats': False
-        },
-        'test': {
-            'outputs': {
-                'default': {
-                    'type': 'postgres',
-                    'threads': 4,
-                    'host': 'database',
-                    'port': 5432,
-                    'user': 'root',
-                    'pass': 'password',
-                    'dbname': 'dbt',
-                    'schema': unique_schema,
-                },
-            },
-            'target': 'default'
-        }
-    }
-
-
-@pytest.fixture
-def postgres_profile(profiles_dir, postgres_profile_data) -> Dict[str, Any]:
-    path = os.path.join(profiles_dir, 'profiles.yml')
-    with open(path, 'w') as fp:
-        fp.write(yaml.safe_dump(postgres_profile_data))
-    return postgres_profile_data
-
-
-@pytest.fixture
-def project_dir(tmpdir):
-    return tmpdir.mkdir('project')
 
 
 class ProjectDefinition:
@@ -496,7 +454,6 @@ class ProjectDefinition:
 
         if value is not None:
             self._write_recursive(project_dir.mkdir(name), value)
-
 
     def write_models(self, project_dir, remove=False):
         self._write_values(project_dir, remove, 'models', self.models)
@@ -565,3 +522,24 @@ def built_schema(project_dir, schema, profiles_dir, test_kwargs, project_def):
     adapter = get_adapter(cfg)
     adapter.cleanup_connections()
     execute(adapter, 'drop schema if exists {} cascade'.format(schema))
+
+
+@contextmanager
+def get_querier(
+    project_def,
+    project_dir,
+    profiles_dir,
+    schema,
+    test_kwargs,
+    criteria='ready',
+):
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir,
+        criteria=criteria,
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir,
+        test_kwargs={}, project_def=project_def,
+    )
+    with schema_ctx, server_ctx as server:
+        yield Querier(server)

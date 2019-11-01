@@ -11,6 +11,7 @@ from dbt.contracts.rpc import (
     RemoteCatalogResults,
     RemoteExecutionResult,
     RemoteRunOperationResult,
+    RPCSnapshotParameters,
 )
 from dbt.rpc.method import (
     Parameters,
@@ -132,9 +133,10 @@ class RemoteRunOperationTask(
         return results.success
 
 
-class RemoteSnapshotTask(RPCCommandTask[RPCCompileParameters], SnapshotTask):
+class RemoteSnapshotTask(RPCCommandTask[RPCSnapshotParameters], SnapshotTask):
     METHOD_NAME = 'snapshot'
 
-    def set_args(self, params: RPCCompileParameters) -> None:
-        self.args.models = self._listify(params.models)
+    def set_args(self, params: RPCSnapshotParameters) -> None:
+        # select has an argparse `dest` value of `models`.
+        self.args.models = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)

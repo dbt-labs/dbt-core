@@ -46,6 +46,12 @@ class RPCCompileParameters(RPCParameters):
 
 
 @dataclass
+class RPCSnapshotParameters(RPCParameters):
+    select: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+
+
+@dataclass
 class RPCTestParameters(RPCCompileParameters):
     data: bool = False
     schema: bool = False
