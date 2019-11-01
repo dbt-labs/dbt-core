@@ -4,8 +4,7 @@ import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
-from dbt.adapters.base import available, RelationType
-from dbt.adapters.sql import SQLAdapter
+from dbt.adapters.base import BaseAdapter, available, RelationType
 from dbt.adapters.bigquery.relation import (
     BigQueryRelation
 )
@@ -34,7 +33,7 @@ def _stub_relation(*args, **kwargs):
     )
 
 
-class BigQueryAdapter(SQLAdapter):
+class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
         'TABLE': RelationType.Table,
@@ -83,6 +82,17 @@ class BigQueryAdapter(SQLAdapter):
             '`rename_relation` is not implemented for this adapter!'
         )
 
+    @available
+    def list_schemas(self, database):
+        conn = self.connections.get_thread_connection()
+        client = conn.handle
+
+        with self.connections.exception_handler('list dataset'):
+            # this is similar to how we have to deal with listing tables
+            all_datasets = client.list_datasets(project=database,
+                                                max_results=10000)
+            return [ds.dataset_id for ds in all_datasets]
+
     @available.parse(lambda *a, **k: False)
     def check_schema_exists(self, database: str, schema: str) -> bool:
         conn = self.connections.get_thread_connection()
@@ -96,7 +106,7 @@ class BigQueryAdapter(SQLAdapter):
         # which appear in neither the information_schema.schemata view nor the
         # list_datasets method.
         try:
-            next(client.list_tables(bigquery_dataset, max_results=1))
+            next(iter(client.list_tables(bigquery_dataset, max_results=1)))
         except StopIteration:
             pass
         except google.api_core.exceptions.NotFound:
@@ -124,6 +134,33 @@ class BigQueryAdapter(SQLAdapter):
     def expand_target_column_types(self, from_relation, to_relation):
         # This is a no-op on BigQuery
         pass
+
+    def list_relations_without_caching(self, information_schema, schema):
+        connection = self.connections.get_thread_connection()
+        client = connection.handle
+
+        bigquery_dataset = self.connections.dataset(
+            information_schema.database, information_schema.schema, connection
+        )
+
+        all_tables = client.list_tables(
+            bigquery_dataset,
+            # BigQuery paginates tables by alphabetizing them, and using
+            # the name of the last table on a page as the key for the
+            # next page. If that key table gets dropped before we run
+            # list_relations, then this will 404. So, we avoid this
+            # situation by making the page size sufficiently large.
+            # see: https://github.com/fishtown-analytics/dbt/issues/726
+            # TODO: cache the list of relations up front, and then we
+            #       won't need to do this
+            max_results=100000)
+
+        # This will 404 if the dataset does not exist. This behavior mirrors
+        # the implementation of list_relations for other adapters
+        try:
+            return [self._bq_table_to_relation(table) for table in all_tables]
+        except google.api_core.exceptions.NotFound:
+            return []
 
     def get_relation(self, database, schema, identifier):
         if self._schema_is_cached(database, schema):

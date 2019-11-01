@@ -227,7 +227,6 @@ class SQLAdapter(BaseAdapter):
             identifier='INFORMATION_SCHEMA',
             quote_policy=self.config.quoting
         ).information_schema()
-        information_schema.render()
 
         kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
