@@ -1,5 +1,4 @@
 import agate
-import itertools
 import os
 from typing_extensions import Protocol
 from typing import Union, Callable, Any, Dict, List, TypeVar, Type
@@ -95,23 +94,6 @@ class Provider(Protocol):
     source: Type[BaseResolver]
 
 
-def _add_macro_map(
-    context: Dict[str, Any], package_name: str, macro_map: Dict[str, Callable]
-):
-    """Update an existing context in-place, adding the given macro map to the
-    appropriate package namespace. Adapter packages get inserted into the
-    global namespace.
-    """
-    key = package_name
-    if package_name in PACKAGES:
-        key = GLOBAL_PROJECT_NAME
-    if key not in context:
-        value: Dict[str, Callable] = {}
-        context[key] = value
-
-    context[key].update(macro_map)
-
-
 class ManifestParsedContext(HasCredentialsContext):
     """A context available after the manifest has been parsed."""
     def __init__(self, config, manifest):
@@ -119,29 +101,7 @@ class ManifestParsedContext(HasCredentialsContext):
         self.manifest = manifest
 
     def add_macros(self, context):
-        global_macros: List[Dict[str, Callable]] = []
-        local_macros: List[Dict[str, Callable]] = []
-
-        for unique_id, macro in self.manifest.macros.items():
-            if macro.resource_type != NodeType.Macro:
-                continue
-            package_name = macro.package_name
-
-            macro_map: Dict[str, Callable] = {
-                macro.name: macro.generator(context)
-            }
-
-            # adapter packages are part of the global project space
-            _add_macro_map(context, package_name, macro_map)
-
-            if package_name == self.search_package_name:
-                local_macros.append(macro_map)
-            elif package_name in PACKAGES:
-                global_macros.append(macro_map)
-
-        # Load global macros before local macros -- local takes precedence
-        for macro_map in itertools.chain(global_macros, local_macros):
-            context.update(macro_map)
+        self.add_macros_from(context, self.manifest.macros)
 
 
 def _store_result(sql_results):

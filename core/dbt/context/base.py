@@ -1,12 +1,18 @@
+import itertools
 import json
 import os
-from typing import Dict, Any
+from typing import Callable, Any, Dict, List
 
 import dbt.tracking
 from dbt.clients.jinja import undefined_error
+from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.exceptions import MacroReturn, raise_compiler_error
+from dbt.include.global_project import PACKAGES
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.version import __version__ as dbt_version
+
+from dbt.node_types import NodeType
 
 
 # These modules are added to the context. Consider alternative
@@ -184,6 +190,24 @@ class ConfigRenderContext(BaseContext):
         return context
 
 
+def _add_macro_map(
+    context: Dict[str, Any], package_name: str, macro_map: Dict[str, Callable]
+):
+    """Update an existing context in-place, adding the given macro map to the
+    appropriate package namespace. Adapter packages get inserted into the
+    global namespace.
+    """
+    key = package_name
+    if package_name in PACKAGES:
+        key = GLOBAL_PROJECT_NAME
+    if key not in context:
+        value: Dict[str, Callable] = {}
+        context[key] = value
+
+    context[key].update(macro_map)
+
+
+
 class HasCredentialsContext(ConfigRenderContext):
     def __init__(self, config):
         # sometimes we only have a profile object and end up here. In those
@@ -210,6 +234,35 @@ class HasCredentialsContext(ConfigRenderContext):
     @property
     def search_package_name(self):
         return self.config.package_name
+
+    def add_macros_from(
+        self,
+        context: Dict[str, Any],
+        macros: Dict[str, ParsedMacro],
+    ):
+        global_macros: List[Dict[str, Callable]] = []
+        local_macros: List[Dict[str, Callable]] = []
+
+        for unique_id, macro in macros.items():
+            if macro.resource_type != NodeType.Macro:
+                continue
+            package_name = macro.package_name
+
+            macro_map: Dict[str, Callable] = {
+                macro.name: macro.generator(context)
+            }
+
+            # adapter packages are part of the global project space
+            _add_macro_map(context, package_name, macro_map)
+
+            if package_name == self.search_package_name:
+                local_macros.append(macro_map)
+            elif package_name in PACKAGES:
+                global_macros.append(macro_map)
+
+        # Load global macros before local macros -- local takes precedence
+        for macro_map in itertools.chain(global_macros, local_macros):
+            context.update(macro_map)
 
 
 class QueryHeaderContext(HasCredentialsContext):
