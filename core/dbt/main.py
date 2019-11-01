@@ -386,7 +386,7 @@ def _build_snapshot_subparser(subparsers, base_subparser):
         '''
     )
     sub.set_defaults(cls=snapshot_task.SnapshotTask, which='snapshot',
-                     rpc_method=None)
+                     rpc_method='snapshot')
     return sub
 
 
@@ -707,7 +707,7 @@ def _build_run_operation_subparser(subparsers, base_subparser):
         '''
     )
     sub.set_defaults(cls=run_operation_task.RunOperationTask,
-                     which='run-operation', rpc_method=None)
+                     which='run-operation', rpc_method='run-operation')
     return sub
 
 

@@ -455,6 +455,10 @@ class JSONEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
+        if hasattr(obj, 'to_dict'):
+            # if we have a to_dict we should try to serialize the result of
+            # that!
+            obj = obj.to_dict()
         return super().default(obj)
 
 

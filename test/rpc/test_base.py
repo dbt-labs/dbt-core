@@ -1,23 +1,23 @@
+# flake8: disable=redefined-outer-name
 import time
-from .fixtures import (
-    ProjectDefinition, rpc_server, Querier, project_dir, profiles_dir,
-    postgres_profile, unique_schema, postgres_profile_data, built_schema,
+from .util import (
+    ProjectDefinition, rpc_server, Querier, built_schema, get_querier,
 )
 
 
-def test_rpc_basics(project_dir, profiles_dir, postgres_profile, unique_schema):
+def test_rpc_basics(project_root, profiles_root, postgres_profile, unique_schema):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
-    server_ctx = rpc_server(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
     )
-    schema_ctx = built_schema(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
-    )
-    with schema_ctx, server_ctx as server:
-        querier = Querier(server)
 
+    with querier_ctx as querier:
         token = querier.is_async_result(querier.run_sql('select 1 as id'))
         querier.is_result(querier.async_wait(token))
 
@@ -38,15 +38,15 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
         },
         packages={'packages': packages},
     )
-    server_ctx = rpc_server(
-        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_dir,
+        profiles_dir=profiles_dir,
+        schema=schema,
+        test_kwargs={},
     )
-    schema_ctx = built_schema(
-        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
-    )
-    with schema_ctx, server_ctx as server:
-        querier = Querier(server)
 
+    with querier_ctx as querier:
         # we should be able to run sql queries at startup
         token = querier.is_async_result(querier.run_sql('select 1 as id'))
         querier.is_result(querier.async_wait(token))
@@ -101,7 +101,7 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
         querier.is_result(querier.async_wait(tok1))
 
 
-def test_rpc_deps_packages(project_dir, profiles_dir, postgres_profile, unique_schema):
+def test_rpc_deps_packages(project_root, profiles_root, postgres_profile, unique_schema):
     packages = [{
         'package': 'fishtown-analytics/dbt_utils',
         'version': '0.2.1',
@@ -110,10 +110,10 @@ def test_rpc_deps_packages(project_dir, profiles_dir, postgres_profile, unique_s
         'package': 'fishtown-analytics/dbt_util',
         'version': '0.2.1',
     }]
-    deps_with_packages(packages, bad_packages, project_dir, profiles_dir, unique_schema)
+    deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
 
 
-def test_rpc_deps_git(project_dir, profiles_dir, postgres_profile, unique_schema):
+def test_rpc_deps_git(project_root, profiles_root, postgres_profile, unique_schema):
     packages = [{
         'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
         'revision': '0.2.1'
@@ -123,7 +123,7 @@ def test_rpc_deps_git(project_dir, profiles_dir, postgres_profile, unique_schema
         'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
         'revision': 'not-a-real-revision'
     }]
-    deps_with_packages(packages, bad_packages, project_dir, profiles_dir, unique_schema)
+    deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
 
 
 bad_schema_yml = '''
@@ -155,21 +155,22 @@ sources:
 '''
 
 
-def test_rpc_status_error(project_dir, profiles_dir, postgres_profile, unique_schema):
+def test_rpc_status_error(project_root, profiles_root, postgres_profile, unique_schema):
     project = ProjectDefinition(
         models={
             'descendant_model.sql': 'select * from {{ source("test_source", "test_table") }}',
             'schema.yml': bad_schema_yml,
         }
     )
-    server_ctx = rpc_server(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, criteria='error',
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+        criteria='error',
     )
-    schema_ctx = built_schema(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
-    )
-    with schema_ctx, server_ctx as server:
-        querier = Querier(server)
+    with querier_ctx as querier:
 
         # the status should be an error result
         result = querier.is_result(querier.status())
@@ -184,7 +185,7 @@ def test_rpc_status_error(project_dir, profiles_dir, postgres_profile, unique_sc
         for key in ('message', 'timestamp', 'levelname', 'level'):
             assert key in logs[0]
         assert 'pid' in result
-        assert server.pid == result['pid']
+        assert querier.server.pid == result['pid']
 
         error = querier.is_error(querier.compile_sql('select 1 as id'))
         assert 'code' in error
@@ -210,7 +211,7 @@ def test_rpc_status_error(project_dir, profiles_dir, postgres_profile, unique_sc
         assert error['code'] == 10011
 
         project.models['schema.yml'] = fixed_schema_yml
-        project.write_models(project_dir, remove=True)
+        project.write_models(project_root, remove=True)
 
         # deps should work
         token = querier.is_async_result(querier.deps())
@@ -224,18 +225,19 @@ def test_rpc_status_error(project_dir, profiles_dir, postgres_profile, unique_sc
         querier.is_result(querier.compile_sql('select 1 as id'))
 
 
-def test_gc_change_interval(project_dir, profiles_dir, postgres_profile, unique_schema):
+def test_gc_change_interval(project_root, profiles_root, postgres_profile, unique_schema):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
-    server_ctx = rpc_server(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
     )
-    schema_ctx = built_schema(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
-    )
-    with schema_ctx, server_ctx as server:
-        querier = Querier(server)
+
+    with querier_ctx as querier:
 
         for _ in range(10):
             token = querier.is_async_result(querier.run())
@@ -271,19 +273,19 @@ def test_gc_change_interval(project_dir, profiles_dir, postgres_profile, unique_
         assert len(result['rows']) == 2
 
 
-def test_ps_poll_output_match(project_dir, profiles_dir, postgres_profile, unique_schema):
+def test_ps_poll_output_match(project_root, profiles_root, postgres_profile, unique_schema):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
-    server_ctx = rpc_server(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir
-    )
-    schema_ctx = built_schema(
-        project_dir=project_dir, schema=unique_schema, profiles_dir=profiles_dir, test_kwargs={}, project_def=project,
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
     )
 
-    with schema_ctx, server_ctx as server:
-        querier = Querier(server)
+    with querier_ctx as querier:
 
         token = querier.is_async_result(querier.run())
         poll_result = querier.is_result(querier.async_wait(token))
@@ -296,3 +298,163 @@ def test_ps_poll_output_match(project_dir, profiles_dir, postgres_profile, uniqu
 
         for key in ('start', 'end', 'elapsed', 'state'):
             assert ps_result[key] == poll_result[key]
+
+
+macros_data = '''
+{% macro foo() %}
+    {{ return(1) }}
+{% endmacro %}
+{% macro bar(value) %}
+    {{ return(value + 1) }}
+{% endmacro %}
+{% macro quux(value) %}
+    {{ return(asdf) }}
+{% endmacro %}
+'''
+
+
+def test_run_operation(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'},
+        macros={
+            'my_macros.sql': macros_data,
+        }
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.run_operation(macro='foo', args={}))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.run_operation(macro='bar', args={'value': 10}))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.run_operation(macro='baz', args={}))
+        poll_result = querier.is_result(querier.async_wait(token, state='failed'))
+        assert 'state' in poll_result
+        assert poll_result['state'] == 'failed'
+
+        token = querier.is_async_result(querier.run_operation(macro='quux', args={}))
+        poll_result = querier.is_result(querier.async_wait(token))
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+
+def test_run_operation_cli(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'},
+        macros={
+            'my_macros.sql': macros_data,
+        }
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.cli_args(cli='run-operation foo'))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.cli_args(cli='''run-operation bar --args="{'value': 10}"'''))
+        poll_result = querier.is_result(querier.async_wait(token))
+
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+        token = querier.is_async_result(querier.cli_args(cli='run-operation baz'))
+        poll_result = querier.is_result(querier.async_wait(token, state='failed'))
+        assert 'state' in poll_result
+        assert poll_result['state'] == 'failed'
+
+        token = querier.is_async_result(querier.cli_args(cli='run-operation quux'))
+        poll_result = querier.is_result(querier.async_wait(token))
+        assert 'success' in poll_result
+        assert poll_result['success'] is True
+
+
+snapshot_data = '''
+{% snapshot snapshot_actual %}
+
+    {{
+        config(
+            target_database=database,
+            target_schema=schema,
+            unique_key='id',
+            strategy='timestamp',
+            updated_at='updated_at',
+        )
+    }}
+    select 1 as id, '2019-10-31 23:59:40' as updated_at
+
+{% endsnapshot %}
+'''
+
+
+def test_snapshots(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        snapshots={'my_snapshots.sql': snapshot_data},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.snapshot())
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 1
+
+        token = querier.is_async_result(querier.snapshot(exclude=['snapshot_actual']))
+        results = querier.is_result(querier.async_wait(token))
+
+        token = querier.is_async_result(querier.snapshot(select=['snapshot_actual']))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 1
+
+
+def test_snapshots_cli(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        snapshots={'my_snapshots.sql': snapshot_data},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.cli_args(cli='snapshot'))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 1
+
+        token = querier.is_async_result(querier.cli_args(cli='snapshot --exclude=snapshot_actual'))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 0
+
+        token = querier.is_async_result(querier.cli_args(cli='snapshot --select=snapshot_actual'))
+        results = querier.is_result(querier.async_wait(token))
+        assert len(results['results']) == 1

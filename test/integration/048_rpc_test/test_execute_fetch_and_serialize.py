@@ -2,6 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import pickle
 import os
 
+
 class TestRpcExecuteReturnsResults(DBTIntegrationTest):
 
     @property
@@ -26,7 +27,7 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
 
         pickle.dumps(table)
 
-    def test_file(self, filename):
+    def do_test_file(self, filename):
         file_path = os.path.join("sql", filename)
         with open(file_path) as fh:
             query = fh.read()
@@ -39,12 +40,12 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery_fetch_and_serialize(self):
-        self.test_file('bigquery.sql')
+        self.do_test_file('bigquery.sql')
 
     @use_profile('snowflake')
     def test__snowflake_fetch_and_serialize(self):
-        self.test_file('snowflake.sql')
+        self.do_test_file('snowflake.sql')
 
     @use_profile('redshift')
     def test__redshift_fetch_and_serialize(self):
-        self.test_file('redshift.sql')
+        self.do_test_file('redshift.sql')

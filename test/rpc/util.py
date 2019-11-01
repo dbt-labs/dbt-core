@@ -29,7 +29,9 @@ class NoServerException(Exception):
 
 
 class ServerProcess(dbt.flags.MP_CONTEXT.Process):
-    def __init__(self, cwd, port, profiles_dir, cli_vars=None, criteria=('ready',)):
+    def __init__(
+        self, cwd, port, profiles_dir, cli_vars=None, criteria=('ready',)
+    ):
         self.cwd = cwd
         self.port = port
         self.criteria = criteria
@@ -44,7 +46,8 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         super().__init__(
             target=handle_and_check,
             args=(handle_and_check_args,),
-            name='ServerProcess')
+            name='ServerProcess',
+        )
 
     def run(self):
         os.chdir(self.cwd)
@@ -216,12 +219,40 @@ class Querier:
             method='run', params=params, request_id=request_id
         )
 
+    def run_operation(
+        self,
+        macro: str,
+        args: Optional[Dict[str, Any]],
+        request_id: int = 1,
+    ):
+        params = {'macro': macro}
+        if args is not None:
+            params['args'] = args
+        return self.request(
+            method='run-operation', params=params, request_id=request_id
+        )
+
     def seed(self, show: bool = None, request_id: int = 1):
         params = {}
         if show is not None:
             params['show'] = show
         return self.request(
             method='seed', params=params, request_id=request_id
+        )
+
+    def snapshot(
+        self,
+        select: Optional[Union[str, List[str]]] = None,
+        exclude: Optional[Union[str, List[str]]] = None,
+        request_id: int = 1,
+    ):
+        params = {}
+        if select is not None:
+            params['select'] = select
+        if exclude is not None:
+            params['exclude'] = exclude
+        return self.request(
+            method='snapshot', params=params, request_id=request_id
         )
 
     def test(
@@ -241,7 +272,7 @@ class Querier:
             params['data'] = data
         if schema is not None:
             params['schema'] = schema
-        return self.requuest(
+        return self.request(
             method='test', params=params, request_id=request_id
         )
 
@@ -308,7 +339,9 @@ class Querier:
         assert 'error' in data
         return data['error']
 
-    def async_wait(self, token: str, timeout: int = 60, state='success') -> Dict[str, Any]:
+    def async_wait(
+        self, token: str, timeout: int = 60, state='success'
+    ) -> Dict[str, Any]:
         start = time.time()
         while True:
             time.sleep(0.5)
@@ -362,53 +395,6 @@ def rpc_server(project_dir, schema, profiles_dir, criteria='ready'):
         proc.join()
 
 
-@pytest.fixture
-def unique_schema() -> str:
-    return "test{}{:04}".format(int(time.time()), random.randint(0, 9999))
-
-
-@pytest.fixture
-def profiles_dir(tmpdir):
-    return tmpdir.mkdir('profile')
-
-
-@pytest.fixture
-def postgres_profile_data(unique_schema):
-    return {
-        'config': {
-            'send_anonymous_usage_stats': False
-        },
-        'test': {
-            'outputs': {
-                'default': {
-                    'type': 'postgres',
-                    'threads': 4,
-                    'host': 'database',
-                    'port': 5432,
-                    'user': 'root',
-                    'pass': 'password',
-                    'dbname': 'dbt',
-                    'schema': unique_schema,
-                },
-            },
-            'target': 'default'
-        }
-    }
-
-
-@pytest.fixture
-def postgres_profile(profiles_dir, postgres_profile_data) -> Dict[str, Any]:
-    path = os.path.join(profiles_dir, 'profiles.yml')
-    with open(path, 'w') as fp:
-        fp.write(yaml.safe_dump(postgres_profile_data))
-    return postgres_profile_data
-
-
-@pytest.fixture
-def project_dir(tmpdir):
-    return tmpdir.mkdir('project')
-
-
 class ProjectDefinition:
     def __init__(
         self,
@@ -419,6 +405,7 @@ class ProjectDefinition:
         packages=None,
         models=None,
         macros=None,
+        snapshots=None,
     ):
         self.project = {
             'name': name,
@@ -430,6 +417,7 @@ class ProjectDefinition:
         self.packages = packages
         self.models = models
         self.macros = macros
+        self.snapshots = snapshots
 
     def _write_recursive(self, path, inputs):
         for name, value in inputs.items():
@@ -460,19 +448,21 @@ class ProjectDefinition:
             cfg.remove()
         cfg.write(yaml.safe_dump(self.project))
 
-    def write_models(self, project_dir, remove=False):
+    def _write_values(self, project_dir, remove, name, value):
         if remove:
-            project_dir.join('models').remove()
+            project_dir.join(name).remove()
 
-        if self.models is not None:
-            self._write_recursive(project_dir.mkdir('models'), self.models)
+        if value is not None:
+            self._write_recursive(project_dir.mkdir(name), value)
+
+    def write_models(self, project_dir, remove=False):
+        self._write_values(project_dir, remove, 'models', self.models)
 
     def write_macros(self, project_dir, remove=False):
-        if remove:
-            project_dir.join('macros').remove()
+        self._write_values(project_dir, remove, 'macros', self.macros)
 
-        if self.macros is not None:
-            self._write_recursive(project_dir.mkdir('macros'), self.macros)
+    def write_snapshots(self, project_dir, remove=False):
+        self._write_values(project_dir, remove, 'snapshots', self.snapshots)
 
     def write_to(self, project_dir, remove=False):
         if remove:
@@ -482,6 +472,7 @@ class ProjectDefinition:
         self.write_config(project_dir)
         self.write_models(project_dir)
         self.write_macros(project_dir)
+        self.write_snapshots(project_dir)
 
 
 class TestArgs:
@@ -531,3 +522,24 @@ def built_schema(project_dir, schema, profiles_dir, test_kwargs, project_def):
     adapter = get_adapter(cfg)
     adapter.cleanup_connections()
     execute(adapter, 'drop schema if exists {} cascade'.format(schema))
+
+
+@contextmanager
+def get_querier(
+    project_def,
+    project_dir,
+    profiles_dir,
+    schema,
+    test_kwargs,
+    criteria='ready',
+):
+    server_ctx = rpc_server(
+        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir,
+        criteria=criteria,
+    )
+    schema_ctx = built_schema(
+        project_dir=project_dir, schema=schema, profiles_dir=profiles_dir,
+        test_kwargs={}, project_def=project_def,
+    )
+    with schema_ctx, server_ctx as server:
+        yield Querier(server)
