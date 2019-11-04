@@ -5,10 +5,11 @@ from typing import Type, Dict, Any
 from dbt.exceptions import RuntimeException
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.contracts.connection import Credentials, HasCredentials
+from dbt.contracts.connection import Credentials, AdapterRequiredConfig
 
 from dbt.adapters.base.impl import BaseAdapter
 from dbt.adapters.base.plugin import AdapterPlugin
+
 
 # TODO: we can't import these because they cause an import cycle.
 # Profile has to call into load_plugin to get credentials, so adapter/relation
@@ -74,7 +75,7 @@ class AdpaterContainer:
 
         return plugin.credentials
 
-    def register_adapter(self, config: HasCredentials) -> None:
+    def register_adapter(self, config: AdapterRequiredConfig) -> None:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
 
@@ -109,11 +110,11 @@ class AdpaterContainer:
 FACTORY: AdpaterContainer = AdpaterContainer()
 
 
-def register_adapter(config: HasCredentials) -> None:
+def register_adapter(config: AdapterRequiredConfig) -> None:
     FACTORY.register_adapter(config)
 
 
-def get_adapter(config: HasCredentials):
+def get_adapter(config: AdapterRequiredConfig):
     return FACTORY.lookup_adapter(config.credentials.type)
 
 

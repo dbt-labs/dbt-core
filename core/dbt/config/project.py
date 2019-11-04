@@ -11,6 +11,7 @@ from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import validator_error_message
 from dbt.exceptions import warn_or_error
+from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
@@ -149,7 +150,7 @@ class Project:
                  analysis_paths, docs_paths, target_path, snapshot_paths,
                  clean_targets, log_path, modules_path, quoting, models,
                  on_run_start, on_run_end, seeds, snapshots, dbt_version,
-                 packages):
+                 packages, query_comment):
         self.project_name = project_name
         self.version = version
         self.project_root = project_root
@@ -173,6 +174,7 @@ class Project:
         self.snapshots = snapshots
         self.dbt_version = dbt_version
         self.packages = packages
+        self.query_comment = query_comment
 
     @staticmethod
     def _preprocess(project_dict):
@@ -257,6 +259,7 @@ class Project:
         seeds = project_dict.get('seeds', {})
         snapshots = project_dict.get('snapshots', {})
         dbt_raw_version = project_dict.get('require-dbt-version', '>=0.0.0')
+        query_comment = project_dict.get('query-comment', NoValue())
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)
@@ -291,7 +294,8 @@ class Project:
             seeds=seeds,
             snapshots=snapshots,
             dbt_version=dbt_version,
-            packages=packages
+            packages=packages,
+            query_comment=query_comment,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -343,6 +347,9 @@ class Project:
         })
         if with_packages:
             result.update(self.packages.to_dict())
+        if self.query_comment != NoValue():
+            result['query-comment'] = self.query_comment
+
         return result
 
     def validate(self):

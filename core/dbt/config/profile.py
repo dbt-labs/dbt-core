@@ -255,7 +255,10 @@ class Profile:
             target could not be found
         :returns Profile: The new Profile object.
         """
-        # user_cfg is not rendered since it only contains booleans.
+        # user_cfg is not rendered.
+        if user_cfg is None:
+            user_cfg = raw_profile.get('config')
+
         # TODO: should it be, and the values coerced to bool?
         target_name, profile_data = cls.render_profile(
             raw_profile, profile_name, target_override, cli_vars

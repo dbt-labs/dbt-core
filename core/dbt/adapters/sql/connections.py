@@ -112,6 +112,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> Tuple[str, agate.Table]:
+        sql = self._add_query_comment(sql)
         _, cursor = self.add_query(sql, auto_begin)
         status = self.get_status(cursor)
         if fetch:
@@ -130,7 +131,10 @@ class SQLConnectionManager(BaseConnectionManager):
         connection = self.get_thread_connection()
 
         if dbt.flags.STRICT_MODE:
-            assert isinstance(connection, Connection)
+            if not isinstance(connection, Connection):
+                raise dbt.exceptions.CompilerException(
+                    f'In begin, got {connection} - not a Connection!'
+                )
 
         if connection.transaction_open is True:
             raise dbt.exceptions.InternalException(
@@ -145,7 +149,10 @@ class SQLConnectionManager(BaseConnectionManager):
     def commit(self):
         connection = self.get_thread_connection()
         if dbt.flags.STRICT_MODE:
-            assert isinstance(connection, Connection)
+            if not isinstance(connection, Connection):
+                raise dbt.exceptions.CompilerException(
+                    f'In commit, got {connection} - not a Connection!'
+                )
 
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(

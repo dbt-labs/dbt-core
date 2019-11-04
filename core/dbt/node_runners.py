@@ -147,21 +147,21 @@ class BaseRunner:
 
     def compile_and_execute(self, manifest, ctx):
         result = None
-        self.adapter.acquire_connection(self.node.name)
-        with collect_timing_info('compile') as timing_info:
-            # if we fail here, we still have a compiled node to return
-            # this has the benefit of showing a build path for the errant
-            # model
-            ctx.node = self.compile(manifest)
-        ctx.timing.append(timing_info)
-
-        # for ephemeral nodes, we only want to compile, not run
-        if not ctx.node.is_ephemeral_model:
-            with collect_timing_info('execute') as timing_info:
-                result = self.run(ctx.node, manifest)
-                ctx.node = result.node
-
+        with self.adapter.connection_for(self.node):
+            with collect_timing_info('compile') as timing_info:
+                # if we fail here, we still have a compiled node to return
+                # this has the benefit of showing a build path for the errant
+                # model
+                ctx.node = self.compile(manifest)
             ctx.timing.append(timing_info)
+
+            # for ephemeral nodes, we only want to compile, not run
+            if not ctx.node.is_ephemeral_model:
+                with collect_timing_info('execute') as timing_info:
+                    result = self.run(ctx.node, manifest)
+                    ctx.node = result.node
+
+                ctx.timing.append(timing_info)
 
         return result
 
@@ -496,7 +496,7 @@ class FreshnessRunner(BaseRunner):
 
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
-        with self.adapter.connection_named(compiled_node.unique_id):
+        with self.adapter.connection_for(compiled_node):
             self.adapter.clear_transaction()
             freshness = self.adapter.calculate_freshness(
                 relation,

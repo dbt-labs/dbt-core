@@ -48,7 +48,7 @@ class TestRedshiftAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)

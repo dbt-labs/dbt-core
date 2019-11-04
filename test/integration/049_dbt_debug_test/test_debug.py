@@ -71,3 +71,35 @@ class TestDebug(DBTIntegrationTest):
     def test_postgres_wronguser(self):
         self.run_dbt(['debug', '--target', 'wronguser'])
         self.assertGotValue(re.compile(r'\s+Connection test'), 'ERROR')
+
+
+class TestDebugInvalidProject(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return 'dbt_debug_049'
+
+    @staticmethod
+    def dir(value):
+        return os.path.normpath(value)
+
+    @property
+    def models(self):
+        return self.dir('models')
+
+    @pytest.fixture(autouse=True)
+    def capsys(self, capsys):
+        self.capsys = capsys
+
+    @use_profile('postgres')
+    def test_postgres_badproject(self):
+        # load a special project that is an error
+        self.use_default_project(overrides={
+            'invalid-key': 'not a valid key so this is bad project',
+        })
+        self.run_dbt(['debug', '--profile', 'test'])
+        splitout = self.capsys.readouterr().out.split('\n')
+        for line in splitout:
+            if line.strip().startswith('dbt_project.yml file'):
+                self.assertIn('ERROR invalid', line)
+            elif line.strip().startswith('profiles.yml file'):
+                self.assertNotIn('ERROR invalid', line)

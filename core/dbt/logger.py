@@ -510,13 +510,13 @@ class LogManager(logbook.NestedSetup):
         if error is None:
             error = stream
 
-        if self._output_handler.stream is self.stdout_stream:
+        if self._output_handler.stream is self.stdout:
             self._output_handler.stream = stream
-        elif self._output_handler.stream is self.stderr_stream:
+        elif self._output_handler.stream is self.stderr:
             self._output_handler.stream = error
 
-        self.stdout_stream = stream
-        self.stderr_stream = error
+        self.stdout = stream
+        self.stderr = error
 
 
 log_manager = LogManager()

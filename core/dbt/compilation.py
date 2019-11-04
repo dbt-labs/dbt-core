@@ -76,8 +76,10 @@ def recursively_prepend_ctes(model, manifest):
         return (model, model.extra_ctes, manifest)
 
     if dbt.flags.STRICT_MODE:
-        assert isinstance(model, tuple(COMPILED_TYPES.values())), \
-            'Bad model type: {}'.format(type(model))
+        if not isinstance(model, tuple(COMPILED_TYPES.values())):
+            raise dbt.exceptions.InternalException(
+                'Bad model type: {}'.format(type(model))
+            )
 
     prepended_ctes = []
 

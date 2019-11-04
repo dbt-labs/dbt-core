@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Optional, Tuple, Callable, Container, FrozenSet, Type, Dict, Any, List,
-    Mapping
+    Mapping, Iterator,
 )
 
 import agate
@@ -13,12 +13,13 @@ import dbt.exceptions
 import dbt.flags
 
 from dbt.clients.agate_helper import empty_table
+from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
 
-from dbt.adapters.base.connections import BaseConnectionManager
+from dbt.adapters.base.connections import BaseConnectionManager, Connection
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import ComponentName, BaseRelation
 from dbt.adapters.base import Column as BaseColumn
@@ -203,20 +204,20 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Methods that pass through to the connection manager
     ###
-    def acquire_connection(self, name=None):
+    def acquire_connection(self, name=None) -> Connection:
         return self.connections.set_connection_name(name)
 
-    def release_connection(self):
-        return self.connections.release()
+    def release_connection(self) -> None:
+        self.connections.release()
 
-    def cleanup_connections(self):
-        return self.connections.cleanup_all()
+    def cleanup_connections(self) -> None:
+        self.connections.cleanup_all()
 
-    def clear_transaction(self):
+    def clear_transaction(self) -> None:
         self.connections.clear_transaction()
 
-    def commit_if_has_connection(self):
-        return self.connections.commit_if_has_connection()
+    def commit_if_has_connection(self) -> None:
+        self.connections.commit_if_has_connection()
 
     def nice_connection_name(self):
         conn = self.connections.get_if_exists()
@@ -225,11 +226,23 @@ class BaseAdapter(metaclass=AdapterMeta):
         return conn.name
 
     @contextmanager
-    def connection_named(self, name):
+    def connection_named(
+        self, name: str, node: Optional[CompileResultNode] = None
+    ):
         try:
-            yield self.acquire_connection(name)
+            self.connections.query_header.set(name, node)
+            conn = self.acquire_connection(name)
+            yield conn
         finally:
             self.release_connection()
+            self.connections.query_header.reset()
+
+    @contextmanager
+    def connection_for(
+        self, node: CompileResultNode
+    ) -> Iterator[Connection]:
+        with self.connection_named(node.unique_id, node) as conn:
+            yield conn
 
     @available.parse(lambda *a, **k: ('', empty_table()))
     def execute(

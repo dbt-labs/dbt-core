@@ -45,7 +45,8 @@ class BigQueryCredentials(Credentials):
         return 'bigquery'
 
     def _connection_keys(self):
-        return ('method', 'database', 'schema', 'location')
+        return ('method', 'database', 'schema', 'location', 'priority',
+                'timeout_seconds')
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -200,6 +201,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         return query_job, iterator
 
     def execute(self, sql, auto_begin=False, fetch=None):
+        sql = self._add_query_comment(sql)
         # auto_begin is ignored on bigquery, and only included for consistency
         query_job, iterator = self.raw_execute(sql, fetch=fetch)
 

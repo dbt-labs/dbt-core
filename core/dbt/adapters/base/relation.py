@@ -16,6 +16,7 @@ from hologram.helpers import StrEnum
 from dbt.contracts.util import Replaceable
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedNode
+from dbt.exceptions import InternalException
 from dbt import deprecations
 
 
@@ -322,10 +323,18 @@ class BaseRelation(FakeAPIObject, Hashable):
         **kwargs: Any,
     ) -> Self:
         if node.resource_type == NodeType.Source:
-            assert isinstance(node, ParsedSourceDefinition)
+            if not isinstance(node, ParsedSourceDefinition):
+                raise InternalException(
+                    'type mismatch, expected ParsedSourceDefinition but got {}'
+                    .format(type(node))
+                )
             return cls.create_from_source(node, **kwargs)
         else:
-            assert isinstance(node, (ParsedNode, CompiledNode))
+            if not isinstance(node, (ParsedNode, CompiledNode)):
+                raise InternalException(
+                    'type mismatch, expected ParsedNode or CompiledNode but '
+                    'got {}'.format(type(node))
+                )
             return cls.create_from_node(config, node, **kwargs)
 
     @classmethod

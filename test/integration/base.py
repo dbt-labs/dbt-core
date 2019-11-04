@@ -324,12 +324,9 @@ class DBTIntegrationTest(unittest.TestCase):
         os.chdir(self.initial_dir)
         # before we go anywhere, collect the initial path info
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
-        print('initial_dir={}'.format(self.initial_dir))
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
-        print('test_original_source_path={}'.format(self.test_original_source_path))
         self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
-        print('test_root_dir={}'.format(self.test_root_dir))
         os.chdir(self.test_root_dir)
         try:
             self._symlink_test_folders()
