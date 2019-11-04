@@ -62,15 +62,17 @@ class MacroQueryStringSetter:
         self.config = config
 
         comment_macro = self._get_comment_macro()
-        self.generator: QueryStringFunc = lambda name, model: ''
+        self.generator: QueryStringFunc = lambda name, model: ""
         # if the comment value was None or the empty string, just skip it
         if comment_macro:
             assert isinstance(comment_macro, str)
-            macro = '\n'.join((
-                '{%- macro query_comment_macro(connection_name, node) -%}',
+            macro = "\n".join(
+                (
                     "{%- macro query_comment_macro(connection_name, node) -%}",
-                '{% endmacro %}'
-            ))
+                    comment_macro,
+                    "{% endmacro %}",
+                )
+            )
             ctx = self._get_context()
             self.generator = QueryStringGenerator(macro, ctx)
         self.comment = _QueryComment(None)
