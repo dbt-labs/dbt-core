@@ -271,9 +271,11 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     def _expected_catalog(self, id_type, text_type, time_type, view_type,
                           table_type, model_stats, seed_stats=None, case=None,
-                          model_database=None):
+                          case_columns=False, model_database=None):
         if case is None:
             case = lambda x: x
+        col_case = case if case_columns else lambda x: x
+
         if seed_stats is None:
             seed_stats = model_stats
 
@@ -282,32 +284,32 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         role = self.get_role()
         expected_cols = {
-            case('id'): {
-                'name': case('id'),
+            col_case('id'): {
+                'name': col_case('id'),
                 'index': 1,
                 'type': id_type,
                 'comment': None,
             },
-            case('first_name'): {
-                'name': case('first_name'),
+            col_case('first_name'): {
+                'name': col_case('first_name'),
                 'index': 2,
                 'type': text_type,
                 'comment': None,
             },
-            case('email'): {
-                'name': case('email'),
+            col_case('email'): {
+                'name': col_case('email'),
                 'index': 3,
                 'type': text_type,
                 'comment': None,
             },
-            case('ip_address'): {
-                'name': case('ip_address'),
+            col_case('ip_address'): {
+                'name': col_case('ip_address'),
                 'index': 4,
                 'type': text_type,
                 'comment': None,
             },
-            case('updated_at'): {
-                'name': case('updated_at'),
+            col_case('updated_at'): {
+                'name': col_case('updated_at'),
                 'index': 5,
                 'type': time_type,
                 'comment': None,
@@ -322,7 +324,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('model'),
                     'type': view_type,
                     'comment': None,
-                    'owner': self.get_role(),
+                    'owner': role,
                 },
                 'stats': model_stats,
                 'columns': expected_cols,
@@ -335,7 +337,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('seed'),
                     'type': table_type,
                     'comment': None,
-                    'owner': self.get_role(),
+                    'owner': role,
                 },
                 'stats': seed_stats,
                 'columns': expected_cols,
@@ -469,7 +471,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
 
-    def expected_snowflake_catalog(self):
+    def expected_snowflake_catalog(self, case_columns=False):
         return self._expected_catalog(
             id_type='NUMBER',
             text_type='TEXT',
@@ -479,7 +481,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             model_stats=self._no_stats(),
             seed_stats=self._snowflake_stats(),
             case=lambda x: x.upper(),
-            model_database=self.alternative_database)
+            model_database=self.alternative_database,
+            case_columns=case_columns,
+        )
 
     def expected_bigquery_catalog(self):
         return self._expected_catalog(
@@ -490,7 +494,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             table_type='table',
             model_stats=self._bigquery_stats(False),
             seed_stats=self._bigquery_stats(True),
-            model_database=self.alternative_database
+            model_database=self.alternative_database,
         )
 
     def expected_presto_catalog(self):
@@ -502,7 +506,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             table_type='BASE TABLE',
             model_stats=self._no_stats(),
             seed_stats=self._no_stats(),
-            model_database=self.default_database
+            model_database=self.default_database,
         )
 
     @staticmethod
@@ -2940,7 +2944,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 }
             })
 
-        self.verify_catalog(self.expected_snowflake_catalog())
+        self.verify_catalog(self.expected_snowflake_catalog(case_columns=True))
         self.verify_manifest(self.expected_seeded_manifest())
         self.verify_run_results(self.expected_run_results(quote_schema=False, quote_model=True))
 

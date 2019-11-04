@@ -67,7 +67,7 @@
         {% set bindings = [] %}
 
         {% for row in chunk %}
-            {% set _ = bindings.extend(row) %}
+            {% do bindings.extend(row) %}
         {% endfor %}
 
         {% set sql %}
@@ -81,10 +81,10 @@
             {%- endfor %}
         {% endset %}
 
-        {% set _ = adapter.add_query(sql, bindings=bindings, abridge_sql_log=True) %}
+        {% do adapter.add_query(sql, bindings=bindings, abridge_sql_log=True) %}
 
         {% if loop.index0 == 0 %}
-            {% set _ = statements.append(sql) %}
+            {% do statements.append(sql) %}
         {% endif %}
     {% endfor %}
 
