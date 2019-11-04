@@ -1,3 +1,5 @@
+from typing import Dict, List, Optional, Any
+
 import dbt.deprecations
 import dbt.exceptions
 import dbt.flags as flags
@@ -6,12 +8,13 @@ import dbt.clients.agate_helper
 
 from dbt.adapters.base import BaseAdapter, available, RelationType
 from dbt.adapters.bigquery.relation import (
-    BigQueryRelation
+    BigQueryRelation, BigQueryInformationSchema
 )
 from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.utils import filter_null_values
 
 import google.auth
 import google.api_core
@@ -52,14 +55,14 @@ class BigQueryAdapter(BaseAdapter):
     ###
 
     @classmethod
-    def date_function(cls):
+    def date_function(cls) -> str:
         return 'CURRENT_TIMESTAMP()'
 
     @classmethod
-    def is_cancelable(cls):
+    def is_cancelable(cls) -> bool:
         return False
 
-    def drop_relation(self, relation):
+    def drop_relation(self, relation: BigQueryRelation) -> None:
         is_cached = self._schema_is_cached(relation.database, relation.schema)
         if is_cached:
             self.cache_dropped(relation)
@@ -72,18 +75,20 @@ class BigQueryAdapter(BaseAdapter):
         relation_object = dataset.table(relation.identifier)
         client.delete_table(relation_object)
 
-    def truncate_relation(self, relation):
+    def truncate_relation(self, relation: BigQueryRelation) -> None:
         raise dbt.exceptions.NotImplementedException(
             '`truncate` is not implemented for this adapter!'
         )
 
-    def rename_relation(self, from_relation, to_relation):
+    def rename_relation(
+        self, from_relation: BigQueryRelation, to_relation: BigQueryRelation
+    ) -> None:
         raise dbt.exceptions.NotImplementedException(
             '`rename_relation` is not implemented for this adapter!'
         )
 
     @available
-    def list_schemas(self, database):
+    def list_schemas(self, database: str) -> List[str]:
         conn = self.connections.get_thread_connection()
         client = conn.handle
 
@@ -114,7 +119,9 @@ class BigQueryAdapter(BaseAdapter):
             return False
         return True
 
-    def get_columns_in_relation(self, relation):
+    def get_columns_in_relation(
+        self, relation: BigQueryRelation
+    ) -> List[BigQueryColumn]:
         try:
             table = self.connections.get_bq_table(
                 database=relation.database,
@@ -127,15 +134,21 @@ class BigQueryAdapter(BaseAdapter):
             logger.debug("get_columns_in_relation error: {}".format(e))
             return []
 
-    def expand_column_types(self, goal, current):
+    def expand_column_types(
+        self, goal: BigQueryRelation, current: BigQueryRelation
+    ) -> None:
         # This is a no-op on BigQuery
         pass
 
-    def expand_target_column_types(self, from_relation, to_relation):
+    def expand_target_column_types(
+        self, from_relation: BigQueryRelation, to_relation: BigQueryRelation
+    ) -> None:
         # This is a no-op on BigQuery
         pass
 
-    def list_relations_without_caching(self, information_schema, schema):
+    def list_relations_without_caching(
+        self, information_schema: BigQueryInformationSchema, schema: str
+    ) -> List[BigQueryRelation]:
         connection = self.connections.get_thread_connection()
         client = connection.handle
 
@@ -162,7 +175,9 @@ class BigQueryAdapter(BaseAdapter):
         except google.api_core.exceptions.NotFound:
             return []
 
-    def get_relation(self, database, schema, identifier):
+    def get_relation(
+        self, database: str, schema: str, identifier: str
+    ) -> BigQueryRelation:
         if self._schema_is_cached(database, schema):
             # if it's in the cache, use the parent's model of going through
             # the relations cache and picking out the relation
@@ -178,47 +193,62 @@ class BigQueryAdapter(BaseAdapter):
             table = None
         return self._bq_table_to_relation(table)
 
-    def create_schema(self, database, schema):
+    def create_schema(self, database: str, schema: str) -> None:
         logger.debug('Creating schema "{}.{}".', database, schema)
         self.connections.create_dataset(database, schema)
 
-    def drop_schema(self, database, schema):
+    def drop_schema(self, database: str, schema: str) -> None:
         logger.debug('Dropping schema "{}.{}".', database, schema)
         self.connections.drop_dataset(database, schema)
 
     @classmethod
-    def quote(cls, identifier):
+    def quote(cls, identifier: str) -> str:
         return '`{}`'.format(identifier)
 
     @classmethod
-    def convert_text_type(cls, agate_table, col_idx):
+    def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "string"
 
     @classmethod
-    def convert_number_type(cls, agate_table, col_idx):
+    def convert_number_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
         return "float64" if decimals else "int64"
 
     @classmethod
-    def convert_boolean_type(cls, agate_table, col_idx):
+    def convert_boolean_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         return "bool"
 
     @classmethod
-    def convert_datetime_type(cls, agate_table, col_idx):
+    def convert_datetime_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         return "datetime"
 
     @classmethod
-    def convert_date_type(cls, agate_table, col_idx):
+    def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "date"
 
     @classmethod
-    def convert_time_type(cls, agate_table, col_idx):
+    def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "time"
 
     ###
     # Implementation details
     ###
-    def _get_dbt_columns_from_bq_table(self, table):
+    def _make_match_kwargs(
+        self, database: str, schema: str, identifier: str
+    ) -> Dict[str, str]:
+        return filter_null_values({
+            'database': database,
+            'identifier': identifier,
+            'schema': schema,
+        })
+
+    def _get_dbt_columns_from_bq_table(self, table) -> List[BigQueryColumn]:
         "Translates BQ SchemaField dicts into dbt BigQueryColumn objects"
 
         columns = []
@@ -231,7 +261,9 @@ class BigQueryAdapter(BaseAdapter):
 
         return columns
 
-    def _agate_to_schema(self, agate_table, column_override):
+    def _agate_to_schema(
+        self, agate_table: agate.Table, column_override: Dict[str, str]
+    ) -> List[google.cloud.bigquery.SchemaField]:
         """Convert agate.Table with column names to a list of bigquery schemas.
         """
         bq_schema = []
@@ -243,7 +275,7 @@ class BigQueryAdapter(BaseAdapter):
             )
         return bq_schema
 
-    def _materialize_as_view(self, model):
+    def _materialize_as_view(self, model: Dict[str, Any]) -> str:
         model_database = model.get('database')
         model_schema = model.get('schema')
         model_alias = model.get('alias')
@@ -258,7 +290,12 @@ class BigQueryAdapter(BaseAdapter):
         )
         return "CREATE VIEW"
 
-    def _materialize_as_table(self, model, model_sql, decorator=None):
+    def _materialize_as_table(
+        self,
+        model: Dict[str, Any],
+        model_sql: str,
+        decorator: Optional[str] = None,
+    ) -> str:
         model_database = model.get('database')
         model_schema = model.get('schema')
         model_alias = model.get('alias')
