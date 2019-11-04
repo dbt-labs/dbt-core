@@ -61,12 +61,17 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
 
+        self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
+
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
 
     def tearDown(self):
         # we want a unique self.handle every time.
         self.adapter.cleanup_connections()
+        self.qh_patch.stop()
         self.patcher.stop()
         self.load_patch.stop()
 

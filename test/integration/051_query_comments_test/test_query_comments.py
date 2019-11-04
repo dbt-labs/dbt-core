@@ -2,12 +2,28 @@ from test.integration.base import DBTIntegrationTest,  use_profile
 import io
 import json
 import os
-import sys
+
+import dbt.exceptions
 from dbt.version import __version__ as dbt_version
 from dbt.logger import log_manager
 
 
-class QueryComments(DBTIntegrationTest):
+class TestDefaultQueryComments(DBTIntegrationTest):
+    def matches_comment(self, msg):
+        if not msg.startswith('/* '):
+            return False
+        # our blob is the first line of the query comments, minus the comment
+        json_str = msg.split('\n')[0][3:-3]
+        data = json.loads(json_str)
+        self.assertEqual(data['app'], 'dbt')
+        self.assertEqual(data['dbt_version'], dbt_version)
+        self.assertEqual(data['node_id'], 'model.test.x')
+
+    @property
+    def project_config(self):
+        return {'macro-paths': ['macros']}
+
+
     @property
     def schema(self):
         return 'dbt_query_comments_051'
@@ -31,8 +47,11 @@ class QueryComments(DBTIntegrationTest):
         log_manager.set_output_stream(self.initial_stdout, self.initial_stderr)
         super().tearDown()
 
-    def run_get_json(self):
-        self.run_dbt(['--debug', '--log-format=json', 'run'])
+    def run_get_json(self, expect_pass=True):
+        self.run_dbt(
+            ['--debug', '--log-format=json', 'run'],
+            expect_pass=expect_pass
+        )
         logs = []
         for line in self.stringbuf.getvalue().split('\n'):
             try:
@@ -56,9 +75,6 @@ class QueryComments(DBTIntegrationTest):
             return msg
         return None
 
-    def matches_comment(self, msg) -> bool:
-        raise NotImplementedError
-
     def run_assert_comments(self):
         logs = self.run_get_json()
 
@@ -71,11 +87,29 @@ class QueryComments(DBTIntegrationTest):
 
         self.assertTrue(seen, 'Never saw a matching log message! Logs:\n{}'.format('\n'.join(l['message'] for l in logs)))
 
+    @use_profile('postgres')
+    def test_postgres_comments(self):
+        self.run_assert_comments()
 
-class TestQueryComments(QueryComments):
+    @use_profile('redshift')
+    def test_redshift_comments(self):
+        self.run_assert_comments()
+
+    @use_profile('snowflake')
+    def test_snowflake_comments(self):
+        self.run_assert_comments()
+
+    @use_profile('bigquery')
+    def test_bigquery_comments(self):
+        self.run_assert_comments()
+
+
+class TestQueryComments(TestDefaultQueryComments):
     @property
     def project_config(self):
-        return {'query-comment': 'dbt\nrules!\n'}
+        cfg = super().project_config
+        cfg.update({'query-comment': 'dbt\nrules!\n'})
+        return cfg
 
     def matches_comment(self, msg) -> bool:
         self.assertTrue(
@@ -83,46 +117,47 @@ class TestQueryComments(QueryComments):
             f'{msg} did not start with query comment'
         )
 
-    @use_profile('postgres')
-    def test_postgres_comments(self):
-        self.run_assert_comments()
 
-    @use_profile('redshift')
-    def test_redshift_comments(self):
-        self.run_assert_comments()
+class TestMacroQueryComments(TestDefaultQueryComments):
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg.update({'query-comment': '{{ query_header_no_args() }}'})
+        return cfg
 
-    @use_profile('snowflake')
-    def test_snowflake_comments(self):
-        self.run_assert_comments()
+    def matches_comment(self, msg) -> bool:
+        start_with = '/* dbt macros\nare pretty cool */\n'
+        self.assertTrue(
+            msg.startswith(start_with),
+            f'"{msg}" did not start with expected query comment "{start_with}"'
+        )
 
-    @use_profile('bigquery')
-    def test_bigquery_comments(self):
-        self.run_assert_comments()
+
+class TestMacroArgsQueryComments(TestDefaultQueryComments):
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg.update(
+            {'query-comment': '{{ return(ordered_to_json(query_header_args(target.name))) }}'}
+        )
+        return cfg
+
+    def matches_comment(self, msg) -> bool:
+        expected_dct = {'app': 'dbt++', 'dbt_version': dbt_version, 'macro_version': '0.1.0', 'message': 'blah: default2'}
+        expected = '/* {} */\n'.format(json.dumps(expected_dct, sort_keys=True))
+        self.assertTrue(
+            msg.startswith(expected),
+            f"'{msg}' did not start with query comment '{expected}'"
+        )
 
 
-class TestDefaultQueryComments(QueryComments):
-    def matches_comment(self, msg):
-        if not msg.startswith('/* '):
-            return False
-        # our blob is the first line of the query comments, minus the comment
-        json_str = msg.split('\n')[0][3:-3]
-        data = json.loads(json_str)
-        self.assertEqual(data['app'], 'dbt')
-        self.assertEqual(data['dbt_version'], dbt_version)
-        self.assertEqual(data['node_id'], 'model.test.x')
+class TestMacroInvalidQueryComments(TestDefaultQueryComments):
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg.update({'query-comment': '{{ invalid_query_header() }}'})
+        return cfg
 
-    @use_profile('postgres')
-    def test_postgres_comments(self):
-        self.run_assert_comments()
-
-    @use_profile('redshift')
-    def test_redshift_comments(self):
-        self.run_assert_comments()
-
-    @use_profile('snowflake')
-    def test_snowflake_comments(self):
-        self.run_assert_comments()
-
-    @use_profile('bigquery')
-    def test_bigquery_comments(self):
-        self.run_assert_comments()
+    def run_assert_comments(self):
+        with self.assertRaises(dbt.exceptions.RuntimeException):
+            self.run_get_json(expect_pass=False)

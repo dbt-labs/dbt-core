@@ -1,7 +1,7 @@
 import agate
 import os
 from typing_extensions import Protocol
-from typing import Union, Callable, Any, Dict, List, TypeVar, Type
+from typing import Union, Callable, Any, Dict, TypeVar, Type
 
 import dbt.clients.agate_helper
 from dbt.contracts.graph.compiled import CompiledSeedNode
@@ -13,8 +13,6 @@ import dbt.utils
 import dbt.writer
 from dbt.adapters.factory import get_adapter
 from dbt.node_types import NodeType
-from dbt.include.global_project import PACKAGES
-from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.clients.jinja import get_rendered
 from dbt.context.base import Var, HasCredentialsContext
 from dbt.contracts.graph.manifest import Manifest

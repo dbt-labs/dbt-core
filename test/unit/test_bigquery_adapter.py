@@ -59,8 +59,13 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             'version': '0.1',
             'project-root': '/tmp/dbt/does-not-exist',
             'profile': 'default',
-            'query-comment': 'dbt',
         }
+        self.qh_patch = None
+
+    def tearDown(self):
+        if self.qh_patch:
+            self.qh_patch.stop()
+        super().tearDown()
 
     def get_adapter(self, target):
         project = self.project_cfg.copy()
@@ -72,6 +77,11 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             profile=profile,
         )
         adapter = BigQueryAdapter(config)
+
+        self.qh_patch = patch.object(adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
+
         inject_adapter(adapter)
         return adapter
 

@@ -49,7 +49,6 @@ class TestRedshiftAdapter(unittest.TestCase):
                 'identifier': False,
                 'schema': True,
             },
-            'query-comment': 'dbt',
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)

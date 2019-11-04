@@ -88,11 +88,15 @@ class ManifestLoader:
         self,
         root_project: RuntimeConfig,
         all_projects: Mapping[str, Project],
-        macro_hook: Callable[[Manifest], Any],
+        macro_hook: Optional[Callable[[Manifest], Any]] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
-        self.macro_hook: Callable[[Manifest], Any] = macro_hook
+        self.macro_hook: Callable[[Manifest], Any]
+        if macro_hook is None:
+            self.macro_hook = lambda m: None
+        else:
+            self.macro_hook = macro_hook
 
         self.results: ParseResult = make_parse_result(
             root_project, all_projects,
@@ -189,6 +193,7 @@ class ManifestLoader:
             macros=self.results.macros,
             files=self.results.files
         )
+        self.macro_hook(macro_manifest)
 
         for project in self.all_projects.values():
             # parse a single project

@@ -14,13 +14,13 @@ class ConfigRenderer:
         self.context = ConfigRenderContext(cli_vars).to_dict()
 
     @staticmethod
-    def _is_hook_or_model_vars_path(keypath):
+    def _is_deferred_render(keypath):
         if not keypath:
             return False
 
         first = keypath[0]
         # run hooks
-        if first in {'on-run-start', 'on-run-end'}:
+        if first in {'on-run-start', 'on-run-end', 'query-comment'}:
             return True
         # models have two things to avoid
         if first in {'seeds', 'models', 'snapshots'}:
@@ -45,9 +45,10 @@ class ConfigRenderer:
         :param key str: The key to convert on.
         :return Any: The rendered entry.
         """
-        # hooks should be treated as raw sql, they'll get rendered later.
-        # Same goes for 'vars' declarations inside 'models'/'seeds'.
-        if self._is_hook_or_model_vars_path(keypath):
+        # query comments and hooks should be treated as raw sql, they'll get
+        # rendered later.
+        # Same goes for 'vars' declarations inside 'models'/'seeds'
+        if self._is_deferred_render(keypath):
             return value
 
         return self.render_value(value)

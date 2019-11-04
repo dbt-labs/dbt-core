@@ -2,7 +2,6 @@ import unittest
 from unittest import mock
 
 import dbt.flags as flags
-import dbt.parser.manifest
 from dbt.task.debug import DebugTask
 
 from dbt.adapters.postgres import PostgresAdapter
@@ -10,7 +9,7 @@ from dbt.exceptions import ValidationException, DbtConfigError
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
 from psycopg2 import extensions as psycopg2_extensions
-from psycopg2 import DatabaseError, Error
+from psycopg2 import DatabaseError
 import agate
 
 from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection
@@ -25,7 +24,6 @@ class TestPostgresAdapter(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': '/tmp/dbt/does-not-exist',
-            'query-comment': 'dbt',
         }
         profile_cfg = {
             'outputs': {
@@ -219,7 +217,6 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
                 'identifier': False,
                 'schema': True,
             },
-            'query-comment': 'dbt',
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
@@ -229,12 +226,12 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_execute = self.cursor.execute
         self.patcher = mock.patch('dbt.adapters.postgres.connections.psycopg2')
         self.psycopg2 = self.patcher.start()
-        # there must be a better way to do this...
-        self.psycopg2.DatabaseError = DatabaseError
-        self.psycopg2.Error = Error
 
         self.psycopg2.connect.return_value = self.handle
         self.adapter = PostgresAdapter(self.config)
+        self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
 
@@ -245,6 +242,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
     def tearDown(self):
         # we want a unique self.handle every time.
         self.adapter.cleanup_connections()
+        self.qh_patch.stop()
         self.patcher.stop()
         self.load_patch.stop()
 

@@ -1,7 +1,7 @@
 import itertools
 import json
 import os
-from typing import Callable, Any, Dict, List
+from typing import Callable, Any, Dict, List, Optional
 
 import dbt.tracking
 from dbt.clients.jinja import undefined_error
@@ -132,9 +132,9 @@ def fromjson(string, default=None):
         return default
 
 
-def tojson(value, default=None):
+def tojson(value, default=None, sort_keys=False):
     try:
-        return json.dumps(value)
+        return json.dumps(value, sort_keys=sort_keys)
     except ValueError:
         return default
 
@@ -207,7 +207,6 @@ def _add_macro_map(
     context[key].update(macro_map)
 
 
-
 class HasCredentialsContext(ConfigRenderContext):
     def __init__(self, config):
         # sometimes we only have a profile object and end up here. In those
@@ -233,7 +232,7 @@ class HasCredentialsContext(ConfigRenderContext):
 
     @property
     def search_package_name(self):
-        return self.config.package_name
+        return self.config.project_name
 
     def add_macros_from(
         self,
@@ -269,8 +268,10 @@ class QueryHeaderContext(HasCredentialsContext):
     def __init__(self, config):
         super().__init__(config)
 
-    def to_dict(self):
+    def to_dict(self, macros: Optional[Dict[str, ParsedMacro]] = None):
         context = super().to_dict()
         context['target'] = self.get_target()
         context['dbt_version'] = dbt_version
+        if macros is not None:
+            self.add_macros_from(context, macros)
         return context
