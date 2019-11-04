@@ -36,4 +36,17 @@ setup(
         'psycopg2>=2.7.5,<2.8',
     ],
     zip_safe=False,
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+
+        'License :: OSI Approved :: Apache Software License',
+
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: POSIX :: Linux',
+
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
 )

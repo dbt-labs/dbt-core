@@ -33,8 +33,20 @@ setup(
         'snowflake-connector-python>=1.6.12,<2.1',
         'azure-storage-blob~=2.1',
         'azure-storage-common~=2.1',
-        # hoist this to here so pip's silly dependency resolver sees it
         'urllib3<1.25.0',
     ],
     zip_safe=False,
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+
+        'License :: OSI Approved :: Apache Software License',
+
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: POSIX :: Linux',
+
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
 )
