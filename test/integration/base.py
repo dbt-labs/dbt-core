@@ -459,9 +459,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
-            self.adapter.drop_schema(
-                database, schema
-            )
+            self.adapter.drop_schema(database, schema)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.DROP_SCHEMA_STATEMENT.format(schema_fqn))
@@ -487,9 +485,11 @@ class DBTIntegrationTest(unittest.TestCase):
             self._get_schema_fqn(self.default_database, schema)
         )
         # on postgres/redshift, this will make you sad
-        drop_alternative = self.setup_alternate_db and \
-                self.adapter_type not in {'postgres', 'redshift'} and \
-                self.alternative_database
+        drop_alternative = (
+            self.setup_alternate_db and
+            self.adapter_type not in {'postgres', 'redshift'} and
+            self.alternative_database
+        )
         if drop_alternative:
             self._created_schemas.add(
                 self._get_schema_fqn(self.alternative_database, schema)

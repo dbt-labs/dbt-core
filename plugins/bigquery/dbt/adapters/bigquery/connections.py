@@ -296,21 +296,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
         client = conn.handle
 
         with self.exception_handler('drop dataset'):
-            for table in client.list_tables(dataset):
-                client.delete_table(table.reference)
-            client.delete_dataset(dataset)
+            client.delete_dataset(
+                dataset, delete_contents=True, not_found_ok=True
+            )
 
     def create_dataset(self, database, schema):
         conn = self.get_thread_connection()
         client = conn.handle
         dataset = self.dataset(database, schema, conn)
 
-        # Emulate 'create schema if not exists ...'
-        try:
-            client.get_dataset(dataset)
-            return
-        except google.api_core.exceptions.NotFound:
-            pass
-
         with self.exception_handler('create dataset'):
-            client.create_dataset(dataset)
+            client.create_dataset(dataset, exists_ok=True)

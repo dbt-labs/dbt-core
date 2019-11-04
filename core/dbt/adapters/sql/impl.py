@@ -222,7 +222,9 @@ class SQLAdapter(BaseAdapter):
 
     def check_schema_exists(self, database, schema):
         information_schema = self.Relation.create(
-            database=database, schema=schema,
+            database=database,
+            schema=schema,
+            identifier='INFORMATION_SCHEMA',
             quote_policy=self.config.quoting
         ).information_schema()
 

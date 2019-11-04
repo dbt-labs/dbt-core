@@ -30,7 +30,7 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'google-cloud-bigquery>=1.0.0,<2',
+        'google-cloud-bigquery>=1.15.0,<2',
     ],
     zip_safe=False,
 )

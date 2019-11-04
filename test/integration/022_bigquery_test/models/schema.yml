@@ -39,3 +39,13 @@ models:
   - was_materialized:
       name: table_model
       type: table
+- name: fUnKyCaSe
+  columns:
+    - name: id
+      tests:
+        - not_null
+        - unique
+  tests:
+    - was_materialized:
+        name: fUnKyCaSe
+        type: view

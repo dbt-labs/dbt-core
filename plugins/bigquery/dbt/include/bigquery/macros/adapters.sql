@@ -91,7 +91,7 @@
 
 {% macro bigquery__list_relations_without_caching(information_schema, schema) -%}
   {{ return(adapter.list_relations_without_caching(information_schema, schema)) }}
-{% endmacro %}
+{%- endmacro %}
 
 
 {% macro bigquery__current_timestamp() -%}
@@ -99,7 +99,7 @@
 {%- endmacro %}
 
 
-{% macro bigquery__list_schemas(database) %}
+{% macro bigquery__list_schemas(database) -%}
   {{ return(adapter.list_schemas()) }}
 {% endmacro %}
 

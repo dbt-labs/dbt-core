@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from dbt.adapters.base.relation import (
-    BaseRelation, ComponentName
+    BaseRelation, ComponentName, InformationSchema
 )
 from dbt.utils import filter_null_values
 from typing import TypeVar
@@ -45,32 +45,36 @@ class BigQueryRelation(BaseRelation):
     def dataset(self):
         return self.schema
 
-    def information_schema(self: Self, identifier=None) -> Self:
-        # BigQuery (usually) addresses information schemas at the dataset
-        # level. This method overrides the BaseRelation method to return an
-        # Information Schema relation as project.dataset.information_schem
+    def information_schema(
+        self, identifier: Optional[str] = None
+    ) -> 'BigQueryInformationSchema':
+        return BigQueryInformationSchema.from_relation(self, identifier)
 
-        include_policy = self.include_policy.replace(
-            database=self.database is not None,
-            schema=self.schema is not None,
-            identifier=True
+
+@dataclass(frozen=True, eq=False, repr=False)
+class BigQueryInformationSchema(InformationSchema):
+    quote_character: str = '`'
+
+    @classmethod
+    def get_include_policy(cls, relation, information_schema_view):
+        schema = True
+        if information_schema_view in ('SCHEMATA', 'SCHEMATA_OPTIONS', None):
+            schema = False
+
+        identifier = True
+        if information_schema_view == '__TABLES__':
+            identifier = False
+
+        return relation.quote_policy.replace(
+            schema=schema,
+            identifier=identifier,
         )
 
-        # Quote everything on BigQuery -- identifiers are case-sensitive,
-        # even when quoted.
-        quote_policy = self.quote_policy.replace(
-            database=True,
-            schema=True,
-            identifier=True,
-        )
-
-        path = self.path.replace(
-            schema=self.schema,
-            identifier='INFORMATION_SCHEMA'
-        )
-
-        return self.replace(
-            quote_policy=quote_policy,
-            include_policy=include_policy,
-            path=path,
-        )
+    def replace(self, **kwargs):
+        if 'information_schema_view' in kwargs:
+            view = kwargs['information_schema_view']
+            # we also need to update the include policy, unless the caller did
+            # in which case it's their problem
+            if 'include_policy' not in kwargs:
+                kwargs['include_policy'] = self.get_include_policy(self, view)
+        return super().replace(**kwargs)
