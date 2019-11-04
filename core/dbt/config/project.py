@@ -11,6 +11,7 @@ from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import validator_error_message
 from dbt.exceptions import warn_or_error
+from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
@@ -258,7 +259,7 @@ class Project:
         seeds = project_dict.get('seeds', {})
         snapshots = project_dict.get('snapshots', {})
         dbt_raw_version = project_dict.get('require-dbt-version', '>=0.0.0')
-        query_comment = project_dict.get('query-comment')
+        query_comment = project_dict.get('query-comment', NoValue())
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)
@@ -343,10 +344,12 @@ class Project:
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
-            'query-comment': self.query_comment,
         })
         if with_packages:
             result.update(self.packages.to_dict())
+        if self.query_comment != NoValue():
+            result['query-comment'] = self.query_comment
+
         return result
 
     def validate(self):

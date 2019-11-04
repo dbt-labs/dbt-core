@@ -161,3 +161,31 @@ class TestMacroInvalidQueryComments(TestDefaultQueryComments):
     def run_assert_comments(self):
         with self.assertRaises(dbt.exceptions.RuntimeException):
             self.run_get_json(expect_pass=False)
+
+
+class TestNullQueryComments(TestDefaultQueryComments):
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg.update({'query-comment': None})
+        return cfg
+
+    def matches_comment(self, msg) -> bool:
+        self.assertFalse(
+            '/*' in msg or '*/' in msg,
+            f"'{msg}' contained a query comment"
+        )
+
+
+class TestEmptyQueryComments(TestDefaultQueryComments):
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg.update({'query-comment': ''})
+        return cfg
+
+    def matches_comment(self, msg) -> bool:
+        self.assertFalse(
+            '/*' in msg or '*/' in msg,
+            f"'{msg}' contained a query comment"
+        )
