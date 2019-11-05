@@ -10,7 +10,7 @@
 
 
 {% macro common_get_merge_sql(target, source, unique_key, dest_columns) -%}
-    {%- set dest_cols_csv = dest_columns | map(attribute="name") | join(', ') -%}
+    {%- set dest_cols_csv =  get_quoted_csv(dest_columns | map(attribute="name")) -%}
 
     merge into {{ target }} as DBT_INTERNAL_DEST
     using {{ source }} as DBT_INTERNAL_SOURCE
@@ -24,7 +24,7 @@
     {% if unique_key %}
     when matched then update set
         {% for column in dest_columns -%}
-            {{ column.name }} = DBT_INTERNAL_SOURCE.{{ column.name }}
+            {{ adapter.quote(column.name) }} = DBT_INTERNAL_SOURCE.{{ adapter.quote(column.name) }}
             {%- if not loop.last %}, {%- endif %}
         {%- endfor %}
     {% endif %}
@@ -48,7 +48,8 @@
 
 
 {% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-    {%- set dest_cols_csv = dest_columns | map(attribute="name") | join(', ') -%}
+
+    {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
 
     {% if unique_key is not none %}
     delete from {{ target }}

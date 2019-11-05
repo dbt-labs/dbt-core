@@ -19,7 +19,7 @@ sources:
     tables:
       - name: test_table
         identifier: source
-        loaded_at_field: updated_at
+        loaded_at_field: "{{ var('test_loaded_at') }}"
         freshness:
           error_after: {count: 18, period: hour}
         columns:
@@ -49,7 +49,7 @@ sources:
         identifier: other_table
       - name: disabled_test_table
         freshness: null
-        loaded_at_field: updated_at
+        loaded_at_field: "{{ var('test_loaded_at') }}"
   - name: other_source
     schema: "{{ var('test_run_schema') }}"
     quoting:
