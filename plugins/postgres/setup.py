@@ -31,7 +31,7 @@ consider retrying with the 'DBT_PSYCOPG2_NAME' environment variable set to
 
 def _dbt_psycopg2_name():
     # if the user chose something, use that
-    package_name = os.getenv('DBT_PSYCOPG2_NAME', '')
+    package_name = os.getenv("DBT_PSYCOPG2_NAME", "")
     if package_name:
         return package_name
 
@@ -70,7 +70,7 @@ setup(
     },
     install_requires=[
         "dbt-core=={}".format(package_version),
-        '{}~=2.8'.format(DBT_PSYCOPG2_NAME),
+        "{}~=2.8".format(DBT_PSYCOPG2_NAME),
     ],
     zip_safe=False,
     classifiers=[
