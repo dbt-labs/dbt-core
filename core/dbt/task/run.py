@@ -303,12 +303,10 @@ class RunTask(CompileTask):
     def _hook_keyfunc(self, hook: ParsedHookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
         if package_name == self.config.project_name:
-            package_name = BiggestName('')
+            package_name = BiggestName("")
         return package_name, hook.index
 
-    def get_hooks_by_type(
-        self, hook_type: RunHookType
-    ) -> List[ParsedHookNode]:
+    def get_hooks_by_type(self, hook_type: RunHookType) -> List[ParsedHookNode]:
 
         if self.manifest is None:
             raise InternalException("self.manifest was None in get_hooks_by_type")
@@ -334,8 +332,8 @@ class RunTask(CompileTask):
             fire_event(EmptyLine())
         fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
 
-        startctx = TimestampNamed('node_started_at')
-        finishctx = TimestampNamed('node_finished_at')
+        startctx = TimestampNamed("node_started_at")
+        finishctx = TimestampNamed("node_finished_at")
 
         for idx, hook in enumerate(ordered_hooks, start=1):
             hook._event_status['started_at'] = datetime.utcnow().isoformat()

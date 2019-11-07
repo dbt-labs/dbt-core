@@ -284,7 +284,7 @@ class NodeMetadata(logbook.Processor):
 
     def process(self, record):
         self.process_keys(record)
-        record.extra['node_index'] = self.index
+        record.extra["node_index"] = self.index
 
 
 class ModelMetadata(NodeMetadata):
@@ -294,7 +294,7 @@ class ModelMetadata(NodeMetadata):
             ("schema", "node_schema"),
             ("database", "node_database"),
             ('original_file_path', 'node_path'),
-            ('name', 'node_name'),
+            ("name", "node_name"),
             ('resource_type', 'resource_type'),
             ('depends_on_nodes', 'depends_on'),
         ]
@@ -313,8 +313,8 @@ class ModelMetadata(NodeMetadata):
 class HookMetadata(NodeMetadata):
     def mapping_keys(self):
         return [
-            ('name', 'node_name'),
-            ('resource_type', 'resource_type'),
+            ("name", "node_name"),
+            ("resource_type", "resource_type"),
         ]
 
 
