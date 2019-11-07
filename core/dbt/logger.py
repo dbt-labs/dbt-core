@@ -334,13 +334,15 @@ DebugWarnings().__enter__()
 _redirect_std_logging()
 
 
-class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
+class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
     def __init__(
         self,
         log_dir: Optional[str] = None,
         level=logbook.DEBUG,
         filter=None,
         bubble=True,
+        max_size=10 * 1024 * 1024,  # 10 mb
+        backup_count=5,
     ) -> None:
         self.disabled = False
         self._msg_buffer: Optional[List[logbook.LogRecord]] = []
@@ -352,6 +354,8 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
         if log_dir is not None:
             self.set_path(log_dir)
         self._text_format_string = None
+        self._max_size = max_size
+        self._backup_count = backup_count
 
     def reset(self):
         if self.initialized:
@@ -384,16 +388,16 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
         self._log_path = log_path
 
     def _super_init(self, log_path):
-        logbook.TimedRotatingFileHandler.__init__(
+        logbook.RotatingFileHandler.__init__(
             self,
             filename=log_path,
             level=self.level,
             filter=self.filter,
+            delay=True,
+            max_size=self._max_size,
+            backup_count=self._backup_count,
             bubble=self.bubble,
             format_string=DEBUG_LOG_FORMAT,
-            date_format='%Y-%m-%d',
-            backup_count=7,
-            timed_filename_for_current=False,
         )
         FormatterMixin.__init__(self, DEBUG_LOG_FORMAT)
 
@@ -506,13 +510,13 @@ class LogManager(logbook.NestedSetup):
         if error is None:
             error = stream
 
-        if self._output_handler.stream is self.stdout_stream:
+        if self._output_handler.stream is self.stdout:
             self._output_handler.stream = stream
-        elif self._output_handler.stream is self.stderr_stream:
+        elif self._output_handler.stream is self.stderr:
             self._output_handler.stream = error
 
-        self.stdout_stream = stream
-        self.stderr_stream = error
+        self.stdout = stream
+        self.stderr = error
 
 
 log_manager = LogManager()

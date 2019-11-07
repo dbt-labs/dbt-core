@@ -31,8 +31,8 @@ class TestSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
         test_results = self.run_schema_validations()
-        # If the disabled model's tests ran, there would be 19 of these.
-        self.assertEqual(len(test_results), 18)
+        # If the disabled model's tests ran, there would be 20 of these.
+        self.assertEqual(len(test_results), 19)
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail

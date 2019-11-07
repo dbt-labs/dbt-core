@@ -21,7 +21,8 @@ class RuntimeConfig(Project, Profile):
                  docs_paths, target_path, snapshot_paths, clean_targets,
                  log_path, modules_path, quoting, models, on_run_start,
                  on_run_end, seeds, snapshots, dbt_version, profile_name,
-                 target_name, config, threads, credentials, packages, args):
+                 target_name, config, threads, credentials, packages,
+                 query_comment, args):
         # 'vars'
         self.args = args
         self.cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
@@ -50,7 +51,8 @@ class RuntimeConfig(Project, Profile):
             seeds=seeds,
             snapshots=snapshots,
             dbt_version=dbt_version,
-            packages=packages
+            packages=packages,
+            query_comment=query_comment,
         )
         # 'profile'
         Profile.__init__(
@@ -101,6 +103,7 @@ class RuntimeConfig(Project, Profile):
             snapshots=project.snapshots,
             dbt_version=project.dbt_version,
             packages=project.packages,
+            query_comment=project.query_comment,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             config=profile.config,

@@ -6,7 +6,7 @@ import dbt.exceptions
 from collections.abc import Mapping, Hashable
 from dataclasses import dataclass, fields
 from typing import (
-    Optional, TypeVar, Generic, Any, Type, Dict, Union, List
+    Optional, TypeVar, Generic, Any, Type, Dict, Union, List, Iterator, Tuple
 )
 from typing_extensions import Protocol
 
@@ -16,6 +16,7 @@ from hologram.helpers import StrEnum
 from dbt.contracts.util import Replaceable
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedNode
+from dbt.exceptions import InternalException
 from dbt import deprecations
 
 
@@ -105,6 +106,21 @@ class Path(_ComponentObject[Optional[str]]):
     schema: Optional[str]
     identifier: Optional[str]
 
+    def __post_init__(self):
+        # handle pesky jinja2.Undefined sneaking in here and messing up render
+        if not isinstance(self.database, (type(None), str)):
+            raise dbt.exceptions.CompilationException(
+                'Got an invalid path database: {}'.format(self.database)
+            )
+        if not isinstance(self.schema, (type(None), str)):
+            raise dbt.exceptions.CompilationException(
+                'Got an invalid path schema: {}'.format(self.schema)
+            )
+        if not isinstance(self.identifier, (type(None), str)):
+            raise dbt.exceptions.CompilationException(
+                'Got an invalid path identifier: {}'.format(self.identifier)
+            )
+
     def get_lowered_part(self, key: ComponentName) -> Optional[str]:
         part = self.get_part(key)
         if part is not None:
@@ -146,14 +162,6 @@ class BaseRelation(FakeAPIObject, Hashable):
     @classmethod
     def get_default_quote_policy(cls: Type[Self]) -> Policy:
         return cls._get_field_named('quote_policy').default
-
-    @classmethod
-    def get_default_include_policy(cls: Type[Self]) -> Policy:
-        return cls._get_field_named('include_policy').default
-
-    @classmethod
-    def get_relation_type_class(cls: Type[Self]) -> Type[RelationType]:
-        return cls._get_field_named('type')
 
     def get(self, key, default=None):
         """Override `.get` to return a metadata object so we don't break
@@ -200,6 +208,9 @@ class BaseRelation(FakeAPIObject, Hashable):
 
         return exact_match
 
+    def replace_path(self, **kwargs):
+        return self.replace(path=self.path.replace(**kwargs))
+
     def quote(
         self: Self,
         database: Optional[bool] = None,
@@ -230,46 +241,32 @@ class BaseRelation(FakeAPIObject, Hashable):
         new_include_policy = self.include_policy.replace_dict(policy)
         return self.replace(include_policy=new_include_policy)
 
-    def information_schema(self: Self, identifier=None) -> Self:
-        include_policy = self.include_policy.replace(
-            database=self.database is not None,
-            schema=True,
-            identifier=identifier is not None
-        )
-        quote_policy = self.quote_policy.replace(
-            schema=False,
-            identifier=False,
-        )
+    def information_schema(self, view_name=None) -> 'InformationSchema':
+        # some of our data comes from jinja, where things can be `Undefined`.
+        if not isinstance(view_name, str):
+            view_name = None
 
-        path = self.path.replace(
-            schema='information_schema',
-            identifier=identifier,
-        )
+        return InformationSchema.from_relation(self, view_name)
 
-        return self.replace(
-            quote_policy=quote_policy,
-            include_policy=include_policy,
-            path=path,
-        )
-
-    def information_schema_only(self: Self) -> Self:
+    def information_schema_only(self) -> 'InformationSchema':
         return self.information_schema()
 
-    def information_schema_table(self: Self, identifier: str) -> Self:
-        return self.information_schema(identifier)
+    def _render_iterator(
+        self
+    ) -> Iterator[Tuple[Optional[ComponentName], Optional[str]]]:
+
+        for key in ComponentName:
+            path_part: Optional[str] = None
+            if self.include_policy.get_part(key):
+                path_part = self.path.get_part(key)
+                if path_part is not None and self.quote_policy.get_part(key):
+                    path_part = self.quoted(path_part)
+            yield key, path_part
 
     def render(self) -> str:
-        parts: List[str] = []
-
-        for k in ComponentName:
-            if self.include_policy.get_part(k):
-                path_part = self.path.get_part(k)
-
-                if path_part is not None:
-                    part: str = path_part
-                    if self.quote_policy.get_part(k):
-                        part = self.quoted(path_part)
-                    parts.append(part)
+        parts: List[str] = [
+            part for _, part in self._render_iterator() if part is not None
+        ]
 
         if len(parts) == 0:
             raise dbt.exceptions.RuntimeException(
@@ -330,10 +327,18 @@ class BaseRelation(FakeAPIObject, Hashable):
         **kwargs: Any,
     ) -> Self:
         if node.resource_type == NodeType.Source:
-            assert isinstance(node, ParsedSourceDefinition)
+            if not isinstance(node, ParsedSourceDefinition):
+                raise InternalException(
+                    'type mismatch, expected ParsedSourceDefinition but got {}'
+                    .format(type(node))
+                )
             return cls.create_from_source(node, **kwargs)
         else:
-            assert isinstance(node, (ParsedNode, CompiledNode))
+            if not isinstance(node, (ParsedNode, CompiledNode)):
+                raise InternalException(
+                    'type mismatch, expected ParsedNode or CompiledNode but '
+                    'got {}'.format(type(node))
+                )
             return cls.create_from_node(config, node, **kwargs)
 
     @classmethod
@@ -416,3 +421,70 @@ class BaseRelation(FakeAPIObject, Hashable):
     @classproperty
     def RelationType(cls) -> Type[RelationType]:
         return RelationType
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class InformationSchema(BaseRelation):
+    information_schema_view: Optional[str] = None
+
+    def __post_init__(self):
+        if not isinstance(self.information_schema_view, (type(None), str)):
+            raise dbt.exceptions.CompilationException(
+                'Got an invalid name: {}'.format(self.information_schema_view)
+            )
+
+    @classmethod
+    def get_path(
+        cls, relation: BaseRelation, information_schema_view: Optional[str]
+    ) -> Path:
+        return Path(
+            database=relation.database,
+            schema=relation.schema,
+            identifier='INFORMATION_SCHEMA',
+        )
+
+    @classmethod
+    def get_include_policy(
+        cls,
+        relation,
+        information_schema_view: Optional[str],
+    ) -> Policy:
+        return relation.include_policy.replace(
+            database=relation.database is not None,
+            schema=False,
+            identifier=True,
+        )
+
+    @classmethod
+    def get_quote_policy(
+        cls,
+        relation,
+        information_schema_view: Optional[str],
+    ) -> Policy:
+        return relation.quote_policy.replace(
+            identifier=False,
+        )
+
+    @classmethod
+    def from_relation(
+        cls: Self,
+        relation: BaseRelation,
+        information_schema_view: Optional[str],
+    ) -> Self:
+        include_policy = cls.get_include_policy(
+            relation, information_schema_view
+        )
+        quote_policy = cls.get_quote_policy(relation, information_schema_view)
+        path = cls.get_path(relation, information_schema_view)
+        return cls(
+            type=RelationType.View,
+            path=path,
+            include_policy=include_policy,
+            quote_policy=quote_policy,
+            information_schema_view=information_schema_view,
+        )
+
+    def _render_iterator(self):
+        for k, v in super()._render_iterator():
+            yield k, v
+        yield None, self.information_schema_view

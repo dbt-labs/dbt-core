@@ -723,7 +723,7 @@ class TestRPCServerCompileRun(HasRPCServer):
         ).json()
         error_data = self.assertIsErrorWith(data, 10003, 'Database Error', {
             'type': 'DatabaseException',
-            'message': 'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^',
+            'message': 'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 2: hi this is not sql\n          ^',
             'compiled_sql': 'hi this is not sql',
             'raw_sql': 'hi this is not sql',
         })

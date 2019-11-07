@@ -1,20 +1,12 @@
 import json
-import multiprocessing
 import os
-import random
-import signal
-import socket
-import time
-from base64 import standard_b64encode as b64
 from datetime import datetime, timedelta
 
-import requests
-from pytest import mark
+import yaml
 
 from dbt.exceptions import CompilationException
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyStringWith
-from dbt.main import handle_and_check
 
 
 class BaseSourcesTest(DBTIntegrationTest):
@@ -42,8 +34,11 @@ class BaseSourcesTest(DBTIntegrationTest):
         super().tearDown()
 
     def run_dbt_with_vars(self, cmd, *args, **kwargs):
-        cmd.extend(['--vars',
-                    '{{test_run_schema: {}}}'.format(self.unique_schema())])
+        vars_dict = {
+            'test_run_schema': self.unique_schema(),
+            'test_loaded_at': self.adapter.quote('updated_at'),
+        }
+        cmd.extend(['--vars', yaml.safe_dump(vars_dict)])
         return self.run_dbt(cmd, *args, **kwargs)
 
 
@@ -63,10 +58,15 @@ class SuccessfulSourcesTest(BaseSourcesTest):
         insert_id = self._id
         self._id += 1
         raw_sql = """INSERT INTO {schema}.{source}
-            (favorite_color,id,first_name,email,ip_address,updated_at)
+            ({quoted_columns})
         VALUES (
             'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
         )"""
+        quoted_columns = ','.join(
+            self.adapter.quote(c) if self.adapter_type != 'bigquery' else c
+            for c in
+            ('favorite_color', 'id', 'first_name', 'email', 'ip_address', 'updated_at')
+        )
         self.run_sql(
             raw_sql,
             kwargs={
@@ -74,6 +74,7 @@ class SuccessfulSourcesTest(BaseSourcesTest):
                 'time': timestr,
                 'id': insert_id,
                 'source': self.adapter.quote('source'),
+                'quoted_columns': quoted_columns,
             }
         )
         self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -107,12 +108,12 @@ class TestSources(SuccessfulSourcesTest):
         )
 
     def run_dbt_with_vars(self, cmd, *args, **kwargs):
-        cmd.extend([
-            '--vars',
-            '{{test_run_schema: {}, test_run_alt_schema: {}}}'.format(
-                self.unique_schema(), self.alternative_schema()
-            )
-        ])
+        vars_dict = {
+            'test_run_schema': self.unique_schema(),
+            'test_run_alt_schema': self.alternative_schema(),
+            'test_loaded_at': self.adapter.quote('updated_at'),
+        }
+        cmd.extend(['--vars', yaml.safe_dump(vars_dict)])
         return self.run_dbt(cmd, *args, **kwargs)
 
     @use_profile('postgres')

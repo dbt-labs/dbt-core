@@ -39,9 +39,11 @@ class TestSnowflakeAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
+            'query-comment': 'dbt',
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.assertEqual(self.config.query_comment, 'dbt')
 
         self.handle = mock.MagicMock(
             spec=snowflake_connector.SnowflakeConnection)
@@ -58,13 +60,18 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
+
+        self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
+
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
-
 
     def tearDown(self):
         # we want a unique self.handle every time.
         self.adapter.cleanup_connections()
+        self.qh_patch.stop()
         self.patcher.stop()
         self.load_patch.stop()
 
@@ -75,7 +82,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
 
         self.mock_execute.assert_has_calls([
-            mock.call('drop schema if exists test_database."test_schema" cascade', None)
+            mock.call('/* dbt */\ndrop schema if exists test_database."test_schema" cascade', None)
         ])
 
     def test_quoting_on_drop(self):
@@ -90,7 +97,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.mock_execute.assert_has_calls([
             mock.call(
-                'drop table if exists test_database."test_schema".test_table cascade',
+                '/* dbt */\ndrop table if exists test_database."test_schema".test_table cascade',
                 None
             )
         ])
@@ -106,7 +113,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.adapter.truncate_relation(relation)
 
         self.mock_execute.assert_has_calls([
-            mock.call('truncate table test_database."test_schema".test_table', None)
+            mock.call('/* dbt */\ntruncate table test_database."test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
@@ -131,7 +138,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.mock_execute.assert_has_calls([
             mock.call(
-                'alter table test_database."test_schema".table_a rename to test_database."test_schema".table_b',
+                '/* dbt */\nalter table test_database."test_schema".table_a rename to test_database."test_schema".table_b',
                 None
             )
         ])
@@ -143,7 +150,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         execute_side_effect = self.mock_execute.side_effect
 
         def execute_effect(sql, *args, **kwargs):
-            if sql == 'select current_warehouse() as warehouse':
+            if sql == '/* dbt */\nselect current_warehouse() as warehouse':
                 self.cursor.description = [['name']]
                 self.cursor.fetchall.return_value = [[response]]
             else:
@@ -178,12 +185,12 @@ class TestSnowflakeAdapter(unittest.TestCase):
             result = self.adapter.pre_model_hook(config)
             self.assertIsNotNone(result)
             calls = [
-                mock.call('select current_warehouse() as warehouse', None),
-                mock.call('use warehouse other_warehouse', None)
+                mock.call('/* dbt */\nselect current_warehouse() as warehouse', None),
+                mock.call('/* dbt */\nuse warehouse other_warehouse', None)
             ]
             self.mock_execute.assert_has_calls(calls)
             self.adapter.post_model_hook(config, result)
-            calls.append(mock.call('use warehouse warehouse', None))
+            calls.append(mock.call('/* dbt */\nuse warehouse warehouse', None))
             self.mock_execute.assert_has_calls(calls)
 
     def test_pre_post_hooks_no_warehouse(self):

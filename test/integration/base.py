@@ -324,12 +324,9 @@ class DBTIntegrationTest(unittest.TestCase):
         os.chdir(self.initial_dir)
         # before we go anywhere, collect the initial path info
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
-        print('initial_dir={}'.format(self.initial_dir))
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
-        print('test_original_source_path={}'.format(self.test_original_source_path))
         self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
-        print('test_root_dir={}'.format(self.test_root_dir))
         os.chdir(self.test_root_dir)
         try:
             self._symlink_test_folders()
@@ -462,9 +459,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
-            self.adapter.drop_schema(
-                database, schema
-            )
+            self.adapter.drop_schema(database, schema)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.DROP_SCHEMA_STATEMENT.format(schema_fqn))
@@ -490,9 +485,11 @@ class DBTIntegrationTest(unittest.TestCase):
             self._get_schema_fqn(self.default_database, schema)
         )
         # on postgres/redshift, this will make you sad
-        drop_alternative = self.setup_alternate_db and \
-                self.adapter_type not in {'postgres', 'redshift'} and \
-                self.alternative_database
+        drop_alternative = (
+            self.setup_alternate_db and
+            self.adapter_type not in {'postgres', 'redshift'} and
+            self.alternative_database
+        )
         if drop_alternative:
             self._created_schemas.add(
                 self._get_schema_fqn(self.alternative_database, schema)

@@ -2,7 +2,6 @@ import unittest
 from unittest import mock
 
 import dbt.flags as flags
-import dbt.parser.manifest
 from dbt.task.debug import DebugTask
 
 from dbt.adapters.postgres import PostgresAdapter
@@ -10,7 +9,7 @@ from dbt.exceptions import ValidationException, DbtConfigError
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
 from psycopg2 import extensions as psycopg2_extensions
-from psycopg2 import DatabaseError, Error
+from psycopg2 import DatabaseError
 import agate
 
 from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection
@@ -217,7 +216,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
@@ -227,12 +226,12 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_execute = self.cursor.execute
         self.patcher = mock.patch('dbt.adapters.postgres.connections.psycopg2')
         self.psycopg2 = self.patcher.start()
-        # there must be a better way to do this...
-        self.psycopg2.DatabaseError = DatabaseError
-        self.psycopg2.Error = Error
 
         self.psycopg2.connect.return_value = self.handle
         self.adapter = PostgresAdapter(self.config)
+        self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
 
@@ -243,6 +242,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
     def tearDown(self):
         # we want a unique self.handle every time.
         self.adapter.cleanup_connections()
+        self.qh_patch.stop()
         self.patcher.stop()
         self.load_patch.stop()
 
@@ -250,7 +250,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.adapter.drop_schema(database='postgres', schema='test_schema')
 
         self.mock_execute.assert_has_calls([
-            mock.call('drop schema if exists "test_schema" cascade', None)
+            mock.call('/* dbt */\ndrop schema if exists "test_schema" cascade', None)
         ])
 
     def test_quoting_on_drop(self):
@@ -263,7 +263,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         )
         self.adapter.drop_relation(relation)
         self.mock_execute.assert_has_calls([
-            mock.call('drop table if exists "postgres"."test_schema".test_table cascade', None)
+            mock.call('/* dbt */\ndrop table if exists "postgres"."test_schema".test_table cascade', None)
         ])
 
     def test_quoting_on_truncate(self):
@@ -276,7 +276,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         )
         self.adapter.truncate_relation(relation)
         self.mock_execute.assert_has_calls([
-            mock.call('truncate table "postgres"."test_schema".test_table', None)
+            mock.call('/* dbt */\ntruncate table "postgres"."test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
@@ -300,13 +300,13 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             to_relation=to_relation
         )
         self.mock_execute.assert_has_calls([
-            mock.call('alter table "postgres"."test_schema".table_a rename to table_b', None)
+            mock.call('/* dbt */\nalter table "postgres"."test_schema".table_a rename to table_b', None)
         ])
 
     def test_debug_connection_ok(self):
         DebugTask.validate_connection(self.target_dict)
         self.mock_execute.assert_has_calls([
-            mock.call('select 1 as id', None)
+            mock.call('/* dbt */\nselect 1 as id', None)
         ])
 
     def test_debug_connection_fail_nopass(self):
@@ -319,6 +319,6 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             with self.assertRaises(DbtConfigError):
                 DebugTask.validate_connection(self.target_dict)
             self.mock_execute.assert_has_calls([
-                mock.call('select 1 as id', None)
+                mock.call('/* dbt */\nselect 1 as id', None)
             ])
 

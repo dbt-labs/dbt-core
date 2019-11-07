@@ -4,7 +4,7 @@ from setuptools import setup
 import os
 
 package_name = "dbt-snowflake"
-package_version = "0.15.0b2"
+package_version = "0.15.0rc1"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -31,6 +31,22 @@ setup(
     install_requires=[
         'dbt-core=={}'.format(package_version),
         'snowflake-connector-python>=1.6.12,<2.1',
+        'azure-storage-blob~=2.1',
+        'azure-storage-common~=2.1',
+        'urllib3<1.25.0',
     ],
     zip_safe=False,
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+
+        'License :: OSI Approved :: Apache Software License',
+
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: POSIX :: Linux',
+
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
 )

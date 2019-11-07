@@ -52,9 +52,8 @@ class RedshiftCredentials(PostgresCredentials):
         return 'redshift'
 
     def _connection_keys(self):
-        return (
-            'host', 'port', 'user', 'database', 'schema', 'method',
-            'search_path')
+        keys = super()._connection_keys()
+        return keys + ('method', 'cluster_id', 'iam_duration_seconds')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):

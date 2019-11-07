@@ -1,7 +1,8 @@
 import abc
+import itertools
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List
 )
 from typing_extensions import Protocol
 
@@ -88,11 +89,19 @@ class Credentials(
             'type not implemented for base credentials class'
         )
 
-    def connection_info(self) -> Iterable[Tuple[str, Any]]:
+    def connection_info(
+        self, *, with_aliases: bool = False
+    ) -> Iterable[Tuple[str, Any]]:
         """Return an ordered iterator of key/value pairs for pretty-printing.
         """
-        as_dict = self.to_dict()
-        for key in self._connection_keys():
+        as_dict = self.to_dict(omit_none=False, with_aliases=with_aliases)
+        connection_keys = set(self._connection_keys())
+        aliases: List[str] = []
+        if with_aliases:
+            aliases = [
+                k for k, v in self._ALIASES.items() if v in connection_keys
+            ]
+        for key in itertools.chain(self._connection_keys(), aliases):
             if key in as_dict:
                 yield key, as_dict[key]
 
@@ -109,7 +118,7 @@ class Credentials(
     def translate_aliases(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         return translate_aliases(kwargs, cls._ALIASES)
 
-    def to_dict(self, omit_none=True, validate=False, with_aliases=False):
+    def to_dict(self, omit_none=True, validate=False, *, with_aliases=False):
         serialized = super().to_dict(omit_none=omit_none, validate=validate)
         if with_aliases:
             serialized.update({
@@ -122,3 +131,7 @@ class Credentials(
 
 class HasCredentials(Protocol):
     credentials: Credentials
+
+
+class AdapterRequiredConfig(HasCredentials):
+    query_comment: Optional[str]

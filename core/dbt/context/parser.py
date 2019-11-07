@@ -135,9 +135,9 @@ def generate(model, runtime_config, manifest, source_config):
     # have to acquire it.
     # In the future, it would be nice to lazily open the connection, as in some
     # projects it would be possible to parse without connecting to the db
-    with get_adapter(runtime_config).connection_named(model.name):
+    with get_adapter(runtime_config).connection_for(model):
         return dbt.context.common.generate(
-            model, runtime_config, manifest, source_config, Provider()
+            model, runtime_config, manifest, Provider(), source_config
         )
 
 

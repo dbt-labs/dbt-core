@@ -2,7 +2,8 @@ import codecs
 import linecache
 import os
 import tempfile
-from typing import List, Union, Set, Optional
+from contextlib import contextmanager
+from typing import List, Union, Set, Optional, Dict, Any, Callable, Iterator
 
 import jinja2
 import jinja2._compat
@@ -113,28 +114,96 @@ class TemplateCache:
 template_cache = TemplateCache()
 
 
-def macro_generator(node):
-    def apply_context(context):
-        def call(*args, **kwargs):
-            name = node.name
-            template = template_cache.get_node_template(node)
-            module = template.make_module(context, False, context)
+class BaseMacroGenerator:
+    def __init__(self, context: Optional[Dict[str, Any]] = None) -> None:
+        self.context: Optional[Dict[str, Any]] = context
 
-            macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
-            module.__dict__.update(context)
+    def get_template(self):
+        raise NotImplementedError('get_template not implemented!')
 
+    def get_name(self) -> str:
+        raise NotImplementedError('get_name not implemented!')
+
+    def get_macro(self):
+        name = self.get_name()
+        template = self.get_template()
+        # make the module. previously we set both vars and local, but that's
+        # redundant: They both end up in the same place
+        module = template.make_module(vars=self.context, shared=False)
+        macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
+        module.__dict__.update(self.context)
+        return macro
+
+    @contextmanager
+    def exception_handler(self) -> Iterator[None]:
+        try:
+            yield
+        except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
+            dbt.exceptions.raise_compiler_error(str(e))
+
+    def call_macro(self, *args, **kwargs):
+        if self.context is None:
+            raise dbt.exceptions.InternalException(
+                'Context is still None in call_macro!'
+            )
+        assert self.context is not None
+
+        macro = self.get_macro()
+
+        with self.exception_handler():
             try:
                 return macro(*args, **kwargs)
             except dbt.exceptions.MacroReturn as e:
                 return e.value
-            except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-                dbt.exceptions.raise_compiler_error(str(e), node)
-            except dbt.exceptions.CompilationException as e:
-                e.stack.append(node)
-                raise e
 
-        return call
-    return apply_context
+
+class MacroGenerator(BaseMacroGenerator):
+    def __init__(self, node, context: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(context)
+        self.node = node
+
+    def get_template(self):
+        return template_cache.get_node_template(self.node)
+
+    def get_name(self) -> str:
+        return self.node.name
+
+    @contextmanager
+    def exception_handler(self) -> Iterator[None]:
+        try:
+            yield
+        except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
+            dbt.exceptions.raise_compiler_error(str(e), self.node)
+        except dbt.exceptions.CompilationException as e:
+            e.stack.append(self.node)
+            raise e
+
+    def __call__(self, context: Dict[str, Any]) -> Callable:
+        self.context = context
+        return self.call_macro
+
+
+class QueryStringGenerator(BaseMacroGenerator):
+    def __init__(
+        self, template_str: str, context: Dict[str, Any]
+    ) -> None:
+        super().__init__(context)
+        self.template_str: str = template_str
+        env = get_environment()
+        self.template = env.from_string(
+            self.template_str,
+            globals=self.context,
+        )
+
+    def get_name(self) -> str:
+        return 'query_comment_macro'
+
+    def get_template(self):
+        """Don't use the template cache, we don't have a node"""
+        return self.template
+
+    def __call__(self, connection_name: str, node) -> str:
+        return str(self.call_macro(connection_name, node))
 
 
 class MaterializationExtension(jinja2.ext.Extension):

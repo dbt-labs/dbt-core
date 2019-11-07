@@ -133,10 +133,10 @@
   {%- set tmp_column = column_name + "__dbt_alter" -%}
 
   {% call statement('alter_column_type') %}
-    alter table {{ relation }} add column {{ tmp_column }} {{ new_column_type }};
-    update {{ relation }} set {{ tmp_column }} = {{ column_name }};
-    alter table {{ relation }} drop column {{ column_name }} cascade;
-    alter table {{ relation }} rename column {{ tmp_column }} to {{ column_name }}
+    alter table {{ relation }} add column {{ adapter.quote(tmp_column) }} {{ new_column_type }};
+    update {{ relation }} set {{ adapter.quote(tmp_column) }} = {{ adapter.quote(column_name) }};
+    alter table {{ relation }} drop column {{ adapter.quote(column_name) }} cascade;
+    alter table {{ relation }} rename column {{ adapter.quote(tmp_column) }} to {{ adapter.quote(column_name) }}
   {% endcall %}
 
 {% endmacro %}
@@ -182,9 +182,9 @@
 
 {% macro default__information_schema_name(database) -%}
   {%- if database -%}
-    {{ adapter.quote_as_configured(database, 'database') }}.information_schema
+    {{ adapter.quote_as_configured(database, 'database') }}.INFORMATION_SCHEMA
   {%- else -%}
-    information_schema
+    INFORMATION_SCHEMA
   {%- endif -%}
 {%- endmacro %}
 
@@ -194,12 +194,12 @@
 {% endmacro %}
 
 {% macro default__list_schemas(database) -%}
-  {% call statement('list_schemas', fetch_result=True, auto_begin=False) %}
+  {% set sql %}
     select distinct schema_name
-    from {{ information_schema_name(database) }}.schemata
+    from {{ information_schema_name(database) }}.SCHEMATA
     where catalog_name ilike '{{ database }}'
-  {% endcall %}
-  {{ return(load_result('list_schemas').table) }}
+  {% endset %}
+  {{ return(run_query(sql)) }}
 {% endmacro %}
 
 
@@ -208,13 +208,13 @@
 {% endmacro %}
 
 {% macro default__check_schema_exists(information_schema, schema) -%}
-  {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) -%}
+  {% set sql -%}
         select count(*)
-        from {{ information_schema }}.schemata
+        from {{ information_schema.replace(information_schema_view='SCHEMATA') }}
         where catalog_name='{{ information_schema.database }}'
           and schema_name='{{ schema }}'
-  {%- endcall %}
-  {{ return(load_result('check_schema_exists').table) }}
+  {%- endset %}
+  {{ return(run_query(sql)) }}
 {% endmacro %}
 
 
