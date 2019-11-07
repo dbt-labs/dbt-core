@@ -3,6 +3,7 @@ from setuptools import find_namespace_packages
 from setuptools import setup
 import os
 
+
 package_name = "dbt-redshift"
 package_version = "0.15.0rc1"
 description = """The redshift adapter plugin for dbt (data build tool)"""
@@ -33,7 +34,6 @@ setup(
         'dbt-postgres=={}'.format(package_version),
         'boto3>=1.6.23,<1.10.0',
         'botocore>=1.9.23,<1.13.0',
-        'psycopg2>=2.7.5,<2.8',
     ],
     zip_safe=False,
     classifiers=[
