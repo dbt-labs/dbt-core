@@ -623,7 +623,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                if conn.handle and conn.handle.closed != 0:
+                if conn.handle and not conn.handle.is_closed():
                     conn.handle.rollback()
                 print(sql)
                 print(e)
