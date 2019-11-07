@@ -12,7 +12,7 @@ from dbt.logger import (
     UniqueID,
     TimestampNamed,
     DbtModelState,
-    NodeMetadata,
+    ModelMetadata,
     NodeCount,
 )
 from dbt.compilation import compile_manifest
@@ -124,7 +124,7 @@ class GraphRunnableTask(ManifestTask):
         with RUNNING_STATE, uid_context:
             startctx = TimestampNamed('node_started_at')
             index = self.index_offset(runner.node_index)
-            extended_metadata = NodeMetadata(runner.node, index)
+            extended_metadata = ModelMetadata(runner.node, index)
             with startctx, extended_metadata:
                 logger.debug('Began running node {}'.format(
                     runner.node.unique_id))

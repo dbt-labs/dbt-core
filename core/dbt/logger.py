@@ -265,9 +265,9 @@ class NodeCount(logbook.Processor):
         record.extra['node_count'] = self.node_count
 
 
-class ModelMetadata(logbook.Processor):
-    def __init__(self, model, index):
-        self.model = model
+class NodeMetadata(logbook.Processor):
+    def __init__(self, node, index):
+        self.node = node
         self.index = index
         super().__init__()
 
@@ -276,7 +276,7 @@ class ModelMetadata(logbook.Processor):
 
     def process_keys(self, record):
         for attr, key in self.mapping_keys():
-            value = getattr(self.model, attr, None)
+            value = getattr(self.node, attr, None)
             if value is not None:
                 record.extra[key] = value
 
@@ -285,7 +285,7 @@ class ModelMetadata(logbook.Processor):
         record.extra['node_index'] = self.index
 
 
-class NodeMetadata(ModelMetadata):
+class ModelMetadata(NodeMetadata):
     def mapping_keys(self):
         return [
             ('alias', 'node_alias'),
@@ -297,8 +297,8 @@ class NodeMetadata(ModelMetadata):
         ]
 
     def process_config(self, record):
-        if hasattr(self.model, 'config'):
-            materialized = getattr(self.model.config, 'materialized', None)
+        if hasattr(self.node, 'config'):
+            materialized = getattr(self.node.config, 'materialized', None)
             if materialized is not None:
                 record.extra['node_materialized'] = materialized
 
@@ -307,7 +307,7 @@ class NodeMetadata(ModelMetadata):
         self.process_config(record)
 
 
-class HookMetadata(ModelMetadata):
+class HookMetadata(NodeMetadata):
     def mapping_keys(self):
         return [
             ('name', 'node_name'),
