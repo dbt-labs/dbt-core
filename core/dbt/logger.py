@@ -300,8 +300,8 @@ class ModelMetadata(NodeMetadata):
         ]
 
     def process_config(self, record):
-        if hasattr(self.node, 'config'):
-            materialized = getattr(self.node.config, 'materialized', None)
+        if hasattr(self.node, "config"):
+            materialized = getattr(self.node.config, "materialized", None)
             if materialized is not None:
                 record.extra["node_materialized"] = materialized
 
