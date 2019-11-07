@@ -265,30 +265,54 @@ class NodeCount(logbook.Processor):
         record.extra['node_count'] = self.node_count
 
 
-class NodeMetadata(logbook.Processor):
-    def __init__(self, node, node_index):
-        self.node = node
-        self.node_index = node_index
+class ModelMetadata(logbook.Processor):
+    def __init__(self, model, index):
+        self.model = model
+        self.index = index
         super().__init__()
 
+    def mapping_keys(self):
+        return []
+
+    def process_keys(self, record):
+        for attr, key in self.mapping_keys():
+            value = getattr(self.model, attr, None)
+            if value is not None:
+                record.extra[key] = value
+
     def process(self, record):
-        keys = [
+        self.process_keys(record)
+        record.extra['node_index'] = self.index
+
+
+class NodeMetadata(ModelMetadata):
+    def mapping_keys(self):
+        return [
             ('alias', 'node_alias'),
             ('schema', 'node_schema'),
             ('database', 'node_database'),
-            ('name', 'node_name'),
             ('original_file_path', 'node_path'),
+            ('name', 'node_name'),
             ('resource_type', 'resource_type'),
         ]
-        for attr, key in keys:
-            value = getattr(self.node, attr, None)
-            if value is not None:
-                record.extra[key] = value
-        record.extra['node_index'] = self.node_index
-        if hasattr(self.node, 'config'):
-            materialized = getattr(self.node.config, 'materialized', None)
+
+    def process_config(self, record):
+        if hasattr(self.model, 'config'):
+            materialized = getattr(self.model.config, 'materialized', None)
             if materialized is not None:
                 record.extra['node_materialized'] = materialized
+
+    def process(self, record):
+        super().process(record)
+        self.process_config(record)
+
+
+class HookMetadata(ModelMetadata):
+    def mapping_keys(self):
+        return [
+            ('name', 'node_name'),
+            ('resource_type', 'resource_type'),
+        ]
 
 
 class TimestampNamed(JsonOnly):

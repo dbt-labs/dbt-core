@@ -1,7 +1,15 @@
 import functools
 import time
+from typing import List
 
-from dbt.logger import GLOBAL_LOGGER as logger, TextOnly
+from dbt.logger import (
+    GLOBAL_LOGGER as logger,
+    TextOnly,
+    HookMetadata,
+    UniqueID,
+    TimestampNamed,
+    DbtModelState,
+)
 from dbt.node_types import NodeType, RunHookType
 from dbt.node_runners import ModelRunner
 
@@ -16,6 +24,7 @@ from dbt.ui.printer import \
     get_counts
 
 from dbt.compilation import compile_node
+from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.task.compile import CompileTask
 from dbt.utils import get_nodes_by_tags
 
@@ -40,7 +49,7 @@ class Timer:
 
 
 @functools.total_ordering
-class BiggestName:
+class BiggestName(str):
     def __lt__(self, other):
         return True
 
@@ -48,10 +57,18 @@ class BiggestName:
         return isinstance(other, self.__class__)
 
 
+def _hook_list() -> List[ParsedHookNode]:
+    return []
+
+
 class RunTask(CompileTask):
     def __init__(self, args, config):
         super().__init__(args, config)
         self.ran_hooks = []
+        self._total_executed = 0
+
+    def index_offset(self, value: int) -> int:
+        return self._total_executed + value
 
     def raise_on_first_error(self):
         return False
@@ -67,20 +84,22 @@ class RunTask(CompileTask):
         hook_obj = get_hook(statement, index=hook_index)
         return hook_obj.sql or ''
 
-    def _hook_keyfunc(self, hook):
+    def _hook_keyfunc(self, hook: ParsedHookNode):
         package_name = hook.package_name
         if package_name == self.config.project_name:
-            package_name = BiggestName()
+            package_name = BiggestName('')
         return package_name, hook.index
 
-    def get_hooks_by_type(self, hook_type):
+    def get_hooks_by_type(
+        self, hook_type: RunHookType
+    ) -> List[ParsedHookNode]:
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 
-    def run_hooks(self, adapter, hook_type, extra_context):
+    def run_hooks(self, adapter, hook_type: RunHookType, extra_context):
         ordered_hooks = self.get_hooks_by_type(hook_type)
 
         # on-run-* hooks should run outside of a transaction. This happens
@@ -97,6 +116,8 @@ class RunTask(CompileTask):
         print_timestamped_line(
             'Running {} {} {}'.format(num_hooks, hook_type, plural)
         )
+        startctx = TimestampNamed('node_started_at')
+        finishctx = TimestampNamed('node_finished_at')
 
         for idx, hook in enumerate(ordered_hooks, start=1):
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
@@ -105,6 +126,11 @@ class RunTask(CompileTask):
             hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
                                           hook.index)
             print_hook_start_line(hook_text, idx, num_hooks)
+
+            hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
+            uid_ctx = UniqueID(hook.unique_id)
+            with uid_ctx, hook_meta_ctx, startctx:
+                logger.debug('on-run-hook starting')
             status = 'OK'
 
             with Timer() as timer:
@@ -113,13 +139,18 @@ class RunTask(CompileTask):
                                                 fetch=False)
             self.ran_hooks.append(hook)
 
+            with uid_ctx, finishctx, DbtModelState({'node_status': status}):
+                logger.debug('on-run-hook complete')
+
             print_hook_end_line(hook_text, status, idx, num_hooks,
                                 timer.elapsed)
+
+        self._total_executed += len(ordered_hooks)
 
         with TextOnly():
             print_timestamped_line("")
 
-    def safe_run_hooks(self, adapter, hook_type, extra_context):
+    def safe_run_hooks(self, adapter, hook_type: RunHookType, extra_context):
         try:
             self.run_hooks(adapter, hook_type, extra_context)
         except dbt.exceptions.RuntimeException:
@@ -161,6 +192,7 @@ class RunTask(CompileTask):
                                 {'schemas': schemas, 'results': results})
 
     def after_hooks(self, adapter, results, elapsed):
+        self._total_executed += len(results)
         self.print_results_line(results, elapsed)
 
     def build_query(self):
