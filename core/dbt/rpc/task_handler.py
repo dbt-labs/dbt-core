@@ -179,7 +179,7 @@ def get_results_context(
 
     with manifest_blocking:
         yield
-        if RemoteMethodFlags.RequiresManifestReloadAfter:
+        if RemoteMethodFlags.RequiresManifestReloadAfter in flags:
             manager.parse_manifest()
 
 
