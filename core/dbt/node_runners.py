@@ -546,12 +546,13 @@ class TestRunner(CompileRunner):
             fetch=True)
 
         num_rows = len(table.rows)
-        if num_rows > 1:
+        if num_rows != 1:
             num_cols = len(table.columns)
-            raise RuntimeError(
-                "Bad test {name}: Returned {rows} rows and {cols} cols"
-                .format(name=test.name, rows=num_rows, cols=num_cols))
-
+            dbt.exceptions.raise_compiler_error(
+                f"Bad test {test.test_metadata.name}: "
+                f"Returned {num_rows} rows "
+                f"and {num_cols} cols but expected 1 row and 1 column"
+            )
         return table[0][0]
 
     def before_execute(self):
