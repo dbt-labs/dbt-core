@@ -181,7 +181,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
     def test_pre_post_hooks_warehouse(self):
         with self.current_warehouse('warehouse'):
-            config = {'warehouse': 'other_warehouse'}
+            config = {'snowflake_warehouse': 'other_warehouse'}
             result = self.adapter.pre_model_hook(config)
             self.assertIsNotNone(result)
             calls = [

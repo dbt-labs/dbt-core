@@ -13,7 +13,7 @@ class SnowflakeAdapter(SQLAdapter):
 
     AdapterSpecificConfigs = frozenset(
         {"transient", "cluster_by", "automatic_clustering", "secure",
-         "copy_grants", "warehouse"}
+         "copy_grants", "snowflake_warehouse"}
     )
 
     @classmethod
@@ -62,7 +62,7 @@ class SnowflakeAdapter(SQLAdapter):
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Optional[str]:
         default_warehouse = self.config.credentials.warehouse
-        warehouse = config.get('warehouse', default_warehouse)
+        warehouse = config.get('snowflake_warehouse', default_warehouse)
         if warehouse == default_warehouse or warehouse is None:
             return None
         previous = self._get_warehouse()
