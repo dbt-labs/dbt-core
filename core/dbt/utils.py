@@ -8,7 +8,10 @@ import itertools
 import json
 import os
 from enum import Enum
-from typing import Tuple, Type, Any, Optional, TypeVar, Dict
+from typing import (
+    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List
+)
+from typing_extensions import Protocol
 
 import dbt.exceptions
 
@@ -314,7 +317,16 @@ def get_pseudo_hook_path(hook_name):
     return os.path.join(*path_parts)
 
 
-def get_nodes_by_tags(nodes, match_tags, resource_type):
+class _Tagged(Protocol):
+    tags: Iterable[str]
+
+
+Tagged = TypeVar('Tagged', bound=_Tagged)
+
+
+def get_nodes_by_tags(
+    nodes: Iterable[Tagged], match_tags: Set[str], resource_type: NodeType
+) -> List[Tagged]:
     matched_nodes = []
     for node in nodes:
         node_tags = node.tags
