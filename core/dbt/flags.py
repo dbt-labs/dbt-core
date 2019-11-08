@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+from typing import Optional
 # initially all flags are set to None, the on-load call of reset() will set
 # them for their first time.
 STRICT_MODE = None
@@ -9,6 +10,21 @@ WARN_ERROR = None
 TEST_NEW_PARSER = None
 WRITE_JSON = None
 PARTIAL_PARSE = None
+
+
+def env_set_truthy(key: str) -> Optional[str]:
+    """Return the value if it was set to a "truthy" string value, or None
+    otherwise.
+    """
+    value = os.getenv(key)
+    if not value or value.lower() in ('0', 'false', 'f'):
+        return None
+    return value
+
+
+SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
+SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
+MACRO_DEBUGGING = env_set_truthy('DBT_MACRO_DEBUGGING')
 
 
 def _get_context():
