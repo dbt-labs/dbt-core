@@ -16,6 +16,7 @@ import dbt.exceptions
 import dbt.utils
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
+from dbt.flags import MACRO_DEBUGGING
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -79,9 +80,8 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         If the value is 'write', also write the files to disk.
         WARNING: This can write a ton of data if you aren't careful.
         """
-        macro_compile = dbt.utils.env_set_truthy('DBT_MACRO_DEBUGGING')
-        if filename == '<template>' and macro_compile:
-            write = macro_compile == 'write'
+        if filename == '<template>' and MACRO_DEBUGGING:
+            write = MACRO_DEBUGGING == 'write'
             filename = _linecache_inject(source, write)
 
         return super()._compile(source, filename)

@@ -4,7 +4,8 @@ import dbt.exceptions
 import dbt.utils
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ColumnInfo
-from dbt.config import Project
+from dbt.config import RuntimeConfig
+from dbt.flags import SINGLE_THREADED_HANDLER
 
 
 def docs(node, manifest, current_project: str, column_name=None):
@@ -254,19 +255,19 @@ class ParserUtils:
         return manifest
 
     @classmethod
-    def add_new_refs(cls, manifest, current_project: Project, node, macros):
-        """Given a new node that is not in the manifest, copy the manifest and
-        insert the new node into it as if it were part of regular ref
-        processing
+    def add_new_refs(cls, manifest, config: RuntimeConfig, node, macros):
+        """Given a new node that is not in the manifest, insert the new node
+        into it as if it were part of regular ref processing.
         """
-        manifest = manifest.deepcopy()
+        if config.args.single_threaded or SINGLE_THREADED_HANDLER:
+            manifest = manifest.deepcopy()
         # it's ok for macros to silently override a local project macro name
         manifest.macros.update(macros)
 
         manifest.add_nodes({node.unique_id: node})
         cls.process_sources_for_node(
-            manifest, current_project.project_name, node
+            manifest, config.project_name, node
         )
-        cls.process_refs_for_node(manifest, current_project.project_name, node)
-        cls.process_docs_for_node(manifest, current_project.project_name, node)
+        cls.process_refs_for_node(manifest, config.project_name, node)
+        cls.process_docs_for_node(manifest, config.project_name, node)
         return manifest

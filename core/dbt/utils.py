@@ -518,16 +518,6 @@ def pluralize(count, string):
         return "{} {}s".format(count, string)
 
 
-def env_set_truthy(key: str) -> Optional[str]:
-    """Return the value if it was set to a "truthy" string value, or None
-    otherwise.
-    """
-    value = os.getenv(key)
-    if not value or value.lower() in ('0', 'false', 'f'):
-        return None
-    return value
-
-
 def restrict_to(*restrictions):
     """Create the metadata for a restricted dataclass field"""
     return {'restrict': list(restrictions)}

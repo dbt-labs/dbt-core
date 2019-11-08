@@ -37,13 +37,11 @@ from dbt.rpc.logger import (
     QueueTimeoutMessage,
 )
 from dbt.rpc.method import RemoteMethod
-from dbt.utils import env_set_truthy
+from dbt.flags import SINGLE_THREADED_HANDLER
+
 
 # we use this in typing only...
 from queue import Queue  # noqa
-
-
-SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
 
 
 def sigterm_handler(signum, frame):
