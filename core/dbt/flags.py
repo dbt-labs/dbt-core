@@ -63,7 +63,7 @@ def env_set_truthy(key: str) -> Optional[str]:
     otherwise.
     """
     value = os.getenv(key)
-    if not value or value.lower() in ('0', 'false', 'f'):
+    if not value or value.lower() in ("0", "false", "f"):
         return None
     return value
 
@@ -82,7 +82,7 @@ def env_set_path(key: str) -> Optional[Path]:
         return Path(value)
 
 
-MACRO_DEBUGGING = env_set_truthy('DBT_MACRO_DEBUGGING')
+MACRO_DEBUGGING = env_set_truthy("DBT_MACRO_DEBUGGING")
 DEFER_MODE = env_set_truthy('DBT_DEFER_TO_STATE')
 ARTIFACT_STATE_PATH = env_set_path('DBT_ARTIFACT_STATE_PATH')
 ENABLE_LEGACY_LOGGER = env_set_truthy('DBT_ENABLE_LEGACY_LOGGER')
