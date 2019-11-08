@@ -1,10 +1,10 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import threading
-from dbt.adapters.factory import ADAPTER_TYPES
+from dbt.adapters.factory import FACTORY
 
 
 def get_adapter_standalone(config):
-    cls = ADAPTER_TYPES[config.credentials.type]
+    cls = FACTORY.adapter_types[config.credentials.type]
     return cls(config)
 
 
@@ -17,13 +17,13 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         }
 
     def setUp(self):
-        super(BaseTestConcurrentTransaction, self).setUp()
+        super().setUp()
         self._secret_adapter = get_adapter_standalone(self.config)
         self.reset()
 
     def tearDown(self):
         self._secret_adapter.cleanup_connections()
-        super(BaseTestConcurrentTransaction, self).tearDown()
+        super().tearDown()
 
     @property
     def schema(self):
@@ -99,6 +99,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         self.assertEqual(self.query_state['view_model'], 'good')
         self.assertEqual(self.query_state['model_1'], 'good')
 
+
 class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
@@ -109,6 +110,7 @@ class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
         self.reset()
         self.run_test()
 
+
 class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
@@ -118,6 +120,7 @@ class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
     def test__redshift__concurrent_transaction_view(self):
         self.reset()
         self.run_test()
+
 
 class IncrementalTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property

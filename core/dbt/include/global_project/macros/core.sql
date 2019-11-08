@@ -1,6 +1,6 @@
 {% macro statement(name=None, fetch_result=False, auto_begin=True) -%}
   {%- if execute: -%}
-    {%- set sql = render(caller()) -%}
+    {%- set sql = caller() -%}
 
     {%- if name == 'main' -%}
       {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}
@@ -16,7 +16,7 @@
 {%- endmacro %}
 
 {% macro noop_statement(name=None, status=None, res=None) -%}
-  {%- set sql = render(caller()) -%}
+  {%- set sql = caller() -%}
 
   {%- if name == 'main' -%}
     {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}

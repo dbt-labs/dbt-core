@@ -29,7 +29,7 @@ class TestBasePrestoRun(DBTIntegrationTest):
         test_results = self.run_dbt(['test'], expect_pass=False)
 
         for result in test_results:
-            if 'dupe' in result.node.get('name'):
+            if 'dupe' in result.node.name:
                 self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(result.status > 0)
@@ -44,7 +44,7 @@ class TestBasePrestoRun(DBTIntegrationTest):
 
 class TestSimplePrestoRun(TestBasePrestoRun):
     def setUp(self):
-        super(TestSimplePrestoRun, self).setUp()
+        super().setUp()
         for conn in self.adapter.connections.in_use.values():
             conn.transaction_open
 

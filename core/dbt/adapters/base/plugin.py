@@ -1,23 +1,32 @@
-from dbt.config.project import Project
+from typing import List, Optional, Type
+
+from dbt.adapters.base import BaseAdapter, Credentials
 
 
-class AdapterPlugin(object):
+class AdapterPlugin:
     """Defines the basic requirements for a dbt adapter plugin.
 
-    :param type adapter: An adapter class, derived from BaseAdapter
-    :param type credentials: A credentials object, derived from Credentials
-    :param str project_name: The name of this adapter plugin's associated dbt
-        project.
-    :param str include_path: The path to this adapter plugin's root
-    :param Optional[List[str]] dependencies: A list of adapter names that this
-        adapter depends upon.
+    :param include_path: The path to this adapter plugin's root
+    :param dependencies: A list of adapter names that this adapter depends
+        upon.
     """
-    def __init__(self, adapter, credentials, include_path, dependencies=None):
-        self.adapter = adapter
-        self.credentials = credentials
-        self.include_path = include_path
+    def __init__(
+        self,
+        adapter: Type[BaseAdapter],
+        credentials: Type[Credentials],
+        include_path: str,
+        dependencies: Optional[List[str]] = None
+    ):
+        # avoid an import cycle
+        from dbt.config.project import Project
+
+        self.adapter: Type[BaseAdapter] = adapter
+        self.credentials: Type[Credentials] = credentials
+        self.include_path: str = include_path
         project = Project.from_project_root(include_path, {})
-        self.project_name = project.project_name
+        self.project_name: str = project.project_name
+        self.dependencies: List[str]
         if dependencies is None:
-            dependencies = []
-        self.dependencies = dependencies
+            self.dependencies = []
+        else:
+            self.dependencies = dependencies

@@ -10,7 +10,6 @@ import tarfile
 import requests
 import stat
 
-import dbt.compat
 import dbt.exceptions
 import dbt.utils
 
@@ -25,13 +24,13 @@ def find_matching(root_path,
     absolute root path (`relative_paths_to_search`), and a `file_pattern`
     like '*.sql', returns information about the files. For example:
 
-    > find_matching('/root/path', 'models', '*.sql')
+    > find_matching('/root/path', ['models'], '*.sql')
 
       [ { 'absolute_path': '/root/path/models/model_one.sql',
-          'relative_path': 'models/model_one.sql',
+          'relative_path': 'model_one.sql',
           'searched_path': 'models' },
         { 'absolute_path': '/root/path/models/subdirectory/model_two.sql',
-          'relative_path': 'models/subdirectory/model_two.sql',
+          'relative_path': 'subdirectory/model_two.sql',
           'searched_path': 'models' } ]
     """
     matching = []
@@ -46,7 +45,8 @@ def find_matching(root_path,
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
                 relative_path = os.path.relpath(
-                    absolute_path, absolute_path_to_search)
+                    absolute_path, absolute_path_to_search
+                )
 
                 if fnmatch.fnmatch(local_file, file_pattern):
                     matching.append({
@@ -115,7 +115,8 @@ def supports_symlinks():
 
 def write_file(path, contents=''):
     make_directory(os.path.dirname(path))
-    dbt.compat.write_file(path, contents)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(str(contents))
 
     return True
 

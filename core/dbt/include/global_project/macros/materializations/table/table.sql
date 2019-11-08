@@ -56,4 +56,6 @@
   {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+  {{ return({'relations': [target_relation]}) }}
 {% endmaterialization %}

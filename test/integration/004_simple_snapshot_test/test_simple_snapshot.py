@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import dbt.exceptions
 
 
-class TestSimpleSnapshotFiles(DBTIntegrationTest):
+class BaseSimpleSnapshotTest(DBTIntegrationTest):
     NUM_SNAPSHOT_MODELS = 1
 
     @property
@@ -15,19 +15,6 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     def run_snapshot(self):
         return self.run_dbt(['snapshot'])
-
-    @property
-    def project_config(self):
-        return {
-            "data-paths": ['data'],
-            "snapshot-paths": ['test-snapshots-pg'],
-        }
-
-    @use_profile('postgres')
-    def test__postgres_ref_snapshot(self):
-        self.dbt_run_seed_snapshot()
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 1)
 
     def dbt_run_seed_snapshot(self):
         if self.adapter_type == 'postgres':
@@ -47,6 +34,21 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     def assert_expected(self):
         self.assert_case_tables_equal('snapshot_actual', 'snapshot_expected')
+
+
+class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-pg'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres_ref_snapshot(self):
+        self.dbt_run_seed_snapshot()
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
 
     @use_profile('postgres')
     def test__postgres__simple_snapshot(self):
@@ -100,6 +102,77 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
         self.assertIn('not implemented for presto', results[0].error)
 
 
+class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros'],
+            'snapshot-paths': ['test-snapshots-pg-custom'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres_ref_snapshot(self):
+        self.dbt_run_seed_snapshot()
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
+
+    @use_profile('postgres')
+    def test__postgres__simple_custom_snapshot(self):
+        self.dbt_run_seed_snapshot()
+
+        self.assert_expected()
+
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
+
+        results = self.run_snapshot()
+        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
+
+        self.assert_expected()
+
+
+class TestNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros'],
+            'snapshot-paths': ['test-snapshots-pg-custom-namespaced'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__simple_custom_snapshot_namespaced(self):
+        self.dbt_run_seed_snapshot()
+
+        self.assert_expected()
+
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
+
+        results = self.run_snapshot()
+        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
+
+        self.assert_expected()
+
+
+class TestInvalidNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros'],
+            'snapshot-paths': ['test-snapshots-pg-custom-invalid'],
+        }
+
+    def run_snapshot(self):
+        return self.run_dbt(['snapshot'], expect_pass=False)
+
+    @use_profile('postgres')
+    def test__postgres__simple_custom_snapshot_invalid_namespace(self):
+        self.dbt_run_seed_snapshot()
+
+
 class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
     @property
     def schema(self):
@@ -114,7 +187,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
         return {
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-select',
-                              'test-snapshots-pg'],
+                               'test-snapshots-pg'],
         }
 
     @use_profile('postgres')
@@ -157,6 +230,23 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
         self.assertTableDoesNotExist('snapshot_alvarez')
         self.assertTableDoesNotExist('snapshot_kelly')
         self.assertTableDoesNotExist('snapshot_actual')
+
+
+class TestConfiguredSnapshotFileSelects(TestSimpleSnapshotFileSelects):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-select-noconfig'],
+            "snapshots": {
+                "test": {
+                    "target_schema": self.unique_schema(),
+                    "unique_key": "id || '-' || first_name",
+                    'strategy': 'timestamp',
+                    'updated_at': 'updated_at',
+                }
+            }
+        }
 
 
 class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
@@ -358,19 +448,16 @@ class TestBadSnapshot(DBTIntegrationTest):
 
 class TestCheckCols(TestSimpleSnapshotFiles):
     NUM_SNAPSHOT_MODELS = 2
+
     def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
         # When building the equality tests, only test columns that don't start
         # with 'dbt_', because those are time-sensitive
         if columns is None:
             columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
-        return super(TestCheckCols, self)._assertTablesEqualSql(
-            relation_a,
-            relation_b,
-            columns=columns
-        )
+        return super()._assertTablesEqualSql(relation_a, relation_b, columns=columns)
 
     def assert_expected(self):
-        super(TestCheckCols, self).assert_expected()
+        super().assert_expected()
         self.assert_case_tables_equal('snapshot_checkall', 'snapshot_expected')
 
     @property
@@ -381,20 +468,33 @@ class TestCheckCols(TestSimpleSnapshotFiles):
         }
 
 
+class TestConfiguredCheckCols(TestCheckCols):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-check-col-snapshots-noconfig'],
+            "snapshots": {
+                "test": {
+                    "target_schema": self.unique_schema(),
+                    "unique_key": "id || '-' || first_name",
+                    "strategy": "check",
+                    "check_cols": ["email"],
+                }
+            }
+        }
+
+
 class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
     def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
         # When building the equality tests, only test columns that don't start
         # with 'dbt_', because those are time-sensitive
         if columns is None:
             columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
-        return super(TestCheckColsBigquery, self)._assertTablesEqualSql(
-            relation_a,
-            relation_b,
-            columns=columns
-        )
+        return super()._assertTablesEqualSql(relation_a, relation_b, columns=columns)
 
     def assert_expected(self):
-        super(TestCheckColsBigquery, self).assert_expected()
+        super().assert_expected()
         self.assertTablesEqual('snapshot_checkall', 'snapshot_expected')
 
     @property

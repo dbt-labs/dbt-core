@@ -37,9 +37,12 @@
     {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
   {% endif %}
 
-  OPTIONS({% for opt_key, opt_val in opts.items() %}
-    {{ opt_key }}={{ opt_val }}
-  {% endfor %})
+  {% set options -%}
+    OPTIONS({% for opt_key, opt_val in opts.items() %}
+      {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
+    {% endfor %})
+  {%- endset %}
+  {% do return(options) %}
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
@@ -88,7 +91,7 @@
 
 {% macro bigquery__list_relations_without_caching(information_schema, schema) -%}
   {{ return(adapter.list_relations_without_caching(information_schema, schema)) }}
-{% endmacro %}
+{%- endmacro %}
 
 
 {% macro bigquery__current_timestamp() -%}
@@ -96,7 +99,7 @@
 {%- endmacro %}
 
 
-{% macro bigquery__list_schemas(database) %}
+{% macro bigquery__list_schemas(database) -%}
   {{ return(adapter.list_schemas()) }}
 {% endmacro %}
 

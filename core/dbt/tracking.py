@@ -4,8 +4,7 @@ from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
-from dbt.adapters.factory import get_adapter
-
+import logbook
 import pytz
 import platform
 import uuid
@@ -30,10 +29,8 @@ DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
 class TimeoutEmitter(Emitter):
     def __init__(self):
-        super(TimeoutEmitter, self).__init__(COLLECTOR_URL,
-                                             protocol=COLLECTOR_PROTOCOL,
-                                             buffer_size=1,
-                                             on_failure=self.handle_failure)
+        super().__init__(COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL,
+                         buffer_size=1, on_failure=self.handle_failure)
 
     @staticmethod
     def handle_failure(num_ok, unsent):
@@ -43,15 +40,15 @@ class TimeoutEmitter(Emitter):
         do_not_track()
 
     def http_get(self, payload):
-        sp_logger.info("Sending GET request to %s..." % self.endpoint)
-        sp_logger.debug("Payload: %s" % payload)
+        sp_logger.info("Sending GET request to {}...".format(self.endpoint))
+        sp_logger.debug("Payload: {}".format(payload))
         r = requests.get(self.endpoint, params=payload, timeout=5.0)
 
         msg = "GET request finished with status code: " + str(r.status_code)
         if self.is_good_status_code(r.status_code):
             sp_logger.info(msg)
         else:
-            sp_logger.warn(msg)
+            sp_logger.warning(msg)
         return r
 
 
@@ -61,7 +58,7 @@ tracker = Tracker(emitter, namespace="cf", app_id="dbt")
 active_user = None
 
 
-class User(object):
+class User:
 
     def __init__(self, cookie_dir):
         self.do_not_track = True
@@ -127,6 +124,8 @@ def get_run_type(args):
 
 
 def get_invocation_context(user, config, args):
+    # put this in here to avoid an import cycle
+    from dbt.adapters.factory import get_adapter
     try:
         adapter_type = get_adapter(config).type()
     except Exception:
@@ -338,3 +337,14 @@ def initialize_tracking(cookie_dir):
         logger.debug('Got an exception trying to initialize tracking',
                      exc_info=True)
         active_user = User(None)
+
+
+class InvocationProcessor(logbook.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self, record):
+        record.extra.update({
+            "run_started_at": active_user.run_started_at.isoformat(),
+            "invocation_id": active_user.invocation_id,
+        })

@@ -1,367 +1,168 @@
-from dbt.api import APIObject
-from dbt.utils import deep_merge
+from dataclasses import dataclass, field, Field
+from typing import (
+    Optional,
+    Union,
+    List,
+    Dict,
+    Any,
+    Type,
+    Tuple,
+    NewType,
+    MutableMapping,
+    Callable,
+)
+
+from hologram import JsonSchemaMixin
+from hologram.helpers import (
+    StrEnum, register_pattern
+)
+
+from dbt.clients.jinja import MacroGenerator
+import dbt.flags
+from dbt.contracts.graph.unparsed import (
+    UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
+    UnparsedBaseNode, FreshnessThreshold, ExternalTable,
+    AdditionalPropertiesAllowed
+)
+from dbt.contracts.util import Replaceable, list_str
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
-import dbt.clients.jinja
 
-from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
-    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT, \
-    UNPARSED_BASE_CONTRACT, TIME_CONTRACT
-
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+class SnapshotStrategy(StrEnum):
+    Timestamp = 'timestamp'
+    Check = 'check'
 
 
-# TODO: which of these do we _really_ support? or is it both?
-HOOK_CONTRACT = {
-    'anyOf': [
-        {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'sql': {
-                    'type': 'string',
-                },
-                'transaction': {
-                    'type': 'boolean',
-                },
-                'index': {
-                    'type': 'integer',
-                }
-            },
-            'required': ['sql', 'transaction'],
-        },
-        {
-            'type': 'string',
-        },
-    ],
-}
+class All(StrEnum):
+    All = 'all'
 
 
-CONFIG_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': True,
-    'properties': {
-        'enabled': {
-            'type': 'boolean',
-        },
-        'materialized': {
-            'type': 'string',
-        },
-        'persist_docs': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-        'post-hook': {
-            'type': 'array',
-            'items': HOOK_CONTRACT,
-        },
-        'pre-hook': {
-            'type': 'array',
-            'items': HOOK_CONTRACT,
-        },
-        'vars': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-        'quoting': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-        'column_types': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-        'tags': {
-            'anyOf': [
-                {
-                    'type': 'array',
-                    'items': {
-                        'type': 'string'
-                    },
-                },
-                {
-                    'type': 'string'
-                }
-            ]
-        },
-        'severity': {
-            'type': 'string',
-            'pattern': '([eE][rR][rR][oO][rR]|[wW][aA][rR][nN])',
-        },
-    },
-    'required': [
-        'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
-        'quoting', 'column_types', 'tags', 'persist_docs'
-    ]
-}
+@dataclass
+class Hook(JsonSchemaMixin, Replaceable):
+    sql: str
+    transaction: bool = True
+    index: Optional[int] = None
 
 
-#  Note that description must be present, but may be empty.
-COLUMN_INFO_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': 'Information about a single column in a model',
-    'properties': {
-        'name': {
-            'type': 'string',
-            'description': 'The column name',
-        },
-        'description': {
-            'type': 'string',
-            'description': 'A description of the column',
-        },
-    },
-    'required': ['name', 'description'],
-}
+def insensitive_patterns(*patterns: str):
+    lowercased = []
+    for pattern in patterns:
+        lowercased.append(
+            ''.join('[{}{}]'.format(s.upper(), s.lower()) for s in pattern)
+        )
+    return '^({})$'.format('|'.join(lowercased))
+
+
+Severity = NewType('Severity', str)
+register_pattern(Severity, insensitive_patterns('warn', 'error'))
+
+
+@dataclass
+class NodeConfig(
+    AdditionalPropertiesAllowed, Replaceable, MutableMapping[str, Any]
+):
+    enabled: bool = True
+    materialized: str = 'view'
+    persist_docs: Dict[str, Any] = field(default_factory=dict)
+    post_hook: List[Hook] = field(default_factory=list)
+    pre_hook: List[Hook] = field(default_factory=list)
+    vars: Dict[str, Any] = field(default_factory=dict)
+    quoting: Dict[str, Any] = field(default_factory=dict)
+    column_types: Dict[str, Any] = field(default_factory=dict)
+    tags: Union[List[str], str] = field(default_factory=list_str)
+
+    @classmethod
+    def field_mapping(cls):
+        return {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
+
+    # Implement MutableMapping so this config will behave as some macros expect
+    # during parsing (notably, syntax like `{{ node.config['schema'] }}`)
+
+    def __getitem__(self, key):
+        """Handle parse-time use of `config` as a dictionary, making the extra
+        values available during parsing.
+        """
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return self._extra[key]
+
+    def __setitem__(self, key, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            self._extra[key] = value
+
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            msg = (
+                'Error, tried to delete config key "{}": Cannot delete '
+                'built-in keys'
+            ).format(key)
+            raise dbt.exceptions.CompilationException(msg)
+        else:
+            del self._extra[key]
+
+    def __iter__(self):
+        for fld in self._get_fields():
+            yield fld.name
+
+        for key in self._extra:
+            yield key
+
+    def __len__(self):
+        return len(self._get_fields()) + len(self._extra)
+
+
+@dataclass
+class ColumnInfo(JsonSchemaMixin, Replaceable):
+    name: str
+    description: str = ''
+    data_type: Optional[str] = None
 
 
 # Docrefs are not quite like regular references, as they indicate what they
 # apply to as well as what they are referring to (so the doc package + doc
 # name, but also the column name if relevant). This is because column
 # descriptions are rendered separately from their models.
-DOCREF_CONTRACT = {
-    'type': 'object',
-    'properties': {
-        'documentation_name': {
-            'type': 'string',
-            'description': 'The name of the documentation block referred to',
-        },
-        'documentation_package': {
-            'type': 'string',
-            'description': (
-                'If provided, the documentation package name referred to'
-            ),
-        },
-        'column_name': {
-            'type': 'string',
-            'description': (
-                'If the documentation refers to a column instead of the '
-                'model, the column name should be set'
-            ),
-        },
-    },
-    'required': ['documentation_name', 'documentation_package']
-}
+@dataclass
+class Docref(JsonSchemaMixin, Replaceable):
+    documentation_name: str
+    documentation_package: str
+    column_name: Optional[str] = None
 
 
-HAS_FQN_CONTRACT = {
-    'properties': {
-        'fqn': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-            }
-        },
-    },
-    'required': ['fqn'],
-}
+@dataclass
+class HasFqn(JsonSchemaMixin, Replaceable):
+    fqn: List[str]
 
 
-HAS_UNIQUE_ID_CONTRACT = {
-    'properties': {
-        'unique_id': {
-            'type': 'string',
-            'minLength': 1,
-        },
-    },
-    'required': ['unique_id'],
-}
-
-CAN_REF_CONTRACT = {
-    'properties': {
-        'refs': {
-            'type': 'array',
-            'items': {
-                'type': 'array',
-                'description': (
-                    'The list of arguments passed to a single ref call.'
-                ),
-            },
-            'description': (
-                'The list of call arguments, one list of arguments per '
-                'call.'
-            )
-        },
-        'sources': {
-            'type': 'array',
-            'items': {
-                'type': 'array',
-                'description': (
-                    'The list of arguments passed to a single source call.'
-                ),
-            },
-            'description': (
-                'The list of call arguments, one list of arguments per '
-                'call.'
-            )
-        },
-        'depends_on': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'nodes': {
-                    'type': 'array',
-                    'items': {
-                        'type': 'string',
-                        'minLength': 1,
-                        'description': (
-                            'A node unique ID that this depends on.'
-                        )
-                    }
-                },
-                'macros': {
-                    'type': 'array',
-                    'items': {
-                        'type': 'string',
-                        'minLength': 1,
-                        'description': (
-                            'A macro unique ID that this depends on.'
-                        )
-                    }
-                },
-            },
-            'description': (
-                'A list of unique IDs for nodes and macros that this '
-                'node depends upon.'
-            ),
-            'required': ['nodes', 'macros'],
-        },
-    },
-    'required': ['refs', 'sources', 'depends_on'],
-}
+@dataclass
+class HasUniqueID(JsonSchemaMixin, Replaceable):
+    unique_id: str
 
 
-HAS_DOCREFS_CONTRACT = {
-    'properties': {
-        'docrefs': {
-            'type': 'array',
-            'items': DOCREF_CONTRACT,
-        },
-    },
-}
+@dataclass
+class DependsOn(JsonSchemaMixin, Replaceable):
+    nodes: List[str] = field(default_factory=list)
+    macros: List[str] = field(default_factory=list)
 
 
-HAS_DESCRIPTION_CONTRACT = {
-    'properties': {
-        'description': {
-            'type': 'string',
-            'description': 'A user-supplied description of the model',
-        },
-        'columns': {
-            'type': 'object',
-            'properties': {
-                '.*': COLUMN_INFO_CONTRACT,
-            },
-        },
-    },
-    'required': ['description', 'columns'],
-}
-
-# does this belong inside another contract?
-HAS_CONFIG_CONTRACT = {
-    'properties': {
-        'config': CONFIG_CONTRACT,
-    },
-    'required': ['config'],
-}
+@dataclass
+class HasRelationMetadata(JsonSchemaMixin, Replaceable):
+    database: str
+    schema: str
 
 
-COLUMN_TEST_CONTRACT = {
-    'properties': {
-        'column_name': {
-            'type': 'string',
-            'description': (
-                'In tests parsed from a v2 schema, the column the test is '
-                'associated with (if there is one)'
-            )
-        },
-    }
-}
-
-
-HAS_RELATION_METADATA_CONTRACT = {
-    'properties': {
-        'database': {
-            'type': 'string',
-            'description': (
-                'The actual database string that this will build into.'
-            )
-        },
-        'schema': {
-            'type': 'string',
-            'description': (
-                'The actual schema string that this will build into.'
-            )
-        },
-    },
-    'required': ['database', 'schema'],
-}
-
-
-PARSED_NODE_CONTRACT = deep_merge(
-    UNPARSED_NODE_CONTRACT,
-    HAS_UNIQUE_ID_CONTRACT,
-    HAS_FQN_CONTRACT,
-    CAN_REF_CONTRACT,
-    HAS_DOCREFS_CONTRACT,
-    HAS_DESCRIPTION_CONTRACT,
-    HAS_CONFIG_CONTRACT,
-    COLUMN_TEST_CONTRACT,
-    HAS_RELATION_METADATA_CONTRACT,
-    {
-        'properties': {
-            'alias': {
-                'type': 'string',
-                'description': (
-                    'The name of the relation that this will build into'
-                )
-            },
-            # TODO: move this into a class property.
-            'empty': {
-                'type': 'boolean',
-                'description': 'True if the SQL is empty',
-            },
-            'tags': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                }
-            },
-            # this is really nodes-only
-            'patch_path': {
-                'type': 'string',
-                'description': (
-                    'The path to the patch source if the node was patched'
-                ),
-            },
-            'build_path': {
-                'type': 'string',
-                'description': (
-                    'In seeds, the path to the source file used during build.'
-                ),
-            },
-        },
-        'required': ['empty', 'tags', 'alias'],
-    }
-)
-
-
-class ParsedNode(APIObject):
-    SCHEMA = PARSED_NODE_CONTRACT
-
-    def __init__(self, agate_table=None, **kwargs):
-        self.agate_table = agate_table
-        kwargs.setdefault('columns', {})
-        kwargs.setdefault('description', '')
-        super(ParsedNode, self).__init__(**kwargs)
-
+class ParsedNodeMixins:
     @property
     def is_refable(self):
         return self.resource_type in NodeType.refable()
 
     @property
     def is_ephemeral(self):
-        return self.get('config', {}).get('materialized') == 'ephemeral'
+        return self.config.materialized == 'ephemeral'
 
     @property
     def is_ephemeral_model(self):
@@ -369,431 +170,343 @@ class ParsedNode(APIObject):
 
     @property
     def depends_on_nodes(self):
-        """Return the list of node IDs that this node depends on."""
-        return self.depends_on['nodes']
-
-    def to_dict(self):
-        """Similar to 'serialize', but tacks the agate_table attribute in too.
-        Why we need this:
-            - networkx demands that the attr_dict it gets (the node) be a dict
-                or subclass and does not respect the abstract Mapping class
-            - many jinja things access the agate_table attribute (member) of
-                the node dict.
-            - the nodes are passed around between those two contexts in a way
-                that I don't quite have clear enough yet.
-        """
-        ret = self.serialize()
-        # note: not a copy/deep copy.
-        ret['agate_table'] = self.agate_table
-        return ret
-
-    def to_shallow_dict(self):
-        ret = self._contents.copy()
-        ret['agate_table'] = self.agate_table
-        return ret
+        return self.depends_on.nodes
 
     def patch(self, patch):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
-        self._contents.update({
-            'patch_path': patch.original_file_path,
-            'description': patch.description,
-            'columns': patch.columns,
-            'docrefs': patch.docrefs,
-        })
-        # patches always trigger re-validation
-        self.validate()
+        self.patch_path = patch.original_file_path
+        self.description = patch.description
+        self.columns = patch.columns
+        self.docrefs = patch.docrefs
+        if dbt.flags.STRICT_MODE:
+            self.to_dict(validate=True)
 
     def get_materialization(self):
-        return self.config.get('materialized')
+        return self.config.materialized
+
+    def local_vars(self):
+        return self.config.vars
+
+
+@dataclass
+class ParsedNodeMandatory(
+    UnparsedNode,
+    HasUniqueID,
+    HasFqn,
+    HasRelationMetadata,
+    Replaceable
+):
+    alias: str
 
     @property
-    def build_path(self):
-        return self._contents.get('build_path')
+    def identifier(self):
+        return self.alias
 
-    @build_path.setter
-    def build_path(self, value):
-        self._contents['build_path'] = value
+
+@dataclass
+class ParsedNodeDefaults(ParsedNodeMandatory):
+    config: NodeConfig = field(default_factory=NodeConfig)
+    tags: List[str] = field(default_factory=list)
+    refs: List[List[str]] = field(default_factory=list)
+    sources: List[List[Any]] = field(default_factory=list)
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    docrefs: List[Docref] = field(default_factory=list)
+    description: str = field(default='')
+    columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    patch_path: Optional[str] = None
+    build_path: Optional[str] = None
+
+
+@dataclass
+class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
+    pass
+
+
+@dataclass
+class ParsedAnalysisNode(ParsedNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
+
+
+@dataclass
+class ParsedHookNode(ParsedNode):
+    resource_type: NodeType = field(
+        metadata={'restrict': [NodeType.Operation]}
+    )
+    index: Optional[int] = None
+
+
+@dataclass
+class ParsedModelNode(ParsedNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
+
+
+@dataclass
+class ParsedRPCNode(ParsedNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+
+
+@dataclass
+class ParsedSeedNode(ParsedNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    seed_file_path: str = ''
+
+    def __post_init__(self):
+        if self.seed_file_path == '':
+            raise dbt.exceptions.InternalException(
+                'Seeds should always have a seed_file_path'
+            )
 
     @property
-    def database(self):
-        return self._contents['database']
-
-    @database.setter
-    def database(self, value):
-        self._contents['database'] = value
-
-    @property
-    def schema(self):
-        return self._contents['schema']
-
-    @schema.setter
-    def schema(self, value):
-        self._contents['schema'] = value
-
-    @property
-    def alias(self):
-        return self._contents['alias']
-
-    @alias.setter
-    def alias(self, value):
-        self._contents['alias'] = value
-
-    @property
-    def config(self):
-        return self._contents['config']
-
-    @config.setter
-    def config(self, value):
-        self._contents['config'] = value
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
 
 
-SNAPSHOT_CONFIG_CONTRACT = {
-    'properties': {
-        'target_database': {
-            'type': 'string',
-        },
-        'target_schema': {
-            'type': 'string',
-        },
-        'unique_key': {
-            'type': 'string',
-        },
-        'anyOf': [
-            {
-                'properties': {
-                    'strategy': {
-                        'enum': ['timestamp'],
-                    },
-                    'updated_at': {
-                        'type': 'string',
-                        'description': (
-                            'The column name with the timestamp to compare'
-                        ),
-                    },
-                },
-                'required': ['updated_at'],
-            },
-            {
-                'properties': {
-                    'strategy': {
-                        'enum': ['check'],
-                    },
-                    'check_cols': {
-                        'oneOf': [
-                            {
-                                'type': 'array',
-                                'items': {'type': 'string'},
-                                'description': 'The columns to check',
-                                'minLength': 1,
-                            },
-                            {
-                                'enum': ['all'],
-                                'description': 'Check all columns',
-                            },
-                        ],
-                    },
-                },
-                'required': ['check_cols'],
-            }
-        ]
-    },
-    'required': [
-        'target_schema', 'unique_key', 'strategy',
-    ],
-}
+@dataclass
+class TestConfig(NodeConfig):
+    severity: Severity = Severity('error')
 
 
-PARSED_SNAPSHOT_NODE_CONTRACT = deep_merge(
-    PARSED_NODE_CONTRACT,
-    {
-        'properties': {
-            'config': SNAPSHOT_CONFIG_CONTRACT,
-            'resource_type': {
-                'enum': [NodeType.Snapshot],
-            },
-        },
-    }
-)
+@dataclass
+class TestMetadata(JsonSchemaMixin):
+    namespace: Optional[str]
+    name: str
+    kwargs: Dict[str, Any]
 
 
+@dataclass
+class ParsedTestNode(ParsedNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    column_name: Optional[str] = None
+    config: TestConfig = field(default_factory=TestConfig)
+    test_metadata: Optional[TestMetadata] = None
+
+
+@dataclass(init=False)
+class _SnapshotConfig(NodeConfig):
+    unique_key: str = field(init=False, metadata=dict(init_required=True))
+    target_schema: str = field(init=False, metadata=dict(init_required=True))
+    target_database: Optional[str] = None
+
+    def __init__(
+        self,
+        unique_key: str,
+        target_schema: str,
+        target_database: Optional[str] = None,
+        **kwargs
+    ) -> None:
+        self.unique_key = unique_key
+        self.target_schema = target_schema
+        self.target_database = target_database
+        super().__init__(**kwargs)
+
+    # type hacks...
+    @classmethod
+    def _get_fields(cls) -> List[Tuple[Field, str]]:  # type: ignore
+        fields: List[Tuple[Field, str]] = []
+        for old_field, name in super()._get_fields():
+            new_field = old_field
+            # tell hologram we're really an initvar
+            if old_field.metadata and old_field.metadata.get('init_required'):
+                new_field = field(init=True, metadata=old_field.metadata)
+                new_field.name = old_field.name
+                new_field.type = old_field.type
+                new_field._field_type = old_field._field_type  # type: ignore
+            fields.append((new_field, name))
+        return fields
+
+
+@dataclass(init=False)
+class GenericSnapshotConfig(_SnapshotConfig):
+    strategy: str = field(init=False, metadata=dict(init_required=True))
+
+    def __init__(self, strategy: str, **kwargs) -> None:
+        self.strategy = strategy
+        super().__init__(**kwargs)
+
+
+@dataclass(init=False)
+class TimestampSnapshotConfig(_SnapshotConfig):
+    strategy: str = field(
+        init=False,
+        metadata=dict(
+            restrict=[str(SnapshotStrategy.Timestamp)],
+            init_required=True,
+        ),
+    )
+    updated_at: str = field(init=False, metadata=dict(init_required=True))
+
+    def __init__(
+        self, strategy: str, updated_at: str, **kwargs
+    ) -> None:
+        self.strategy = strategy
+        self.updated_at = updated_at
+        super().__init__(**kwargs)
+
+
+@dataclass(init=False)
+class CheckSnapshotConfig(_SnapshotConfig):
+    strategy: str = field(
+        init=False,
+        metadata=dict(
+            restrict=[str(SnapshotStrategy.Check)],
+            init_required=True,
+        ),
+    )
+    # TODO: is there a way to get this to accept tuples of strings? Adding
+    # `Tuple[str, ...]` to the list of types results in this:
+    # ['email'] is valid under each of {'type': 'array', 'items':
+    # {'type': 'string'}}, {'type': 'array', 'items': {'type': 'string'}}
+    # but without it, parsing gets upset about values like `('email',)`
+    # maybe hologram itself should support this behavior? It's not like tuples
+    # are meaningful in json
+    check_cols: Union[All, List[str]] = field(
+        init=False,
+        metadata=dict(init_required=True),
+    )
+
+    def __init__(
+        self, strategy: str, check_cols: Union[All, List[str]],
+        **kwargs
+    ) -> None:
+        self.strategy = strategy
+        self.check_cols = check_cols
+        super().__init__(**kwargs)
+
+
+@dataclass
+class IntermediateSnapshotNode(ParsedNode):
+    # at an intermediate stage in parsing, where we've built something better
+    # than an unparsed node for rendering in parse mode, it's pretty possible
+    # that we won't have critical snapshot-related information that is only
+    # defined in config blocks. To fix that, we have an intermediate type that
+    # uses a regular node config, which the snapshot parser will then convert
+    # into a full ParsedSnapshotNode after rendering.
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+
+
+def _create_if_else_chain(
+    key: str,
+    criteria: List[Tuple[str, Type[JsonSchemaMixin]]],
+    default: Type[JsonSchemaMixin]
+) -> dict:
+    """Mutate a given schema key that contains a 'oneOf' to instead be an
+    'if-then-else' chain. This results is much better/more consistent errors
+    from jsonschema.
+    """
+    schema: Dict[str, Any] = {}
+    result: Dict[str, Any] = {}
+    criteria = criteria[:]
+    while criteria:
+        if_clause, then_clause = criteria.pop()
+        schema['if'] = {'properties': {
+            key: {'enum': [if_clause]}
+        }}
+        schema['then'] = then_clause.json_schema()
+        schema['else'] = {}
+        schema = schema['else']
+    schema.update(default.json_schema())
+    return result
+
+
+@dataclass
 class ParsedSnapshotNode(ParsedNode):
-    SCHEMA = PARSED_SNAPSHOT_NODE_CONTRACT
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+    config: Union[
+        CheckSnapshotConfig,
+        TimestampSnapshotConfig,
+        GenericSnapshotConfig,
+    ]
+
+    @classmethod
+    def json_schema(cls, embeddable=False):
+        schema = super().json_schema(embeddable)
+
+        # mess with config
+        configs = [
+            (str(SnapshotStrategy.Check), CheckSnapshotConfig),
+            (str(SnapshotStrategy.Timestamp), TimestampSnapshotConfig),
+        ]
+
+        if embeddable:
+            dest = schema[cls.__name__]['properties']
+        else:
+            dest = schema['properties']
+        dest['config'] = _create_if_else_chain(
+            'strategy', configs, GenericSnapshotConfig
+        )
+        return schema
 
 
 # The parsed node update is only the 'patch', not the test. The test became a
 # regular parsed node. Note that description and columns must be present, but
 # may be empty.
-PARSED_NODE_PATCH_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': 'A collection of values that can be set on a node',
-    'properties': {
-        'name': {
-            'type': 'string',
-            'description': 'The name of the node this modifies',
-        },
-        'description': {
-            'type': 'string',
-            'description': 'The description of the node to add',
-        },
-        'original_file_path': {
-            'type': 'string',
-            'description': (
-                'Relative path to the originating file path for the patch '
-                'from the project root'
-            ),
-        },
-        'columns': {
-            'type': 'object',
-            'properties': {
-                '.*': COLUMN_INFO_CONTRACT,
-            }
-        },
-        'docrefs': {
-            'type': 'array',
-            'items': DOCREF_CONTRACT,
-        }
-    },
-    'required': [
-        'name', 'original_file_path', 'description', 'columns', 'docrefs'
-    ],
-}
+@dataclass
+class ParsedNodePatch(JsonSchemaMixin, Replaceable):
+    name: str
+    description: str
+    original_file_path: str
+    columns: Dict[str, ColumnInfo]
+    docrefs: List[Docref]
 
 
-class ParsedNodePatch(APIObject):
-    SCHEMA = PARSED_NODE_PATCH_CONTRACT
+@dataclass
+class MacroDependsOn(JsonSchemaMixin, Replaceable):
+    macros: List[str] = field(default_factory=list)
 
 
-PARSED_MACRO_CONTRACT = deep_merge(
-    UNPARSED_MACRO_CONTRACT,
-    {
-        # This is required for the 'generator' field to work.
-        # TODO: fix before release
-        'additionalProperties': True,
-        'properties': {
-            'name': {
-                'type': 'string',
-                'description': (
-                    'Name of this node. For models, this is used as the '
-                    'identifier in the database.'),
-                'minLength': 1,
-                'maxLength': 127,
-            },
-            'resource_type': {
-                'enum': [
-                    NodeType.Macro,
-                ],
-            },
-            'unique_id': {
-                'type': 'string',
-                'minLength': 1,
-                'maxLength': 255,
-            },
-            'tags': {
-                'description': (
-                    'An array of arbitrary strings to use as tags.'
-                ),
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                },
-            },
-            'depends_on': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'macros': {
-                        'type': 'array',
-                        'items': {
-                            'type': 'string',
-                            'minLength': 1,
-                            'maxLength': 255,
-                            'description': 'A single macro unique ID.'
-                        }
-                    }
-                },
-                'description': 'A list of all macros this macro depends on.',
-                'required': ['macros'],
-            },
-        },
-        'required': [
-            'resource_type', 'unique_id', 'tags', 'depends_on', 'name',
-        ]
-    }
-)
+@dataclass
+class ParsedMacro(UnparsedMacro, HasUniqueID):
+    name: str
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
+    # TODO: can macros even have tags?
+    tags: List[str] = field(default_factory=list)
+    # TODO: is this ever populated?
+    depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
 
-
-class ParsedMacro(APIObject):
-    SCHEMA = PARSED_MACRO_CONTRACT
+    def local_vars(self):
+        return {}
 
     @property
-    def generator(self):
+    def generator(self) -> Callable[[Dict[str, Any]], Callable]:
         """
         Returns a function that can be called to render the macro results.
         """
-        # TODO: we can generate self.template from the other properties
-        # available in this class. should we just generate this here?
-        return dbt.clients.jinja.macro_generator(self._contents)
+        return MacroGenerator(self)
 
 
-# This is just the file + its ID
-PARSED_DOCUMENTATION_CONTRACT = deep_merge(
-    UNPARSED_DOCUMENTATION_FILE_CONTRACT,
-    {
-        'properties': {
-            'name': {
-                'type': 'string',
-                'description': (
-                    'Name of this node, as referred to by doc() references'
-                ),
-            },
-            'unique_id': {
-                'type': 'string',
-                'minLength': 1,
-                'maxLength': 255,
-                'description': (
-                    'The unique ID of this node as stored in the manifest'
-                ),
-            },
-            'block_contents': {
-                'type': 'string',
-                'description': 'The contents of just the docs block',
-            },
-        },
-        'required': ['name', 'unique_id', 'block_contents'],
-    }
-)
+@dataclass
+class ParsedDocumentation(UnparsedDocumentationFile, HasUniqueID):
+    name: str
+    block_contents: str
 
 
-NODE_EDGE_MAP = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': 'A map of node relationships',
-    'patternProperties': {
-        '.*': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'description': 'A node name',
-            }
-        }
-    }
-}
+@dataclass
+class ParsedSourceDefinition(
+        UnparsedBaseNode,
+        HasUniqueID,
+        HasRelationMetadata,
+        HasFqn):
+    name: str
+    source_name: str
+    source_description: str
+    loader: str
+    identifier: str
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+    quoting: Quoting = field(default_factory=Quoting)
+    loaded_at_field: Optional[str] = None
+    freshness: Optional[FreshnessThreshold] = None
+    external: Optional[ExternalTable] = None
+    docrefs: List[Docref] = field(default_factory=list)
+    description: str = ''
+    columns: Dict[str, ColumnInfo] = field(default_factory=dict)
 
+    @property
+    def is_ephemeral_model(self):
+        return False
 
-class ParsedDocumentation(APIObject):
-    SCHEMA = PARSED_DOCUMENTATION_CONTRACT
-
-
-class Hook(APIObject):
-    SCHEMA = HOOK_CONTRACT
-
-
-FRESHNESS_CONTRACT = {
-    'properties': {
-        'loaded_at_field': {
-            'type': ['null', 'string'],
-            'description': 'The field to use as the "loaded at" timestamp',
-        },
-        'freshness': {
-            'anyOf': [
-                {'type': 'null'},
-                {
-                    'type': 'object',
-                    'additionalProperties': False,
-                    'properties': {
-                        'warn_after': TIME_CONTRACT,
-                        'error_after': TIME_CONTRACT,
-                    },
-                },
-            ],
-        },
-    },
-}
-
-
-QUOTING_CONTRACT = {
-    'properties': {
-        'quoting': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'database': {'type': 'boolean'},
-                'schema': {'type': 'boolean'},
-                'identifier': {'type': 'boolean'},
-            },
-        },
-    },
-    'required': ['quoting'],
-}
-
-
-PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
-    UNPARSED_BASE_CONTRACT,
-    FRESHNESS_CONTRACT,
-    QUOTING_CONTRACT,
-    HAS_DESCRIPTION_CONTRACT,
-    HAS_UNIQUE_ID_CONTRACT,
-    HAS_DOCREFS_CONTRACT,
-    HAS_RELATION_METADATA_CONTRACT,
-    HAS_FQN_CONTRACT,
-    {
-        'description': (
-            'A source table definition, as parsed from the one provided in the'
-            '"tables" subsection of the "sources" section of schema.yml'
-        ),
-        'properties': {
-            'name': {
-                'type': 'string',
-                'description': (
-                    'The name of this node, which is the name of the model it'
-                    'refers to'
-                ),
-                'minLength': 1,
-            },
-            'source_name': {
-                'type': 'string',
-                'description': 'The reference name of the source definition',
-                'minLength': 1,
-            },
-            'source_description': {
-                'type': 'string',
-                'description': 'The user-supplied description of the source',
-            },
-            'loader': {
-                'type': 'string',
-                'description': 'The user-defined loader for this source',
-            },
-            'identifier': {
-                'type': 'string',
-                'description': 'The identifier for the source table',
-                'minLength': 1,
-            },
-            # the manifest search stuff really requires this, sadly
-            'resource_type': {
-                'enum': [NodeType.Source],
-            },
-        },
-        # note that while required, loaded_at_field and freshness may be null
-        'required': [
-            'source_name', 'source_description', 'loaded_at_field', 'loader',
-            'freshness', 'description', 'columns', 'docrefs', 'identifier',
-        ],
-    }
-)
-
-
-class ParsedSourceDefinition(APIObject):
-    SCHEMA = PARSED_SOURCE_DEFINITION_CONTRACT
-    is_ephemeral_model = False
-
-    def to_shallow_dict(self):
-        return self._contents.copy()
-
-    # provide some emtpy/meaningless properties so these look more like
-    # ParsedNodes
     @property
     def depends_on_nodes(self):
         return []
@@ -813,3 +526,22 @@ class ParsedSourceDefinition(APIObject):
     @property
     def has_freshness(self):
         return bool(self.freshness) and self.loaded_at_field is not None
+
+
+ParsedResource = Union[
+    ParsedMacro, ParsedNode, ParsedDocumentation, ParsedSourceDefinition
+]
+
+
+PARSED_TYPES: Dict[NodeType, Type[ParsedResource]] = {
+    NodeType.Analysis: ParsedAnalysisNode,
+    NodeType.Documentation: ParsedDocumentation,
+    NodeType.Macro: ParsedMacro,
+    NodeType.Model: ParsedModelNode,
+    NodeType.Operation: ParsedHookNode,
+    NodeType.RPCCall: ParsedRPCNode,
+    NodeType.Seed: ParsedSeedNode,
+    NodeType.Snapshot: ParsedSnapshotNode,
+    NodeType.Source: ParsedSourceDefinition,
+    NodeType.Test: ParsedTestNode,
+}

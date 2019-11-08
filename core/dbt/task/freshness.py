@@ -28,6 +28,7 @@ class FreshnessTask(GraphRunnableTask):
             "resource_types": [NodeType.Source],
             "tags": [],
             "required": ['has_freshness'],
+            "addin_ephemeral_nodes": False,
         }
 
     def get_runner_type(self):

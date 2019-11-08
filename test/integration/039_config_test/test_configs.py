@@ -1,4 +1,3 @@
-from datetime import datetime
 import os
 import shutil
 
@@ -11,7 +10,7 @@ class TestConfigs(DBTIntegrationTest):
         return "config_039"
 
     def unique_schema(self):
-        return super(TestConfigs, self).unique_schema().upper()
+        return super().unique_schema().upper()
 
     @property
     def project_config(self):
@@ -50,18 +49,18 @@ class TestTargetConfigs(DBTIntegrationTest):
         return "config_039"
 
     def unique_schema(self):
-        return super(TestTargetConfigs, self).unique_schema().upper()
+        return super().unique_schema().upper()
 
     @property
     def models(self):
         return "models"
 
     def setUp(self):
-        super(TestTargetConfigs, self).setUp()
+        super().setUp()
         self.init_targets = [d for d in os.listdir('.') if os.path.isdir(d) and d.startswith('target_')]
 
     def tearDown(self):
-        super(TestTargetConfigs, self).tearDown()
+        super().tearDown()
         for d in self.new_dirs():
             shutil.rmtree(d)
 
@@ -78,7 +77,7 @@ class TestTargetConfigs(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_alternative_target_paths(self):
+    def test_postgres_alternative_target_paths(self):
         self.run_dbt(['seed'])
         dirs = list(self.new_dirs())
         self.assertEqual(len(dirs), 1)

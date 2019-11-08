@@ -33,7 +33,7 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
         }
 
     @use_profile("postgres")
-    def test_duplicate_model_enabled(self):
+    def test_postgres_duplicate_model_enabled(self):
         message = "dbt found two resources with the name"
         try:
             self.run_dbt(["run"])
@@ -73,7 +73,7 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
         }
 
     @use_profile("postgres")
-    def test_duplicate_model_disabled(self):
+    def test_postgres_duplicate_model_disabled(self):
         try:
             results = self.run_dbt(["run"])
         except CompilationException:
@@ -109,7 +109,7 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
         }
 
     @use_profile("postgres")
-    def test_duplicate_model_enabled_across_packages(self):
+    def test_postgres_duplicate_model_enabled_across_packages(self):
         self.run_dbt(["deps"])
         message = "dbt found two resources with the name"
         try:
@@ -146,7 +146,7 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
         }
 
     @use_profile("postgres")
-    def test_duplicate_model_disabled_across_packages(self):
+    def test_postgres_duplicate_model_disabled_across_packages(self):
         self.run_dbt(["deps"])
         try:
             self.run_dbt(["run"])

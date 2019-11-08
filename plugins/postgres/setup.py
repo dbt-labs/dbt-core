@@ -1,15 +1,35 @@
 #!/usr/bin/env python
-from setuptools import find_packages
-from distutils.core import setup
+from setuptools import find_namespace_packages
+from setuptools import setup
 import os
+import sys
+
+
+def _dbt_psycopg2_name():
+    # if the user chose something, use that
+    package_name = os.getenv('DBT_PSYCOPG2_NAME', '')
+    if package_name:
+        return package_name
+
+    binary_only_versions = [(3, 8)]
+
+    # binary wheels don't exist for all versions. Require psycopg2-binary for
+    # them and wait for psycopg2.
+    if sys.version_info[:2] in binary_only_versions:
+        return 'psycopg2-binary'
+    else:
+        return 'psycopg2'
+
 
 package_name = "dbt-postgres"
-package_version = "0.14.1"
+package_version = "0.15.0rc1"
 description = """The postgres adpter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
+
+DBT_PSYCOPG2_NAME = _dbt_psycopg2_name()
 
 setup(
     name=package_name,
@@ -20,7 +40,7 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_packages(),
+    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [
             'include/postgres/dbt_project.yml',
@@ -30,6 +50,20 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'psycopg2>=2.7.5,<2.8',
-    ]
+        '{}~=2.8'.format(DBT_PSYCOPG2_NAME),
+    ],
+    zip_safe=False,
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+
+        'License :: OSI Approved :: Apache Software License',
+
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: POSIX :: Linux',
+
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
 )

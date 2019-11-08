@@ -30,8 +30,7 @@ class RedshiftAdapter(PostgresAdapter):
         https://docs.aws.amazon.com/redshift/latest/dg/r_DROP_TABLE.html
         """
         with self.connections.fresh_transaction():
-            parent = super(RedshiftAdapter, self)
-            return parent.drop_relation(relation)
+            return super().drop_relation(relation)
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):

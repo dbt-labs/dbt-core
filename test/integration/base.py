@@ -1,6 +1,4 @@
-
 import json
-import logging
 import os
 import random
 import shutil
@@ -8,29 +6,54 @@ import tempfile
 import time
 import traceback
 import unittest
-import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
 
 import pytest
 import yaml
-from mock import patch
+from unittest.mock import patch
 
 import dbt.main as dbt
 import dbt.flags as flags
-from dbt.adapters.factory import get_adapter, reset_adapters
+from dbt.adapters.factory import get_adapter, reset_adapters, register_adapter
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
-from dbt.compat import basestring
 from dbt.context import common
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, log_manager
 
 
 INITIAL_ROOT = os.getcwd()
 
 
-class FakeArgs(object):
+def normalize(path):
+    """On windows, neither is enough on its own:
+
+    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
+    'c:\\documents\\all caps\\subdir\\..'
+    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
+    'C:\\documents\\ALL CAPS'
+    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
+    'c:\\documents\\all caps'
+    """
+    return os.path.normcase(os.path.normpath(path))
+
+
+class Normalized:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return f'Normalized({self.value!r})'
+
+    def __str__(self):
+        return f'Normalized({self.value!s})'
+
+    def __eq__(self, other):
+        return normalize(self.value) == normalize(other)
+
+
+class FakeArgs:
     def __init__(self):
         self.threads = 1
         self.data = False
@@ -41,7 +64,7 @@ class FakeArgs(object):
         self.single_threaded = False
 
 
-class TestArgs(object):
+class TestArgs:
     def __init__(self, kwargs):
         self.which = 'run'
         self.single_threaded = False
@@ -51,18 +74,20 @@ class TestArgs(object):
 
 def _profile_from_test_name(test_name):
     adapter_names = ('postgres', 'snowflake', 'redshift', 'bigquery', 'presto')
-    adapters_in_name =  sum(x in test_name for x in adapter_names)
-    if adapters_in_name > 1:
-        raise ValueError('test names must only have 1 profile choice embedded')
+    adapters_in_name = sum(x in test_name for x in adapter_names)
+    if adapters_in_name != 1:
+        raise ValueError(
+            'test names must have exactly 1 profile choice embedded, {} has {}'
+            .format(test_name, adapters_in_name)
+        )
 
     for adapter_name in adapter_names:
         if adapter_name in test_name:
             return adapter_name
 
-    warnings.warn(
+    raise ValueError(
         'could not find adapter name in test name {}'.format(test_name)
     )
-    return 'postgres'
 
 
 def _pytest_test_name():
@@ -293,16 +318,15 @@ class DBTIntegrationTest(unittest.TestCase):
         os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
     def setUp(self):
+        self.dbt_core_install_root = os.path.dirname(dbt.__file__)
+        log_manager.reset_handlers()
         self.initial_dir = INITIAL_ROOT
         os.chdir(self.initial_dir)
         # before we go anywhere, collect the initial path info
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
-        print('initial_dir={}'.format(self.initial_dir))
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
-        print('test_original_source_path={}'.format(self.test_original_source_path))
-        self.test_root_dir = tempfile.mkdtemp(prefix='dbt-int-test-')
-        print('test_root_dir={}'.format(self.test_root_dir))
+        self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
         os.chdir(self.test_root_dir)
         try:
             self._symlink_test_folders()
@@ -324,8 +348,6 @@ class DBTIntegrationTest(unittest.TestCase):
         self._created_schemas = set()
         flags.reset()
         template_cache.clear()
-        # disable capturing warnings
-        logging.captureWarnings(False)
 
         self.use_profile(self._pick_profile())
         self.use_default_project()
@@ -385,6 +407,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         config = RuntimeConfig.from_args(TestArgs(kwargs))
 
+        register_adapter(config)
         adapter = get_adapter(config)
         adapter.cleanup_connections()
         self.adapter_type = adapter.type()
@@ -401,6 +424,7 @@ class DBTIntegrationTest(unittest.TestCase):
         # get any current run adapter and clean up its connections before we
         # reset them. It'll probably be different from ours because
         # handle_and_check() calls reset_adapters().
+        register_adapter(self.config)
         adapter = get_adapter(self.config)
         if adapter is not self.adapter:
             adapter.cleanup_connections()
@@ -435,9 +459,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
-            self.adapter.drop_schema(
-                database, schema
-            )
+            self.adapter.drop_schema(database, schema)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.DROP_SCHEMA_STATEMENT.format(schema_fqn))
@@ -463,9 +485,11 @@ class DBTIntegrationTest(unittest.TestCase):
             self._get_schema_fqn(self.default_database, schema)
         )
         # on postgres/redshift, this will make you sad
-        drop_alternative = self.setup_alternate_db and \
-                self.adapter_type not in {'postgres', 'redshift'} and \
-                self.alternative_database
+        drop_alternative = (
+            self.setup_alternate_db and
+            self.adapter_type not in {'postgres', 'redshift'} and
+            self.alternative_database
+        )
         if drop_alternative:
             self._created_schemas.add(
                 self._get_schema_fqn(self.alternative_database, schema)
@@ -501,6 +525,7 @@ class DBTIntegrationTest(unittest.TestCase):
         return res
 
     def run_dbt_and_check(self, args=None, strict=True, parser=False, profiles_dir=True):
+        log_manager.reset_handlers()
         if args is None:
             args = ["run"]
 
@@ -598,10 +623,11 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                conn.handle.rollback()
+                if conn.handle and not conn.handle.is_closed():
+                    conn.handle.rollback()
                 print(sql)
                 print(e)
-                raise e
+                raise
             finally:
                 conn.transaction_open = False
 
@@ -741,7 +767,7 @@ class DBTIntegrationTest(unittest.TestCase):
         schema = self.unique_schema() if schema is None else schema
         database = self.default_database if database is None else database
         relation = self.adapter.Relation.create(
-            database = database,
+            database=database,
             schema=schema,
             identifier=table,
             type='table',
@@ -1136,19 +1162,26 @@ def use_profile(profile_name):
     return outer
 
 
-class AnyFloat(object):
+class AnyFloat:
     """Any float. Use this in assertEqual() calls to assert that it is a float.
     """
     def __eq__(self, other):
         return isinstance(other, float)
 
 
-class AnyStringWith(object):
+class AnyString:
+    """Any string. Use this in assertEqual() calls to assert that it is a string.
+    """
+    def __eq__(self, other):
+        return isinstance(other, str)
+
+
+class AnyStringWith:
     def __init__(self, contains=None):
         self.contains = contains
 
     def __eq__(self, other):
-        if not isinstance(other, basestring):
+        if not isinstance(other, str):
             return False
 
         if self.contains is None:

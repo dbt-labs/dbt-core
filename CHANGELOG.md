@@ -1,3 +1,35 @@
+## dbt 0.15.0 (TBD)
+
+### Breaking changes
+ - The 'table_name' parameter to relations has been removed
+ - Cache management changes:
+  - Materialization macros should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
+  - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped`
+      - `adapter.drop_relation` already does this
+  - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed`
+      - `adapter.rename_relation` already does this
+
+## dbt 0.14.3 (Unreleased)
+
+This is a bugfix release.
+
+### Fixes:
+- Fix for `dictionary changed size during iteration` race condition ([#1740](https://github.com/fishtown-analytics/dbt/issues/1740), [#1750](https://github.com/fishtown-analytics/dbt/pull/1750))
+
+### Under the hood:
+- Provide a programmatic method for validating profile targets ([#1754](https://github.com/fishtown-analytics/dbt/issues/1754), [#1775](https://github.com/fishtown-analytics/dbt/pull/1775))
+
+## dbt 0.14.2 (September 13, 2019)
+
+### Overview
+
+This is a bugfix release.
+
+### Fixes:
+- Fix for dbt hanging at the end of execution in `dbt source snapshot-freshness` tasks ([#1728](https://github.com/fishtown-analytics/dbt/issues/1728), [#1729](https://github.com/fishtown-analytics/dbt/pull/1729))
+- Fix for broken "packages" and "tags" selector dropdowns in the dbt Documentation website ([docs#47](https://github.com/fishtown-analytics/dbt-docs/issues/47), [#1726](https://github.com/fishtown-analytics/dbt/pull/1726))
+
+
 ## dbt 0.14.1 (September 3, 2019)
 
 ### Overview
@@ -40,8 +72,8 @@ This is primarily a bugfix release which contains a few minor improvements too. 
  - Fix for non-atomic column expansion logic in Snowflake incremental models and snapshots ([#1687](https://github.com/fishtown-analytics/dbt/issues/1687), [#1690](https://github.com/fishtown-analytics/dbt/pull/1690))
  - Fix for unprojected `count(*)` expression injected by custom data tests ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688))
  - Fix for `dbt run` and `dbt docs generate` commands when running against Panoply Redshift ([#1479](https://github.com/fishtown-analytics/dbt/issues/1479), [#1686](https://github.com/fishtown-analytics/dbt/pull/1686))
- 
- 
+
+
  ### Contributors:
 Thanks for your contributions to dbt!
 
@@ -53,6 +85,7 @@ Thanks for your contributions to dbt!
 - [@sjwhitworth](https://github.com/sjwhitworth) ([#1672](https://github.com/fishtown-analytics/dbt/pull/1672), [#1673](https://github.com/fishtown-analytics/dbt/pull/1673))
 - [@mikaelene](https://github.com/mikaelene) ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688), [#1709](https://github.com/fishtown-analytics/dbt/pull/1709))
 - [@bastienboutonnet](https://github.com/bastienboutonnet) ([#1591](https://github.com/fishtown-analytics/dbt/pull/1591), [#1689](https://github.com/fishtown-analytics/dbt/pull/1689))
+
 
 
 ## dbt 0.14.0 - Wilt Chamberlain (July 10, 2019)

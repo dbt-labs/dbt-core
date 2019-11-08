@@ -2,6 +2,7 @@ import dbt.exceptions
 
 import dbt.context.common
 from dbt.adapters.factory import get_adapter
+from dbt.contracts.graph.parsed import Docref
 
 
 def docs(unparsed, docrefs, column_name=None):
@@ -14,22 +15,18 @@ def docs(unparsed, docrefs, column_name=None):
         if len(args) == 2:
             doc_package_name = args[1]
 
-        docref = {
-            'documentation_package': doc_package_name,
-            'documentation_name': doc_name,
-        }
-        if column_name is not None:
-            docref['column_name'] = column_name
-
+        docref = Docref(documentation_package=doc_package_name,
+                        documentation_name=doc_name,
+                        column_name=column_name)
         docrefs.append(docref)
 
-        # IDK
-        return True
+        # At parse time, nothing should care about what doc() returns
+        return ''
 
     return do_docs
 
 
-class Config(object):
+class Config:
     def __init__(self, model, source_config):
         self.model = model
         self.source_config = source_config
@@ -92,7 +89,7 @@ class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
             )
 
 
-class Var(dbt.context.common.Var):
+class Var(dbt.context.base.Var):
     def get_missing_var(self, var_name):
         # in the parser, just always return None.
         return None
@@ -107,17 +104,24 @@ class RefResolver(dbt.context.common.BaseResolver):
         else:
             dbt.exceptions.ref_invalid_args(self.model, args)
 
-        return self.Relation.create_from_node(self.config, self.model)
+        return self.Relation.create_from(self.config, self.model)
 
 
 class SourceResolver(dbt.context.common.BaseResolver):
-    def __call__(self, source_name, table_name):
+    def __call__(self, *args):
         # When you call source(), this is what happens at parse time
-        self.model.sources.append([source_name, table_name])
-        return self.Relation.create_from_node(self.config, self.model)
+        if len(args) == 2:
+            self.model.sources.append(list(args))
+
+        else:
+            dbt.exceptions.raise_compiler_error(
+                "source() takes exactly two arguments ({} given)"
+                .format(len(args)), self.model)
+
+        return self.Relation.create_from(self.config, self.model)
 
 
-class Provider(object):
+class Provider(dbt.context.common.Provider):
     execute = False
     Config = Config
     DatabaseWrapper = DatabaseWrapper
@@ -131,9 +135,9 @@ def generate(model, runtime_config, manifest, source_config):
     # have to acquire it.
     # In the future, it would be nice to lazily open the connection, as in some
     # projects it would be possible to parse without connecting to the db
-    with get_adapter(runtime_config).connection_named(model.get('name')):
+    with get_adapter(runtime_config).connection_for(model):
         return dbt.context.common.generate(
-            model, runtime_config, manifest, source_config, Provider()
+            model, runtime_config, manifest, Provider(), source_config
         )
 
 

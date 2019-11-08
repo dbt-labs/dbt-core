@@ -1,59 +1,64 @@
-from dbt.api.object import APIObject
-from dbt.contracts.common import named_property
+import abc
+import itertools
+from dataclasses import dataclass, field
+from typing import (
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List
+)
+from typing_extensions import Protocol
+
+from hologram import JsonSchemaMixin
+from hologram.helpers import (
+    StrEnum, register_pattern, ExtensibleJsonSchemaMixin
+)
+
+from dbt.contracts.util import Replaceable
+from dbt.utils import translate_aliases
 
 
-CONNECTION_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'type': {
-            'type': 'string',
-            # valid python identifiers only
-            'pattern': r'^[A-Za-z_][A-Za-z0-9_]+$',
-        },
-        'name': {
-            'type': ['null', 'string'],
-        },
-        'state': {
-            'enum': ['init', 'open', 'closed', 'fail'],
-        },
-        'transaction_open': {
-            'type': 'boolean',
-        },
-        # we can't serialize this so we can't require it as part of the
-        # contract.
-        # 'handle': {
-        #     'type': ['null', 'object'],
-        # },
-        # credentials are validated separately by the adapter packages
-        'credentials': {
-            'description': (
-                'The credentials object here should match the connection type.'
-            ),
-            'type': 'object',
-            'additionalProperties': True,
-        }
-    },
-    'required': [
-        'type', 'name', 'state', 'transaction_open', 'credentials'
-    ],
-}
+Identifier = NewType('Identifier', str)
+register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
 
 
-class Connection(APIObject):
-    SCHEMA = CONNECTION_CONTRACT
+class ConnectionState(StrEnum):
+    INIT = 'init'
+    OPEN = 'open'
+    CLOSED = 'closed'
+    FAIL = 'fail'
 
-    def __init__(self, credentials, *args, **kwargs):
-        # we can't serialize handles
-        self._handle = kwargs.pop('handle')
-        super(Connection, self).__init__(credentials=credentials.serialize(),
-                                         *args, **kwargs)
-        # this will validate itself in its own __init__.
-        self._credentials = credentials
+
+@dataclass(init=False)
+class Connection(ExtensibleJsonSchemaMixin, Replaceable):
+    type: Identifier
+    name: Optional[str]
+    state: ConnectionState = ConnectionState.INIT
+    transaction_open: bool = False
+    # prevent serialization
+    _handle: Optional[Any] = None
+    _credentials: JsonSchemaMixin = field(init=False)
+
+    def __init__(
+        self,
+        type: Identifier,
+        name: Optional[str],
+        credentials: JsonSchemaMixin,
+        state: ConnectionState = ConnectionState.INIT,
+        transaction_open: bool = False,
+        handle: Optional[Any] = None,
+    ) -> None:
+        self.type = type
+        self.name = name
+        self.state = state
+        self.credentials = credentials
+        self.transaction_open = transaction_open
+        self.handle = handle
 
     @property
     def credentials(self):
         return self._credentials
+
+    @credentials.setter
+    def credentials(self, value):
+        self._credentials = value
 
     @property
     def handle(self):
@@ -63,9 +68,70 @@ class Connection(APIObject):
     def handle(self, value):
         self._handle = value
 
-    name = named_property('name', 'The name of this connection')
-    state = named_property('state', 'The state of the connection')
-    transaction_open = named_property(
-        'transaction_open',
-        'True if there is an open transaction, False otherwise.'
-    )
+
+# see https://github.com/python/mypy/issues/4717#issuecomment-373932080
+# and https://github.com/python/mypy/issues/5374
+# for why we have type: ignore. Maybe someday dataclasses + abstract classes
+# will work.
+@dataclass  # type: ignore
+class Credentials(
+    ExtensibleJsonSchemaMixin,
+    Replaceable,
+    metaclass=abc.ABCMeta
+):
+    database: str
+    schema: str
+    _ALIASES: ClassVar[Dict[str, str]] = field(default={}, init=False)
+
+    @abc.abstractproperty
+    def type(self) -> str:
+        raise NotImplementedError(
+            'type not implemented for base credentials class'
+        )
+
+    def connection_info(
+        self, *, with_aliases: bool = False
+    ) -> Iterable[Tuple[str, Any]]:
+        """Return an ordered iterator of key/value pairs for pretty-printing.
+        """
+        as_dict = self.to_dict(omit_none=False, with_aliases=with_aliases)
+        connection_keys = set(self._connection_keys())
+        aliases: List[str] = []
+        if with_aliases:
+            aliases = [
+                k for k, v in self._ALIASES.items() if v in connection_keys
+            ]
+        for key in itertools.chain(self._connection_keys(), aliases):
+            if key in as_dict:
+                yield key, as_dict[key]
+
+    @abc.abstractmethod
+    def _connection_keys(self) -> Tuple[str, ...]:
+        raise NotImplementedError
+
+    @classmethod
+    def from_dict(cls, data):
+        data = cls.translate_aliases(data)
+        return super().from_dict(data)
+
+    @classmethod
+    def translate_aliases(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        return translate_aliases(kwargs, cls._ALIASES)
+
+    def to_dict(self, omit_none=True, validate=False, *, with_aliases=False):
+        serialized = super().to_dict(omit_none=omit_none, validate=validate)
+        if with_aliases:
+            serialized.update({
+                new_name: serialized[canonical_name]
+                for new_name, canonical_name in self._ALIASES.items()
+                if canonical_name in serialized
+            })
+        return serialized
+
+
+class HasCredentials(Protocol):
+    credentials: Credentials
+
+
+class AdapterRequiredConfig(HasCredentials):
+    query_comment: Optional[str]

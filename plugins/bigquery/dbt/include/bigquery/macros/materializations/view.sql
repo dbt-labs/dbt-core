@@ -9,5 +9,5 @@
 
 
 {% materialization view, adapter='bigquery' -%}
-    {{ create_or_replace_view(run_outside_transaction_hooks=False) }}
+    {{ return(create_or_replace_view(run_outside_transaction_hooks=False)) }}
 {%- endmaterialization %}

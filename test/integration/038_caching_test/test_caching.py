@@ -1,5 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-from dbt.adapters import factory
+from dbt.adapters.factory import FACTORY
 
 class TestBaseCaching(DBTIntegrationTest):
     @property
@@ -19,7 +19,7 @@ class TestBaseCaching(DBTIntegrationTest):
         # we want to inspect the adapter that dbt used for the run, which is
         # not self.adapter. You can't do this until after you've run dbt once.
         self.run_dbt(['run'])
-        return factory._ADAPTERS[self.adapter_type]
+        return FACTORY.adapters[self.adapter_type]
 
     def cache_run(self):
         adapter = self.run_and_get_adapter()

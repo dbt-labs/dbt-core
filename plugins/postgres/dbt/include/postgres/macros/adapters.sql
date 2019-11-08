@@ -90,7 +90,7 @@
 {% endmacro %}
 
 {% macro postgres__check_schema_exists(information_schema, schema) -%}
-  {% if database -%}
+  {% if information_schema.database -%}
     {{ adapter.verify_database(information_schema.database) }}
   {%- endif -%}
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) %}
@@ -111,7 +111,6 @@
 {% macro postgres__make_temp_relation(base_relation, suffix) %}
     {% set tmp_identifier = base_relation.identifier ~ suffix ~ py_current_timestring() %}
     {% do return(base_relation.incorporate(
-                                  table_name=tmp_identifier,
                                   path={
                                     "identifier": tmp_identifier,
                                     "schema": none,

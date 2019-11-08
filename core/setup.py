@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from setuptools import find_packages
-from distutils.core import setup
+from setuptools import find_namespace_packages
+from setuptools import setup
 import os
 
 
@@ -9,7 +9,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.14.1"
+package_version = "0.15.0rc1"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -22,7 +22,7 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_packages(),
+    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [
             'include/index.html',
@@ -31,6 +31,7 @@ setup(
             'include/global_project/macros/*.sql',
             'include/global_project/macros/**/*.sql',
             'include/global_project/macros/**/**/*.sql',
+            'py.typed',
         ]
     },
     test_suite='test',
@@ -45,14 +46,33 @@ setup(
     install_requires=[
         'Jinja2>=2.10',
         'PyYAML>=3.11',
-        'sqlparse==0.2.3',
-        'networkx>=1.11,<3',
+        'sqlparse>=0.2.3,<0.4',
+        'networkx>=2.3,<3',
         'minimal-snowplow-tracker==0.0.2',
         'requests>=2.18.0,<3',
-        'colorama==0.3.9',
+        'colorama>=0.3.9,<0.5',
         'agate>=1.6,<2',
         'jsonschema>=3.0.1,<4',
         'json-rpc>=1.12,<2',
-        'werkzeug>=0.14.1,<0.15',
-    ]
+        'werkzeug>=0.15,<0.17',
+        'dataclasses==0.6;python_version<"3.7"',
+        'hologram==0.0.5',
+        'logbook>=1.5,<1.6',
+        'pytest-logbook>=1.2.0,<1.3',
+        'typing-extensions>=3.7.4,<3.8',
+    ],
+    zip_safe=False,
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+
+        'License :: OSI Approved :: Apache Software License',
+
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: POSIX :: Linux',
+
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
 )

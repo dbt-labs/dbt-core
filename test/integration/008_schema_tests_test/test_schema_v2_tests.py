@@ -27,21 +27,21 @@ class TestSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_schema_tests(self):
+    def test_postgres_schema_tests(self):
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
         test_results = self.run_schema_validations()
-        # If the disabled model's tests ran, there would be 19 of these.
-        self.assertEqual(len(test_results), 18)
+        # If the disabled model's tests ran, there would be 20 of these.
+        self.assertEqual(len(test_results), 19)
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
-            if 'failure' in result.node.get('name'):
+            if 'failure' in result.node.name:
                 self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
-                    'test {} did not fail'.format(result.node.get('name'))
+                    'test {} did not fail'.format(result.node.name)
                 )
 
             # assert that actual tests pass
@@ -51,7 +51,7 @@ class TestSchemaTests(DBTIntegrationTest):
                 # status = # of failing rows
                 self.assertEqual(
                     result.status, 0,
-                    'test {} failed'.format(result.node.get('name'))
+                    'test {} failed'.format(result.node.name)
                 )
 
         self.assertEqual(sum(x.status for x in test_results), 6)
@@ -77,20 +77,12 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_malformed_schema_test_wont_brick_run(self):
-        # dbt run should work (Despite broken schema test)
-        results = self.run_dbt(strict=False)
-        self.assertEqual(len(results), 2)
-
-        # in v2, we skip the entire model
-        ran_tests = self.run_schema_validations()
-        self.assertEqual(len(ran_tests), 5)
-        self.assertEqual(sum(x.status for x in ran_tests), 0)
-
-    @use_profile('postgres')
-    def test_malformed_schema_strict_will_break_run(self):
+    def test_postgres_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt(strict=True)
+        # even if strict = False!
+        with self.assertRaises(CompilationException):
+            self.run_dbt(strict=False)
 
 
 class TestHooksInTests(DBTIntegrationTest):
@@ -112,7 +104,7 @@ class TestHooksInTests(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_hooks_dont_run_for_tests(self):
+    def test_postgres_hooks_dont_run_for_tests(self):
         # This would fail if the hooks ran
         results = self.run_dbt(['test', '--model', 'ephemeral'])
         self.assertEqual(len(results), 1)
@@ -122,7 +114,7 @@ class TestHooksInTests(DBTIntegrationTest):
             # status = # of failing rows
             self.assertEqual(
                 result.status, 0,
-                'test {} failed'.format(result.node.get('name'))
+                'test {} failed'.format(result.node.name)
             )
 
 class TestCustomSchemaTests(DBTIntegrationTest):
@@ -170,7 +162,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_schema_tests(self):
+    def test_postgres_schema_tests(self):
         self.run_dbt(["deps"])
         results = self.run_dbt()
         self.assertEqual(len(results), 4)
@@ -217,12 +209,12 @@ class TestBQSchemaTests(DBTIntegrationTest):
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
-            if 'failure' in result.node.get('name'):
+            if 'failure' in result.node.name:
                 self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
-                    'test {} did not fail'.format(result.node.get('name'))
+                    'test {} did not fail'.format(result.node.name)
                 )
 
             # assert that actual tests pass
@@ -232,7 +224,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
                 # status = # of failing rows
                 self.assertEqual(
                     result.status, 0,
-                    'test {} failed'.format(result.node.get('name'))
+                    'test {} failed'.format(result.node.name)
                 )
 
         self.assertEqual(sum(x.status for x in test_results), 0)

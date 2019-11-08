@@ -1,144 +1,185 @@
-from dbt.api import APIObject
-from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, \
-    PARSED_SOURCE_DEFINITION_CONTRACT
-from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
-from dbt.exceptions import raise_duplicate_resource_name
-from dbt.node_types import NodeType
+import hashlib
+import os
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional, Union, Mapping, Any
+from uuid import UUID
+
+from hologram import JsonSchemaMixin
+
+from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
+    ParsedDocumentation
+from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.util import Writable, Replaceable
+from dbt.exceptions import raise_duplicate_resource_name, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_types import NodeType
 from dbt import tracking
 import dbt.utils
 
-# We allow either parsed or compiled nodes, or parsed sources, as some
-# 'compile()' calls in the runner actually just return the original parsed
-# node they were given.
-COMPILE_RESULT_NODE_CONTRACT = {
-    'anyOf': [
-        PARSED_NODE_CONTRACT,
-        COMPILED_NODE_CONTRACT,
-        PARSED_SOURCE_DEFINITION_CONTRACT,
-    ]
-}
+NodeEdgeMap = Dict[str, List[str]]
 
 
-COMPILE_RESULT_NODES_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed nodes, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': COMPILE_RESULT_NODE_CONTRACT
-    },
-}
+@dataclass
+class FilePath(JsonSchemaMixin):
+    searched_path: str
+    relative_path: str
+    project_root: str
+
+    @property
+    def search_key(self) -> str:
+        # TODO: should this be project name + path relative to project root?
+        return self.absolute_path
+
+    @property
+    def full_path(self) -> str:
+        # useful for symlink preservation
+        return os.path.join(
+            self.project_root, self.searched_path, self.relative_path
+        )
+
+    @property
+    def absolute_path(self) -> str:
+        return os.path.abspath(self.full_path)
+
+    @property
+    def original_file_path(self) -> str:
+        # this is mostly used for reporting errors. It doesn't show the project
+        # name, should it?
+        return os.path.join(
+            self.searched_path, self.relative_path
+        )
 
 
-PARSED_MACROS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed macros, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_MACRO_CONTRACT
-    },
-}
+@dataclass
+class FileHash(JsonSchemaMixin):
+    name: str  # the hash type name
+    checksum: str  # the hashlib.hash_type().hexdigest() of the file contents
+
+    @classmethod
+    def empty(cls):
+        return FileHash(name='none', checksum='')
+
+    @classmethod
+    def path(cls, path: str):
+        return FileHash(name='path', checksum=path)
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return False
+
+        if self.name == 'none' or self.name != other.name:
+            return False
+
+        return self.checksum == other.checksum
+
+    def compare(self, contents: str) -> bool:
+        """Compare the file contents with the given hash"""
+        if self.name == 'none':
+            return False
+
+        return self.from_contents(contents, name=self.name) == self.checksum
+
+    @classmethod
+    def from_contents(cls, contents: str, name='sha256'):
+        """Create a file hash from the given file contents. The hash is always
+        the utf-8 encoding of the contents given, because dbt only reads files
+        as utf-8.
+        """
+        data = contents.encode('utf-8')
+        checksum = hashlib.new(name, data).hexdigest()
+        return cls(name=name, checksum=checksum)
 
 
-PARSED_DOCUMENTATIONS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed docs, stored by their uniqe IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_DOCUMENTATION_CONTRACT,
-    },
-}
+@dataclass
+class RemoteFile(JsonSchemaMixin):
+    @property
+    def searched_path(self) -> str:
+        return 'from remote system'
+
+    @property
+    def relative_path(self) -> str:
+        return 'from remote system'
+
+    @property
+    def absolute_path(self) -> str:
+        return 'from remote system'
+
+    @property
+    def original_file_path(self):
+        return 'from remote system'
 
 
-NODE_EDGE_MAP = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': 'A map of node relationships',
-    'patternProperties': {
-        '.*': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'description': 'A node name',
-            }
-        }
-    }
-}
+@dataclass
+class SourceFile(JsonSchemaMixin):
+    """Define a source file in dbt"""
+    path: Union[FilePath, RemoteFile]  # the path information
+    checksum: FileHash
+    # we don't want to serialize this
+    _contents: Optional[str] = None
+    # the unique IDs contained in this file
+    nodes: List[str] = field(default_factory=list)
+    docs: List[str] = field(default_factory=list)
+    macros: List[str] = field(default_factory=list)
+    sources: List[str] = field(default_factory=list)
+    # any node patches in this file. The entries are names, not unique ids!
+    patches: List[str] = field(default_factory=list)
+
+    @property
+    def search_key(self) -> Optional[str]:
+        if isinstance(self.path, RemoteFile):
+            return None
+        if self.checksum.name == 'none':
+            return None
+        return self.path.search_key
+
+    @property
+    def contents(self) -> str:
+        if self._contents is None:
+            raise InternalException('SourceFile has no contents!')
+        return self._contents
+
+    @contents.setter
+    def contents(self, value):
+        self._contents = value
+
+    @classmethod
+    def empty(cls, path: FilePath) -> 'SourceFile':
+        self = cls(path=path, checksum=FileHash.empty())
+        self.contents = ''
+        return self
+
+    @classmethod
+    def seed(cls, path: FilePath) -> 'SourceFile':
+        """Seeds always parse the same regardless of their content."""
+        self = cls(path=path, checksum=FileHash.path(path.absolute_path))
+        self.contents = ''
+        return self
+
+    @classmethod
+    def remote(cls, contents: str) -> 'SourceFile':
+        self = cls(path=RemoteFile(), checksum=FileHash.empty())
+        self.contents = contents
+        return self
 
 
-PARSED_MANIFEST_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'The full parsed manifest of the graph, with both the required nodes'
-        ' and required macros.'
-    ),
-    'properties': {
-        'nodes': COMPILE_RESULT_NODES_CONTRACT,
-        'macros': PARSED_MACROS_CONTRACT,
-        'docs': PARSED_DOCUMENTATIONS_CONTRACT,
-        'disabled': {
-            'type': 'array',
-            'items': PARSED_NODE_CONTRACT,
-            'description': 'An array of disabled nodes',
-        },
-        'generated_at': {
-            'type': 'string',
-            'format': 'date-time',
-            'description': (
-                'The time at which the manifest was generated'
-            ),
-        },
-        'parent_map': NODE_EDGE_MAP,
-        'child_map': NODE_EDGE_MAP,
-        'metadata': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'project_id': {
-                    'type': ('string', 'null'),
-                    'description': (
-                        'The anonymized ID of the project. Persists as long '
-                        'as the project name stays the same.'
-                    ),
-                    'pattern': '[0-9a-f]{32}',
-                },
-                'user_id': {
-                    'type': ('string', 'null'),
-                    'description': (
-                        'The user ID assigned by dbt. Persists per-user as '
-                        'long as the user cookie file remains in place.'
-                    ),
-                    'pattern': (
-                        '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-'
-                        '[0-9a-f]{12}'
-                    ),
-                },
-                'send_anonymous_usage_stats': {
-                    'type': ('boolean', 'null'),
-                    'description': (
-                        'Whether or not to send anonymized usage statistics.'
-                    ),
-                },
-            },
-            'required': [
-                'project_id', 'user_id', 'send_anonymous_usage_stats',
-            ],
-        },
-    },
-    'required': ['nodes', 'macros', 'docs', 'generated_at', 'metadata'],
-}
+@dataclass
+class ManifestMetadata(JsonSchemaMixin, Replaceable):
+    project_id: Optional[str] = None
+    user_id: Optional[UUID] = None
+    send_anonymous_usage_stats: Optional[bool] = None
 
+    def __post_init__(self):
+        if tracking.active_user is None:
+            return
 
-class CompileResultNode(CompiledNode):
-    SCHEMA = COMPILE_RESULT_NODE_CONTRACT
+        if self.user_id is None:
+            self.user_id = tracking.active_user.id
+
+        if self.send_anonymous_usage_stats is None:
+            self.send_anonymous_usage_stats = (
+                not tracking.active_user.do_not_track
+            )
 
 
 def _sort_values(dct):
@@ -163,79 +204,63 @@ def build_edges(nodes):
     return _sort_values(forward_edges), _sort_values(backward_edges)
 
 
-class Manifest(APIObject):
-    SCHEMA = PARSED_MANIFEST_CONTRACT
+def _deepcopy(value):
+    return value.from_dict(value.to_dict())
+
+
+@dataclass
+class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
-    Nodes may be either ParsedNodes or CompiledNodes or a mix, depending upon
-    the current state of the compiler. Macros will always be ParsedMacros and
-    docs will always be ParsedDocumentations.
     """
-    def __init__(self, nodes, macros, docs, generated_at, disabled,
-                 config=None):
-        """The constructor. nodes and macros are dictionaries mapping unique
-        IDs to ParsedNode/CompiledNode and ParsedMacro objects, respectively.
-        docs is a dictionary mapping unique IDs to ParsedDocumentation objects.
-        generated_at is a text timestamp in RFC 3339 format.
-        disabled is a list of disabled FQNs (as strings).
+    nodes: Mapping[str, CompileResultNode]
+    macros: Mapping[str, ParsedMacro]
+    docs: Mapping[str, ParsedDocumentation]
+    generated_at: datetime
+    disabled: List[ParsedNode]
+    files: Mapping[str, SourceFile]
+    metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
+    flat_graph: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_macros(cls, macros=None, files=None) -> 'Manifest':
+        if macros is None:
+            macros = {}
+        if files is None:
+            files = {}
+        return cls(
+            nodes={},
+            macros=macros,
+            docs={},
+            generated_at=datetime.utcnow(),
+            disabled=[],
+            files=files,
+        )
+
+    def update_node(self, new_node):
+        unique_id = new_node.unique_id
+        if unique_id not in self.nodes:
+            raise dbt.exceptions.RuntimeException(
+                'got an update_node call with an unrecognized node: {}'
+                .format(unique_id)
+            )
+        existing = self.nodes[unique_id]
+        if new_node.original_file_path != existing.original_file_path:
+            raise dbt.exceptions.RuntimeException(
+                'cannot update a node to have a new file path!'
+            )
+        self.nodes[unique_id] = new_node
+
+    def build_flat_graph(self):
+        """This attribute is used in context.common by each node, so we want to
+        only build it once and avoid any concurrency issues around it.
+        Make sure you don't call this until you're done with building your
+        manifest!
         """
-        metadata = self.get_metadata(config)
-        self.nodes = nodes
-        self.macros = macros
-        self.docs = docs
-        self.generated_at = generated_at
-        self.metadata = metadata
-        self.disabled = disabled
-        self._flat_graph = None
-        super(Manifest, self).__init__()
-
-    @staticmethod
-    def get_metadata(config):
-        project_id = None
-        user_id = None
-        send_anonymous_usage_stats = None
-
-        if config is not None:
-            project_id = config.hashed_name()
-
-        if tracking.active_user is not None:
-            user_id = tracking.active_user.id
-            send_anonymous_usage_stats = not tracking.active_user.do_not_track
-
-        return {
-            'project_id': project_id,
-            'user_id': user_id,
-            'send_anonymous_usage_stats': send_anonymous_usage_stats,
+        self.flat_graph = {
+            'nodes': {
+                k: v.to_dict(omit_none=False) for k, v in self.nodes.items()
+            },
         }
-
-    def serialize(self):
-        """Convert the parsed manifest to a nested dict structure that we can
-        safely serialize to JSON.
-        """
-        forward_edges, backward_edges = build_edges(self.nodes.values())
-
-        return {
-            'nodes': {k: v.serialize() for k, v in self.nodes.items()},
-            'macros': {k: v.serialize() for k, v in self.macros.items()},
-            'docs': {k: v.serialize() for k, v in self.docs.items()},
-            'parent_map': backward_edges,
-            'child_map': forward_edges,
-            'generated_at': self.generated_at,
-            'metadata': self.metadata,
-            'disabled': [v.serialize() for v in self.disabled],
-        }
-
-    def to_flat_graph(self):
-        """This function gets called in context.common by each node, so we want
-        to cache it. Make sure you don't call this until you're done with
-        building your manifest!
-        """
-        if self._flat_graph is None:
-            self._flat_graph = {
-                'nodes': {
-                    k: v.serialize() for k, v in self.nodes.items()
-                },
-            }
-        return self._flat_graph
 
     def find_disabled_by_name(self, name, package=None):
         return dbt.utils.find_in_list_by_name(self.disabled, name, package,
@@ -243,7 +268,6 @@ class Manifest(APIObject):
 
     def _find_by_name(self, name, package, subgraph, nodetype):
         """
-
         Find a node by its given name in the appropriate sugraph. If package is
         None, all pacakges will be searched.
         nodetype should be a list of NodeTypes to accept.
@@ -328,38 +352,6 @@ class Manifest(APIObject):
 
         return resource_fqns
 
-    def _filter_subgraph(self, subgraph, predicate):
-        """
-        Given a subgraph of the manifest, and a predicate, filter
-        the subgraph using that predicate. Generates a list of nodes.
-        """
-        to_return = []
-
-        for unique_id, item in subgraph.items():
-            if predicate(item):
-                to_return.append(item)
-
-        return to_return
-
-    def _model_matches_schema_and_table(self, schema, table, model):
-        if model.resource_type == NodeType.Source:
-            return (model.schema.lower() == schema.lower() and
-                    model.identifier.lower() == table.lower())
-        return (model.schema.lower() == schema.lower() and
-                model.alias.lower() == table.lower())
-
-    def get_unique_ids_for_schema_and_table(self, schema, table):
-        """
-        Given a schema and table, find matching models, and return
-        their unique_ids. A schema and table may have more than one
-        match if the relation matches both a source and a seed, for instance.
-        """
-        def predicate(model):
-            return self._model_matches_schema_and_table(schema, table, model)
-
-        matching = list(self._filter_subgraph(self.nodes, predicate))
-        return [match.get('unique_id') for match in matching]
-
     def add_nodes(self, new_nodes):
         """Add the given dict of new nodes to the manifest."""
         for unique_id, node in new_nodes.items():
@@ -370,6 +362,8 @@ class Manifest(APIObject):
     def patch_nodes(self, patches):
         """Patch nodes with the given dict of patches. Note that this consumes
         the input!
+        This relies on the fact that all nodes have unique _name_ fields, not
+        just unique unique_id fields.
         """
         # because we don't have any mapping from node _names_ to nodes, and we
         # only have the node name in the patch, we have to iterate over all the
@@ -393,11 +387,6 @@ class Manifest(APIObject):
                     'not found or is disabled').format(patch.name)
                 )
 
-    def __getattr__(self, name):
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, name)
-        )
-
     def get_used_schemas(self, resource_types=None):
         return frozenset({
             (node.database, node.schema)
@@ -408,12 +397,77 @@ class Manifest(APIObject):
     def get_used_databases(self):
         return frozenset(node.database for node in self.nodes.values())
 
-    def deepcopy(self, config=None):
+    def deepcopy(self):
         return Manifest(
-            nodes={k: v.incorporate() for k, v in self.nodes.items()},
-            macros={k: v.incorporate() for k, v in self.macros.items()},
-            docs={k: v.incorporate() for k, v in self.docs.items()},
+            nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
+            macros={k: _deepcopy(v) for k, v in self.macros.items()},
+            docs={k: _deepcopy(v) for k, v in self.docs.items()},
             generated_at=self.generated_at,
-            disabled=[n.incorporate() for n in self.disabled],
-            config=config
+            disabled=[_deepcopy(n) for n in self.disabled],
+            metadata=self.metadata,
+            files={k: _deepcopy(v) for k, v in self.files.items()},
         )
+
+    def writable_manifest(self):
+        forward_edges, backward_edges = build_edges(self.nodes.values())
+
+        return WritableManifest(
+            nodes=self.nodes,
+            macros=self.macros,
+            docs=self.docs,
+            generated_at=self.generated_at,
+            metadata=self.metadata,
+            disabled=self.disabled,
+            child_map=forward_edges,
+            parent_map=backward_edges,
+            files=self.files,
+        )
+
+    @classmethod
+    def from_writable_manifest(cls, writable):
+        self = cls(
+            nodes=writable.nodes,
+            macros=writable.macros,
+            docs=writable.docs,
+            generated_at=writable.generated_at,
+            metadata=writable.metadata,
+            disabled=writable.disabled,
+            files=writable.files,
+        )
+        self.metadata = writable.metadata
+        return self
+
+    @classmethod
+    def from_dict(cls, data, validate=True):
+        writable = WritableManifest.from_dict(data=data, validate=validate)
+        return cls.from_writable_manifest(writable)
+
+    def to_dict(self, omit_none=True, validate=False):
+        return self.writable_manifest().to_dict(
+            omit_none=omit_none, validate=validate
+        )
+
+    def write(self, path):
+        self.writable_manifest().write(path)
+
+    def expect(self, unique_id: str) -> CompileResultNode:
+        if unique_id not in self.nodes:
+            # something terrible has happened
+            raise dbt.exceptions.InternalException(
+                'Expected node {} not found in manifest'.format(unique_id)
+            )
+        return self.nodes[unique_id]
+
+
+@dataclass
+class WritableManifest(JsonSchemaMixin, Writable):
+    nodes: Mapping[str, CompileResultNode]
+    macros: Mapping[str, ParsedMacro]
+    docs: Mapping[str, ParsedDocumentation]
+    disabled: Optional[List[ParsedNode]]
+    generated_at: datetime
+    parent_map: Optional[NodeEdgeMap]
+    child_map: Optional[NodeEdgeMap]
+    metadata: ManifestMetadata
+    # map of original_file_path to all unique IDs provided by that file
+    files: Mapping[str, SourceFile]

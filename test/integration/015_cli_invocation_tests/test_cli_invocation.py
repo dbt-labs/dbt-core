@@ -19,7 +19,7 @@ class ModelCopyingIntegrationTest(DBTIntegrationTest):
 class TestCLIInvocation(ModelCopyingIntegrationTest):
 
     def setUp(self):
-        super(TestCLIInvocation, self).setUp()
+        super().setUp()
         self.run_sql_file("seed.sql")
 
     @property
@@ -31,13 +31,13 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_toplevel_dbt_run(self):
+    def test_postgres_toplevel_dbt_run(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
 
     @use_profile('postgres')
-    def test_subdir_dbt_run(self):
+    def test_postgres_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
 
         results = self.run_dbt(['run'])
@@ -48,7 +48,7 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
 class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
     def setUp(self):
-        super(TestCLIInvocationWithProfilesDir, self).setUp()
+        super().setUp()
 
         self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.custom_schema))
         self.run_sql("CREATE SCHEMA {};".format(self.custom_schema))
@@ -97,7 +97,7 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_toplevel_dbt_run_with_profile_dir_arg(self):
+    def test_postgres_toplevel_dbt_run_with_profile_dir_arg(self):
         results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
         self.assertEqual(len(results), 1)
 
@@ -111,4 +111,4 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
         # make sure the test runs against `custom_schema`
         for test_result in res:
             self.assertTrue(self.custom_schema,
-                            test_result.node.get('wrapped_sql'))
+                            test_result.node.wrapped_sql)

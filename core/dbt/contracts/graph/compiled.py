@@ -1,129 +1,139 @@
-from dbt.api import APIObject
-from dbt.utils import deep_merge
-from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_MACRO_CONTRACT, ParsedNode
-
-import dbt.compat
-
-import sqlparse
-
-INJECTED_CTE_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': 'A single entry in the CTEs list',
-    'properties': {
-        'id': {
-            'type': 'string',
-            'description': 'The id of the CTE',
-        },
-        'sql': {
-            'type': ['string', 'null'],
-            'description': 'The compiled SQL of the CTE',
-            'additionalProperties': True,
-        },
-    },
-    'required': ['id', 'sql'],
-}
-
-
-COMPILED_NODE_CONTRACT = deep_merge(
-    PARSED_NODE_CONTRACT,
-    {
-        # TODO: when we add 'extra_ctes' back in, flip this back to False
-        'additionalProperties': True,
-        'properties': {
-            'compiled': {
-                'description': (
-                    'This is true after the node has been compiled, but ctes '
-                    'have not necessarily been injected into the node.'
-                ),
-                'type': 'boolean'
-            },
-            'compiled_sql': {
-                'type': ['string', 'null'],
-            },
-            'extra_ctes_injected': {
-                'description': (
-                    'This is true after extra ctes have been injected into '
-                    'the compiled node.'
-                ),
-                'type': 'boolean',
-            },
-            'extra_ctes': {
-                'type': 'array',
-                'description': 'The injected CTEs for a model',
-                'items': INJECTED_CTE_CONTRACT,
-            },
-            'injected_sql': {
-                'type': ['string', 'null'],
-                'description': 'The SQL after CTEs have been injected',
-            },
-            'wrapped_sql': {
-                'type': ['string', 'null'],
-                'description': (
-                    'The SQL after it has been wrapped (for tests, '
-                    'operations, and analysis)'
-                ),
-            },
-        },
-        'required': PARSED_NODE_CONTRACT['required'] + [
-            'compiled', 'compiled_sql', 'extra_ctes_injected',
-            'injected_sql', 'extra_ctes'
-        ]
-    }
+from dbt.contracts.graph.parsed import (
+    ParsedNode,
+    ParsedAnalysisNode,
+    ParsedModelNode,
+    ParsedHookNode,
+    ParsedRPCNode,
+    ParsedSeedNode,
+    ParsedSnapshotNode,
+    ParsedSourceDefinition,
+    ParsedTestNode,
+    TestConfig,
+    TestMetadata,
+    PARSED_TYPES,
 )
+from dbt.node_types import NodeType
+from dbt.contracts.util import Replaceable
+from dbt.exceptions import InternalException, RuntimeException
+
+from hologram import JsonSchemaMixin
+from dataclasses import dataclass, field
+import sqlparse  # type: ignore
+from typing import Optional, List, Union, Dict, Type
 
 
-COMPILED_NODES_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the compiled nodes, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': COMPILED_NODE_CONTRACT
-    },
-}
+@dataclass
+class InjectedCTE(JsonSchemaMixin, Replaceable):
+    id: str
+    sql: str
+
+# for some frustrating reason, we can't subclass from ParsedNode directly,
+# or typing.Union will flatten CompiledNode+ParsedNode into just ParsedNode.
+# TODO: understand that issue and come up with some way for these two to share
+# logic
 
 
-COMPILED_MACRO_CONTRACT = PARSED_MACRO_CONTRACT
+@dataclass
+class CompiledNode(ParsedNode):
+    compiled: bool = False
+    compiled_sql: Optional[str] = None
+    extra_ctes_injected: bool = False
+    extra_ctes: List[InjectedCTE] = field(default_factory=list)
+    injected_sql: Optional[str] = None
+    wrapped_sql: Optional[str] = None
+
+    def prepend_ctes(self, prepended_ctes: List[InjectedCTE]):
+        self.extra_ctes_injected = True
+        self.extra_ctes = prepended_ctes
+        if self.compiled_sql is None:
+            raise RuntimeException(
+                'Cannot prepend ctes to an unparsed node', self
+            )
+        self.injected_sql = _inject_ctes_into_sql(
+            self.compiled_sql,
+            prepended_ctes,
+        )
+        self.validate(self.to_dict())
+
+    def set_cte(self, cte_id: str, sql: str):
+        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
+        do if extra_ctes were an OrderedDict
+        """
+        for cte in self.extra_ctes:
+            if cte.id == cte_id:
+                cte.sql = sql
+                break
+        else:
+            self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
 
-COMPILED_MACROS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the compiled macros, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': COMPILED_MACRO_CONTRACT
-    },
-}
+@dataclass
+class CompiledAnalysisNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
 
 
-COMPILED_GRAPH_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'The full compiled graph, with both the required nodes and required '
-        'macros.'
-    ),
-    'properties': {
-        'nodes': COMPILED_NODES_CONTRACT,
-        'macros': COMPILED_MACROS_CONTRACT,
-    },
-    'required': ['nodes', 'macros'],
-}
+@dataclass
+class CompiledHookNode(CompiledNode):
+    resource_type: NodeType = field(
+        metadata={'restrict': [NodeType.Operation]}
+    )
+    index: Optional[int] = None
 
 
-def _inject_ctes_into_sql(sql, ctes):
+@dataclass
+class CompiledModelNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
+
+
+@dataclass
+class CompiledRPCNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+
+
+@dataclass
+class CompiledSeedNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    seed_file_path: str = ''
+
+    def __post_init__(self):
+        if self.seed_file_path == '':
+            raise InternalException(
+                'Seeds should always have a seed_file_path'
+            )
+
+    @property
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
+
+
+@dataclass
+class CompiledSnapshotNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+
+
+@dataclass
+class CompiledTestNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    column_name: Optional[str] = None
+    config: TestConfig = field(default_factory=TestConfig)
+    test_metadata: Optional[TestMetadata] = None
+
+
+def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     """
-    `ctes` is a dict of CTEs in the form:
+    `ctes` is a list of InjectedCTEs like:
 
-      {
-        "cte_id_1": "__dbt__CTE__ephemeral as (select * from table)",
-        "cte_id_2": "__dbt__CTE__events as (select id, type from events)"
-      }
+        [
+            InjectedCTE(
+                id="cte_id_1",
+                sql="__dbt__CTE__ephemeral as (select * from table)",
+            ),
+            InjectedCTE(
+                id="cte_id_2",
+                sql="__dbt__CTE__events as (select id, type from events)",
+            ),
+        ]
 
     Given `sql` like:
 
@@ -163,74 +173,59 @@ def _inject_ctes_into_sql(sql, ctes):
 
     token = sqlparse.sql.Token(
         sqlparse.tokens.Keyword,
-        ", ".join(c['sql'] for c in ctes)
+        ", ".join(c.sql for c in ctes)
     )
     parsed.insert_after(with_stmt, token)
 
-    return dbt.compat.to_string(parsed)
+    return str(parsed)
 
 
-class CompiledNode(ParsedNode):
-    SCHEMA = COMPILED_NODE_CONTRACT
-
-    def prepend_ctes(self, prepended_ctes):
-        self._contents['extra_ctes_injected'] = True
-        self._contents['extra_ctes'] = prepended_ctes
-        self._contents['injected_sql'] = _inject_ctes_into_sql(
-            self.compiled_sql,
-            prepended_ctes
-        )
-        self.validate()
-
-    @property
-    def extra_ctes_injected(self):
-        return self._contents.get('extra_ctes_injected')
-
-    @property
-    def extra_ctes(self):
-        return self._contents.get('extra_ctes')
-
-    @property
-    def compiled(self):
-        return self._contents.get('compiled')
-
-    @compiled.setter
-    def compiled(self, value):
-        self._contents['compiled'] = value
-
-    @property
-    def injected_sql(self):
-        return self._contents.get('injected_sql')
-
-    @property
-    def compiled_sql(self):
-        return self._contents.get('compiled_sql')
-
-    @compiled_sql.setter
-    def compiled_sql(self, value):
-        self._contents['compiled_sql'] = value
-
-    @property
-    def wrapped_sql(self):
-        return self._contents.get('wrapped_sql')
-
-    @wrapped_sql.setter
-    def wrapped_sql(self, value):
-        self._contents['wrapped_sql'] = value
-
-    def set_cte(self, cte_id, sql):
-        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
-        do if extra_ctes were an OrderedDict
-        """
-        for cte in self.extra_ctes:
-            if cte['id'] == cte_id:
-                cte['sql'] = sql
-                break
-        else:
-            self.extra_ctes.append(
-                {'id': cte_id, 'sql': sql}
-            )
+COMPILED_TYPES: Dict[NodeType, Type[CompiledNode]] = {
+    NodeType.Analysis: CompiledAnalysisNode,
+    NodeType.Model: CompiledModelNode,
+    NodeType.Operation: CompiledHookNode,
+    NodeType.RPCCall: CompiledRPCNode,
+    NodeType.Seed: CompiledSeedNode,
+    NodeType.Snapshot: CompiledSnapshotNode,
+    NodeType.Test: CompiledTestNode,
+}
 
 
-class CompiledGraph(APIObject):
-    SCHEMA = COMPILED_GRAPH_CONTRACT
+def compiled_type_for(parsed: ParsedNode):
+    if parsed.resource_type in COMPILED_TYPES:
+        return COMPILED_TYPES[parsed.resource_type]
+    else:
+        return type(parsed)
+
+
+def parsed_instance_for(compiled: CompiledNode) -> ParsedNode:
+    cls = PARSED_TYPES.get(compiled.resource_type)
+    if cls is None:
+        # how???
+        raise ValueError('invalid resource_type: {}'
+                         .format(compiled.resource_type))
+
+    # validate=False to allow extra keys from compiling
+    return cls.from_dict(compiled.to_dict(), validate=False)
+
+
+# We allow either parsed or compiled nodes, or parsed sources, as some
+# 'compile()' calls in the runner actually just return the original parsed
+# node they were given.
+CompileResultNode = Union[
+    CompiledAnalysisNode,
+    CompiledModelNode,
+    CompiledHookNode,
+    CompiledRPCNode,
+    CompiledSeedNode,
+    CompiledSnapshotNode,
+    CompiledTestNode,
+    ParsedAnalysisNode,
+    ParsedModelNode,
+    ParsedHookNode,
+    ParsedRPCNode,
+    ParsedSeedNode,
+    ParsedSnapshotNode,
+    ParsedSourceDefinition,
+    ParsedTestNode,
+]
