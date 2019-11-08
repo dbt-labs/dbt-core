@@ -55,6 +55,8 @@ class RemoteCompileProjectTask(
     def set_args(self, params: RPCCompileParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
+        if params.threads is not None:
+            self.args.threads = params.threads
 
 
 class RemoteRunProjectTask(RPCCommandTask[RPCCompileParameters], RunTask):
@@ -63,12 +65,16 @@ class RemoteRunProjectTask(RPCCommandTask[RPCCompileParameters], RunTask):
     def set_args(self, params: RPCCompileParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
+        if params.threads is not None:
+            self.args.threads = params.threads
 
 
 class RemoteSeedProjectTask(RPCCommandTask[RPCSeedParameters], SeedTask):
     METHOD_NAME = 'seed'
 
     def set_args(self, params: RPCSeedParameters) -> None:
+        if params.threads is not None:
+            self.args.threads = params.threads
         self.args.show = params.show
 
 
@@ -80,6 +86,8 @@ class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
         self.args.exclude = self._listify(params.exclude)
         self.args.data = params.data
         self.args.schema = params.schema
+        if params.threads is not None:
+            self.args.threads = params.threads
 
 
 class RemoteDocsGenerateProjectTask(
@@ -140,3 +148,5 @@ class RemoteSnapshotTask(RPCCommandTask[RPCSnapshotParameters], SnapshotTask):
         # select has an argparse `dest` value of `models`.
         self.args.models = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
+        if params.threads is not None:
+            self.args.threads = params.threads

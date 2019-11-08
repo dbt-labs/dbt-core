@@ -1,5 +1,6 @@
 # flake8: disable=redefined-outer-name
 import time
+import yaml
 from .util import (
     ProjectDefinition, rpc_server, Querier, built_schema, get_querier,
 )
@@ -458,3 +459,137 @@ def test_snapshots_cli(project_root, profiles_root, postgres_profile, unique_sch
         token = querier.is_async_result(querier.cli_args(cli='snapshot --select=snapshot_actual'))
         results = querier.is_result(querier.async_wait(token))
         assert len(results['results']) == 1
+
+
+def assert_has_threads(results, num_threads):
+    assert 'logs' in results
+    c_logs = [l for l in results['logs'] if 'Concurrency' in l['message']]
+    assert len(c_logs) == 1, \
+        f'Got invalid number of concurrency logs ({len(c_logs)})'
+    assert 'message' in c_logs[0]
+    assert f'Concurrency: {num_threads} threads' in c_logs[0]['message']
+
+
+def test_rpc_run_threads(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'}
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.run(threads=5))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 5)
+
+        token = querier.is_async_result(querier.cli_args('run --threads=7'))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 7)
+
+
+def test_rpc_compile_threads(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'}
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.compile(threads=5))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 5)
+
+        token = querier.is_async_result(querier.cli_args('compile --threads=7'))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 7)
+
+
+def test_rpc_test_threads(project_root, profiles_root, postgres_profile, unique_schema):
+    schema_yaml = {
+        'version': 2,
+        'models': [{
+            'name': 'my_model',
+            'columns': [
+                {
+                    'name': 'id',
+                    'tests': ['not_null', 'unique'],
+                },
+            ],
+        }],
+    }
+    project = ProjectDefinition(
+        models={
+            'my_model.sql': 'select 1 as id',
+            'schema.yml': yaml.safe_dump(schema_yaml)}
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+    with querier_ctx as querier:
+        # first run dbt to get the model built
+        token = querier.is_async_result(querier.run())
+        querier.is_result(querier.async_wait(token))
+
+        token = querier.is_async_result(querier.test(threads=5))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 5)
+
+        token = querier.is_async_result(querier.cli_args('test --threads=7'))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 7)
+
+
+def test_rpc_snapshot_threads(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        snapshots={'my_snapshots.sql': snapshot_data},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.snapshot(threads=5))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 5)
+
+        token = querier.is_async_result(querier.cli_args('snapshot --threads=7'))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 7)
+
+
+def test_rpc_seed_threads(project_root, profiles_root, postgres_profile, unique_schema):
+    project = ProjectDefinition(
+        seeds={'data.csv': 'a,b\n1,hello\n2,goodbye'}
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        token = querier.is_async_result(querier.seed(threads=5))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 5)
+
+        token = querier.is_async_result(querier.cli_args('seed --threads=7'))
+        results = querier.is_result(querier.async_wait(token))
+        assert_has_threads(results, 7)
