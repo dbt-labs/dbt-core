@@ -3,7 +3,7 @@
   {%- if dist is not none -%}
       {%- set dist = dist.strip().lower() -%}
 
-      {%- if dist in ['all', 'even'] -%}
+      {%- if dist in ['all', 'even', 'auto'] -%}
         diststyle {{ dist }}
       {%- else -%}
         diststyle key distkey ({{ dist }})
