@@ -88,7 +88,7 @@ class KillParameters(RPCParameters):
 @dataclass
 class PollParameters(RPCParameters):
     request_token: TaskID
-    logs: bool = False
+    logs: bool = True
     logs_start: int = 0
 
 

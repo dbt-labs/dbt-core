@@ -1,12 +1,15 @@
 # flake8: disable=redefined-outer-name
+
 import time
 import yaml
 from .util import (
-    ProjectDefinition, rpc_server, Querier, built_schema, get_querier,
+    ProjectDefinition, get_querier,
 )
 
 
-def test_rpc_basics(project_root, profiles_root, postgres_profile, unique_schema):
+def test_rpc_basics(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
@@ -19,17 +22,17 @@ def test_rpc_basics(project_root, profiles_root, postgres_profile, unique_schema
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.run_sql('select 1 as id'))
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.run_sql('select 1 as id'))
 
-        token = querier.is_async_result(querier.run())
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.run())
 
-        token = querier.is_async_result(querier.run_sql('select * from {{ ref("my_model") }}'))
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(
+            querier.run_sql('select * from {{ ref("my_model") }}')
+        )
 
-        token = querier.is_async_result(querier.run_sql('select * from {{ reff("my_model") }}'))
-        querier.is_error(querier.async_wait(token))
+        querier.async_wait_for_error(
+            querier.run_sql('select * from {{ reff("my_model") }}')
+        )
 
 
 def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema):
@@ -49,15 +52,13 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
 
     with querier_ctx as querier:
         # we should be able to run sql queries at startup
-        token = querier.is_async_result(querier.run_sql('select 1 as id'))
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.run_sql('select 1 as id'))
 
         # the status should be something positive
         querier.is_result(querier.status())
 
         # deps should pass
-        token = querier.is_async_result(querier.deps())
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.deps())
 
         # queries should work after deps
         tok1 = querier.is_async_result(querier.run())
@@ -78,8 +79,7 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
         querier.is_result(querier.async_wait(tok1))
 
         # now run deps again, it should be sad
-        token = querier.is_async_result(querier.deps())
-        querier.is_error(querier.async_wait(token))
+        querier.async_wait_for_error(querier.deps())
         # it should also not be running.
         result = querier.is_result(querier.ps(active=True, completed=False))
         assert result['rows'] == []
@@ -91,8 +91,7 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
         querier.is_error(querier.run())
 
         # deps should pass now
-        token = querier.is_async_result(querier.deps())
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.deps())
         querier.is_result(querier.status())
 
         tok1 = querier.is_async_result(querier.run())
@@ -198,8 +197,7 @@ def test_rpc_status_error(project_root, profiles_root, postgres_profile, unique_
         assert 'Invalid test config' in error['data']['message']
 
         # deps should fail because it still can't parse the manifest
-        token = querier.is_async_result(querier.deps())
-        querier.is_error(querier.async_wait(token))
+        querier.async_wait_for_error(querier.deps())
 
         # and not resolve the issue
         result = querier.is_result(querier.status())
@@ -215,8 +213,7 @@ def test_rpc_status_error(project_root, profiles_root, postgres_profile, unique_
         project.write_models(project_root, remove=True)
 
         # deps should work
-        token = querier.is_async_result(querier.deps())
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.deps())
 
         result = querier.is_result(querier.status())
         assert result.get('error') is None
@@ -241,8 +238,7 @@ def test_gc_change_interval(project_root, profiles_root, postgres_profile, uniqu
     with querier_ctx as querier:
 
         for _ in range(10):
-            token = querier.is_async_result(querier.run())
-            querier.is_result(querier.async_wait(token))
+            querier.async_wait_for_result(querier.run())
 
         result = querier.is_result(querier.ps(True, True))
         assert len(result['rows']) == 10
@@ -266,8 +262,7 @@ def test_gc_change_interval(project_root, profiles_root, postgres_profile, uniqu
         time.sleep(0.5)
 
         for _ in range(10):
-            token = querier.is_async_result(querier.run())
-            querier.is_result(querier.async_wait(token))
+            querier.async_wait_for_result(querier.run())
 
         time.sleep(0.5)
         result = querier.is_result(querier.ps(True, True))
@@ -288,8 +283,7 @@ def test_ps_poll_output_match(project_root, profiles_root, postgres_profile, uni
 
     with querier_ctx as querier:
 
-        token = querier.is_async_result(querier.run())
-        poll_result = querier.is_result(querier.async_wait(token))
+        poll_result = querier.async_wait_for_result(querier.run())
 
         result = querier.is_result(querier.ps(active=True, completed=True))
         assert 'rows' in result
@@ -314,7 +308,9 @@ macros_data = '''
 '''
 
 
-def test_run_operation(project_root, profiles_root, postgres_profile, unique_schema):
+def test_run_operation(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'},
         macros={
@@ -330,30 +326,37 @@ def test_run_operation(project_root, profiles_root, postgres_profile, unique_sch
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.run_operation(macro='foo', args={}))
-        poll_result = querier.is_result(querier.async_wait(token))
+        poll_result = querier.async_wait_for_result(
+            querier.run_operation(macro='foo', args={})
+        )
 
         assert 'success' in poll_result
         assert poll_result['success'] is True
 
-        token = querier.is_async_result(querier.run_operation(macro='bar', args={'value': 10}))
-        poll_result = querier.is_result(querier.async_wait(token))
+        poll_result = querier.async_wait_for_result(
+            querier.run_operation(macro='bar', args={'value': 10})
+        )
 
         assert 'success' in poll_result
         assert poll_result['success'] is True
 
-        token = querier.is_async_result(querier.run_operation(macro='baz', args={}))
-        poll_result = querier.is_result(querier.async_wait(token, state='failed'))
+        poll_result = querier.async_wait_for_result(
+            querier.run_operation(macro='baz', args={}),
+            state='failed',
+        )
         assert 'state' in poll_result
         assert poll_result['state'] == 'failed'
 
-        token = querier.is_async_result(querier.run_operation(macro='quux', args={}))
-        poll_result = querier.is_result(querier.async_wait(token))
+        poll_result = querier.async_wait_for_result(
+            querier.run_operation(macro='quux', args={})
+        )
         assert 'success' in poll_result
         assert poll_result['success'] is True
 
 
-def test_run_operation_cli(project_root, profiles_root, postgres_profile, unique_schema):
+def test_run_operation_cli(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'},
         macros={
@@ -369,25 +372,31 @@ def test_run_operation_cli(project_root, profiles_root, postgres_profile, unique
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.cli_args(cli='run-operation foo'))
-        poll_result = querier.is_result(querier.async_wait(token))
+        poll_result = querier.async_wait_for_result(
+            querier.cli_args(cli='run-operation foo')
+        )
 
         assert 'success' in poll_result
         assert poll_result['success'] is True
 
-        token = querier.is_async_result(querier.cli_args(cli='''run-operation bar --args="{'value': 10}"'''))
-        poll_result = querier.is_result(querier.async_wait(token))
+        bar_cmd = '''run-operation bar --args="{'value': 10}"'''
+        poll_result = querier.async_wait_for_result(
+            querier.cli_args(cli=bar_cmd)
+        )
 
         assert 'success' in poll_result
         assert poll_result['success'] is True
 
-        token = querier.is_async_result(querier.cli_args(cli='run-operation baz'))
-        poll_result = querier.is_result(querier.async_wait(token, state='failed'))
+        poll_result = querier.async_wait_for_result(
+            querier.cli_args(cli='run-operation baz'),
+            state='failed',
+        )
         assert 'state' in poll_result
         assert poll_result['state'] == 'failed'
 
-        token = querier.is_async_result(querier.cli_args(cli='run-operation quux'))
-        poll_result = querier.is_result(querier.async_wait(token))
+        poll_result = querier.async_wait_for_result(
+            querier.cli_args(cli='run-operation quux')
+        )
         assert 'success' in poll_result
         assert poll_result['success'] is True
 
@@ -410,7 +419,9 @@ snapshot_data = '''
 '''
 
 
-def test_snapshots(project_root, profiles_root, postgres_profile, unique_schema):
+def test_snapshots(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         snapshots={'my_snapshots.sql': snapshot_data},
     )
@@ -423,19 +434,22 @@ def test_snapshots(project_root, profiles_root, postgres_profile, unique_schema)
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.snapshot())
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.snapshot())
         assert len(results['results']) == 1
 
-        token = querier.is_async_result(querier.snapshot(exclude=['snapshot_actual']))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.snapshot(
+            exclude=['snapshot_actual'])
+        )
 
-        token = querier.is_async_result(querier.snapshot(select=['snapshot_actual']))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.snapshot(select=['snapshot_actual'])
+        )
         assert len(results['results']) == 1
 
 
-def test_snapshots_cli(project_root, profiles_root, postgres_profile, unique_schema):
+def test_snapshots_cli(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         snapshots={'my_snapshots.sql': snapshot_data},
     )
@@ -448,16 +462,19 @@ def test_snapshots_cli(project_root, profiles_root, postgres_profile, unique_sch
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.cli_args(cli='snapshot'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args(cli='snapshot')
+        )
         assert len(results['results']) == 1
 
-        token = querier.is_async_result(querier.cli_args(cli='snapshot --exclude=snapshot_actual'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args(cli='snapshot --exclude=snapshot_actual')
+        )
         assert len(results['results']) == 0
 
-        token = querier.is_async_result(querier.cli_args(cli='snapshot --select=snapshot_actual'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args(cli='snapshot --select=snapshot_actual')
+        )
         assert len(results['results']) == 1
 
 
@@ -470,7 +487,9 @@ def assert_has_threads(results, num_threads):
     assert f'Concurrency: {num_threads} threads' in c_logs[0]['message']
 
 
-def test_rpc_run_threads(project_root, profiles_root, postgres_profile, unique_schema):
+def test_rpc_run_threads(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
@@ -482,16 +501,18 @@ def test_rpc_run_threads(project_root, profiles_root, postgres_profile, unique_s
         test_kwargs={},
     )
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.run(threads=5))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.run(threads=5))
         assert_has_threads(results, 5)
 
-        token = querier.is_async_result(querier.cli_args('run --threads=7'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args('run --threads=7')
+        )
         assert_has_threads(results, 7)
 
 
-def test_rpc_compile_threads(project_root, profiles_root, postgres_profile, unique_schema):
+def test_rpc_compile_threads(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
@@ -503,16 +524,18 @@ def test_rpc_compile_threads(project_root, profiles_root, postgres_profile, uniq
         test_kwargs={},
     )
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.compile(threads=5))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.compile(threads=5))
         assert_has_threads(results, 5)
 
-        token = querier.is_async_result(querier.cli_args('compile --threads=7'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args('compile --threads=7')
+        )
         assert_has_threads(results, 7)
 
 
-def test_rpc_test_threads(project_root, profiles_root, postgres_profile, unique_schema):
+def test_rpc_test_threads(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     schema_yaml = {
         'version': 2,
         'models': [{
@@ -539,19 +562,20 @@ def test_rpc_test_threads(project_root, profiles_root, postgres_profile, unique_
     )
     with querier_ctx as querier:
         # first run dbt to get the model built
-        token = querier.is_async_result(querier.run())
-        querier.is_result(querier.async_wait(token))
+        querier.async_wait_for_result(querier.run())
 
-        token = querier.is_async_result(querier.test(threads=5))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.test(threads=5))
         assert_has_threads(results, 5)
 
-        token = querier.is_async_result(querier.cli_args('test --threads=7'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args('test --threads=7')
+        )
         assert_has_threads(results, 7)
 
 
-def test_rpc_snapshot_threads(project_root, profiles_root, postgres_profile, unique_schema):
+def test_rpc_snapshot_threads(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         snapshots={'my_snapshots.sql': snapshot_data},
     )
@@ -564,16 +588,18 @@ def test_rpc_snapshot_threads(project_root, profiles_root, postgres_profile, uni
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.snapshot(threads=5))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.snapshot(threads=5))
         assert_has_threads(results, 5)
 
-        token = querier.is_async_result(querier.cli_args('snapshot --threads=7'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args('snapshot --threads=7')
+        )
         assert_has_threads(results, 7)
 
 
-def test_rpc_seed_threads(project_root, profiles_root, postgres_profile, unique_schema):
+def test_rpc_seed_threads(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
     project = ProjectDefinition(
         seeds={'data.csv': 'a,b\n1,hello\n2,goodbye'}
     )
@@ -586,10 +612,102 @@ def test_rpc_seed_threads(project_root, profiles_root, postgres_profile, unique_
     )
 
     with querier_ctx as querier:
-        token = querier.is_async_result(querier.seed(threads=5))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(querier.seed(threads=5))
         assert_has_threads(results, 5)
 
-        token = querier.is_async_result(querier.cli_args('seed --threads=7'))
-        results = querier.is_result(querier.async_wait(token))
+        results = querier.async_wait_for_result(
+            querier.cli_args('seed --threads=7')
+        )
         assert_has_threads(results, 7)
+
+
+sleeper_sql = '''
+{{ log('test output', info=True) }}
+{{ run_query('select * from pg_sleep(20)') }}
+select 1 as id
+'''
+
+logger_sql = '''
+{{ log('test output', info=True) }}
+select 1 as id
+'''
+
+
+def find_log_ordering(logs, *messages) -> bool:
+    log_iter = iter(logs)
+    found = 0
+
+    while found < len(messages):
+        try:
+            log = next(log_iter)
+        except StopIteration:
+            return False
+        if messages[found] in log['message']:
+            found += 1
+    return True
+
+
+def poll_logs(querier, token):
+    has_log = querier.is_result(querier.poll(token))
+    assert 'logs' in has_log
+    return has_log['logs']
+
+
+def wait_for_log_ordering(querier, token, attempts, *messages) -> int:
+    for _ in range(attempts):
+        time.sleep(1)
+        logs = poll_logs(querier, token)
+        if find_log_ordering(logs, *messages):
+            return len(logs)
+
+    msg = 'Never got expected messages {} in {}'.format(
+        messages,
+        [log['message'] for log in logs],
+    )
+    assert False, msg
+
+
+def test_get_status(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
+    project = ProjectDefinition(
+        models={'my_model.sql': 'select 1 as id'},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        # make sure that logs_start/logs are honored during a task
+        token = querier.is_async_result(querier.run_sql(sleeper_sql))
+
+        no_log = querier.is_result(querier.poll(token, logs=False))
+        assert 'logs' in no_log
+        assert len(no_log['logs']) == 0
+
+        num_logs = wait_for_log_ordering(querier, token, 10)
+
+        trunc_log = querier.is_result(querier.poll(token, logs_start=num_logs))
+        assert 'logs' in trunc_log
+        assert len(trunc_log['logs']) == 0
+
+        querier.kill(token)
+
+        # make sure that logs_start/logs are honored after a task has finished
+        token = querier.is_async_result(querier.run_sql(logger_sql))
+        result = querier.is_result(querier.async_wait(token))
+        assert 'logs' in result
+        num_logs = len(result['logs'])
+        assert num_logs > 0
+
+        result = querier.is_result(querier.poll(token, logs_start=num_logs))
+        assert 'logs' in result
+        assert len(result['logs']) == 0
+
+        result = querier.is_result(querier.poll(token, logs=False))
+        assert 'logs' in result
+        assert len(result['logs']) == 0

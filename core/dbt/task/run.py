@@ -126,22 +126,23 @@ class RunTask(CompileTask):
             hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
                                           hook.index)
             hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
-            uid_ctx = UniqueID(hook.unique_id)
             running_ctx = DbtModelState({'node_status': 'running'})
-            with uid_ctx, hook_meta_ctx, startctx, running_ctx:
-                print_hook_start_line(hook_text, idx, num_hooks)
+            with UniqueID(hook.unique_id):
+                with hook_meta_ctx, startctx, running_ctx:
+                    print_hook_start_line(hook_text, idx, num_hooks)
 
-            status = 'OK'
+                status = 'OK'
 
-            with Timer() as timer, uid_ctx:
-                if len(sql.strip()) > 0:
-                    status, _ = adapter.execute(sql, auto_begin=False,
-                                                fetch=False)
-            self.ran_hooks.append(hook)
+                with Timer() as timer:
+                    if len(sql.strip()) > 0:
+                        status, _ = adapter.execute(sql, auto_begin=False,
+                                                    fetch=False)
+                self.ran_hooks.append(hook)
 
-            with uid_ctx, finishctx, DbtModelState({'node_status': 'passed'}):
-                print_hook_end_line(hook_text, status, idx, num_hooks,
-                                    timer.elapsed)
+                with finishctx, DbtModelState({'node_status': 'passed'}):
+                    print_hook_end_line(
+                        hook_text, status, idx, num_hooks, timer.elapsed
+                    )
 
         self._total_executed += len(ordered_hooks)
 

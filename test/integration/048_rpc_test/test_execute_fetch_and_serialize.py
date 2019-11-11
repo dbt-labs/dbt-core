@@ -19,7 +19,7 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
             'macro-paths': ['macros'],
         }
 
-    def test_pickle(self, agate_table):
+    def do_test_pickle(self, agate_table):
         table = {
             'column_names': list(agate_table.column_names),
             'rows': [list(row) for row in agate_table]
@@ -36,7 +36,7 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
         self.assertTrue(len(table.columns) > 0, "agate table had no columns")
         self.assertTrue(len(table.rows) > 0, "agate table had no rows")
 
-        self.test_pickle(table)
+        self.do_test_pickle(table)
 
     @use_profile('bigquery')
     def test__bigquery_fetch_and_serialize(self):
