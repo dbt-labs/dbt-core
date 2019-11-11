@@ -84,6 +84,10 @@ class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
         handler = QueueLogHandler(self.queue)
         with handler.applicationbound():
             self._spawn_setup()
+            # copy threads over into our credentials, if it exists and is set.
+            # some commands, like 'debug', won't have a threads value at all.
+            if getattr(self.task.args, 'threads', None) is not None:
+                self.task.config.threads = self.task.args.threads
             rpc_exception = None
             result = None
             try:

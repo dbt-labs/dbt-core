@@ -193,6 +193,7 @@ class Querier:
         self,
         models: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
         request_id: int = 1,
     ):
         params = {}
@@ -200,6 +201,8 @@ class Querier:
             params['models'] = models
         if exclude is not None:
             params['exclude'] = exclude
+        if threads is not None:
+            params['threads'] = threads
         return self.request(
             method='compile', params=params, request_id=request_id
         )
@@ -208,6 +211,7 @@ class Querier:
         self,
         models: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
         request_id: int = 1,
     ):
         params = {}
@@ -215,6 +219,8 @@ class Querier:
             params['models'] = models
         if exclude is not None:
             params['exclude'] = exclude
+        if threads is not None:
+            params['threads'] = threads
         return self.request(
             method='run', params=params, request_id=request_id
         )
@@ -232,10 +238,17 @@ class Querier:
             method='run-operation', params=params, request_id=request_id
         )
 
-    def seed(self, show: bool = None, request_id: int = 1):
+    def seed(
+        self,
+        show: bool = None,
+        threads: Optional[int] = None,
+        request_id: int = 1,
+    ):
         params = {}
         if show is not None:
             params['show'] = show
+        if threads is not None:
+            params['threads'] = threads
         return self.request(
             method='seed', params=params, request_id=request_id
         )
@@ -244,6 +257,7 @@ class Querier:
         self,
         select: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
         request_id: int = 1,
     ):
         params = {}
@@ -251,6 +265,8 @@ class Querier:
             params['select'] = select
         if exclude is not None:
             params['exclude'] = exclude
+        if threads is not None:
+            params['threads'] = threads
         return self.request(
             method='snapshot', params=params, request_id=request_id
         )
@@ -259,6 +275,7 @@ class Querier:
         self,
         models: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
         data: bool = None,
         schema: bool = None,
         request_id: int = 1,
@@ -272,6 +289,8 @@ class Querier:
             params['data'] = data
         if schema is not None:
             params['schema'] = schema
+        if threads is not None:
+            params['threads'] = threads
         return self.request(
             method='test', params=params, request_id=request_id
         )
@@ -406,6 +425,7 @@ class ProjectDefinition:
         models=None,
         macros=None,
         snapshots=None,
+        seeds=None,
     ):
         self.project = {
             'name': name,
@@ -418,10 +438,11 @@ class ProjectDefinition:
         self.models = models
         self.macros = macros
         self.snapshots = snapshots
+        self.seeds = seeds
 
     def _write_recursive(self, path, inputs):
         for name, value in inputs.items():
-            if name.endswith('.sql'):
+            if name.endswith('.sql') or name.endswith('.csv'):
                 path.join(name).write(value)
             elif name.endswith('.yml'):
                 if isinstance(value, str):
@@ -464,6 +485,9 @@ class ProjectDefinition:
     def write_snapshots(self, project_dir, remove=False):
         self._write_values(project_dir, remove, 'snapshots', self.snapshots)
 
+    def write_seeds(self, project_dir, remove=False):
+        self._write_values(project_dir, remove, 'data', self.seeds)
+
     def write_to(self, project_dir, remove=False):
         if remove:
             project_dir.remove()
@@ -473,6 +497,7 @@ class ProjectDefinition:
         self.write_models(project_dir)
         self.write_macros(project_dir)
         self.write_snapshots(project_dir)
+        self.write_seeds(project_dir)
 
 
 class TestArgs:
