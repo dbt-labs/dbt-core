@@ -359,7 +359,7 @@ class RunTask(CompileTask):
 
                 self.ran_hooks.append(hook)
                 hook._event_status["finished_at"] = datetime.utcnow().isoformat()
-                with finishctx, DbtModelState({'node_status': 'passed'}):
+                with finishctx, DbtModelState({"node_status": "passed"}):
                     hook._event_status["node_status"] = RunStatus.Success
                     fire_event(
                         PrintHookEndLine(
