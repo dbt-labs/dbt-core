@@ -126,9 +126,8 @@ class RunTask(CompileTask):
             hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
                                           hook.index)
             hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
-            running_ctx = DbtModelState({'node_status': 'running'})
             with UniqueID(hook.unique_id):
-                with hook_meta_ctx, startctx, running_ctx:
+                with hook_meta_ctx, startctx:
                     print_hook_start_line(hook_text, idx, num_hooks)
 
                 status = 'OK'
