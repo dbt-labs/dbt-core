@@ -88,7 +88,7 @@ class KillParameters(RPCParameters):
 @dataclass
 class PollParameters(RPCParameters):
     request_token: TaskID
-    logs: bool = False
+    logs: bool = True
     logs_start: int = 0
 
 
@@ -349,9 +349,10 @@ class PollRemoteEmptyCompleteResult(PollResult, RemoteEmptyResult):
         base: RemoteEmptyResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollRemoteEmptyCompleteResult':
         return cls(
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -380,12 +381,13 @@ class PollExecuteCompleteResult(RemoteExecutionResult, PollResult):
         base: RemoteExecutionResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollExecuteCompleteResult':
         return cls(
             results=base.results,
             generated_at=base.generated_at,
             elapsed_time=base.elapsed_time,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -407,13 +409,14 @@ class PollCompileCompleteResult(RemoteCompileResult, PollResult):
         base: RemoteCompileResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollCompileCompleteResult':
         return cls(
             raw_sql=base.raw_sql,
             compiled_sql=base.compiled_sql,
             node=base.node,
             timing=base.timing,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -435,13 +438,14 @@ class PollRunCompleteResult(RemoteRunResult, PollResult):
         base: RemoteRunResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollRunCompleteResult':
         return cls(
             raw_sql=base.raw_sql,
             compiled_sql=base.compiled_sql,
             node=base.node,
             timing=base.timing,
-            logs=base.logs,
+            logs=logs,
             table=base.table,
             tags=tags,
             state=timing.state,
@@ -464,10 +468,11 @@ class PollRunOperationCompleteResult(RemoteRunOperationResult, PollResult):
         base: RemoteRunOperationResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollRunOperationCompleteResult':
         return cls(
             success=base.success,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -489,12 +494,13 @@ class PollCatalogCompleteResult(RemoteCatalogResults, PollResult):
         base: RemoteCatalogResults,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollCatalogCompleteResult':
         return cls(
             nodes=base.nodes,
             generated_at=base.generated_at,
             _compile_results=base._compile_results,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,

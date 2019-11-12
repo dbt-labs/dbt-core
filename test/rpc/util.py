@@ -148,8 +148,8 @@ class Querier:
     def poll(
         self,
         request_token: str,
-        logs: bool = False,
-        logs_start: int = 0,
+        logs: Optional[bool] = None,
+        logs_start: Optional[int] = None,
         request_id: int = 1,
     ):
         params = {
@@ -374,6 +374,14 @@ class Querier:
             delta = (time.time() - start)
             assert timeout > delta, \
                 f'At time {delta}, never saw {state}.\nLast response: {result}'
+
+    def async_wait_for_result(self, data: Dict[str, Any], state='success'):
+        token = self.is_async_result(data)
+        return self.is_result(self.async_wait(token, state=state))
+
+    def async_wait_for_error(self, data: Dict[str, Any], state='success'):
+        token = self.is_async_result(data)
+        return self.is_error(self.async_wait(token, state=state))
 
 
 def _first_server(cwd, cli_vars, profiles_dir, criteria):
