@@ -40,9 +40,7 @@ class ISODateTime(agate.data_types.DateTime):
         except:  # noqa
             pass
 
-        raise agate.exceptions.CastError(
-            'Can not parse value "%s" as datetime.' % d
-        )
+        raise agate.exceptions.CastError('Can not parse value "%s" as datetime.' % d)
 
 
 def build_type_tester(
@@ -52,12 +50,12 @@ def build_type_tester(
 
     types = [
         Number(null_values=("null", "")),
-        agate.data_types.Date(null_values=('null', ''),
-                              date_format='%Y-%m-%d'),
-        agate.data_types.DateTime(null_values=('null', ''),
-                                  datetime_format='%Y-%m-%d %H:%M:%S'),
-        ISODateTime(null_values=('null', '')),
-        agate.data_types.Boolean(true_values=('true',),
+        agate.data_types.Date(null_values=("null", ""), date_format="%Y-%m-%d"),
+        agate.data_types.DateTime(null_values=("null", ""), datetime_format="%Y-%m-%d %H:%M:%S"),
+        ISODateTime(null_values=("null", "")),
+        agate.data_types.Boolean(
+            true_values=("true",), false_values=("false",), null_values=("null", "")
+        ),
                                  false_values=('false',),
                                  null_values=('null', '')),
         agate.data_types.Text(null_values=string_null_values)
