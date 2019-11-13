@@ -132,7 +132,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_simple_seed_with_disabled(self):
         results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  2)
         self.assertTableDoesExist('seed_enabled')
         self.assertTableDoesNotExist('seed_disabled')
 
