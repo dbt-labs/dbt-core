@@ -314,11 +314,34 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         with self.assertRaises(DbtConfigError):
             DebugTask.validate_connection(self.target_dict)
 
-        def test_connection_fail_select(self):
-            self.mock_execute.side_effect = DatabaseError()
-            with self.assertRaises(DbtConfigError):
-                DebugTask.validate_connection(self.target_dict)
-            self.mock_execute.assert_has_calls([
-                mock.call('/* dbt */\nselect 1 as id', None)
-            ])
+    def test_connection_fail_select(self):
+        self.mock_execute.side_effect = DatabaseError()
+        with self.assertRaises(DbtConfigError):
+            DebugTask.validate_connection(self.target_dict)
+        self.mock_execute.assert_has_calls([
+            mock.call('/* dbt */\nselect 1 as id', None)
+        ])
 
+    def test_dbname_verification_is_case_insensitive(self):
+        # Override adapter settings from setUp()
+        self.target_dict['dbname'] = 'Postgres'
+        profile_cfg = {
+            'outputs': {
+                'test': self.target_dict,
+            },
+            'target': 'test'
+        }
+        project_cfg = {
+            'name': 'X',
+            'version': '0.1',
+            'profile': 'test',
+            'project-root': '/tmp/dbt/does-not-exist',
+            'quoting': {
+                'identifier': False,
+                'schema': True,
+            },
+        }
+        self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.adapter.cleanup_connections()
+        self._adapter = PostgresAdapter(self.config)
+        self.adapter.verify_database('postgres')
