@@ -199,3 +199,35 @@ class TestRedshiftAdapter(unittest.TestCase):
             password='password',
             port=5439,
             connect_timeout=10)
+    
+    def test_dbname_verification_is_case_insensitive(self):
+        # Override adapter settings from setUp()
+        profile_cfg = {
+            'outputs': {
+                'test': {
+                    'type': 'redshift',
+                    'dbname': 'Redshift',
+                    'user': 'root',
+                    'host': 'thishostshouldnotexist',
+                    'pass': 'password',
+                    'port': 5439,
+                    'schema': 'public'
+                }
+            },
+            'target': 'test'
+        }
+
+        project_cfg = {
+            'name': 'X',
+            'version': '0.1',
+            'profile': 'test',
+            'project-root': '/tmp/dbt/does-not-exist',
+            'quoting': {
+                'identifier': False,
+                'schema': True,
+            },
+        }
+        self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.adapter.cleanup_connections()
+        self._adapter = RedshiftAdapter(self.config) 
+        self.adapter.verify_database('redshift')

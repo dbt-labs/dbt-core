@@ -23,10 +23,8 @@ class PostgresAdapter(SQLAdapter):
     def verify_database(self, database):
         if database.startswith('"'):
             database = database.strip('"')
-        else:
-            database = database.lower()
         expected = self.config.credentials.database
-        if database != expected:
+        if database.lower() != expected.lower():
             raise dbt.exceptions.NotImplementedException(
                 'Cross-db references not allowed in {} ({} vs {})'
                 .format(self.type(), database, expected)
