@@ -246,7 +246,10 @@ class BaseRelation(FakeAPIObject, Hashable):
         if not isinstance(view_name, str):
             view_name = None
 
-        return InformationSchema.from_relation(self, view_name)
+        # Kick the user-supplied schema out of the information schema relation
+        # Instead address this as <database>.information_schema by default
+        info_schema = InformationSchema.from_relation(self, view_name)
+        return info_schema.incorporate(path={"schema": None})
 
     def information_schema_only(self) -> 'InformationSchema':
         return self.information_schema()
