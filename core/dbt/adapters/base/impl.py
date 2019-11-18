@@ -743,9 +743,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             return identifier
 
     @available
-    def quote_seed_column(
-        self, column: str, quote_config: Optional[bool]
-    ) -> str:
+    def quote_seed_column(self, column: str, quote_config: Optional[bool]) -> str:
         quote_columns: bool = True
         if isinstance(quote_config, bool):
             quote_columns = quote_config
@@ -754,7 +752,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             raise_compiler_error(
                 f'The seed configuration value of "quote_columns" has an '
-                f'invalid type {type(quote_config)}'
+                f"invalid type {type(quote_config)}"
             )
 
         if quote_columns:
