@@ -315,7 +315,7 @@ class HookMetadata(NodeMetadata):
         ]
 
 
-class TimestampNamed(JsonOnly):
+class TimestampNamed(logbook.Processor):
     def __init__(self, name: str):
         self.name = name
         super().__init__()
