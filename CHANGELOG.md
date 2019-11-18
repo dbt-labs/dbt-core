@@ -27,6 +27,7 @@
 - Improve CLI output when running snapshots ([#1768](https://github.com/fishtown-analytics/dbt/issues/1768), [#1769](https://github.com/fishtown-analytics/dbt/pull/1769))
 
 #### Fixes
+- Fix for lingering backup tables when incremental models are full-refreshed ([#1933](https://github.com/fishtown-analytics/dbt/issues/1933), [#1931](https://github.com/fishtown-analytics/dbt/pull/1931))
 - Fix for confusing error message when errors are encountered during compilation ([#1807](https://github.com/fishtown-analytics/dbt/issues/1807), [#1839](https://github.com/fishtown-analytics/dbt/pull/1839))
 - Fix for logic error affecting the two-argument flavor of the `ref` function ([#1504](https://github.com/fishtown-analytics/dbt/issues/1504), [#1515](https://github.com/fishtown-analytics/dbt/pull/1515))
 - Fix for invalid reference to dbt.exceptions ([#1569](https://github.com/fishtown-analytics/dbt/issues/1569), [#1609](https://github.com/fishtown-analytics/dbt/pull/1609))
