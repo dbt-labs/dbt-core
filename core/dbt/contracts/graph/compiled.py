@@ -8,6 +8,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSnapshotNode,
     ParsedSourceDefinition,
     ParsedTestNode,
+    SeedConfig,
     TestConfig,
     TestMetadata,
     PARSED_TYPES,
@@ -93,6 +94,7 @@ class CompiledRPCNode(CompiledNode):
 @dataclass
 class CompiledSeedNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    config: SeedConfig = field(default_factory=SeedConfig)
     seed_file_path: str = ''
 
     def __post_init__(self):

@@ -19,7 +19,8 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
                         "enabled": True,
                         "column_types": self.seed_types()
                     },
-                }
+                },
+                'quote_columns': False,
             }
         }
 

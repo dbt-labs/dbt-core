@@ -130,8 +130,9 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
             'seeds': {
                 'post-hook': [
                     'insert into {{ this }} (a, b, c) VALUES (10, 11, 12)',
-                ]
-            }
+                ],
+                'quote_columns': False,
+            },
         }
 
     @use_profile('bigquery')

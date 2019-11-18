@@ -601,7 +601,8 @@ def test_rpc_seed_threads(
     project_root, profiles_root, postgres_profile, unique_schema
 ):
     project = ProjectDefinition(
-        seeds={'data.csv': 'a,b\n1,hello\n2,goodbye'}
+        project_data={'seeds': {'quote_columns': False}},
+        seeds={'data.csv': 'a,b\n1,hello\n2,goodbye'},
     )
     querier_ctx = get_querier(
         project_def=project,

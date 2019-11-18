@@ -23,6 +23,9 @@ class BaseSourcesTest(DBTIntegrationTest):
         return {
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
+            'seeds': {
+                'quote_columns': True,
+            },
         }
 
     def setUp(self):

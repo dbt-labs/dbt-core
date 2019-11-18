@@ -84,6 +84,15 @@ class NotADictionaryDeprecation(DBTDeprecation):
     '''.lstrip()
 
 
+class ColumnQuotingDeprecation(DBTDeprecation):
+    _name = 'column-quoting-unset'
+
+    _description = '''
+    The quote_columns parameter was not set for seeds, so the default value of
+    False was chosen. The default will change to True in a future release.
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
  a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -123,6 +132,7 @@ deprecations_list: List[DBTDeprecation] = [
     GenerateSchemaNameSingleArgDeprecated(),
     MaterializationReturnDeprecation(),
     NotADictionaryDeprecation(),
+    ColumnQuotingDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

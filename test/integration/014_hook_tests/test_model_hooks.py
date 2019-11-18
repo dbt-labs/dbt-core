@@ -171,8 +171,9 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
                 'post-hook': [
                     'alter table {{ this }} add column new_col int',
                     'update {{ this }} set new_col = 1'
-                ]
-            }
+                ],
+                'quote_columns': False,
+            },
         }
 
     @use_profile('postgres')
@@ -203,7 +204,10 @@ class TestPrePostModelHooksOnSnapshots(DBTIntegrationTest):
                     'alter table {{ this }} add column new_col int',
                     'update {{ this }} set new_col = 1'
                 ]
-            }
+            },
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     @use_profile('postgres')
@@ -280,6 +284,9 @@ class TestPrePostSnapshotHooksInConfigKwargs(TestPrePostModelHooksOnSnapshots):
             'data-paths': ['data'],
             'snapshot-paths': ['test-kwargs-snapshots'],
             'models': {},
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
 

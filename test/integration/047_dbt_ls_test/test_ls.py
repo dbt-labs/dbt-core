@@ -27,6 +27,9 @@ class TestStrictUndefined(DBTIntegrationTest):
             'macro-paths': [self.dir('macros')],
             'data-paths': [self.dir('data')],
             'test-paths': [self.dir('tests')],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     def run_dbt_ls(self, args=None, expect_pass=True):
@@ -247,6 +250,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'vars': {},
                     'column_types': {},
                     'persist_docs': {},
+                    'quote_columns': False,
                 },
                 'alias': 'seed',
                 'resource_type': 'seed',

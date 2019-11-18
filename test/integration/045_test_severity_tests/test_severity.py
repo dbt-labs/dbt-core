@@ -14,6 +14,9 @@ class TestSeverity(DBTIntegrationTest):
         return {
             'data-paths': ['data'],
             'test-paths': ['tests'],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     def run_dbt_with_vars(self, cmd, strict_var, *args, **kwargs):
