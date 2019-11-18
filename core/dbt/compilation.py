@@ -46,8 +46,10 @@ def print_compile_stats(stats):
     results = {k: 0 for k in names.keys()}
     results.update(stats)
 
-    stat_line = ", ".join(
-        [dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()])
+    stat_line = ", ".join([
+        dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()
+        if t in names
+    ])
 
     logger.info("Found {}".format(stat_line))
 
