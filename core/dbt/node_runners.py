@@ -46,7 +46,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "hashed_contents": dbt.utils.get_hashed_contents(
             run_model_result.node
         ),
-        "timing": run_model_result.timing,
+        "timing": [t.to_dict() for t in run_model_result.timing],
     })
 
 
