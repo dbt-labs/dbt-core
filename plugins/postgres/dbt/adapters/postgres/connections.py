@@ -16,10 +16,10 @@ from typing import Optional
 class PostgresCredentials(Credentials):
     host: str
     user: str
-    password: str
     port: Port
-    search_path: Optional[str]
-    keepalives_idle: Optional[int] = 0  # 0 means to use the default value
+    password: str  # on postgres the password is mandatory
+    search_path: Optional[str] = None
+    keepalives_idle: int = 0  # 0 means to use the default value
 
     _ALIASES = {
         'dbname': 'database',
