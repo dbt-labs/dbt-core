@@ -83,6 +83,26 @@ class TestRedshiftAdapter(unittest.TestCase):
         expected_creds = self.config.credentials.replace(password='tmp_password')
         self.assertEqual(creds, expected_creds)
 
+    def test_iam_conn_optionals(self):
+
+        profile_cfg = {
+            'outputs': {
+                'test': {
+                    'type': 'redshift',
+                    'dbname': 'redshift',
+                    'user': 'root',
+                    'host': 'thishostshouldnotexist',
+                    'port': 5439,
+                    'schema': 'public',
+                    'method': 'iam',
+                    'cluster_id': 'my_redshift',
+                }
+            },
+            'target': 'test'
+        }
+
+        config_from_parts_or_dicts(self.config, profile_cfg)
+
     def test_invalid_auth_method(self):
         # we have to set method this way, otherwise it won't validate
         self.config.credentials.method = 'badmethod'
@@ -199,7 +219,7 @@ class TestRedshiftAdapter(unittest.TestCase):
             password='password',
             port=5439,
             connect_timeout=10)
-    
+
     def test_dbname_verification_is_case_insensitive(self):
         # Override adapter settings from setUp()
         profile_cfg = {
@@ -229,5 +249,5 @@ class TestRedshiftAdapter(unittest.TestCase):
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
         self.adapter.cleanup_connections()
-        self._adapter = RedshiftAdapter(self.config) 
+        self._adapter = RedshiftAdapter(self.config)
         self.adapter.verify_database('redshift')
