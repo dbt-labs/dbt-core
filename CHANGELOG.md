@@ -64,6 +64,7 @@
 ### Postgres / Redshift
 - Support running dbt against schemas which contain materialized views on Postgres ([#1698](https://github.com/fishtown-analytics/dbt/issues/1698), [#1833](https://github.com/fishtown-analytics/dbt/pull/1833))
 - Support distyle AUTO in Redshift model configs ([#1882](https://github.com/fishtown-analytics/dbt/issues/1882), [#1885](https://github.com/fishtown-analytics/dbt/pull/1885))
+- Fix for internal errors when run against mixed-case logical databases ([#1800](https://github.com/fishtown-analytics/dbt/issues/1800), [#1936](https://github.com/fishtown-analytics/dbt/pull/1936))
 
 ### Snowflake
 - Support `copy grants` option in Snowflake model configs ([#1744](https://github.com/fishtown-analytics/dbt/issues/1744), [#1747](https://github.com/fishtown-analytics/dbt/pull/1747))
