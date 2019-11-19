@@ -138,17 +138,18 @@ class SchemaSearchMap(dict):
     def flatten(self):
         new = self.__class__()
 
-        database = None
-        # iterate once to look for a database name
+        # make sure we don't have duplicates
         seen = {r.database.lower() for r in self if r.database}
         if len(seen) > 1:
             dbt.exceptions.raise_compiler_error(str(seen))
-        elif len(seen) == 1:
-            database = list(seen)[0]
 
         for information_schema_name, schema in self.search():
+            path = {
+                'database': information_schema_name.database,
+                'schema': schema
+            }
             new.add(information_schema_name.incorporate(
-                path={'database': database, 'schema': schema},
+                path=path,
                 quote_policy={'database': False},
                 include_policy={'database': False},
             ))
