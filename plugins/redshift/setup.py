@@ -5,7 +5,7 @@ import os
 
 
 package_name = "dbt-redshift"
-package_version = "0.15.0rc1"
+package_version = "0.15.0rc2"
 description = """The redshift adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
