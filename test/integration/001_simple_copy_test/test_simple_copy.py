@@ -14,12 +14,26 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
+    @property
+    def project_config(self):
+        return self.seed_quote_cfg_with({})
+
+
+    def seed_quote_cfg_with(self, extra):
+        cfg = {
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
+        cfg.update(extra)
+        return cfg
+
 
 class TestSimpleCopy(BaseTestSimpleCopy):
 
     @property
     def project_config(self):
-        return {"data-paths": [self.dir("seed-initial")]}
+        return self.seed_quote_cfg_with({"data-paths": [self.dir("seed-initial")]})
 
     @use_profile("postgres")
     def test__postgres__simple_copy(self):
@@ -88,7 +102,12 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
     @use_profile("snowflake")
     def test__snowflake__simple_copy(self):
-        self.use_default_project({"data-paths": [self.dir("snowflake-seed-initial")]})
+        self.use_default_project({
+            "data-paths": [self.dir("seed-initial")],
+            "seeds": {
+                'quote_columns': False,
+            }
+        })
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
@@ -96,7 +115,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
-        self.use_default_project({"data-paths": [self.dir("snowflake-seed-update")]})
+        self.use_default_project({"data-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
@@ -106,7 +125,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.use_default_project({
             "test-paths": [self.dir("tests")],
-            "data-paths": [self.dir("snowflake-seed-update")],
+            "data-paths": [self.dir("seed-update")],
         })
         self.run_dbt(['test'])
 
@@ -192,11 +211,11 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
     @property
     def project_config(self):
-        return {
+        return self.seed_quote_cfg_with({
             'quoting': {
                 'identifier': True,
             },
-        }
+        })
 
     @use_profile("snowflake")
     def test__snowflake__simple_copy__quoting_on(self):
@@ -261,9 +280,9 @@ class TestSnowflakeSimpleLowercasedSchemaCopy(BaseLowercasedSchemaTest):
 class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):
     @property
     def project_config(self):
-        return {
+        return self.seed_quote_cfg_with({
             'quoting': {'identifier': False, 'schema': True}
-        }
+        })
 
     @use_profile("snowflake")
     def test__snowflake__seed__quoting_switch_schema(self):
@@ -314,7 +333,7 @@ class TestShouting(BaseTestSimpleCopy):
 
     @property
     def project_config(self):
-        return {"data-paths": [self.dir("seed-initial")]}
+        return self.seed_quote_cfg_with({"data-paths": [self.dir("seed-initial")]})
 
     @use_profile("postgres")
     def test__postgres__simple_copy_loud(self):

@@ -100,6 +100,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             'models': {
                 'vars': {'alternate_db': alternate_db},
             },
+            'seeds': {
+                'quote_columns': True,
+            },
         }
         if extra:
             project.update(extra)
@@ -904,6 +907,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'quoting': {},
                         'tags': [],
+                        'quote_columns': True,
                     },
                     'patch_path': None,
                     'path': 'seed.csv',
@@ -1391,6 +1395,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'quote_columns': True,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -1935,6 +1940,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'quoting': {},
                         'tags': [],
+                        'quote_columns': True,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2175,6 +2181,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'vars': {},
+                        'quote_columns': True,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2409,6 +2416,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'quote_columns': True,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -2839,6 +2847,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'quote_columns': True,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},

@@ -9,6 +9,17 @@
 {%- endmacro %}
 
 
+{% macro get_quoted_csv(column_names) %}
+    {% set quoted = [] %}
+    {% for col in column_names -%}
+        {%- do quoted.append(adapter.quote(col)) -%}
+    {%- endfor %}
+
+    {%- set dest_cols_csv = quoted | join(', ') -%}
+    {{ return(dest_cols_csv) }}
+{% endmacro %}
+
+
 {% macro common_get_merge_sql(target, source, unique_key, dest_columns) -%}
     {%- set dest_cols_csv =  get_quoted_csv(dest_columns | map(attribute="name")) -%}
 

@@ -13,10 +13,13 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ["data"],
-            "quoting": {
-                "schema": False,
-                "identifier": False
+            'data-paths': ['data'],
+            'seeds': {
+                'quote_columns': False,
+            },
+            'quoting': {
+                'schema': False,
+                'identifier': False
             }
         }
 

@@ -92,15 +92,6 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
 
         self.assert_expected()
 
-    @use_profile('presto')
-    def test__presto__simple_snapshot_disabled(self):
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
-        # presto does not run snapshots
-        results = self.run_dbt(["snapshot"], expect_pass=False)
-        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
-        self.assertIn('not implemented for presto', results[0].error)
-
 
 class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
     @property

@@ -24,6 +24,9 @@ class TestConfigs(DBTIntegrationTest):
                     'tags': ['tag_one'],
                 },
             },
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     @property
@@ -73,7 +76,10 @@ class TestTargetConfigs(DBTIntegrationTest):
     def project_config(self):
         return {
             'data-paths': ['data'],
-            'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}"
+            'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     @use_profile('postgres')

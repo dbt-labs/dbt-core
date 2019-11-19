@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Optional, Tuple, Callable, Container, FrozenSet, Type, Dict, Any, List,
-    Mapping, Iterator,
+    Mapping, Iterator, Union
 )
 
 import agate
@@ -12,9 +12,11 @@ import pytz
 import dbt.exceptions
 import dbt.flags
 
+from dbt import deprecations
 from dbt.clients.agate_helper import empty_table
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
@@ -24,6 +26,9 @@ from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import ComponentName, BaseRelation
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.cache import RelationsCache
+
+
+SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
 
 
 GET_CATALOG_MACRO_NAME = 'get_catalog'
@@ -786,6 +791,27 @@ class BaseAdapter(metaclass=AdapterMeta):
             return self.quote(identifier)
         else:
             return identifier
+
+    @available
+    def quote_seed_column(
+        self, column: str, quote_config: Optional[bool]
+    ) -> str:
+        # this is the default for now
+        quote_columns: bool = False
+        if isinstance(quote_config, bool):
+            quote_columns = quote_config
+        elif quote_config is None:
+            deprecations.warn('column-quoting-unset')
+        else:
+            dbt.exceptions.raise_compiler_error(
+                f'The seed configuration value of "quote_columns" has an '
+                f'invalid type {type(quote_config)}'
+            )
+
+        if quote_columns:
+            return self.quote(column)
+        else:
+            return column
 
     ###
     # Conversions: These must be implemented by concrete implementations, for

@@ -27,6 +27,8 @@ class SourceConfig:
         # this is often a list, but it should replace and not append (sometimes
         # it's 'all')
         'check_cols',
+        # seeds
+        'quote_columns',
     }
     ConfigKeys = AppendListFields | ExtendDictFields | ClobberFields
 

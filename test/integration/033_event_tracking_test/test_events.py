@@ -187,6 +187,9 @@ class TestEventTrackingSuccess(TestEventTracking):
         return {
             "data-paths": [self.dir("data")],
             "test-paths": [self.dir("test")],
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @use_profile("postgres")

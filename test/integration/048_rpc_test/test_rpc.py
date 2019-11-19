@@ -147,6 +147,9 @@ class HasRPCServer(DBTIntegrationTest):
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'macro-paths': ['macros'],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     def build_query(
