@@ -90,6 +90,9 @@ class ColumnQuotingDeprecation(DBTDeprecation):
     _description = '''
     The quote_columns parameter was not set for seeds, so the default value of
     False was chosen. The default will change to True in a future release.
+
+    For more information, see:
+    https://docs.getdbt.com/v0.15/docs/seeds#section-specify-column-quoting
     '''
 
 
