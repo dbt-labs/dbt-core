@@ -83,7 +83,7 @@
 - Drop support for `networkx 1.x` ([#1577](https://github.com/fishtown-analytics/dbt/issues/1577), [#1814](https://github.com/fishtown-analytics/dbt/pull/1814))
 - Upgrade `werkzeug` to 0.15.6 ([#1697](https://github.com/fishtown-analytics/dbt/issues/1697), [#1814](https://github.com/fishtown-analytics/dbt/pull/1814))
 - Pin `psycopg2` dependency to 2.8.x to prevent segfaults ([#1221](https://github.com/fishtown-analytics/dbt/issues/1221), [#1898](https://github.com/fishtown-analytics/dbt/pull/1898))
-- Set a strict upper bound for `jsonschema` dependency ([#1817](https://github.com/fishtown-analytics/dbt/issues/1817), [#1821](https://github.com/fishtown-analytics/dbt/pull/1821))
+- Set a strict upper bound for `jsonschema` dependency ([#1817](https://github.com/fishtown-analytics/dbt/issues/1817), [#1821](https://github.com/fishtown-analytics/dbt/pull/1821), [#1932](https://github.com/fishtown-analytics/dbt/pull/1932))
 #### Everything else
 - Provide test names and kwargs in the manifest ([#1154](https://github.com/fishtown-analytics/dbt/issues/1154), [#1816](https://github.com/fishtown-analytics/dbt/pull/1816))
 - Replace JSON Schemas with data classes ([#1447](https://github.com/fishtown-analytics/dbt/issues/1447), [#1589](https://github.com/fishtown-analytics/dbt/pull/1589))
