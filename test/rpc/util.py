@@ -519,7 +519,8 @@ class TestArgs:
 
 
 def execute(adapter, sql):
-    with adapter.connection_named('rpc-tests') as conn:
+    with adapter.connection_named('rpc-tests'):
+        conn = adapter.connections.get_thread_connection()
         with conn.handle.cursor() as cursor:
             try:
                 cursor.execute(sql)
