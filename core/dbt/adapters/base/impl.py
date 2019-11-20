@@ -214,9 +214,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 self.connections.query_header.reset()
 
     @contextmanager
-    def connection_for(
-        self, node: CompileResultNode
-    ) -> Iterator[None]:
+    def connection_for(self, node: CompileResultNode) -> Iterator[None]:
         with self.connection_named(node.unique_id, node):
             yield
 
