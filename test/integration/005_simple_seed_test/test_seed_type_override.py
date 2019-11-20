@@ -24,7 +24,7 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
                         'column_types': self.seed_tricky_types(),
                     }
                 },
-                'quote_columns': False,
+                'quote_columns': True,
             }
         }
 
@@ -106,12 +106,6 @@ class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
             'looks_like_a_bool': 'TEXT',
             'looks_like_a_date': 'TEXT',
         }
-
-    # @property
-    # def project_config(self):
-    #     cfg = super().project_config
-    #     cfg['data-paths'] = ['snowflake-data-config']
-    #     return cfg
 
     @property
     def profile_config(self):
