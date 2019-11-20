@@ -1,3 +1,6 @@
+import os
+from pytest import mark
+
 from test.integration.base import DBTIntegrationTest, use_profile
 
 
@@ -329,7 +332,7 @@ class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):
 class TestShouting(BaseTestSimpleCopy):
     @property
     def models(self):
-        return self.dir('shouting_models')
+        return self.dir('models-shouting')
 
     @property
     def project_config(self):
@@ -351,3 +354,42 @@ class TestShouting(BaseTestSimpleCopy):
         self.assertEqual(len(results),  7)
 
         self.assertManyTablesEqual(["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
+
+
+# I give up on getting this working for Windows.
+@mark.skipif(os.name == 'nt', reason='mixed-case postgres database tests are not supported on Windows')
+class TestMixedCaseDatabase(BaseTestSimpleCopy):
+    @property
+    def models(self):
+        return self.dir('models-trivial')
+
+    def postgres_profile(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'postgres',
+                        'threads': 4,
+                        'host': self.database_host,
+                        'port': 5432,
+                        'user': 'root',
+                        'pass': 'password',
+                        'dbname': 'dbtMixedCase',
+                        'schema': self.unique_schema()
+                    },
+                },
+                'target': 'default2'
+            }
+        }
+
+    @property
+    def project_config(self):
+        return {}
+
+    @use_profile('postgres')
+    def test_postgres_run_mixed_case(self):
+        self.run_dbt()
+        self.run_dbt()
