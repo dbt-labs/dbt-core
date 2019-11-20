@@ -77,7 +77,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         key = self.get_thread_identifier()
         if key in self.thread_connections:
             raise dbt.exceptions.InternalException(
-                'In set_thread_connection, existing connection exists for {}'
+                "In set_thread_connection, existing connection exists for {}"
             )
         self.thread_connections[key] = conn
 
