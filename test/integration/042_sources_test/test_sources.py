@@ -349,3 +349,25 @@ class TestMalformedSources(BaseSourcesTest):
     def test_postgres_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt_with_vars(['seed'], strict=True)
+
+
+class TestUnquotedSources(SuccessfulSourcesTest):
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg['quoting'] = {
+            'identifier': False,
+            'schema': False,
+            'database': False,
+        }
+        return cfg
+
+    @use_profile('postgres')
+    def test_postgres_catalog(self):
+        self.run_dbt_with_vars(['run'])
+        self.run_dbt_with_vars(['docs', 'generate'])
+
+    @use_profile('redshift')
+    def test_redshift_catalog(self):
+        self.run_dbt_with_vars(['run'])
+        self.run_dbt_with_vars(['docs', 'generate'])
