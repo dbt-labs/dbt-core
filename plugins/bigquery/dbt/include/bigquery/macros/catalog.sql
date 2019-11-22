@@ -28,10 +28,10 @@
                 case
                     when type = 1 then 'table'
                     when type = 2 then 'view'
-                    else concat('unknown (', cast(type as string), ')')
+                    else 'external'
                 end as table_type,
 
-                REGEXP_CONTAINS(table_id, '^.+[0-9]{8}$') and type = 1 as is_date_shard,
+                REGEXP_CONTAINS(table_id, '^.+[0-9]{8}$') and coalesce(type, 0) = 1 as is_date_shard,
                 REGEXP_EXTRACT(table_id, '^(.+)[0-9]{8}$') as shard_base_name,
                 REGEXP_EXTRACT(table_id, '^.+([0-9]{8})$') as shard_name
 
@@ -57,7 +57,7 @@
                 table_database,
                 table_schema,
                 table_name,
-                table_type,
+                coalesce(table_type, 'external') as table_type,
                 is_date_shard,
 
                 struct(
@@ -152,14 +152,16 @@
             end as table_name,
             unsharded_tables.table_type,
 
-            columns.column_name,
+            -- coalesce name and type for External tables - these columns are not
+            -- present in the COLUMN_FIELD_PATHS resultset
+            coalesce(columns.column_name, '<null>') as column_name,
             -- invent a row number to account for nested fields -- BQ does
             -- not treat these nested properties as independent fields
             row_number() over (
                 partition by relation_id
                 order by columns.column_index, columns.column_name
             ) as column_index,
-            columns.column_type,
+            coalesce(columns.column_type, '<null>') as column_type,
             columns.column_comment,
 
             'Location' as `stats__location__label`,
