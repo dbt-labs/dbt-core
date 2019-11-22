@@ -19,14 +19,14 @@ except ImportError:
     sys.exit(1)
 
 
-PSYCOPG2_MESSAGE = '''
+PSYCOPG2_MESSAGE = """
 No package name override was set.
 Using 'psycopg2-binary' package to satisfy 'psycopg2'
 
 If you experience segmentation faults, silent crashes, or installation errors,
 consider retrying with the 'DBT_PSYCOPG2_NAME' environment variable set to
 'psycopg2'. It may require a compiler toolchain and development libraries!
-'''.strip()
+""".strip()
 
 
 def _dbt_psycopg2_name():
@@ -37,7 +37,7 @@ def _dbt_psycopg2_name():
 
     # default to psycopg2-binary for all OSes/versions
     print(PSYCOPG2_MESSAGE)
-    return 'psycopg2-binary'
+    return "psycopg2-binary"
 
 
 package_name = "dbt-postgres"
