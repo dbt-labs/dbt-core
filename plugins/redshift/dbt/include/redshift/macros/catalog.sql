@@ -1,9 +1,6 @@
 
 {% macro redshift__get_base_catalog(information_schemas) -%}
   {%- call statement('base_catalog', fetch_result=True) -%}
-    {% if (information_schemas | length) != 1 %}
-        {{ exceptions.raise_compiler_error('redshift get_catalog requires exactly one database') }}
-    {% endif %}
     {% set database = information_schemas[0].database %}
     {{ adapter.verify_database(database) }}
 
