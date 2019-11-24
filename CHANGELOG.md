@@ -3,30 +3,30 @@
 ### Breaking changes
 - Support for Python 2.x has been dropped [as it will no longer be supported on January 1, 2020](https://www.python.org/dev/peps/pep-0373/)
 - The 'table_name' field field has been removed from Relations
-- Cache management changes:
+- Cache management changes ([docs](https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-update-the-relation-cache)):
   - Materializations should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
   - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped` (or use `adapter.drop_relation`)
   - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed` (or use `adapter.rename_relation`)
-- The existing `compile` and `execute` rpc tasks have been renamed to `compile_sql` and `execute_sql` ([#1779](https://github.com/fishtown-analytics/dbt/issues/1779), [#1798](https://github.com/fishtown-analytics/dbt/pull/1798))
+- The existing `compile` and `execute` rpc tasks have been renamed to `compile_sql` and `execute_sql` ([#1779](https://github.com/fishtown-analytics/dbt/issues/1779), [#1798](https://github.com/fishtown-analytics/dbt/pull/1798)) ([docs](https://docs.getdbt.com/v0.15/docs/rpc))
 - Compilation errors in .yml files are now treated as errors instead of warnings ([#1493](https://github.com/fishtown-analytics/dbt/issues/1493), [#1751](https://github.com/fishtown-analytics/dbt/pull/1751))
 
 ### Core
 #### Features
-- Add improved error message for malformed source/ref inputs ([#1660](https://github.com/fishtown-analytics/dbt/issues/1660), [#1809](https://github.com/fishtown-analytics/dbt/pull/1809))
-- Add a JSON logger ([#1237](https://github.com/fishtown-analytics/dbt/issues/1237), [#1791](https://github.com/fishtown-analytics/dbt/pull/1791))
+- Add a JSON logger ([#1237](https://github.com/fishtown-analytics/dbt/issues/1237), [#1791](https://github.com/fishtown-analytics/dbt/pull/1791)) ([docs](https://docs.getdbt.com/v0.15/docs/global-cli-flags#section-log-formatting))
 - Add structured logging to dbt ([#1704](https://github.com/fishtown-analytics/dbt/issues/1704), [#1799](https://github.com/fishtown-analytics/dbt/issues/1799), [#1715](https://github.com/fishtown-analytics/dbt/pull/1715), [#1806](https://github.com/fishtown-analytics/dbt/pull/1806))
-- Add partial parsing option to the profiles.yml file ([#1835](https://github.com/fishtown-analytics/dbt/issues/1835), [#1836](https://github.com/fishtown-analytics/dbt/pull/1836), [#1487](https://github.com/fishtown-analytics/dbt/issues/1487))
-- Support configurable query comments in SQL queries ([#1643](https://github.com/fishtown-analytics/dbt/issues/1643), [#1864](https://github.com/fishtown-analytics/dbt/pull/1864))
+- Add partial parsing option to the profiles.yml file ([#1835](https://github.com/fishtown-analytics/dbt/issues/1835), [#1836](https://github.com/fishtown-analytics/dbt/pull/1836), [#1487](https://github.com/fishtown-analytics/dbt/issues/1487)) ([docs](https://docs.getdbt.com/v0.15/docs/configure-your-profile#section-partial-parsing))
+- Support configurable query comments in SQL queries ([#1643](https://github.com/fishtown-analytics/dbt/issues/1643), [#1864](https://github.com/fishtown-analytics/dbt/pull/1864)) ([docs](https://docs.getdbt.com/v0.15/docs/configuring-query-comments))
 - Support atomic full-refreshes for incremental models ([#525](https://github.com/fishtown-analytics/dbt/issues/525), [#1682](https://github.com/fishtown-analytics/dbt/pull/1682))
-- Support snapshot configs in dbt_project.yml ([#1613](https://github.com/fishtown-analytics/dbt/issues/1613), [#1759](https://github.com/fishtown-analytics/dbt/pull/1759))
-- Support cache modifications in materializations ([#1683](https://github.com/fishtown-analytics/dbt/issues/1683), [#1770](https://github.com/fishtown-analytics/dbt/pull/1770))
-- Support `quote` parameter to Accepted Values schema tests ([#1873](https://github.com/fishtown-analytics/dbt/issues/1873), [#1876](https://github.com/fishtown-analytics/dbt/pull/1876))
+- Support snapshot configs in dbt_project.yml ([#1613](https://github.com/fishtown-analytics/dbt/issues/1613), [#1759](https://github.com/fishtown-analytics/dbt/pull/1759)) ([docs](https://docs.getdbt.com/v0.15/docs/snapshots#section-configuring-snapshots-in-dbt_project-yml))
+- Support cache modifications in materializations ([#1683](https://github.com/fishtown-analytics/dbt/issues/1683), [#1770](https://github.com/fishtown-analytics/dbt/pull/1770)) ([docs](https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-update-the-relation-cache))
+- Support `quote` parameter to Accepted Values schema tests ([#1873](https://github.com/fishtown-analytics/dbt/issues/1873), [#1876](https://github.com/fishtown-analytics/dbt/pull/1876)) ([docs](https://docs.getdbt.com/v0.15/docs/testing#section-accepted-values))
 - Support Python 3.8 ([#1886](https://github.com/fishtown-analytics/dbt/pull/1886))
-- Support filters in sources for `dbt source snapshot-freshness` invocation ([#1495](https://github.com/fishtown-analytics/dbt/issues/1495), [#1776](https://github.com/fishtown-analytics/dbt/pull/1776))
+- Support filters in sources for `dbt source snapshot-freshness` invocation ([#1495](https://github.com/fishtown-analytics/dbt/issues/1495), [#1776](https://github.com/fishtown-analytics/dbt/pull/1776)) ([docs](https://docs.getdbt.com/v0.15/docs/using-sources#section-filtering-sources))
 - Support external table configuration in yml source specifications ([#1784](https://github.com/fishtown-analytics/dbt/pull/1784))
 - Improve CLI output when running snapshots ([#1768](https://github.com/fishtown-analytics/dbt/issues/1768), [#1769](https://github.com/fishtown-analytics/dbt/pull/1769))
 
 #### Fixes
+- Fix for unhelpful error message for malformed source/ref inputs ([#1660](https://github.com/fishtown-analytics/dbt/issues/1660), [#1809](https://github.com/fishtown-analytics/dbt/pull/1809))
 - Fix for lingering backup tables when incremental models are full-refreshed ([#1933](https://github.com/fishtown-analytics/dbt/issues/1933), [#1931](https://github.com/fishtown-analytics/dbt/pull/1931))
 - Fix for confusing error message when errors are encountered during compilation ([#1807](https://github.com/fishtown-analytics/dbt/issues/1807), [#1839](https://github.com/fishtown-analytics/dbt/pull/1839))
 - Fix for logic error affecting the two-argument flavor of the `ref` function ([#1504](https://github.com/fishtown-analytics/dbt/issues/1504), [#1515](https://github.com/fishtown-analytics/dbt/pull/1515))
@@ -63,18 +63,18 @@
 
 ### Postgres / Redshift
 - Support running dbt against schemas which contain materialized views on Postgres ([#1698](https://github.com/fishtown-analytics/dbt/issues/1698), [#1833](https://github.com/fishtown-analytics/dbt/pull/1833))
-- Support distyle AUTO in Redshift model configs ([#1882](https://github.com/fishtown-analytics/dbt/issues/1882), [#1885](https://github.com/fishtown-analytics/dbt/pull/1885))
+- Support distyle AUTO in Redshift model configs ([#1882](https://github.com/fishtown-analytics/dbt/issues/1882), [#1885](https://github.com/fishtown-analytics/dbt/pull/1885)) ([docs](https://docs.getdbt.com/v0.15/docs/redshift-configs#section-using-sortkey-and-distkey))
 - Fix for internal errors when run against mixed-case logical databases ([#1800](https://github.com/fishtown-analytics/dbt/issues/1800), [#1936](https://github.com/fishtown-analytics/dbt/pull/1936))
 
 ### Snowflake
-- Support `copy grants` option in Snowflake model configs ([#1744](https://github.com/fishtown-analytics/dbt/issues/1744), [#1747](https://github.com/fishtown-analytics/dbt/pull/1747))
-- Support warehouse configuration in Snowflake model configs ([#1358](https://github.com/fishtown-analytics/dbt/issues/1358), [#1899](https://github.com/fishtown-analytics/dbt/issues/1899), [#1788](https://github.com/fishtown-analytics/dbt/pull/1788), [#1901](https://github.com/fishtown-analytics/dbt/pull/1901))
-- Support secure views in Snowflake model configs ([#1730](https://github.com/fishtown-analytics/dbt/issues/1730), [#1743](https://github.com/fishtown-analytics/dbt/pull/1743))
+- Support `copy grants` option in Snowflake model configs ([#1744](https://github.com/fishtown-analytics/dbt/issues/1744), [#1747](https://github.com/fishtown-analytics/dbt/pull/1747)) ([docs](https://docs.getdbt.com/v0.15/docs/snowflake-configs#section-copying-grants))
+- Support warehouse configuration in Snowflake model configs ([#1358](https://github.com/fishtown-analytics/dbt/issues/1358), [#1899](https://github.com/fishtown-analytics/dbt/issues/1899), [#1788](https://github.com/fishtown-analytics/dbt/pull/1788), [#1901](https://github.com/fishtown-analytics/dbt/pull/1901)) ([docs](https://docs.getdbt.com/v0.15/docs/snowflake-configs#section-configuring-virtual-warehouses))
+- Support secure views in Snowflake model configs ([#1730](https://github.com/fishtown-analytics/dbt/issues/1730), [#1743](https://github.com/fishtown-analytics/dbt/pull/1743)) ([docs](https://docs.getdbt.com/v0.15/docs/snowflake-configs#section-secure-views))
 - Fix for unclosed connections preventing dbt from exiting when Snowflake is used with client_session_keep_alive ([#1271](https://github.com/fishtown-analytics/dbt/issues/1271), [#1749](https://github.com/fishtown-analytics/dbt/pull/1749))
 - Fix for errors on Snowflake when dbt schemas contain `LOCAL TEMPORARY` tables ([#1869](https://github.com/fishtown-analytics/dbt/issues/1869), [#1872](https://github.com/fishtown-analytics/dbt/pull/1872))
 
 ### BigQuery
-- Support KMS Encryption in BigQuery model configs ([#1829](https://github.com/fishtown-analytics/dbt/issues/1829), [#1851](https://github.com/fishtown-analytics/dbt/issues/1829))
+- Support KMS Encryption in BigQuery model configs ([#1829](https://github.com/fishtown-analytics/dbt/issues/1829), [#1851](https://github.com/fishtown-analytics/dbt/issues/1829)) ([docs](https://docs.getdbt.com/v0.15/docs/bigquery-configs#section-managing-kms-encryption))
 - Improve docs generation speed by leveraging the information schema ([#1576](https://github.com/fishtown-analytics/dbt/issues/1576), [#1795](https://github.com/fishtown-analytics/dbt/pull/1795))
 - Fix for cache errors on BigQuery when dataset names are capitalized ([#1810](https://github.com/fishtown-analytics/dbt/issues/1810), [#1881](https://github.com/fishtown-analytics/dbt/pull/1881))
 - Fix for invalid query generation when multiple `options` are provided to a `create table|view` query ([#1786](https://github.com/fishtown-analytics/dbt/issues/1786), [#1787](https://github.com/fishtown-analytics/dbt/pull/1787))
