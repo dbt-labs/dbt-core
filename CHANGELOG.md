@@ -2,13 +2,10 @@
 
 ### Breaking changes
 - Support for Python 2.x has been dropped [as it will no longer be supported on January 1, 2020](https://www.python.org/dev/peps/pep-0373/)
-- The 'table_name' field field has been removed from Relations
-- Cache management changes ([docs](https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-update-the-relation-cache)):
-  - Materializations should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
-  - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped` (or use `adapter.drop_relation`)
-  - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed` (or use `adapter.rename_relation`)
-- The existing `compile` and `execute` rpc tasks have been renamed to `compile_sql` and `execute_sql` ([#1779](https://github.com/fishtown-analytics/dbt/issues/1779), [#1798](https://github.com/fishtown-analytics/dbt/pull/1798)) ([docs](https://docs.getdbt.com/v0.15/docs/rpc))
 - Compilation errors in .yml files are now treated as errors instead of warnings ([#1493](https://github.com/fishtown-analytics/dbt/issues/1493), [#1751](https://github.com/fishtown-analytics/dbt/pull/1751))
+- The 'table_name' field field has been removed from Relations
+- The existing `compile` and `execute` rpc tasks have been renamed to `compile_sql` and `execute_sql` ([#1779](https://github.com/fishtown-analytics/dbt/issues/1779), [#1798](https://github.com/fishtown-analytics/dbt/pull/1798)) ([docs](https://docs.getdbt.com/v0.15/docs/rpc))
+- Custom materializations must now manage dbt's Relation cache ([docs](https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-update-the-relation-cache)):
 
 ### Core
 #### Features
