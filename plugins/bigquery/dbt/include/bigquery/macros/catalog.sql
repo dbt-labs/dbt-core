@@ -154,14 +154,14 @@
 
             -- coalesce name and type for External tables - these columns are not
             -- present in the COLUMN_FIELD_PATHS resultset
-            coalesce(columns.column_name, '<null>') as column_name,
+            coalesce(columns.column_name, '<unknown>') as column_name,
             -- invent a row number to account for nested fields -- BQ does
             -- not treat these nested properties as independent fields
             row_number() over (
                 partition by relation_id
                 order by columns.column_index, columns.column_name
             ) as column_index,
-            coalesce(columns.column_type, '<null>') as column_type,
+            coalesce(columns.column_type, '<unknown>') as column_type,
             columns.column_comment,
 
             'Location' as `stats__location__label`,
