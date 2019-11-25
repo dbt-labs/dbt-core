@@ -2,7 +2,15 @@
 from setuptools import find_namespace_packages
 from setuptools import setup
 import os
-import sys
+
+PSYCOPG2_MESSAGE = '''
+No package name override was set.
+Using 'psycopg2-binary' package to satisfy 'psycopg2'
+
+If you experience segmentation faults, silent crashes, or installation errors,
+consider retrying with the 'DBT_PSYCOPG2_NAME' environment variable set to
+'psycopg2'. It may require a compiler toolchain and development libraries!
+'''.strip()
 
 
 def _dbt_psycopg2_name():
@@ -11,14 +19,9 @@ def _dbt_psycopg2_name():
     if package_name:
         return package_name
 
-    binary_only_versions = [(3, 8)]
-
-    # binary wheels don't exist for all versions. Require psycopg2-binary for
-    # them and wait for psycopg2.
-    if sys.version_info[:2] in binary_only_versions:
-        return 'psycopg2-binary'
-    else:
-        return 'psycopg2'
+    # default to psycopg2-binary for all OSes/versions
+    print(PSYCOPG2_MESSAGE)
+    return 'psycopg2-binary'
 
 
 package_name = "dbt-postgres"
