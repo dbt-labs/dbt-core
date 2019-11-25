@@ -5,7 +5,24 @@
 - Compilation errors in .yml files are now treated as errors instead of warnings ([#1493](https://github.com/fishtown-analytics/dbt/issues/1493), [#1751](https://github.com/fishtown-analytics/dbt/pull/1751))
 - The 'table_name' field field has been removed from Relations
 - The existing `compile` and `execute` rpc tasks have been renamed to `compile_sql` and `execute_sql` ([#1779](https://github.com/fishtown-analytics/dbt/issues/1779), [#1798](https://github.com/fishtown-analytics/dbt/pull/1798)) ([docs](https://docs.getdbt.com/v0.15/docs/rpc))
-- Custom materializations must now manage dbt's Relation cache ([docs](https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-update-the-relation-cache)):
+- Custom materializations must now manage dbt's Relation cache ([docs](https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-update-the-relation-cache))
+
+### Installation notes:
+
+dbt v0.15.0 uses the `psycopg2-binary` dependency (instead of `psycopg2`) to simplify installation on platforms that do not have a compiler toolchain installed. If you experience segmentation faults, crashes, or installation errors, you can set the  `DBT_PSYCOPG2_NAME` environment variable to `psycopg2` to change the dependency that dbt installs. This may require a compiler toolchain and development libraries.
+
+```bash
+$ DBT_PSYCOPG2_NAME=psycopg2 pip install dbt
+```
+
+You may also install specific dbt plugins directly by name. This has the advantage of only installing the Python requirements needed for your particular database:
+
+```bash
+$ pip install dbt-postgres
+$ pip install dbt-redshift
+$ pip install dbt-snowflake
+$ pip install dbt-bigquery
+```
 
 ### Core
 #### Features
