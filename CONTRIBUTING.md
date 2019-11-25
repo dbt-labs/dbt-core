@@ -61,7 +61,7 @@ brew install postgresql
 First make sure that you set up your `virtualenv` as described in section _Setting up an environment_. Next, install dbt (and it's dependencies) with:
 
 ```
-pip install -r requirements.txt
+pip install -r editable_requirements.txt
 ```
 
 When dbt is installed from source in this way, any changes you make to the dbt source code will be reflected immediately in your next `dbt` run.
