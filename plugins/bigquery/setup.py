@@ -4,7 +4,7 @@ from setuptools import setup
 import os
 
 package_name = "dbt-bigquery"
-package_version = "0.15.0rc2"
+package_version = "0.15.0"
 description = """The bigquery adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
