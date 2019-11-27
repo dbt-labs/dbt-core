@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from unittest.mock import patch, MagicMock, Mock
 
 import hologram
+
 import dbt.flags as flags
 
 from dbt.adapters.bigquery import BigQueryCredentials
