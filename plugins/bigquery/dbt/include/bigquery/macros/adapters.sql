@@ -65,8 +65,8 @@
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
   {{ bigquery_table_options(
-    persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name,
-    labels=raw_labels) }}
+      persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name,
+      labels=raw_labels) }}
   as (
     {{ sql }}
   );
