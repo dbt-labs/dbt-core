@@ -295,7 +295,12 @@ class TestBigQueryRelation(unittest.TestCase):
 class TestBigQueryConnectionManager(unittest.TestCase):
 
     def setUp(self):
-        self.connections = BigQueryConnectionManager(profile={})
+        credentials = BigQueryCredentials(**{
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                })
+        self.connections = BigQueryConnectionManager(profile=credentials)
         self.mock_client = Mock(
           dbt.adapters.bigquery.impl.google.cloud.bigquery.Client)
         self.mock_connection = MagicMock()
