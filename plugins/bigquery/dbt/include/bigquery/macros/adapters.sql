@@ -27,25 +27,32 @@
 {%- endmacro -%}
 
 {% macro bigquery_table_options(persist_docs, temporary, kms_key_name) %}
-  {% set opts = {} %}
+  {% set opts = {} -%}
 
-  {% set description = get_relation_comment(persist_docs, model) %}
+  {%- set description = get_relation_comment(persist_docs, model) -%}
   {%- if description is not none -%}
-    {% do opts.update({'description': "'" ~ description ~ "'"}) %}
-  {% endif %}
-  {% if temporary %}
+    {%- do opts.update({'description': "'" ~ description ~ "'"}) -%}
+  {%- endif -%}
+  {%- if temporary -%}
     {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
-  {% endif %}
-  {% if kms_key_name %}
-    {% do opts.update({'kms_key_name': "'" ~ kms_key_name ~ "'"}) %}
-  {% endif %}
+  {%- endif -%}
+  {%- if kms_key_name -%}
+    {%- do opts.update({'kms_key_name': "'" ~ kms_key_name ~ "'"}) -%}
+  {%- endif -%}
+  {%- if labels -%}
+    {%- set label_list = [] -%}
+    {%- for key in labels -%}
+      {%- do label_list.append((key, labels[key])) -%}
+    {%- endfor -%}
+    {%- do opts.update({'labels': label_list}) -%}
+  {%- endif -%}
 
   {% set options -%}
     OPTIONS({% for opt_key, opt_val in opts.items() %}
       {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
     {% endfor %})
   {%- endset %}
-  {% do return(options) %}
+  {%- do return(options) -%}
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
@@ -53,15 +60,17 @@
   {%- set raw_cluster_by = config.get('cluster_by', none) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set raw_kms_key_name = config.get('kms_key_name', none) -%}
-
+  {%- set raw_labels = config.get('labels', []) -%}
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
-  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name) }}
+  {{ bigquery_table_options(
+    persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name,
+    labels=raw_labels) }}
   as (
     {{ sql }}
   );
-{% endmacro %}
+{%- endmacro -%}
 
 
 {% macro bigquery__create_view_as(relation, sql) -%}
