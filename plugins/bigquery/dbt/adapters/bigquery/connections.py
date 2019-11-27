@@ -227,20 +227,6 @@ class BigQueryConnectionManager(BaseConnectionManager):
             status = 'CREATE TABLE ({})'.format(table.num_rows)
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-        elif query_job.statement_type == 'CREATE_TABLE_AS_SELECT':
-            conn = self.get_thread_connection()
-            client = conn.handle
-            table = client.get_table(query_job.destination)
-            status = 'CREATE TABLE ({})'.format(table.num_rows)
-
-        elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-        elif query_job.statement_type == 'CREATE_TABLE_AS_SELECT':
-            conn = self.get_thread_connection()
-            client = conn.handle
-            table = client.get_table(query_job.destination)
-            status = 'CREATE TABLE ({})'.format(table.num_rows)
-
-        elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
             status = '{} ({})'.format(
                 query_job.statement_type,
                 query_job.num_dml_affected_rows
