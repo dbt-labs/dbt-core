@@ -333,11 +333,11 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             raise DummyException()
 
 #        with self.assertLogs(logger.name) as logs:
-         with self.assertRaises(DummyException):
-             self.connections._retry_and_handle(
-                  "some sql", {'credentials': {'retries': 8}},
-                  raiseDummyException)
-             self.assertEqual(DummyException.count, 9)
+        with self.assertRaises(DummyException):
+            self.connections._retry_and_handle(
+                 "some sql", {'credentials': {'retries': 8}},
+                 raiseDummyException)
+            self.assertEqual(DummyException.count, 9)
 #        self.assertIn(
 #            'WARNING:dbt:Retry attempt 1 of 8 after error: DummyException()',
 #            logs.output)
