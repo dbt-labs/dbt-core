@@ -297,7 +297,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
     def setUp(self):
         credentials = BigQueryCredentials(**{
                     'method': 'oauth',
-                    'project': 'dbt-unit-000000',
+                    'database': 'dbt-unit-000000',
                     'schema': 'dummy_schema',
                 })
         self.connections = BigQueryConnectionManager(profile=credentials)
