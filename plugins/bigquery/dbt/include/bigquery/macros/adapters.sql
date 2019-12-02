@@ -26,7 +26,7 @@
 
 {%- endmacro -%}
 
-{% macro bigquery_table_options(persist_docs, temporary, kms_key_name) %}
+{% macro bigquery_table_options(persist_docs, temporary, kms_key_name, labels) %}
   {% set opts = {} -%}
 
   {%- set description = get_relation_comment(persist_docs, model) -%}
@@ -41,8 +41,8 @@
   {%- endif -%}
   {%- if labels -%}
     {%- set label_list = [] -%}
-    {%- for key in labels -%}
-      {%- do label_list.append((key, labels[key])) -%}
+    {%- for label, value in labels.items() -%}
+      {%- do label_list.append((label, value)) -%}
     {%- endfor -%}
     {%- do opts.update({'labels': label_list}) -%}
   {%- endif -%}
