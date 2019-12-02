@@ -26,6 +26,10 @@
 
 {%- endmacro -%}
 
+{% macro sql_header(config) -%}
+  {{ config.set('sql_header', caller()) }}
+{%- endmacro %}
+
 {% macro bigquery_table_options(persist_docs, temporary, kms_key_name) %}
   {% set opts = {} %}
 
@@ -53,6 +57,9 @@
   {%- set raw_cluster_by = config.get('cluster_by', none) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set raw_kms_key_name = config.get('kms_key_name', none) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
