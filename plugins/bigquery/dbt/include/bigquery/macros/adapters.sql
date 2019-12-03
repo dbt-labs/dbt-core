@@ -26,10 +26,6 @@
 
 {%- endmacro -%}
 
-{% macro sql_header(config) -%}
-  {{ config.set('sql_header', caller()) }}
-{%- endmacro %}
-
 {% macro bigquery_table_options(persist_docs, temporary, kms_key_name) %}
   {% set opts = {} %}
 
@@ -73,6 +69,9 @@
 
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
   create or replace view {{ relation }}
   {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=false) }}

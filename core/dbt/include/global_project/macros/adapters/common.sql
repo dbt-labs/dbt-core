@@ -269,3 +269,7 @@
 
     {% do return(tmp_relation) %}
 {% endmacro %}
+
+{% macro set_sql_header(config) -%}
+  {{ config.set('sql_header', caller()) }}
+{%- endmacro %}
