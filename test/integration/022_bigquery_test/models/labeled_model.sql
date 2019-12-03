@@ -1,7 +1,7 @@
 {{
 	config(
 		materialized = "table",
-		labels = {town: 'fish', analytics: 'yes'}
+		labels = {'town': 'fish', 'analytics': 'yes'}
 	)
 }}
 

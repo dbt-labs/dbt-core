@@ -75,9 +75,10 @@
 
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+  {%- set raw_labels = config.get('labels', []) -%}
 
   create or replace view {{ relation }}
-  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=false) }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=false, labels=raw_labels) }}
   as (
     {{ sql }}
   );
