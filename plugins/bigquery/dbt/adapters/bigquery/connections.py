@@ -195,7 +195,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         job_params = {'use_legacy_sql': False}
 
         priority = conn.credentials.get('priority', 'interactive')
-        if priority == 'batch':
+        if priority == Priority.Batch:
             job_params['priority'] = google.cloud.bigquery.QueryPriority.BATCH
         else:
             job_params[
