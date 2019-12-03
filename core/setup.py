@@ -46,21 +46,12 @@ setup(
     install_requires=[
         'Jinja2>=2.10',
         'PyYAML>=3.11',
-<<<<<<< HEAD
-        'sqlparse==0.2.3',
-        'networkx>=1.11,<2.4',
-=======
         'sqlparse>=0.2.3,<0.4',
         'networkx>=2.3,<3',
->>>>>>> 0.15.latest
         'minimal-snowplow-tracker==0.0.2',
         'requests>=2.18.0,<3',
         'colorama>=0.3.9,<0.5',
         'agate>=1.6,<2',
-<<<<<<< HEAD
-        'jsonschema>=3.0.1,<3.1.2,!=3.1.0',
-=======
->>>>>>> 0.15.latest
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<0.17',
         'dataclasses==0.6;python_version<"3.7"',

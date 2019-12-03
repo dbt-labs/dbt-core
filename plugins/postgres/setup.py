@@ -53,10 +53,6 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-<<<<<<< HEAD
-        'psycopg2>=2.7,<2.8',
-    ]
-=======
         '{}~=2.8'.format(DBT_PSYCOPG2_NAME),
     ],
     zip_safe=False,
@@ -73,5 +69,4 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
     ],
->>>>>>> 0.15.latest
 )
