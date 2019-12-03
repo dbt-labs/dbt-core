@@ -46,7 +46,10 @@ class TestPrePostRunHooks(DBTIntegrationTest):
                 "drop table {{ target.schema }}.end_hook_order_test",
                 "create table {{ target.schema }}.schemas ( schema text )",
                 "insert into {{ target.schema }}.schemas values ({% for schema in schemas %}( '{{ schema }}' ){% if not loop.last %},{% endif %}{% endfor %})",
-            ]
+            ],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     @property

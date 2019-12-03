@@ -32,7 +32,7 @@ def dot_separated(key):
     return '.'.join(map(str, key))
 
 
-class _CachedRelation(object):
+class _CachedRelation:
     """Nothing about _CachedRelation is guaranteed to be thread-safe!
 
     :attr str schema: The schema of this relation.
@@ -130,7 +130,6 @@ class _CachedRelation(object):
                 'schema': new_relation.inner.schema,
                 'identifier': new_relation.inner.identifier
             },
-            table_name=new_relation.inner.identifier
         )
 
     def rename_key(self, old_key, new_key):
@@ -168,7 +167,7 @@ def lazy_log(msg, func):
     logger.debug(msg.format(func()))
 
 
-class RelationsCache(object):
+class RelationsCache:
     """A cache of the relations known to dbt. Keeps track of relationships
     declared between tables and handles renames/drops as a real database would.
 
@@ -254,6 +253,8 @@ class RelationsCache(object):
         """
         referenced = self.relations.get(referenced_key)
         if referenced is None:
+            return
+        if referenced is None:
             dbt.exceptions.raise_cache_inconsistent(
                 'in add_link, referenced link key {} not in cache!'
                 .format(referenced_key)
@@ -269,8 +270,8 @@ class RelationsCache(object):
         referenced.add_reference(dependent)
 
     def add_link(self, referenced, dependent):
-        """Add a link between two relations to the database. Both the old and
-        new entries must already exist in the database.
+        """Add a link between two relations to the database. If either relation
+        does not exist, it will be added as an "external" relation.
 
         The dependent model refers _to_ the referenced model. So, given
         arguments of (jake_test, bar, jake_test, foo):
@@ -282,23 +283,36 @@ class RelationsCache(object):
         :param BaseRelation dependent: The dependent model.
         :raises InternalError: If either entry does not exist.
         """
-        referenced = _make_key(referenced)
-        if (referenced.database, referenced.schema) not in self:
+        ref_key = _make_key(referenced)
+        if (ref_key.database, ref_key.schema) not in self:
             # if we have not cached the referenced schema at all, we must be
             # referring to a table outside our control. There's no need to make
             # a link - we will never drop the referenced relation during a run.
             logger.debug(
                 '{dep!s} references {ref!s} but {ref.database}.{ref.schema} '
                 'is not in the cache, skipping assumed external relation'
-                .format(dep=dependent, ref=referenced)
+                .format(dep=dependent, ref=ref_key)
             )
             return
-        dependent = _make_key(dependent)
+        if ref_key not in self.relations:
+            # Insert a dummy "external" relation.
+            referenced = referenced.replace(
+                type=referenced.RelationType.External
+            )
+            self.add(referenced)
+
+        dep_key = _make_key(dependent)
+        if dep_key not in self.relations:
+            # Insert a dummy "external" relation.
+            dependent = dependent.replace(
+                type=referenced.RelationType.External
+            )
+            self.add(dependent)
         logger.debug(
-            'adding link, {!s} references {!s}'.format(dependent, referenced)
+            'adding link, {!s} references {!s}'.format(dep_key, ref_key)
         )
         with self.lock:
-            self._add_link(referenced, dependent)
+            self._add_link(ref_key, dep_key)
 
     def add(self, relation):
         """Add the relation inner to the cache, under the schema schema and
@@ -455,12 +469,13 @@ class RelationsCache(object):
         :return List[BaseRelation]: The list of relations with the given
             schema
         """
+        database = _lower(database)
         schema = _lower(schema)
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if (r.schema == _lower(schema) and
-                    r.database == _lower(database))
+                if (_lower(r.schema) == schema and
+                    _lower(r.database) == database)
             ]
 
         if None in results:

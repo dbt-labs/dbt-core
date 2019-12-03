@@ -3,7 +3,7 @@ from dbt.context import runtime
 from dbt.exceptions import raise_compiler_error
 
 
-class RefResolver(runtime.BaseRefResolver):
+class RefResolver(runtime.RefResolver):
     def __call__(self, *args):
         # When you call ref(), this is what happens at operation runtime
         target_model, name = self.resolve(args)

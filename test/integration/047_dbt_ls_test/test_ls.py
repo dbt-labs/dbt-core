@@ -1,6 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import os
-from dbt.logger import log_to_stdout, GLOBAL_LOGGER
+from dbt.logger import log_manager
 
 import json
 
@@ -27,10 +27,13 @@ class TestStrictUndefined(DBTIntegrationTest):
             'macro-paths': [self.dir('macros')],
             'data-paths': [self.dir('data')],
             'test-paths': [self.dir('tests')],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     def run_dbt_ls(self, args=None, expect_pass=True):
-        log_to_stdout(GLOBAL_LOGGER)
+        log_manager.stdout_console()
         full_args = ['ls']
         if args is not None:
             full_args = full_args + args
@@ -38,7 +41,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         result = self.run_dbt(args=full_args, expect_pass=expect_pass,
                               strict=False, parser=False)
 
-        log_to_stdout(GLOBAL_LOGGER)
+        log_manager.stdout_console()
         return result
 
     def assertEqualJSON(self, json_str, expected):
@@ -59,7 +62,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def expect_snapshot_output(self):
         expectations = {
             'name': 'my_snapshot',
-            'selector': 'test.my_snapshot',
+            'selector': 'test.snapshot.my_snapshot',
             'json': {
                 'name': 'my_snapshot',
                 'package_name': 'test',
@@ -247,6 +250,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'vars': {},
                     'column_types': {},
                     'persist_docs': {},
+                    'quote_columns': False,
                 },
                 'alias': 'seed',
                 'resource_type': 'seed',
@@ -331,8 +335,8 @@ class TestStrictUndefined(DBTIntegrationTest):
         # but models don't! they just have (package.name)
         # sources are like models - (package.source_name.table_name)
         expected_default = {
-            'test.my_snapshot',
             'test.ephemeral',
+            'test.snapshot.my_snapshot',
             'test.sub.inner',
             'test.outer',
             'test.seed',

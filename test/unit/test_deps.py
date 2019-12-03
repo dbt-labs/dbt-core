@@ -1,82 +1,122 @@
 import unittest
-import mock
+from unittest import mock
 
+import dbt.deps
 import dbt.exceptions
-from dbt.task.deps import GitPackage, LocalPackage, RegistryPackage
+from dbt.deps.git import GitUnpinnedPackage
+from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.registry import RegistryUnpinnedPackage
+from dbt.deps.resolver import resolve_packages
+from dbt.contracts.project import (
+    LocalPackage,
+    GitPackage,
+    RegistryPackage,
+)
+
+from dbt.contracts.project import PackageConfig
 from dbt.semver import VersionSpecifier
+
+from hologram import ValidationError
+
 
 class TestLocalPackage(unittest.TestCase):
     def test_init(self):
-        a = LocalPackage(local='/path/to/package')
-        a.resolve_version()
-        self.assertEqual(a.source_type(), 'local')
+        a_contract = LocalPackage.from_dict({'local': '/path/to/package'})
+        self.assertEqual(a_contract.local, '/path/to/package')
+        a = LocalUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.local, '/path/to/package')
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.local, '/path/to/package')
+        self.assertEqual(str(a_pinned), '/path/to/package')
 
 
 class TestGitPackage(unittest.TestCase):
     def test_init(self):
-        a = GitPackage(git='http://example.com', revision='0.0.1')
+        a_contract = GitPackage.from_dict(
+            {'git': 'http://example.com', 'revision': '0.0.1'}
+        )
+        self.assertEqual(a_contract.git, 'http://example.com')
+        self.assertEqual(a_contract.revision, '0.0.1')
+        self.assertIs(a_contract.warn_unpinned, None)
+
+        a = GitUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.git, 'http://example.com')
-        self.assertEqual(a.revision, '0.0.1')
-        self.assertEqual(a.version, ['0.0.1'])
-        self.assertEqual(a.source_type(), 'git')
+        self.assertEqual(a.revisions, ['0.0.1'])
+        self.assertIs(a.warn_unpinned, True)
+
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.name, 'http://example.com')
+        self.assertEqual(a_pinned.get_version(), '0.0.1')
+        self.assertEqual(a_pinned.source_type(), 'git')
+        self.assertIs(a_pinned.warn_unpinned, True)
 
     def test_invalid(self):
-        with self.assertRaises(dbt.exceptions.ValidationException):
-            GitPackage(git='http://example.com', version='0.0.1')
+        with self.assertRaises(ValidationError):
+            GitPackage.from_dict(
+                {'git': 'http://example.com', 'version': '0.0.1'}
+            )
 
     def test_resolve_ok(self):
-        a = GitPackage(git='http://example.com', revision='0.0.1')
-        b = GitPackage(git='http://example.com', revision='0.0.1')
+        a_contract = GitPackage.from_dict(
+            {'git': 'http://example.com', 'revision': '0.0.1'}
+        )
+        b_contract = GitPackage.from_dict(
+            {'git': 'http://example.com', 'revision': '0.0.1',
+             'warn-unpinned': False}
+        )
+        a = GitUnpinnedPackage.from_contract(a_contract)
+        b = GitUnpinnedPackage.from_contract(b_contract)
+        self.assertTrue(a.warn_unpinned)
+        self.assertFalse(b.warn_unpinned)
         c = a.incorporate(b)
-        self.assertEqual(c.git, 'http://example.com')
-        self.assertEqual(c.version, ['0.0.1', '0.0.1'])
-        c.resolve_version()
-        self.assertEqual(c.version, ['0.0.1'])
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.name, 'http://example.com')
+        self.assertEqual(c_pinned.get_version(), '0.0.1')
+        self.assertEqual(c_pinned.source_type(), 'git')
+        self.assertFalse(c_pinned.warn_unpinned)
 
     def test_resolve_fail(self):
-        a = GitPackage(git='http://example.com', revision='0.0.1')
-        b = GitPackage(git='http://example.com', revision='0.0.2')
+        a_contract = GitPackage.from_dict(
+            {'git': 'http://example.com', 'revision': '0.0.1'}
+        )
+        b_contract = GitPackage.from_dict(
+            {'git': 'http://example.com', 'revision': '0.0.2'}
+        )
+        a = GitUnpinnedPackage.from_contract(a_contract)
+        b = GitUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
         self.assertEqual(c.git, 'http://example.com')
-        self.assertEqual(c.version, ['0.0.1', '0.0.2'])
+        self.assertEqual(c.revisions, ['0.0.1', '0.0.2'])
+
         with self.assertRaises(dbt.exceptions.DependencyException):
-            c.resolve_version()
+            c.resolved()
+
+    def test_default_revision(self):
+        a_contract = GitPackage.from_dict({'git': 'http://example.com'})
+        self.assertEqual(a_contract.revision, None)
+        self.assertIs(a_contract.warn_unpinned, None)
+
+        a = GitUnpinnedPackage.from_contract(a_contract)
+        self.assertEqual(a.git, 'http://example.com')
+        self.assertEqual(a.revisions, [])
+        self.assertIs(a.warn_unpinned, True)
+
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.name, 'http://example.com')
+        self.assertEqual(a_pinned.get_version(), 'master')
+        self.assertEqual(a_pinned.source_type(), 'git')
+        self.assertIs(a_pinned.warn_unpinned, True)
 
 
 class TestHubPackage(unittest.TestCase):
     def setUp(self):
-        self.patcher = mock.patch('dbt.task.deps.registry')
+        self.patcher = mock.patch('dbt.deps.registry.registry')
         self.registry = self.patcher.start()
         self.index_cached = self.registry.index_cached
         self.get_available_versions = self.registry.get_available_versions
         self.package_version = self.registry.package_version
 
-    def tearDown(self):
-        self.patcher.stop()
-
-    def test_init(self):
-        a = RegistryPackage(package='fishtown-analytics-test/a',
-                            version='0.1.2')
-        self.assertEqual(a.package, 'fishtown-analytics-test/a')
-        self.assertEqual(
-            a.version,
-            [VersionSpecifier(
-                build=None,
-                major='0',
-                matcher='=',
-                minor='1',
-                patch='2',
-                prerelease=None
-            )]
-        )
-        self.assertEqual(a.source_type(), 'hub')
-
-    def test_invalid(self):
-        with self.assertRaises(dbt.exceptions.DependencyException):
-            RegistryPackage(package='namespace/name', key='invalid')
-
-    def test_resolve_ok(self):
         self.index_cached.return_value = [
             'fishtown-analytics-test/a',
         ]
@@ -98,105 +138,263 @@ class TestHubPackage(unittest.TestCase):
             'newfield': ['another', 'value'],
         }
 
-        a = RegistryPackage(
+    def tearDown(self):
+        self.patcher.stop()
+
+    def test_init(self):
+        a_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
-            version='0.1.2'
+            version='0.1.2',
         )
-        b = RegistryPackage(
-            package='fishtown-analytics-test/a',
-            version='0.1.2'
-        )
-        c = a.incorporate(b)
+        self.assertEqual(a_contract.package, 'fishtown-analytics-test/a')
+        self.assertEqual(a_contract.version, '0.1.2')
+
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        self.assertEqual(a.package, 'fishtown-analytics-test/a')
         self.assertEqual(
-            c.version,
-            [
-                VersionSpecifier({
-                    'build': None,
-                    'major': '0',
-                    'matcher': '=',
-                    'minor': '1',
-                    'patch': '2',
-                    'prerelease': None,
-                }),
-                VersionSpecifier({
-                    'build': None,
-                    'major': '0',
-                    'matcher': '=',
-                    'minor': '1',
-                    'patch': '2',
-                    'prerelease': None,
-                })
-            ]
+            a.versions,
+            [VersionSpecifier(
+                build=None,
+                major='0',
+                matcher='=',
+                minor='1',
+                patch='2',
+                prerelease=None
+            )]
         )
-        c.resolve_version()
+
+        a_pinned = a.resolved()
+        self.assertEqual(a_contract.package, 'fishtown-analytics-test/a')
+        self.assertEqual(a_contract.version, '0.1.2')
+        self.assertEqual(a_pinned.source_type(), 'hub')
+
+    def test_invalid(self):
+        with self.assertRaises(ValidationError):
+            RegistryPackage.from_dict(
+                {'package': 'namespace/name', 'key': 'invalid'}
+            )
+
+    def test_resolve_ok(self):
+        a_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='0.1.2'
+        )
+        b_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='0.1.2'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
         self.assertEqual(c.package, 'fishtown-analytics-test/a')
         self.assertEqual(
-            c.version,
-            [VersionSpecifier({
-                'build': None,
-                'major': '0',
-                'matcher': '=',
-                'minor': '1',
-                'patch': '2',
-                'prerelease': None,
-            })]
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='=',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='=',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+            ]
         )
-        self.assertEqual(c.source_type(), 'hub')
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c_pinned.version, '0.1.2')
+        self.assertEqual(c_pinned.source_type(), 'hub')
 
     def test_resolve_missing_package(self):
-        self.index_cached.return_value = [
-            'fishtown-analytics-test/b',
-        ]
-        a = RegistryPackage(
-            package='fishtown-analytics-test/a',
+        a = RegistryUnpinnedPackage.from_contract(RegistryPackage(
+            package='fishtown-analytics-test/b',
             version='0.1.2'
-        )
+        ))
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
-            a.resolve_version()
+            a.resolved()
 
-        msg = 'Package fishtown-analytics-test/a was not found in the package index'
+        msg = 'Package fishtown-analytics-test/b was not found in the package index'
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_missing_version(self):
-        self.index_cached.return_value = [
-            'fishtown-analytics-test/a',
-        ]
-        self.get_available_versions.return_value = [
-            '0.1.3', '0.1.4'
-        ]
-        a = RegistryPackage(
+        a = RegistryUnpinnedPackage.from_contract(RegistryPackage(
             package='fishtown-analytics-test/a',
-            version='0.1.2'
-        )
+            version='0.1.4'
+        ))
+
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
-            a.resolve_version()
+            a.resolved()
         msg = (
             "Could not find a matching version for package "
-            "fishtown-analytics-test/a\n  Requested range: =0.1.2, =0.1.2\n  "
-            "Available versions: ['0.1.3', '0.1.4']"
+            "fishtown-analytics-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
+            "Available versions: ['0.1.2', '0.1.3']"
         )
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_conflict(self):
-        self.index_cached.return_value = [
-            'fishtown-analytics-test/a',
-        ]
-        self.get_available_versions.return_value = [
-            '0.1.2', '0.1.3'
-        ]
-        a = RegistryPackage(
+        a_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        b = RegistryPackage(
+        b_contract = RegistryPackage(
             package='fishtown-analytics-test/a',
             version='0.1.3'
         )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
+
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
-            c.resolve_version()
+            c.resolved()
         msg = (
             "Version error for package fishtown-analytics-test/a: Could not "
             "find a satisfactory version from options: ['=0.1.2', '=0.1.3']"
         )
         self.assertEqual(msg, str(exc.exception))
+
+    def test_resolve_ranges(self):
+        a_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='0.1.2'
+        )
+        b_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='<0.1.4'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'fishtown-analytics-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='=',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='4',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c_pinned.version, '0.1.2')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+
+class MockRegistry:
+    def __init__(self, packages):
+        self.packages = packages
+
+    def index_cached(self, registry_base_url=None):
+        return sorted(self.packages)
+
+    def get_available_versions(self, name):
+        try:
+            pkg = self.packages[name]
+        except KeyError:
+            return []
+        return list(pkg)
+
+    def package_version(self, name, version):
+        try:
+            return self.packages[name][version]
+        except KeyError:
+            return None
+
+
+class TestPackageSpec(unittest.TestCase):
+    def setUp(self):
+        self.patcher = mock.patch('dbt.deps.registry.registry')
+        self.registry = self.patcher.start()
+        self.mock_registry = MockRegistry(packages={
+            'fishtown-analytics-test/a': {
+                '0.1.2': {
+                    'id': 'fishtown-analytics-test/a/0.1.2',
+                    'name': 'a',
+                    'version': '0.1.2',
+                    'packages': [],
+                    '_source': {
+                        'blahblah': 'asdfas',
+                    },
+                    'downloads': {
+                        'tarball': 'https://example.com/invalid-url!',
+                        'extra': 'field',
+                    },
+                    'newfield': ['another', 'value'],
+                },
+                '0.1.3': {
+                    'id': 'fishtown-analytics-test/a/0.1.3',
+                    'name': 'a',
+                    'version': '0.1.3',
+                    'packages': [],
+                    '_source': {
+                        'blahblah': 'asdfas',
+                    },
+                    'downloads': {
+                        'tarball': 'https://example.com/invalid-url!',
+                        'extra': 'field',
+                    },
+                    'newfield': ['another', 'value'],
+                }
+            },
+            'fishtown-analytics-test/b': {
+                '0.2.1': {
+                    'id': 'fishtown-analytics-test/b/0.2.1',
+                    'name': 'b',
+                    'version': '0.2.1',
+                    'packages': [{'package': 'fishtown-analytics-test/a', 'version': '>=0.1.3'}],
+                    '_source': {
+                        'blahblah': 'asdfas',
+                    },
+                    'downloads': {
+                        'tarball': 'https://example.com/invalid-url!',
+                        'extra': 'field',
+                    },
+                    'newfield': ['another', 'value'],
+                },
+            }
+        })
+
+        self.registry.index_cached.side_effect = self.mock_registry.index_cached
+        self.registry.get_available_versions.side_effect = self.mock_registry.get_available_versions
+        self.registry.package_version.side_effect = self.mock_registry.package_version
+
+    def tearDown(self):
+        self.patcher.stop()
+
+    def test_dependency_resolution(self):
+        package_config = PackageConfig.from_dict({
+            'packages': [
+                {'package': 'fishtown-analytics-test/a', 'version': '>0.1.2'},
+                {'package': 'fishtown-analytics-test/b', 'version': '0.2.1'},
+            ],
+        })
+        resolved = resolve_packages(package_config.packages, None)
+        self.assertEqual(len(resolved), 2)
+        self.assertEqual(resolved[0].name, 'fishtown-analytics-test/a')
+        self.assertEqual(resolved[0].version, '0.1.3')
+        self.assertEqual(resolved[1].name, 'fishtown-analytics-test/b')
+        self.assertEqual(resolved[1].version, '0.2.1')

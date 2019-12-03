@@ -27,7 +27,7 @@ class TestAliases(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test__alias_model_name(self):
+    def test__alias_model_name_postgres(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
@@ -43,6 +43,7 @@ class TestAliases(DBTIntegrationTest):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
+
 
 class TestAliasErrors(DBTIntegrationTest):
     @property
@@ -60,10 +61,11 @@ class TestAliasErrors(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test__alias_dupe_throws_exception(self):
+    def test__postgres_alias_dupe_throws_exception(self):
         message = ".*identical database representation.*"
-        with self.assertRaisesRegexp(Exception, message):
+        with self.assertRaisesRegex(Exception, message):
             self.run_dbt(['run'])
+
 
 class TestSameAliasDifferentSchemas(DBTIntegrationTest):
     @property
@@ -81,7 +83,7 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test__same_alias_succeeds_in_different_schemas(self):
+    def test__postgres_same_alias_succeeds_in_different_schemas(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 3)
         res = self.run_dbt(['test'])

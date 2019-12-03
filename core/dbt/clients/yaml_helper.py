@@ -1,4 +1,3 @@
-import dbt.compat
 import dbt.exceptions
 
 import yaml
@@ -17,7 +16,7 @@ Raw Error:
 
 
 def line_no(i, line, width=3):
-    line_number = dbt.compat.to_string(i).ljust(width)
+    line_number = str(i).ljust(width)
     return "{}| {}".format(line_number, line)
 
 
@@ -52,6 +51,6 @@ def load_yaml_text(contents):
         if hasattr(e, 'problem_mark'):
             error = contextualized_yaml_error(contents, e)
         else:
-            error = dbt.compat.to_string(e)
+            error = str(e)
 
         raise dbt.exceptions.ValidationException(error)

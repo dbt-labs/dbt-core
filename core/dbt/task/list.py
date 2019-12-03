@@ -1,12 +1,9 @@
-from __future__ import print_function
-
 import json
 
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.node_types import NodeType
 import dbt.exceptions
-from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.logger import log_to_stderr
+from dbt.logger import log_manager, GLOBAL_LOGGER as logger
 
 
 class ListTask(GraphRunnableTask):
@@ -32,7 +29,7 @@ class ListTask(GraphRunnableTask):
     ))
 
     def __init__(self, args, config):
-        super(ListTask, self).__init__(args, config)
+        super().__init__(args, config)
         self.args.single_threaded = True
         if self.args.models:
             if self.args.select:
@@ -46,9 +43,10 @@ class ListTask(GraphRunnableTask):
                 )
 
     @classmethod
-    def pre_init_hook(cls):
+    def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
-        log_to_stderr(logger)
+        log_manager.stderr_console()
+        super().pre_init_hook(args)
 
     def _iterate_selected_nodes(self):
         nodes = sorted(self.select_nodes())
@@ -77,13 +75,13 @@ class ListTask(GraphRunnableTask):
         for node in self._iterate_selected_nodes():
             yield json.dumps({
                 k: v
-                for k, v in node.serialize().items()
+                for k, v in node.to_dict(omit_none=False).items()
                 if k in self.ALLOWED_KEYS
             })
 
     def generate_paths(self):
         for node in self._iterate_selected_nodes():
-            yield node.get('original_file_path')
+            yield node.original_file_path
 
     def run(self):
         ManifestTask._runtime_initialize(self)

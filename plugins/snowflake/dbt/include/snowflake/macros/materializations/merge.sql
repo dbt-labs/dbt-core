@@ -6,7 +6,7 @@
        is provided, then this macro will do a proper merge instead.
     #}
 
-    {%- set dest_cols_csv = dest_columns | map(attribute="name") | join(', ') -%}
+    {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute='name')) -%}
 
     {%- if unique_key is none -%}
 

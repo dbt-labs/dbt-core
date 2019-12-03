@@ -1,5 +1,5 @@
-from mock import patch, MagicMock
 import unittest
+from unittest.mock import patch, MagicMock
 
 import dbt.main
 import dbt.version

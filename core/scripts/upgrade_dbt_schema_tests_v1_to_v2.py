@@ -28,7 +28,7 @@ def is_column_name(value):
 class OperationalError(Exception):
     def __init__(self, message):
         self.message = message
-        super(OperationalError, self).__init__(message)
+        super().__init__(message)
 
 
 def setup_logging(filename):
@@ -238,7 +238,7 @@ def sorted_column_list(column_dict):
     return columns
 
 
-class ModelTestBuilder(object):
+class ModelTestBuilder:
     SIMPLE_COLUMN_TESTS = {'unique', 'not_null'}
     # map test name -> the key that indicates column name
     COMPLEX_COLUMN_TESTS = {

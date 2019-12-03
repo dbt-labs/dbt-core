@@ -12,7 +12,7 @@ class TestCLIVars(DBTIntegrationTest):
         return "models_complex"
 
     @use_profile('postgres')
-    def test__cli_vars_longform(self):
+    def test__postgres_cli_vars_longform(self):
         self.use_profile('postgres')
         self.use_default_project()
 
@@ -39,7 +39,7 @@ class TestCLIVarsSimple(DBTIntegrationTest):
         return "models_simple"
 
     @use_profile('postgres')
-    def test__cli_vars_shorthand(self):
+    def test__postgres_cli_vars_shorthand(self):
         self.use_profile('postgres')
         self.use_default_project()
 
@@ -49,7 +49,7 @@ class TestCLIVarsSimple(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
 
     @use_profile('postgres')
-    def test__cli_vars_longer(self):
+    def test__postgres_cli_vars_longer(self):
         self.use_profile('postgres')
         self.use_default_project()
 

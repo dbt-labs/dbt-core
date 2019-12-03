@@ -47,7 +47,10 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
                 "{{ custom_run_hook_bq('end', target, run_started_at, invocation_id) }}",
                 "create table {{ target.schema }}.end_hook_order_test ( id INT64 )",
                 "drop table {{ target.schema }}.end_hook_order_test",
-            ]
+            ],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     @property

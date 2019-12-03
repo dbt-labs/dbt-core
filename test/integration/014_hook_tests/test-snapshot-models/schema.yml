@@ -1,0 +1,7 @@
+version: 2
+models:
+- name: example_snapshot
+  columns:
+  - name: new_col
+    tests:
+    - not_null

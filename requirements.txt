@@ -1,5 +1,5 @@
--e ./core
--e ./plugins/postgres
--e ./plugins/redshift
--e ./plugins/snowflake
--e ./plugins/bigquery
+./core
+./plugins/postgres
+./plugins/redshift
+./plugins/snowflake
+./plugins/bigquery

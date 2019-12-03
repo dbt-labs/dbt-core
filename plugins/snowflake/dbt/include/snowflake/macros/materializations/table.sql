@@ -31,10 +31,9 @@
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
-  
-  -- Drop the relation if it was a view to "convert" it in a table. This may lead to 
-  -- downtime, but it should be a relatively infrequent occurrence 
   {% if exists_as_view %}
+  {#-- Drop the relation if it was a view to "convert" it in a table. This may lead to
+    -- downtime, but it should be a relatively infrequent occurrence  #}
     {{ log("Dropping relation " ~ old_relation ~ " because it is of type " ~ old_relation.type) }}
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}
@@ -79,4 +78,7 @@
   {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+  {{ return({'relations': [target_relation]}) }}
+
 {% endmaterialization %}

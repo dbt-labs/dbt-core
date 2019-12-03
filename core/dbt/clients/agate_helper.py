@@ -1,7 +1,10 @@
-import dbt.compat
+from codecs import BOM_UTF8
 
 import agate
 import json
+
+
+BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
 
 DEFAULT_TYPE_TESTER = agate.TypeTester(types=[
     agate.data_types.Number(null_values=('null', '')),
@@ -43,7 +46,7 @@ def table_from_data_flat(data, column_names):
                 row.append(value)
         rows.append(row)
 
-    return agate.Table(rows, column_names)
+    return agate.Table(rows, column_names, column_types=DEFAULT_TYPE_TESTER)
 
 
 def empty_table():
@@ -59,7 +62,7 @@ def as_matrix(table):
 
 
 def from_csv(abspath):
-    with dbt.compat.open_seed_file(abspath) as fp:
-        if fp.read(len(dbt.compat.BOM_UTF8)) != dbt.compat.BOM_UTF8:
+    with open(abspath, encoding='utf-8') as fp:
+        if fp.read(1) != BOM:
             fp.seek(0)
         return agate.Table.from_csv(fp, column_types=DEFAULT_TYPE_TESTER)

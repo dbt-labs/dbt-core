@@ -1,20 +1,21 @@
+from hologram.helpers import StrEnum
 
-class NodeType(object):
-    Base = 'base'
+
+class NodeType(StrEnum):
     Model = 'model'
     Analysis = 'analysis'
     Test = 'test'
     Snapshot = 'snapshot'
-    Macro = 'macro'
     Operation = 'operation'
     Seed = 'seed'
+    RPCCall = 'rpc'
     Documentation = 'docs'
     Source = 'source'
-    RPCCall = 'rpc'
+    Macro = 'macro'
 
     @classmethod
     def executable(cls):
-        return [
+        return [v.value for v in [
             cls.Model,
             cls.Test,
             cls.Snapshot,
@@ -23,18 +24,17 @@ class NodeType(object):
             cls.Seed,
             cls.Documentation,
             cls.RPCCall,
-        ]
+        ]]
 
     @classmethod
     def refable(cls):
-        return [
+        return [v.value for v in [
             cls.Model,
             cls.Seed,
             cls.Snapshot,
-        ]
+        ]]
 
 
-class RunHookType:
+class RunHookType(StrEnum):
     Start = 'on-run-start'
     End = 'on-run-end'
-    Both = [Start, End]

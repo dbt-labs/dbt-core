@@ -1,9 +1,9 @@
+from datetime import datetime
 from decimal import Decimal
+from unittest import mock
 import unittest
-import os
 
 import dbt.flags
-from dbt.compat import bigint
 from dbt.task import generate
 
 
@@ -11,11 +11,35 @@ class GenerateTest(unittest.TestCase):
     def setUp(self):
         dbt.flags.STRICT_MODE = True
         self.maxDiff = None
+        self.manifest = mock.MagicMock()
+        self.patcher = mock.patch('dbt.task.generate.get_unique_id_mapping')
+        self.mock_get_unique_id_mapping = self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+
+    def map_uids(self, effects):
+        results = {
+            generate.CatalogKey(db, sch, tbl): [uid]
+            for db, sch, tbl, uid in effects
+        }
+        self.mock_get_unique_id_mapping.return_value = results
+
+    def generate_catalog_dict(self, columns):
+        result = generate.CatalogResults(
+            nodes=generate.Catalog(columns).make_unique_id_map(self.manifest),
+            generated_at=datetime.utcnow(),
+        )
+        return result.to_dict(omit_none=False)['nodes']
 
     def test__unflatten_empty(self):
         columns = {}
         expected = {}
-        result = generate.unflatten(columns)
+        self.map_uids([])
+
+        result = self.generate_catalog_dict(columns)
+
+        self.mock_get_unique_id_mapping.assert_called_once_with(self.manifest)
         self.assertEqual(result, expected)
 
     def test__unflatten_one_column(self):
@@ -27,42 +51,47 @@ class GenerateTest(unittest.TestCase):
             'table_comment': None,
             'table_name': 'test_table',
             'table_schema': 'test_schema',
-            'table_type': 'BASE TABLE'
+            'table_type': 'BASE TABLE',
+            'table_database': 'test_database',
         }]
-
         expected = {
-            'test_schema': {
-                'test_table': {
-                    'metadata': {
+            'test.model.test_table': {
+                'metadata': {
+                    'owner': None,
+                    'comment': None,
+                    'name': 'test_table',
+                    'type': 'BASE TABLE',
+                    'schema': 'test_schema',
+                    'database': 'test_database',
+                },
+                'columns': {
+                    'id': {
+                        'type': 'integer',
                         'comment': None,
-                        'name': 'test_table',
-                        'type': 'BASE TABLE',
-                        'schema': 'test_schema',
+                        'index': 1,
+                        'name': 'id'
                     },
-                    'columns': {
-                        'id': {
-                            'type': 'integer',
-                            'comment': None,
-                            'index': bigint(1),
-                            'name': 'id'
-                        },
+                },
+                'stats': {
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'description': 'Indicates whether there are statistics for this table',
+                        'include': False,
                     },
-                    'stats': {
-                        'has_stats': {
-                            'id': 'has_stats',
-                            'label': 'Has Stats?',
-                            'value': False,
-                            'description': 'Indicates whether there are statistics for this table',
-                            'include': False,
-                        },
-                    },
-                }
-            }
+                },
+                'unique_id': 'test.model.test_table',
+            },
         }
-        result = generate.unflatten(columns)
+        self.map_uids([('test_database', 'test_schema', 'test_table', 'test.model.test_table')])
+
+        result = self.generate_catalog_dict(columns)
+
+        self.mock_get_unique_id_mapping.assert_called_once_with(self.manifest)
         self.assertEqual(result, expected)
 
-    def test__unflatten_multiple_schemas(self):
+    def test__unflatten_multiple_schemas_dbs(self):
         columns = [
             {
                 'column_comment': None,
@@ -72,7 +101,9 @@ class GenerateTest(unittest.TestCase):
                 'table_comment': None,
                 'table_name': 'test_table',
                 'table_schema': 'test_schema',
-                'table_type': 'BASE TABLE'
+                'table_type': 'BASE TABLE',
+                'table_database': 'test_database',
+                'table_owner': None,
             },
             {
                 'column_comment': None,
@@ -82,7 +113,9 @@ class GenerateTest(unittest.TestCase):
                 'table_comment': None,
                 'table_name': 'test_table',
                 'table_schema': 'test_schema',
-                'table_type': 'BASE TABLE'
+                'table_type': 'BASE TABLE',
+                'table_database': 'test_database',
+                'table_owner': None,
             },
             {
                 'column_comment': None,
@@ -93,6 +126,8 @@ class GenerateTest(unittest.TestCase):
                 'table_name': 'other_test_table',
                 'table_schema': 'test_schema',
                 'table_type': 'BASE TABLE',
+                'table_database': 'test_database',
+                'table_owner': None,
             },
             {
                 'column_comment': None,
@@ -103,6 +138,8 @@ class GenerateTest(unittest.TestCase):
                 'table_name': 'other_test_table',
                 'table_schema': 'test_schema',
                 'table_type': 'BASE TABLE',
+                'table_database': 'test_database',
+                'table_owner': None,
             },
             {
                 'column_comment': None,
@@ -112,7 +149,9 @@ class GenerateTest(unittest.TestCase):
                 'table_comment': None,
                 'table_name': 'test_table',
                 'table_schema': 'other_test_schema',
-                'table_type': 'BASE TABLE'
+                'table_type': 'BASE TABLE',
+                'table_database': 'test_database',
+                'table_owner': None,
             },
             {
                 'column_comment': None,
@@ -122,108 +161,193 @@ class GenerateTest(unittest.TestCase):
                 'table_comment': None,
                 'table_name': 'test_table',
                 'table_schema': 'other_test_schema',
-                'table_type': 'BASE TABLE'
+                'table_type': 'BASE TABLE',
+                'table_database': 'test_database',
+                'table_owner': None,
+            },
+            {
+                'column_comment': None,
+                'column_index': Decimal('1'),
+                'column_name': 'id',
+                'column_type': 'integer',
+                'table_comment': None,
+                'table_name': 'test_table',
+                'table_schema': 'test_schema',
+                'table_type': 'BASE TABLE',
+                'table_database': 'other_test_database',
+                'table_owner': None,
+            },
+            {
+                'column_comment': None,
+                'column_index': Decimal('2'),
+                'column_name': 'name',
+                'column_type': 'text',
+                'table_comment': None,
+                'table_name': 'test_table',
+                'table_schema': 'test_schema',
+                'table_type': 'BASE TABLE',
+                'table_database': 'other_test_database',
+                'table_owner': None,
             },
         ]
-
         expected = {
-            'test_schema': {
-                'test_table': {
-                    'metadata': {
+            'test.model.test_table': {
+                'metadata': {
+                    'owner': None,
+                    'comment': None,
+                    'name': 'test_table',
+                    'type': 'BASE TABLE',
+                    'schema': 'test_schema',
+                    'database': 'test_database',
+                },
+                'columns': {
+                    'id': {
+                        'type': 'integer',
                         'comment': None,
-                        'name': 'test_table',
-                        'type': 'BASE TABLE',
-                        'schema': 'test_schema',
+                        'index': 1,
+                        'name': 'id'
                     },
-                    'columns': {
-                        'id': {
-                            'type': 'integer',
-                            'comment': None,
-                            'index': bigint(1),
-                            'name': 'id'
-                        },
-                        'name': {
-                            'type': 'text',
-                            'comment': None,
-                            'index': Decimal('2'),
-                            'name': 'name',
-                        }
-                    },
-                    'stats': {
-                        'has_stats': {
-                            'id': 'has_stats',
-                            'label': 'Has Stats?',
-                            'value': False,
-                            'description': 'Indicates whether there are statistics for this table',
-                            'include': False,
-                        },
+                    'name': {
+                        'type': 'text',
+                        'comment': None,
+                        'index': 2,
+                        'name': 'name',
+                    }
+                },
+                'stats': {
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'description': 'Indicates whether there are statistics for this table',
+                        'include': False,
                     },
                 },
-                'other_test_table': {
-                    'metadata': {
-                        'comment': None,
-                        'name': 'other_test_table',
-                        'type': 'BASE TABLE',
-                        'schema': 'test_schema',
-                    },
-                    'columns': {
-                        'id': {
-                            'type': 'integer',
-                            'comment': None,
-                            'index': bigint(1),
-                            'name': 'id'
-                        },
-                        'email': {
-                            'type': 'character varying',
-                            'comment': None,
-                            'index': Decimal('2'),
-                            'name': 'email',
-                        }
-                    },
-                    'stats': {
-                        'has_stats': {
-                            'id': 'has_stats',
-                            'label': 'Has Stats?',
-                            'value': False,
-                            'description': 'Indicates whether there are statistics for this table',
-                            'include': False,
-                        },
-                    },
-                },
+                'unique_id': 'test.model.test_table',
             },
-            'other_test_schema': {
-                'test_table': {
-                    'metadata': {
+            'test.model.other_test_table': {
+                'metadata': {
+                    'owner': None,
+                    'comment': None,
+                    'name': 'other_test_table',
+                    'type': 'BASE TABLE',
+                    'schema': 'test_schema',
+                    'database': 'test_database',
+                },
+                'columns': {
+                    'id': {
+                        'type': 'integer',
                         'comment': None,
-                        'name': 'test_table',
-                        'type': 'BASE TABLE',
-                        'schema': 'other_test_schema',
+                        'index': 1,
+                        'name': 'id'
                     },
-                    'columns': {
-                        'id': {
-                            'type': 'integer',
-                            'comment': None,
-                            'index': bigint(1),
-                            'name': 'id'
-                        },
-                        'name': {
-                            'type': 'text',
-                            'comment': None,
-                            'index': Decimal('2'),
-                            'name': 'name',
-                        }
-                    },
-                    'stats': {
-                        'has_stats': {
-                            'id': 'has_stats',
-                            'label': 'Has Stats?',
-                            'value': False,
-                            'description': 'Indicates whether there are statistics for this table',
-                            'include': False,
-                        },
+                    'email': {
+                        'type': 'character varying',
+                        'comment': None,
+                        'index': 2,
+                        'name': 'email',
+                    }
+                },
+                'stats': {
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'description': 'Indicates whether there are statistics for this table',
+                        'include': False,
                     },
                 },
+                'unique_id': 'test.model.other_test_table',
+            },
+            'test.model.test_table_otherschema': {
+                'metadata': {
+                    'owner': None,
+                    'comment': None,
+                    'name': 'test_table',
+                    'type': 'BASE TABLE',
+                    'schema': 'other_test_schema',
+                    'database': 'test_database',
+                },
+                'columns': {
+                    'id': {
+                        'type': 'integer',
+                        'comment': None,
+                        'index': 1,
+                        'name': 'id'
+                    },
+                    'name': {
+                        'type': 'text',
+                        'comment': None,
+                        'index': 2,
+                        'name': 'name',
+                    }
+                },
+                'stats': {
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'description': 'Indicates whether there are statistics for this table',
+                        'include': False,
+                    },
+                },
+                'unique_id': 'test.model.test_table_otherschema',
+            },
+            'test.model.test_table_otherdb': {
+                'metadata': {
+                    'owner': None,
+                    'comment': None,
+                    'name': 'test_table',
+                    'type': 'BASE TABLE',
+                    'schema': 'test_schema',
+                    'database': 'other_test_database',
+                },
+                'columns': {
+                    'id': {
+                        'type': 'integer',
+                        'comment': None,
+                        'index': 1,
+                        'name': 'id'
+                    },
+                    'name': {
+                        'type': 'text',
+                        'comment': None,
+                        'index': 2,
+                        'name': 'name',
+                    }
+                },
+                'stats': {
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'description': 'Indicates whether there are statistics for this table',
+                        'include': False,
+                    },
+                },
+                'unique_id': 'test.model.test_table_otherdb',
             }
         }
-        result = generate.unflatten(columns)
+        self.map_uids([
+            (
+                'test_database', 'test_schema', 'test_table',
+                'test.model.test_table'
+            ),
+            (
+                'test_database', 'test_schema', 'other_test_table',
+                'test.model.other_test_table'
+            ),
+            (
+                'test_database', 'other_test_schema', 'test_table',
+                'test.model.test_table_otherschema'
+            ),
+            (
+                'other_test_database', 'test_schema', 'test_table',
+                'test.model.test_table_otherdb'
+            ),
+        ])
+
+        result = self.generate_catalog_dict(columns)
+
+        self.mock_get_unique_id_mapping.assert_called_once_with(self.manifest)
         self.assertEqual(result, expected)

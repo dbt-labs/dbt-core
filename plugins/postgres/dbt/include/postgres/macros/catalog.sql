@@ -2,9 +2,10 @@
 {% macro postgres__get_catalog(information_schemas) -%}
 
   {%- call statement('catalog', fetch_result=True) -%}
-    {% if (information_schemas | length) != 1 %}
-        {{ exceptions.raise_compiler_error('postgres get_catalog requires exactly one database') }}
-    {% endif %}
+    {#
+      If the user has multiple databases set and the first one is wrong, this will fail.
+      But we won't fail in the case where there are multiple quoting-difference-only dbs, which is better.
+    #}
     {% set database = information_schemas[0].database %}
     {{ adapter.verify_database(database) }}
 

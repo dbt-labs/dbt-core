@@ -9,7 +9,7 @@ import dbt.config
 import dbt.utils
 import dbt.exceptions
 from dbt.links import ProfileConfigDocs
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.version import get_installed_version
 from dbt.config import Project, Profile
 from dbt.clients.yaml_helper import load_yaml_text
@@ -57,9 +57,15 @@ documentation:
 FILE_NOT_FOUND = 'file not found'
 
 
+class QueryCommentedProfile(Profile):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.query_comment = None
+
+
 class DebugTask(BaseTask):
     def __init__(self, args, config):
-        super(DebugTask, self).__init__(args, config)
+        super().__init__(args, config)
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
         self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')
@@ -209,7 +215,9 @@ class DebugTask(BaseTask):
         self.profile_name = self._choose_profile_name()
         self.target_name = self._choose_target_name()
         try:
-            self.profile = Profile.from_args(self.args, self.profile_name)
+            self.profile = QueryCommentedProfile.from_args(
+                self.args, self.profile_name
+            )
         except dbt.exceptions.DbtConfigError as exc:
             self.profile_fail_details = str(exc)
             return red('ERROR invalid')
@@ -270,6 +278,7 @@ class DebugTask(BaseTask):
         """Return a string containing the error message, or None if there was
         no error.
         """
+        register_adapter(profile)
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named('debug'):

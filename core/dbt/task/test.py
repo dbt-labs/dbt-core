@@ -12,11 +12,8 @@ class TestTask(RunTask):
     def raise_on_first_error(self):
         return False
 
-    def before_run(self, adapter, selected_uids):
+    def safe_run_hooks(self, adapter, hook_type, extra_context):
         # Don't execute on-run-* hooks for tests
-        self.populate_adapter_cache(adapter)
-
-    def after_run(self, adapter, results):
         pass
 
     def build_query(self):

@@ -3,10 +3,27 @@
 Note that all imports should be inside the functions to avoid import/mocking
 issues.
 """
-import mock
+import os
+from unittest import mock
+from unittest import TestCase
+
+from hologram import ValidationError
 
 
-class Obj(object):
+def normalize(path):
+    """On windows, neither is enough on its own:
+
+    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
+    'c:\\documents\\all caps\\subdir\\..'
+    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
+    'C:\\documents\\ALL CAPS'
+    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
+    'c:\\documents\\all caps'
+    """
+    return os.path.normcase(os.path.normpath(path))
+
+
+class Obj:
     which = 'blah'
 
 
@@ -30,6 +47,7 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
                                                 cli_vars)
     args = Obj()
     args.vars = repr(cli_vars)
+    args.profile_dir = '/dev/null'
     return RuntimeConfig.from_parts(
         project=project,
         profile=profile,
@@ -41,8 +59,34 @@ def inject_adapter(value):
     """Inject the given adapter into the adapter factory, so your hand-crafted
     artisanal adapter will be available from get_adapter() as if dbt loaded it.
     """
-    from dbt.adapters import factory
-    from dbt.adapters.base.connections import BaseConnectionManager
+    from dbt.adapters.factory import FACTORY
     key = value.type()
-    factory._ADAPTERS[key] = value
-    factory.ADAPTER_TYPES[key] = type(value)
+    FACTORY.adapters[key] = value
+    FACTORY.adapter_types[key] = type(value)
+
+
+class ContractTestCase(TestCase):
+    ContractType = None
+
+    def setUp(self):
+        self.maxDiff = None
+        super().setUp()
+
+    def assert_to_dict(self, obj, dct):
+        self.assertEqual(obj.to_dict(), dct)
+
+    def assert_from_dict(self, obj, dct, cls=None):
+        if cls is None:
+            cls = self.ContractType
+        self.assertEqual(cls.from_dict(dct),  obj)
+
+    def assert_symmetric(self, obj, dct, cls=None):
+        self.assert_to_dict(obj, dct)
+        self.assert_from_dict(obj, dct, cls)
+
+    def assert_fails_validation(self, dct, cls=None):
+        if cls is None:
+            cls = self.ContractType
+
+        with self.assertRaises(ValidationError):
+            cls.from_dict(dct)

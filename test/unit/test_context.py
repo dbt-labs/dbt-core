@@ -1,34 +1,30 @@
-import mock
 import unittest
+from unittest import mock
 
-from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.graph.parsed import ParsedModelNode, NodeConfig, DependsOn
 from dbt.context import parser, runtime
+from dbt.node_types import NodeType
 import dbt.exceptions
 from .mock_adapter import adapter_factory
 
 
-
 class TestVar(unittest.TestCase):
     def setUp(self):
-        self.model = ParsedNode(
+        self.model = ParsedModelNode(
             alias='model_one',
             name='model_one',
             database='dbt',
             schema='analytics',
-            resource_type='model',
+            resource_type=NodeType.Model,
             unique_id='model.root.model_one',
             fqn=['root', 'model_one'],
-            empty=False,
             package_name='root',
             original_file_path='model_one.sql',
             root_path='/usr/src/app',
             refs=[],
             sources=[],
-            depends_on={
-                'nodes': [],
-                'macros': []
-            },
-            config={
+            depends_on=DependsOn(),
+            config=NodeConfig.from_dict({
                 'enabled': True,
                 'materialized': 'view',
                 'persist_docs': {},
@@ -38,7 +34,7 @@ class TestVar(unittest.TestCase):
                 'quoting': {},
                 'column_types': {},
                 'tags': [],
-            },
+            }),
             tags=[],
             path='model_one.sql',
             raw_sql='',

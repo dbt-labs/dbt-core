@@ -1,4 +1,4 @@
-import mock
+from unittest import mock
 
 from dbt.adapters.base import BaseAdapter
 from contextlib import contextmanager
