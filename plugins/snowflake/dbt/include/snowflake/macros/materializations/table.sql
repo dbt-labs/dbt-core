@@ -2,14 +2,14 @@
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set backup_identifier = identifier + '__dbt_backup' -%}
-  {%- set non_destructive_mode = config.get("non_destructive", default=False) -%}
+  {%- set non_destructive_config = config.get("non_destructive", default=False) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
 
   {% set invalid_non_destructive_msg -%}
-    Invalid value provided for non_destructive: {{ non_destructive_mode }}
+    Invalid value provided for non_destructive: {{ non_destructive_config }}
     Expected one of: True, False
   {%- endset %}
-  {% if non_destructive_mode not in [True, False] %}
+  {% if non_destructive_config not in [True, False] %}
     {% do exceptions.raise_compiler_error(invalid_non_destructive_msg) %}
   {% endif %}
 
@@ -35,10 +35,10 @@
   {#-- Drop the relation if it was a view to "convert" it in a table. This may lead to
     -- downtime, but it should be a relatively infrequent occurrence  #}
     {{ log("Dropping relation " ~ old_relation ~ " because it is of type " ~ old_relation.type) }}
-    {{ adapter.drop_relation(old_relation) }}
+    {{ drop_relation_if_exists(old_relation) }}
   {% endif %}
 
-  {%- set non_destructive = non_destructive_mode and not full_refresh_mode -%}
+  {%- set non_destructive = non_destructive_config and not full_refresh_mode -%}
   {%- set table_swap = exists_as_table and not non_destructive -%}
 
   --build model
