@@ -5,6 +5,7 @@ import dbt.exceptions
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
+import dbt.links
 
 from dbt.adapters.base import BaseAdapter, available, RelationType
 from dbt.adapters.base.impl import SchemaSearchMap
@@ -26,6 +27,15 @@ import google.cloud.bigquery
 
 import time
 import agate
+import re
+
+
+BQ_INTEGER_RANGE_NOT_SUPPORTED = f"""
+BigQuery integer range partitioning is only supported by the
+`partition_by` config, which accepts a dictionary.
+
+See: {dbt.links.BigQueryNewPartitionBy}
+"""
 
 
 def _stub_relation(*args, **kwargs):
@@ -413,6 +423,47 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
+    def _partitions_match(self, table, conf_partition):
+        """
+        Check if the actual and configured partitions for a table are a match.
+        BigQuery tables can be replaced if:
+        - Both tables are not partitioned, OR
+        - Both tables are partitioned using the exact same configs
+        
+        If there is a mismatch, then the table cannot be replaced directly.
+        """
+        if table.partitioning_type is None and conf_partition is None:
+            return True
+
+        elif conf_partition is None or table.partitioning_type is None:
+            return False
+
+        elif table.partitioning_type == 'DAY':
+            return table.time_partitioning.field == conf_partition.get('field')
+
+        elif table.partitioning_type == 'RANGE': # TODO
+            dest_part = table.range_partition.range_
+            conf_part = conf_partition.get('range')
+
+            return dest_part.field == conf_part.get('field') \
+                and dest_part.start == conf_part.get('start') \
+                and dest_part.end == conf_part.get('end') \
+                and dest_part.interval == conf_part.get('interval')
+
+        else:
+            return False
+
+    def _clusters_match(self, table, conf_cluster):
+        """
+        Check if the actual and configured clustering columns for a table
+        are a match. BigQuery tables can be replaced if clustering columns
+        match exactly.
+        """
+        if isinstance(conf_cluster, str):
+            conf_cluster = [conf_cluster]
+
+        return table.clustering_fields == conf_cluster
+
     @available.parse(lambda *a, **k: True)
     def is_replaceable(self, relation, conf_partition, conf_cluster):
         """
@@ -422,6 +473,9 @@ class BigQueryAdapter(BaseAdapter):
         partitioning spec. This method returns True if the given config spec is
         identical to that of the existing table.
         """
+        if not relation:
+            return True
+
         try:
             table = self.connections.get_bq_table(
                 database=relation.database,
@@ -431,17 +485,66 @@ class BigQueryAdapter(BaseAdapter):
         except google.cloud.exceptions.NotFound:
             return True
 
-        table_partition = table.time_partitioning
-        if table_partition is not None:
-            table_partition = table_partition.field
+        return all((
+            self._partitions_match(table, conf_partition),
+            self._clusters_match(table, conf_cluster)
+        ))
 
-        table_cluster = table.clustering_fields
+    @available
+    def parse_partition_by(self, raw_partition_by):
+        """
+        dbt v0.16.0 expects `partition_by` to be a dictionary where previously
+        it was a string. Check the type of `partition_by`, raise error
+        or warning if string, and attempt to convert to dict.
+        """
+    
+        if isinstance(raw_partition_by, dict):
+            if raw_partition_by.get('field'):
+                if raw_partition_by.get('data_type'):
+                    return raw_partition_by
+                else:  # assume date type as default
+                    return dict(raw_partition_by, data_type='date')
+            else:
+                dbt.exceptions.raise_compiler_error(
+                    'Config `partition_by` is missing required item `field`'
+                )
 
-        if isinstance(conf_cluster, str):
-            conf_cluster = [conf_cluster]
+        elif isinstance(raw_partition_by, str):
+            raw_partition_by = raw_partition_by.strip()
+            if 'range_bucket' in raw_partition_by.lower():
+                dbt.exceptions.raise_compiler_error(
+                    BQ_INTEGER_RANGE_NOT_SUPPORTED
+                )
 
-        return table_partition == conf_partition \
-            and table_cluster == conf_cluster
+            elif raw_partition_by.lower().startswith('date('):
+                matches = re.match(r'date\((.+)\)', raw_partition_by,
+                                   re.IGNORECASE)
+                if not matches:
+                    dbt.exceptions.raise_compiler_error(
+                            f"Specified partition_by '{raw_partition_by}' "
+                            "is not parseable")
+
+                partition_by = matches.group(1)
+                data_type = 'timestamp'
+
+            else:
+                partition_by = raw_partition_by
+                data_type = 'date'
+
+            inferred_partition_by = {
+                'field': partition_by,
+                'data_type': data_type
+            }
+
+            dbt.deprecations.warn(
+                'bq-partition-by-string',
+                raw_partition_by=raw_partition_by,
+                inferred_partition_by=inferred_partition_by
+            )
+
+            return inferred_partition_by
+        else:
+            return None
 
     @available.parse_none
     def alter_table_add_columns(self, relation, columns):

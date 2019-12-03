@@ -1,25 +1,39 @@
-{% macro partition_by(raw_partition_by) %}
-  {%- if raw_partition_by is none -%}
-    {{ return('') }}
-  {% endif %}
+{% macro pprint_partition_field(partition_by_dict, alias = '') %}
+    {%- set partition_col_exp -%}
+        {%- if alias -%} {{alias}}.{{partition_by_dict.field}}
+        {%- else -%} {{partition_by_dict.field}}
+        {%- endif -%}
+    {%- endset -%}
+    {%- if partition_by_dict.data_type in ('timestamp','datetime') -%}
+        date({{partition_col_exp}})
+    {%- else -%}
+        {{partition_col_exp}}
+    {%- endif -%}
+{% endmacro %}
 
-  {% set partition_by_clause %}
-    partition by {{ raw_partition_by }}
-  {%- endset -%}
-
-  {{ return(partition_by_clause) }}
+{% macro partition_by(partition_by_dict) %}
+    {%- if partition_by_dict is not none -%}
+        {%- set partition_by_type = partition_by_dict.data_type|trim|lower -%}
+        {%- if partition_by_type in ('date','timestamp','datetime') -%}
+            partition by {{pprint_partition_field(partition_by_dict)}}
+        {%- elif partition_by_type in ('int64') -%}
+            {%- set pbr = partition_by_dict.range -%}
+            partition by range_bucket(
+                {{partition_by_dict.field}},
+                generate_array({{pbr.start}}, {{pbr.end}}, {{pbr.interval}})
+            )
+        {%- endif -%}
+    {%- endif -%}
 {%- endmacro -%}
-
 
 {% macro cluster_by(raw_cluster_by) %}
   {%- if raw_cluster_by is not none -%}
-  cluster by
-  {% if raw_cluster_by is string -%}
+  cluster by {% if raw_cluster_by is string -%}
     {% set raw_cluster_by = [raw_cluster_by] %}
   {%- endif -%}
   {%- for cluster in raw_cluster_by -%}
     {{ cluster }}
-    {%- if not loop.last -%},{%- endif -%}
+    {%- if not loop.last -%}, {% endif -%}
   {%- endfor -%}
 
   {% endif %}
@@ -32,9 +46,6 @@
   {%- set description = get_relation_comment(persist_docs, model) -%}
   {%- if description is not none -%}
     {%- do opts.update({'description': "'" ~ description ~ "'"}) -%}
-  {%- endif -%}
-  {%- if temporary -%}
-    {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
   {%- endif -%}
   {%- if kms_key_name -%}
     {%- do opts.update({'kms_key_name': "'" ~ kms_key_name ~ "'"}) -%}
@@ -63,17 +74,24 @@
   {%- set raw_labels = config.get('labels', []) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
 
+  {%- set partition_by_dict = adapter.parse_partition_by(raw_partition_by) -%}
+
   {{ sql_header if sql_header is not none }}
 
-  create or replace table {{ relation }}
-  {{ partition_by(raw_partition_by) }}
+  create or replace {% if temporary -%}temp{%- endif %} table
+      {{ relation.include(database=(not is_scripting), schema=(not is_scripting)) }}
+  {{ partition_by(partition_by_dict) }}
   {{ cluster_by(raw_cluster_by) }}
-  {{ bigquery_table_options(
-      persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name,
-      labels=raw_labels) }}
+  {%- if not temporary -%}
+    {{ bigquery_table_options(
+        persist_docs=raw_persist_docs,
+        kms_key_name=raw_kms_key_name,
+        labels=raw_labels) }}
+    {%- endif %}
   as (
     {{ sql }}
   );
+
 {%- endmacro -%}
 
 
@@ -133,4 +151,11 @@
 
 {% macro bigquery__check_schema_exists(information_schema, schema) %}
   {{ return(adapter.check_schema_exists(information_schema.database, schema)) }}
+{% endmacro %}
+
+
+{% macro bigquery__make_temp_relation(base_relation, suffix) %}
+    {% set tmp_identifier = base_relation.identifier ~ suffix %}
+    {% set tmp_relation = api.Relation.create(identifier=tmp_identifier) -%}
+    {% do return(tmp_relation) %}
 {% endmacro %}
