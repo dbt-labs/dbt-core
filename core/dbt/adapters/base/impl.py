@@ -379,9 +379,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
             name = self.nice_connection_name()
-            raise_compiler_error(
-                'Attempted to cache a null relation for {}'.format(name)
-            )
+            raise_compiler_error("Attempted to cache a null relation for {}".format(name))
         self.cache.add(relation)
         # so jinja doesn't render things
         return ""
