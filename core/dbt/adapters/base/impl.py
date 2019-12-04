@@ -462,9 +462,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse_none
     def truncate_relation(self, relation: BaseRelation) -> None:
         """Truncate the given relation."""
-        raise NotImplementedException(
-            '`truncate_relation` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`truncate_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
