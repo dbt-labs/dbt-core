@@ -391,9 +391,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         if relation is None:
             name = self.nice_connection_name()
-            raise_compiler_error(
-                'Attempted to drop a null relation for {}'.format(name)
-            )
+            raise_compiler_error("Attempted to drop a null relation for {}".format(name))
         self.cache.drop(relation)
         return ""
 
