@@ -1,9 +1,9 @@
 resolves #
 
 <!---
-  Include the number of the issue addressed by this PR above.
-  If this PR does not apply to an open issue, please create that issue before opening this PR.
-  PRs opened without an associated issue *will not be merged*. See CONTRIBUTING.md for more information.
+  Include the number of the issue addressed by this PR above if applicable.
+  PRs for code changes without an associated issue *will not be merged*.
+  See CONTRIBUTING.md for more information.
   
   Example:
     resolves #1234
