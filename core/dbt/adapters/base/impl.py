@@ -687,9 +687,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 "schema": schema,
                 "database": database,
             }
-            get_relation_returned_multiple_results(
-                kwargs, matches
-            )
+            get_relation_returned_multiple_results(kwargs, matches)
 
         elif matches:
             return matches[0]
