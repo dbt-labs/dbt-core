@@ -433,9 +433,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractmethod
     def list_schemas(self, database: str) -> List[str]:
         """Get a list of existing schemas in database"""
-        raise NotImplementedException(
-            '`list_schemas` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`list_schemas` is not implemented for this adapter!")
 
     @available.parse(lambda *a, **k: False)
     def check_schema_exists(self, database: str, schema: str) -> bool:
