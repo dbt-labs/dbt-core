@@ -22,9 +22,13 @@ import agate
 import pytz
 
 from dbt.exceptions import (
-    raise_database_error, raise_compiler_error, invalid_type_error,
+    raise_database_error,
+    raise_compiler_error,
+    invalid_type_error,
     get_relation_returned_multiple_results,
-    InternalException, NotImplementedException, RuntimeException,
+    InternalException,
+    NotImplementedException,
+    RuntimeException,
 )
 
 from dbt.adapters.protocol import (

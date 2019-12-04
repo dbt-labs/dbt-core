@@ -356,16 +356,13 @@ class MaterializationCandidate(MacroCandidate):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, MaterializationCandidate):
             return NotImplemented
-        equal = (
-            self.specificity == other.specificity and
-            self.locality == other.locality
-        )
+        equal = self.specificity == other.specificity and self.locality == other.locality
         if equal:
             raise_compiler_error(
-                'Found two materializations with the name {} (packages {} and '
-                '{}). dbt cannot resolve this ambiguity'
-                .format(self.macro.name, self.macro.package_name,
-                        other.macro.package_name)
+                "Found two materializations with the name {} (packages {} and "
+                "{}). dbt cannot resolve this ambiguity".format(
+                    self.macro.name, self.macro.package_name, other.macro.package_name
+                )
             )
 
         return equal
