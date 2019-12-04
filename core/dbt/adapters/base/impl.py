@@ -9,7 +9,11 @@ from typing import (
 import agate
 import pytz
 
-import dbt.exceptions
+from dbt.exceptions import (
+    raise_database_error, raise_compiler_error, invalid_type_error,
+    get_relation_returned_multiple_results,
+    InternalException, NotImplementedException, RuntimeException,
+)
 import dbt.flags
 
 from dbt import deprecations
@@ -37,7 +41,7 @@ FRESHNESS_MACRO_NAME = 'collect_freshness'
 
 def _expect_row_value(key: str, row: agate.Row):
     if key not in row.keys():
-        raise dbt.exceptions.InternalException(
+        raise InternalException(
             'Got a row without "{}" column, columns: {}'
             .format(key, row.keys())
         )
@@ -84,14 +88,14 @@ def _utc(
     assume the datetime is already for UTC and add the timezone.
     """
     if dt is None:
-        raise dbt.exceptions.raise_database_error(
+        raise raise_database_error(
             "Expected a non-null value when querying field '{}' of table "
             " {} but received value 'null' instead".format(
                 field_name,
                 source))
 
     elif not hasattr(dt, 'tzinfo'):
-        raise dbt.exceptions.raise_database_error(
+        raise raise_database_error(
             "Expected a timestamp value when querying field '{}' of table "
             "{} but received value of type '{}' instead".format(
                 field_name,
@@ -141,7 +145,7 @@ class SchemaSearchMap(dict):
         # make sure we don't have duplicates
         seen = {r.database.lower() for r in self if r.database}
         if len(seen) > 1:
-            dbt.exceptions.raise_compiler_error(str(seen))
+            raise_compiler_error(str(seen))
 
         for information_schema_name, schema in self.search():
             path = {
@@ -380,7 +384,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
             name = self.nice_connection_name()
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 'Attempted to cache a null relation for {}'.format(name)
             )
         if dbt.flags.USE_CACHE:
@@ -395,7 +399,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         if relation is None:
             name = self.nice_connection_name()
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 'Attempted to drop a null relation for {}'.format(name)
             )
         if dbt.flags.USE_CACHE:
@@ -415,7 +419,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             name = self.nice_connection_name()
             src_name = _relation_name(from_relation)
             dst_name = _relation_name(to_relation)
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 'Attempted to rename {} to {} for {}'
                 .format(src_name, dst_name, name)
             )
@@ -430,12 +434,12 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractclassmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`date_function` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
     def is_cancelable(cls) -> bool:
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`is_cancelable` is not implemented for this adapter!'
         )
 
@@ -445,7 +449,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractmethod
     def list_schemas(self, database: str) -> List[str]:
         """Get a list of existing schemas in database"""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`list_schemas` is not implemented for this adapter!'
         )
 
@@ -473,7 +477,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         *Implementors must call self.cache.drop() to preserve cache state!*
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`drop_relation` is not implemented for this adapter!'
         )
 
@@ -481,7 +485,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse_none
     def truncate_relation(self, relation: BaseRelation) -> None:
         """Truncate the given relation."""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`truncate_relation` is not implemented for this adapter!'
         )
 
@@ -494,7 +498,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         Implementors must call self.cache.rename() to preserve cache state.
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`rename_relation` is not implemented for this adapter!'
         )
 
@@ -504,7 +508,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self, relation: BaseRelation
     ) -> List[BaseColumn]:
         """Get a list of the columns in the given Relation."""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
 
@@ -532,7 +536,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param self.Relation current: A relation that currently exists in the
             database with columns of unspecified types.
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`expand_target_column_types` is not implemented for this adapter!'
         )
 
@@ -550,7 +554,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :return: The relations in schema
         :rtype: List[self.Relation]
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`list_relations_without_caching` is not implemented for this '
             'adapter!'
         )
@@ -566,14 +570,14 @@ class BaseAdapter(metaclass=AdapterMeta):
         to_relation.
         """
         if not isinstance(from_relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
+            invalid_type_error(
                 method_name='get_missing_columns',
                 arg_name='from_relation',
                 got_value=from_relation,
                 expected_type=self.Relation)
 
         if not isinstance(to_relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
+            invalid_type_error(
                 method_name='get_missing_columns',
                 arg_name='to_relation',
                 got_value=to_relation,
@@ -602,11 +606,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         expected columns.
 
         :param Relation relation: The relation to check
-        :raises dbt.exceptions.CompilationException: If the columns are
+        :raises CompilationException: If the columns are
             incorrect.
         """
         if not isinstance(relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
+            invalid_type_error(
                 method_name='valid_snapshot_target',
                 arg_name='relation',
                 got_value=relation,
@@ -636,21 +640,21 @@ class BaseAdapter(metaclass=AdapterMeta):
                     'Snapshot target is not a snapshot table (missing "{}")'
                     .format('", "'.join(missing))
                 )
-            dbt.exceptions.raise_compiler_error(msg)
+            raise_compiler_error(msg)
 
     @available.parse_none
     def expand_target_column_types(
         self, from_relation: BaseRelation, to_relation: BaseRelation
     ) -> None:
         if not isinstance(from_relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
+            invalid_type_error(
                 method_name='expand_target_column_types',
                 arg_name='from_relation',
                 got_value=from_relation,
                 expected_type=self.Relation)
 
         if not isinstance(to_relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
+            invalid_type_error(
                 method_name='expand_target_column_types',
                 arg_name='to_relation',
                 got_value=to_relation,
@@ -731,7 +735,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 'schema': schema,
                 'database': database,
             }
-            dbt.exceptions.get_relation_returned_multiple_results(
+            get_relation_returned_multiple_results(
                 kwargs, matches
             )
 
@@ -755,14 +759,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse_none
     def create_schema(self, database: str, schema: str):
         """Create the given schema if it does not exist."""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`create_schema` is not implemented for this adapter!'
         )
 
     @abc.abstractmethod
     def drop_schema(self, database: str, schema: str):
         """Drop the given schema (and everything in it) if it exists."""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`drop_schema` is not implemented for this adapter!'
         )
 
@@ -770,7 +774,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractclassmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`quote` is not implemented for this adapter!'
         )
 
@@ -804,7 +808,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         elif quote_config is None:
             deprecations.warn('column-quoting-unset')
         else:
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 f'The seed configuration value of "quote_columns" has an '
                 f'invalid type {type(quote_config)}'
             )
@@ -829,7 +833,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`convert_text_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
@@ -843,7 +847,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`convert_number_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
@@ -857,7 +861,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`convert_boolean_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
@@ -871,7 +875,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`convert_datetime_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
@@ -883,7 +887,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`convert_date_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
@@ -895,7 +899,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             '`convert_time_type` is not implemented for this adapter!')
 
     @available
@@ -958,9 +962,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             else:
                 package_name = 'the "{}" package'.format(project)
 
-            # The import of dbt.context.runtime below shadows 'dbt'
-            import dbt.exceptions
-            raise dbt.exceptions.RuntimeException(
+            raise RuntimeException(
                 'dbt could not find a macro with the name "{}" in {}'
                 .format(macro_name, package_name)
             )
@@ -1034,7 +1036,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 'Got an invalid result from "{}" macro: {}'.format(
                     FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
                 )
