@@ -1,7 +1,17 @@
 #!/usr/bin/env python
-from setuptools import find_namespace_packages
-from setuptools import setup
 import os
+import sys
+
+from setuptools import setup
+try:
+    from setuptools import find_namespace_packages
+except ImportError:
+    # the user has a downlevel version of setuptools.
+    print('Error: dbt requires v40.1.0 or higher of setuptools.')
+    print('Please upgrade setuptools with "pip install --upgrade setuptools" '
+          'and try again')
+    sys.exit(1)
+
 
 package_name = "dbt-bigquery"
 package_version = "0.15.0"
