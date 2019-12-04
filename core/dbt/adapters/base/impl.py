@@ -773,8 +773,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            '`convert_text_type` is not implemented for this adapter!')
+        raise NotImplementedException("`convert_text_type` is not implemented for this adapter!")
 
     @abc.abstractclassmethod
     def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
@@ -785,8 +784,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            '`convert_number_type` is not implemented for this adapter!')
+        raise NotImplementedException("`convert_number_type` is not implemented for this adapter!")
 
     @abc.abstractclassmethod
     def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
@@ -821,8 +819,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            '`convert_date_type` is not implemented for this adapter!')
+        raise NotImplementedException("`convert_date_type` is not implemented for this adapter!")
 
     @abc.abstractclassmethod
     def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
@@ -833,8 +830,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
         """
-        raise NotImplementedException(
-            '`convert_time_type` is not implemented for this adapter!')
+        raise NotImplementedException("`convert_time_type` is not implemented for this adapter!")
 
     @available
     @classmethod
