@@ -22,7 +22,7 @@ After creating an issue, a dbt maintainer will follow up with you to explore you
 
 If the issue is appropriately well-scoped and describes a beneficial change to the dbt codebase, then anyone may submit a Pull Request to implement the functionality described in the issue (see the sections below on how to do this).
 
-In some cases, the right resolution to an open issue might be tagential to the dbt codebase. The right path forward might be a  documentation update or a change that can be made in user-space. In other cases, the issue might describe functionality that the dbt maintainers are unwilling to incorporate into the dbt codebase. When it is determined that an open issue describes functionality that will not translate to a code change in the dbt repository, the issue will be tagged with the `wontfix` label (see below) and closed.
+In some cases, the right resolution to an open issue might be tagential to the dbt codebase. The right path forward might be a  documentation update or a change that can be made in user-space. In other cases, the issue might describe functionality that the dbt maintainers are unwilling or unable to incorporate into the dbt codebase. When it is determined that an open issue describes functionality that will not translate to a code change in the dbt repository, the issue will be tagged with the `wontfix` label (see below) and closed.
 
 ### Using issue labels
 
@@ -32,12 +32,11 @@ The dbt maintainers use labels to categorize open issues. Some labels indicate t
 | --- | ----------- |
 | bug | This issue represents a defect or regression in dbt |
 | enhancement | This issue represents net-new functionality in dbt |
-| good first issue | This issue does not require deep knowledge of the dbt codebase to implement. This issue is appropriate for a first-time contributor to implement. Note: this tag does not mean that a change is necessarily _easy_ to implement. |
+| good first issue | This issue does not require deep knowledge of the dbt codebase to implement. This issue is appropriate for a first-time contributor to implement. |
 | snoozed | This issue describes a good idea, but one which will probably not be addressed in a six-month time horizon. The dbt maintainers will revist these issues periodically and re-prioritize them accordingly. |
-| snoozed | This issue describes a good idea, but one which will probably not be addressed in a six-month time horizon. The dbt maintainers will revist these issues periodically and re-prioritize them accordingly. |
-| triage | This is a new issue which has not yet been reviewed by a dbt maintainer. This tag is removed when a maintainer reviews the issue. |
+| triage | This is a new issue which has not yet been reviewed by a dbt maintainer. This label is removed when a maintainer reviews and responds to the issue. |
 | stale | This is an old issue which has not recently been updated. Stale issues will periodically be closed by dbt maintainers, but they can be re-opened if the discussion is restarted. |
-| wontfix | This issue does not require a code change in the dbt repository, or the maintainers are unwilling to merge a Pull Request which implements the behavior described in the issue. |
+| wontfix | This issue does not require a code change in the dbt repository, or the maintainers are unwilling/unable to merge a Pull Request which implements the behavior described in the issue. |
 
 ### Signing the CLA
 
