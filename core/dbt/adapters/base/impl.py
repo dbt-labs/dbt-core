@@ -421,8 +421,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @abc.abstractclassmethod
     def date_function(cls) -> str:
         """Get the date function used by this adapter's database."""
-        raise NotImplementedException(
-            '`date_function` is not implemented for this adapter!')
+        raise NotImplementedException("`date_function` is not implemented for this adapter!")
 
     @abc.abstractclassmethod
     def is_cancelable(cls) -> bool:
@@ -464,9 +463,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         *Implementors must call self.cache.drop() to preserve cache state!*
         """
-        raise NotImplementedException(
-            '`drop_relation` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`drop_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
@@ -483,9 +480,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         Implementors must call self.cache.rename() to preserve cache state.
         """
-        raise NotImplementedException(
-            '`rename_relation` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`rename_relation` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_list
@@ -736,25 +731,19 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse_none
     def create_schema(self, relation: BaseRelation):
         """Create the given schema if it does not exist."""
-        raise NotImplementedException(
-            '`create_schema` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`create_schema` is not implemented for this adapter!")
 
     @abc.abstractmethod
     @available.parse_none
     def drop_schema(self, relation: BaseRelation):
         """Drop the given schema (and everything in it) if it exists."""
-        raise NotImplementedException(
-            '`drop_schema` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`drop_schema` is not implemented for this adapter!")
 
     @available
     @abc.abstractclassmethod
     def quote(cls, identifier: str) -> str:
         """Quote the given identifier, as appropriate for the database."""
-        raise NotImplementedException(
-            '`quote` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`quote` is not implemented for this adapter!")
 
     @available
     def quote_as_configured(self, identifier: str, quote_key: str) -> str:
