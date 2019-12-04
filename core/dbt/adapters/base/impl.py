@@ -425,9 +425,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractclassmethod
     def is_cancelable(cls) -> bool:
-        raise NotImplementedException(
-            '`is_cancelable` is not implemented for this adapter!'
-        )
+        raise NotImplementedException("`is_cancelable` is not implemented for this adapter!")
 
     ###
     # Abstract methods about schemas
