@@ -201,6 +201,7 @@ class BigQueryAdapter(BaseAdapter):
     def drop_schema(self, database: str, schema: str) -> None:
         logger.debug('Dropping schema "{}.{}".', database, schema)
         self.connections.drop_dataset(database, schema)
+        self.cache.drop_schema(database, schema)
 
     @classmethod
     def quote(cls, identifier: str) -> str:

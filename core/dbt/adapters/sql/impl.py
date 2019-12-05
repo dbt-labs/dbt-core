@@ -172,6 +172,8 @@ class SQLAdapter(BaseAdapter):
         }
         self.execute_macro(CREATE_SCHEMA_MACRO_NAME, kwargs=kwargs)
         self.commit_if_has_connection()
+        # we can't update the cache here, as if the schema already existed we
+        # don't want to (incorrectly) say that it's empty
 
     def drop_schema(self, database, schema):
         logger.debug('Dropping schema "{}"."{}".', database, schema)
@@ -179,8 +181,9 @@ class SQLAdapter(BaseAdapter):
             'database_name': self.quote_as_configured(database, 'database'),
             'schema_name': self.quote_as_configured(schema, 'schema'),
         }
-        self.execute_macro(DROP_SCHEMA_MACRO_NAME,
-                           kwargs=kwargs)
+        self.execute_macro(DROP_SCHEMA_MACRO_NAME, kwargs=kwargs)
+        # we can update the cache here
+        self.cache.drop_schema(database, schema)
 
     def list_relations_without_caching(self, information_schema, schema):
         kwargs = {'information_schema': information_schema, 'schema': schema}

@@ -131,7 +131,8 @@ class TestRename(TestCache):
                           make_relation('DBT_2', 'schema', 'foo'))
         self.assert_relations_exist('DBT_2', 'schema', 'foo')
         self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
-        self.assertEqual(self.cache.schemas, {('dbt_2', 'schema')})
+        # we know about both schemas: dbt has nothing, dbt_2 has something.
+        self.assertEqual(self.cache.schemas, {('dbt_2', 'schema'), ('dbt', 'schema')})
         self.assertEqual(len(self.cache.relations), 1)
 
     def test_rename_identifier(self):
@@ -156,7 +157,8 @@ class TestRename(TestCache):
         self.assertEqual(len(self.cache.get_relations('DBT_2', 'schema')), 1)
         self.assert_relations_exist('DBT_2', 'schema', 'foo')
         self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
-        self.assertEqual(self.cache.schemas, {('dbt_2', 'schema')})
+        # we know about both schemas: dbt has nothing, dbt_2 has something.
+        self.assertEqual(self.cache.schemas, {('dbt_2', 'schema'), ('dbt', 'schema')})
 
         relation = self.cache.relations[('dbt_2', 'schema', 'foo')]
         self.assertEqual(relation.inner.database, 'DBT_2')
@@ -174,7 +176,8 @@ class TestRename(TestCache):
         self.assertEqual(len(self.cache.get_relations('DBT', 'schema_2')), 1)
         self.assert_relations_exist('DBT', 'schema_2', 'foo')
         self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
-        self.assertEqual(self.cache.schemas, {('dbt', 'schema_2')})
+        # we know about both schemas: schema has nothing, schema_2 has something.
+        self.assertEqual(self.cache.schemas, {('dbt', 'schema_2'), ('dbt', 'schema')})
 
         relation = self.cache.relations[('dbt', 'schema_2', 'foo')]
         self.assertEqual(relation.inner.database, 'DBT')
