@@ -182,7 +182,6 @@ class SQLAdapter(BaseAdapter):
             'schema_name': self.quote_as_configured(schema, 'schema'),
         }
         self.execute_macro(DROP_SCHEMA_MACRO_NAME, kwargs=kwargs)
-        self.commit_if_has_connection()
         # we can update the cache here
         self.cache.drop_schema(database, schema)
 
