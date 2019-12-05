@@ -149,7 +149,7 @@ class TestEmitWarning(DBTIntegrationTest):
         return "emit-warning-models"
 
     @use_profile('postgres')
-    def test_postgres_emit_warning(self):
+    def test_postgres_warn(self):
         with pytest.raises(dbt.exceptions.CompilationException):
             self.run_dbt(['run'], strict=True)
         self.run_dbt(['run'], strict=False, expect_pass=True)

@@ -756,7 +756,7 @@ def warn_or_raise(exc, log_fmt=None):
         logger.warning(msg)
 
 
-def emit_warning(msg, node=None):
+def warn(msg, node=None):
     # there's no reason to expose log_fmt to macros - it's only useful for
     # handling colors
     return warn_or_error(msg, node=node)
@@ -768,7 +768,7 @@ CONTEXT_EXPORTS = {
     fn.__name__: fn
     for fn in
     [
-        emit_warning,
+        warn,
         missing_config,
         missing_materialization,
         missing_relation,
