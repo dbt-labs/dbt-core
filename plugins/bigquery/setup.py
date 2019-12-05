@@ -7,7 +7,7 @@ try:
     from setuptools import find_namespace_packages
 except ImportError:
     # the user has a downlevel version of setuptools.
-    print('Error: dbt requires v40.1.0 or higher of setuptools.')
+    print('Error: dbt requires setuptools v40.1.0 or higher.')
     print('Please upgrade setuptools with "pip install --upgrade setuptools" '
           'and try again')
     sys.exit(1)
