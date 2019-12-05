@@ -6,8 +6,6 @@ from typing import Optional
 from dbt.logger import CACHE_LOGGER as logger
 import dbt.exceptions
 
-from core.dbt.adapters.factory import BaseRelation
-
 _ReferenceKey = namedtuple('_ReferenceKey', 'database schema identifier')
 
 
@@ -18,7 +16,7 @@ def _lower(value: Optional[str]) -> Optional[str]:
     return value.lower()
 
 
-def _make_key(relation: BaseRelation) -> _ReferenceKey:
+def _make_key(relation) -> _ReferenceKey:
     """Make _ReferenceKeys with lowercase values for the cache so we don't have
     to keep track of quoting
     """
@@ -44,7 +42,7 @@ class _CachedRelation:
         that refer to this relation.
     :attr BaseRelation inner: The underlying dbt relation.
     """
-    def __init__(self, inner: BaseRelation):
+    def __init__(self, inner):
         self.referenced_by = {}
         self.inner = inner
 
