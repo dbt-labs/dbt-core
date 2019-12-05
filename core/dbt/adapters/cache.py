@@ -1,21 +1,25 @@
 from collections import namedtuple
 import threading
 from copy import deepcopy
+from typing import Optional
+
+from dbt.adapters.cache import _CachedRelation
 from dbt.logger import CACHE_LOGGER as logger
 import dbt.exceptions
 
+from core.dbt.adapters.factory import BaseRelation
 
 _ReferenceKey = namedtuple('_ReferenceKey', 'database schema identifier')
 
 
-def _lower(value):
+def _lower(value: Optional[str]) -> Optional[str]:
     """Postgres schemas can be None so we can't just call lower()."""
     if value is None:
         return None
     return value.lower()
 
 
-def _make_key(relation):
+def _make_key(relation: BaseRelation) -> _ReferenceKey:
     """Make _ReferenceKeys with lowercase values for the cache so we don't have
     to keep track of quoting
     """
@@ -24,10 +28,10 @@ def _make_key(relation):
                          _lower(relation.identifier))
 
 
-def dot_separated(key):
+def dot_separated(key: _ReferenceKey) -> str:
     """Return the key in dot-separated string form.
 
-    :param key _ReferenceKey: The key to stringify.
+    :param _ReferenceKey key: The key to stringify.
     """
     return '.'.join(map(str, key))
 
@@ -41,25 +45,25 @@ class _CachedRelation:
         that refer to this relation.
     :attr BaseRelation inner: The underlying dbt relation.
     """
-    def __init__(self, inner):
+    def __init__(self, inner: BaseRelation):
         self.referenced_by = {}
         self.inner = inner
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             '_CachedRelation(database={}, schema={}, identifier={}, inner={})'
         ).format(self.database, self.schema, self.identifier, self.inner)
 
     @property
-    def database(self):
+    def database(self) -> Optional[str]:
         return _lower(self.inner.database)
 
     @property
-    def schema(self):
+    def schema(self) -> Optional[str]:
         return _lower(self.inner.schema)
 
     @property
-    def identifier(self):
+    def identifier(self) -> Optional[str]:
         return _lower(self.inner.identifier)
 
     def __copy__(self):
@@ -82,7 +86,7 @@ class _CachedRelation:
         """
         return _make_key(self)
 
-    def add_reference(self, referrer):
+    def add_reference(self, referrer: _CachedRelation):
         """Add a reference from referrer to self, indicating that if this node
         were drop...cascaded, the referrer would be dropped as well.
 

@@ -1,5 +1,5 @@
 import agate
-from typing import Any, Optional, Tuple, Type
+from typing import Any, Optional, Tuple, Type, List
 
 import dbt.clients.agate_helper
 from dbt.contracts.connection import Connection
@@ -9,6 +9,7 @@ from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from core.dbt.adapters.factory import BaseRelation
 
 LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
 GET_COLUMNS_IN_RELATION_MACRO_NAME = 'get_columns_in_relation'
@@ -38,6 +39,7 @@ class SQLAdapter(BaseAdapter):
         - list_relations_without_caching
         - get_columns_in_relation
     """
+
     ConnectionManager: Type[SQLConnectionManager]
     connections: SQLConnectionManager
 
@@ -63,35 +65,35 @@ class SQLAdapter(BaseAdapter):
                                           abridge_sql_log)
 
     @classmethod
-    def convert_text_type(cls, agate_table, col_idx):
+    def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "text"
 
     @classmethod
-    def convert_number_type(cls, agate_table, col_idx):
+    def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
         return "float8" if decimals else "integer"
 
     @classmethod
-    def convert_boolean_type(cls, agate_table, col_idx):
+    def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "boolean"
 
     @classmethod
-    def convert_datetime_type(cls, agate_table, col_idx):
+    def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "timestamp without time zone"
 
     @classmethod
-    def convert_date_type(cls, agate_table, col_idx):
+    def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "date"
 
     @classmethod
-    def convert_time_type(cls, agate_table, col_idx):
+    def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "time"
 
     @classmethod
-    def is_cancelable(cls):
+    def is_cancelable(cls) -> bool:
         return True
 
-    def expand_column_types(self, goal, current):
+    def expand_column_types(self, goal, current, model_name: Optional[str] = None):
         reference_columns = {
             c.name: c for c in
             self.get_columns_in_relation(goal)
@@ -114,7 +116,7 @@ class SQLAdapter(BaseAdapter):
 
                 self.alter_column_type(current, column_name, new_type)
 
-    def alter_column_type(self, relation, column_name, new_column_type):
+    def alter_column_type(self, relation, column_name, new_column_type) -> None:
         """
         1. Create a new column (w/ temp name and correct type)
         2. Copy data over to it
@@ -131,7 +133,7 @@ class SQLAdapter(BaseAdapter):
             kwargs=kwargs
         )
 
-    def drop_relation(self, relation):
+    def drop_relation(self, relation, model_name: Optional[str] = None):
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -143,13 +145,13 @@ class SQLAdapter(BaseAdapter):
             kwargs={'relation': relation}
         )
 
-    def truncate_relation(self, relation):
+    def truncate_relation(self, relation, model_name: Optional[str] = None):
         self.execute_macro(
             TRUNCATE_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
         )
 
-    def rename_relation(self, from_relation, to_relation):
+    def rename_relation(self, from_relation, to_relation, model_name: Optional[str] = None):
         self.cache_renamed(from_relation, to_relation)
 
         kwargs = {'from_relation': from_relation, 'to_relation': to_relation}
@@ -158,13 +160,13 @@ class SQLAdapter(BaseAdapter):
             kwargs=kwargs
         )
 
-    def get_columns_in_relation(self, relation):
+    def get_columns_in_relation(self, relation: str, model_name: Optional[str] = None):
         return self.execute_macro(
             GET_COLUMNS_IN_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
         )
 
-    def create_schema(self, database, schema):
+    def create_schema(self, database: str, schema: str, model_name: Optional[str] = None) -> None:
         logger.debug('Creating schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
@@ -173,7 +175,7 @@ class SQLAdapter(BaseAdapter):
         self.execute_macro(CREATE_SCHEMA_MACRO_NAME, kwargs=kwargs)
         self.commit_if_has_connection()
 
-    def drop_schema(self, database, schema):
+    def drop_schema(self, database: str, schema: str, model_name: Optional[str] = None) -> None:
         logger.debug('Dropping schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
@@ -182,7 +184,7 @@ class SQLAdapter(BaseAdapter):
         self.execute_macro(DROP_SCHEMA_MACRO_NAME,
                            kwargs=kwargs)
 
-    def list_relations_without_caching(self, information_schema, schema):
+    def list_relations_without_caching(self, information_schema, schema, model_name: Optional[str] = None) -> List[BaseRelation]:
         kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
@@ -209,10 +211,10 @@ class SQLAdapter(BaseAdapter):
             ))
         return relations
 
-    def quote(cls, identifier):
+    def quote(self, identifier):
         return '"{}"'.format(identifier)
 
-    def list_schemas(self, database):
+    def list_schemas(self, database: str, model_name: Optional[str] = None) -> List[str]:
         results = self.execute_macro(
             LIST_SCHEMAS_MACRO_NAME,
             kwargs={'database': database}
@@ -220,7 +222,7 @@ class SQLAdapter(BaseAdapter):
 
         return [row[0] for row in results]
 
-    def check_schema_exists(self, database, schema):
+    def check_schema_exists(self, database: str, schema: str, model_name: Optional[str] = None) -> bool:
         information_schema = self.Relation.create(
             database=database,
             schema=schema,

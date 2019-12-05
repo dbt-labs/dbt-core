@@ -115,7 +115,7 @@ class SchemaSearchMap(dict):
     """A utility class to keep track of what information_schema tables to
     search for what schemas
     """
-    def add(self, relation):
+    def add(self, relation: BaseRelation):
         key = relation.information_schema_only()
         if key not in self:
             self[key] = set()
@@ -225,7 +225,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def commit_if_has_connection(self) -> None:
         self.connections.commit_if_has_connection()
 
-    def nice_connection_name(self):
+    def nice_connection_name(self) -> str:
         conn = self.connections.get_if_exists()
         if conn is None or conn.name is None:
             return '<None>'
@@ -234,7 +234,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @contextmanager
     def connection_named(
         self, name: str, node: Optional[CompileResultNode] = None
-    ):
+    ) -> Connection:
         try:
             self.connections.query_header.set(name, node)
             conn = self.acquire_connection(name)
@@ -306,7 +306,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Caching methods
     ###
-    def _schema_is_cached(self, database: str, schema: str):
+    def _schema_is_cached(self, database: str, schema: str) -> bool:
         """Check if the schema is cached, and by default logs if it is not."""
 
         if dbt.flags.USE_CACHE is False:
@@ -345,7 +345,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     def _relations_cache_for_schemas(self, manifest: Manifest) -> None:
         """Populate the relations cache for the given schemas. Returns an
-        iteratble of the schemas populated, as strings.
+        iterable of the schemas populated, as strings.
         """
         if not dbt.flags.USE_CACHE:
             return
