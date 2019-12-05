@@ -93,7 +93,7 @@ class SQLAdapter(BaseAdapter):
     def is_cancelable(cls) -> bool:
         return True
 
-    def expand_column_types(self, goal, current, model_name: Optional[str] = None):
+    def expand_column_types(self, goal, current):
         reference_columns = {
             c.name: c for c in
             self.get_columns_in_relation(goal)
@@ -133,7 +133,7 @@ class SQLAdapter(BaseAdapter):
             kwargs=kwargs
         )
 
-    def drop_relation(self, relation, model_name: Optional[str] = None):
+    def drop_relation(self, relation):
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -145,13 +145,13 @@ class SQLAdapter(BaseAdapter):
             kwargs={'relation': relation}
         )
 
-    def truncate_relation(self, relation, model_name: Optional[str] = None):
+    def truncate_relation(self, relation):
         self.execute_macro(
             TRUNCATE_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
         )
 
-    def rename_relation(self, from_relation, to_relation, model_name: Optional[str] = None):
+    def rename_relation(self, from_relation, to_relation):
         self.cache_renamed(from_relation, to_relation)
 
         kwargs = {'from_relation': from_relation, 'to_relation': to_relation}
@@ -160,13 +160,13 @@ class SQLAdapter(BaseAdapter):
             kwargs=kwargs
         )
 
-    def get_columns_in_relation(self, relation: str, model_name: Optional[str] = None):
+    def get_columns_in_relation(self, relation: str):
         return self.execute_macro(
             GET_COLUMNS_IN_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
         )
 
-    def create_schema(self, database: str, schema: str, model_name: Optional[str] = None) -> None:
+    def create_schema(self, database: str, schema: str) -> None:
         logger.debug('Creating schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
@@ -175,7 +175,7 @@ class SQLAdapter(BaseAdapter):
         self.execute_macro(CREATE_SCHEMA_MACRO_NAME, kwargs=kwargs)
         self.commit_if_has_connection()
 
-    def drop_schema(self, database: str, schema: str, model_name: Optional[str] = None) -> None:
+    def drop_schema(self, database: str, schema: str) -> None:
         logger.debug('Dropping schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
@@ -184,7 +184,7 @@ class SQLAdapter(BaseAdapter):
         self.execute_macro(DROP_SCHEMA_MACRO_NAME,
                            kwargs=kwargs)
 
-    def list_relations_without_caching(self, information_schema, schema, model_name: Optional[str] = None) -> List[BaseRelation]:
+    def list_relations_without_caching(self, information_schema, schema) -> List[BaseRelation]:
         kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
@@ -214,7 +214,7 @@ class SQLAdapter(BaseAdapter):
     def quote(self, identifier):
         return '"{}"'.format(identifier)
 
-    def list_schemas(self, database: str, model_name: Optional[str] = None) -> List[str]:
+    def list_schemas(self, database: str) -> List[str]:
         results = self.execute_macro(
             LIST_SCHEMAS_MACRO_NAME,
             kwargs={'database': database}
@@ -222,7 +222,7 @@ class SQLAdapter(BaseAdapter):
 
         return [row[0] for row in results]
 
-    def check_schema_exists(self, database: str, schema: str, model_name: Optional[str] = None) -> bool:
+    def check_schema_exists(self, database: str, schema: str) -> bool:
         information_schema = self.Relation.create(
             database=database,
             schema=schema,

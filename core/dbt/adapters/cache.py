@@ -3,7 +3,6 @@ import threading
 from copy import deepcopy
 from typing import Optional
 
-from dbt.adapters.cache import _CachedRelation
 from dbt.logger import CACHE_LOGGER as logger
 import dbt.exceptions
 
@@ -86,7 +85,7 @@ class _CachedRelation:
         """
         return _make_key(self)
 
-    def add_reference(self, referrer: _CachedRelation):
+    def add_reference(self, referrer: '_CachedRelation'):
         """Add a reference from referrer to self, indicating that if this node
         were drop...cascaded, the referrer would be dropped as well.
 
