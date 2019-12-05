@@ -760,6 +760,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
     @abc.abstractmethod
+    @available.parse_none
     def drop_schema(self, database: str, schema: str):
         """Drop the given schema (and everything in it) if it exists."""
         raise dbt.exceptions.NotImplementedException(
