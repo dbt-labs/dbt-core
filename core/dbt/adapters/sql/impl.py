@@ -75,15 +75,11 @@ class SQLAdapter(BaseAdapter):
         return "float8" if decimals else "integer"
 
     @classmethod
-    def convert_boolean_type(
-            cls, agate_table: agate.Table, col_idx: int
-    ) -> str:
+    def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "boolean"
 
     @classmethod
-    def convert_datetime_type(
-            cls, agate_table: agate.Table, col_idx: int
-    ) -> str:
+    def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "timestamp without time zone"
 
     @classmethod
@@ -125,9 +121,7 @@ class SQLAdapter(BaseAdapter):
 
                 self.alter_column_type(current, column_name, new_type)
 
-    def alter_column_type(
-            self, relation, column_name, new_column_type
-    ) -> None:
+    def alter_column_type(self, relation, column_name, new_column_type) -> None:
         """
         1. Create a new column (w/ temp name and correct type)
         2. Copy data over to it
