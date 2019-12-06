@@ -39,7 +39,7 @@ class TestConfigWarehouse(DBTIntegrationTest):
             'source-paths': ['project-config-models'],
             'models': {
                 'test': {
-                    'snowflake_warehouse': 'DBT_TEST_ALT',
+                    'snowflake_warehouse': os.getenv('SNOWFLAKE_TEST_ALT_WAREHOUSE', 'DBT_TEST_ALT'),
                 },
             },
         }

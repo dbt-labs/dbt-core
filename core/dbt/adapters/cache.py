@@ -1,7 +1,7 @@
 from collections import namedtuple
-import threading
 from copy import deepcopy
-from typing import Optional
+from typing import List, Iterable, Optional
+import threading
 
 from dbt.logger import CACHE_LOGGER as logger
 import dbt.exceptions
@@ -182,29 +182,36 @@ class RelationsCache:
         self.lock = threading.RLock()
         self.schemas = set()
 
-    def add_schema(self, database, schema):
+    def add_schema(self, database: str, schema: str):
         """Add a schema to the set of known schemas (case-insensitive)
 
-        :param str database: The database name to add.
-        :param str schema: The schema name to add.
+        :param database: The database name to add.
+        :param schema: The schema name to add.
         """
         self.schemas.add((_lower(database), _lower(schema)))
 
-    def remove_schema(self, database, schema):
-        """Remove a schema from the set of known schemas (case-insensitive)
+    def drop_schema(self, database: str, schema: str):
+        """Drop the given schema and remove it from the set of known schemas.
 
-        If the schema does not exist, it will be ignored - it could just be a
-        temporary table.
-
-        :param str database: The database name to remove.
-        :param str schema: The schema name to remove.
+        Then remove all its contents (and their dependents, etc) as well.
         """
-        self.schemas.discard((_lower(database), _lower(schema)))
+        key = (_lower(database), _lower(schema))
+        if key not in self.schemas:
+            return
 
-    def update_schemas(self, schemas):
+        # avoid iterating over self.relations while removing things by
+        # collecting the list first.
+
+        with self.lock:
+            to_remove = self._list_relations_in_schema(database, schema)
+            self._remove_all(to_remove)
+            # handle a drop_schema race by using discard() over remove()
+            self.schemas.discard(key)
+
+    def update_schemas(self, schemas: Iterable[str]):
         """Add multiple schemas to the set of known schemas (case-insensitive)
 
-        :param Iterable[str] schemas: An iterable of the schema names to add.
+        :param schemas: An iterable of the schema names to add.
         """
         self.schemas.update((_lower(d), _lower(s)) for (d, s) in schemas)
 
@@ -403,7 +410,6 @@ class RelationsCache:
 
         self.relations[new_key] = relation
         # also fixup the schemas!
-        self.remove_schema(old_key.database, old_key.schema)
         self.add_schema(new_key.database, new_key.schema)
 
         return True
@@ -490,3 +496,25 @@ class RelationsCache:
         with self.lock:
             self.relations.clear()
             self.schemas.clear()
+
+    def _list_relations_in_schema(
+        self, database: str, schema: str
+    ) -> List[_CachedRelation]:
+        """Get the relations in a schema. Callers should hold the lock."""
+        key = (_lower(database), _lower(schema))
+
+        to_remove: List[_CachedRelation] = []
+        for cachekey, relation in self.relations.items():
+            if (cachekey.database, cachekey.schema) == key:
+                to_remove.append(relation)
+        return to_remove
+
+    def _remove_all(self, to_remove: List[_CachedRelation]):
+        """Remove all the listed relations. Ignore relations that have been
+        cascaded out.
+        """
+        for relation in to_remove:
+            # it may have been cascaded out already
+            drop_key = _make_key(relation)
+            if drop_key in self.relations:
+                self.drop(drop_key)
