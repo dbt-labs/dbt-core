@@ -9,7 +9,7 @@ from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from core.dbt.adapters.factory import BaseRelation
+from dbt.adapters.factory import BaseRelation
 
 LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
 GET_COLUMNS_IN_RELATION_MACRO_NAME = 'get_columns_in_relation'
@@ -74,11 +74,15 @@ class SQLAdapter(BaseAdapter):
         return "float8" if decimals else "integer"
 
     @classmethod
-    def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_boolean_type(
+            cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         return "boolean"
 
     @classmethod
-    def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
+    def convert_datetime_type(
+            cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         return "timestamp without time zone"
 
     @classmethod
@@ -116,7 +120,9 @@ class SQLAdapter(BaseAdapter):
 
                 self.alter_column_type(current, column_name, new_type)
 
-    def alter_column_type(self, relation, column_name, new_column_type) -> None:
+    def alter_column_type(
+            self, relation, column_name, new_column_type
+    ) -> None:
         """
         1. Create a new column (w/ temp name and correct type)
         2. Copy data over to it
@@ -184,7 +190,9 @@ class SQLAdapter(BaseAdapter):
         self.execute_macro(DROP_SCHEMA_MACRO_NAME,
                            kwargs=kwargs)
 
-    def list_relations_without_caching(self, information_schema, schema) -> List[BaseRelation]:
+    def list_relations_without_caching(
+            self, information_schema, schema
+    ) -> List[BaseRelation]:
         kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
