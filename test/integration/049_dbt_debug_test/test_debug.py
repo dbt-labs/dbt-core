@@ -103,3 +103,12 @@ class TestDebugInvalidProject(DBTIntegrationTest):
                 self.assertIn('ERROR invalid', line)
             elif line.strip().startswith('profiles.yml file'):
                 self.assertNotIn('ERROR invalid', line)
+
+    @use_profile('postgres')
+    def test_postgres_invalid_project_dir(self):
+        self.use_default_project()
+        self.run_dbt(['debug', '--project-dir', 'nopass'])
+        splitout = self.capsys.readouterr().out.split('\n')
+        for line in splitout:
+            if line.strip().startswith('dbt_project.yml file'):
+                self.assertIn('ERROR not found', line)

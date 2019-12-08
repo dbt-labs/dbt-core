@@ -69,7 +69,7 @@ class DebugTask(BaseTask):
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
         self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')
-        self.project_path = os.path.join(os.getcwd(), 'dbt_project.yml')
+        self.project_path = os.path.join(args.project_dir or os.getcwd(), 'dbt_project.yml')
         self.cli_vars = dbt.utils.parse_cli_vars(
             getattr(self.args, 'vars', '{}')
         )
