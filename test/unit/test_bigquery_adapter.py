@@ -296,8 +296,8 @@ class TestBigQueryConnectionManager(unittest.TestCase):
 
     def setUp(self):
         credentials = Mock(BigQueryCredentials)
-        credentials.query_comment = None
-        self.connections = BigQueryConnectionManager(profile=credentials)
+        profile = Mock(query_comment=None, credentials=credentials)
+        self.connections = BigQueryConnectionManager(profile=profile)
         self.mock_client = Mock(
           dbt.adapters.bigquery.impl.google.cloud.bigquery.Client)
         self.mock_connection = MagicMock()
@@ -353,8 +353,8 @@ class TestBigQueryConnectionManager(unittest.TestCase):
 
         self.connections.drop_dataset('project', 'dataset')
 
-        self.mock_client.list_tables.assert_called_once()
-        self.mock_client.delete_table.assert_called_once_with('table1')
+        self.mock_client.list_tables.assert_not_called()
+        self.mock_client.delete_table.assert_not_called()
         self.mock_client.delete_dataset.assert_called_once()
 
     @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
