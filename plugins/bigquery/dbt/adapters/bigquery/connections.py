@@ -177,8 +177,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
     @classmethod
     def get_retries(cls, conn):
-        credentials = conn['credentials']
-        return credentials.get('retries', cls.RETRIES)
+        credentials = conn.credentials
+        return credentials.retries
 
     @classmethod
     def get_table_from_response(cls, resp):
@@ -194,14 +194,15 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         job_params = {'use_legacy_sql': False}
 
-        priority = conn.credentials.get('priority', 'interactive')
+        priority = conn.credentials.priority
         if priority == Priority.Batch:
             job_params['priority'] = google.cloud.bigquery.QueryPriority.BATCH
         else:
             job_params[
-              'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
+                'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
 
-        fn = lambda: self._query_and_results(client, sql, conn, job_params)
+        def fn(): 
+            self._query_and_results(client, sql, conn, job_params)
 
         query_job, iterator = self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
@@ -250,7 +251,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
         view = google.cloud.bigquery.Table(view_ref)
         callback(view)
 
-        fn = lambda: client.create_table(view)
+        def fn():
+            client.create_table(view)
         self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_view(self, database, schema, table_name, sql):
@@ -268,7 +270,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
         job_params = {'destination': table_ref,
                       'write_disposition': 'WRITE_TRUNCATE'}
 
-        fn = lambda: self._query_and_results(client, sql, conn, job_params)
+        def fn(): 
+            self._query_and_results(client, sql, conn, job_params)
         self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_date_partitioned_table(self, database, schema, table_name):
@@ -298,9 +301,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
         dataset = self.dataset(database, schema, conn)
         client = conn.handle
 
-        fn = lambda: client.delete_dataset(
-        	dataset, delete_contents=True, not_found_ok=True)
-
+        def fn():
+            client.delete_dataset(
+                dataset, delete_contents=True, not_found_ok=True)
 
         self._retry_and_handle(
           msg='drop dataset', conn=conn, fn=fn)
@@ -310,7 +313,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
         client = conn.handle
         dataset = self.dataset(database, schema, conn)
 
-        fn = lambda: client.create_dataset(dataset, exist_ok=True)
+        def fn():
+            client.create_dataset(dataset, exist_ok=True)
         self._retry_and_handle(msg='create dataset', conn=conn, fn=fn)
 
     def _query_and_results(self, client, sql, conn, job_params):
@@ -337,6 +341,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
             initial=self.DEFAULT_INITIAL_DELAY,
             maximum=self.DEFAULT_MAXIMUM_DELAY)
 
+
 class _ErrorCounter(object):
     """Counts errors seen up to a threshold then raises the next error."""
 
@@ -347,7 +352,7 @@ class _ErrorCounter(object):
     def count_error(self, error):
         if self.retries == 0:
             return False  # Don't log
-        self.error_count +=1
+        self.error_count += 1
         if _is_retryable(error) and self.error_count <= self.retries:
             logger.warning(
                 'Retry attempt %s of %s after error: %s',
@@ -358,6 +363,7 @@ class _ErrorCounter(object):
                 'Not Retrying after %s previous attempts. Error: %s',
                 self.error_count - 1, repr(error))
             return False
+
 
 def _is_retryable(error):
     """Return true for 500 level (retryable) errors."""

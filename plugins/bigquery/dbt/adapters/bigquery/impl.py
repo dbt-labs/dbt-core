@@ -98,9 +98,9 @@ class BigQueryAdapter(BaseAdapter):
             all_datasets = client.list_datasets(project=database,
                                                 max_results=10000)
             return [ds.dataset_id for ds in all_datasets]
-          
+
         return self.connections._retry_and_handle(
-          msg='list dataset', conn=conn, fn=query_schemas)
+            msg='list dataset', conn=conn, fn=query_schemas)
 
     @available.parse(lambda *a, **k: False)
     def check_schema_exists(self, database: str, schema: str) -> bool:
