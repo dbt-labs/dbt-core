@@ -33,6 +33,7 @@ class BaseSimpleSnapshotTest(DBTIntegrationTest):
         self.assertTablesEqual(actual, expected)
 
     def assert_expected(self):
+        self.run_dbt(['test'])
         self.assert_case_tables_equal('snapshot_actual', 'snapshot_expected')
 
 
@@ -42,6 +43,7 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
         return {
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-pg'],
+            'macro-paths': ['macros'],
         }
 
     @use_profile('postgres')
@@ -98,7 +100,7 @@ class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
     def project_config(self):
         return {
             'data-paths': ['data'],
-            'macro-paths': ['custom-snapshot-macros'],
+            'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-pg-custom'],
         }
 
@@ -128,7 +130,7 @@ class TestNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
     def project_config(self):
         return {
             'data-paths': ['data'],
-            'macro-paths': ['custom-snapshot-macros'],
+            'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-pg-custom-namespaced'],
         }
 
@@ -152,7 +154,7 @@ class TestInvalidNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
     def project_config(self):
         return {
             'data-paths': ['data'],
-            'macro-paths': ['custom-snapshot-macros'],
+            'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-pg-custom-invalid'],
         }
 
@@ -179,6 +181,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-select',
                                'test-snapshots-pg'],
+            'macro-paths': ['macros'],
         }
 
     @use_profile('postgres')
@@ -236,7 +239,8 @@ class TestConfiguredSnapshotFileSelects(TestSimpleSnapshotFileSelects):
                     'strategy': 'timestamp',
                     'updated_at': 'updated_at',
                 }
-            }
+            },
+            'macro-paths': ['macros'],
         }
 
 
@@ -253,16 +257,15 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
     def project_config(self):
         return {
             "snapshot-paths": ['test-snapshots-bq'],
+            'macro-paths': ['macros'],
         }
 
     def assert_expected(self):
+        self.run_dbt(['test'])
         self.assertTablesEqual('snapshot_actual', 'snapshot_expected')
 
     @use_profile('bigquery')
     def test__bigquery__simple_snapshot(self):
-        self.use_default_project()
-        self.use_profile('bigquery')
-
         self.run_sql_file("seed_bq.sql")
 
         self.run_dbt(["snapshot"])
@@ -276,11 +279,8 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
 
         self.assert_expected()
 
-
     @use_profile('bigquery')
     def test__bigquery__snapshot_with_new_field(self):
-        self.use_default_project()
-        self.use_profile('bigquery')
 
         self.run_sql_file("seed_bq.sql")
 
@@ -341,6 +341,7 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
             paths = ['test-snapshots-bq']
         return {
             'snapshot-paths': paths,
+            'macro-paths': ['macros'],
         }
 
     def run_snapshot(self):
@@ -395,6 +396,7 @@ class TestCrossSchemaSnapshotFiles(DBTIntegrationTest):
         paths = ['test-snapshots-pg']
         return {
             'snapshot-paths': paths,
+            'macro-paths': ['macros'],
         }
 
     def target_schema(self):
@@ -427,6 +429,7 @@ class TestBadSnapshot(DBTIntegrationTest):
     def project_config(self):
         return {
             "snapshot-paths": ['test-snapshots-invalid'],
+            'macro-paths': ['macros'],
         }
 
     @use_profile('postgres')
@@ -456,6 +459,7 @@ class TestCheckCols(TestSimpleSnapshotFiles):
         return {
             "data-paths": ['data'],
             "snapshot-paths": ['test-check-col-snapshots'],
+            'macro-paths': ['macros'],
         }
 
 
@@ -472,7 +476,8 @@ class TestConfiguredCheckCols(TestCheckCols):
                     "strategy": "check",
                     "check_cols": ["email"],
                 }
-            }
+            },
+            'macro-paths': ['macros'],
         }
 
 
@@ -493,6 +498,7 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
         return {
             "data-paths": ['data'],
             "snapshot-paths": ['test-check-col-snapshots-bq'],
+            'macro-paths': ['macros'],
         }
 
     @use_profile('bigquery')
@@ -562,6 +568,7 @@ class TestLongText(DBTIntegrationTest):
     def project_config(self):
         return {
             "snapshot-paths": ['test-snapshots-longtext'],
+            'macro-paths': ['macros'],
         }
 
     @use_profile('postgres')

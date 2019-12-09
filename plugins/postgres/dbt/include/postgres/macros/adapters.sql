@@ -104,6 +104,12 @@
   now()
 {%- endmacro %}
 
+{% macro postgres__snapshot_string_as_time(timestamp) -%}
+    {%- set result = "'" ~ timestamp ~ "'::timestamp without time zone" -%}
+    {{ return(result) }}
+{%- endmacro %}
+
+
 {% macro postgres__snapshot_get_time() -%}
   {{ current_timestamp() }}::timestamp without time zone
 {%- endmacro %}

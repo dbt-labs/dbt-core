@@ -82,10 +82,30 @@
 {% endmacro %}
 
 
+{% macro snapshot_string_as_time(timestamp) -%}
+    {{ adapter_macro('snapshot_string_as_time', timestamp) }}
+{%- endmacro %}
+
+
+{% macro default__snapshot_string_as_time(timestamp) %}
+    {% do exceptions.raise_not_implemented(
+        'snapshot_string_as_time macro not implemented for adapter '+adapter.type()
+    ) %}
+{% endmacro %}
+
 {% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set check_cols_config = config['check_cols'] %}
     {% set primary_key = config['unique_key'] %}
-    {% set updated_at = snapshot_get_time() %}
+    {% set select_current_time -%}
+        select {{ snapshot_get_time() }} as snapshot_start
+    {%- endset %}
+
+    {# don't access the column by name, to avoid dealing with casing issues on snowflake #}
+    {%- set now = run_query(select_current_time)[0][0] -%}
+    {% if now is none or now is undefined -%}
+        {%- do exceptions.raise_compiler_error('Could not get a snapshot start time from the database') -%}
+    {%- endif %}
+    {% set updated_at = snapshot_string_as_time(now) %}
 
     {% if check_cols_config == 'all' %}
         {% set check_cols = get_columns_in_query(node['injected_sql']) %}
