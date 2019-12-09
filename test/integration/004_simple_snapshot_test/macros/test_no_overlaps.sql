@@ -11,30 +11,6 @@
     {%- do return('concat(cast(id as string), "-", first_name)') -%}
 {%- endmacro %}
 
-
-{% macro test_no_overlaps(model, keys) %}
-    with base as (
-        select
-            {{ get_snapshot_unique_id() }} as dbt_unique_id,
-            *
-        from {{ model }}
-    ),
-    matches as (
-        select rel1.* from base rel1
-        inner join base rel2
-        using (dbt_unique_id)
-        where not (
-            ((rel1.dbt_valid_from <= rel2.dbt_valid_to) or
-             (rel2.dbt_valid_to is null)
-             )
-            and
-            ((rel1.dbt_valid_to >= rel2.dbt_valid_from) or
-              (rel1.dbt_valid_to is null))
-        )
-    )
-    select count(*) from matches
-{% endmacro %}
-
 {#
     mostly copy+pasted from dbt_utils, but I removed some parameters and added
     a query that calls get_snapshot_unique_id
@@ -83,10 +59,10 @@ calc as (
         -- For each record: upper_bound {{ allow_gaps_operator }} the next lower_bound.
         -- Coalesce it to handle null cases for the last record.
         coalesce(
-            upper_bound <= next_lower_bound,
+            upper_bound = next_lower_bound,
             is_last_record,
             false
-        ) as upper_bound_less_than_or_equal_to_next_lower_bound
+        ) as upper_bound_equal_to_next_lower_bound
 
     from window_functions
 
@@ -101,7 +77,7 @@ validation_errors as (
     where not(
         -- THE FOLLOWING SHOULD BE TRUE --
         lower_bound_less_than_upper_bound
-        and upper_bound_less_than_or_equal_to_next_lower_bound
+        and upper_bound_equal_to_next_lower_bound
     )
 )
 
