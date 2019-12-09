@@ -264,6 +264,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
+        table_ref = self.table_ref(database, schema, table_name, conn)
         job_params = {'destination': table_ref,
                       'write_disposition': 'WRITE_TRUNCATE'}
 
