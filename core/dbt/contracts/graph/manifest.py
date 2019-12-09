@@ -1,3 +1,4 @@
+import enum
 import hashlib
 import os
 from dataclasses import dataclass, field
@@ -11,7 +12,10 @@ from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
     ParsedDocumentation
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.util import Writable, Replaceable
-from dbt.exceptions import raise_duplicate_resource_name, InternalException
+from dbt.exceptions import (
+    raise_duplicate_resource_name, InternalException, raise_compiler_error
+)
+from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt import tracking
@@ -208,6 +212,50 @@ def _deepcopy(value):
     return value.from_dict(value.to_dict())
 
 
+class Locality(enum.IntEnum):
+    Core = 1
+    Imported = 2
+    Root = 3
+
+
+class Specificity(enum.IntEnum):
+    Default = 1
+    Adapter = 2
+
+
+@dataclass
+class MaterializationCandidate:
+    specificity: Specificity
+    locality: Locality
+    macro: ParsedMacro
+
+    def __eq__(self, other):
+        equal = (
+            self.specificity == other.specificity and
+            self.locality == other.locality
+        )
+        if equal:
+            raise_compiler_error(
+                'Found two materializations with the name {} (packages {} and '
+                '{}). dbt cannot resolve this ambiguity'
+                .format(self.macro.name, self.macro.package_name,
+                        other.macro.package_name)
+            )
+
+        return equal
+
+    def __lt__(self, other: 'MaterializationCandidate') -> bool:
+        if self.specificity < other.specificity:
+            return True
+        if self.specificity > other.specificity:
+            return False
+        if self.locality < other.locality:
+            return True
+        if self.locality > other.locality:
+            return False
+        return False
+
+
 @dataclass
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
@@ -291,7 +339,7 @@ class Manifest:
             parts = unique_id.split('.')
             if len(parts) != 2:
                 msg = "documentation names cannot contain '.' characters"
-                dbt.exceptions.raise_compiler_error(msg, doc)
+                raise_compiler_error(msg, doc)
 
             found_package, found_node = parts
 
@@ -318,27 +366,48 @@ class Manifest:
         name = '{}.{}'.format(source_name, table_name)
         return self._find_by_name(name, package, 'nodes', [NodeType.Source])
 
-    def get_materialization_macro(self, materialization_name,
-                                  adapter_type=None):
-        macro_name = dbt.utils.get_materialization_macro_name(
-            materialization_name=materialization_name,
-            adapter_type=adapter_type,
-            with_prefix=False)
-
-        macro = self.find_macro_by_name(
-            macro_name,
-            None)
-
-        if adapter_type not in ('default', None) and macro is None:
-            macro_name = dbt.utils.get_materialization_macro_name(
+    def get_materialization_macro(
+        self, project_name: str, materialization_name: str, adapter_type: str
+    ):
+        adapter_macro_name, default_macro_name = [
+            dbt.utils.get_materialization_macro_name(
                 materialization_name=materialization_name,
-                adapter_type='default',
-                with_prefix=False)
-            macro = self.find_macro_by_name(
-                macro_name,
-                None)
+                adapter_type=atype,
+                with_prefix=False,
+            )
+            for atype in (adapter_type, None)
+        ]
 
-        return macro
+        candidates: List[MaterializationCandidate] = []
+
+        for unique_id, macro in self.macros.items():
+            specificity: Specificity
+            locality: Locality
+            if macro.name == adapter_macro_name:
+                specificity = Specificity.Adapter
+            elif macro.name == default_macro_name:
+                specificity = Specificity.Default
+            else:
+                continue
+
+            if macro.package_name == project_name:
+                locality = Locality.Root
+            elif macro.package_name in PACKAGES:
+                locality = Locality.Core
+            else:
+                locality = Locality.Imported
+
+            candidate = MaterializationCandidate(
+                specificity=specificity,
+                locality=locality,
+                macro=macro,
+            )
+            candidates.append(candidate)
+
+        if not candidates:
+            return None
+        candidates.sort()
+        return candidates[-1].macro
 
     def get_resource_fqns(self):
         resource_fqns = {}
