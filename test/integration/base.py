@@ -753,7 +753,8 @@ class DBTIntegrationTest(unittest.TestCase):
         if name is None:
             name = '__test'
         with patch.object(common, 'get_adapter', return_value=self.adapter):
-            with self.adapter.connection_named(name) as conn:
+            with self.adapter.connection_named(name):
+                conn = self.adapter.connections.get_thread_connection()
                 yield conn
 
     def get_relation_columns(self, relation):

@@ -41,11 +41,12 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
     def run_select_and_check(self, rel, sql):
         connection_name = '__test_{}'.format(id(threading.current_thread()))
         try:
-            with self._secret_adapter.connection_named(connection_name) as conn:
+            with self._secret_adapter.connection_named(connection_name):
+                conn = self._secret_adapter.connections.get_thread_connection()
                 res = self.run_sql_common(self.transform_sql(sql), 'one', conn)
 
             # The result is the output of f_sleep(), which is True
-            if res[0] == True:
+            if res[0]:
                 self.query_state[rel] = 'good'
             else:
                 self.query_state[rel] = 'bad'
