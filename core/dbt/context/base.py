@@ -11,6 +11,7 @@ from dbt.include.global_project import PACKAGES
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.version import __version__ as dbt_version
+import importlib
 
 from dbt.node_types import NodeType
 
@@ -118,6 +119,7 @@ def get_context_modules() -> Dict[str, Dict[str, Any]]:
     return {
         'pytz': get_pytz_module_context(),
         'datetime': get_datetime_module_context(),
+        'import_module': importlib.import_module,
     }
 
 
