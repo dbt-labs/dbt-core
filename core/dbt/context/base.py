@@ -93,7 +93,7 @@ class Var:
 
 
 def get_pytz_module_context() -> Dict[str, Any]:
-    context_exports = pytz.__all__
+    context_exports = pytz.__all__  # type: ignore
 
     return {
         name: getattr(pytz, name) for name in context_exports
