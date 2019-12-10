@@ -270,7 +270,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         job_params = {'destination': table_ref,
                       'write_disposition': 'WRITE_TRUNCATE'}
 
-        def fn(): 
+        def fn():
             self._query_and_results(client, sql, conn, job_params)
         self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
