@@ -92,7 +92,7 @@ class Var:
             return self.get_missing_var(var_name)
 
 
-def get_pytz_module_context():
+def get_pytz_module_context() -> Dict[str, Any]:
     context_exports = pytz.__all__
 
     return {
@@ -100,7 +100,7 @@ def get_pytz_module_context():
     }
 
 
-def get_datetime_module_context():
+def get_datetime_module_context() -> Dict[str, Any]:
     context_exports = [
         'date',
         'datetime',
@@ -114,7 +114,7 @@ def get_datetime_module_context():
     }
 
 
-def get_context_modules():
+def get_context_modules() -> Dict[str, Dict[str, Any]]:
     return {
         'pytz': get_pytz_module_context(),
         'datetime': get_datetime_module_context(),
@@ -148,12 +148,6 @@ def log(msg, info=False):
 
 
 class BaseContext:
-    def get_context_modules(self):
-        return {
-            'pytz': get_pytz_module_context(),
-            'datetime': get_datetime_module_context(),
-        }
-
     def to_dict(self) -> Dict[str, Any]:
         run_started_at = None
         invocation_id = None
@@ -164,7 +158,7 @@ class BaseContext:
 
         context: Dict[str, Any] = {
             'env_var': env_var,
-            'modules': self.get_context_modules(),
+            'modules': CONTEXT_MODULES,
             'run_started_at': run_started_at,
             'invocation_id': invocation_id,
             'return': _return,
