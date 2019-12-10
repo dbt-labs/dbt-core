@@ -201,7 +201,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
             job_params[
                 'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
 
-        def fn(): 
+        def fn():
             self._query_and_results(client, sql, conn, job_params)
 
         query_job, iterator = self._retry_and_handle(msg=sql, conn=conn, fn=fn)
