@@ -158,7 +158,7 @@ class BaseContext:
 
         context: Dict[str, Any] = {
             'env_var': env_var,
-            'modules': CONTEXT_MODULES,
+            'modules': get_context_modules(),
             'run_started_at': run_started_at,
             'invocation_id': invocation_id,
             'return': _return,
