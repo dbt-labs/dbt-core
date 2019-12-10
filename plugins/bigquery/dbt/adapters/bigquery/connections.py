@@ -306,7 +306,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 dataset, delete_contents=True, not_found_ok=True)
 
         self._retry_and_handle(
-          msg='drop dataset', conn=conn, fn=fn)
+            msg='drop dataset', conn=conn, fn=fn)
 
     def create_dataset(self, database, schema):
         conn = self.get_thread_connection()
