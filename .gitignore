@@ -81,7 +81,5 @@ target/
 # Vim
 *.sw*
 
-# envs
-/env/
 # pycharm
 .idea/
