@@ -35,11 +35,11 @@ class SnowflakeAdapter(SQLAdapter):
         return super()._catalog_filter_table(lowered, manifest)
 
     
-    # def get_columns_in_relation(self, relation):
-    #     return self.execute_macro(
-    #         GET_COLUMNS_IN_RELATION_MACRO_NAME,
-    #         kwargs={'relation': relation}
-    #     )
+    def get_columns_in_relation(self, relation):
+        return self.execute_macro(
+            GET_COLUMNS_IN_RELATION_MACRO_NAME,
+            kwargs={'relation': relation}
+        )
 
 
     def _make_match_kwargs(self, database, schema, identifier):
