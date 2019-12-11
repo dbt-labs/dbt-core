@@ -314,7 +314,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         dataset = self.dataset(database, schema, conn)
 
         def fn():
-            client.create_dataset(dataset, exist_ok=True)
+            client.create_dataset(dataset, exists_ok=True)
         self._retry_and_handle(msg='create dataset', conn=conn, fn=fn)
 
     def _query_and_results(self, client, sql, conn, job_params):
