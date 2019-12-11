@@ -202,7 +202,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
 
         def fn():
-            self._query_and_results(client, sql, conn, job_params)
+            return self._query_and_results(client, sql, conn, job_params)
 
         query_job, iterator = self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
@@ -252,7 +252,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         callback(view)
 
         def fn():
-            client.create_table(view)
+            return client.create_table(view)
         self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_view(self, database, schema, table_name, sql):
@@ -271,7 +271,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                       'write_disposition': 'WRITE_TRUNCATE'}
 
         def fn():
-            self._query_and_results(client, sql, conn, job_params)
+            return self._query_and_results(client, sql, conn, job_params)
         self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_date_partitioned_table(self, database, schema, table_name):
@@ -302,7 +302,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         client = conn.handle
 
         def fn():
-            client.delete_dataset(
+            return client.delete_dataset(
                 dataset, delete_contents=True, not_found_ok=True)
 
         self._retry_and_handle(
@@ -314,7 +314,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         dataset = self.dataset(database, schema, conn)
 
         def fn():
-            client.create_dataset(dataset, exist_ok=True)
+             return client.create_dataset(dataset, exist_ok=True)
         self._retry_and_handle(msg='create dataset', conn=conn, fn=fn)
 
     def _query_and_results(self, client, sql, conn, job_params):
