@@ -95,6 +95,79 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
         self.assert_expected()
 
 
+class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_snapshot_004"
+
+    @property
+    def models(self):
+        return "models-checkall"
+
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros', 'macros'],
+            'snapshot-paths': ['test-snapshots-checkall'],
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
+
+    def _run_snapshot_test(self):
+        self.run_dbt(['seed'])
+        self.run_dbt(['snapshot'])
+        database = self.default_database
+        if self.adapter_type == 'bigquery':
+            database = self.adapter.quote(database)
+        results = self.run_sql(
+            'select * from {}.{}.my_snapshot'.format(database, self.unique_schema()),
+            fetch='all'
+        )
+        self.assertEqual(len(results), 3)
+        for result in results:
+            self.assertEqual(len(result), 6)
+
+        self.run_dbt(['snapshot', '--vars', '{seed_name: seed_newcol}'])
+        results = self.run_sql(
+            'select * from {}.{}.my_snapshot where last_name is not NULL'.format(database, self.unique_schema()),
+            fetch='all'
+        )
+        self.assertEqual(len(results), 3)
+
+        for result in results:
+            # new column
+            self.assertEqual(len(result), 7)
+            self.assertIsNotNone(result[-1])
+
+        results = self.run_sql(
+            'select * from {}.{}.my_snapshot where last_name is NULL'.format(database, self.unique_schema()),
+            fetch='all'
+        )
+        self.assertEqual(len(results), 3)
+        for result in results:
+            # new column
+            self.assertEqual(len(result), 7)
+
+    @use_profile('postgres')
+    def test_postgres_renamed_source(self):
+        self._run_snapshot_test()
+
+    @use_profile('snowflake')
+    def test_snowflake_renamed_source(self):
+        self._run_snapshot_test()
+
+    @use_profile('redshift')
+    def test_redshift_renamed_source(self):
+        self._run_snapshot_test()
+
+    @use_profile('bigquery')
+    def test_bigquery_renamed_source(self):
+        self._run_snapshot_test()
+
+
 class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
     @property
     def project_config(self):
