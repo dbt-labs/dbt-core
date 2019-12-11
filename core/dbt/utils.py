@@ -8,7 +8,10 @@ import itertools
 import json
 import os
 from enum import Enum
-from typing import Tuple, Type, Any, Optional, TypeVar, Dict
+from typing import (
+    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List
+)
+from typing_extensions import Protocol
 
 import dbt.exceptions
 
@@ -314,7 +317,16 @@ def get_pseudo_hook_path(hook_name):
     return os.path.join(*path_parts)
 
 
-def get_nodes_by_tags(nodes, match_tags, resource_type):
+class _Tagged(Protocol):
+    tags: Iterable[str]
+
+
+Tagged = TypeVar('Tagged', bound=_Tagged)
+
+
+def get_nodes_by_tags(
+    nodes: Iterable[Tagged], match_tags: Set[str], resource_type: NodeType
+) -> List[Tagged]:
     matched_nodes = []
     for node in nodes:
         node_tags = node.tags
@@ -455,6 +467,10 @@ class JSONEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
+        if hasattr(obj, 'to_dict'):
+            # if we have a to_dict we should try to serialize the result of
+            # that!
+            obj = obj.to_dict()
         return super().default(obj)
 
 
@@ -500,16 +516,6 @@ def pluralize(count, string):
         return "{} {}".format(count, string)
     else:
         return "{} {}s".format(count, string)
-
-
-def env_set_truthy(key: str) -> Optional[str]:
-    """Return the value if it was set to a "truthy" string value, or None
-    otherwise.
-    """
-    value = os.getenv(key)
-    if not value or value.lower() in ('0', 'false', 'f'):
-        return None
-    return value
 
 
 def restrict_to(*restrictions):

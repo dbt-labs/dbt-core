@@ -19,7 +19,8 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
                         "enabled": True,
                         "column_types": self.seed_types()
                     },
-                }
+                },
+                'quote_columns': False,
             }
         }
 
@@ -77,9 +78,15 @@ class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
 
     def seed_types(self):
         return {
-            "id": "FLOAT",
-            "birthday": "TEXT",
+            "ID": "FLOAT",
+            "BIRTHDAY": "TEXT",
         }
+
+    @property
+    def project_config(self):
+        cfg = super().project_config
+        cfg['data-paths'] = ['snowflake-data-config']
+        return cfg
 
     @property
     def profile_config(self):

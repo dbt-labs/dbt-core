@@ -60,6 +60,12 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             'project-root': '/tmp/dbt/does-not-exist',
             'profile': 'default',
         }
+        self.qh_patch = None
+
+    def tearDown(self):
+        if self.qh_patch:
+            self.qh_patch.stop()
+        super().tearDown()
 
     def get_adapter(self, target):
         project = self.project_cfg.copy()
@@ -71,6 +77,11 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             profile=profile,
         )
         adapter = BigQueryAdapter(config)
+
+        self.qh_patch = patch.object(adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
+
         inject_adapter(adapter)
         return adapter
 
@@ -89,6 +100,8 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         except BaseException as e:
             raise
 
+        mock_open_connection.assert_not_called()
+        connection.handle
         mock_open_connection.assert_called_once()
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
@@ -104,6 +117,8 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         except BaseException as e:
             raise
 
+        mock_open_connection.assert_not_called()
+        connection.handle
         mock_open_connection.assert_called_once()
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
@@ -117,9 +132,8 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
 
-        except BaseException as e:
-            raise
-
+        mock_open_connection.assert_not_called()
+        connection.handle
         mock_open_connection.assert_called_once()
 
     def test_cancel_open_connections_empty(self):
@@ -147,8 +161,11 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         mock_auth_default.return_value = (creds, MagicMock())
         adapter = self.get_adapter('loc')
 
-        adapter.acquire_connection('dummy')
+        connection = adapter.acquire_connection('dummy')
         mock_client = mock_bq.Client
+
+        mock_client.assert_not_called()
+        connection.handle
         mock_client.assert_called_once_with('dbt-unit-000000', creds,
                                             location='Luna Station')
 

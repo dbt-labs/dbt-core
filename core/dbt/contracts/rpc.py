@@ -41,7 +41,15 @@ class RPCExecParameters(RPCParameters):
 
 @dataclass
 class RPCCompileParameters(RPCParameters):
+    threads: Optional[int] = None
     models: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+
+
+@dataclass
+class RPCSnapshotParameters(RPCParameters):
+    threads: Optional[int] = None
+    select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
 
 
@@ -53,6 +61,7 @@ class RPCTestParameters(RPCCompileParameters):
 
 @dataclass
 class RPCSeedParameters(RPCParameters):
+    threads: Optional[int] = None
     show: bool = False
 
 
@@ -79,7 +88,7 @@ class KillParameters(RPCParameters):
 @dataclass
 class PollParameters(RPCParameters):
     request_token: TaskID
-    logs: bool = False
+    logs: bool = True
     logs_start: int = 0
 
 
@@ -116,9 +125,15 @@ class GCParameters(RPCParameters):
         will be applied to the task manager before GC starts. By default the
         existing gc settings remain.
     """
-    task_ids: Optional[List[TaskID]]
-    before: Optional[datetime]
-    settings: Optional[GCSettings]
+    task_ids: Optional[List[TaskID]] = None
+    before: Optional[datetime] = None
+    settings: Optional[GCSettings] = None
+
+
+@dataclass
+class RPCRunOperationParameters(RPCParameters):
+    macro: str
+    args: Dict[str, Any] = field(default_factory=dict)
 
 
 # Outputs
@@ -159,6 +174,11 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
 class ResultTable(JsonSchemaMixin):
     column_names: List[str]
     rows: List[Any]
+
+
+@dataclass
+class RemoteRunOperationResult(RemoteResult):
+    success: bool
 
 
 @dataclass
@@ -329,9 +349,10 @@ class PollRemoteEmptyCompleteResult(PollResult, RemoteEmptyResult):
         base: RemoteEmptyResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollRemoteEmptyCompleteResult':
         return cls(
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -360,12 +381,13 @@ class PollExecuteCompleteResult(RemoteExecutionResult, PollResult):
         base: RemoteExecutionResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollExecuteCompleteResult':
         return cls(
             results=base.results,
             generated_at=base.generated_at,
             elapsed_time=base.elapsed_time,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -387,13 +409,14 @@ class PollCompileCompleteResult(RemoteCompileResult, PollResult):
         base: RemoteCompileResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollCompileCompleteResult':
         return cls(
             raw_sql=base.raw_sql,
             compiled_sql=base.compiled_sql,
             node=base.node,
             timing=base.timing,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -415,14 +438,41 @@ class PollRunCompleteResult(RemoteRunResult, PollResult):
         base: RemoteRunResult,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollRunCompleteResult':
         return cls(
             raw_sql=base.raw_sql,
             compiled_sql=base.compiled_sql,
             node=base.node,
             timing=base.timing,
-            logs=base.logs,
+            logs=logs,
             table=base.table,
+            tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
+        )
+
+
+@dataclass
+class PollRunOperationCompleteResult(RemoteRunOperationResult, PollResult):
+    state: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
+    )
+
+    @classmethod
+    def from_result(
+        cls: Type['PollRunOperationCompleteResult'],
+        base: RemoteRunOperationResult,
+        tags: TaskTags,
+        timing: TaskTiming,
+        logs: List[LogMessage],
+    ) -> 'PollRunOperationCompleteResult':
+        return cls(
+            success=base.success,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,
@@ -444,12 +494,13 @@ class PollCatalogCompleteResult(RemoteCatalogResults, PollResult):
         base: RemoteCatalogResults,
         tags: TaskTags,
         timing: TaskTiming,
+        logs: List[LogMessage],
     ) -> 'PollCatalogCompleteResult':
         return cls(
             nodes=base.nodes,
             generated_at=base.generated_at,
             _compile_results=base._compile_results,
-            logs=base.logs,
+            logs=logs,
             tags=tags,
             state=timing.state,
             start=timing.start,

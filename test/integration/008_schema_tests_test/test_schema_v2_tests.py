@@ -31,8 +31,8 @@ class TestSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
         test_results = self.run_schema_validations()
-        # If the disabled model's tests ran, there would be 19 of these.
-        self.assertEqual(len(test_results), 18)
+        # If the disabled model's tests ran, there would be 20 of these.
+        self.assertEqual(len(test_results), 19)
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
@@ -83,6 +83,51 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         # even if strict = False!
         with self.assertRaises(CompilationException):
             self.run_dbt(strict=False)
+
+
+class TestMalformedMacroTests(DBTIntegrationTest):
+
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("seed.sql")
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+    
+    @property
+    def models(self):
+        return "models-v2/custom-bad-test-macro"
+    
+    @property
+    def project_config(self):
+        return {
+            "macro-paths": ["macros-v2/malformed"],
+        }
+    
+    def run_schema_validations(self):
+        args = FakeArgs()
+        test_task = TestTask(args, self.config)
+        return test_task.run()
+
+    @use_profile('postgres')
+    def test_postgres_malformed_macro_reports_error(self):
+        self.run_dbt(["deps"])
+        self.run_dbt()
+        expected_failure = 'not_null'
+
+        test_results = self.run_schema_validations()
+
+        self.assertEqual(len(test_results), 2)
+
+        for result in test_results:
+            self.assertTrue(result.error is not None or result.fail)
+            # Assert that error is thrown for empty schema test
+            if result.error is not None:
+                self.assertIn("Returned 0 rows", result.error)
+            # Assert that failure occurs for normal schema test
+            elif result.fail:
+                self.assertIn(expected_failure, result.node.name)
 
 
 class TestHooksInTests(DBTIntegrationTest):
@@ -148,7 +193,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
-            "macro-paths": ["macros-v2"],
+            "macro-paths": ["macros-v2/macros"],
         }
 
     @property

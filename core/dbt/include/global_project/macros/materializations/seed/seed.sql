@@ -13,13 +13,15 @@
 
 {% macro default__create_csv_table(model, agate_table) %}
   {%- set column_override = model['config'].get('column_types', {}) -%}
+  {%- set quote_seed_column = model['config'].get('quote_columns', None) -%}
 
   {% set sql %}
     create table {{ this.render() }} (
         {%- for col_name in agate_table.column_names -%}
             {%- set inferred_type = adapter.convert_type(agate_table, loop.index0) -%}
             {%- set type = column_override.get(col_name, inferred_type) -%}
-            {{ col_name | string }} {{ type }} {%- if not loop.last -%}, {%- endif -%}
+            {%- set column_name = (col_name | string) -%}
+            {{ adapter.quote_seed_column(column_name, quote_seed_column) }} {{ type }} {%- if not loop.last -%}, {%- endif -%}
         {%- endfor -%}
     )
   {% endset %}
@@ -46,8 +48,20 @@
 {% endmacro %}
 
 
+{% macro get_seed_column_quoted_csv(model, column_names) %}
+  {%- set quote_seed_column = model['config'].get('quote_columns', None) -%}
+    {% set quoted = [] %}
+    {% for col in column_names -%}
+        {%- do quoted.append(adapter.quote_seed_column(col, quote_seed_column)) -%}
+    {%- endfor %}
+
+    {%- set dest_cols_csv = quoted | join(', ') -%}
+    {{ return(dest_cols_csv) }}
+{% endmacro %}
+
+
 {% macro basic_load_csv_rows(model, batch_size, agate_table) %}
-    {% set cols_sql = ", ".join(agate_table.column_names) %}
+    {% set cols_sql = get_seed_column_quoted_csv(model, agate_table.column_names) %}
     {% set bindings = [] %}
 
     {% set statements = [] %}
@@ -56,7 +70,7 @@
         {% set bindings = [] %}
 
         {% for row in chunk %}
-            {% set _ = bindings.extend(row) %}
+            {% do bindings.extend(row) %}
         {% endfor %}
 
         {% set sql %}
@@ -70,10 +84,10 @@
             {%- endfor %}
         {% endset %}
 
-        {% set _ = adapter.add_query(sql, bindings=bindings, abridge_sql_log=True) %}
+        {% do adapter.add_query(sql, bindings=bindings, abridge_sql_log=True) %}
 
         {% if loop.index0 == 0 %}
-            {% set _ = statements.append(sql) %}
+            {% do statements.append(sql) %}
         {% endif %}
     {% endfor %}
 

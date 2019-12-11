@@ -1,10 +1,20 @@
 #!/usr/bin/env python
-from setuptools import find_namespace_packages
-from setuptools import setup
 import os
+import sys
+
+from setuptools import setup
+try:
+    from setuptools import find_namespace_packages
+except ImportError:
+    # the user has a downlevel version of setuptools.
+    print('Error: dbt requires setuptools v40.1.0 or higher.')
+    print('Please upgrade setuptools with "pip install --upgrade setuptools" '
+          'and try again')
+    sys.exit(1)
+
 
 package_name = "dbt-bigquery"
-package_version = "0.15.0b2"
+package_version = "0.15.0"
 description = """The bigquery adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -30,7 +40,20 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'google-cloud-bigquery>=1.0.0,<2',
+        'google-cloud-bigquery>=1.15.0,<2',
     ],
     zip_safe=False,
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+
+        'License :: OSI Approved :: Apache Software License',
+
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: POSIX :: Linux',
+
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
 )

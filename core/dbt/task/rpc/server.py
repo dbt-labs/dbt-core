@@ -123,8 +123,7 @@ class RPCServerTask(ConfiguredTask):
             'Send requests to http://{}:{}/jsonrpc'.format(display_host, port)
         )
 
-        app = self.handle_request
-        app = DispatcherMiddleware(app, {
+        app = DispatcherMiddleware(self.handle_request, {
             '/jsonrpc': self.handle_jsonrpc_request,
         })
 

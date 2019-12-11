@@ -18,6 +18,9 @@ class TestBasePrestoRun(DBTIntegrationTest):
         return {
             'data-paths': ['data'],
             'macro-paths': ['macros'],
+            'seeds': {
+                'quote_columns': False,
+            },
         }
 
     @property

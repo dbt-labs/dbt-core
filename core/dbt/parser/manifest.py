@@ -2,7 +2,7 @@ import itertools
 import os
 import pickle
 from datetime import datetime
-from typing import Dict, Optional, Mapping
+from typing import Dict, Optional, Mapping, Callable, Any
 
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
@@ -85,12 +85,22 @@ def make_parse_result(
 
 class ManifestLoader:
     def __init__(
-        self, root_project: RuntimeConfig, all_projects: Mapping[str, Project]
+        self,
+        root_project: RuntimeConfig,
+        all_projects: Mapping[str, Project],
+        macro_hook: Optional[Callable[[Manifest], Any]] = None,
     ) -> None:
-        self.root_project = root_project
-        self.all_projects = all_projects
+        self.root_project: RuntimeConfig = root_project
+        self.all_projects: Mapping[str, Project] = all_projects
+        self.macro_hook: Callable[[Manifest], Any]
+        if macro_hook is None:
+            self.macro_hook = lambda m: None
+        else:
+            self.macro_hook = macro_hook
 
-        self.results = make_parse_result(root_project, all_projects)
+        self.results: ParseResult = make_parse_result(
+            root_project, all_projects,
+        )
         self._loaded_file_cache: Dict[str, FileBlock] = {}
 
     def _load_macros(
@@ -183,6 +193,7 @@ class ManifestLoader:
             macros=self.results.macros,
             files=self.results.files
         )
+        self.macro_hook(macro_manifest)
 
         for project in self.all_projects.values():
             # parse a single project
@@ -309,11 +320,12 @@ class ManifestLoader:
     def load_all(
         cls,
         root_config: RuntimeConfig,
-        internal_manifest: Optional[Manifest] = None
+        internal_manifest: Optional[Manifest],
+        macro_hook: Callable[[Manifest], Any],
     ) -> Manifest:
         with PARSING_STATE:
             projects = load_all_projects(root_config)
-            loader = cls(root_config, projects)
+            loader = cls(root_config, projects, macro_hook)
             loader.load(internal_manifest=internal_manifest)
             loader.write_parse_results()
             manifest = loader.create_manifest()
@@ -422,6 +434,8 @@ def load_internal_manifest(config: RuntimeConfig) -> Manifest:
 
 
 def load_manifest(
-    config: RuntimeConfig, internal_manifest: Optional[Manifest]
+    config: RuntimeConfig,
+    internal_manifest: Optional[Manifest],
+    macro_hook: Callable[[Manifest], Any],
 ) -> Manifest:
-    return ManifestLoader.load_all(config, internal_manifest)
+    return ManifestLoader.load_all(config, internal_manifest, macro_hook)

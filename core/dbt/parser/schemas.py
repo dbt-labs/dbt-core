@@ -3,7 +3,7 @@ from typing import Iterable, Dict, Any, Union, List, Optional
 
 from hologram import ValidationError
 
-from dbt.context.base import generate_config_context
+from dbt.context.base import ConfigRenderContext
 
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import load_yaml_text
@@ -237,7 +237,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         builds the initial node to be parsed, but rendering is basically the
         same
         """
-        render_ctx = generate_config_context(self.root_project.cli_vars)
+        render_ctx = ConfigRenderContext(self.root_project.cli_vars).to_dict()
         builder = TestBuilder[Target](
             test=block.test,
             target=block.target,

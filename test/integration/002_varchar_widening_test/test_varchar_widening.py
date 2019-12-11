@@ -1,5 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 
+
 class TestVarcharWidening(DBTIntegrationTest):
     @property
     def schema(self):

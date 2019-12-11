@@ -57,6 +57,12 @@ documentation:
 FILE_NOT_FOUND = 'file not found'
 
 
+class QueryCommentedProfile(Profile):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.query_comment = None
+
+
 class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
@@ -209,7 +215,9 @@ class DebugTask(BaseTask):
         self.profile_name = self._choose_profile_name()
         self.target_name = self._choose_target_name()
         try:
-            self.profile = Profile.from_args(self.args, self.profile_name)
+            self.profile = QueryCommentedProfile.from_args(
+                self.args, self.profile_name
+            )
         except dbt.exceptions.DbtConfigError as exc:
             self.profile_fail_details = str(exc)
             return red('ERROR invalid')

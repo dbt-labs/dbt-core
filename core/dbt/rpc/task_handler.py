@@ -37,13 +37,11 @@ from dbt.rpc.logger import (
     QueueTimeoutMessage,
 )
 from dbt.rpc.method import RemoteMethod
-from dbt.utils import env_set_truthy
+from dbt.flags import SINGLE_THREADED_HANDLER
+
 
 # we use this in typing only...
 from queue import Queue  # noqa
-
-
-SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
 
 
 def sigterm_handler(signum, frame):
@@ -86,6 +84,10 @@ class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
         handler = QueueLogHandler(self.queue)
         with handler.applicationbound():
             self._spawn_setup()
+            # copy threads over into our credentials, if it exists and is set.
+            # some commands, like 'debug', won't have a threads value at all.
+            if getattr(self.task.args, 'threads', None) is not None:
+                self.task.config.threads = self.task.args.threads
             rpc_exception = None
             result = None
             try:
@@ -179,7 +181,7 @@ def get_results_context(
 
     with manifest_blocking:
         yield
-        if RemoteMethodFlags.RequiresManifestReloadAfter:
+        if RemoteMethodFlags.RequiresManifestReloadAfter in flags:
             manager.parse_manifest()
 
 

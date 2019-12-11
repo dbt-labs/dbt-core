@@ -17,6 +17,9 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
         return {
             'data-paths': ['data'],
             'macro-paths': ['macros'],
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @property
@@ -49,7 +52,7 @@ class TestSimpleBigQueryRun(TestBaseBigQueryRun):
         self.run_dbt(['seed'])
         self.run_dbt(['seed', '--full-refresh'])
         results = self.run_dbt()
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         self.assert_nondupes_pass()
 
 
@@ -60,7 +63,7 @@ class TestUnderscoreBigQueryRun(TestBaseBigQueryRun):
     def test_bigquery_run_twice(self):
         self.run_dbt(['seed'])
         results = self.run_dbt()
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         results = self.run_dbt()
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         self.assert_nondupes_pass()

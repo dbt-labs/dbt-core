@@ -110,7 +110,7 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
         node = rpc_parser.parse_remote(sql, self.args.name)
         self.manifest = ParserUtils.add_new_refs(
             manifest=self.manifest,
-            current_project=self.config,
+            config=self.config,
             node=node,
             macros=macro_overrides
         )

@@ -266,32 +266,56 @@ class NodeCount(logbook.Processor):
 
 
 class NodeMetadata(logbook.Processor):
-    def __init__(self, node, node_index):
+    def __init__(self, node, index):
         self.node = node
-        self.node_index = node_index
+        self.index = index
         super().__init__()
 
-    def process(self, record):
-        keys = [
-            ('alias', 'node_alias'),
-            ('schema', 'node_schema'),
-            ('database', 'node_database'),
-            ('name', 'node_name'),
-            ('original_file_path', 'node_path'),
-            ('resource_type', 'resource_type'),
-        ]
-        for attr, key in keys:
+    def mapping_keys(self):
+        return []
+
+    def process_keys(self, record):
+        for attr, key in self.mapping_keys():
             value = getattr(self.node, attr, None)
             if value is not None:
                 record.extra[key] = value
-        record.extra['node_index'] = self.node_index
+
+    def process(self, record):
+        self.process_keys(record)
+        record.extra['node_index'] = self.index
+
+
+class ModelMetadata(NodeMetadata):
+    def mapping_keys(self):
+        return [
+            ('alias', 'node_alias'),
+            ('schema', 'node_schema'),
+            ('database', 'node_database'),
+            ('original_file_path', 'node_path'),
+            ('name', 'node_name'),
+            ('resource_type', 'resource_type'),
+        ]
+
+    def process_config(self, record):
         if hasattr(self.node, 'config'):
             materialized = getattr(self.node.config, 'materialized', None)
             if materialized is not None:
                 record.extra['node_materialized'] = materialized
 
+    def process(self, record):
+        super().process(record)
+        self.process_config(record)
 
-class TimestampNamed(JsonOnly):
+
+class HookMetadata(NodeMetadata):
+    def mapping_keys(self):
+        return [
+            ('name', 'node_name'),
+            ('resource_type', 'resource_type'),
+        ]
+
+
+class TimestampNamed(logbook.Processor):
     def __init__(self, name: str):
         self.name = name
         super().__init__()
@@ -334,13 +358,15 @@ DebugWarnings().__enter__()
 _redirect_std_logging()
 
 
-class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
+class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
     def __init__(
         self,
         log_dir: Optional[str] = None,
         level=logbook.DEBUG,
         filter=None,
         bubble=True,
+        max_size=10 * 1024 * 1024,  # 10 mb
+        backup_count=5,
     ) -> None:
         self.disabled = False
         self._msg_buffer: Optional[List[logbook.LogRecord]] = []
@@ -352,6 +378,8 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
         if log_dir is not None:
             self.set_path(log_dir)
         self._text_format_string = None
+        self._max_size = max_size
+        self._backup_count = backup_count
 
     def reset(self):
         if self.initialized:
@@ -384,16 +412,16 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
         self._log_path = log_path
 
     def _super_init(self, log_path):
-        logbook.TimedRotatingFileHandler.__init__(
+        logbook.RotatingFileHandler.__init__(
             self,
             filename=log_path,
             level=self.level,
             filter=self.filter,
+            delay=True,
+            max_size=self._max_size,
+            backup_count=self._backup_count,
             bubble=self.bubble,
             format_string=DEBUG_LOG_FORMAT,
-            date_format='%Y-%m-%d',
-            backup_count=7,
-            timed_filename_for_current=False,
         )
         FormatterMixin.__init__(self, DEBUG_LOG_FORMAT)
 
@@ -506,13 +534,13 @@ class LogManager(logbook.NestedSetup):
         if error is None:
             error = stream
 
-        if self._output_handler.stream is self.stdout_stream:
+        if self._output_handler.stream is self.stdout:
             self._output_handler.stream = stream
-        elif self._output_handler.stream is self.stderr_stream:
+        elif self._output_handler.stream is self.stderr:
             self._output_handler.stream = error
 
-        self.stdout_stream = stream
-        self.stderr_stream = error
+        self.stdout = stream
+        self.stderr = error
 
 
 log_manager = LogManager()

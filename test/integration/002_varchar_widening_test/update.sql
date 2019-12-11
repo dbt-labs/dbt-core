@@ -1,6 +1,6 @@
-ALTER TABLE {schema}.seed ALTER COLUMN gender TYPE varchar(300);
+ALTER TABLE {schema}.seed ALTER COLUMN "GenDEr" TYPE varchar(300);
 
-insert into {schema}.seed (first_name, last_name, email, gender, ip_address) values
+insert into {schema}.seed (first_name, last_name, email, "GenDEr", ip_address) values
 ('Annie', 'Reynolds', 'areynolds0@nifty.com', 'Amerisource Bergen', '133.30.242.211'),
 ('Doris', 'Wood', 'dwood1@skyrock.com', 'Bliss World, LLC', '128.229.89.207'),
 ('Andrea', 'Ray', 'aray2@google.co.jp', 'Nelco Laboratories, Inc.', '109.74.153.45'),

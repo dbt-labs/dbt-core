@@ -32,10 +32,7 @@ import dbt.rpc.builtins  # noqa
 
 # import this to make sure our timedelta encoder is registered
 from dbt import helper_types  # noqa
-from dbt.utils import env_set_truthy
-
-
-SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
+from dbt.flags import SINGLE_THREADED_WEBSERVER
 
 
 WrappedHandler = Callable[..., Dict[str, Any]]

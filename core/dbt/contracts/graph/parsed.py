@@ -1,6 +1,15 @@
 from dataclasses import dataclass, field, Field
 from typing import (
-    Optional, Union, List, Dict, Any, Type, Tuple, NewType, MutableMapping
+    Optional,
+    Union,
+    List,
+    Dict,
+    Any,
+    Type,
+    Tuple,
+    NewType,
+    MutableMapping,
+    Callable,
 )
 
 from hologram import JsonSchemaMixin
@@ -8,7 +17,7 @@ from hologram.helpers import (
     StrEnum, register_pattern
 )
 
-import dbt.clients.jinja
+from dbt.clients.jinja import MacroGenerator
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
@@ -239,9 +248,14 @@ class ParsedRPCNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
+class SeedConfig(NodeConfig):
+    quote_columns: Optional[bool] = None
+
+
 @dataclass
 class ParsedSeedNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    config: SeedConfig = field(default_factory=SeedConfig)
     seed_file_path: str = ''
 
     def __post_init__(self):
@@ -383,7 +397,7 @@ def _create_if_else_chain(
     key: str,
     criteria: List[Tuple[str, Type[JsonSchemaMixin]]],
     default: Type[JsonSchemaMixin]
-) -> dict:
+) -> Dict[str, Any]:
     """Mutate a given schema key that contains a 'oneOf' to instead be an
     'if-then-else' chain. This results is much better/more consistent errors
     from jsonschema.
@@ -462,11 +476,11 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
         return {}
 
     @property
-    def generator(self):
+    def generator(self) -> Callable[[Dict[str, Any]], Callable]:
         """
         Returns a function that can be called to render the macro results.
         """
-        return dbt.clients.jinja.macro_generator(self)
+        return MacroGenerator(self)
 
 
 @dataclass

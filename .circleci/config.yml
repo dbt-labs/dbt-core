@@ -2,7 +2,7 @@ version: 2
 jobs:
   unit:
     docker: &test_and_postgres
-      - image: fishtownjacob/test-container
+      - image: fishtownjacob/test-container:2
       - image: postgres
         name: database
         environment: &pgenv
@@ -19,7 +19,7 @@ jobs:
             PGUSER: root
             PGPASSWORD: password
             PGDATABASE: postgres
-      - run: tox -e flake8,mypy,unit-py36
+      - run: tox -e flake8,mypy,unit-py36,unit-py38
   integration-postgres-py36:
     docker: *test_and_postgres
     steps:
@@ -32,7 +32,7 @@ jobs:
           path: ./logs
   integration-snowflake-py36:
     docker: &test_only
-      - image: fishtownjacob/test-container
+      - image: fishtownjacob/test-container:2
     steps:
       - checkout
       - run:
@@ -59,6 +59,44 @@ jobs:
           command: tox -e integration-bigquery-py36
       - store_artifacts:
           path: ./logs
+  integration-postgres-py38:
+    docker: *test_and_postgres
+    steps:
+      - checkout
+      - run: *setupdb
+      - run:
+          name: Run tests
+          command: tox -e integration-postgres-py38
+      - store_artifacts:
+          path: ./logs
+  integration-snowflake-py38:
+    docker: *test_only
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: tox -e integration-snowflake-py38
+          no_output_timeout: 1h
+      - store_artifacts:
+          path: ./logs
+  integration-redshift-py38:
+    docker: *test_only
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: tox -e integration-redshift-py38
+      - store_artifacts:
+          path: ./logs
+  integration-bigquery-py38:
+    docker: *test_only
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: tox -e integration-bigquery-py38
+      - store_artifacts:
+          path: ./logs
 
 workflows:
   version: 2
@@ -77,3 +115,15 @@ workflows:
       - integration-snowflake-py36:
           requires:
             - integration-postgres-py36
+      - integration-postgres-py38:
+          requires:
+            - unit
+      - integration-redshift-py38:
+          requires:
+            - integration-postgres-py38
+      - integration-bigquery-py38:
+          requires:
+            - integration-postgres-py38
+      - integration-snowflake-py38:
+          requires:
+            - integration-postgres-py38

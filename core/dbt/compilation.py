@@ -46,8 +46,10 @@ def print_compile_stats(stats):
     results = {k: 0 for k in names.keys()}
     results.update(stats)
 
-    stat_line = ", ".join(
-        [dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()])
+    stat_line = ", ".join([
+        dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()
+        if t in names
+    ])
 
     logger.info("Found {}".format(stat_line))
 
@@ -76,8 +78,10 @@ def recursively_prepend_ctes(model, manifest):
         return (model, model.extra_ctes, manifest)
 
     if dbt.flags.STRICT_MODE:
-        assert isinstance(model, tuple(COMPILED_TYPES.values())), \
-            'Bad model type: {}'.format(type(model))
+        if not isinstance(model, tuple(COMPILED_TYPES.values())):
+            raise dbt.exceptions.InternalException(
+                'Bad model type: {}'.format(type(model))
+            )
 
     prepended_ctes = []
 

@@ -48,7 +48,7 @@ class TestRedshiftAdapter(unittest.TestCase):
             'quoting': {
                 'identifier': False,
                 'schema': True,
-            }
+            },
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
@@ -82,6 +82,26 @@ class TestRedshiftAdapter(unittest.TestCase):
 
         expected_creds = self.config.credentials.replace(password='tmp_password')
         self.assertEqual(creds, expected_creds)
+
+    def test_iam_conn_optionals(self):
+
+        profile_cfg = {
+            'outputs': {
+                'test': {
+                    'type': 'redshift',
+                    'dbname': 'redshift',
+                    'user': 'root',
+                    'host': 'thishostshouldnotexist',
+                    'port': 5439,
+                    'schema': 'public',
+                    'method': 'iam',
+                    'cluster_id': 'my_redshift',
+                }
+            },
+            'target': 'test'
+        }
+
+        config_from_parts_or_dicts(self.config, profile_cfg)
 
     def test_invalid_auth_method(self):
         # we have to set method this way, otherwise it won't validate
@@ -133,6 +153,8 @@ class TestRedshiftAdapter(unittest.TestCase):
     def test_default_keepalive(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -148,6 +170,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(keepalives_idle=256)
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -162,6 +186,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(search_path="test")
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -177,6 +203,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(search_path="test test")
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -192,6 +220,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(keepalives_idle=0)
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -199,3 +229,35 @@ class TestRedshiftAdapter(unittest.TestCase):
             password='password',
             port=5439,
             connect_timeout=10)
+
+    def test_dbname_verification_is_case_insensitive(self):
+        # Override adapter settings from setUp()
+        profile_cfg = {
+            'outputs': {
+                'test': {
+                    'type': 'redshift',
+                    'dbname': 'Redshift',
+                    'user': 'root',
+                    'host': 'thishostshouldnotexist',
+                    'pass': 'password',
+                    'port': 5439,
+                    'schema': 'public'
+                }
+            },
+            'target': 'test'
+        }
+
+        project_cfg = {
+            'name': 'X',
+            'version': '0.1',
+            'profile': 'test',
+            'project-root': '/tmp/dbt/does-not-exist',
+            'quoting': {
+                'identifier': False,
+                'schema': True,
+            },
+        }
+        self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+        self.adapter.cleanup_connections()
+        self._adapter = RedshiftAdapter(self.config)
+        self.adapter.verify_database('redshift')

@@ -1,6 +1,6 @@
 import abc
-from multiprocessing import RLock
 import os
+from multiprocessing import RLock
 from threading import get_ident
 from typing import (
     Dict, Tuple, Hashable, Optional, ContextManager, List
@@ -11,7 +11,10 @@ import agate
 import dbt.exceptions
 import dbt.flags
 from dbt.contracts.connection import (
-    Connection, Identifier, ConnectionState, HasCredentials
+    Connection, Identifier, ConnectionState, AdapterRequiredConfig, LazyHandle
+)
+from dbt.adapters.base.query_headers import (
+    QueryStringSetter, MacroQueryStringSetter,
 )
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -31,10 +34,17 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     """
     TYPE: str = NotImplemented
 
-    def __init__(self, profile: HasCredentials):
+    def __init__(self, profile: AdapterRequiredConfig):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock: RLock = dbt.flags.MP_CONTEXT.RLock()
+        self.query_header = QueryStringSetter(self.profile)
+
+    def set_query_header(self, manifest=None) -> None:
+        if manifest is not None:
+            self.query_header = MacroQueryStringSetter(self.profile, manifest)
+        else:
+            self.query_header = QueryStringSetter(self.profile)
 
     @staticmethod
     def get_thread_identifier() -> Hashable:
@@ -50,6 +60,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                     key, list(self.thread_connections)
                 )
             return self.thread_connections[key]
+
+    def set_thread_connection(self, conn):
+        key = self.get_thread_identifier()
+        if key in self.thread_connections:
+            raise dbt.exceptions.InternalException(
+                'In set_thread_connection, existing connection exists for {}'
+            )
+        self.thread_connections[key] = conn
 
     def get_if_exists(self) -> Optional[Connection]:
         key = self.get_thread_identifier()
@@ -91,12 +109,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             # named 'master'
             conn_name = 'master'
         else:
+            if not isinstance(name, str):
+                raise dbt.exceptions.CompilerException(
+                    f'For connection name, got {name} - not a string!'
+                )
             assert isinstance(name, str)
             conn_name = name
 
         conn = self.get_if_exists()
-        thread_id_key = self.get_thread_identifier()
-
         if conn is None:
             conn = Connection(
                 type=Identifier(self.TYPE),
@@ -106,7 +126,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 handle=None,
                 credentials=self.profile.credentials
             )
-            self.thread_connections[thread_id_key] = conn
+            self.set_thread_connection(conn)
 
         if conn.name == conn_name and conn.state == 'open':
             return conn
@@ -124,7 +144,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 'Opening a new connection, currently in state {}'
                 .format(conn.state)
             )
-            self.open(conn)
+            conn.handle = LazyHandle(type(self))
 
         conn.name = conn_name
         return conn
@@ -221,7 +241,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
         if dbt.flags.STRICT_MODE:
-            assert isinstance(connection, Connection)
+            if not isinstance(connection, Connection):
+                raise dbt.exceptions.CompilerException(
+                    f'In _rollback, got {connection} - not a Connection!'
+                )
 
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
@@ -236,7 +259,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @classmethod
     def close(cls, connection: Connection) -> Connection:
         if dbt.flags.STRICT_MODE:
-            assert isinstance(connection, Connection)
+            if not isinstance(connection, Connection):
+                raise dbt.exceptions.CompilerException(
+                    f'In close, got {connection} - not a Connection!'
+                )
 
         # if the connection is in closed or init, there's nothing to do
         if connection.state in {ConnectionState.CLOSED, ConnectionState.INIT}:
@@ -256,6 +282,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         connection = self.get_if_exists()
         if connection:
             self.commit()
+
+    def _add_query_comment(self, sql: str) -> str:
+        return self.query_header.add(sql)
 
     @abc.abstractmethod
     def execute(

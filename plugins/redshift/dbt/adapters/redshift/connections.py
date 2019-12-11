@@ -39,22 +39,22 @@ class RedshiftConnectionMethod(StrEnum):
 @dataclass
 class RedshiftCredentials(PostgresCredentials):
     method: RedshiftConnectionMethod = RedshiftConnectionMethod.DATABASE
+    password: Optional[str] = None
     cluster_id: Optional[str] = field(
         default=None,
         metadata={'description': 'If using IAM auth, the name of the cluster'},
     )
-    iam_duration_seconds: Optional[int] = None
+    iam_duration_seconds: int = 900
     search_path: Optional[str] = None
-    keepalives_idle: Optional[int] = 240
+    keepalives_idle: int = 240
 
     @property
     def type(self):
         return 'redshift'
 
     def _connection_keys(self):
-        return (
-            'host', 'port', 'user', 'database', 'schema', 'method',
-            'search_path')
+        keys = super()._connection_keys()
+        return keys + ('method', 'cluster_id', 'iam_duration_seconds')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
@@ -134,6 +134,12 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         # Support missing 'method' for backwards compatibility
         if method == 'database' or method is None:
             logger.debug("Connecting to Redshift using 'database' credentials")
+            # this requirement is really annoying to encode into json schema,
+            # so validate it here
+            if credentials.password is None:
+                raise dbt.exceptions.FailedToConnectException(
+                    "'password' field is required for 'database' credentials"
+                )
             return credentials
 
         elif method == 'iam':

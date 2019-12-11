@@ -2,8 +2,6 @@ import os
 
 from test.integration.base import DBTIntegrationTest, use_profile
 
-from dbt.exceptions import CompilationException
-
 
 class TestSimpleSeed(DBTIntegrationTest):
 
@@ -23,7 +21,10 @@ class TestSimpleSeed(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['data']
+            "data-paths": ['data'],
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @use_profile('postgres')
@@ -36,7 +37,6 @@ class TestSimpleSeed(DBTIntegrationTest):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
-
 
     @use_profile('postgres')
     def test_postgres_simple_seed_with_drop(self):
@@ -68,8 +68,9 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
     def project_config(self):
         return {
             "data-paths": ['data'],
-            "seeds": {
-                "schema": "custom_schema"
+            'seeds': {
+                "schema": "custom_schema",
+                'quote_columns': False,
             }
         }
 
@@ -115,7 +116,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
     def project_config(self):
         return {
             "data-paths": ['data-config'],
-            "seeds": {
+            'seeds': {
                 "test": {
                     "seed_enabled": {
                         "enabled": True
@@ -123,7 +124,8 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
                     "seed_disabled": {
                         "enabled": False
                     }
-                }
+                },
+                'quote_columns': False,
             }
         }
 
@@ -151,7 +153,10 @@ class TestSeedParsing(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['data-bad']
+            "data-paths": ['data-bad'],
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @use_profile('postgres')
@@ -180,7 +185,10 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['data-bom']
+            "data-paths": ['data-bom'],
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @use_profile('postgres')
@@ -208,7 +216,10 @@ class TestSimpleSeedWithUnicode(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['data-unicode']
+            "data-paths": ['data-unicode'],
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @use_profile('postgres')

@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: table_copy
+    description: "A copy of the table"
+    columns:
+      - name: email
+        tests:
+          - not_null
+    # should throw a runtime error
+    tests:
+      - empty_aggregation
