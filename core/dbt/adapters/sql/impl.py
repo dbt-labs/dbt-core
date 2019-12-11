@@ -159,10 +159,10 @@ class SQLAdapter(BaseAdapter):
                 return True
 
             # 3/4. If the columns do not have the same data type and size (see core/dbt/schema.py for more details) 
-            refernce_type = re.findall(r"^(\w*)",reference_column.data_type) # just get the name of datatype, not size/precision
+            reference_type = re.findall(r"^(\w*)",reference_column.data_type) # just get the name of datatype, not size/precision
             target_type = re.findall(r"^(\w*)",target_column.data_type)
-            if refernce_type[0] != target_type[0]:
-                logger.debug("Schema difference detected: Datatype {} in reference column {} do not match target datatype {}".format(refernce_type, reference_column.name, target_type))
+            if reference_type[0] != target_type[0]:
+                logger.debug("Schema difference detected: Datatype {} in reference column {} do not match target datatype {}".format(reference_type, reference_column.name, target_type))
                 logger.debug("target_ref = {}".format(target_columns))
                 logger.debug("temp_ref = {}".format(reference_columns))
                 return True

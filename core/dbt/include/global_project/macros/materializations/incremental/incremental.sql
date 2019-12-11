@@ -38,7 +38,7 @@
       {% do to_drop.append(backup_relation) %}
   {% else %}
       {% set tmp_relation = make_temp_relation(target_relation) %}
-      {% if adapter.target_contains_schema_change(target_relation=target_relation, temp_relation=tmp_relation) -%}
+      {% if on_schema_change is not none and adapter.target_contains_schema_change(target_relation=target_relation, temp_relation=tmp_relation) -%}
         {% if on_schema_change == 'full_refresh'  -%}
           {% do adapter.rename_relation(target_relation, backup_relation) %}
           {% set build_sql = create_table_as(False, target_relation, sql) %}
