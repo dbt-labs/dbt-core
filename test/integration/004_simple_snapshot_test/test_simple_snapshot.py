@@ -592,10 +592,8 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
         # This adds new fields to the source table, and updates the expected snapshot output accordingly
         self.run_sql_file("add_column_to_source_bq.sql")
 
-        # this should fail because `check="all"` will try to compare the nested field
-        self.run_dbt(['snapshot'], expect_pass=False)
-
-        self.run_dbt(["snapshot", '--select', 'snapshot_actual'])
+        # check_cols='all' will replace the changed field
+        self.run_dbt(['snapshot'])
 
         # A more thorough test would assert that snapshotted == expected, but BigQuery does not support the
         # "EXCEPT DISTINCT" operator on nested fields! Instead, just check that schemas are congruent.
@@ -610,9 +608,15 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
             schema=self.unique_schema(),
             table='snapshot_actual'
         )
+        snapshotted_all_cols = self.get_table_columns(
+            database=self.default_database,
+            schema=self.unique_schema(),
+            table='snapshot_checkall'
+        )
 
         self.assertTrue(len(expected_cols) > 0, "source table does not exist -- bad test")
         self.assertEqual(len(expected_cols), len(snapshotted_cols), "actual and expected column lengths are different")
+        self.assertEqual(len(expected_cols), len(snapshotted_all_cols))
 
         for (expected_col, actual_col) in zip(expected_cols, snapshotted_cols):
             expected_name, expected_type, _ = expected_col
