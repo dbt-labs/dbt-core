@@ -1,11 +1,15 @@
 import agate
+from typing import Any, Optional, Tuple, Type, List
 
 import dbt.clients.agate_helper
+from dbt.contracts.connection import Connection
 import dbt.exceptions
 import dbt.flags
 from dbt.adapters.base import BaseAdapter, available
+from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from dbt.adapters.factory import BaseRelation
 
 LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
 GET_COLUMNS_IN_RELATION_MACRO_NAME = 'get_columns_in_relation'
@@ -35,50 +39,64 @@ class SQLAdapter(BaseAdapter):
         - list_relations_without_caching
         - get_columns_in_relation
     """
+
+    ConnectionManager: Type[SQLConnectionManager]
+    connections: SQLConnectionManager
+
     @available.parse(lambda *a, **k: (None, None))
-    def add_query(self, sql, auto_begin=True, bindings=None,
-                  abridge_sql_log=False):
+    def add_query(
+        self,
+        sql: str,
+        auto_begin: bool = True,
+        bindings: Optional[Any] = None,
+        abridge_sql_log: bool = False,
+    ) -> Tuple[Connection, Any]:
         """Add a query to the current transaction. A thin wrapper around
         ConnectionManager.add_query.
 
-        :param str sql: The SQL query to add
-        :param bool auto_begin: If set and there is no transaction in progress,
+        :param sql: The SQL query to add
+        :param auto_begin: If set and there is no transaction in progress,
             begin a new one.
-        :param Optional[List[object]]: An optional list of bindings for the
-            query.
-        :param bool abridge_sql_log: If set, limit the raw sql logged to 512
+        :param bindings: An optional list of bindings for the query.
+        :param abridge_sql_log: If set, limit the raw sql logged to 512
             characters
         """
         return self.connections.add_query(sql, auto_begin, bindings,
                                           abridge_sql_log)
 
     @classmethod
-    def convert_text_type(cls, agate_table, col_idx):
+    def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "text"
 
     @classmethod
-    def convert_number_type(cls, agate_table, col_idx):
+    def convert_number_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
         return "float8" if decimals else "integer"
 
     @classmethod
-    def convert_boolean_type(cls, agate_table, col_idx):
+    def convert_boolean_type(
+            cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         return "boolean"
 
     @classmethod
-    def convert_datetime_type(cls, agate_table, col_idx):
+    def convert_datetime_type(
+            cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         return "timestamp without time zone"
 
     @classmethod
-    def convert_date_type(cls, agate_table, col_idx):
+    def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "date"
 
     @classmethod
-    def convert_time_type(cls, agate_table, col_idx):
+    def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "time"
 
     @classmethod
-    def is_cancelable(cls):
+    def is_cancelable(cls) -> bool:
         return True
 
     def expand_column_types(self, goal, current):
@@ -99,12 +117,14 @@ class SQLAdapter(BaseAdapter):
                target_column.can_expand_to(reference_column):
                 col_string_size = reference_column.string_size()
                 new_type = self.Column.string_type(col_string_size)
-                logger.debug("Changing col type from %s to %s in table %s",
+                logger.debug("Changing col type from {} to {} in table {}",
                              target_column.data_type, new_type, current)
 
                 self.alter_column_type(current, column_name, new_type)
 
-    def alter_column_type(self, relation, column_name, new_column_type):
+    def alter_column_type(
+            self, relation, column_name, new_column_type
+    ) -> None:
         """
         1. Create a new column (w/ temp name and correct type)
         2. Copy data over to it
@@ -122,13 +142,12 @@ class SQLAdapter(BaseAdapter):
         )
 
     def drop_relation(self, relation):
-        if dbt.flags.USE_CACHE:
-            self.cache.drop(relation)
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
                 .format(relation))
 
+        self.cache_dropped(relation)
         self.execute_macro(
             DROP_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
@@ -141,8 +160,7 @@ class SQLAdapter(BaseAdapter):
         )
 
     def rename_relation(self, from_relation, to_relation):
-        if dbt.flags.USE_CACHE:
-            self.cache.rename(from_relation, to_relation)
+        self.cache_renamed(from_relation, to_relation)
 
         kwargs = {'from_relation': from_relation, 'to_relation': to_relation}
         self.execute_macro(
@@ -150,31 +168,36 @@ class SQLAdapter(BaseAdapter):
             kwargs=kwargs
         )
 
-    def get_columns_in_relation(self, relation):
+    def get_columns_in_relation(self, relation: str):
         return self.execute_macro(
             GET_COLUMNS_IN_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
         )
 
-    def create_schema(self, database, schema):
-        logger.debug('Creating schema "%s"."%s".', database, schema)
+    def create_schema(self, database: str, schema: str) -> None:
+        logger.debug('Creating schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
             'schema_name': self.quote_as_configured(schema, 'schema'),
         }
         self.execute_macro(CREATE_SCHEMA_MACRO_NAME, kwargs=kwargs)
         self.commit_if_has_connection()
+        # we can't update the cache here, as if the schema already existed we
+        # don't want to (incorrectly) say that it's empty
 
-    def drop_schema(self, database, schema):
-        logger.debug('Dropping schema "%s"."%s".', database, schema)
+    def drop_schema(self, database: str, schema: str) -> None:
+        logger.debug('Dropping schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
             'schema_name': self.quote_as_configured(schema, 'schema'),
         }
-        self.execute_macro(DROP_SCHEMA_MACRO_NAME,
-                           kwargs=kwargs)
+        self.execute_macro(DROP_SCHEMA_MACRO_NAME, kwargs=kwargs)
+        # we can update the cache here
+        self.cache.drop_schema(database, schema)
 
-    def list_relations_without_caching(self, information_schema, schema):
+    def list_relations_without_caching(
+            self, information_schema, schema
+    ) -> List[BaseRelation]:
         kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
@@ -188,6 +211,10 @@ class SQLAdapter(BaseAdapter):
             'identifier': True
         }
         for _database, name, _schema, _type in results:
+            try:
+                _type = self.Relation.RelationType(_type)
+            except ValueError:
+                _type = self.Relation.RelationType.External
             relations.append(self.Relation.create(
                 database=_database,
                 schema=_schema,
@@ -197,10 +224,10 @@ class SQLAdapter(BaseAdapter):
             ))
         return relations
 
-    def quote(cls, identifier):
+    def quote(self, identifier):
         return '"{}"'.format(identifier)
 
-    def list_schemas(self, database):
+    def list_schemas(self, database: str) -> List[str]:
         results = self.execute_macro(
             LIST_SCHEMAS_MACRO_NAME,
             kwargs={'database': database}
@@ -208,9 +235,11 @@ class SQLAdapter(BaseAdapter):
 
         return [row[0] for row in results]
 
-    def check_schema_exists(self, database, schema):
+    def check_schema_exists(self, database: str, schema: str) -> bool:
         information_schema = self.Relation.create(
-            database=database, schema=schema,
+            database=database,
+            schema=schema,
+            identifier='INFORMATION_SCHEMA',
             quote_policy=self.config.quoting
         ).information_schema()
 

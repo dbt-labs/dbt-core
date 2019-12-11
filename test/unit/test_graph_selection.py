@@ -1,12 +1,12 @@
 import unittest
-import mock
+from unittest import mock
 
-import os
 import string
 import dbt.exceptions
 import dbt.graph.selector as graph_selector
 
 import networkx as nx
+
 
 class BaseGraphSelectionTest(unittest.TestCase):
     def create_graph(self):
@@ -16,15 +16,14 @@ class BaseGraphSelectionTest(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.package_graph = self.create_graph()
+        self.package_graph = graph_selector.Graph(self.create_graph())
         nodes = {
             node: mock.MagicMock(fqn=node.split('.')[1:], tags=[])
             for node in self.package_graph
         }
         self.add_tags(nodes)
         self.manifest = mock.MagicMock(nodes=nodes)
-        self.linker = mock.MagicMock(graph=self.package_graph)
-        self.selector = graph_selector.NodeSelector(self.linker, self.manifest)
+        self.selector = graph_selector.NodeSelector(self.package_graph, self.manifest)
 
 
 class GraphSelectionTest(BaseGraphSelectionTest):

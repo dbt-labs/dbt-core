@@ -2,6 +2,7 @@
   {%- set transient = config.get('transient', default=true) -%}
   {%- set cluster_by_keys = config.get('cluster_by', default=none) -%}
   {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
+  {%- set copy_grants = config.get('copy_grants', default=false) -%}
   {%- if cluster_by_keys is not none and cluster_by_keys is string -%}
     {%- set cluster_by_keys = [cluster_by_keys] -%}
   {%- endif -%}
@@ -15,8 +16,8 @@
         temporary
       {%- elif transient -%}
         transient
-      {%- endif %} table {{ relation }}
-      as (
+      {%- endif %} table {{ relation }} {% if copy_grants and not temporary -%} copy grants {%- endif %} as
+      (
         {%- if cluster_by_string is not none -%}
           select * from(
             {{ sql }}
@@ -35,7 +36,11 @@
 {% endmacro %}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
-  create or replace view {{ relation }} as (
+  {%- set secure = config.get('secure', default=false) -%}
+  {%- set copy_grants = config.get('copy_grants', default=false) -%}
+  create or replace {% if secure -%}
+    secure
+  {%- endif %} view {{ relation }} {% if copy_grants -%} copy grants {%- endif %} as (
     {{ sql }}
   );
 {% endmacro %}
@@ -78,7 +83,7 @@
       case when table_type = 'BASE TABLE' then 'table'
            when table_type = 'VIEW' then 'view'
            when table_type = 'MATERIALIZED VIEW' then 'materializedview'
-           when table_type = 'EXTERNAL TABLE' then 'externaltable'
+           when table_type = 'EXTERNAL TABLE' then 'external'
            else table_type
       end as table_type
     from {{ information_schema }}.tables
@@ -117,6 +122,6 @@
 
 {% macro snowflake__alter_column_type(relation, column_name, new_column_type) -%}
   {% call statement('alter_column_type') %}
-    alter table {{ relation }} alter {{ column_name }} set data type {{ new_column_type }};
+    alter table {{ relation }} alter {{ adapter.quote(column_name) }} set data type {{ new_column_type }};
   {% endcall %}
 {% endmacro %}

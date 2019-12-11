@@ -1,5 +1,16 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+from pytest import mark
 
+
+# postgres sometimes fails with an internal error if you run these tests too close together.
+def postgres_error(err, *args):
+    msg = str(err)
+    if 'tuple concurrently updated' in msg:
+        return True
+    return False
+
+
+@mark.flaky(rerun_filter=postgres_error)
 class TestPermissions(DBTIntegrationTest):
 
     def setUp(self):
@@ -15,19 +26,14 @@ class TestPermissions(DBTIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_no_create_schema_permissions(self):
+    def test_postgres_no_create_schema_permissions(self):
         # the noaccess user does not have permissions to create a schema -- this should fail
-        failed = False
         self.run_sql('drop schema if exists "{}" cascade'.format(self.unique_schema()))
-        try:
+        with self.assertRaises(RuntimeError):
             self.run_dbt(['run', '--target', 'noaccess'], expect_pass=False)
-        except RuntimeError:
-            failed = True
-
-        self.assertTrue(failed)
 
     @use_profile('postgres')
-    def test_create_schema_permissions(self):
+    def test_postgres_create_schema_permissions(self):
         # now it should work!
         self.run_sql('grant create on database {} to noaccess'.format(self.default_database))
         self.run_sql('grant usage, create on schema "{}" to noaccess'.format(self.unique_schema()))

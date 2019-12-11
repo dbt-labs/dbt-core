@@ -1,5 +1,4 @@
 from functools import wraps
-import six
 import requests
 from dbt.exceptions import RegistryException
 from dbt.utils import memoized
@@ -33,10 +32,10 @@ def _wrap_exceptions(fn):
                 if attempt < max_attempts:
                     time.sleep(1)
                     continue
-                six.raise_from(
-                    RegistryException('Unable to connect to registry hub'),
-                    exc
-                )
+
+                raise RegistryException(
+                    'Unable to connect to registry hub'
+                ) from exc
     return wrapper
 
 

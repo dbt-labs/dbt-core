@@ -40,7 +40,7 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
         }
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  5)
@@ -83,7 +83,7 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
 
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  5)
@@ -127,7 +127,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
 
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency(self):
         self.use_default_project()
 
         self.run_dbt(["deps"])
@@ -183,7 +183,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
 
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  3)

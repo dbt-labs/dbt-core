@@ -1,12 +1,31 @@
+from dataclasses import dataclass
 import re
-import logging
 
-from dbt.api.object import APIObject
-from dbt.contracts.project import VERSION_SPECIFICATION_CONTRACT
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
 
-logger = logging.getLogger(__name__)
+from hologram import JsonSchemaMixin
+from hologram.helpers import StrEnum
+from typing import Optional
+
+
+class Matchers(StrEnum):
+    GREATER_THAN = '>'
+    GREATER_THAN_OR_EQUAL = '>='
+    LESS_THAN = '<'
+    LESS_THAN_OR_EQUAL = '<='
+    EXACT = '='
+
+
+@dataclass
+class VersionSpecification(JsonSchemaMixin):
+    major: Optional[str]
+    minor: Optional[str]
+    patch: Optional[str]
+    prerelease: Optional[str]
+    build: Optional[str]
+    matcher: Matchers = Matchers.EXACT
+
 
 _MATCHERS = r"(?P<matcher>\>=|\>|\<|\<=|=)?"
 _NUM_NO_LEADING_ZEROS = r"(0|[1-9][0-9]*)"
@@ -43,14 +62,6 @@ $
     version_extra_regex=_VERSION_EXTRA_REGEX)
 
 _VERSION_REGEX = re.compile(_VERSION_REGEX_PAT_STR, re.VERBOSE)
-
-
-class Matchers:
-    GREATER_THAN = '>'
-    GREATER_THAN_OR_EQUAL = '>='
-    LESS_THAN = '<'
-    LESS_THAN_OR_EQUAL = '<='
-    EXACT = '='
 
 
 class VersionRange(dbt.utils.AttrDict):
@@ -162,15 +173,8 @@ class VersionRange(dbt.utils.AttrDict):
         return to_return
 
 
-class VersionSpecifier(APIObject):
-    SCHEMA = VERSION_SPECIFICATION_CONTRACT
-
-    def __init__(self, *args, **kwargs):
-        kwargs = dict(*args, **kwargs)
-        if kwargs.get('matcher') is None:
-            kwargs['matcher'] = Matchers.EXACT
-        super(VersionSpecifier, self).__init__(**kwargs)
-
+@dataclass
+class VersionSpecifier(VersionSpecification):
     def to_version_string(self, skip_matcher=False):
         prerelease = ''
         build = ''
@@ -200,7 +204,9 @@ class VersionSpecifier(APIObject):
             raise dbt.exceptions.SemverException(
                 'Could not parse version "{}"'.format(version_string))
 
-        return VersionSpecifier(match.groupdict())
+        matched = {k: v for k, v in match.groupdict().items() if v is not None}
+
+        return cls.from_dict(matched)
 
     def __str__(self):
         return self.to_version_string()
@@ -230,7 +236,7 @@ class VersionSpecifier(APIObject):
             return 0
 
         for key in ['major', 'minor', 'patch']:
-            comparison = int(self[key]) - int(other[key])
+            comparison = int(getattr(self, key)) - int(getattr(other, key))
 
             if comparison > 0:
                 return 1
@@ -295,8 +301,8 @@ class VersionSpecifier(APIObject):
 
 class UnboundedVersionSpecifier(VersionSpecifier):
     def __init__(self, *args, **kwargs):
-        super(UnboundedVersionSpecifier, self).__init__(
-            matcher='=',
+        super().__init__(
+            matcher=Matchers.EXACT,
             major=None,
             minor=None,
             patch=None,

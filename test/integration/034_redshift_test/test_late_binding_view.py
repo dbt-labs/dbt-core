@@ -18,7 +18,12 @@ class TestLateBindingView(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return {"data-paths": [self.dir("seed")]}
+        return {
+            'data-paths': [self.dir('seed')],
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
 
     @use_profile('redshift')
     def test__redshift_late_binding_view_query(self):

@@ -187,7 +187,6 @@ class TestCustomSchemaWithCustomMacroConfigs(TestCustomSchemaWithCustomMacro):
     @use_profile('postgres')
     def test__postgres__custom_schema_from_macro(self):
         self.run_sql_file("seed.sql")
-
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
 

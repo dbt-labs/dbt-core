@@ -1,16 +1,16 @@
-from abc import ABCMeta, abstractmethod
 import os
+from abc import ABCMeta, abstractmethod
+from typing import Type, Union
 
-import six
-
+from dbt.adapters.factory import register_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
 from dbt import tracking
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, log_manager
 import dbt.exceptions
 
 
-class NoneConfig(object):
+class NoneConfig:
     @classmethod
     def from_args(cls, args):
         return None
@@ -38,17 +38,20 @@ https://docs.getdbt.com/docs/configure-your-profile
 """
 
 
-@six.add_metaclass(ABCMeta)
-class BaseTask(object):
-    ConfigType = NoneConfig
+class BaseTask(metaclass=ABCMeta):
+    ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
     def __init__(self, args, config):
         self.args = args
         self.config = config
 
     @classmethod
-    def pre_init_hook(cls):
+    def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
+        if args.log_format == 'json':
+            log_manager.format_json()
+        else:
+            log_manager.format_text()
 
     @classmethod
     def from_args(cls, args):
@@ -129,11 +132,15 @@ class RequiresProjectTask(BaseTask):
     @classmethod
     def from_args(cls, args):
         move_to_nearest_project_dir(args)
-        return super(RequiresProjectTask, cls).from_args(args)
+        return super().from_args(args)
 
 
 class ConfiguredTask(RequiresProjectTask):
     ConfigType = RuntimeConfig
+
+    def __init__(self, args, config):
+        super().__init__(args, config)
+        register_adapter(self.config)
 
 
 class ProjectOnlyTask(RequiresProjectTask):

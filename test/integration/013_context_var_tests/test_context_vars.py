@@ -2,6 +2,10 @@ from test.integration.base import DBTIntegrationTest, use_profile
 
 import os
 
+import pytest
+
+import dbt.exceptions
+
 
 class TestContextVars(DBTIntegrationTest):
 
@@ -84,7 +88,7 @@ class TestContextVars(DBTIntegrationTest):
         return ctx
 
     @use_profile('postgres')
-    def test_env_vars_dev(self):
+    def test_postgres_env_vars_dev(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
@@ -110,7 +114,7 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['env_var'], '1')
 
     @use_profile('postgres')
-    def test_env_vars_prod(self):
+    def test_postgres_env_vars_prod(self):
         results = self.run_dbt(['run', '--target', 'prod'])
         self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
@@ -133,3 +137,19 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['target.user'], 'root')
         self.assertEqual(ctx['target.pass'], '')
         self.assertEqual(ctx['env_var'], '1')
+
+
+class TestEmitWarning(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "context_vars_013"
+
+    @property
+    def models(self):
+        return "emit-warning-models"
+
+    @use_profile('postgres')
+    def test_postgres_warn(self):
+        with pytest.raises(dbt.exceptions.CompilationException):
+            self.run_dbt(['run'], strict=True)
+        self.run_dbt(['run'], strict=False, expect_pass=True)

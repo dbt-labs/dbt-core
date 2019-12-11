@@ -1,6 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import json
-import mock
+from unittest import mock
 
 import dbt.semver
 import dbt.config
@@ -37,11 +37,11 @@ class TestSimpleDependency(BaseDependencyTest):
 
     @property
     def schema(self):
-        return "local_dependency_006"
+        return 'local_dependency_006'
 
     @property
     def models(self):
-        return "local_models"
+        return 'local_models'
 
     def base_schema(self):
         return self.unique_schema()
@@ -51,8 +51,9 @@ class TestSimpleDependency(BaseDependencyTest):
 
     @use_profile('postgres')
     def test_postgres_local_dependency(self):
-        self.run_dbt(["deps"])
-        results = self.run_dbt(["run"])
+        self.run_dbt(['deps'])
+        self.run_dbt(['seed'])
+        results = self.run_dbt(['run'])
         self.assertEqual(len(results),  3)
         self.assertEqual({r.node.schema for r in results},
                          {self.base_schema(), self.configured_schema()})
@@ -103,6 +104,11 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
     def test_postgres_local_dependency_out_of_date(self, mock_get):
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
         self.run_dbt(['deps'])
+        # check seed
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+            self.run_dbt(['seed'])
+        self.assertIn('--no-version-check', str(exc.exception))
+        # check run too
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             self.run_dbt(['run'])
         self.assertIn('--no-version-check', str(exc.exception))
@@ -112,6 +118,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
     def test_postgres_local_dependency_out_of_date_no_check(self, mock_get):
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
         self.run_dbt(['deps'])
+        self.run_dbt(['seed', '--no-version-check'])
         results = self.run_dbt(['run', '--no-version-check'])
         self.assertEqual(len(results), 3)
 

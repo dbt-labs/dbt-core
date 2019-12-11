@@ -1,9 +1,10 @@
 import unittest
-from mock import patch, MagicMock
+from unittest.mock import patch, MagicMock
+
+import hologram
 
 import dbt.flags as flags
 
-from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 import dbt.exceptions
@@ -59,6 +60,12 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             'project-root': '/tmp/dbt/does-not-exist',
             'profile': 'default',
         }
+        self.qh_patch = None
+
+    def tearDown(self):
+        if self.qh_patch:
+            self.qh_patch.stop()
+        super().tearDown()
 
     def get_adapter(self, target):
         project = self.project_cfg.copy()
@@ -70,6 +77,11 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             profile=profile,
         )
         adapter = BigQueryAdapter(config)
+
+        self.qh_patch = patch.object(adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
+
         inject_adapter(adapter)
         return adapter
 
@@ -80,7 +92,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         adapter = self.get_adapter('oauth')
         try:
             connection = adapter.acquire_connection('dummy')
-            self.assertEqual(connection.get('type'), 'bigquery')
+            self.assertEqual(connection.type, 'bigquery')
 
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
@@ -88,6 +100,8 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         except BaseException as e:
             raise
 
+        mock_open_connection.assert_not_called()
+        connection.handle
         mock_open_connection.assert_called_once()
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
@@ -95,7 +109,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         adapter = self.get_adapter('service_account')
         try:
             connection = adapter.acquire_connection('dummy')
-            self.assertEqual(connection.get('type'), 'bigquery')
+            self.assertEqual(connection.type, 'bigquery')
 
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
@@ -103,6 +117,8 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         except BaseException as e:
             raise
 
+        mock_open_connection.assert_not_called()
+        connection.handle
         mock_open_connection.assert_called_once()
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
@@ -110,15 +126,14 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         adapter = self.get_adapter('loc')
         try:
             connection = adapter.acquire_connection('dummy')
-            self.assertEqual(connection.get('type'), 'bigquery')
-            self.assertEqual(connection.credentials.get('priority'), 'batch')
+            self.assertEqual(connection.type, 'bigquery')
+            self.assertEqual(connection.credentials.priority, 'batch')
 
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
 
-        except BaseException as e:
-            raise
-
+        mock_open_connection.assert_not_called()
+        connection.handle
         mock_open_connection.assert_called_once()
 
     def test_cancel_open_connections_empty(self):
@@ -146,8 +161,11 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         mock_auth_default.return_value = (creds, MagicMock())
         adapter = self.get_adapter('loc')
 
-        adapter.acquire_connection('dummy')
+        connection = adapter.acquire_connection('dummy')
         mock_client = mock_bq.Client
+
+        mock_client.assert_not_called()
+        connection.handle
         mock_client.assert_called_once_with('dbt-unit-000000', creds,
                                             location='Luna Station')
 
@@ -155,7 +173,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
 class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
 
     def setUp(self):
-        super(TestConnectionNamePassthrough, self).setUp()
+        super().setUp()
         self._conn_patch = patch.object(BigQueryAdapter, 'ConnectionManager')
         self.conn_manager_cls = self._conn_patch.start()
 
@@ -164,12 +182,12 @@ class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
 
         self.mock_connection_manager = self.conn_manager_cls.return_value
         self.conn_manager_cls.TYPE = 'bigquery'
-        self.relation_cls.DEFAULTS = BigQueryRelation.DEFAULTS
+        self.relation_cls.get_default_quote_policy.side_effect = BigQueryRelation.get_default_quote_policy
 
         self.adapter = self.get_adapter('oauth')
 
     def tearDown(self):
-        super(TestConnectionNamePassthrough, self).tearDown()
+        super().tearDown()
         self._conn_patch.stop()
         self._relation_patch.stop()
 
@@ -190,7 +208,7 @@ class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
     def test_get_columns_in_relation(self):
         self.mock_connection_manager.get_bq_table.side_effect = ValueError
         self.adapter.get_columns_in_relation(
-            MagicMock(database='db', schema='schema', table_name='ident'),
+            MagicMock(database='db', schema='schema', identifier='ident'),
         )
         self.mock_connection_manager.get_bq_table.assert_called_once_with(
             database='db', schema='schema', identifier='ident'
@@ -209,12 +227,11 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
-            'table_name': 'my_view__dbt_tmp',
             'quote_policy': {
                 'identifier': False
             }
         }
-        BigQueryRelation(**kwargs)
+        BigQueryRelation.from_dict(kwargs)
 
     def test_view_relation(self):
         kwargs = {
@@ -224,13 +241,12 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
-            'table_name': 'my_view',
             'quote_policy': {
                 'identifier': True,
                 'schema': True
             }
         }
-        BigQueryRelation(**kwargs)
+        BigQueryRelation.from_dict(kwargs)
 
     def test_table_relation(self):
         kwargs = {
@@ -240,13 +256,12 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': 'test_schema',
                 'identifier': 'generic_table'
             },
-            'table_name': 'generic_table',
             'quote_policy': {
                 'identifier': True,
                 'schema': True
             }
         }
-        BigQueryRelation(**kwargs)
+        BigQueryRelation.from_dict(kwargs)
 
     def test_external_source_relation(self):
         kwargs = {
@@ -256,13 +271,12 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': 'test_schema',
                 'identifier': 'sheet'
             },
-            'table_name': 'sheet',
             'quote_policy': {
                 'identifier': True,
                 'schema': True
             }
         }
-        BigQueryRelation(**kwargs)
+        BigQueryRelation.from_dict(kwargs)
 
     def test_invalid_relation(self):
         kwargs = {
@@ -272,11 +286,10 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': 'test_schema',
                 'identifier': 'my_invalid_id'
             },
-            'table_name': 'my_invalid_id',
             'quote_policy': {
                 'identifier': False,
                 'schema': True
             }
         }
-        with self.assertRaises(dbt.exceptions.ValidationException):
-            BigQueryRelation(**kwargs)
+        with self.assertRaises(hologram.ValidationError):
+            BigQueryRelation.from_dict(kwargs)

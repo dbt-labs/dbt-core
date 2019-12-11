@@ -1,109 +1,85 @@
-import os
+from typing import Iterable
 
-import jinja2.runtime
+import jinja2
 
-import dbt.exceptions
-import dbt.flags
-import dbt.utils
-
-import dbt.clients.jinja
-import dbt.clients.system
-import dbt.contracts.project
-
-from dbt.parser.base import BaseParser
-from dbt.node_types import NodeType
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
+from dbt.exceptions import CompilationException
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_types import NodeType
+from dbt.parser.base import BaseParser
+from dbt.parser.search import FileBlock, FilesystemSearcher
+from dbt.utils import MACRO_PREFIX
 
 
-class MacroParser(BaseParser):
-    def parse_macro_file(self, macro_file_path, macro_file_contents, root_path,
-                         package_name, resource_type, tags=None, context=None):
-
-        logger.debug("Parsing {}".format(macro_file_path))
-
-        to_return = {}
-
-        if tags is None:
-            tags = []
-
-        # change these to actual kwargs
-        base_node = UnparsedMacro(
-            path=macro_file_path,
-            original_file_path=macro_file_path,
-            package_name=package_name,
-            raw_sql=macro_file_contents,
-            root_path=root_path,
+class MacroParser(BaseParser[ParsedMacro]):
+    def get_paths(self):
+        return FilesystemSearcher(
+            project=self.project,
+            relative_dirs=self.project.macro_paths,
+            extension='.sql',
         )
 
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.Macro
+
+    @classmethod
+    def get_compiled_path(cls, block: FileBlock):
+        return block.path.relative_path
+
+    def parse_macro(self, base_node: UnparsedMacro, name: str) -> ParsedMacro:
+        unique_id = self.generate_unique_id(name)
+
+        return ParsedMacro(
+            path=base_node.path,
+            original_file_path=base_node.original_file_path,
+            package_name=base_node.package_name,
+            raw_sql=base_node.raw_sql,
+            root_path=base_node.root_path,
+            resource_type=base_node.resource_type,
+            name=name,
+            unique_id=unique_id,
+        )
+
+    def parse_unparsed_macros(
+        self, base_node: UnparsedMacro
+    ) -> Iterable[ParsedMacro]:
         try:
-            ast = dbt.clients.jinja.parse(macro_file_contents)
-        except dbt.exceptions.CompilationException as e:
+            ast = jinja.parse(base_node.raw_sql)
+        except CompilationException as e:
             e.node = base_node
             raise e
 
         for macro_node in ast.find_all(jinja2.nodes.Macro):
             macro_name = macro_node.name
 
-            node_type = None
-            if macro_name.startswith(dbt.utils.MACRO_PREFIX):
-                node_type = NodeType.Macro
-                name = macro_name.replace(dbt.utils.MACRO_PREFIX, '')
-
-            if node_type != resource_type:
+            if not macro_name.startswith(MACRO_PREFIX):
                 continue
 
-            unique_id = self.get_path(resource_type, package_name, name)
+            name = macro_name.replace(MACRO_PREFIX, '')
+            node = self.parse_macro(base_node, name)
+            yield node
 
-            merged = dbt.utils.deep_merge(
-                base_node.serialize(),
-                {
-                    'name': name,
-                    'unique_id': unique_id,
-                    'tags': tags,
-                    'resource_type': resource_type,
-                    'depends_on': {'macros': []},
-                })
+    def parse_file(self, block: FileBlock):
+        # mark the file as seen, even if there are no macros in it
+        self.results.get_file(block.file)
+        source_file = block.file
 
-            new_node = ParsedMacro(**merged)
+        original_file_path = source_file.path.original_file_path
 
-            to_return[unique_id] = new_node
+        logger.debug("Parsing {}".format(original_file_path))
 
-        return to_return
+        # this is really only used for error messages
+        base_node = UnparsedMacro(
+            path=original_file_path,
+            original_file_path=original_file_path,
+            package_name=self.project.project_name,
+            raw_sql=source_file.contents,
+            root_path=self.project.project_root,
+            resource_type=NodeType.Macro,
+        )
 
-    def load_and_parse(self, package_name, root_dir, relative_dirs,
-                       resource_type, tags=None):
-        extension = "[!.#~]*.sql"
-
-        if tags is None:
-            tags = []
-
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**self.all_projects)
-
-        file_matches = dbt.clients.system.find_matching(
-            root_dir,
-            relative_dirs,
-            extension)
-
-        result = {}
-
-        for file_match in file_matches:
-            file_contents = dbt.clients.system.load_file_contents(
-                file_match.get('absolute_path'))
-
-            original_file_path = os.path.join(
-                file_match.get('searched_path'),
-                file_match.get('relative_path')
-            )
-
-            result.update(
-                self.parse_macro_file(
-                    original_file_path,
-                    file_contents,
-                    root_dir,
-                    package_name,
-                    resource_type))
-
-        return result
+        for node in self.parse_unparsed_macros(base_node):
+            self.results.add_macro(block.file, node)

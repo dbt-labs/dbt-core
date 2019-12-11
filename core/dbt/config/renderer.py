@@ -1,30 +1,29 @@
-from dbt import compat
 from dbt.clients.jinja import get_rendered
-from dbt.context.common import generate_config_context
+from dbt.context.base import ConfigRenderContext
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.utils import deep_map
 
 
-class ConfigRenderer(object):
+class ConfigRenderer:
     """A renderer provides configuration rendering for a given set of cli
     variables and a render type.
     """
     def __init__(self, cli_vars):
-        self.context = generate_config_context(cli_vars)
+        self.context = ConfigRenderContext(cli_vars).to_dict()
 
     @staticmethod
-    def _is_hook_or_model_vars_path(keypath):
+    def _is_deferred_render(keypath):
         if not keypath:
             return False
 
         first = keypath[0]
         # run hooks
-        if first in {'on-run-start', 'on-run-end'}:
+        if first in {'on-run-start', 'on-run-end', 'query-comment'}:
             return True
         # models have two things to avoid
-        if first in {'seeds', 'models'}:
+        if first in {'seeds', 'models', 'snapshots'}:
             # model-level hooks
             if 'pre-hook' in keypath or 'post-hook' in keypath:
                 return True
@@ -46,9 +45,10 @@ class ConfigRenderer(object):
         :param key str: The key to convert on.
         :return Any: The rendered entry.
         """
-        # hooks should be treated as raw sql, they'll get rendered later.
-        # Same goes for 'vars' declarations inside 'models'/'seeds'.
-        if self._is_hook_or_model_vars_path(keypath):
+        # query comments and hooks should be treated as raw sql, they'll get
+        # rendered later.
+        # Same goes for 'vars' declarations inside 'models'/'seeds'
+        if self._is_deferred_render(keypath):
             return value
 
         return self.render_value(value)
@@ -56,11 +56,9 @@ class ConfigRenderer(object):
     def render_value(self, value, keypath=None):
         # keypath is ignored.
         # if it wasn't read as a string, ignore it
-        if not isinstance(value, compat.basestring):
+        if not isinstance(value, str):
             return value
-        # force the result of rendering into this python version's native
-        # string type
-        return compat.to_native_string(get_rendered(value, self.context))
+        return str(get_rendered(value, self.context))
 
     def _render_profile_data(self, value, keypath):
         result = self.render_value(value)

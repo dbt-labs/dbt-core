@@ -1,14 +1,15 @@
 from dbt.utils import get_materialization, add_ephemeral_model_prefix
 
 import dbt.clients.jinja
+import dbt.context.base
 import dbt.context.common
 import dbt.flags
-from dbt.parser import ParserUtils
+from dbt.parser.util import ParserUtils
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-class BaseRefResolver(dbt.context.common.BaseResolver):
+class RefResolver(dbt.context.common.BaseResolver):
     def resolve(self, args):
         name = None
         package = None
@@ -45,12 +46,10 @@ class BaseRefResolver(dbt.context.common.BaseResolver):
         if get_materialization(target_model) == 'ephemeral':
             return self.create_ephemeral_relation(target_model, name)
         else:
-            return self.Relation.create_from_node(self.config, target_model)
+            return self.Relation.create_from(self.config, target_model)
 
-
-class RefResolver(BaseRefResolver):
     def validate(self, resolved, args):
-        if resolved.unique_id not in self.model.depends_on.get('nodes'):
+        if resolved.unique_id not in self.model.depends_on.nodes:
             dbt.exceptions.ref_bad_context(self.model, args)
 
     def __call__(self, *args):
@@ -83,6 +82,9 @@ class SourceResolver(dbt.context.common.BaseResolver):
         return self.Relation.create_from_source(target_source)
 
 
+_MISSING = object()
+
+
 class Config:
     def __init__(self, model, source_config=None):
         self.model = model
@@ -97,11 +99,20 @@ class Config:
     def _validate(self, validator, value):
         validator(value)
 
-    def require(self, name, validator=None):
-        if name not in self.model['config']:
+    def _lookup(self, name, default=_MISSING):
+        config = self.model.config
+
+        if hasattr(config, name):
+            return getattr(config, name)
+        elif name in config.extra:
+            return config.extra[name]
+        elif default is not _MISSING:
+            return default
+        else:
             dbt.exceptions.missing_config(self.model, name)
 
-        to_return = self.model['config'][name]
+    def require(self, name, validator=None):
+        to_return = self._lookup(name)
 
         if validator is not None:
             self._validate(validator, to_return)
@@ -109,7 +120,7 @@ class Config:
         return to_return
 
     def get(self, name, validator=None, default=None):
-        to_return = self.model['config'].get(name, default)
+        to_return = self._lookup(name, default)
 
         if validator is not None and default is not None:
             self._validate(validator, to_return)
@@ -132,11 +143,11 @@ class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
             )
 
 
-class Var(dbt.context.common.Var):
+class Var(dbt.context.base.Var):
     pass
 
 
-class Provider(object):
+class Provider(dbt.context.common.Provider):
     execute = True
     Config = Config
     DatabaseWrapper = DatabaseWrapper
@@ -147,4 +158,5 @@ class Provider(object):
 
 def generate(model, runtime_config, manifest):
     return dbt.context.common.generate(
-        model, runtime_config, manifest, None, Provider())
+        model, runtime_config, manifest, Provider(), None
+    )

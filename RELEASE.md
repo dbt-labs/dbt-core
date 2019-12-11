@@ -14,10 +14,10 @@ dbt has three types of branches:
 2. If this is a release candidate, you want to create it off of your release branch. If it's an actual release, you must first merge to a master branch. Open a Pull Request in Github to merge it into the appropriate trunk (`X.X.latest`)
 3. Bump the version using `bumpversion`:
   - Dry run first by running `bumpversion --new-version <desired-version> <part>` and checking the diff. If it looks correct, clean up the chanages and move on:
-  - Alpha releases: `bumpversion --commit --tag --new-version 0.10.2a1 num`
-  - Patch releases: `bumpversion --commit --tag --new-version 0.10.2 patch`
-  - Minor releases: `bumpversion --commit --tag --new-version 0.11.0 minor`
-  - Major releases: `bumpversion --commit --tag --new-version 1.0.0 major`
+  - Alpha releases: `bumpversion --commit --no-tag --new-version 0.10.2a1 num`
+  - Patch releases: `bumpversion --commit --no-tag --new-version 0.10.2 patch`
+  - Minor releases: `bumpversion --commit --no-tag --new-version 0.11.0 minor`
+  - Major releases: `bumpversion --commit --no-tag --new-version 1.0.0 major`
 4. (If this is a not a release candidate) Merge to `x.x.latest` and (optionally) `master`.
 5. Update the default branch to the next dev release branch.
 6. Build source distributions for all packages by running `./scripts/build-sdists.sh`. Note that this will clean out your `dist/` folder, so if you have important stuff in there, don't run it!!!

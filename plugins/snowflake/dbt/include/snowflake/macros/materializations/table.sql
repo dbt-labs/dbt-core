@@ -10,8 +10,8 @@
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
-  
-  {#-- Drop the relation if it was a view to "convert" it in a table. This may lead to 
+
+  {#-- Drop the relation if it was a view to "convert" it in a table. This may lead to
     -- downtime, but it should be a relatively infrequent occurrence  #}
   {% if old_relation is not none and not old_relation.is_table %}
     {{ log("Dropping relation " ~ old_relation ~ " because it is of type " ~ old_relation.type) }}
@@ -29,4 +29,7 @@
   {{ adapter.commit() }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+  {{ return({'relations': [target_relation]}) }}
+
 {% endmaterialization %}

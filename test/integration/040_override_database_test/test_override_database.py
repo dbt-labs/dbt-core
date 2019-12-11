@@ -18,7 +18,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
         if self.adapter_type == 'snowflake':
             return os.getenv('SNOWFLAKE_TEST_DATABASE')
         else:
-            return super(BaseOverrideDatabase, self).alternative_database
+            return super().alternative_database
 
     def snowflake_profile(self):
         return {
@@ -55,7 +55,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['data'],
+            'data-paths': ['data'],
             'models': {
                 'vars': {
                     'alternate_db': self.alternative_database,
@@ -63,6 +63,9 @@ class BaseOverrideDatabase(DBTIntegrationTest):
             },
             'quoting': {
                 'database': True,
+            },
+            'seeds': {
+                'quote_columns': False,
             }
         }
 

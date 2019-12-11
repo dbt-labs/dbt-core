@@ -20,23 +20,23 @@ class TestChangingRelationType(DBTIntegrationTest):
         # between materializations that create tables and views.
 
         results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: table'])
-        self.assertEqual(results[0].node['config']['materialized'], 'table')
+        self.assertEqual(results[0].node.config.materialized, 'table')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: incremental'])
-        self.assertEqual(results[0].node['config']['materialized'], 'incremental')
+        self.assertEqual(results[0].node.config.materialized, 'incremental')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
     @use_profile("postgres")
@@ -59,23 +59,23 @@ class TestChangingRelationType(DBTIntegrationTest):
         # and then remove these bq-specific tests
 
         results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: table'])
-        self.assertEqual(results[0].node['config']['materialized'], 'table')
+        self.assertEqual(results[0].node.config.materialized, 'table')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: view', "--full-refresh"])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: incremental'])
-        self.assertEqual(results[0].node['config']['materialized'], 'incremental')
+        self.assertEqual(results[0].node.config.materialized, 'incremental')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: view', "--full-refresh"])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
     @use_profile('presto')
@@ -83,13 +83,13 @@ class TestChangingRelationType(DBTIntegrationTest):
         # presto can't do incremental materializations so there's less to this
 
         results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: table'])
-        self.assertEqual(results[0].node['config']['materialized'], 'table')
+        self.assertEqual(results[0].node.config.materialized, 'table')
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)

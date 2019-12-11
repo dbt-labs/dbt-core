@@ -13,10 +13,13 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ["data"],
-            "quoting": {
-                "schema": False,
-                "identifier": False
+            'data-paths': ['data'],
+            'seeds': {
+                'quote_columns': False,
+            },
+            'quoting': {
+                'schema': False,
+                'identifier': False
             }
         }
 
@@ -68,7 +71,7 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
         # ensure that the model actually was materialized as a table
         for result in results:
             node_name = result.node.name
-            self.assertEqual(result.node.config['materialized'], expected_types[node_name])
+            self.assertEqual(result.node.config.materialized, expected_types[node_name])
 
         results = self.run_dbt(["run", "--vars", "{add_table_field: true, dependent_type: table}"])
         self.assertEqual(len(results),  2)
@@ -82,7 +85,7 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
         # ensure that the model actually was materialized as a table
         for result in results:
             node_name = result.node.name
-            self.assertEqual(result.node.config['materialized'], expected_types[node_name])
+            self.assertEqual(result.node.config.materialized, expected_types[node_name])
 
     @use_profile('presto')
     def test__presto__changed_table_schema_for_downstream_view(self):
@@ -115,7 +118,7 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
         # ensure that the model actually was materialized as a table
         for result in results:
             node_name = result.node.name
-            self.assertEqual(result.node.config['materialized'], expected_types[node_name])
+            self.assertEqual(result.node.config.materialized, expected_types[node_name])
 
         results = self.run_dbt(["run", "--vars", "{add_table_field: true, dependent_type: table}"])
         self.assertEqual(len(results),  2)
@@ -129,4 +132,4 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
         # ensure that the model actually was materialized as a table
         for result in results:
             node_name = result.node.name
-            self.assertEqual(result.node.config['materialized'], expected_types[node_name])
+            self.assertEqual(result.node.config.materialized, expected_types[node_name])

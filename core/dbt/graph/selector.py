@@ -1,6 +1,8 @@
-import networkx as nx
-from dbt.logger import GLOBAL_LOGGER as logger
+from enum import Enum
 
+import networkx as nx  # type: ignore
+
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import is_enabled, coalesce
 from dbt.node_types import NodeType
 import dbt.exceptions
@@ -12,7 +14,7 @@ SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
 
 
-class SelectionCriteria(object):
+class SelectionCriteria:
     def __init__(self, node_spec):
         self.raw = node_spec
         self.select_children = False
@@ -45,10 +47,13 @@ class SelectionCriteria(object):
             self.selector_value = node_spec
 
 
-class SELECTOR_FILTERS(object):
+class SELECTOR_FILTERS(str, Enum):
     FQN = 'fqn'
     TAG = 'tag'
     SOURCE = 'source'
+
+    def __str__(self):
+        return self._value_
 
 
 def split_specs(node_specs):
@@ -125,52 +130,67 @@ def warn_if_useless_spec(spec, nodes):
     dbt.exceptions.warn_or_error(msg, log_fmt='{} and was ignored\n')
 
 
-class NodeSelector(object):
-    def __init__(self, linker, manifest):
-        self.linker = linker
+class ManifestSelector:
+    def __init__(self, manifest):
         self.manifest = manifest
 
-    def _node_iterator(self, graph, exclude, include):
-        for node in graph.nodes():
-            real_node = self.manifest.nodes[node]
-            if include is not None and real_node.resource_type not in include:
+    def _node_iterator(self, included_nodes, exclude, include):
+        for unique_id, node in self.manifest.nodes.items():
+            if unique_id not in included_nodes:
                 continue
-            if exclude is not None and real_node.resource_type in exclude:
+            if include is not None and node.resource_type not in include:
                 continue
-            yield node, real_node
+            if exclude is not None and node.resource_type in exclude:
+                continue
+            yield unique_id, node
 
-    def parsed_nodes(self, graph):
+    def parsed_nodes(self, included_nodes):
         return self._node_iterator(
-            graph,
+            included_nodes,
             exclude=(NodeType.Source,),
             include=None)
 
-    def source_nodes(self, graph):
+    def source_nodes(self, included_nodes):
         return self._node_iterator(
-            graph,
+            included_nodes,
             exclude=None,
             include=(NodeType.Source,))
 
-    def get_nodes_by_qualified_name(self, graph, qualified_name_selector):
-        """Yield all nodes in the graph that match the qualified_name_selector.
+    def search(self, included_nodes, selector):
+        raise NotImplementedError('subclasses should implement this')
 
-        :param str qualified_name_selector: The selector or node name
+
+class QualifiedNameSelector(ManifestSelector):
+    FILTER = SELECTOR_FILTERS.FQN
+
+    def search(self, included_nodes, selector):
+        """Yield all nodes in the graph that match the selector.
+
+        :param str selector: The selector or node name
         """
-        qualified_name = qualified_name_selector.split(".")
-        package_names = get_package_names(graph)
-        for node, real_node in self.parsed_nodes(graph):
+        qualified_name = selector.split(".")
+        package_names = {node.split(".")[1] for node in included_nodes}
+        for node, real_node in self.parsed_nodes(included_nodes):
             if _node_is_match(qualified_name, package_names, real_node.fqn):
                 yield node
 
-    def get_nodes_by_tag(self, graph, tag_name):
+
+class TagSelector(ManifestSelector):
+    FILTER = SELECTOR_FILTERS.TAG
+
+    def search(self, included_nodes, selector):
         """ yields nodes from graph that have the specified tag """
-        for node, real_node in self.parsed_nodes(graph):
-            if tag_name in real_node.tags:
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if selector in real_node.tags:
                 yield node
 
-    def get_nodes_by_source(self, graph, source_full_name):
+
+class SourceSelector(ManifestSelector):
+    FILTER = SELECTOR_FILTERS.SOURCE
+
+    def search(self, included_nodes, selector):
         """yields nodes from graph are the specified source."""
-        parts = source_full_name.split('.')
+        parts = selector.split('.')
         target_package = SELECTOR_GLOB
         if len(parts) == 1:
             target_source, target_table = parts[0], None
@@ -184,10 +204,10 @@ class NodeSelector(object):
                 'form `${{source_name}}`, '
                 '`${{source_name}}.${{target_name}}`, or '
                 '`${{package_name}}.${{source_name}}.${{target_name}}'
-            ).format(source_full_name)
+            ).format(selector)
             raise dbt.exceptions.RuntimeException(msg)
 
-        for node, real_node in self.source_nodes(graph):
+        for node, real_node in self.source_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
                 continue
             if target_source not in (real_node.source_name, SELECTOR_GLOB):
@@ -195,65 +215,110 @@ class NodeSelector(object):
             if target_table in (None, real_node.name, SELECTOR_GLOB):
                 yield node
 
-    def select_childrens_parents(self, graph, selected):
-        ancestors_for = self.select_children(graph, selected) | selected
-        return self.select_parents(graph, ancestors_for) | ancestors_for
 
-    def select_children(self, graph, selected):
+class InvalidSelectorError(Exception):
+    pass
+
+
+class MultiSelector:
+    """The base class of the node selector. It only about the manifest and
+    selector types, including the glob operator, but does not handle any graph
+    related behavior.
+    """
+    SELECTORS = [QualifiedNameSelector, TagSelector, SourceSelector]
+
+    def __init__(self, manifest):
+        self.manifest = manifest
+
+    def get_selector(self, selector_type):
+        for cls in self.SELECTORS:
+            if cls.FILTER == selector_type:
+                return cls(self.manifest)
+
+        raise InvalidSelectorError(selector_type)
+
+    def select_included(self, included_nodes, selector_type, selector_value):
+        selector = self.get_selector(selector_type)
+        return set(selector.search(included_nodes, selector_value))
+
+
+class Graph:
+    """A wrapper around the networkx graph that understands SelectionCriteria
+    and how they interact with the graph.
+    """
+    def __init__(self, graph):
+        self.graph = graph
+
+    def nodes(self):
+        return set(self.graph.nodes())
+
+    def __iter__(self):
+        return iter(self.graph.nodes())
+
+    def select_childrens_parents(self, selected):
+        ancestors_for = self.select_children(selected) | selected
+        return self.select_parents(ancestors_for) | ancestors_for
+
+    def select_children(self, selected):
         descendants = set()
         for node in selected:
-            descendants.update(nx.descendants(graph, node))
+            descendants.update(nx.descendants(self.graph, node))
         return descendants
 
-    def select_parents(self, graph, selected):
+    def select_parents(self, selected):
         ancestors = set()
         for node in selected:
-            ancestors.update(nx.ancestors(graph, node))
+            ancestors.update(nx.ancestors(self.graph, node))
         return ancestors
 
-    def collect_models(self, graph, selected, spec):
+    def select_successors(self, selected):
+        successors = set()
+        for node in selected:
+            successors.update(self.graph.successors(node))
+        return successors
+
+    def collect_models(self, selected, spec):
         additional = set()
         if spec.select_childrens_parents:
-            additional.update(self.select_childrens_parents(graph, selected))
+            additional.update(self.select_childrens_parents(selected))
         if spec.select_parents:
-            additional.update(self.select_parents(graph, selected))
+            additional.update(self.select_parents(selected))
         if spec.select_children:
-            additional.update(self.select_children(graph, selected))
+            additional.update(self.select_children(selected))
         return additional
 
-    def collect_tests(self, graph, model_nodes):
-        test_nodes = set()
-        for node in model_nodes:
-            # include tests that depend on this node. if we aren't running
-            # tests, they'll be filtered out later.
-            child_tests = [n for n in graph.successors(node)
-                           if self.manifest.nodes[n].resource_type ==
-                           NodeType.Test]
-            test_nodes.update(child_tests)
-        return test_nodes
+    def subgraph(self, nodes):
+        cls = type(self)
+        return cls(self.graph.subgraph(nodes))
+
+
+class NodeSelector(MultiSelector):
+    def __init__(self, graph, manifest):
+        self.full_graph = Graph(graph)
+        super().__init__(manifest)
 
     def get_nodes_from_spec(self, graph, spec):
-        filter_map = {
-            SELECTOR_FILTERS.FQN: self.get_nodes_by_qualified_name,
-            SELECTOR_FILTERS.TAG: self.get_nodes_by_tag,
-            SELECTOR_FILTERS.SOURCE: self.get_nodes_by_source,
-        }
-
-        filter_method = filter_map.get(spec.selector_type)
-
-        if filter_method is None:
-            valid_selectors = ", ".join(filter_map.keys())
+        try:
+            collected = self.select_included(graph.nodes(),
+                                             spec.selector_type,
+                                             spec.selector_value)
+        except InvalidSelectorError:
+            valid_selectors = ", ".join(s.FILTER for s in self.SELECTORS)
             logger.info("The '{}' selector specified in {} is invalid. Must "
                         "be one of [{}]".format(
                             spec.selector_type,
                             spec.raw,
                             valid_selectors))
-
             return set()
 
-        collected = set(filter_method(graph, spec.selector_value))
-        collected.update(self.collect_models(graph, collected, spec))
-        collected.update(self.collect_tests(graph, collected))
+        specified = graph.collect_models(collected, spec)
+        collected.update(specified)
+
+        tests = {
+            n for n in graph.select_successors(collected)
+            if self.manifest.nodes[n].resource_type == NodeType.Test
+        }
+        collected.update(tests)
 
         return collected
 
@@ -276,13 +341,7 @@ class NodeSelector(object):
         node = self.manifest.nodes[node_name]
         if node.resource_type == NodeType.Source:
             return True
-        return not node.get('empty') and is_enabled(node)
-
-    def get_valid_nodes(self, graph):
-        return [
-            node_name for node_name in graph.nodes()
-            if self._is_graph_member(node_name)
-        ]
+        return not node.empty and is_enabled(node)
 
     def _is_match(self, node_name, resource_types, tags, required):
         node = self.manifest.nodes[node_name]
@@ -298,14 +357,15 @@ class NodeSelector(object):
         return True
 
     def get_selected(self, include, exclude, resource_types, tags, required):
-        graph = self.linker.graph
-
         include = coalesce(include, ['fqn:*', 'source:*'])
         exclude = coalesce(exclude, [])
         tags = coalesce(tags, [])
 
-        to_run = self.get_valid_nodes(graph)
-        filtered_graph = graph.subgraph(to_run)
+        graph_members = {
+            node_name for node_name in self.full_graph.nodes()
+            if self._is_graph_member(node_name)
+        }
+        filtered_graph = self.full_graph.subgraph(graph_members)
         selected_nodes = self.select_nodes(filtered_graph, include, exclude)
 
         filtered_nodes = set()

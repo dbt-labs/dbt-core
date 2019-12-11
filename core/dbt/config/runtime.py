@@ -1,24 +1,15 @@
-
 from copy import deepcopy
-import pprint
-
-from dbt.utils import parse_cli_vars
-from dbt.contracts.project import Configuration
-from dbt.exceptions import DbtProjectError
-from dbt.exceptions import ValidationException
-from dbt.adapters.factory import get_relation_class_by_name
 
 from .profile import Profile
 from .project import Project
+from dbt.utils import parse_cli_vars
+from dbt.contracts.project import Configuration
+from dbt.exceptions import DbtProjectError
+from dbt.exceptions import validator_error_message
+from dbt.adapters.factory import get_relation_class_by_name
 
 
-_ARCHIVE_REMOVED_MESSAGE = '''
-The `archive` section in `dbt_project.yml` is no longer supported. Please use a
-`snapshot` block instead. For more information on snapshot blocks and a script
-to help migrate these archives, please consult the 0.14.0 migration guide:
-
-https://docs.getdbt.com/v0.14/docs/upgrading-to-014
-'''.strip()
+from hologram import ValidationError
 
 
 class RuntimeConfig(Project, Profile):
@@ -29,8 +20,9 @@ class RuntimeConfig(Project, Profile):
                  macro_paths, data_paths, test_paths, analysis_paths,
                  docs_paths, target_path, snapshot_paths, clean_targets,
                  log_path, modules_path, quoting, models, on_run_start,
-                 on_run_end, archive, seeds, dbt_version, profile_name,
-                 target_name, config, threads, credentials, packages, args):
+                 on_run_end, seeds, snapshots, dbt_version, profile_name,
+                 target_name, config, threads, credentials, packages,
+                 query_comment, args):
         # 'vars'
         self.args = args
         self.cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
@@ -56,10 +48,11 @@ class RuntimeConfig(Project, Profile):
             models=models,
             on_run_start=on_run_start,
             on_run_end=on_run_end,
-            archive=archive,
             seeds=seeds,
+            snapshots=snapshots,
             dbt_version=dbt_version,
-            packages=packages
+            packages=packages,
+            query_comment=query_comment,
         )
         # 'profile'
         Profile.__init__(
@@ -73,24 +66,19 @@ class RuntimeConfig(Project, Profile):
         self.validate()
 
     @classmethod
-    def from_parts(cls, project, profile, args, allow_archive_configs=False):
+    def from_parts(cls, project, profile, args):
         """Instantiate a RuntimeConfig from its components.
 
         :param profile Profile: A parsed dbt Profile.
         :param project Project: A parsed dbt Project.
         :param args argparse.Namespace: The parsed command-line arguments.
-        :param allow_archive_configs bool: If True, ignore archive blocks in
-            configs. This flag exists to enable archive migration.
         :returns RuntimeConfig: The new configuration.
         """
-        quoting = deepcopy(
+        quoting = (
             get_relation_class_by_name(profile.credentials.type)
-            .DEFAULTS['quote_policy']
-        )
-        quoting.update(project.quoting)
-        if project.archive and not allow_archive_configs:
-            # if the user has an `archive` section, raise an error
-            raise DbtProjectError(_ARCHIVE_REMOVED_MESSAGE)
+            .get_default_quote_policy()
+            .replace_dict(project.quoting)
+        ).to_dict()
 
         return cls(
             project_name=project.project_name,
@@ -111,10 +99,11 @@ class RuntimeConfig(Project, Profile):
             models=project.models,
             on_run_start=project.on_run_start,
             on_run_end=project.on_run_end,
-            archive=project.archive,
             seeds=project.seeds,
+            snapshots=project.snapshots,
             dbt_version=project.dbt_version,
             packages=project.packages,
+            query_comment=project.query_comment,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             config=profile.config,
@@ -162,7 +151,7 @@ class RuntimeConfig(Project, Profile):
         return result
 
     def __str__(self):
-        return pprint.pformat(self.serialize())
+        return str(self.serialize())
 
     def validate(self):
         """Validate the configuration against its contract.
@@ -170,22 +159,20 @@ class RuntimeConfig(Project, Profile):
         :raises DbtProjectError: If the configuration fails validation.
         """
         try:
-            Configuration(**self.serialize())
-        except ValidationException as e:
-            raise DbtProjectError(str(e))
+            Configuration.from_dict(self.serialize())
+        except ValidationError as e:
+            raise DbtProjectError(validator_error_message(e)) from e
 
         if getattr(self.args, 'version_check', False):
             self.validate_version()
 
     @classmethod
-    def from_args(cls, args, allow_archive_configs=False):
+    def from_args(cls, args):
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.
 
         :param args argparse.Namespace: The arguments as parsed from the cli.
-        :param allow_archive_configs bool: If True, ignore archive blocks in
-            configs. This flag exists to enable archive migration.
         :raises DbtProjectError: If the project is invalid or missing.
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
@@ -203,5 +190,4 @@ class RuntimeConfig(Project, Profile):
             project=project,
             profile=profile,
             args=args,
-            allow_archive_configs=allow_archive_configs
         )

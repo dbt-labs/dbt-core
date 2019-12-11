@@ -229,8 +229,8 @@ class TestGraphSelection(DBTIntegrationTest):
         # make sure that users_rollup_dependency and users don't interleave
         users = [r for r in results if r.node.name == 'users'][0]
         dep = [r for r in results if r.node.name == 'users_rollup_dependency'][0]
-        user_last_end = users.timing[1]['completed_at']
-        dep_first_start = dep.timing[0]['started_at']
+        user_last_end = users.timing[1].completed_at
+        dep_first_start = dep.timing[0].started_at
         self.assertTrue(
             user_last_end <= dep_first_start,
             'dependency started before its transitive parent ({} > {})'.format(user_last_end, dep_first_start)
