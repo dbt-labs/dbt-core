@@ -95,7 +95,7 @@
     join table_owners using (table_database, table_schema, table_name)
 
     where table_schema != 'information_schema'
-      and table_schema not like 'pg_%'
+      and table_schema not like 'pg\_%'
 
     order by "column_index"
   {%- endcall -%}
