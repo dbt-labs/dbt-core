@@ -29,7 +29,7 @@
     join pg_catalog.pg_attribute col on col.attrelid = tbl.oid
 
     where sch.nspname != 'information_schema'
-      and sch.nspname not like 'pg_%' -- avoid postgres system schemas
+      and sch.nspname not like 'pg\_%' -- avoid postgres system schemas, '_' is a wildcard so escape it
       and not pg_is_other_temp_schema(sch.oid) -- not a temporary schema belonging to another session
       and tbl.relpersistence = 'p' -- [p]ermanent table. Other values are [u]nlogged table, [t]emporary table
       and tbl.relkind in ('r', 'v', 'f', 'p') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table, [m]aterialized view
