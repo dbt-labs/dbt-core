@@ -3005,3 +3005,33 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_run_results(self.expected_run_results(
             model_database=self.default_database
         ))
+
+
+class TestDocsGenerateMissingSchema(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return 'docs_generate_029'
+
+    @staticmethod
+    def dir(path):
+        return normalize(path)
+
+    @property
+    def models(self):
+        return self.dir("bq_models_noschema")
+
+    def setUp(self):
+        super().setUp()
+        self.extra_schema = self.unique_schema() + '_bq_test'
+
+    def tearDown(self):
+        with self.adapter.connection_named('__test'):
+            self._drop_schema_named(self.default_database, self.extra_schema)
+        super().tearDown()
+
+    @use_profile('bigquery')
+    def test_bigquery_docs_generate_noschema(self):
+        self.run_dbt([
+            'docs', 'generate',
+            '--vars', "{{extra_schema: {}}}".format(self.extra_schema)
+        ])

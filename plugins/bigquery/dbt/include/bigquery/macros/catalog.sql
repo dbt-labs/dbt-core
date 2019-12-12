@@ -1,8 +1,13 @@
 
 {% macro bigquery__get_catalog(information_schemas) -%}
 
-  {%- call statement('catalog', fetch_result=True) -%}
-    {% for information_schema in information_schemas %}
+  {%- if (information_schemas | length) == 0 -%}
+    {# Hopefully nothing cares about the columns we return when there are no rows #}
+    {%- set query  = "select 1 as id limit 0" -%}
+  {%- else -%}
+
+  {%- set query -%}
+    {%- for information_schema in information_schemas -%}
       (
         with schemas as (
 
@@ -214,8 +219,11 @@
       )
 
       {% if not loop.last %} union all {% endif %}
-    {% endfor %}
-  {%- endcall -%}
-  {{ return(load_result('catalog').table) }}
+    {%- endfor -%}
+  {%- endset -%}
 
-{% endmacro %}
+  {%- endif -%}
+
+  {{ return(run_query(query)) }}
+
+{%- endmacro %}
