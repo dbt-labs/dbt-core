@@ -1,12 +1,15 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from contextlib import contextmanager
+from unittest.mock import patch, MagicMock, Mock
 
 import hologram
 
 import dbt.flags as flags
 
+from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery.connections import BigQueryConnectionManager
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -293,3 +296,77 @@ class TestBigQueryRelation(unittest.TestCase):
         }
         with self.assertRaises(hologram.ValidationError):
             BigQueryRelation.from_dict(kwargs)
+
+
+class TestBigQueryConnectionManager(unittest.TestCase):
+
+    def setUp(self):
+        credentials = Mock(BigQueryCredentials)
+        profile = Mock(query_comment=None, credentials=credentials)
+        self.connections = BigQueryConnectionManager(profile=profile)
+        self.mock_client = Mock(
+          dbt.adapters.bigquery.impl.google.cloud.bigquery.Client)
+        self.mock_connection = MagicMock()
+
+        self.mock_connection.handle = self.mock_client
+
+        self.connections.get_thread_connection = lambda: self.mock_connection
+
+    def test_retry_and_handle(self):
+        self.connections.DEFAULT_MAXIMUM_DELAY = 2.0
+        dbt.adapters.bigquery.connections._is_retryable = lambda x: True
+
+        @contextmanager
+        def dummy_handler(msg):
+            yield
+
+        self.connections.exception_handler = dummy_handler
+
+        class DummyException(Exception):
+            """Count how many times this exception is raised"""
+            count = 0
+
+            def __init__(self):
+                DummyException.count += 1
+
+        def raiseDummyException():
+            raise DummyException()
+
+        with self.assertRaises(DummyException):
+            self.connections._retry_and_handle(
+                 "some sql", Mock(credentials=Mock(retries=8)),
+                 raiseDummyException)
+            self.assertEqual(DummyException.count, 9)
+
+    def test_is_retryable(self):
+        _is_retryable = dbt.adapters.bigquery.connections._is_retryable
+        exceptions = dbt.adapters.bigquery.impl.google.cloud.exceptions
+        internal_server_error = exceptions.InternalServerError('code broke')
+        bad_request_error = exceptions.BadRequest('code broke')
+
+        self.assertTrue(_is_retryable(internal_server_error))
+        self.assertFalse(_is_retryable(bad_request_error))
+
+    def test_drop_dataset(self):
+        mock_table = Mock()
+        mock_table.reference = 'table1'
+
+        self.mock_client.list_tables.return_value = [mock_table]
+
+        self.connections.drop_dataset('project', 'dataset')
+
+        self.mock_client.list_tables.assert_not_called()
+        self.mock_client.delete_table.assert_not_called()
+        self.mock_client.delete_dataset.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
+    def test_query_and_results(self, mock_bq):
+        self.connections.get_timeout = lambda x: 100.0
+
+        self.connections._query_and_results(
+          self.mock_client, 'sql', self.mock_connection,
+          {'description': 'blah'})
+
+        mock_bq.QueryJobConfig.assert_called_once()
+        self.mock_client.query.assert_called_once_with(
+          'sql', job_config=mock_bq.QueryJobConfig())
