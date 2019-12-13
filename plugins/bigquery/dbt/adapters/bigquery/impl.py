@@ -50,7 +50,7 @@ class BigQueryAdapter(BaseAdapter):
     ConnectionManager = BigQueryConnectionManager
 
     AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by",
-                                        "kms_key_name"})
+                                        "kms_key_name", "labels"})
 
     ###
     # Implementations of abstract methods
