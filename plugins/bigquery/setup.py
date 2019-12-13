@@ -40,7 +40,12 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'google-cloud-bigquery>=1.15.0,<2',
+        'google-cloud-core>=1,<=1.1.0',
+        'google-cloud-bigquery>=1.15.0,<1.24.0',
+        # hidden secret dependency: bq requires this but only documents 1.10.0
+        # through its dependency chain.
+        # see https://github.com/googleapis/google-cloud-python/issues/9965
+        'six>=1.13.0',
     ],
     zip_safe=False,
     classifiers=[
