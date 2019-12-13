@@ -27,7 +27,9 @@ from dbt.utils import filter_null_values
 
 from dbt.adapters.base.connections import BaseConnectionManager, Connection
 from dbt.adapters.base.meta import AdapterMeta, available
-from dbt.adapters.base.relation import ComponentName, BaseRelation
+from dbt.adapters.base.relation import (
+    ComponentName, BaseRelation, InformationSchema
+)
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.cache import RelationsCache
 
@@ -995,11 +997,16 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return table.where(_catalog_filter_schemas(manifest))
 
+    def _get_catalog_information_schemas(
+        self, manifest: Manifest
+    ) -> List[InformationSchema]:
+        return list(self._get_cache_schemas(manifest).keys())
+
     def get_catalog(self, manifest: Manifest) -> agate.Table:
         """Get the catalog for this manifest by running the get catalog macro.
         Returns an agate.Table of catalog information.
         """
-        information_schemas = list(self._get_cache_schemas(manifest).keys())
+        information_schemas = self._get_catalog_information_schemas(manifest)
         # make it a list so macros can index into it.
         kwargs = {'information_schemas': information_schemas}
         table = self.execute_macro(GET_CATALOG_MACRO_NAME,

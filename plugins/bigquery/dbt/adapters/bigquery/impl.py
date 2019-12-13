@@ -13,6 +13,7 @@ from dbt.adapters.bigquery.relation import (
 from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
+from dbt.contracts.graph.manifest import Manifest
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
 
@@ -482,10 +483,32 @@ class BigQueryAdapter(BaseAdapter):
         with self.connections.exception_handler("LOAD TABLE"):
             self.poll_until_job_completes(job, timeout)
 
-    def _catalog_filter_table(self, table, manifest):
-        # BigQuery doesn't allow ":" chars in column names -- remap them here.
+    @classmethod
+    def _catalog_filter_table(
+        cls, table: agate.Table, manifest: Manifest
+    ) -> agate.Table:
         table = table.rename(column_names={
             col.name: col.name.replace('__', ':') for col in table.columns
         })
-
         return super()._catalog_filter_table(table, manifest)
+
+    def _get_catalog_information_schemas(
+        self, manifest: Manifest
+    ) -> List[BigQueryInformationSchema]:
+
+        candidates = super()._get_catalog_information_schemas(manifest)
+        information_schemas = []
+        db_schemas = {}
+        for candidate in candidates:
+            database = candidate.database
+            if database not in db_schemas:
+                db_schemas[database] = set(self.list_schemas(database))
+            if candidate.schema in db_schemas[database]:
+                information_schemas.append(candidate)
+            else:
+                logger.debug(
+                    'Skipping catalog for {}.{} - schema does not exist'
+                    .format(database, candidate.schema)
+                )
+
+        return information_schemas
