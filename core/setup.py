@@ -52,6 +52,7 @@ setup(
         'requests>=2.18.0,<3',
         'colorama>=0.3.9,<0.5',
         'agate>=1.6,<2',
+        'isodate>=0.6,<0.7',
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<0.17',
         'dataclasses==0.6;python_version<"3.7"',

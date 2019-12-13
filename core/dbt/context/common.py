@@ -3,7 +3,7 @@ import os
 from typing_extensions import Protocol
 from typing import Union, Callable, Any, Dict, TypeVar, Type
 
-import dbt.clients.agate_helper
+from dbt.clients import agate_helper
 from dbt.contracts.graph.compiled import CompiledSeedNode
 from dbt.contracts.graph.parsed import ParsedSeedNode
 import dbt.exceptions
@@ -105,11 +105,11 @@ class ManifestParsedContext(HasCredentialsContext):
 def _store_result(sql_results):
     def call(name, status, agate_table=None):
         if agate_table is None:
-            agate_table = dbt.clients.agate_helper.empty_table()
+            agate_table = agate_helper.empty_table()
 
         sql_results[name] = dbt.utils.AttrDict({
             'status': status,
-            'data': dbt.clients.agate_helper.as_matrix(agate_table),
+            'data': agate_helper.as_matrix(agate_table),
             'table': agate_table
         })
         return ''
@@ -185,8 +185,9 @@ def _build_load_agate_table(
 ) -> Callable[[], agate.Table]:
     def load_agate_table():
         path = model.seed_file_path
+        column_types = model.config.column_types
         try:
-            table = dbt.clients.agate_helper.from_csv(path)
+            table = agate_helper.from_csv(path, text_columns=column_types)
         except ValueError as e:
             dbt.exceptions.raise_compiler_error(str(e))
         table.original_abspath = os.path.abspath(path)
