@@ -545,10 +545,6 @@ class DBTIntegrationTest(unittest.TestCase):
         final_args.append('--log-cache-events')
 
         logger.info("Invoking dbt with {}".format(final_args))
-        if args is None:
-            args = ["run"]
-
-        logger.info("Invoking dbt with {}".format(args))
         return dbt.handle_and_check(final_args)
 
     def run_sql_file(self, path, kwargs=None):
