@@ -6,7 +6,7 @@
 	  WHEN LOWER(str) = 'a' THEN 'b'
 	  ELSE str
 	  END
-	)
+	);
 {% endcall %}
 
 select a_to_b(dupe) from {{ ref('view_model') }}
