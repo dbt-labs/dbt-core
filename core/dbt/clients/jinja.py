@@ -59,12 +59,7 @@ def _linecache_inject(source, write):
         filename = rnd.decode("ascii")
 
     # put ourselves in the cache
-    cache_entry = (
-        len(source),
-        None,
-        [line + '\n' for line in source.splitlines()],
-        filename
-    )
+    cache_entry = (len(source), None, [line + "\n" for line in source.splitlines()], filename)
     # linecache does in fact have an attribute `cache`, thanks
     linecache.cache[filename] = cache_entry  # type: ignore
     return filename
