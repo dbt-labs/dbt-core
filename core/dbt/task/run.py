@@ -313,9 +313,7 @@ class RunTask(CompileTask):
     ) -> List[ParsedHookNode]:
 
         if self.manifest is None:
-            raise InternalException(
-                'self.manifest was None in get_hooks_by_type'
-            )
+            raise InternalException("self.manifest was None in get_hooks_by_type")
 
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)

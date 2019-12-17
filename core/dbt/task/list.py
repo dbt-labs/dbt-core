@@ -77,9 +77,7 @@ class ListTask(GraphRunnableTask):
             warn_or_error('No nodes selected!')
             return
         if self.manifest is None:
-            raise InternalException(
-                'manifest is None in _iterate_selected_nodes'
-            )
+            raise InternalException("manifest is None in _iterate_selected_nodes")
         for node in nodes:
             if node in self.manifest.nodes:
                 yield self.manifest.nodes[node]

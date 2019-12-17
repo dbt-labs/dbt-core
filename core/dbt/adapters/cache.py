@@ -176,7 +176,9 @@ class RelationsCache:
         self.schemas: Set[Tuple[Optional[str], Optional[str]]] = set()
 
     def add_schema(
-        self, database: Optional[str], schema: Optional[str],
+        self,
+        database: Optional[str],
+        schema: Optional[str],
     ) -> None:
         """Add a schema to the set of known schemas (case-insensitive)
 
@@ -186,7 +188,9 @@ class RelationsCache:
         self.schemas.add((lowercase(database), lowercase(schema)))
 
     def drop_schema(
-        self, database: Optional[str], schema: Optional[str],
+        self,
+        database: Optional[str],
+        schema: Optional[str],
     ) -> None:
         """Drop the given schema and remove it from the set of known schemas.
 
@@ -451,9 +455,7 @@ class RelationsCache:
 
         fire_event(DumpAfterRenameSchema(dump=Lazy.defer(lambda: self.dump_graph())))
 
-    def get_relations(
-        self, database: Optional[str], schema: Optional[str]
-    ) -> List[Any]:
+    def get_relations(self, database: Optional[str], schema: Optional[str]) -> List[Any]:
         """Case-insensitively yield all relations matching the given schema.
 
         :param str schema: The case-insensitive schema name to list from.

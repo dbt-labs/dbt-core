@@ -804,9 +804,9 @@ def _build_list_subparser(subparsers, base_subparser):
         aliases=['ls'],
     )
     sub.set_defaults(cls=list_task.ListTask, which='list', rpc_method=None)
-    resource_values: List[str] = [
+    resource_values: List[str] = [str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES] + [
         str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES
-    ] + ['default', 'all']
+        "all",
     sub.add_argument('--resource-type',
                      choices=resource_values,
                      action='append',

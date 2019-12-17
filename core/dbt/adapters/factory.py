@@ -61,7 +61,7 @@ class AdapterContainer:
         # singletons
         try:
             # mypy doesn't think modules have any attributes.
-            mod: Any = import_module('.' + name, 'dbt.adapters')
+            mod: Any = import_module("." + name, "dbt.adapters")
         except ModuleNotFoundError as exc:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtime error

@@ -345,7 +345,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         return RelationType
 
 
-Info = TypeVar('Info', bound='InformationSchema')
+Info = TypeVar("Info", bound="InformationSchema")
 
 
 @dataclass(frozen=True, eq=False, repr=False)

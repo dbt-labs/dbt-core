@@ -315,8 +315,7 @@ def track_resource_counts(resource_counts):
 
 def track_model_run(options):
     context = [SelfDescribingJson(RUN_MODEL_SPEC, options)]
-    assert active_user is not None, \
-        'Cannot track model runs when active user is None'
+    assert active_user is not None, "Cannot track model runs when active user is None"
 
     track(
         active_user,
@@ -329,8 +328,7 @@ def track_model_run(options):
 
 def track_rpc_request(options):
     context = [SelfDescribingJson(RPC_REQUEST_SPEC, options)]
-    assert active_user is not None, \
-        'Cannot track rpc requests when active user is None'
+    assert active_user is not None, "Cannot track rpc requests when active user is None"
 
     track(
         active_user,
@@ -342,8 +340,7 @@ def track_rpc_request(options):
 
 
 def track_package_install(config, args, options):
-    assert active_user is not None, \
-        'Cannot track package installs when active user is None'
+    assert active_user is not None, "Cannot track package installs when active user is None"
 
     invocation_data = get_invocation_context(active_user, config, args)
 
@@ -391,8 +388,7 @@ def track_invocation_end(
         get_dbt_env_context()
     ]
 
-    assert active_user is not None, \
-        'Cannot track invocation end when active user is None'
+    assert active_user is not None, "Cannot track invocation end when active user is None"
 
     track(
         active_user,
@@ -497,10 +493,12 @@ class InvocationProcessor(logbook.Processor):
 
     def process(self, record):
         if active_user is not None:
-            record.extra.update({
-                "run_started_at": active_user.run_started_at.isoformat(),
+            record.extra.update(
+                {
                 "invocation_id": get_invocation_id(),
-            })
+                    "invocation_id": get_invocation_id(),
+                }
+            )
 
 
 def initialize_from_flags():

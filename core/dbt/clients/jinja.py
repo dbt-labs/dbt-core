@@ -51,8 +51,8 @@ def _linecache_inject(source, write):
     else:
         # `codecs.encode` actually takes a `bytes` as the first argument if
         # the second argument is 'hex' - mypy does not know this.
-        rnd = codecs.encode(os.urandom(12), 'hex')  # type: ignore
-        filename = rnd.decode('ascii')
+        rnd = codecs.encode(os.urandom(12), "hex")  # type: ignore
+        filename = rnd.decode("ascii")
 
     # put ourselves in the cache
     cache_entry = (

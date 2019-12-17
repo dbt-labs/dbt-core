@@ -224,9 +224,7 @@ class VersionRange:
     def _try_combine_lower_bound_with_exact(self, lower, exact):
         comparison = lower.compare(exact)
 
-        if (comparison < 0 or
-            (comparison == 0 and
-             lower.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
+        if comparison < 0 or (comparison == 0 and lower.matcher == Matchers.GREATER_THAN_OR_EQUAL):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -238,7 +236,7 @@ class VersionRange:
             return b
 
         if not (a.is_exact or b.is_exact):
-            comparison = (a.compare(b) < 0)
+            comparison = a.compare(b) < 0
 
             if comparison:
                 return b
@@ -254,9 +252,7 @@ class VersionRange:
     def _try_combine_upper_bound_with_exact(self, upper, exact):
         comparison = upper.compare(exact)
 
-        if (comparison > 0 or
-            (comparison == 0 and
-             upper.matcher == Matchers.LESS_THAN_OR_EQUAL)):
+        if comparison > 0 or (comparison == 0 and upper.matcher == Matchers.LESS_THAN_OR_EQUAL):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -268,7 +264,7 @@ class VersionRange:
             return b
 
         if not (a.is_exact or b.is_exact):
-            comparison = (a.compare(b) > 0)
+            comparison = a.compare(b) > 0
 
             if comparison:
                 return b
@@ -284,7 +280,7 @@ class VersionRange:
     def reduce(self, other):
         start = None
 
-        if(self.start.is_exact and other.start.is_exact):
+        if self.start.is_exact and other.start.is_exact:
             start = end = self._try_combine_exact(self.start, other.start)
 
         else:
@@ -300,7 +296,7 @@ class VersionRange:
         result = []
 
         if self.start.is_unbounded and self.end.is_unbounded:
-            return 'ANY'
+            return "ANY"
 
         if not self.start.is_unbounded:
             result.append(self.start.to_version_string())
@@ -308,7 +304,7 @@ class VersionRange:
         if not self.end.is_unbounded:
             result.append(self.end.to_version_string())
 
-        return ', '.join(result)
+        return ", ".join(result)
 
     def to_version_string_pair(self):
         to_return = []

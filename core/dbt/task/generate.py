@@ -196,9 +196,7 @@ def get_unique_id_mapping(
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
         if self.manifest is None:
-            raise InternalException(
-                'manifest should not be None in _get_manifest'
-            )
+            raise InternalException("manifest should not be None in _get_manifest")
         return self.manifest
 
     def run(self) -> CatalogArtifact:
@@ -233,9 +231,7 @@ class GenerateTask(CompileTask):
                     to_asset_path)
 
         if self.manifest is None:
-            raise InternalException(
-                'self.manifest was None in run!'
-            )
+            raise InternalException("self.manifest was None in run!")
 
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):

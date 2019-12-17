@@ -126,9 +126,7 @@ class FormatterMixin:
         self.format_string = self._text_format_string
 
     def reset(self):
-        raise NotImplementedError(
-            'reset() not implemented in FormatterMixin subclass'
-        )
+        raise NotImplementedError("reset() not implemented in FormatterMixin subclass")
 
 
 class OutputHandler(logbook.StreamHandler, FormatterMixin):
@@ -444,8 +442,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
         FormatterMixin.__init__(self, DEBUG_LOG_FORMAT)
 
     def _replay_buffered(self):
-        assert self._msg_buffer is not None, \
-            '_msg_buffer should never be None in _replay_buffered'
+        assert self._msg_buffer is not None, "_msg_buffer should never be None in _replay_buffered"
         for record in self._msg_buffer:
             super().emit(record)
         self._msg_buffer = None

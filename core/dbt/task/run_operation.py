@@ -31,7 +31,7 @@ class RunOperationTask(ManifestTask):
 
     def compile_manifest(self) -> None:
         if self.manifest is None:
-            raise InternalException('manifest was None in compile_manifest')
+            raise InternalException("manifest was None in compile_manifest")
 
     def _run_unsafe(self) -> agate.Table:
         adapter = get_adapter(self.config)

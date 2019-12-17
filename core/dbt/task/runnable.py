@@ -82,9 +82,7 @@ class ManifestTask(ConfiguredTask):
 
     def compile_manifest(self):
         if self.manifest is None:
-            raise InternalException(
-                'compile_manifest called before manifest was loaded'
-            )
+            raise InternalException("compile_manifest called before manifest was loaded")
         adapter = get_adapter(self.config)
         compiler = adapter.get_compiler()
         self.graph = compiler.compile(self.manifest)
@@ -182,7 +180,7 @@ class GraphRunnableTask(ManifestTask):
         return False
 
     def get_runner_type(self, node):
-        raise NotImplementedException('Not Implemented')
+        raise NotImplementedException("Not Implemented")
 
     def result_path(self):
         return os.path.join(self.config.target_path, RESULT_FILE_NAME)
@@ -279,9 +277,7 @@ class GraphRunnableTask(ManifestTask):
         """Given a pool, submit jobs from the queue to the pool.
         """
         if self.job_queue is None:
-            raise InternalException(
-                'Got to run_queue with no job queue set'
-            )
+            raise InternalException("Got to run_queue with no job queue set")
 
         def callback(result):
             """Note: mark_done, at a minimum, must happen here or dbt will
@@ -290,9 +286,7 @@ class GraphRunnableTask(ManifestTask):
             self._handle_result(result)
 
             if self.job_queue is None:
-                raise InternalException(
-                    'Got to run_queue callback with no job queue set'
-                )
+                raise InternalException("Got to run_queue callback with no job queue set")
             self.job_queue.mark_done(result.node.unique_id)
 
         while not self.job_queue.empty():
@@ -334,7 +328,7 @@ class GraphRunnableTask(ManifestTask):
         node = result.node
 
         if self.manifest is None:
-            raise InternalException('manifest was None in _handle_result')
+            raise InternalException("manifest was None in _handle_result")
 
         if isinstance(node, ParsedSourceDefinition):
             self.manifest.update_source(node)
@@ -453,9 +447,7 @@ class GraphRunnableTask(ManifestTask):
         self._runtime_initialize()
 
         if self._flattened_nodes is None:
-            raise InternalException(
-                'after _runtime_initialize, _flattened_nodes was still None'
-            )
+            raise InternalException("after _runtime_initialize, _flattened_nodes was still None")
 
         if len(self._flattened_nodes) == 0:
             with TextOnly():
@@ -499,7 +491,7 @@ class GraphRunnableTask(ManifestTask):
         self, adapter, selected_uids: Iterable[str]
     ) -> Set[BaseRelation]:
         if self.manifest is None:
-            raise InternalException('manifest was None in get_model_schemas')
+            raise InternalException("manifest was None in get_model_schemas")
         result: Set[BaseRelation] = set()
 
         for node in self.manifest.nodes.values():

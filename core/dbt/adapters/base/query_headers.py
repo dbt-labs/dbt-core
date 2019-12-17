@@ -44,7 +44,7 @@ class _QueryComment(local):
         return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
 
     def set(self, comment: Optional[str], append: bool):
-        if isinstance(comment, str) and '*/' in comment:
+        if isinstance(comment, str) and "*/" in comment:
             # tell the user "no" so they don't hurt themselves by writing
             # garbage
             raise RuntimeException(
@@ -69,7 +69,7 @@ class MacroQueryStringSetter:
             assert isinstance(comment_macro, str)
             macro = '\n'.join((
                 '{%- macro query_comment_macro(connection_name, node) -%}',
-                comment_macro,
+                    "{%- macro query_comment_macro(connection_name, node) -%}",
                 '{% endmacro %}'
             ))
             ctx = self._get_context()

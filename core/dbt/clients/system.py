@@ -111,7 +111,7 @@ def make_directory(path: str) -> None:
                 raise e
 
 
-def make_file(path: str, contents: str = '', overwrite: bool = False) -> bool:
+def make_file(path: str, contents: str = "", overwrite: bool = False) -> bool:
     """
     Make a file at `path` assuming that the directory it resides in already
     exists. The file is saved with contents `contents`
@@ -139,7 +139,7 @@ def supports_symlinks() -> bool:
     return getattr(os, "symlink", None) is not None
 
 
-def write_file(path: str, contents: str = '') -> bool:
+def write_file(path: str, contents: str = "") -> bool:
     path = convert_path(path)
     try:
         make_directory(os.path.dirname(path))
@@ -177,9 +177,7 @@ def write_json(path: str, data: Dict[str, Any]) -> bool:
     return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
 
 
-def _windows_rmdir_readonly(
-    func: Callable[[str], Any], path: str, exc: Tuple[Any, OSError, Any]
-):
+def _windows_rmdir_readonly(func: Callable[[str], Any], path: str, exc: Tuple[Any, OSError, Any]):
     exception_val = exc[1]
     if exception_val.errno == errno.EACCES:
         os.chmod(path, stat.S_IWUSR)
@@ -316,9 +314,7 @@ def open_dir_cmd() -> str:
         return 'xdg-open'
 
 
-def _handle_posix_cwd_error(
-    exc: OSError, cwd: str, cmd: List[str]
-) -> NoReturn:
+def _handle_posix_cwd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = 'Directory does not exist'
     elif exc.errno == errno.EACCES:
@@ -330,9 +326,7 @@ def _handle_posix_cwd_error(
     raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
 
 
-def _handle_posix_cmd_error(
-    exc: OSError, cwd: str, cmd: List[str]
-) -> NoReturn:
+def _handle_posix_cmd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = "Could not find command, ensure it is in the user's PATH"
     elif exc.errno == errno.EACCES:
@@ -408,9 +402,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     )
 
 
-def run_cmd(
-    cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None
-) -> Tuple[bytes, bytes]:
+def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> Tuple[bytes, bytes]:
     fire_event(SystemExecutingCmd(cmd=cmd))
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
@@ -480,9 +472,7 @@ def rename(from_path: str, to_path: str, force: bool = False) -> None:
     shutil.move(from_path, to_path)
 
 
-def untar_package(
-    tar_path: str, dest_dir: str, rename_to: Optional[str] = None
-) -> None:
+def untar_package(tar_path: str, dest_dir: str, rename_to: Optional[str] = None) -> None:
     tar_path = convert_path(tar_path)
     tar_dir_name = None
     with tarfile.open(tar_path, 'r:gz') as tarball:

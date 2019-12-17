@@ -887,15 +887,11 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available
     @classmethod
-    def convert_type(
-        cls, agate_table: agate.Table, col_idx: int
-    ) -> Optional[str]:
+    def convert_type(cls, agate_table: agate.Table, col_idx: int) -> Optional[str]:
         return cls.convert_agate_type(agate_table, col_idx)
 
     @classmethod
-    def convert_agate_type(
-        cls, agate_table: agate.Table, col_idx: int
-    ) -> Optional[str]:
+    def convert_agate_type(cls, agate_table: agate.Table, col_idx: int) -> Optional[str]:
         agate_type: Type = agate_table.column_types[col_idx]
         conversions: List[Tuple[Type, Callable[..., str]]] = [
             (agate.Text, cls.convert_text_type),

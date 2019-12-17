@@ -1,7 +1,6 @@
 import logging
 from typing import Union, Optional, List, Any, Dict
 
-
 class Subject:
     def __init__(self) -> None: ...
     def set_platform(self, value: Any): ...
@@ -35,7 +34,16 @@ class Tracker:
 
     def __init__(self, emitters: Union[List[Any], Any], subject: Optional[Subject] = ..., namespace: Optional[str] = ..., app_id: Optional[str] = ..., encode_base64: bool = ...) -> None: ...
     def set_subject(self, subject: Optional[Subject]): ...
-    def track_struct_event(self, category: str, action: str, label: Optional[str] = None, property_: Optional[str] = None, value: Optional[float] = None, context: Optional[List[Any]] = None, tstamp: Optional[Any] = None): ...
+    def track_struct_event(
+        self,
+        category: str,
+        action: str,
+        label: Optional[str] = None,
+        property_: Optional[str] = None,
+        value: Optional[float] = None,
+        context: Optional[List[Any]] = None,
+        tstamp: Optional[Any] = None,
+    ): ...
     def flush(self, asynchronous: bool = False): ...
 
 
