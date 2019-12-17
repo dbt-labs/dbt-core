@@ -346,8 +346,8 @@ class ManifestLoader:
 
 
 def _check_resource_uniqueness(manifest):
-    names_resources = {}
-    alias_resources = {}
+    names_resources: Dict[str, CompileResultNode] = {}
+    alias_resources: Dict[str, CompileResultNode] = {}
 
     for resource, node in manifest.nodes.items():
         if node.resource_type not in NodeType.refable():

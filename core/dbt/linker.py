@@ -36,7 +36,7 @@ class GraphQueue:
         self.graph = graph
         self.manifest = manifest
         # store the queue as a priority queue.
-        self.inner = PriorityQueue()
+        self.inner: PriorityQueue = PriorityQueue()
         # things that have been popped off the queue but not finished
         # and worker thread reservations
         self.in_progress = set()

@@ -36,8 +36,11 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
 
     def set_config(self, config):
         super().set_config(config)
+        if self.task_type is None:
+            raise InternalException('task type not set for set_config')
         if issubclass(self.task_type, RemoteManifestMethod):
-            self.real_task = self.task_type(
+            task_type: Type[RemoteManifestMethod] = self.task_type
+            self.real_task = task_type(
                 self.args, self.config, self.manifest
             )
         else:
@@ -53,7 +56,10 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
         self.task_type = self.get_rpc_task_cls()
 
     def get_flags(self):
-        return self.task_type.get_flags(self)
+        if self.task_type is None:
+            raise InternalException('task type not set for get_flags')
+        # this is a kind of egregious hack from a type perspective...
+        return self.task_type.get_flags(self)  # type: ignore
 
     def get_rpc_task_cls(self) -> Type[HasCLI]:
         # This is obnoxious, but we don't have actual access to the TaskManager

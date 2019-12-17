@@ -1,6 +1,6 @@
 from collections import namedtuple
 from copy import deepcopy
-from typing import List, Iterable, Optional
+from typing import List, Iterable, Optional, Dict, Set, Tuple, Any
 import threading
 
 from dbt.logger import CACHE_LOGGER as logger
@@ -177,12 +177,14 @@ class RelationsCache:
         The adapters also hold this lock while filling the cache.
     :attr Set[str] schemas: The set of known/cached schemas, all lowercased.
     """
-    def __init__(self):
-        self.relations = {}
+    def __init__(self) -> None:
+        self.relations: Dict[_ReferenceKey, _CachedRelation] = {}
         self.lock = threading.RLock()
-        self.schemas = set()
+        self.schemas: Set[Tuple[Optional[str], Optional[str]]] = set()
 
-    def add_schema(self, database: str, schema: str):
+    def add_schema(
+        self, database: Optional[str], schema: Optional[str],
+    ) -> None:
         """Add a schema to the set of known schemas (case-insensitive)
 
         :param database: The database name to add.
@@ -190,7 +192,9 @@ class RelationsCache:
         """
         self.schemas.add((_lower(database), _lower(schema)))
 
-    def drop_schema(self, database: str, schema: str):
+    def drop_schema(
+        self, database: Optional[str], schema: Optional[str],
+    ) -> None:
         """Drop the given schema and remove it from the set of known schemas.
 
         Then remove all its contents (and their dependents, etc) as well.
@@ -208,21 +212,21 @@ class RelationsCache:
             # handle a drop_schema race by using discard() over remove()
             self.schemas.discard(key)
 
-    def update_schemas(self, schemas: Iterable[str]):
+    def update_schemas(self, schemas: Iterable[Tuple[Optional[str], str]]):
         """Add multiple schemas to the set of known schemas (case-insensitive)
 
         :param schemas: An iterable of the schema names to add.
         """
-        self.schemas.update((_lower(d), _lower(s)) for (d, s) in schemas)
+        self.schemas.update((_lower(d), s.lower()) for (d, s) in schemas)
 
-    def __contains__(self, schema_id):
+    def __contains__(self, schema_id: Tuple[Optional[str], str]):
         """A schema is 'in' the relations cache if it is in the set of cached
         schemas.
 
-        :param Tuple[str, str] schema: The db name and schema name to look up.
+        :param schema_id: The db name and schema name to look up.
         """
         db, schema = schema_id
-        return (_lower(db), _lower(schema)) in self.schemas
+        return (_lower(db), schema.lower()) in self.schemas
 
     def dump_graph(self):
         """Dump a key-only representation of the schema to a dictionary. Every
@@ -238,7 +242,7 @@ class RelationsCache:
                 for k, v in self.relations.items()
             }
 
-    def _setdefault(self, relation):
+    def _setdefault(self, relation: _CachedRelation):
         """Add a relation to the cache, or return it if it already exists.
 
         :param _CachedRelation relation: The relation to set or get.
@@ -275,6 +279,8 @@ class RelationsCache:
                 .format(dependent_key)
             )
 
+        assert dependent is not None  # we just raised!
+
         referenced.add_reference(dependent)
 
     def add_link(self, referenced, dependent):
@@ -305,7 +311,7 @@ class RelationsCache:
         if ref_key not in self.relations:
             # Insert a dummy "external" relation.
             referenced = referenced.replace(
-                type=referenced.RelationType.External
+                type=referenced.External
             )
             self.add(referenced)
 
@@ -313,7 +319,7 @@ class RelationsCache:
         if dep_key not in self.relations:
             # Insert a dummy "external" relation.
             dependent = dependent.replace(
-                type=referenced.RelationType.External
+                type=referenced.External
             )
             self.add(dependent)
         logger.debug(
@@ -469,7 +475,9 @@ class RelationsCache:
 
         lazy_log('after rename: {!s}', self.dump_graph)
 
-    def get_relations(self, database, schema):
+    def get_relations(
+        self, database: Optional[str], schema: Optional[str]
+    ) -> List[Any]:
         """Case-insensitively yield all relations matching the given schema.
 
         :param str schema: The case-insensitive schema name to list from.
@@ -498,7 +506,7 @@ class RelationsCache:
             self.schemas.clear()
 
     def _list_relations_in_schema(
-        self, database: str, schema: str
+        self, database: Optional[str], schema: Optional[str]
     ) -> List[_CachedRelation]:
         """Get the relations in a schema. Callers should hold the lock."""
         key = (_lower(database), _lower(schema))

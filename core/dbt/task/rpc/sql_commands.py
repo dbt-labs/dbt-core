@@ -8,7 +8,7 @@ from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest, compile_node
 from dbt.contracts.rpc import RPCExecParameters
 from dbt.contracts.rpc import RemoteExecutionResult
-from dbt.exceptions import RPCKilledException
+from dbt.exceptions import RPCKilledException, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.parser.results import ParseResult
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
@@ -75,6 +75,10 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
         # this just gets a transitive closure of the nodes. We could build a
         # special GraphQueue around this, but we do them all in the main thread
         # so we only care about preserving dependency order anyway
+        if self.linker is None or self.manifest is None:
+            raise InternalException(
+                'linker and manifest not set in _compile_ancestors'
+            )
         sorted_ancestors = self.linker.sorted_ephemeral_ancestors(
             self.manifest,
             unique_id,
@@ -90,6 +94,11 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
             )
 
     def _get_exec_node(self):
+        if self.manifest is None:
+            raise InternalException(
+                'manifest not set in _get_exec_node'
+            )
+
         results = ParseResult.rpc()
         macro_overrides = {}
         macros = self.args.macros
@@ -107,18 +116,18 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
             root_project=self.config,
             macro_manifest=self.manifest,
         )
-        node = rpc_parser.parse_remote(sql, self.args.name)
+        rpc_node = rpc_parser.parse_remote(sql, self.args.name)
         self.manifest = ParserUtils.add_new_refs(
             manifest=self.manifest,
             config=self.config,
-            node=node,
+            node=rpc_node,
             macros=macro_overrides
         )
 
         # don't write our new, weird manifest!
         self.linker = compile_manifest(self.config, self.manifest, write=False)
-        self._compile_ancestors(node.unique_id)
-        return node
+        self._compile_ancestors(rpc_node.unique_id)
+        return rpc_node
 
     def _raise_set_error(self):
         if self._raise_next_tick is not None:

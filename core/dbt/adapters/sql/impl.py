@@ -212,9 +212,9 @@ class SQLAdapter(BaseAdapter):
         }
         for _database, name, _schema, _type in results:
             try:
-                _type = self.Relation.RelationType(_type)
+                _type = self.Relation.get_relation_type(_type)
             except ValueError:
-                _type = self.Relation.RelationType.External
+                _type = self.Relation.External
             relations.append(self.Relation.create(
                 database=_database,
                 schema=_schema,

@@ -7,7 +7,7 @@ from .jsonrpc import JSONRPCRequest
 from .jsonrpc1 import JSONRPC10Response
 from .jsonrpc2 import JSONRPC20BatchRequest, JSONRPC20BatchResponse, JSONRPC20Response
 from .utils import is_invalid_params
-from typing import Any
+from typing import Any, List
 
 logger: Any
 
@@ -17,3 +17,5 @@ class JSONRPCResponseManager:
     def handle(cls, request_str: Any, dispatcher: Any): ...
     @classmethod
     def handle_request(cls, request: Any, dispatcher: Any): ...
+    @classmethod
+    def _get_responses(cls, requests: List[Any], dispatcher: Any): ...

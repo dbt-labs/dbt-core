@@ -1,6 +1,7 @@
 import abc
 import os
-from multiprocessing import RLock
+# multiprocessing.RLock is a function returning this type
+from multiprocessing.synchronize import RLock
 from threading import get_ident
 from typing import (
     Dict, Tuple, Hashable, Optional, ContextManager, List
@@ -144,7 +145,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 'Opening a new connection, currently in state {}'
                 .format(conn.state)
             )
-            conn.handle = LazyHandle(type(self))
+            conn.handle = LazyHandle(self.open)
 
         conn.name = conn_name
         return conn

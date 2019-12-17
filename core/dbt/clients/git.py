@@ -84,6 +84,10 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
         logger.debug('Updating existing dependency {}.', directory)
     else:
         matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
+        if matches is None:
+            raise dbt.exceptions.RuntimeException(
+                f'Error cloning {repo} - never saw "Cloning into ..." from git'
+            )
         directory = matches.group(1)
         logger.debug('Pulling new dependency {}.', directory)
     full_path = os.path.join(cwd, directory)

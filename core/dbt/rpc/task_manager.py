@@ -124,12 +124,6 @@ class TaskManager:
             self._reload_task_manager_thread(reloader)
         return True
 
-    def reload_builtin_tasks(self):
-        # reload all the non-manifest tasks because the config changed.
-        # manifest tasks are still blocked so we can ignore them
-        for task_cls in self._task_types.builtin():
-            self.add_builtin_task_handler(task_cls)
-
     def reload_config(self):
         config = self.config.from_args(self.args)
         self.config = config

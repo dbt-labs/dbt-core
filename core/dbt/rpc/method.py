@@ -103,6 +103,11 @@ class RemoteBuiltinMethod(RemoteMethod[Parameters, Result]):
     def set_args(self, params: Parameters):
         self.params = params
 
+    def run(self):
+        raise InternalException(
+            'the run() method on builtins should never be called'
+        )
+
     def __call__(self, **kwargs: Dict[str, Any]) -> JsonSchemaMixin:
         try:
             params = self.get_parameters().from_dict(kwargs)

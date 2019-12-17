@@ -9,6 +9,9 @@ import sys
 import tarfile
 import requests
 import stat
+from typing import (
+    Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable
+)
 
 import dbt.exceptions
 import dbt.utils
@@ -16,9 +19,11 @@ import dbt.utils
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
-def find_matching(root_path,
-                  relative_paths_to_search,
-                  file_pattern):
+def find_matching(
+    root_path: str,
+    relative_paths_to_search: List[str],
+    file_pattern: str,
+) -> List[Dict[str, str]]:
     """
     Given an absolute `root_path`, a list of relative paths to that
     absolute root path (`relative_paths_to_search`), and a `file_pattern`
@@ -58,7 +63,7 @@ def find_matching(root_path,
     return matching
 
 
-def load_file_contents(path, strip=True):
+def load_file_contents(path: str, strip: bool = True) -> str:
     with open(path, 'rb') as handle:
         to_return = handle.read().decode('utf-8')
 
@@ -68,7 +73,7 @@ def load_file_contents(path, strip=True):
     return to_return
 
 
-def make_directory(path):
+def make_directory(path: str) -> None:
     """
     Make a directory and any intermediate directories that don't already
     exist. This function handles the case where two threads try to create
@@ -86,7 +91,7 @@ def make_directory(path):
                 raise e
 
 
-def make_file(path, contents='', overwrite=False):
+def make_file(path: str, contents: str = '', overwrite: bool = False) -> bool:
     """
     Make a file at `path` assuming that the directory it resides in already
     exists. The file is saved with contents `contents`
@@ -99,21 +104,21 @@ def make_file(path, contents='', overwrite=False):
     return False
 
 
-def make_symlink(source, link_path):
+def make_symlink(source: str, link_path: str) -> None:
     """
     Create a symlink at `link_path` referring to `source`.
     """
     if not supports_symlinks():
         dbt.exceptions.system_error('create a symbolic link')
 
-    return os.symlink(source, link_path)
+    os.symlink(source, link_path)
 
 
-def supports_symlinks():
+def supports_symlinks() -> bool:
     return getattr(os, "symlink", None) is not None
 
 
-def write_file(path, contents=''):
+def write_file(path: str, contents: str = '') -> bool:
     make_directory(os.path.dirname(path))
     with open(path, 'w', encoding='utf-8') as f:
         f.write(str(contents))
@@ -121,11 +126,13 @@ def write_file(path, contents=''):
     return True
 
 
-def write_json(path, data):
+def write_json(path: str, data: Dict[str, Any]) -> bool:
     return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
 
 
-def _windows_rmdir_readonly(func, path, exc):
+def _windows_rmdir_readonly(
+    func: Callable[[str], Any], path: str, exc: Tuple[Any, OSError, Any]
+):
     exception_val = exc[1]
     if exception_val.errno == errno.EACCES:
         os.chmod(path, stat.S_IWUSR)
@@ -134,7 +141,7 @@ def _windows_rmdir_readonly(func, path, exc):
         raise
 
 
-def resolve_path_from_base(path_to_resolve, base_path):
+def resolve_path_from_base(path_to_resolve: str, base_path: str) -> str:
     """
     If path-to_resolve is a relative path, create an absolute path
     with base_path as the base.
@@ -148,7 +155,7 @@ def resolve_path_from_base(path_to_resolve, base_path):
             os.path.expanduser(path_to_resolve)))
 
 
-def rmdir(path):
+def rmdir(path: str) -> None:
     """
     Recursively deletes a directory. Includes an error handler to retry with
     different permissions on Windows. Otherwise, removing directories (eg.
@@ -160,22 +167,22 @@ def rmdir(path):
     else:
         onerror = None
 
-    return shutil.rmtree(path, onerror=onerror)
+    shutil.rmtree(path, onerror=onerror)
 
 
-def remove_file(path):
-    return os.remove(path)
+def remove_file(path: str) -> None:
+    os.remove(path)
 
 
-def path_exists(path):
+def path_exists(path: str) -> bool:
     return os.path.lexists(path)
 
 
-def path_is_symlink(path):
+def path_is_symlink(path: str) -> bool:
     return os.path.islink(path)
 
 
-def open_dir_cmd():
+def open_dir_cmd() -> str:
     # https://docs.python.org/2/library/sys.html#sys.platform
     if sys.platform == 'win32':
         return 'start'
@@ -187,7 +194,9 @@ def open_dir_cmd():
         return 'xdg-open'
 
 
-def _handle_posix_cwd_error(exc, cwd, cmd):
+def _handle_posix_cwd_error(
+    exc: OSError, cwd: str, cmd: List[str]
+) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = 'Directory does not exist'
     elif exc.errno == errno.EACCES:
@@ -199,7 +208,9 @@ def _handle_posix_cwd_error(exc, cwd, cmd):
     raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
 
 
-def _handle_posix_cmd_error(exc, cwd, cmd):
+def _handle_posix_cmd_error(
+    exc: OSError, cwd: str, cmd: List[str]
+) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = "Could not find command, ensure it is in the user's PATH"
     elif exc.errno == errno.EACCES:
@@ -209,7 +220,7 @@ def _handle_posix_cmd_error(exc, cwd, cmd):
     raise dbt.exceptions.ExecutableError(cwd, cmd, message)
 
 
-def _handle_posix_error(exc, cwd, cmd):
+def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     """OSError handling for posix systems.
 
     Some things that could happen to trigger an OSError:
@@ -236,8 +247,8 @@ def _handle_posix_error(exc, cwd, cmd):
         _handle_posix_cmd_error(exc, cwd, cmd)
 
 
-def _handle_windows_error(exc, cwd, cmd):
-    cls = dbt.exceptions.CommandError
+def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
+    cls: Type[dbt.exceptions.Exception] = dbt.exceptions.CommandError
     if exc.errno == errno.ENOENT:
         message = ("Could not find command, ensure it is in the user's PATH "
                    "and that the user has permissions to run it")
@@ -256,7 +267,7 @@ def _handle_windows_error(exc, cwd, cmd):
     raise cls(cwd, cmd, message)
 
 
-def _interpret_oserror(exc, cwd, cmd):
+def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     """Interpret an OSError exc and raise the appropriate dbt exception.
 
     """
@@ -275,7 +286,9 @@ def _interpret_oserror(exc, cwd, cmd):
     )
 
 
-def run_cmd(cwd, cmd, env=None):
+def run_cmd(
+    cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None
+) -> Tuple[bytes, bytes]:
     logger.debug('Executing "{}"'.format(' '.join(cmd)))
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
@@ -299,8 +312,8 @@ def run_cmd(cwd, cmd, env=None):
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    logger.debug('STDOUT: "{}"'.format(out))
-    logger.debug('STDERR: "{}"'.format(err))
+    logger.debug('STDOUT: "{!s}"'.format(out))
+    logger.debug('STDERR: "{!s}"'.format(err))
 
     if proc.returncode != 0:
         logger.debug('command return code={}'.format(proc.returncode))
@@ -310,14 +323,14 @@ def run_cmd(cwd, cmd, env=None):
     return out, err
 
 
-def download(url, path):
+def download(url: str, path: str) -> None:
     response = requests.get(url)
     with open(path, 'wb') as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)
 
 
-def rename(from_path, to_path, force=False):
+def rename(from_path: str, to_path: str, force: bool = False) -> None:
     is_symlink = path_is_symlink(to_path)
 
     if os.path.exists(to_path) and force:
@@ -329,7 +342,9 @@ def rename(from_path, to_path, force=False):
     shutil.move(from_path, to_path)
 
 
-def untar_package(tar_path, dest_dir, rename_to=None):
+def untar_package(
+    tar_path: str, dest_dir: str, rename_to: Optional[str] = None
+) -> None:
     tar_dir_name = None
     with tarfile.open(tar_path, 'r') as tarball:
         tarball.extractall(dest_dir)

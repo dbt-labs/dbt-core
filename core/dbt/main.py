@@ -1,3 +1,4 @@
+from typing import List
 from dbt.logger import GLOBAL_LOGGER as logger, log_cache_events, log_manager
 
 import argparse
@@ -202,7 +203,8 @@ def run_from_args(parsed):
         log_path = getattr(task.config, 'log_path', None)
     # we can finally set the file logger up
     log_manager.set_path(log_path)
-    logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
+    if dbt.tracking.active_user is not None:  # mypy appeasement, always true
+        logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
 
     results = None
 
@@ -643,7 +645,9 @@ def _build_list_subparser(subparsers, base_subparser):
         aliases=['ls'],
     )
     sub.set_defaults(cls=ListTask, which='list', rpc_method=None)
-    resource_values = list(ListTask.ALL_RESOURCE_VALUES) + ['default', 'all']
+    resource_values: List[str] = [
+        str(s) for s in ListTask.ALL_RESOURCE_VALUES
+    ] + ['default', 'all']
     sub.add_argument('--resource-type',
                      choices=resource_values,
                      action='append',

@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Optional, Tuple, Callable, Container, FrozenSet, Type, Dict, Any, List,
-    Mapping, Iterator, Union
+    Mapping, Iterator, Union, Set
 )
 
 import agate
@@ -125,7 +125,10 @@ class SchemaSearchMap(dict):
         key = relation.information_schema_only()
         if key not in self:
             self[key] = set()
-        self[key].add(relation.schema.lower())
+        lowered: Optional[str] = None
+        if relation.schema is not None:
+            lowered = relation.schema.lower()
+        self[key].add(lowered)
 
     def search(self):
         for information_schema_name, schemas in self.items():
@@ -133,7 +136,7 @@ class SchemaSearchMap(dict):
                 yield information_schema_name, schema
 
     def schemas_searched(self):
-        result = set()
+        result: Set[Tuple[str, str]] = set()
         for information_schema_name, schemas in self.items():
             result.update(
                 (information_schema_name.database, schema)
@@ -907,13 +910,17 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available
     @classmethod
-    def convert_type(cls, agate_table, col_idx):
+    def convert_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> Optional[str]:
         return cls.convert_agate_type(agate_table, col_idx)
 
     @classmethod
-    def convert_agate_type(cls, agate_table, col_idx):
-        agate_type = agate_table.column_types[col_idx]
-        conversions = [
+    def convert_agate_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> Optional[str]:
+        agate_type: Type = agate_table.column_types[col_idx]
+        conversions: List[Tuple[Type, Callable[..., str]]] = [
             (agate.Text, cls.convert_text_type),
             (agate.Number, cls.convert_number_type),
             (agate.Boolean, cls.convert_boolean_type),
@@ -924,6 +931,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         for agate_cls, func in conversions:
             if isinstance(agate_type, agate_cls):
                 return func(agate_table, col_idx)
+
+        return None
 
     ###
     # Operations involving the manifest

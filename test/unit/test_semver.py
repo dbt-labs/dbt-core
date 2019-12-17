@@ -26,7 +26,7 @@ class TestSemver(unittest.TestCase):
         expected = create_range(*output_range)
 
         for permutation in itertools.permutations(inputs):
-            self.assertDictEqual(
+            self.assertEqual(
                 reduce_versions(*permutation),
                 expected)
 

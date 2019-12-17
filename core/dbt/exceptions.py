@@ -801,11 +801,10 @@ def wrapper(model):
         def inner(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception as exc:
-                if hasattr(exc, 'node') and exc.node is None:
+            except RuntimeException as exc:
+                if exc.node is None:
                     exc.node = model
                 raise exc
-
         return inner
     return wrap
 

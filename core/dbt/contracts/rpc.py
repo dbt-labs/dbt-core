@@ -3,7 +3,6 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from numbers import Real
 from typing import Optional, Union, List, Any, Dict, Type
 
 from hologram import JsonSchemaMixin
@@ -28,7 +27,7 @@ TaskID = uuid.UUID
 
 @dataclass
 class RPCParameters(JsonSchemaMixin):
-    timeout: Optional[Real]
+    timeout: Optional[float]
     task_tags: TaskTags
 
 
@@ -185,7 +184,7 @@ class ResultTable(JsonSchemaMixin):
 
 
 @dataclass
-class RemoteRunOperationResult(RemoteResult):
+class RemoteRunOperationResult(ExecutionResult, RemoteResult):
     success: bool
 
 
@@ -199,6 +198,7 @@ RPCResult = Union[
     RemoteExecutionResult,
     RemoteCatalogResults,
     RemoteEmptyResult,
+    RemoteRunOperationResult,
 ]
 
 
@@ -480,6 +480,9 @@ class PollRunOperationCompleteResult(RemoteRunOperationResult, PollResult):
     ) -> 'PollRunOperationCompleteResult':
         return cls(
             success=base.success,
+            results=base.results,
+            generated_at=base.generated_at,
+            elapsed_time=base.elapsed_time,
             logs=logs,
             tags=tags,
             state=timing.state,

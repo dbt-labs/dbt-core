@@ -1,6 +1,13 @@
+from datetime import datetime
+from typing import Dict, Any
+
+import agate
+
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.task.runnable import ManifestTask
 from dbt.adapters.factory import get_adapter
+from dbt.contracts.results import RunOperationResult
+from dbt.exceptions import InternalException
 
 import dbt
 import dbt.utils
@@ -17,14 +24,16 @@ class RunOperationTask(ManifestTask):
 
         return package_name, macro_name
 
-    def _get_kwargs(self):
+    def _get_kwargs(self) -> Dict[str, Any]:
         return dbt.utils.parse_cli_vars(self.args.args)
 
-    def compile_manifest(self):
+    def compile_manifest(self) -> None:
         # skip building a linker, but do make sure to build the flat graph
+        if self.manifest is None:
+            raise InternalException('manifest was None in compile_manifest')
         self.manifest.build_flat_graph()
 
-    def _run_unsafe(self):
+    def _run_unsafe(self) -> agate.Table:
         adapter = get_adapter(self.config)
 
         package_name, macro_name = self._get_macro_parts()
@@ -41,27 +50,34 @@ class RunOperationTask(ManifestTask):
 
         return res
 
-    def run(self):
+    def run(self) -> RunOperationResult:
+        start = datetime.utcnow()
         self._runtime_initialize()
         try:
-            result = self._run_unsafe()
+            self._run_unsafe()
         except dbt.exceptions.Exception as exc:
             logger.error(
                 'Encountered an error while running operation: {}'
                 .format(exc)
             )
             logger.debug('', exc_info=True)
-            return False, None
+            success = False
         except Exception as exc:
             logger.error(
                 'Encountered an uncaught exception while running operation: {}'
                 .format(exc)
             )
             logger.debug('', exc_info=True)
-            return False, None
+            success = False
         else:
-            return True, result
+            success = True
+        end = datetime.utcnow()
+        return RunOperationResult(
+            results=[],
+            generated_at=end,
+            elapsed_time=(end - start).total_seconds(),
+            success=success
+        )
 
     def interpret_results(self, results):
-        success, _ = results
-        return success
+        return results.success

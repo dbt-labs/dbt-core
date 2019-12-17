@@ -90,7 +90,7 @@ class Config:
         self.model = model
         # we never use or get a source config, only the parser cares
 
-    def __call__(*args, **kwargs):
+    def __call__(self, *args, **kwargs):
         return ''
 
     def set(self, name, value):

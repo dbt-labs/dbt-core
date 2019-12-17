@@ -1,7 +1,8 @@
+import abc
 import threading
 import time
 import traceback
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from dbt import deprecations
 from dbt.adapters.base import BaseRelation
@@ -11,6 +12,7 @@ from dbt.exceptions import (
     InternalException, missing_materialization
 )
 from dbt.node_types import NodeType
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     RunModelResult, collect_timing_info, SourceFreshnessResult, PartialResult,
 )
@@ -30,6 +32,8 @@ the error persists, open an issue at https://github.com/fishtown-analytics/dbt
 
 
 def track_model_run(index, num_nodes, run_model_result):
+    if dbt.tracking.active_user is None:
+        raise InternalException('cannot track model run with no active user')
     invocation_id = dbt.tracking.active_user.invocation_id
     dbt.tracking.track_model_run({
         "invocation_id": invocation_id,
@@ -59,7 +63,7 @@ class ExecutionContext:
         self.node = node
 
 
-class BaseRunner:
+class BaseRunner(metaclass=abc.ABCMeta):
     def __init__(self, config, adapter, node, node_index, num_nodes):
         self.config = config
         self.adapter = adapter
@@ -68,7 +72,11 @@ class BaseRunner:
         self.num_nodes = num_nodes
 
         self.skip = False
-        self.skip_cause = None
+        self.skip_cause: Optional[RunModelResult] = None
+
+    @abc.abstractmethod
+    def compile(self, manifest: Manifest) -> Any:
+        pass
 
     def get_result_status(self, result) -> Dict[str, str]:
         if result.error:
@@ -223,7 +231,10 @@ class BaseRunner:
 
             # if releasing failed and the result doesn't have an error yet, set
             # an error
-            if exc_str is not None and result.error is None:
+            if (
+                exc_str is not None and result is not None and
+                result.error is None and error is None
+            ):
                 error = exc_str
 
         if error is not None:
@@ -284,6 +295,11 @@ class BaseRunner:
                     self.num_nodes,
                     self.skip_cause
                 )
+                if self.skip_cause is None:  # mypy appeasement
+                    raise InternalException(
+                        'Skip cause not set but skip was somehow caused by '
+                        'an ephemeral failure'
+                    )
                 # set an error so dbt will exit with an error code
                 error = (
                     'Compilation Error in {}, caused by compilation error '

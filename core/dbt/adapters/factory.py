@@ -45,7 +45,8 @@ class AdpaterContainer:
         # and adapter_type entries with the same value, as they're all
         # singletons
         try:
-            mod = import_module('.' + name, 'dbt.adapters')
+            # mypy doesn't think modules have any attributes.
+            mod: Any = import_module('.' + name, 'dbt.adapters')
         except ModuleNotFoundError as exc:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtiem error
@@ -56,7 +57,7 @@ class AdpaterContainer:
             # library. Log the stack trace.
             logger.debug('', exc_info=True)
             raise
-        plugin = mod.Plugin  # type: AdapterPlugin
+        plugin: AdapterPlugin = mod.Plugin
         plugin_type = plugin.adapter.type()
 
         if plugin_type != name:

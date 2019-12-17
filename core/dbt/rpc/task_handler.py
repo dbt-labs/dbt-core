@@ -19,6 +19,7 @@ from dbt.adapters.factory import (
 from dbt.contracts.rpc import (
     RPCParameters, RemoteResult, TaskHandlerState, RemoteMethodFlags, TaskTags,
 )
+from dbt.exceptions import InternalException
 from dbt.logger import (
     GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler,
 )
@@ -112,7 +113,7 @@ class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
             elif result is not None:
                 handler.emit_result(result)
             else:
-                error = dbt_error(dbt.exceptions.InternalException(
+                error = dbt_error(InternalException(
                     'after request handling, neither result nor error is None!'
                 ))
                 handler.emit_error(error.error)
@@ -202,11 +203,12 @@ class StateHandler:
             if self.handler.result is None:
                 # there wasn't an error before, but there sure is one now
                 self.handler.error = dbt_error(
-                    dbt.exceptions.InternalException(
+                    InternalException(
                         'got an invalid result=None, but state was {}'
                         .format(self.handler.state)
                     )
                 )
+            # TODO: need to tighten RequestTaskHandler.Task to also
             elif self.handler.task.interpret_results(self.handler.result):
                 self.handler.state = TaskHandlerState.Success
             else:
@@ -232,13 +234,13 @@ class StateHandler:
     def task_teardown(self):
         self.handler.task.cleanup(self.handler.result)
 
-    def __exit__(self, exc_type, exc_value, exc_tb) -> bool:
+    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
         try:
             if exc_type is not None:
                 self.handle_error(exc_type, exc_value, exc_tb)
             else:
                 self.handle_completed()
-            return False
+            return
         finally:
             # we really really promise to run your teardown
             self.task_teardown()
@@ -302,7 +304,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
     @property
     def method(self) -> str:
         if self.task.METHOD_NAME is None:  # mypy appeasement
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 f'In the request handler, got a task({self.task}) with no '
                 'METHOD_NAME'
             )
@@ -338,7 +340,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
             self.started is None or
             self.process is None
         ):
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 '_wait_for_results() called before handle()'
             )
 
@@ -366,7 +368,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
 
     def get_result(self) -> RemoteResult:
         if self.process is None:
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 'get_result() called before handle()'
             )
 
@@ -411,7 +413,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
         # note this shouldn't call self.run() as that has different semantics
         # (we want errors to raise)
         if self.process is None:  # mypy appeasement
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 'Cannot run a None process'
             )
         self.process.task_exec()
@@ -430,6 +432,8 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
         # calling close(), the connection in the parent ends up throwing
         # 'connection already closed' exceptions
         cleanup_connections()
+        if self.process is None:
+            raise InternalException('self.process is None in start()!')
         self.process.start()
         self.state = TaskHandlerState.Running
         super().start()
@@ -437,6 +441,11 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
     def _collect_parameters(self):
         # both get_parameters and the argparse can raise a TypeError.
         cls: Type[RPCParameters] = self.task.get_parameters()
+
+        if self.task_kwargs is None:
+            raise TypeError(
+                'task_kwargs were None - unable to cllect parameters'
+            )
 
         try:
             return cls.from_dict(self.task_kwargs)
@@ -463,7 +472,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
             # tasks use this to set their `real_task`.
             self.task.set_config(self.manager.config)
             if self.task_params is None:  # mypy appeasement
-                raise dbt.exceptions.InternalException(
+                raise InternalException(
                     'Task params set to None!'
                 )
 

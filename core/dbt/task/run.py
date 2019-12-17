@@ -1,6 +1,6 @@
 import functools
 import time
-from typing import List, Dict, Any, Set, Tuple, Optional
+from typing import List, Dict, Any, Iterable, Set, Tuple, Optional
 
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
@@ -10,6 +10,7 @@ from dbt.logger import (
     TimestampNamed,
     DbtModelState,
 )
+from dbt.exceptions import InternalException
 from dbt.node_types import NodeType, RunHookType
 from dbt.node_runners import ModelRunner
 
@@ -24,9 +25,9 @@ from dbt.ui.printer import \
     get_counts
 
 from dbt.compilation import compile_node
+from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.task.compile import CompileTask
-from dbt.utils import get_nodes_by_tags
 
 
 class Timer:
@@ -61,6 +62,20 @@ def _hook_list() -> List[ParsedHookNode]:
     return []
 
 
+def get_hooks_by_tags(
+    nodes: Iterable[CompileResultNode],
+    match_tags: Set[str],
+) -> List[ParsedHookNode]:
+    matched_nodes = []
+    for node in nodes:
+        if not isinstance(node, ParsedHookNode):
+            continue
+        node_tags = node.tags
+        if len(set(node_tags) & match_tags):
+            matched_nodes.append(node)
+    return matched_nodes
+
+
 class RunTask(CompileTask):
     def __init__(self, args, config):
         super().__init__(args, config)
@@ -84,7 +99,7 @@ class RunTask(CompileTask):
         hook_obj = get_hook(statement, index=hook_index)
         return hook_obj.sql or ''
 
-    def _hook_keyfunc(self, hook: ParsedHookNode):
+    def _hook_keyfunc(self, hook: ParsedHookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name
         if package_name == self.config.project_name:
             package_name = BiggestName('')
@@ -93,9 +108,15 @@ class RunTask(CompileTask):
     def get_hooks_by_type(
         self, hook_type: RunHookType
     ) -> List[ParsedHookNode]:
+
+        if self.manifest is None:
+            raise InternalException(
+                'self.manifest was None in get_hooks_by_type'
+            )
+
         nodes = self.manifest.nodes.values()
         # find all hooks defined in the manifest (could be multiple projects)
-        hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
+        hooks: List[ParsedHookNode] = get_hooks_by_tags(nodes, {hook_type})
         hooks.sort(key=self._hook_keyfunc)
         return hooks
 

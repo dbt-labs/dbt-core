@@ -1,3 +1,5 @@
+from typing import Optional
+
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
@@ -54,8 +56,6 @@ class TimeoutEmitter(Emitter):
 
 emitter = TimeoutEmitter()
 tracker = Tracker(emitter, namespace="cf", app_id="dbt")
-
-active_user = None
 
 
 class User:
@@ -117,6 +117,9 @@ class User:
                 except yaml.reader.ReaderError:
                     user = self.set_cookie()
         return user
+
+
+active_user: Optional[User] = None
 
 
 def get_run_type(args):
@@ -239,6 +242,8 @@ def track_invocation_start(config=None, args=None):
 
 def track_model_run(options):
     context = [SelfDescribingJson(RUN_MODEL_SPEC, options)]
+    assert active_user is not None, \
+        'Cannot track model runs when active user is None'
 
     track(
         active_user,
@@ -251,6 +256,8 @@ def track_model_run(options):
 
 def track_rpc_request(options):
     context = [SelfDescribingJson(RPC_REQUEST_SPEC, options)]
+    assert active_user is not None, \
+        'Cannot track rpc requests when active user is None'
 
     track(
         active_user,
@@ -263,6 +270,9 @@ def track_rpc_request(options):
 
 def track_package_install(options):
     context = [SelfDescribingJson(PACKAGE_INSTALL_SPEC, options)]
+    assert active_user is not None, \
+        'Cannot track package installs when active user is None'
+
     track(
         active_user,
         category="dbt",
@@ -282,6 +292,10 @@ def track_invocation_end(
         get_platform_context(),
         get_dbt_env_context()
     ]
+
+    assert active_user is not None, \
+        'Cannot track invocation end when active user is None'
+
     track(
         active_user,
         category="dbt",
@@ -294,6 +308,8 @@ def track_invocation_end(
 def track_invalid_invocation(
         config=None, args=None, result_type=None
 ):
+    assert active_user is not None, \
+        'Cannot track invalid invocations when active user is None'
 
     user = active_user
     invocation_context = get_invocation_invalid_context(
@@ -344,7 +360,8 @@ class InvocationProcessor(logbook.Processor):
         super().__init__()
 
     def process(self, record):
-        record.extra.update({
-            "run_started_at": active_user.run_started_at.isoformat(),
-            "invocation_id": active_user.invocation_id,
-        })
+        if active_user is not None:
+            record.extra.update({
+                "run_started_at": active_user.run_started_at.isoformat(),
+                "invocation_id": active_user.invocation_id,
+            })

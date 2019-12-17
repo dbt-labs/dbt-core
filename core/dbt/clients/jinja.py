@@ -3,7 +3,9 @@ import linecache
 import os
 import tempfile
 from contextlib import contextmanager
-from typing import List, Union, Set, Optional, Dict, Any, Callable, Iterator
+from typing import (
+    List, Union, Set, Optional, Dict, Any, Callable, Iterator, Type
+)
 
 import jinja2
 import jinja2._compat
@@ -35,17 +37,22 @@ def _linecache_inject(source, write):
         tmp_file.write(source)
         filename = tmp_file.name
     else:
-        filename = codecs.encode(os.urandom(12), 'hex').decode('ascii')
+        # `codecs.encode` actually takes a `bytes` as the first argument if
+        # the second argument is 'hex' - mypy does not know this.
+        rnd = codecs.encode(os.urandom(12), 'hex')  # type: ignore
+        filename = rnd.decode('ascii')
 
     # encode, though I don't think this matters
     filename = jinja2._compat.encode_filename(filename)
     # put ourselves in the cache
-    linecache.cache[filename] = (
+    cache_entry = (
         len(source),
         None,
         [line + '\n' for line in source.splitlines()],
         filename
     )
+    # linecache does in fact have an attribute `cache`, thanks
+    linecache.cache[filename] = cache_entry  # type: ignore
     return filename
 
 
@@ -84,7 +91,7 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             write = MACRO_DEBUGGING == 'write'
             filename = _linecache_inject(source, write)
 
-        return super()._compile(source, filename)
+        return super()._compile(source, filename)  # type: ignore
 
 
 class TemplateCache:
@@ -317,7 +324,7 @@ def create_macro_capture_env(node):
 
 
 def get_environment(node=None, capture_macros=False):
-    args = {
+    args: Dict[str, List[Union[str, Type[jinja2.ext.Extension]]]] = {
         'extensions': ['jinja2.ext.do']
     }
 
@@ -330,37 +337,33 @@ def get_environment(node=None, capture_macros=False):
     return MacroFuzzEnvironment(**args)
 
 
-def parse(string):
+@contextmanager
+def catch_jinja(node=None) -> Iterator[None]:
     try:
-        return get_environment().parse(str(string))
-
-    except (jinja2.exceptions.TemplateSyntaxError,
-            jinja2.exceptions.UndefinedError) as e:
+        yield
+    except jinja2.exceptions.TemplateSyntaxError as e:
         e.translated = False
-        dbt.exceptions.raise_compiler_error(str(e))
+        raise dbt.exceptions.CompilationException(str(e), node) from e
+    except jinja2.exceptions.UndefinedError as e:
+        raise dbt.exceptions.CompilationException(str(e), node) from e
+
+
+def parse(string):
+    with catch_jinja():
+        return get_environment().parse(str(string))
 
 
 def get_template(string, ctx, node=None, capture_macros=False):
-    try:
+    with catch_jinja(node):
         env = get_environment(node, capture_macros)
 
         template_source = str(string)
         return env.from_string(template_source, globals=ctx)
 
-    except (jinja2.exceptions.TemplateSyntaxError,
-            jinja2.exceptions.UndefinedError) as e:
-        e.translated = False
-        dbt.exceptions.raise_compiler_error(str(e), node)
-
 
 def render_template(template, ctx, node=None):
-    try:
+    with catch_jinja(node):
         return template.render(ctx)
-
-    except (jinja2.exceptions.TemplateSyntaxError,
-            jinja2.exceptions.UndefinedError) as e:
-        e.translated = False
-        dbt.exceptions.raise_compiler_error(str(e), node)
 
 
 def get_rendered(string, ctx, node=None,

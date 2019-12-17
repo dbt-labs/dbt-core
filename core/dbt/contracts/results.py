@@ -1,7 +1,10 @@
 from dbt.contracts.graph.manifest import CompileResultNode
-from dbt.contracts.graph.unparsed import Time, FreshnessStatus
+from dbt.contracts.graph.unparsed import (
+    Time, FreshnessStatus, FreshnessThreshold
+)
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import Writable, Replaceable
+from dbt.exceptions import InternalException
 from dbt.logger import (
     TimingProcessor,
     JsonOnly,
@@ -15,7 +18,6 @@ import agate
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Union, Dict, List, Optional, Any, NamedTuple
-from numbers import Real
 
 
 @dataclass
@@ -51,7 +53,7 @@ class PartialResult(JsonSchemaMixin, Writable):
     error: Optional[str] = None
     status: Union[None, str, int, bool] = None
     execution_time: Union[str, int] = 0
-    thread_id: Optional[int] = 0
+    thread_id: Optional[str] = None
     timing: List[TimingInfo] = field(default_factory=list)
     fail: Optional[bool] = None
     warn: Optional[bool] = None
@@ -82,7 +84,7 @@ class RunModelResult(WritableRunModelResult):
 class ExecutionResult(JsonSchemaMixin, Writable):
     results: List[Union[WritableRunModelResult, PartialResult]]
     generated_at: datetime
-    elapsed_time: Real
+    elapsed_time: float
 
     def __len__(self):
         return len(self.results)
@@ -94,6 +96,11 @@ class ExecutionResult(JsonSchemaMixin, Writable):
         return self.results[idx]
 
 
+@dataclass
+class RunOperationResult(ExecutionResult):
+    success: bool
+
+
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
 @dataclass
@@ -101,11 +108,11 @@ class SourceFreshnessResult(JsonSchemaMixin, Writable):
     node: ParsedSourceDefinition
     max_loaded_at: datetime
     snapshotted_at: datetime
-    age: Real
+    age: float
     status: FreshnessStatus
     error: Optional[str] = None
     execution_time: Union[str, int] = 0
-    thread_id: Optional[int] = 0
+    thread_id: Optional[str] = None
     timing: List[TimingInfo] = field(default_factory=list)
     fail: Optional[bool] = None
 
@@ -124,7 +131,7 @@ class SourceFreshnessResult(JsonSchemaMixin, Writable):
 @dataclass
 class FreshnessMetadata(JsonSchemaMixin):
     generated_at: datetime
-    elapsed_time: Real
+    elapsed_time: float
 
 
 @dataclass
@@ -139,6 +146,9 @@ class FreshnessExecutionResult(FreshnessMetadata):
         )
         sources = {}
         for result in self.results:
+            result_value: Union[
+                SourceFreshnessRuntimeError, SourceFreshnessOutput
+            ]
             unique_id = result.node.unique_id
             if result.error is not None:
                 result_value = SourceFreshnessRuntimeError(
@@ -146,12 +156,26 @@ class FreshnessExecutionResult(FreshnessMetadata):
                     state=FreshnessErrorEnum.runtime_error,
                 )
             else:
+                # we know that this must be a SourceFreshnessResult
+                if not isinstance(result, SourceFreshnessResult):
+                    raise InternalException(
+                        'Got {} instead of a SourceFreshnessResult for a '
+                        'non-error result in freshness execution!'
+                        .format(type(result))
+                    )
+                # if we're here, we must have a non-None freshness threshold
+                criteria = result.node.freshness
+                if criteria is None:
+                    raise InternalException(
+                        'Somehow evaluated a freshness result for a source '
+                        'that has no freshness criteria!'
+                    )
                 result_value = SourceFreshnessOutput(
                     max_loaded_at=result.max_loaded_at,
                     snapshotted_at=result.snapshotted_at,
                     max_loaded_at_time_ago_in_s=result.age,
                     state=result.status,
-                    criteria=result.node.freshness,
+                    criteria=criteria,
                 )
             sources[unique_id] = result_value
         output = FreshnessRunOutput(meta=meta, sources=sources)
@@ -191,9 +215,9 @@ class SourceFreshnessRuntimeError(JsonSchemaMixin):
 class SourceFreshnessOutput(JsonSchemaMixin):
     max_loaded_at: datetime
     snapshotted_at: datetime
-    max_loaded_at_time_ago_in_s: Real
+    max_loaded_at_time_ago_in_s: float
     state: FreshnessStatus
-    criteria: FreshnessCriteria
+    criteria: FreshnessThreshold
 
 
 SourceFreshnessRunResult = Union[SourceFreshnessOutput,
