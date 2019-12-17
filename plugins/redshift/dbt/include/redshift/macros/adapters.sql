@@ -178,6 +178,12 @@
   {{ current_timestamp() }}::timestamp
 {%- endmacro %}
 
+
+{% macro redshift__snapshot_string_as_time(timestamp) -%}
+    {%- set result = "'" ~ timestamp ~ "'::timestamp" -%}
+    {{ return(result) }}
+{%- endmacro %}
+
 {% macro redshift__make_temp_relation(base_relation, suffix) %}
     {% do return(postgres__make_temp_relation(base_relation, suffix)) %}
 {% endmacro %}

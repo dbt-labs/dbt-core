@@ -1,0 +1,5 @@
+version: 2
+models:
+  - name: snapshot_actual
+    tests:
+      - mutually_exclusive_ranges

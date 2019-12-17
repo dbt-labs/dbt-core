@@ -1,4 +1,4 @@
-## dbt 0.15.0 (TBD)
+## dbt 0.15.0 (November 25, 2019)
 
 ### Breaking changes
 - Support for Python 2.x has been dropped [as it will no longer be supported on January 1, 2020](https://www.python.org/dev/peps/pep-0373/)

@@ -99,8 +99,8 @@ class AdpaterContainer:
             self.adapters.clear()
 
     def cleanup_connections(self):
-        """Only clean up the adapter connections list without resetting the actual
-        adapters.
+        """Only clean up the adapter connections list without resetting the
+        actual adapters.
         """
         with self.lock:
             for adapter in self.adapters.values():

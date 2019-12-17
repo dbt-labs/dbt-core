@@ -153,6 +153,8 @@ class TestRedshiftAdapter(unittest.TestCase):
     def test_default_keepalive(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -168,6 +170,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(keepalives_idle=256)
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -182,6 +186,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(search_path="test")
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -197,6 +203,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(search_path="test test")
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
@@ -212,6 +220,8 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(keepalives_idle=0)
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',

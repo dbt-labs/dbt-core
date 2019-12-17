@@ -1,7 +1,7 @@
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from hologram import ValidationError
 
@@ -222,11 +222,14 @@ class GenerateTask(CompileTask):
         return results
 
     def get_catalog_results(
-        self, nodes, generated_at, compile_results
+        self,
+        nodes: Dict[str, CatalogTable],
+        generated_at: datetime,
+        compile_results: Optional[Any]
     ) -> CatalogResults:
         return CatalogResults(
             nodes=nodes,
-            generated_at=datetime.utcnow(),
+            generated_at=generated_at,
             _compile_results=compile_results,
         )
 

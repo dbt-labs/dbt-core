@@ -1,7 +1,17 @@
 #!/usr/bin/env python
-from setuptools import find_namespace_packages
-from setuptools import setup
 import os
+import sys
+
+from setuptools import setup
+try:
+    from setuptools import find_namespace_packages
+except ImportError:
+    # the user has a downlevel version of setuptools.
+    print('Error: dbt requires setuptools v40.1.0 or higher.')
+    print('Please upgrade setuptools with "pip install --upgrade setuptools" '
+          'and try again')
+    sys.exit(1)
+
 
 PSYCOPG2_MESSAGE = '''
 No package name override was set.
@@ -25,7 +35,7 @@ def _dbt_psycopg2_name():
 
 
 package_name = "dbt-postgres"
-package_version = "0.15.0rc2"
+package_version = "0.15.0"
 description = """The postgres adpter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))

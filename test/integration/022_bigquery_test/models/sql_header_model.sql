@@ -9,4 +9,4 @@
 	);
 {% endcall %}
 
-select a_to_b(dupe) from {{ ref('view_model') }}
+select a_to_b(dupe) as dupe from {{ ref('view_model') }}

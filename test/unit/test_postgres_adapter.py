@@ -60,12 +60,17 @@ class TestPostgresAdapter(unittest.TestCase):
             self.fail('acquiring connection failed with unknown exception: {}'
                       .format(str(e)))
         self.assertEqual(connection.type, 'postgres')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once()
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_acquire_connection(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         self.assertEqual(connection.state, 'open')
         self.assertNotEqual(connection.handle, None)
         psycopg2.connect.assert_called_once()
@@ -101,6 +106,8 @@ class TestPostgresAdapter(unittest.TestCase):
     def test_default_keepalive(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
@@ -114,6 +121,8 @@ class TestPostgresAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(keepalives_idle=256)
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
@@ -128,6 +137,8 @@ class TestPostgresAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(search_path="test")
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
@@ -142,6 +153,8 @@ class TestPostgresAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(search_path="test test")
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
@@ -156,6 +169,8 @@ class TestPostgresAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.replace(keepalives_idle=0)
         connection = self.adapter.acquire_connection('dummy')
 
+        psycopg2.connect.assert_not_called()
+        connection.handle
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
