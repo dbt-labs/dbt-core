@@ -143,9 +143,7 @@ class ListTask(GraphRunnableTask):
         elif output == "path":
             generator = self.generate_paths
         else:
-            raise InternalException(
-                'Invalid output {}'.format(output)
-            )
+            raise InternalException("Invalid output {}".format(output))
 
         return self.output_results(generator())
 
