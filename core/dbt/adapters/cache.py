@@ -303,15 +303,11 @@ class RelationsCache:
             return
         if ref_key not in self.relations:
             # Insert a dummy "external" relation.
-            referenced = referenced.replace(
-                type=referenced.External
-            )
+            referenced = referenced.replace(type=referenced.External)
             self.add(referenced)
         if dep_key not in self.relations:
             # Insert a dummy "external" relation.
-            dependent = dependent.replace(
-                type=referenced.External
-            )
+            dependent = dependent.replace(type=referenced.External)
             self.add(dependent)
         fire_event(AddLink(dep_key=dep_key, ref_key=ref_key))
         with self.lock:
