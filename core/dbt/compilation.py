@@ -49,7 +49,7 @@ def print_compile_stats(stats):
         NodeType.Model: "model",
         NodeType.Test: "test",
         NodeType.Snapshot: "snapshot",
-        NodeType.Analysis: 'analysis',
+        NodeType.Analysis: "analysis",
         NodeType.Macro: "macro",
         NodeType.Operation: "operation",
         NodeType.Seed: "seed file",
