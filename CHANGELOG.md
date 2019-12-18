@@ -7,7 +7,7 @@ This is a bugfix release.
 - Support raising warnings in user-space ([#1970](https://github.com/fishtown-analytics/dbt/issues/1970), [#1977](https://github.com/fishtown-analytics/dbt/pull/1977))
 
 ### Fixes
-- Fix for catalog generation error when datasets are not missing on BigQuery ([#1984](https://github.com/fishtown-analytics/dbt/issues/1984), [#2005](https://github.com/fishtown-analytics/dbt/pull/2005))
+- Fix for catalog generation error when datasets are missing on BigQuery ([#1984](https://github.com/fishtown-analytics/dbt/issues/1984), [#2005](https://github.com/fishtown-analytics/dbt/pull/2005))
 - Fix for invalid SQL generated when "check" strategy is used in Snapshots with changing schemas ([#1797](https://github.com/fishtown-analytics/dbt/issues/1797), [#2001](https://github.com/fishtown-analytics/dbt/pull/2001)(
 - Fix for gaps in valid_from and valid_to timestamps when "check" strategy is used in Snapshots on some databases ([#1736](https://github.com/fishtown-analytics/dbt/issues/1736), [#1994](https://github.com/fishtown-analytics/dbt/pull/1994))
 - Fix incorrect thread names in dbt server logs ([#1905](https://github.com/fishtown-analytics/dbt/issues/1905), [#2002](https://github.com/fishtown-analytics/dbt/pull/2002))
