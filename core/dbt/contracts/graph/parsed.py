@@ -119,6 +119,7 @@ class NodeConfig(
 class ColumnInfo(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
 
 
@@ -180,6 +181,7 @@ class ParsedNodeMixins:
         self.description = patch.description
         self.columns = patch.columns
         self.docrefs = patch.docrefs
+        self.data = patch.data
         if dbt.flags.STRICT_MODE:
             self.to_dict(validate=True)
 
@@ -215,6 +217,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     docrefs: List[Docref] = field(default_factory=list)
     description: str = field(default='')
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    data: Dict[str, Any] = field(default_factory=dict)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
 
@@ -455,6 +458,7 @@ class ParsedNodePatch(JsonSchemaMixin, Replaceable):
     original_file_path: str
     columns: Dict[str, ColumnInfo]
     docrefs: List[Docref]
+    data: Dict[str, Any]
 
 
 @dataclass
@@ -506,6 +510,7 @@ class ParsedSourceDefinition(
     external: Optional[ExternalTable] = None
     docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
+    data: Dict[str, Any] = field(default_factory=dict)
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
 
     @property

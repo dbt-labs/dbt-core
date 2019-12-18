@@ -66,10 +66,11 @@ class ParserRef:
         self.column_info: Dict[str, ColumnInfo] = {}
         self.docrefs: List[Docref] = []
 
-    def add(self, column_name, description, data_type):
+    def add(self, column_name, description, data_type, data):
         self.column_info[column_name] = ColumnInfo(name=column_name,
                                                    description=description,
-                                                   data_type=data_type)
+                                                   data_type=data_type,
+                                                   data=data)
 
 
 def collect_docrefs(
@@ -222,9 +223,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         column_name = column.name
         description = column.description
         data_type = column.data_type
+        data = column.data
         collect_docrefs(block.target, refs, column_name, description)
 
-        refs.add(column_name, description, data_type)
+        refs.add(column_name, description, data_type, data)
 
         if not column.tests:
             return
@@ -385,7 +387,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             original_file_path=block.path.original_file_path,
             description=description,
             columns=refs.column_info,
-            docrefs=refs.docrefs
+            docrefs=refs.docrefs,
+            data=block.target.data
         )
 
     def parse_target_model(

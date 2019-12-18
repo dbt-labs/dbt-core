@@ -58,6 +58,7 @@ class UnparsedRunHook(UnparsedNode):
 class NamedTested(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
     tests: Optional[List[Union[Dict[str, Any], str]]] = None
 
@@ -159,6 +160,7 @@ class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
     name: str = ''
     description: str = ''
     data_type: str = ''
+    data: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.name == '' or self.data_type == '':
@@ -206,6 +208,7 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
 class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data: Dict[str, Any] = field(default_factory=dict)
     database: Optional[str] = None
     schema: Optional[str] = None
     loader: str = ''
