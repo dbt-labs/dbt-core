@@ -1,3 +1,5 @@
+{{ config(materialized="table") }}
+
 {# This will fail if it is not extracted correctly #}
 {% call set_sql_header(config) %}
   	CREATE TEMPORARY FUNCTION a_to_b(str STRING)
