@@ -342,6 +342,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             NodeType.Source, self.project.project_name, source.name, table.name
         ])
         description = table.description or ''
+        data = table.data or {}
         source_description = source.description or ''
         collect_docrefs(source, refs, None, description, source_description)
 
@@ -350,6 +351,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         freshness = self._calculate_freshness(source, table)
         quoting = source.quoting.merged(table.quoting)
         path = block.path.original_file_path
+        source_data = source.data or {}
 
         return ParsedSourceDefinition(
             package_name=self.project.project_name,
@@ -366,6 +368,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             external=table.external,
             source_name=source.name,
             source_description=source_description,
+            source_data=source_data,
+            data=data,
             loader=source.loader,
             docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,

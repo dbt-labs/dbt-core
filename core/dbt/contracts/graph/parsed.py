@@ -510,8 +510,9 @@ class ParsedSourceDefinition(
     external: Optional[ExternalTable] = None
     docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
-    data: Dict[str, Any] = field(default_factory=dict)
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    data: Dict[str, Any] = field(default_factory=dict)
+    source_data: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_ephemeral_model(self):
