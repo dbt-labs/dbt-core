@@ -1,3 +1,25 @@
+## dbt 0.15.1 (To be released)
+
+This is a bugfix release.
+
+### Features
+- Lazily load database connections ([#1584](https://github.com/fishtown-analytics/dbt/issues/1584), [#1992](https://github.com/fishtown-analytics/dbt/pull/1992))
+- Support raising warnings in user-space ([#1970](https://github.com/fishtown-analytics/dbt/issues/1970), [#1977](https://github.com/fishtown-analytics/dbt/pull/1977))
+
+### Fixes
+- Fix for catalog generation error when datasets are not missing on BigQuery ([#1984](https://github.com/fishtown-analytics/dbt/issues/1984), [#2005](https://github.com/fishtown-analytics/dbt/pull/2005))
+- Fix for invalid SQL generated when "check" strategy is used in Snapshots with changing schemas ([#1797](https://github.com/fishtown-analytics/dbt/issues/1797), [#2001](https://github.com/fishtown-analytics/dbt/pull/2001)(
+- Fix for gaps in valid_from and valid_to timestamps when "check" strategy is used in Snapshots on some databases ([#1736](https://github.com/fishtown-analytics/dbt/issues/1736), [#1994](https://github.com/fishtown-analytics/dbt/pull/1994))
+- Fix incorrect thread names in dbt server logs ([#1905](https://github.com/fishtown-analytics/dbt/issues/1905), [#2002](https://github.com/fishtown-analytics/dbt/pull/2002))
+- Fix for ignored catalog data when user schemas begin with `pg*` on Postgres and Redshift ([#1960](https://github.com/fishtown-analytics/dbt/issues/1960), [#2003](https://github.com/fishtown-analytics/dbt/pull/2003))
+- Fix for poorly defined materialization resolution logic ([#1962](https://github.com/fishtown-analytics/dbt/issues/1962), [#1976](https://github.com/fishtown-analytics/dbt/pull/1976))
+- Fix missing `drop_schema` method in adapter namespace ([#1980](https://github.com/fishtown-analytics/dbt/issues/1980), [#1983](https://github.com/fishtown-analytics/dbt/pull/1983))
+
+### Under the hood
+- Fail more gracefully at install time when setuptools is downlevel ([#1975](https://github.com/fishtown-analytics/dbt/issues/1975), [#1978](https://github.com/fishtown-analytics/dbt/pull/1978))
+- Make the `DBT_TEST_ALT` integration test warehouse configurable on Snowflake ([#1939](https://github.com/fishtown-analytics/dbt/issues/1939), [#1979](https://github.com/fishtown-analytics/dbt/pull/1979))
+
+
 ## dbt 0.15.0 (November 25, 2019)
 
 ### Breaking changes
