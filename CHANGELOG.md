@@ -5,6 +5,8 @@ This is a bugfix release.
 ### Features
 - Lazily load database connections ([#1584](https://github.com/fishtown-analytics/dbt/issues/1584), [#1992](https://github.com/fishtown-analytics/dbt/pull/1992))
 - Support raising warnings in user-space ([#1970](https://github.com/fishtown-analytics/dbt/issues/1970), [#1977](https://github.com/fishtown-analytics/dbt/pull/1977))
+- Suppport BigQuery label configuration for models ([#1942](https://github.com/fishtown-analytics/dbt/issues/1942), [#1964](https://github.com/fishtown-analytics/dbt/pull/1964))
+- Support retrying when BigQuery models fail with server errors ([#1579](https://github.com/fishtown-analytics/dbt/issues/1579), [#1963](https://github.com/fishtown-analytics/dbt/pull/1963))
 
 ### Fixes
 - Fix for catalog generation error when datasets are missing on BigQuery ([#1984](https://github.com/fishtown-analytics/dbt/issues/1984), [#2005](https://github.com/fishtown-analytics/dbt/pull/2005))
@@ -14,10 +16,18 @@ This is a bugfix release.
 - Fix for ignored catalog data when user schemas begin with `pg*` on Postgres and Redshift ([#1960](https://github.com/fishtown-analytics/dbt/issues/1960), [#2003](https://github.com/fishtown-analytics/dbt/pull/2003))
 - Fix for poorly defined materialization resolution logic ([#1962](https://github.com/fishtown-analytics/dbt/issues/1962), [#1976](https://github.com/fishtown-analytics/dbt/pull/1976))
 - Fix missing `drop_schema` method in adapter namespace ([#1980](https://github.com/fishtown-analytics/dbt/issues/1980), [#1983](https://github.com/fishtown-analytics/dbt/pull/1983))
+- Fix incorrect `generated_at` value in the catalog ([#1988](https://github.com/fishtown-analytics/dbt/pull/1988))
 
 ### Under the hood
 - Fail more gracefully at install time when setuptools is downlevel ([#1975](https://github.com/fishtown-analytics/dbt/issues/1975), [#1978](https://github.com/fishtown-analytics/dbt/pull/1978))
 - Make the `DBT_TEST_ALT` integration test warehouse configurable on Snowflake ([#1939](https://github.com/fishtown-analytics/dbt/issues/1939), [#1979](https://github.com/fishtown-analytics/dbt/pull/1979))
+- Pin upper bound on `google-cloud-bigquery` dependency to `1.24.0`. ([#2007](https://github.com/fishtown-analytics/dbt/pull/2007))
+- Remove duplicate `get_context_modules` method ([#1996](https://github.com/fishtown-analytics/dbt/pull/1996))
+- Add type annotations to base adapter code ([#1982](https://github.com/fishtown-analytics/dbt/pull/1982))
+
+Contributors:
+ - [@Fokko](https://github.com/Fokko) ([#1996](https://github.com/fishtown-analytics/dbt/pull/1996), [#1988](https://github.com/fishtown-analytics/dbt/pull/1988), [#1982](https://github.com/fishtown-analytics/dbt/pull/1982))
+ 
 
 
 ## dbt 0.15.0 (November 25, 2019)
