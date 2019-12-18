@@ -32,7 +32,7 @@
             pg_namespace.oid as id,
             pg_namespace.nspname as name
         from pg_namespace
-        where nspname != 'information_schema' and nspname not like 'pg_%'
+        where nspname != 'information_schema' and nspname not like 'pg\_%'
     ),
     referenced as (
         select

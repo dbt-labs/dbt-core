@@ -396,7 +396,7 @@ def _create_if_else_chain(
     key: str,
     criteria: List[Tuple[str, Type[JsonSchemaMixin]]],
     default: Type[JsonSchemaMixin]
-) -> dict:
+) -> Dict[str, Any]:
     """Mutate a given schema key that contains a 'oneOf' to instead be an
     'if-then-else' chain. This results is much better/more consistent errors
     from jsonschema.

@@ -545,10 +545,6 @@ class DBTIntegrationTest(unittest.TestCase):
         final_args.append('--log-cache-events')
 
         logger.info("Invoking dbt with {}".format(final_args))
-        if args is None:
-            args = ["run"]
-
-        logger.info("Invoking dbt with {}".format(args))
         return dbt.handle_and_check(final_args)
 
     def run_sql_file(self, path, kwargs=None):
@@ -623,7 +619,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                if conn.handle and not conn.handle.is_closed():
+                if conn.handle and not conn.handle.closed:
                     conn.handle.rollback()
                 print(sql)
                 print(e)
@@ -753,7 +749,8 @@ class DBTIntegrationTest(unittest.TestCase):
         if name is None:
             name = '__test'
         with patch.object(common, 'get_adapter', return_value=self.adapter):
-            with self.adapter.connection_named(name) as conn:
+            with self.adapter.connection_named(name):
+                conn = self.adapter.connections.get_thread_connection()
                 yield conn
 
     def get_relation_columns(self, relation):

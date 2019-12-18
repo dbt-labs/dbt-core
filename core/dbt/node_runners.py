@@ -417,6 +417,7 @@ class ModelRunner(CompileRunner):
             model, self.config, manifest)
 
         materialization_macro = manifest.get_materialization_macro(
+            self.config.project_name,
             model.get_materialization(),
             self.adapter.type())
 
