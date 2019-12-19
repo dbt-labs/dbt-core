@@ -2396,16 +2396,36 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'target/compiled/test/model.sql'
                     ),
                     'columns': {
-                        'id': {'description': 'The user ID number',
-                                        'name': 'id', 'data_type': None, 'meta': {}},
-                        'first_name': {'description': "The user's first name",
-                                        'name': 'first_name', 'data_type': None, 'meta': {}},
-                        'email': {'description': "The user's email",
-                                        'name': 'email', 'data_type': None, 'meta': {}},
-                        'ip_address': {'description': "The user's IP address",
-                                        'name': 'ip_address', 'data_type': None, 'meta': {}},
-                        'updated_at': {'description': "The last time this user's email was updated",
-                                        'name': 'updated_at', 'data_type': None, 'meta': {}}
+                        'id': {
+                            'description': 'The user ID number',
+                            'name': 'id',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'first_name': {
+                            'description': "The user's first name",
+                            'name': 'first_name',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'email': {
+                            'description': "The user's email",
+                            'name': 'email',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'ip_address': {
+                            'description': "The user's IP address",
+                            'name': 'ip_address',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'updated_at': {
+                            'description': "The last time this user's email was updated",
+                            'name': 'updated_at',
+                            'data_type': None,
+                            'meta': {}
+                        }
                     },
                     'compiled': True,
                     'compiled_sql': compiled_sql,
