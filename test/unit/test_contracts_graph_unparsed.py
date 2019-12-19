@@ -305,7 +305,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'loader': '',
             'freshness': {},
             'quoting': {},
-            'source_meta': {},
+            'meta': {},
             'tables': [
                 {
                     'name': 'table1',
@@ -404,7 +404,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     tests=[
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
-                    ]
+                    ],
+                    meta={},
                 ),
             ],
         )
@@ -427,6 +428,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
@@ -453,6 +455,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         100,
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
@@ -477,6 +480,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
@@ -501,6 +505,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
