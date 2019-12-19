@@ -251,7 +251,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'quoting': {},
             'tables': [],
             'loader': '',
-            'meta': {}
+            'meta': {},
         }
         self.assert_from_dict(minimum, from_dict)
         self.assert_to_dict(minimum, to_dict)
@@ -391,7 +391,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             name='foo',
             description='a description',
             tests=['table_test'],
-            meta={'key': ['value1', 'value2']}
+            meta={'key': ['value1', 'value2']},
             columns=[
                 NamedTested(
                     name='x',
@@ -412,13 +412,13 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'name': 'foo',
             'description': 'a description',
             'tests': ['table_test'],
-            'meta': {'key': ['value1', 'value2']}
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
                 {
                     'name': 'x',
                     'description': 'x description',
                     'tests': [],
-                    'meta': {'key2': 'value3'}
+                    'meta': {'key2': 'value3'},
                 },
                 {
                     'name': 'y',
@@ -438,13 +438,13 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'name': 'foo',
             'description': 'a description',
             'tests': ['table_test'],
-            'meta': {'key': ['value1', 'value2']}
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
                 {
                     'name': 'x',
                     'description': 'x description',
                     'tests': [],
-                    'meta': {'key2': 'value3'}
+                    'meta': {'key2': 'value3'},
                 },
                 {
                     'name': 'y',
@@ -462,13 +462,13 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'name': 'foo',
             'description': 'a description',
             'tests': ['table_test'],
-            'meta': {'key': ['value1', 'value2']}
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
                 # column missing a name
                 {
                     'description': 'x description',
                     'tests': [], ,
-                    'meta': {'key2': 'value3'}
+                    'meta': {'key2': 'value3'},
                 },
                 {
                     'name': 'y',
@@ -486,13 +486,13 @@ class TestUnparsedNodeUpdate(ContractTestCase):
         dct = {
             'description': 'a description',
             'tests': ['table_test'],
-            'meta': {'key': ['value1', 'value2']}
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
                 {
                     'name': 'x',
                     'description': 'x description',
                     'tests': [],
-                    'meta': {'key2': 'value3'}
+                    'meta': {'key2': 'value3'},
                 },
                 {
                     'name': 'y',
