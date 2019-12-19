@@ -91,6 +91,7 @@ class TestParsedModelNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -234,6 +235,7 @@ class TestParsedModelNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_tags)
 
@@ -270,6 +272,7 @@ class TestParsedModelNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_materialized)
 
@@ -442,6 +445,7 @@ class TestParsedHookNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -584,6 +588,7 @@ class TestParsedHookNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
             'index': 'a string!?',
         }
         self.assert_fails_validation(bad_index)
@@ -625,6 +630,7 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -773,6 +779,7 @@ class TestParsedTestNode(ContractTestCase):
             'docrefs': [],
             'columns': {},
             'column_name': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_column_name)
 
@@ -810,6 +817,7 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(missing_config_value)
 
@@ -846,6 +854,7 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(invalid_config_value)
 
@@ -1111,6 +1120,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
 
         node = self.ContractType(
@@ -1216,6 +1226,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
 
         node = self.ContractType(
@@ -1319,6 +1330,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_resource_type)
 
@@ -1333,6 +1345,7 @@ class TestParsedNodePatch(ContractTestCase):
             'original_file_path': '/path/to/schema.yml',
             'columns': {},
             'docrefs': [],
+            'meta': {},
         }
         patch = ParsedNodePatch(
             name='foo',
@@ -1511,6 +1524,8 @@ class TestParsedSourceDefinition(ContractTestCase):
             'columns': {},
             'quoting': {},
             'unique_id': 'test.source.my_source.my_source_table',
+            'meta': {},
+            'source_meta': {},
         }
         source_def = self.ContractType(
             columns={},
