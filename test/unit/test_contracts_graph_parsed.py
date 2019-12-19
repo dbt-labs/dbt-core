@@ -156,6 +156,7 @@ class TestParsedModelNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': ['tag'],
+            'meta': {},
             'config': {
                 'column_types': {'a': 'text'},
                 'enabled': True,
@@ -168,7 +169,7 @@ class TestParsedModelNode(ContractTestCase):
                 'vars': {'foo': 100},
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta': {}}},
         }
 
         node = self.ContractType(
@@ -189,13 +190,14 @@ class TestParsedModelNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=['tag'],
+            meta={},
             config=NodeConfig(
                 column_types={'a': 'text'},
                 materialized='ephemeral',
                 post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
                 vars={'foo': 100},
             ),
-            columns={'a': ColumnInfo('a', 'a text field')},
+            columns={'a': ColumnInfo('a', 'a text field', {})},
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -303,7 +305,7 @@ class TestParsedModelNode(ContractTestCase):
             name='foo',
             description='The foo model',
             original_file_path='/path/to/schema.yml',
-            columns={'a': ColumnInfo(name='a', description='a text field')},
+            columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
@@ -330,6 +332,7 @@ class TestParsedModelNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': [],
+            'meta': {},
             'config': {
                 'column_types': {},
                 'enabled': True,
@@ -342,7 +345,7 @@ class TestParsedModelNode(ContractTestCase):
                 'vars': {},
             },
             'patch_path': '/path/to/schema.yml',
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
             'docrefs': [
                 {
                     'documentation_name': 'foo',
@@ -369,9 +372,10 @@ class TestParsedModelNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=[],
+            meta={},
             config=NodeConfig(),
             patch_path='/path/to/schema.yml',
-            columns={'a': ColumnInfo(name='a', description='a text field')},
+            columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
@@ -1372,7 +1376,7 @@ class TestParsedNodePatch(ContractTestCase):
             'name': 'foo',
             'description': 'The foo model',
             'original_file_path': '/path/to/schema.yml',
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
             'docrefs': [
                 {
                     'documentation_name': 'foo',
@@ -1385,7 +1389,7 @@ class TestParsedNodePatch(ContractTestCase):
             name='foo',
             description='The foo model',
             original_file_path='/path/to/schema.yml',
-            columns={'a': ColumnInfo(name='a', description='a text field')},
+            columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
