@@ -112,6 +112,7 @@ class TestParsedModelNode(ContractTestCase):
             alias='bar',
             tags=[],
             config=NodeConfig(),
+            meta={},
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -295,6 +296,7 @@ class TestParsedModelNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=[],
+            meta={},
             config=NodeConfig(),
         )
         patch = ParsedNodePatch(
@@ -305,6 +307,7 @@ class TestParsedModelNode(ContractTestCase):
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
+            meta={},
         )
 
         initial.patch(patch)
@@ -508,6 +511,7 @@ class TestParsedHookNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': ['tag'],
+            'meta': {},
             'config': {
                 'column_types': {'a': 'text'},
                 'enabled': True,
@@ -520,7 +524,7 @@ class TestParsedHookNode(ContractTestCase):
                 'vars': {},
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
             'index': 13,
         }
 
@@ -542,12 +546,13 @@ class TestParsedHookNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=['tag'],
+            meta={},
             config=NodeConfig(
                 column_types={'a': 'text'},
                 materialized='table',
                 post_hook=[]
             ),
-            columns={'a': ColumnInfo('a', 'a text field')},
+            columns={'a': ColumnInfo('a', 'a text field', {})},
             index=13,
         )
         self.assert_symmetric(node, node_dict)
@@ -616,6 +621,7 @@ class TestParsedTestNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': [],
+            'meta': {},
             'config': {
                 'column_types': {},
                 'enabled': True,
@@ -650,6 +656,7 @@ class TestParsedTestNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=[],
+            meta={},
             config=TestConfig(),
         )
         self.assert_symmetric(node, node_dict)
@@ -671,6 +678,7 @@ class TestParsedTestNode(ContractTestCase):
             'database': 'test_db',
             'schema': 'test_schema',
             'alias': 'bar',
+            'meta': {},
         }
         self.assert_from_dict(node, minimum)
         pickle.loads(pickle.dumps(node))
@@ -694,6 +702,7 @@ class TestParsedTestNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': ['tag'],
+            'meta': {},
             'config': {
                 'column_types': {'a': 'text'},
                 'enabled': True,
@@ -708,7 +717,7 @@ class TestParsedTestNode(ContractTestCase):
                 'extra_key': 'extra value'
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta': {}}},
             'column_name': 'id',
         }
 
@@ -737,8 +746,9 @@ class TestParsedTestNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=['tag'],
+            meta={},
             config=cfg,
-            columns={'a': ColumnInfo('a', 'a text field')},
+            columns={'a': ColumnInfo('a', 'a text field',{})},
             column_name='id',
         )
         self.assert_symmetric(node, node_dict)
@@ -1353,6 +1363,7 @@ class TestParsedNodePatch(ContractTestCase):
             original_file_path='/path/to/schema.yml',
             columns={},
             docrefs=[],
+            meta={},
         )
         self.assert_symmetric(patch, dct)
 
@@ -1368,6 +1379,7 @@ class TestParsedNodePatch(ContractTestCase):
                     'documentation_package': 'test',
                 }
             ],
+            'meta': {'key': ['value']}
         }
         patch = ParsedNodePatch(
             name='foo',
@@ -1377,6 +1389,7 @@ class TestParsedNodePatch(ContractTestCase):
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
+            meta={'key': ['value']},
         )
         self.assert_symmetric(patch, dct)
         pickle.loads(pickle.dumps(patch))

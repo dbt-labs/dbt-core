@@ -16,7 +16,7 @@ import freezegun
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
-    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources',
+    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
     'docrefs', 'description', 'columns', 'fqn', 'build_path', 'patch_path',
