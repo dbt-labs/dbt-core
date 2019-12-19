@@ -467,7 +467,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 # column missing a name
                 {
                     'description': 'x description',
-                    'tests': [], ,
+                    'tests': [],
                     'meta': {'key2': 'value3'},
                 },
                 {
