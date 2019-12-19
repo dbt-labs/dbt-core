@@ -1486,7 +1486,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'source_description': 'My source',
                     'source_name': 'my_source',
-                    'source_meta': {}
+                    'source_meta': {},
                     'unique_id': 'source.test.my_source.my_table',
                     'fqn': ['test', 'my_source', 'my_table'],
                 }
