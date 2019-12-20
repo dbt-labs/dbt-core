@@ -117,7 +117,7 @@ def _relation_name(rel: Optional[BaseRelation]) -> str:
         return str(rel)
 
 
-class SchemaSearchMap(dict):
+class SchemaSearchMap(Dict[InformationSchema, Set[str]]):
     """A utility class to keep track of what information_schema tables to
     search for what schemas
     """
