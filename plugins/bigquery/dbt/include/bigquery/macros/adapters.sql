@@ -61,6 +61,10 @@
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set raw_kms_key_name = config.get('kms_key_name', none) -%}
   {%- set raw_labels = config.get('labels', []) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
+
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
@@ -76,6 +80,9 @@
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set raw_labels = config.get('labels', []) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
   create or replace view {{ relation }}
   {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=false, labels=raw_labels) }}

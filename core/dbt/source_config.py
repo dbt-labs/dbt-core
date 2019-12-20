@@ -16,7 +16,7 @@ class SourceConfig:
         'unique_key',
         'database',
         'severity',
-
+        'sql_header',
         'incremental_strategy',
 
         # snapshots
