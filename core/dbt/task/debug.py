@@ -80,7 +80,7 @@ class DebugTask(BaseTask):
                 self.project_dir = args.project_dir
             else:
                 self.project_dir = os.getcwd()
-        self.project_path = os.path.join(self.project_dir, 'dbt_project.yml')
+        self.project_path = os.path.join(self.project_dir, "dbt_project.yml")
         self.cli_vars = parse_cli_vars(getattr(self.args, "vars", "{}"))
 
         # set by _load_*
