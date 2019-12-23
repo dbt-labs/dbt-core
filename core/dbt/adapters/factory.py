@@ -63,9 +63,9 @@ class AdapterContainer:
         except ModuleNotFoundError as exc:
             # if we failed to import the target module in particular, inform
             # the user about it via a runtime error
-            if exc.name == 'dbt.adapters.' + name:
+            if exc.name == "dbt.adapters." + name:
                 fire_event(AdapterImportError(exc=exc))
-                raise RuntimeException(f'Could not find adapter type {name}!')
+                raise RuntimeException(f"Could not find adapter type {name}!")
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
 
