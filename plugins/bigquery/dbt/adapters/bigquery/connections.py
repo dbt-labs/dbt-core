@@ -176,9 +176,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
         return credentials.timeout_seconds
 
     @classmethod
-    def get_retries(cls, conn):
+    def get_retries(cls, conn) -> int:
         credentials = conn.credentials
-        return credentials.retries
+        if credentials.retries is not None:
+            return credentials.retries
+        else:
+            return 1
 
     @classmethod
     def get_table_from_response(cls, resp):
@@ -270,8 +273,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
         job_params = {'destination': table_ref,
                       'write_disposition': 'WRITE_TRUNCATE'}
 
+        timeout = self.get_timeout(conn)
+
         def fn():
-            return self._query_and_results(client, sql, conn, job_params)
+            return self._query_and_results(client, sql, conn, job_params,
+                                           timeout=timeout)
         self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_date_partitioned_table(self, database, schema, table_name):
@@ -317,12 +323,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
             return client.create_dataset(dataset, exists_ok=True)
         self._retry_and_handle(msg='create dataset', conn=conn, fn=fn)
 
-    def _query_and_results(self, client, sql, conn, job_params):
+    def _query_and_results(self, client, sql, conn, job_params, timeout=None):
         """Query the client and wait for results."""
         # Cannot reuse job_config if destination is set and ddl is used
         job_config = google.cloud.bigquery.QueryJobConfig(**job_params)
         query_job = client.query(sql, job_config=job_config)
-        iterator = query_job.result(timeout=self.get_timeout(conn))
+        iterator = query_job.result(timeout=timeout)
 
         return query_job, iterator
 
@@ -354,13 +360,13 @@ class _ErrorCounter(object):
             return False  # Don't log
         self.error_count += 1
         if _is_retryable(error) and self.error_count <= self.retries:
-            logger.warning(
-                'Retry attempt %s of %s after error: %s',
+            logger.debug(
+                'Retry attempt {} of {} after error: {}',
                 self.error_count, self.retries, repr(error))
             return True
         else:
-            logger.warning(
-                'Not Retrying after %s previous attempts. Error: %s',
+            logger.debug(
+                'Not Retrying after {} previous attempts. Error: {}',
                 self.error_count - 1, repr(error))
             return False
 

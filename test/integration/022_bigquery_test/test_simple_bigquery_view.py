@@ -53,7 +53,7 @@ class TestSimpleBigQueryRun(TestBaseBigQueryRun):
         self.run_dbt(['seed', '--full-refresh'])
         results = self.run_dbt()
         # Bump expected number of results when adding new model
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results), 8)
         self.assert_nondupes_pass()
 
 
@@ -64,7 +64,7 @@ class TestUnderscoreBigQueryRun(TestBaseBigQueryRun):
     def test_bigquery_run_twice(self):
         self.run_dbt(['seed'])
         results = self.run_dbt()
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results), 8)
         results = self.run_dbt()
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results), 8)
         self.assert_nondupes_pass()

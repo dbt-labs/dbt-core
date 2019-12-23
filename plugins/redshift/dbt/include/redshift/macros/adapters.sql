@@ -37,6 +37,9 @@
   {%- set _sort = config.get(
           'sort',
           validator=validation.any[list, basestring]) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
   create {% if temporary -%}temporary{%- endif %} table
     {{ relation.include(database=(not temporary), schema=(not temporary)) }}
@@ -51,6 +54,9 @@
 {% macro redshift__create_view_as(relation, sql) -%}
 
   {% set bind_qualifier = '' if config.get('bind', default=True) else 'with no schema binding' %}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
   create view {{ relation }} as (
     {{ sql }}
