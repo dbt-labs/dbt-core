@@ -7,6 +7,7 @@ This is a bugfix release.
 - Support raising warnings in user-space ([#1970](https://github.com/fishtown-analytics/dbt/issues/1970), [#1977](https://github.com/fishtown-analytics/dbt/pull/1977))
 - Suppport BigQuery label configuration for models ([#1942](https://github.com/fishtown-analytics/dbt/issues/1942), [#1964](https://github.com/fishtown-analytics/dbt/pull/1964))
 - Support retrying when BigQuery models fail with server errors ([#1579](https://github.com/fishtown-analytics/dbt/issues/1579), [#1963](https://github.com/fishtown-analytics/dbt/pull/1963))
+- Support sql headers in create table/view statements ([#1879](https://github.com/fishtown-analytics/dbt/issues/1879), [#1967](https://github.com/fishtown-analytics/dbt/pull/1967))
 
 ### Fixes
 - Fix for catalog generation error when datasets are missing on BigQuery ([#1984](https://github.com/fishtown-analytics/dbt/issues/1984), [#2005](https://github.com/fishtown-analytics/dbt/pull/2005))
@@ -27,7 +28,7 @@ This is a bugfix release.
 
 Contributors:
  - [@Fokko](https://github.com/Fokko) ([#1996](https://github.com/fishtown-analytics/dbt/pull/1996), [#1988](https://github.com/fishtown-analytics/dbt/pull/1988), [#1982](https://github.com/fishtown-analytics/dbt/pull/1982))
- 
+ - [@kconvey](https://github.com/kconvey) ([#1967](https://github.com/fishtown-analytics/dbt/pull/1967))
 
 
 ## dbt 0.15.0 (November 25, 2019)
