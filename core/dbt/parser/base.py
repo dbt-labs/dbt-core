@@ -223,7 +223,7 @@ class ConfiguredParser(
             )
             raise ParsingException(msg, node=node)
 
-    def _context_for(
+    def _context_for(self, parsed_node: IntermediateNode, config: ContextConfig) -> Dict[str, Any]:
         self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> Dict[str, Any]:
         return generate_parser_model_context(
@@ -312,8 +312,7 @@ class ConfiguredParser(
 
         # at this point, we've collected our hooks. Use the node context to
         # render each hook and collect refs/sources
-        hooks = list(itertools.chain(parsed_node.config.pre_hook,
-                                     parsed_node.config.post_hook))
+        hooks = list(itertools.chain(parsed_node.config.pre_hook, parsed_node.config.post_hook))
         # skip context rebuilding if there aren't any hooks
         if not hooks:
             return
