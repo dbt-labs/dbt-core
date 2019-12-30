@@ -1250,12 +1250,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'first_name': {
                             'description': 'The first name being summarized',
                             'name': 'first_name',
-                            'data_type': None
+                            'data_type': None,
+                            'meta': {}
                         },
                         'ct': {
                             'description': 'The number of instances of the first name',
                             'name': 'ct',
-                            'data_type': None
+                            'data_type': None,
+                            'meta': {}
                         },
                     },
                     'config': {
@@ -1326,12 +1328,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'first_name': {
                             'description': 'The first name being summarized',
                             'name': 'first_name',
-                            'data_type': None
+                            'data_type': None,
+                            'meta': {}
                         },
                         'ct': {
                             'description': 'The number of instances of the first name',
                             'name': 'ct',
-                            'data_type': None
+                            'data_type': None,
+                            'meta': {}
                         },
                     },
                     'config': {
@@ -1442,7 +1446,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'id': {
                             'description': 'An ID field',
                             'name': 'id',
-                            'data_type': None
+                            'data_type': None,
+                            'meta': {}
                         }
                     },
                     'quoting': {
@@ -1477,6 +1482,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'identifier': 'seed',
                     'loaded_at_field': None,
                     'loader': 'a_loader',
+                    'meta': {},
                     'name': 'my_table',
                     'original_file_path': self.dir('ref_models/schema.yml'),
                     'package_name': 'test',
