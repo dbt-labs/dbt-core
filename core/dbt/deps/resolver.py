@@ -103,14 +103,14 @@ def _check_for_duplicate_project_names(
         if project_name in seen:
             raise_dependency_error(
                 f'Found duplicate project "{project_name}". This occurs when '
-                'a dependency has the same project name as some other '
-                'dependency.'
+                "a dependency has the same project name as some other "
+                "dependency."
             )
         elif project_name == config.project_name:
             raise_dependency_error(
-                'Found a dependency with the same name as the root project '
+                "Found a dependency with the same name as the root project "
                 f'"{project_name}". Package names must be unique in a project.'
-                ' Please rename one of these packages.'
+                " Please rename one of these packages."
             )
         seen.add(project_name)
 
