@@ -14,6 +14,7 @@ from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash
+from dbt.exceptions import raise_compiler_error
 from dbt.parser.base import BaseParser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.data_test import DataTestParser
@@ -421,7 +422,15 @@ def load_all_projects(config) -> Mapping[str, Project]:
         internal_project_names(),
         _project_directories(config)
     )
-    all_projects.update(_load_projects(config, project_paths))
+    for project_name, project in _load_projects(config, project_paths):
+        if project_name in all_projects:
+            raise_compiler_error(
+                f'dbt found more than one package with the name '
+                f'"{project_name}" included in this project. Package names '
+                f'must be unique in a project. Please rename one of these '
+                f'packages.'
+            )
+        all_projects[project_name] = project
     return all_projects
 
 

@@ -1,7 +1,10 @@
+from typing import Optional
+
 import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
+from dbt.config import Project
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
 
@@ -12,7 +15,7 @@ from dbt.task.base import ProjectOnlyTask
 
 
 class DepsTask(ProjectOnlyTask):
-    def __init__(self, args, config=None):
+    def __init__(self, args, config: Optional[Project] = None):
         super().__init__(args=args, config=config)
 
     def track_package_install(self, package_name, source_type, version):
