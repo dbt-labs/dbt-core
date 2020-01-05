@@ -1,5 +1,7 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import os
 import json
+import shutil
 from unittest import mock
 
 import dbt.semver
@@ -171,3 +173,35 @@ class TestSimpleDependencyHooks(DBTIntegrationTest):
         results = self.run_dbt(["run", '--vars', cli_vars])
         self.assertEqual(len(results),  2)
         self.assertTablesEqual('actual', 'expected')
+
+
+class TestSimpleDependencyDuplicateName(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "local_dependency_006"
+
+    @property
+    def models(self):
+        return "local_models"
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'local': 'duplicate_dependency'
+                }
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_local_dependency_same_name(self):
+        with self.assertRaises(dbt.exceptions.DependencyException):
+            self.run_dbt(['deps'], expect_pass=False)
+
+    @use_profile('postgres')
+    def test_postgres_local_dependency_same_name_sneaky(self):
+        os.makedirs('dbt_modules')
+        shutil.copytree('./duplicate_dependency', './dbt_modules/duplicate_dependency')
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            self.run_dbt(['compile'], expect_pass=False)

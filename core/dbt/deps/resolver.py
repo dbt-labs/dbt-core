@@ -3,6 +3,7 @@ from typing import Dict, List, NoReturn, Union, Type, Iterator
 
 from dbt.exceptions import raise_dependency_error, InternalException
 
+from dbt.config import Project
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
@@ -95,21 +96,28 @@ class PackageListing:
 
 
 def _check_for_duplicate_project_names(
-    final_deps: List[PinnedPackage], config
+    final_deps: List[PinnedPackage], config: Project
 ):
     seen = set()
     for package in final_deps:
         project_name = package.get_project_name(config)
         if project_name in seen:
             raise_dependency_error(
-                'Found duplicate project {}. This occurs when a dependency'
-                ' has the same project name as some other dependency.'
-                .format(project_name))
+                f'Found duplicate project "{project_name}". This occurs when '
+                'a dependency has the same project name as some other '
+                'dependency.'
+            )
+        elif project_name == config.project_name:
+            raise_dependency_error(
+                'Found a dependency with the same name as the root project '
+                f'"{project_name}". Package names must be unique in a project.'
+                ' Please rename one of these packages.'
+            )
         seen.add(project_name)
 
 
 def resolve_packages(
-    packages: List[PackageContract], config
+    packages: List[PackageContract], config: Project
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
