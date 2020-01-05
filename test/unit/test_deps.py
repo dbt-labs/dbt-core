@@ -392,7 +392,7 @@ class TestPackageSpec(unittest.TestCase):
                 {'package': 'fishtown-analytics-test/b', 'version': '0.2.1'},
             ],
         })
-        resolved = resolve_packages(package_config.packages, None)
+        resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
         self.assertEqual(len(resolved), 2)
         self.assertEqual(resolved[0].name, 'fishtown-analytics-test/a')
         self.assertEqual(resolved[0].version, '0.1.3')
