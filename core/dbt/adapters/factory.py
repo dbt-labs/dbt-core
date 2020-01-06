@@ -46,16 +46,17 @@ class AdpaterContainer:
         # singletons
         try:
             mod = import_module('.' + name, 'dbt.adapters')
-        except ImportError as e:
-            logger.info("Error importing adapter: {}".format(e))
-            raise RuntimeException(
-                "Could not find adapter type {}!".format(name)
-            )
-        if not hasattr(mod, 'Plugin'):
-            raise RuntimeException(
-                f'Could not find plugin in {name} plugin module'
-            )
-        plugin: AdapterPlugin = mod.Plugin  # type: ignore
+        except ModuleNotFoundError as exc:
+            # if we failed to import the target module in particular, inform
+            # the user about it via a runtiem error
+            logger.info(f'Error importing adapter: {exc}')
+            if exc.name == 'dbt.adapters.' + name:
+                raise RuntimeException(f'Could not find adapter type {name}!')
+            # otherwise, the error had to have come from some underlying
+            # library. Log the stack trace.
+            logger.debug('', exc_info=True)
+            raise
+        plugin = mod.Plugin  # type: AdapterPlugin
         plugin_type = plugin.adapter.type()
 
         if plugin_type != name:
