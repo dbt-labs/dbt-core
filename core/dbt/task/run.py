@@ -448,7 +448,7 @@ class RunTask(CompileTask):
         # 'schemas', which did not include database information.
 
         database_schema_set: Set[Tuple[Optional[str], str]] = {
-            (r.node.database, r.node.schema) for r in results
+            (r.node.database, r.node.schema)
             if r.node.is_relational and r.status not in (
             if r.node.is_relational
             and r.status not in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped)
@@ -457,9 +457,9 @@ class RunTask(CompileTask):
         self._total_executed += len(results)
 
         extras = {
-            'schemas': list({s for _, s in database_schema_set}),
-            'results': results,
-            'database_schemas': list(database_schema_set),
+            "schemas": list({s for _, s in database_schema_set}),
+            "results": results,
+            "database_schemas": list(database_schema_set),
         }
         with adapter.connection_named('master'):
             self.safe_run_hooks(adapter, RunHookType.End, extras)
