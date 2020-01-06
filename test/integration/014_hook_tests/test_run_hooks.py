@@ -1,5 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 
+
 class TestPrePostRunHooks(DBTIntegrationTest):
 
     def setUp(self):
@@ -45,7 +46,9 @@ class TestPrePostRunHooks(DBTIntegrationTest):
                 "create table {{ target.schema }}.end_hook_order_test ( id int )",
                 "drop table {{ target.schema }}.end_hook_order_test",
                 "create table {{ target.schema }}.schemas ( schema text )",
-                "insert into {{ target.schema }}.schemas values ({% for schema in schemas %}( '{{ schema }}' ){% if not loop.last %},{% endif %}{% endfor %})",
+                "insert into {{ target.schema }}.schemas (schema) values {% for schema in schemas %}( '{{ schema }}' ){% if not loop.last %},{% endif %}{% endfor %}",
+                "create table {{ target.schema }}.db_schemas ( db text, schema text )",
+                "insert into {{ target.schema }}.db_schemas (db, schema) values {% for db, schema in database_schemas %}('{{ db }}', '{{ schema }}' ){% if not loop.last %},{% endif %}{% endfor %}",
             ],
             'seeds': {
                 'quote_columns': False,
@@ -72,6 +75,12 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         results = self.run_sql(schemas_query, fetch='all')
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0][0], self.unique_schema())
+
+        db_schemas_query = 'select * from {}.db_schemas'.format(self.unique_schema())
+        results = self.run_sql(db_schemas_query, fetch='all')
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0], self.default_database)
+        self.assertEqual(results[0][1], self.unique_schema())
 
     def check_hooks(self, state):
         ctx = self.get_ctx_vars(state)

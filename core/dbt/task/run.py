@@ -1,6 +1,6 @@
 import functools
 import time
-from typing import List
+from typing import List, Dict, Any, Set, Tuple, Optional
 
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
@@ -148,7 +148,9 @@ class RunTask(CompileTask):
         with TextOnly():
             print_timestamped_line("")
 
-    def safe_run_hooks(self, adapter, hook_type: RunHookType, extra_context):
+    def safe_run_hooks(
+        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
+    ) -> None:
         try:
             self.run_hooks(adapter, hook_type, extra_context)
         except dbt.exceptions.RuntimeException:
@@ -178,18 +180,23 @@ class RunTask(CompileTask):
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):
-        # in on-run-end hooks, provide the value 'schemas', which is a list of
-        # unique schemas that successfully executed models were in
-        # errored failed skipped
-        schemas = list(set(
-            r.node.schema for r in results
+        # in on-run-end hooks, provide the value 'database_schemas', which is a
+        # list  of unique database, schema pairs that successfully executed
+        # models  were in. for backwards compatibility, include the old
+        # 'schemas', which did not include database information.
+        database_schema_set: Set[Tuple[Optional[str], str]] = {
+            (r.node.database, r.node.schema) for r in results
             if not any((r.error is not None, r.fail, r.skipped))
-        ))
-
+        }
         self._total_executed += len(results)
+
+        extras = {
+            'schemas': list({s for _, s in database_schema_set}),
+            'results': results,
+            'database_schemas': list(database_schema_set),
+        }
         with adapter.connection_named('master'):
-            self.safe_run_hooks(adapter, RunHookType.End,
-                                {'schemas': schemas, 'results': results})
+            self.safe_run_hooks(adapter, RunHookType.End, extras)
 
     def after_hooks(self, adapter, results, elapsed):
         self.print_results_line(results, elapsed)
