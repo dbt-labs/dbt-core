@@ -212,16 +212,21 @@ class ProviderContext(ManifestParsedContext):
         return self.model.package_name
 
     def add_provider_functions(self, context):
-        context['ref'] = self.provider.ref(
-            self.db_wrapper, self.model, self.config, self.manifest
-        )
-        context['source'] = self.provider.source(
-            self.db_wrapper, self.model, self.config, self.manifest
-        )
-        context['config'] = self.provider.Config(
-            self.model, self.source_config
-        )
-        context['execute'] = self.provider.execute
+        # Generate the builtin functions
+        builtins = {
+            'ref': self.provider.ref(
+                self.db_wrapper, self.model, self.config, self.manifest),
+            'source': self.provider.source(
+                self.db_wrapper, self.model, self.config, self.manifest),
+            'config': self.provider.Config(
+                self.model, self.source_config),
+            'execute': self.provider.execute
+        }
+        # Install them at .builtins
+        context['builtins'] = builtins
+        # Install each of them directly in case they're not
+        # clobbered by a macro.
+        context.update(builtins)
 
     def add_exceptions(self, context):
         context['exceptions'] = dbt.exceptions.wrapped_exports(self.model)
