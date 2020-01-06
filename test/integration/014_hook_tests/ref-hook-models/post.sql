@@ -1,0 +1,1 @@
+select 'end' as state

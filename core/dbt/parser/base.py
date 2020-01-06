@@ -1,4 +1,5 @@
 import abc
+import itertools
 import os
 from typing import (
     List, Dict, Any, Callable, Iterable, Optional, Generic, TypeVar
@@ -288,6 +289,13 @@ class ConfiguredParser(
             )
             raise CompilationException(msg, node=node)
 
+    def _context_for(
+        self, parsed_node: IntermediateNode, config: SourceConfig
+    ) -> Dict[str, Any]:
+        return dbt.context.parser.generate(
+            parsed_node, self.root_project, self.macro_manifest, config
+        )
+
     def render_with_context(
         self, parsed_node: IntermediateNode, config: SourceConfig
     ) -> None:
@@ -296,9 +304,7 @@ class ConfiguredParser(
 
         Note: this mutates the config object when config() calls are rendered.
         """
-        context = dbt.context.parser.generate(
-            parsed_node, self.root_project, self.macro_manifest, config
-        )
+        context = self._context_for(parsed_node, config)
 
         get_rendered(parsed_node.raw_sql, context, parsed_node,
                      capture_macros=True)
@@ -362,6 +368,19 @@ class ConfiguredParser(
         ).strip()
         self.update_parsed_node_schema(parsed_node, config_dict)
         self.update_parsed_node_alias(parsed_node, config_dict)
+
+        # at this point, we've collected our hooks. Use the node context to
+        # render each hook and collect refs/sources
+        hooks = list(itertools.chain(parsed_node.config.pre_hook,
+                                     parsed_node.config.post_hook))
+        # skip context rebuilding if there aren't any hooks
+        if not hooks:
+            return
+        # we could cache the original context from parsing this node. Is that
+        # worth the cost in memory/complexity?
+        context = self._context_for(parsed_node, config)
+        for hook in hooks:
+            get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
     def initial_config(self, fqn: List[str]) -> SourceConfig:
         return SourceConfig(self.root_project, self.project, fqn,
