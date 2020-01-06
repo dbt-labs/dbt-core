@@ -1,5 +1,7 @@
+from typing import Dict, Any
+
 from dbt.node_runners import TestRunner
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, RunHookType
 from dbt.task.run import RunTask
 
 
@@ -12,7 +14,9 @@ class TestTask(RunTask):
     def raise_on_first_error(self):
         return False
 
-    def safe_run_hooks(self, adapter, hook_type, extra_context):
+    def safe_run_hooks(
+        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
+    ) -> None:
         # Don't execute on-run-* hooks for tests
         pass
 
