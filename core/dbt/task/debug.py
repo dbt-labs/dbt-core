@@ -126,7 +126,8 @@ class DebugTask(BaseTask):
             return red('ERROR not found')
 
         try:
-            self.project = Project.from_project_root(self.project_dir, self.cli_vars)
+            self.project = Project.from_project_root(self.project_dir,
+                                                     self.cli_vars)
         except dbt.exceptions.DbtConfigError as exc:
             self.project_fail_details = str(exc)
             return red('ERROR invalid')
