@@ -297,6 +297,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             columns={'color': ColumnInfo(name='color', description='The color value')},
             docrefs=[],
             original_file_path=normalize('models/test_one.yml'),
+            meta={},
         )
         self.assertEqual(patch, expected_patch)
 

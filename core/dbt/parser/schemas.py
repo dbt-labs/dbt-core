@@ -66,10 +66,11 @@ class ParserRef:
         self.column_info: Dict[str, ColumnInfo] = {}
         self.docrefs: List[Docref] = []
 
-    def add(self, column_name, description, data_type):
+    def add(self, column_name, description, data_type, meta):
         self.column_info[column_name] = ColumnInfo(name=column_name,
                                                    description=description,
-                                                   data_type=data_type)
+                                                   data_type=data_type,
+                                                   meta=meta)
 
 
 def collect_docrefs(
@@ -222,9 +223,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         column_name = column.name
         description = column.description
         data_type = column.data_type
+        meta = column.meta
         collect_docrefs(block.target, refs, column_name, description)
 
-        refs.add(column_name, description, data_type)
+        refs.add(column_name, description, data_type, meta)
 
         if not column.tests:
             return
@@ -340,6 +342,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             NodeType.Source, self.project.project_name, source.name, table.name
         ])
         description = table.description or ''
+        meta = table.meta or {}
         source_description = source.description or ''
         collect_docrefs(source, refs, None, description, source_description)
 
@@ -348,6 +351,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         freshness = self._calculate_freshness(source, table)
         quoting = source.quoting.merged(table.quoting)
         path = block.path.original_file_path
+        source_meta = source.meta or {}
 
         return ParsedSourceDefinition(
             package_name=self.project.project_name,
@@ -364,6 +368,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             external=table.external,
             source_name=source.name,
             source_description=source_description,
+            source_meta=source_meta,
+            meta=meta,
             loader=source.loader,
             docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,
@@ -385,7 +391,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             original_file_path=block.path.original_file_path,
             description=description,
             columns=refs.column_info,
-            docrefs=refs.docrefs
+            docrefs=refs.docrefs,
+            meta=block.target.meta,
         )
 
     def parse_target_model(

@@ -243,8 +243,18 @@ class TestUnparsedSourceDefinition(ContractTestCase):
 
     def test_defaults(self):
         minimum = self.ContractType(name='foo')
-        self.assert_from_dict(minimum, {'name': 'foo'})
-        self.assert_to_dict(minimum, {'name': 'foo', 'description': '', 'freshness': {}, 'quoting': {}, 'tables': [], 'loader': ''})
+        from_dict = {'name': 'foo'}
+        to_dict = {
+            'name': 'foo',
+            'description': '',
+            'freshness': {},
+            'quoting': {},
+            'tables': [],
+            'loader': '',
+            'meta': {},
+        }
+        self.assert_from_dict(minimum, from_dict)
+        self.assert_to_dict(minimum, to_dict)
 
     def test_contents(self):
         empty = self.ContractType(
@@ -254,6 +264,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             loader='some_loader',
             freshness=FreshnessThreshold(),
             tables=[],
+            meta={},
         )
         dct = {
             'name': 'foo',
@@ -262,6 +273,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'loader': 'some_loader',
             'freshness': {},
             'tables': [],
+            'meta': {},
         }
         self.assert_symmetric(empty, dct)
 
@@ -293,6 +305,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'loader': '',
             'freshness': {},
             'quoting': {},
+            'meta': {},
             'tables': [
                 {
                     'name': 'table1',
@@ -302,6 +315,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     'quoting': {},
                     'external': {},
                     'freshness': {},
+                    'meta': {},
                 },
                 {
                     'name': 'table2',
@@ -311,6 +325,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     'quoting': {'database': True},
                     'external': {},
                     'freshness': {},
+                    'meta': {},
                 },
             ],
         }
@@ -361,7 +376,13 @@ class TestUnparsedNodeUpdate(ContractTestCase):
     def test_defaults(self):
         minimum = self.ContractType(name='foo')
         from_dict = {'name': 'foo'}
-        to_dict = {'name': 'foo', 'columns': [], 'description': '', 'tests': []}
+        to_dict = {
+            'name': 'foo',
+            'columns': [],
+            'description': '',
+            'tests': [],
+            'meta': {},
+        }
         self.assert_from_dict(minimum, from_dict)
         self.assert_to_dict(minimum, to_dict)
 
@@ -370,15 +391,21 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             name='foo',
             description='a description',
             tests=['table_test'],
+            meta={'key': ['value1', 'value2']},
             columns=[
-                NamedTested(name='x', description='x description'),
+                NamedTested(
+                    name='x',
+                    description='x description',
+                    meta={'key2': 'value3'},
+                ),
                 NamedTested(
                     name='y',
                     description='y description',
                     tests=[
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
-                    ]
+                    ],
+                    meta={},
                 ),
             ],
         )
@@ -386,8 +413,14 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'name': 'foo',
             'description': 'a description',
             'tests': ['table_test'],
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
-                {'name': 'x', 'description': 'x description', 'tests': []},
+                {
+                    'name': 'x',
+                    'description': 'x description',
+                    'tests': [],
+                    'meta': {'key2': 'value3'},
+                },
                 {
                     'name': 'y',
                     'description': 'y description',
@@ -395,6 +428,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
@@ -406,8 +440,14 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'name': 'foo',
             'description': 'a description',
             'tests': ['table_test'],
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
-                {'name': 'x', 'description': 'x description', 'tests': []},
+                {
+                    'name': 'x',
+                    'description': 'x description',
+                    'tests': [],
+                    'meta': {'key2': 'value3'},
+                },
                 {
                     'name': 'y',
                     'description': 'y description',
@@ -415,6 +455,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         100,
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
@@ -424,9 +465,14 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'name': 'foo',
             'description': 'a description',
             'tests': ['table_test'],
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
                 # column missing a name
-                {'description': 'x description', 'tests': []},
+                {
+                    'description': 'x description',
+                    'tests': [],
+                    'meta': {'key2': 'value3'},
+                },
                 {
                     'name': 'y',
                     'description': 'y description',
@@ -434,6 +480,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }
@@ -443,8 +490,14 @@ class TestUnparsedNodeUpdate(ContractTestCase):
         dct = {
             'description': 'a description',
             'tests': ['table_test'],
+            'meta': {'key': ['value1', 'value2']},
             'columns': [
-                {'name': 'x', 'description': 'x description', 'tests': []},
+                {
+                    'name': 'x',
+                    'description': 'x description',
+                    'tests': [],
+                    'meta': {'key2': 'value3'},
+                },
                 {
                     'name': 'y',
                     'description': 'y description',
@@ -452,6 +505,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
+                    'meta': {},
                 },
             ],
         }

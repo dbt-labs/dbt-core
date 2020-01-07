@@ -38,6 +38,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'name': 'id',
                 'description': 'The user ID number',
                 'data_type': None,
+                'meta': {},
             },
             model_data['columns']['id']
         )
@@ -46,6 +47,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'name': 'first_name',
                 'description': "The user's first name",
                 'data_type': None,
+                'meta': {},
             },
             model_data['columns']['first_name']
         )
@@ -55,6 +57,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'name': 'last_name',
                 'description': "The user's last name",
                 'data_type': None,
+                'meta': {},
             },
             model_data['columns']['last_name']
         )
@@ -80,6 +83,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'name': 'id',
                 'description': 'The user ID number with alternative text',
                 'data_type': None,
+                'meta': {},
             },
             model_data['columns']['id']
         )
@@ -88,6 +92,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'name': 'first_name',
                 'description': "The user's first name",
                 'data_type': None,
+                'meta': {},
             },
             model_data['columns']['first_name']
         )
@@ -97,6 +102,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'name': 'last_name',
                 'description': "The user's last name in this other file",
                 'data_type': None,
+                'meta': {},
             },
             model_data['columns']['last_name']
         )

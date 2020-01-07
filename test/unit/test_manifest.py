@@ -16,7 +16,7 @@ import freezegun
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
-    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources',
+    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
     'docrefs', 'description', 'columns', 'fqn', 'build_path', 'patch_path',
@@ -64,6 +64,7 @@ class ManifestTest(unittest.TestCase):
                 path='events.sql',
                 original_file_path='events.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.events': ParsedModelNode(
@@ -83,6 +84,7 @@ class ManifestTest(unittest.TestCase):
                 path='events.sql',
                 original_file_path='events.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.dep': ParsedModelNode(
@@ -102,6 +104,7 @@ class ManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.nested': ParsedModelNode(
@@ -121,6 +124,7 @@ class ManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.sibling': ParsedModelNode(
@@ -140,6 +144,7 @@ class ManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.multi': ParsedModelNode(
@@ -159,6 +164,7 @@ class ManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
         }
@@ -390,6 +396,7 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='events.sql',
                 root_path='',
                 raw_sql='does not matter',
+                meta={},
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
@@ -414,6 +421,7 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='events.sql',
                 root_path='',
                 raw_sql='does not matter',
+                meta={},
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
@@ -437,6 +445,7 @@ class MixedManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.nested': ParsedModelNode(
@@ -456,6 +465,7 @@ class MixedManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.sibling': ParsedModelNode(
@@ -475,6 +485,7 @@ class MixedManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
             'model.root.multi': ParsedModelNode(
@@ -494,6 +505,7 @@ class MixedManifestTest(unittest.TestCase):
                 path='multi.sql',
                 original_file_path='multi.sql',
                 root_path='',
+                meta={},
                 raw_sql='does not matter'
             ),
         }

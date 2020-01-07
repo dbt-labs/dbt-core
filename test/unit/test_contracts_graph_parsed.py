@@ -91,6 +91,7 @@ class TestParsedModelNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -111,6 +112,7 @@ class TestParsedModelNode(ContractTestCase):
             alias='bar',
             tags=[],
             config=NodeConfig(),
+            meta={},
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -154,6 +156,7 @@ class TestParsedModelNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': ['tag'],
+            'meta': {},
             'config': {
                 'column_types': {'a': 'text'},
                 'enabled': True,
@@ -166,7 +169,7 @@ class TestParsedModelNode(ContractTestCase):
                 'vars': {'foo': 100},
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta': {}}},
         }
 
         node = self.ContractType(
@@ -187,13 +190,14 @@ class TestParsedModelNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=['tag'],
+            meta={},
             config=NodeConfig(
                 column_types={'a': 'text'},
                 materialized='ephemeral',
                 post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
                 vars={'foo': 100},
             ),
-            columns={'a': ColumnInfo('a', 'a text field')},
+            columns={'a': ColumnInfo('a', 'a text field', {})},
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -234,6 +238,7 @@ class TestParsedModelNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_tags)
 
@@ -270,6 +275,7 @@ class TestParsedModelNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_materialized)
 
@@ -292,16 +298,18 @@ class TestParsedModelNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=[],
+            meta={},
             config=NodeConfig(),
         )
         patch = ParsedNodePatch(
             name='foo',
             description='The foo model',
             original_file_path='/path/to/schema.yml',
-            columns={'a': ColumnInfo(name='a', description='a text field')},
+            columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
+            meta={},
         )
 
         initial.patch(patch)
@@ -324,6 +332,7 @@ class TestParsedModelNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': [],
+            'meta': {},
             'config': {
                 'column_types': {},
                 'enabled': True,
@@ -336,7 +345,7 @@ class TestParsedModelNode(ContractTestCase):
                 'vars': {},
             },
             'patch_path': '/path/to/schema.yml',
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
             'docrefs': [
                 {
                     'documentation_name': 'foo',
@@ -363,9 +372,10 @@ class TestParsedModelNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=[],
+            meta={},
             config=NodeConfig(),
             patch_path='/path/to/schema.yml',
-            columns={'a': ColumnInfo(name='a', description='a text field')},
+            columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
@@ -442,6 +452,7 @@ class TestParsedHookNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -504,6 +515,7 @@ class TestParsedHookNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': ['tag'],
+            'meta': {},
             'config': {
                 'column_types': {'a': 'text'},
                 'enabled': True,
@@ -516,7 +528,7 @@ class TestParsedHookNode(ContractTestCase):
                 'vars': {},
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
             'index': 13,
         }
 
@@ -538,12 +550,13 @@ class TestParsedHookNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=['tag'],
+            meta={},
             config=NodeConfig(
                 column_types={'a': 'text'},
                 materialized='table',
                 post_hook=[]
             ),
-            columns={'a': ColumnInfo('a', 'a text field')},
+            columns={'a': ColumnInfo('a', 'a text field', {})},
             index=13,
         )
         self.assert_symmetric(node, node_dict)
@@ -584,6 +597,7 @@ class TestParsedHookNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
             'index': 'a string!?',
         }
         self.assert_fails_validation(bad_index)
@@ -611,6 +625,7 @@ class TestParsedTestNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': [],
+            'meta': {},
             'config': {
                 'column_types': {},
                 'enabled': True,
@@ -625,6 +640,7 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -644,6 +660,7 @@ class TestParsedTestNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=[],
+            meta={},
             config=TestConfig(),
         )
         self.assert_symmetric(node, node_dict)
@@ -665,6 +682,7 @@ class TestParsedTestNode(ContractTestCase):
             'database': 'test_db',
             'schema': 'test_schema',
             'alias': 'bar',
+            'meta': {},
         }
         self.assert_from_dict(node, minimum)
         pickle.loads(pickle.dumps(node))
@@ -688,6 +706,7 @@ class TestParsedTestNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'tags': ['tag'],
+            'meta': {},
             'config': {
                 'column_types': {'a': 'text'},
                 'enabled': True,
@@ -702,7 +721,7 @@ class TestParsedTestNode(ContractTestCase):
                 'extra_key': 'extra value'
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta': {}}},
             'column_name': 'id',
         }
 
@@ -731,8 +750,9 @@ class TestParsedTestNode(ContractTestCase):
             schema='test_schema',
             alias='bar',
             tags=['tag'],
+            meta={},
             config=cfg,
-            columns={'a': ColumnInfo('a', 'a text field')},
+            columns={'a': ColumnInfo('a', 'a text field',{})},
             column_name='id',
         )
         self.assert_symmetric(node, node_dict)
@@ -773,6 +793,7 @@ class TestParsedTestNode(ContractTestCase):
             'docrefs': [],
             'columns': {},
             'column_name': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_column_name)
 
@@ -810,6 +831,7 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(missing_config_value)
 
@@ -846,6 +868,7 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(invalid_config_value)
 
@@ -1111,6 +1134,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
 
         node = self.ContractType(
@@ -1216,6 +1240,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
 
         node = self.ContractType(
@@ -1319,6 +1344,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
+            'meta': {},
         }
         self.assert_fails_validation(bad_resource_type)
 
@@ -1333,6 +1359,7 @@ class TestParsedNodePatch(ContractTestCase):
             'original_file_path': '/path/to/schema.yml',
             'columns': {},
             'docrefs': [],
+            'meta': {},
         }
         patch = ParsedNodePatch(
             name='foo',
@@ -1340,6 +1367,7 @@ class TestParsedNodePatch(ContractTestCase):
             original_file_path='/path/to/schema.yml',
             columns={},
             docrefs=[],
+            meta={},
         )
         self.assert_symmetric(patch, dct)
 
@@ -1348,22 +1376,24 @@ class TestParsedNodePatch(ContractTestCase):
             'name': 'foo',
             'description': 'The foo model',
             'original_file_path': '/path/to/schema.yml',
-            'columns': {'a': {'name': 'a', 'description': 'a text field'}},
+            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
             'docrefs': [
                 {
                     'documentation_name': 'foo',
                     'documentation_package': 'test',
                 }
             ],
+            'meta': {'key': ['value']}
         }
         patch = ParsedNodePatch(
             name='foo',
             description='The foo model',
             original_file_path='/path/to/schema.yml',
-            columns={'a': ColumnInfo(name='a', description='a text field')},
+            columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
             docrefs=[
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
+            meta={'key': ['value']},
         )
         self.assert_symmetric(patch, dct)
         pickle.loads(pickle.dumps(patch))
@@ -1511,6 +1541,8 @@ class TestParsedSourceDefinition(ContractTestCase):
             'columns': {},
             'quoting': {},
             'unique_id': 'test.source.my_source.my_source_table',
+            'meta': {},
+            'source_meta': {},
         }
         source_def = self.ContractType(
             columns={},
