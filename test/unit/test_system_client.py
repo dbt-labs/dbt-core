@@ -1,53 +1,49 @@
 import os
 import shutil
 import stat
-import sys
 import unittest
 from tempfile import mkdtemp
 
-from dbt.exceptions import ExecutableError, WorkingDirectoryError, \
-    CommandResultError
+from dbt.exceptions import ExecutableError, WorkingDirectoryError
 import dbt.clients.system
 
-if os.name == 'nt':
-    TMPDIR = 'c:/Windows/TEMP'
-else:
-    TMPDIR = '/tmp'
-
-profiles_path = '{}/profiles.yml'.format(TMPDIR)
 
 class SystemClient(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.tmp_dir = mkdtemp()
+        self.profiles_path = '{}/profiles.yml'.format(self.tmp_dir)
 
     def set_up_profile(self):
-        with open(profiles_path, 'w') as f:
+        with open(self.profiles_path, 'w') as f:
             f.write('ORIGINAL_TEXT')
 
     def get_profile_text(self):
-        with open(profiles_path, 'r') as f:
+        with open(self.profiles_path, 'r') as f:
             return f.read()
 
     def tearDown(self):
         try:
-            os.remove(profiles_path)
+            shutil.rmtree(self.tmp_dir)
         except:
             pass
 
     def test__make_file_when_exists(self):
         self.set_up_profile()
-        written = dbt.clients.system.make_file(profiles_path, contents='NEW_TEXT')
+        written = dbt.clients.system.make_file(self.profiles_path, contents='NEW_TEXT')
 
         self.assertFalse(written)
         self.assertEqual(self.get_profile_text(), 'ORIGINAL_TEXT')
 
     def test__make_file_when_not_exists(self):
-        written = dbt.clients.system.make_file(profiles_path, contents='NEW_TEXT')
+        written = dbt.clients.system.make_file(self.profiles_path, contents='NEW_TEXT')
 
         self.assertTrue(written)
         self.assertEqual(self.get_profile_text(), 'NEW_TEXT')
 
     def test__make_file_with_overwrite(self):
         self.set_up_profile()
-        written = dbt.clients.system.make_file(profiles_path, contents='NEW_TEXT', overwrite=True)
+        written = dbt.clients.system.make_file(self.profiles_path, contents='NEW_TEXT', overwrite=True)
 
         self.assertTrue(written)
         self.assertEqual(self.get_profile_text(), 'NEW_TEXT')

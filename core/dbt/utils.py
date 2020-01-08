@@ -514,6 +514,8 @@ def translate_aliases(kwargs, aliases):
 def pluralize(count, string):
     if count == 1:
         return "{} {}".format(count, string)
+    elif string == 'analysis':
+        return "{} {}".format(count, 'analyses')
     else:
         return "{} {}s".format(count, string)
 
