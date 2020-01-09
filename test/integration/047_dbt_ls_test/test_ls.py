@@ -224,6 +224,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                 'name': 'my_table',
                 'source_name': 'my_source',
                 'resource_type': 'source',
+                'tags': [],
             },
             'path': self.dir('models/schema.yml'),
         }

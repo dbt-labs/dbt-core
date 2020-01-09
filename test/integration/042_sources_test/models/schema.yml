@@ -7,6 +7,7 @@ models:
           - relationships:
              to: source('test_source', 'test_table')
              field: favorite_color
+
 sources:
   - name: test_source
     loader: custom
@@ -16,12 +17,16 @@ sources:
     schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
     quoting:
       identifier: True
+    tags:
+      - my_test_source_tag
     tables:
       - name: test_table
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') }}"
         freshness:
           error_after: {count: 18, period: hour}
+        tags:
+          - my_test_source_table_tag
         columns:
           - name: favorite_color
             description: The favorite color
@@ -30,6 +35,8 @@ sources:
             tests:
               - unique
               - not_null
+            tags:
+              - id_column
           - name: first_name
             description: The first name of the user
             tests: []
@@ -47,6 +54,13 @@ sources:
               field: favorite_color
       - name: other_test_table
         identifier: other_table
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+            tags:
+              - id_column
       - name: disabled_test_table
         freshness: null
         loaded_at_field: "{{ var('test_loaded_at') }}"

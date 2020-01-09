@@ -68,8 +68,13 @@ class NamedTested(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
+class UnparsedColumn(NamedTested):
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
 class ColumnDescription(JsonSchemaMixin, Replaceable):
-    columns: List[NamedTested] = field(default_factory=list)
+    columns: List[UnparsedColumn] = field(default_factory=list)
 
 
 @dataclass
@@ -206,6 +211,7 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
     external: Optional[ExternalTable] = field(
         default_factory=ExternalTable
     )
+    tags: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         NodeDescription.__post_init__(self)
@@ -225,6 +231,7 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     )
     loaded_at_field: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
 
     @property
     def yaml_key(self) -> 'str':

@@ -6,7 +6,7 @@ from typing import Generic, TypeVar, Dict, Any, Tuple, Optional, List, Union
 from dbt.clients.jinja import get_rendered
 from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate, UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition, NamedTested
+    UnparsedSourceTableDefinition, UnparsedColumn
 )
 from dbt.exceptions import raise_compiler_error
 from dbt.parser.search import FileBlock
@@ -79,7 +79,7 @@ class SourceTarget:
         return '{0.name}_{1.name}'.format(self.source, self.table)
 
     @property
-    def columns(self) -> List[NamedTested]:
+    def columns(self) -> List[UnparsedColumn]:
         if self.table.columns is None:
             return []
         else:
@@ -136,17 +136,23 @@ class TargetBlock(YamlBlock, Generic[Target]):
 class SchemaTestBlock(TargetBlock):
     test: Dict[str, Any]
     column_name: Optional[str]
+    tags: List[str]
 
     @classmethod
     def from_target_block(
-        cls, src: TargetBlock, test: Dict[str, Any], column_name: Optional[str]
+        cls,
+        src: TargetBlock,
+        test: Dict[str, Any],
+        column_name: Optional[str],
+        tags: List[str],
     ) -> 'SchemaTestBlock':
         return cls(
             file=src.file,
             data=src.data,
             target=src.target,
             test=test,
-            column_name=column_name
+            column_name=column_name,
+            tags=tags,
         )
 
 
@@ -156,8 +162,6 @@ class TestBuilder(Generic[Target]):
     Test names have the following pattern:
         - the test name itself may be namespaced (package.test)
         - or it may not be namespaced (test)
-        - the test may have arguments embedded in the name (, severity=WARN)
-        - or it may not have arguments.
 
     """
     TEST_NAME_PATTERN = re.compile(
@@ -286,7 +290,7 @@ class TestBuilder(Generic[Target]):
             model=self.build_model_str(),
             macro=self.macro_name(),
             kwargs=self.test_kwargs_str(),
-            severity=self.severity()
+            severity=self.severity(),
         )
 
     def build_model_str(self):

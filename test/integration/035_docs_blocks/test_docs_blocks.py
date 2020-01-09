@@ -18,7 +18,6 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
-
     @use_profile('postgres')
     def test_postgres_valid_doc_ref(self):
         self.assertEqual(len(self.run_dbt()), 1)
@@ -39,6 +38,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'description': 'The user ID number',
                 'data_type': None,
                 'meta': {},
+                'tags': [],
             },
             model_data['columns']['id']
         )
@@ -48,6 +48,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'description': "The user's first name",
                 'data_type': None,
                 'meta': {},
+                'tags': [],
             },
             model_data['columns']['first_name']
         )
@@ -58,6 +59,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'description': "The user's last name",
                 'data_type': None,
                 'meta': {},
+                'tags': [],
             },
             model_data['columns']['last_name']
         )
@@ -84,6 +86,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'description': 'The user ID number with alternative text',
                 'data_type': None,
                 'meta': {},
+                'tags': [],
             },
             model_data['columns']['id']
         )
@@ -93,6 +96,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'description': "The user's first name",
                 'data_type': None,
                 'meta': {},
+                'tags': [],
             },
             model_data['columns']['first_name']
         )
@@ -103,6 +107,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
                 'description': "The user's last name in this other file",
                 'data_type': None,
                 'meta': {},
+                'tags': [],
             },
             model_data['columns']['last_name']
         )
@@ -113,6 +118,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
         self.use_default_project({"docs-paths": [self.dir("not-docs")]})
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt()
+
 
 class TestMissingDocsBlocks(DBTIntegrationTest):
     @property
@@ -133,6 +139,7 @@ class TestMissingDocsBlocks(DBTIntegrationTest):
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt()
 
+
 class TestBadDocsBlocks(DBTIntegrationTest):
     @property
     def schema(self):
@@ -151,5 +158,3 @@ class TestBadDocsBlocks(DBTIntegrationTest):
         # The run should fail since we could not find the docs reference.
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt(expect_pass=False)
-
-

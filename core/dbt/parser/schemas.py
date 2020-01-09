@@ -1,3 +1,4 @@
+import itertools
 import os
 
 from abc import abstractmethod
@@ -19,7 +20,7 @@ from dbt.contracts.graph.parsed import (
     ParsedTestNode,
 )
 from dbt.contracts.graph.unparsed import (
-    UnparsedSourceDefinition, UnparsedNodeUpdate, NamedTested,
+    UnparsedSourceDefinition, UnparsedNodeUpdate, UnparsedColumn,
     UnparsedSourceTableDefinition, FreshnessThreshold
 )
 from dbt.context.parser import docs
@@ -68,11 +69,14 @@ class ParserRef:
         self.column_info: Dict[str, ColumnInfo] = {}
         self.docrefs: List[Docref] = []
 
-    def add(self, column_name, description, data_type, meta):
-        self.column_info[column_name] = ColumnInfo(name=column_name,
-                                                   description=description,
-                                                   data_type=data_type,
-                                                   meta=meta)
+    def add(self, column: UnparsedColumn, description, data_type, meta):
+        self.column_info[column.name] = ColumnInfo(
+            name=column.name,
+            description=description,
+            data_type=data_type,
+            meta=meta,
+            tags=column.tags,
+        )
 
 
 def collect_docrefs(
@@ -160,7 +164,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         return None
 
     def parse_column(
-        self, block: TargetBlock, column: NamedTested, refs: ParserRef
+        self, block: TargetBlock, column: UnparsedColumn, refs: ParserRef
     ) -> None:
         column_name = column.name
         description = column.description
@@ -168,13 +172,13 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         meta = column.meta
         collect_docrefs(block.target, refs, column_name, description)
 
-        refs.add(column_name, description, data_type, meta)
+        refs.add(column, description, data_type, meta)
 
         if not column.tests:
             return
 
         for test in column.tests:
-            self.parse_test(block, test, column_name)
+            self.parse_test(block, test, column)
 
     def parse_node(self, block: SchemaTestBlock) -> ParsedTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
@@ -209,11 +213,16 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             'kwargs': builder.args,
         }
 
+        # copy - we don't want to mutate the tags!
+        tags = block.tags[:]
+        if 'schema' not in tags:
+            tags.append('schema')
+
         node = self._create_parsetime_node(
             block=block,
             path=compiled_path,
             config=config,
-            tags=['schema'],
+            tags=tags,
             name=builder.fqn_name,
             raw_sql=builder.build_raw_sql(),
             column_name=block.column_name,
@@ -227,16 +236,24 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         self,
         target_block: TargetBlock,
         test: TestDef,
-        column_name: Optional[str]
+        column: Optional[UnparsedColumn],
     ) -> None:
 
         if isinstance(test, str):
             test = {test: {}}
 
+        if column is None:
+            column_name: Optional[str] = None
+            column_tags: List[str] = []
+        else:
+            column_name = column.name
+            column_tags = column.tags
+
         block = SchemaTestBlock.from_target_block(
             src=target_block,
             test=test,
-            column_name=column_name
+            column_name=column_name,
+            tags=column_tags,
         )
         try:
             self.parse_node(block)
@@ -395,6 +412,9 @@ class SourceParser(YamlParser[SourceTarget, ParsedSourceDefinition]):
         path = block.path.original_file_path
         source_meta = source.meta or {}
 
+        # make sure we don't do duplicate tags from source + table
+        tags = sorted(set(itertools.chain(source.tags, table.tags)))
+
         result = ParsedSourceDefinition(
             package_name=self.project.project_name,
             database=(source.database or self.default_database),
@@ -419,6 +439,7 @@ class SourceParser(YamlParser[SourceTarget, ParsedSourceDefinition]):
             quoting=quoting,
             resource_type=NodeType.Source,
             fqn=[self.project.project_name, source.name, table.name],
+            tags=tags,
         )
         self.results.add_source(self.yaml.file, result)
 
