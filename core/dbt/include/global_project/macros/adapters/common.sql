@@ -94,11 +94,11 @@
 {% endmacro %}
 
 
-{% macro get_catalog(information_schemas) -%}
-  {{ return(adapter_macro('get_catalog', information_schemas)) }}
+{% macro get_catalog(information_schema, schemas) -%}
+  {{ return(adapter_macro('get_catalog', information_schema, schemas)) }}
 {%- endmacro %}
 
-{% macro default__get_catalog(information_schemas) -%}
+{% macro default__get_catalog(information_schema, schemas) -%}
 
   {% set typename = adapter.type() %}
   {% set msg -%}

@@ -1,11 +1,4 @@
-
-{% macro snowflake__get_catalog() %}
-{# snowflake has a different argspec, because it filters by schema inside the database #}
-{% do exceptions.raise_compiler_error('get_catalog is not valid on snowflake, use snowflake_get_catalog') %}
-{% endmacro %}
-
-
-{% macro snowflake_get_catalog(information_schema, schemas) -%}
+{% macro snowflake__get_catalog(information_schema, schemas) -%}
   {% set query %}
       with tables as (
 
@@ -56,8 +49,7 @@
       select *
       from tables
       join columns using ("table_database", "table_schema", "table_name")
-      where "table_schema" != 'INFORMATION_SCHEMA'
-      and (
+      where (
         {%- for schema in schemas -%}
           "table_schema" = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
         {%- endfor -%}

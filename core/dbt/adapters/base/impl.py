@@ -1,4 +1,5 @@
 import abc
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
@@ -1009,28 +1010,56 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return table.where(_catalog_filter_schemas(manifest))
 
-    def _get_catalog_information_schemas(
-        self, manifest: Manifest
-    ) -> List[InformationSchema]:
-        return list(self._get_cache_schemas(manifest).keys())
+    def _get_one_catalog(
+        self,
+        information_schema: InformationSchema,
+        schemas: Set[str],
+        manifest: Manifest,
+    ) -> agate.Table:
 
-    def get_catalog(self, manifest: Manifest) -> agate.Table:
-        """Get the catalog for this manifest by running the get catalog macro.
-        Returns an agate.Table of catalog information.
-        """
-        information_schemas = self._get_catalog_information_schemas(manifest)
-        # make it a list so macros can index into it.
-        kwargs = {'information_schemas': information_schemas}
-        table = self.execute_macro(
-            GET_CATALOG_MACRO_NAME,
-            kwargs=kwargs,
-            release=True,
-            # pass in the full manifest so we get any local project overrides
-            manifest=manifest,
-        )
+        name = '.'.join([
+            str(information_schema.database),
+            'information_schema'
+        ])
+
+        # calculate the possible schemas for a given schema name
+        all_schema_names: Set[str] = set()
+        for schema in schemas:
+            all_schema_names.update({schema, schema.lower(), schema.upper()})
+
+        with self.connection_named(name):
+            kwargs = {
+                'information_schema': information_schema,
+                'schemas': all_schema_names
+            }
+            table = self.execute_macro(
+                GET_CATALOG_MACRO_NAME,
+                kwargs=kwargs,
+                release=True,
+                # pass in the full manifest so we get any local project
+                # overrides
+                manifest=manifest,
+            )
 
         results = self._catalog_filter_table(table, manifest)
         return results
+
+    def get_catalog(self, manifest: Manifest) -> agate.Table:
+        # snowflake is super slow. split it out into the specified threads
+        num_threads = self.config.threads
+        schema_map = self._get_cache_schemas(manifest)
+        catalogs: agate.Table = agate.Table(rows=[])
+
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [
+                executor.submit(self._get_one_catalog, info, schemas, manifest)
+                for info, schemas in schema_map.items() if len(schemas) > 0
+            ]
+            for future in as_completed(futures):
+                catalog = future.result()
+                catalogs = agate.Table.merge([catalogs, catalog])
+
+        return catalogs
 
     def cancel_open_connections(self):
         """Cancel all open connections."""

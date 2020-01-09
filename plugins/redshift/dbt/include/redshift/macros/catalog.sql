@@ -1,7 +1,7 @@
 
-{% macro redshift__get_base_catalog(information_schemas) -%}
+{% macro redshift__get_base_catalog(information_schema, schemas) -%}
   {%- call statement('base_catalog', fetch_result=True) -%}
-    {% set database = information_schemas[0].database %}
+    {% set database = information_schema.database %}
     {{ adapter.verify_database(database) }}
 
     with late_binding as (
@@ -94,8 +94,11 @@
     from unioned
     join table_owners using (table_database, table_schema, table_name)
 
-    where table_schema != 'information_schema'
-      and table_schema not like 'pg\_%'
+    where (
+        {%- for schema in schemas -%}
+          table_schema = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+      )
 
     order by "column_index"
   {%- endcall -%}
@@ -103,7 +106,7 @@
   {{ return(load_result('base_catalog').table) }}
 {%- endmacro %}
 
-{% macro redshift__get_extended_catalog(information_schemas) %}
+{% macro redshift__get_extended_catalog(schemas) %}
   {%- call statement('extended_catalog', fetch_result=True) -%}
 
     select
@@ -180,6 +183,11 @@
         (skew_rows is not null) as "stats:skew_rows:include"
 
     from svv_table_info
+    where (
+        {%- for schema in schemas -%}
+          schema = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+    )
 
   {%- endcall -%}
 
@@ -215,16 +223,16 @@
 {% endmacro %}
 
 
-{% macro redshift__get_catalog(information_schemas) %}
+{% macro redshift__get_catalog(information_schema, schemas) %}
 
     {#-- Compute a left-outer join in memory. Some Redshift queries are
       -- leader-only, and cannot be joined to other compute-based queries #}
 
-    {% set catalog = redshift__get_base_catalog(information_schemas) %}
+    {% set catalog = redshift__get_base_catalog(information_schema, schemas) %}
 
     {% set select_extended =  redshift__can_select_from('svv_table_info') %}
     {% if select_extended %}
-        {% set extended_catalog = redshift__get_extended_catalog() %}
+        {% set extended_catalog = redshift__get_extended_catalog(schemas) %}
         {% set catalog = catalog.join(extended_catalog, 'table_id') %}
     {% else %}
         {{ redshift__no_svv_table_info_warning() }}

@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 
 import dbt.deprecations
 import dbt.exceptions
@@ -7,6 +7,7 @@ import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
 from dbt.adapters.base import BaseAdapter, available, RelationType
+from dbt.adapters.base.impl import SchemaSearchMap
 from dbt.adapters.bigquery.relation import (
     BigQueryRelation, BigQueryInformationSchema
 )
@@ -492,23 +493,22 @@ class BigQueryAdapter(BaseAdapter):
         })
         return super()._catalog_filter_table(table, manifest)
 
-    def _get_catalog_information_schemas(
-        self, manifest: Manifest
-    ) -> List[BigQueryInformationSchema]:
+    def _get_cache_schemas(
+        self, manifest: Manifest, exec_only: bool = False
+    ) -> SchemaSearchMap:
+        candidates = super()._get_cache_schemas(manifest, exec_only)
+        db_schemas: Dict[str, Set[str]] = {}
+        result = SchemaSearchMap()
 
-        candidates = super()._get_catalog_information_schemas(manifest)
-        information_schemas = []
-        db_schemas = {}
-        for candidate in candidates:
+        for candidate, schemas in candidates.items():
             database = candidate.database
             if database not in db_schemas:
                 db_schemas[database] = set(self.list_schemas(database))
             if candidate.schema in db_schemas[database]:
-                information_schemas.append(candidate)
+                result[candidate] = schemas
             else:
                 logger.debug(
                     'Skipping catalog for {}.{} - schema does not exist'
                     .format(database, candidate.schema)
                 )
-
-        return information_schemas
+        return result

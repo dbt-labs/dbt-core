@@ -1,12 +1,12 @@
 
-{% macro postgres__get_catalog(information_schemas) -%}
+{% macro postgres__get_catalog(information_schema, schemas) -%}
 
   {%- call statement('catalog', fetch_result=True) -%}
     {#
       If the user has multiple databases set and the first one is wrong, this will fail.
       But we won't fail in the case where there are multiple quoting-difference-only dbs, which is better.
     #}
-    {% set database = information_schemas[0].database %}
+    {% set database = information_schema.database %}
     {{ adapter.verify_database(database) }}
 
     select
@@ -28,8 +28,11 @@
     join pg_catalog.pg_class tbl on tbl.relnamespace = sch.oid
     join pg_catalog.pg_attribute col on col.attrelid = tbl.oid
 
-    where sch.nspname != 'information_schema'
-      and sch.nspname not like 'pg\_%' -- avoid postgres system schemas, '_' is a wildcard so escape it
+    where (
+        {%- for schema in schemas -%}
+          sch.nspname = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+      )
       and not pg_is_other_temp_schema(sch.oid) -- not a temporary schema belonging to another session
       and tbl.relpersistence = 'p' -- [p]ermanent table. Other values are [u]nlogged table, [t]emporary table
       and tbl.relkind in ('r', 'v', 'f', 'p') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table, [m]aterialized view
