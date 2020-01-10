@@ -69,7 +69,8 @@ class DebugTask(BaseTask):
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
         self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')
-        self.project_path = os.path.join(os.getcwd(), 'dbt_project.yml')
+        self.project_dir = args.project_dir or os.getcwd()
+        self.project_path = os.path.join(self.project_dir, 'dbt_project.yml')
         self.cli_vars = dbt.utils.parse_cli_vars(
             getattr(self.args, 'vars', '{}')
         )
@@ -125,7 +126,8 @@ class DebugTask(BaseTask):
             return red('ERROR not found')
 
         try:
-            self.project = Project.from_current_directory(self.cli_vars)
+            self.project = Project.from_project_root(self.project_dir,
+                                                     self.cli_vars)
         except dbt.exceptions.DbtConfigError as exc:
             self.project_fail_details = str(exc)
             return red('ERROR invalid')

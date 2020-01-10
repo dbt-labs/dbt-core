@@ -1,6 +1,7 @@
 from test.integration.base import DBTIntegrationTest,  use_profile
 import os
 import re
+import yaml
 
 import pytest
 
@@ -103,3 +104,26 @@ class TestDebugInvalidProject(DBTIntegrationTest):
                 self.assertIn('ERROR invalid', line)
             elif line.strip().startswith('profiles.yml file'):
                 self.assertNotIn('ERROR invalid', line)
+
+    @use_profile('postgres')
+    def test_postgres_not_found_project_dir(self):
+        self.run_dbt(['debug', '--project-dir', 'nopass'])
+        splitout = self.capsys.readouterr().out.split('\n')
+        for line in splitout:
+            if line.strip().startswith('dbt_project.yml file'):
+                self.assertIn('ERROR not found', line)
+
+    @use_profile('postgres')
+    def test_postgres_invalid_project_outside_current_dir(self):
+        # create a dbt_project.yml
+        project_config = {
+            'invalid-key': 'not a valid key in this project'
+        }
+        os.makedirs('custom', exist_ok=True)
+        with open("custom/dbt_project.yml", 'w') as f:
+            yaml.safe_dump(project_config, f, default_flow_style=True)
+        self.run_dbt(['debug', '--project-dir', 'custom'])
+        splitout = self.capsys.readouterr().out.split('\n')
+        for line in splitout:
+            if line.strip().startswith('dbt_project.yml file'):
+                self.assertIn('ERROR invalid', line)
