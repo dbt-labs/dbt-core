@@ -13,8 +13,8 @@ class SeedTask(RunTask):
 
     def build_query(self):
         return {
-            "include": ["*"],
-            "exclude": [],
+            "include": self.args.models,
+            "exclude": self.args.exclude,
             "resource_types": [NodeType.Seed],
         }
 

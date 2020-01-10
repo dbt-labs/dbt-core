@@ -62,6 +62,8 @@ class RPCTestParameters(RPCCompileParameters):
 @dataclass
 class RPCSeedParameters(RPCParameters):
     threads: Optional[int] = None
+    select: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
     show: bool = False
 
 

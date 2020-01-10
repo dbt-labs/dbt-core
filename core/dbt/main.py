@@ -863,7 +863,7 @@ def parse_args(args, cls=DBTArgumentParser):
                           rpc_sub, seed_sub)
     # --models, --exclude
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
-    _add_selection_arguments(snapshot_sub, models_name='select')
+    _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 
