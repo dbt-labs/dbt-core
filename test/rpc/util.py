@@ -271,6 +271,21 @@ class Querier:
             method='snapshot', params=params, request_id=request_id
         )
 
+    def snapshot_freshness(
+        self,
+        select: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
+        request_id: int = 1,
+    ):
+        params = {}
+        if select is not None:
+            params['select'] = select
+        if threads is not None:
+            params['threads'] = threads
+        return self.request(
+            method='snapshot-freshness', params=params, request_id=request_id
+        )
+
     def test(
         self,
         models: Optional[Union[str, List[str]]] = None,
