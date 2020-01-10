@@ -14,7 +14,7 @@ from dbt.version import __version__ as dbt_version
 
 from dbt.node_types import NodeType
 
-
+import yaml
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
@@ -139,6 +139,21 @@ def tojson(value, default=None, sort_keys=False):
         return default
 
 
+def fromyaml(value, default=None):
+    try:
+        return yaml.safe_load(value)
+    except (AttributeError, ValueError, yaml.YAMLError):
+        return default
+
+
+# safe_dump defaults to sort_keys=True, but act like json.dumps (the opposite)
+def toyaml(value, default=None, sort_keys=False):
+    try:
+        return yaml.safe_dump(data=value, sort_keys=sort_keys)
+    except (ValueError, yaml.YAMLError):
+        return default
+
+
 def log(msg, info=False):
     if info:
         logger.info(msg)
@@ -164,6 +179,8 @@ class BaseContext:
             'return': _return,
             'fromjson': fromjson,
             'tojson': tojson,
+            'fromyaml': fromyaml,
+            'toyaml': toyaml,
             'log': log,
         }
         if os.environ.get('DBT_MACRO_DEBUGGING'):
