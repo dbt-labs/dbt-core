@@ -24,7 +24,7 @@ class Column:
         return cls.TYPE_LABELS.get(dtype.upper(), dtype)
 
     @classmethod
-    def create(cls, name, label_or_dtype: str) -> 'Column':
+    def create(cls, name, label_or_dtype: str) -> "Column":
         column_type = cls.translate_type(label_or_dtype)
         return cls(name, column_type)
 
@@ -54,21 +54,33 @@ class Column:
     def is_float(self):
         return self.dtype.lower() in [
             # floats
-            'real', 'float4', 'float', 'double precision', 'float8'
+            "real",
+            "float4",
+            "float",
+            "double precision",
+            "float8",
         ]
 
     def is_integer(self) -> bool:
         return self.dtype.lower() in [
             # real types
-            'smallint', 'integer', 'bigint',
-            'smallserial', 'serial', 'bigserial',
+            "smallint",
+            "integer",
+            "bigint",
+            "smallserial",
+            "serial",
+            "bigserial",
             # aliases
-            'int2', 'int4', 'int8',
-            'serial2', 'serial4', 'serial8',
+            "int2",
+            "int4",
+            "int8",
+            "serial2",
+            "serial4",
+            "serial8",
         ]
 
     def is_numeric(self) -> bool:
-        return self.dtype.lower() in ['numeric', 'decimal']
+        return self.dtype.lower() in ["numeric", "decimal"]
 
     def string_size(self) -> int:
         if not self.is_string():
@@ -80,7 +92,7 @@ class Column:
         else:
             return int(self.char_size)
 
-    def can_expand_to(self, other_column: 'Column') -> bool:
+    def can_expand_to(self, other_column: "Column") -> bool:
         """returns True if this column can be expanded to the size of the
         other column"""
         if not self.is_string() or not other_column.is_string():
