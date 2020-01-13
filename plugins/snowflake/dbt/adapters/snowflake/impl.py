@@ -3,12 +3,14 @@ from typing import Mapping, Any, Optional
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
+from dbt.adapters.snowflake import SnowflakeColumn
 from dbt.utils import filter_null_values
 from dbt.exceptions import RuntimeException
 
 
 class SnowflakeAdapter(SQLAdapter):
     Relation = SnowflakeRelation
+    Column = SnowflakeColumn
     ConnectionManager = SnowflakeConnectionManager
 
     AdapterSpecificConfigs = frozenset(

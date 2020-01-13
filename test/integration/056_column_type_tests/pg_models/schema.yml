@@ -1,0 +1,14 @@
+version: 2
+models:
+  - name: model
+    tests:
+      - is_type:
+          column_map:
+            smallint_col: ['integer', 'number']
+            int_col: ['integer', 'number']
+            bigint_col: ['integer', 'number']
+            real_col: ['float', 'number']
+            double_col: ['float', 'number']
+            numeric_col: ['numeric', 'number']
+            text_col: ['string', 'not number']
+            varchar_col: ['string', 'not number']

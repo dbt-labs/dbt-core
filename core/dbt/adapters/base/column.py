@@ -2,9 +2,7 @@ from dataclasses import dataclass
 
 from hologram import JsonSchemaMixin
 
-from typing import TypeVar, Dict, ClassVar, Any, Optional, Type
-
-Self = TypeVar('Self', bound='Column')
+from typing import Dict, ClassVar, Any, Optional
 
 
 @dataclass
@@ -26,7 +24,7 @@ class Column(JsonSchemaMixin):
         return cls.TYPE_LABELS.get(dtype.upper(), dtype)
 
     @classmethod
-    def create(cls: Type[Self], name, label_or_dtype: str) -> Self:
+    def create(cls, name, label_or_dtype: str) -> 'Column':
         column_type = cls.translate_type(label_or_dtype)
         return cls(name, column_type)
 
@@ -52,8 +50,27 @@ class Column(JsonSchemaMixin):
         return self.dtype.lower() in ['text', 'character varying', 'character',
                                       'varchar']
 
+    def is_number(self):
+        return any([self.is_integer(), self.is_numeric(), self.is_float()])
+
+    def is_float(self):
+        return self.dtype.lower() in [
+            # floats
+            'real', 'float4', 'float', 'double precision', 'float8'
+        ]
+
+    def is_integer(self) -> bool:
+        return self.dtype.lower() in [
+            # real types
+            'smallint', 'integer', 'bigint',
+            'smallserial', 'serial', 'bigserial',
+            # aliases
+            'int2', 'int4', 'int8',
+            'serial2', 'serial4', 'serial8',
+        ]
+
     def is_numeric(self) -> bool:
-        return self.dtype.lower() in ['numeric', 'number']
+        return self.dtype.lower() in ['numeric', 'decimal']
 
     def string_size(self) -> int:
         if not self.is_string():
@@ -65,7 +82,7 @@ class Column(JsonSchemaMixin):
         else:
             return int(self.char_size)
 
-    def can_expand_to(self: Self, other_column: Self) -> bool:
+    def can_expand_to(self, other_column: 'Column') -> bool:
         """returns True if this column can be expanded to the size of the
         other column"""
         if not self.is_string() or not other_column.is_string():
