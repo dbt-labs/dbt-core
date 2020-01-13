@@ -12,8 +12,9 @@ from dbt.contracts.graph.parsed import (
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
-    CompilationException, InternalException
+    CompilationException, InternalException, raise_compiler_error
 )
+from dbt.ui import printer
 from dbt.version import __version__
 
 
@@ -87,7 +88,21 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.get_file(source_file).nodes.append(node.unique_id)
 
     def add_macro(self, source_file: SourceFile, macro: ParsedMacro):
-        # macros can be overwritten (should they be?)
+        if macro.unique_id in self.macros:
+            # detect that the macro exists and emit an error
+            other_path = self.macros[macro.unique_id].original_file_path
+            # subtract 2 for the "Compilation Error" indent
+            msg = printer.line_wrap_message(
+                f'''\
+                dbt found two macros in the project "{macro.package_name}" with
+                the name "{macro.name}" (defined in
+                "{macro.original_file_path}" and "{other_path}"). Since these
+                resources have the same name, dbt will choose one to be called
+                when {macro.name} is used. To fix this, remove or change the
+                name of one of these macros.''',
+                subtract=2)
+            raise_compiler_error(msg)
+
         self.macros[macro.unique_id] = macro
         self.get_file(source_file).macros.append(macro.unique_id)
 

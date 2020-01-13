@@ -1,3 +1,5 @@
+import textwrap
+import time
 from typing import Dict, Optional, Tuple
 
 from dbt.logger import GLOBAL_LOGGER as logger, DbtStatusMessage, TextOnly
@@ -6,7 +8,6 @@ from dbt.tracking import InvocationProcessor
 from dbt.utils import get_materialization
 import dbt.ui.colors
 
-import time
 
 USE_COLORS = False
 
@@ -380,3 +381,10 @@ def print_run_end_messages(results, early_exit: bool = False) -> None:
             print_run_result_error(warning, is_warning=True)
 
         print_run_status_line(results)
+
+
+def line_wrap_message(msg: str, subtract: int = 0, dedent: bool = True) -> str:
+    width = PRINTER_WIDTH - subtract
+    if dedent:
+        msg = textwrap.dedent(msg)
+    return textwrap.fill(msg, width=width)
