@@ -93,10 +93,10 @@ class SourceTarget:
             return self.table.tests
 
 
-ModelTarget = UnparsedNodeUpdate
+NodeTarget = UnparsedNodeUpdate
 
 
-Target = TypeVar('Target', ModelTarget, SourceTarget)
+Target = TypeVar('Target', NodeTarget, SourceTarget)
 
 
 @dataclass
@@ -257,7 +257,7 @@ class TestBuilder(Generic[Target]):
         return macro_name
 
     def describe_test_target(self) -> str:
-        if isinstance(self.target, ModelTarget):
+        if isinstance(self.target, NodeTarget):
             fmt = "model('{0}')"
         elif isinstance(self.target, SourceTarget):
             fmt = "source('{0.source}', '{0.table}')"
@@ -268,7 +268,7 @@ class TestBuilder(Generic[Target]):
         raise NotImplementedError('describe_test_target not implemented!')
 
     def get_test_name(self) -> Tuple[str, str]:
-        if isinstance(self.target, ModelTarget):
+        if isinstance(self.target, NodeTarget):
             name = self.name
         elif isinstance(self.target, SourceTarget):
             name = 'source_' + self.name
@@ -290,7 +290,7 @@ class TestBuilder(Generic[Target]):
         )
 
     def build_model_str(self):
-        if isinstance(self.target, ModelTarget):
+        if isinstance(self.target, NodeTarget):
             fmt = "ref('{0.name}')"
         elif isinstance(self.target, SourceTarget):
             fmt = "source('{0.source.name}', '{0.table.name}')"

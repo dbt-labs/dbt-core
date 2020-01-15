@@ -949,7 +949,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                     },
-                    'patch_path': None,
+                    'patch_path': schema_yml_path,
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
@@ -969,8 +969,39 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'alias': 'seed',
-                    'description': '',
-                    'columns': {},
+                    'description': 'The test seed',
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'email': {
+                            'name': 'email',
+                            'description': "The user's email",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                    },
                     'docrefs': [],
                     'compiled': True,
                     'compiled_sql': '',
@@ -1197,7 +1228,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docs': [],
                     'macros': [],
                     'nodes': ['test.test.unique_model_id', 'test.test.not_null_model_id', 'test.test.test_nothing_model_'],
-                    'patches': ['model'],
+                    'patches': ['model', 'seed'],
                     'sources': [],
                 },
             },
@@ -2510,7 +2541,38 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'seed',
                     'build_path': None,
-                    'columns': {},
+                    'columns': {
+                        'id': {
+                            'description': 'The user ID number',
+                            'name': 'id',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'first_name': {
+                            'description': "The user's first name",
+                            'name': 'first_name',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'email': {
+                            'description': "The user's email",
+                            'name': 'email',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'ip_address': {
+                            'description': "The user's IP address",
+                            'name': 'ip_address',
+                            'data_type': None,
+                            'meta': {}
+                        },
+                        'updated_at': {
+                            'description': "The last time this user's email was updated",
+                            'name': 'updated_at',
+                            'data_type': None,
+                            'meta': {}
+                        }
+                    },
                     'compiled': True,
                     'compiled_sql': '',
                     'config': {
@@ -2527,7 +2589,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
-                    'description': '',
+                    'description': 'The test seed',
                     'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
@@ -2537,7 +2599,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
-                    'patch_path': None,
+                    'patch_path': schema_yml_path,
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],

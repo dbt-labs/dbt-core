@@ -9,7 +9,7 @@ import json
 import os
 from enum import Enum
 from typing import (
-    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List
+    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List, Union
 )
 from typing_extensions import Protocol
 
@@ -511,13 +511,20 @@ def translate_aliases(kwargs, aliases):
     return result
 
 
-def pluralize(count, string):
-    if count == 1:
-        return "{} {}".format(count, string)
-    elif string == 'analysis':
-        return "{} {}".format(count, 'analyses')
+def _pluralize(string: Union[str, NodeType]) -> str:
+    try:
+        convert = NodeType(string)
+    except ValueError:
+        return f'{string}s'
     else:
-        return "{} {}s".format(count, string)
+        return convert.pluralize()
+
+
+def pluralize(count, string: Union[str, NodeType]):
+    pluralized: str = str(string)
+    if count != 1:
+        pluralized = _pluralize(string)
+    return f'{count} {pluralized}'
 
 
 def restrict_to(*restrictions):

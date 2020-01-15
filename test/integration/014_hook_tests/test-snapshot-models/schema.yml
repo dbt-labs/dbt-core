@@ -1,5 +1,5 @@
 version: 2
-models:
+snapshots:
 - name: example_snapshot
   columns:
   - name: new_col

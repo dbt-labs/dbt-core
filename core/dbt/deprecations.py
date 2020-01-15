@@ -96,6 +96,18 @@ class ColumnQuotingDeprecation(DBTDeprecation):
     '''
 
 
+class ModelsKeyNonModelDeprecation(DBTDeprecation):
+    _name = 'models-key-mismatch'
+
+    _description = '''
+    patch instruction in {patch.original_file_path} under key
+    "models" was for node "{node.name}", but the node with the same
+    name (from {node.original_file_path}) had resource type
+    "{node.resource_type}". Nodes should be described under their resource
+    specific key. Support for this will be removed in a future release.
+    '''.strip()
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
  a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -136,6 +148,7 @@ deprecations_list: List[DBTDeprecation] = [
     MaterializationReturnDeprecation(),
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),
+    ModelsKeyNonModelDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

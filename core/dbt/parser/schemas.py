@@ -1,5 +1,7 @@
 import os
-from typing import Iterable, Dict, Any, Union, List, Optional
+
+from abc import abstractmethod
+from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar
 
 from hologram import ValidationError
 
@@ -29,7 +31,7 @@ from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
 from dbt.parser.schema_test_builders import (
-    TestBuilder, SourceTarget, ModelTarget, Target,
+    TestBuilder, SourceTarget, NodeTarget, Target,
     SchemaTestBlock, TargetBlock, YamlBlock,
 )
 from dbt.utils import get_pseudo_test_path
@@ -97,7 +99,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
     There are basically three phases to the schema parser:
         - read_yaml_{models,sources}: read in yaml as a dictionary, then
             validate it against the basic structures required so we can start
-            parsing (ModelTarget, SourceTarget)
+            parsing (NodeTarget, SourceTarget)
             - these return potentially many Targets per yaml block, since earch
               source can have multiple tables
         - parse_target_{model,source}: Read in the underlying target, parse and
@@ -105,10 +107,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             any refs/descriptions, and return a parsed entity with the
             appropriate information.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._renderer = ConfigRenderer(self.root_project.cli_vars)
-
     @classmethod
     def get_compiled_path(cls, block: FileBlock) -> str:
         # should this raise an error?
@@ -144,62 +142,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             raise_invalid_schema_yml_version(
                 path, 'version {} is not supported'.format(version)
             )
-
-    def _get_dicts_for(
-        self, yaml: YamlBlock, key: str
-    ) -> Iterable[Dict[str, Any]]:
-        data = yaml.data.get(key, [])
-        if not isinstance(data, list):
-            raise CompilationException(
-                '{} must be a list, got {} instead: ({})'
-                .format(key, type(data), _trimmed(str(data)))
-            )
-        path = yaml.path.original_file_path
-
-        for entry in data:
-            str_keys = (
-                isinstance(entry, dict) and
-                all(isinstance(k, str) for k in entry)
-            )
-            if str_keys:
-                yield entry
-            else:
-                msg = error_context(
-                    path, key, data, 'expected a dict with string keys'
-                )
-                raise CompilationException(msg)
-
-    def read_yaml_models(
-        self, yaml: YamlBlock
-    ) -> Iterable[ModelTarget]:
-        path = yaml.path.original_file_path
-        yaml_key = 'models'
-
-        for data in self._get_dicts_for(yaml, yaml_key):
-            try:
-                model = UnparsedNodeUpdate.from_dict(data)
-            except (ValidationError, JSONValidationException) as exc:
-                msg = error_context(path, yaml_key, data, exc)
-                raise CompilationException(msg) from exc
-            else:
-                yield model
-
-    def read_yaml_sources(
-        self, yaml: YamlBlock
-    ) -> Iterable[SourceTarget]:
-        path = yaml.path.original_file_path
-        yaml_key = 'sources'
-
-        for data in self._get_dicts_for(yaml, yaml_key):
-            try:
-                data = self._renderer.render_schema_source(data)
-                source = UnparsedSourceDefinition.from_dict(data)
-            except (ValidationError, JSONValidationException) as exc:
-                msg = error_context(path, yaml_key, data, exc)
-                raise CompilationException(msg) from exc
-            else:
-                for table in source.tables:
-                    yield SourceTarget(source, table)
 
     def _yaml_from_file(
         self, source_file: SourceFile
@@ -307,6 +249,120 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             )
             raise CompilationException(msg) from exc
 
+    def parse_tests(self, block: TargetBlock) -> ParserRef:
+        refs = ParserRef()
+        for column in block.columns:
+            self.parse_column(block, column, refs)
+
+        for test in block.tests:
+            self.parse_test(block, test, None)
+        return refs
+
+    def parse_file(self, block: FileBlock) -> None:
+        dct = self._yaml_from_file(block.file)
+        # mark the file as seen, even if there are no macros in it
+        self.results.get_file(block.file)
+        if dct:
+            yaml_block = YamlBlock.from_file_block(block, dct)
+
+            self._parse_format_version(yaml_block)
+
+            parser: YamlParser
+            for key in NodeType.documentable():
+                if key == NodeType.Source:
+                    parser = SourceParser(self, yaml_block, key.pluralize())
+                    parser.parse()
+                else:
+                    parser = NodeParser(self, yaml_block, key.pluralize())
+                    parser.parse()
+
+
+Parsed = TypeVar('Parsed', ParsedSourceDefinition, ParsedNodePatch)
+
+
+class YamlParser(Generic[Target, Parsed]):
+    def __init__(
+        self, schema_parser: SchemaParser, yaml: YamlBlock, key: str
+    ) -> None:
+        self.schema_parser = schema_parser
+        self.key = key
+        self.yaml = yaml
+
+    @property
+    def results(self):
+        return self.schema_parser.results
+
+    @property
+    def project(self):
+        return self.schema_parser.project
+
+    @property
+    def default_database(self):
+        return self.schema_parser.default_database
+
+    @property
+    def root_project(self):
+        return self.schema_parser.root_project
+
+    def get_key_dicts(self) -> Iterable[Dict[str, Any]]:
+        data = self.yaml.data.get(self.key, [])
+        if not isinstance(data, list):
+            raise CompilationException(
+                '{} must be a list, got {} instead: ({})'
+                .format(self.key, type(data), _trimmed(str(data)))
+            )
+        path = self.yaml.path.original_file_path
+
+        for entry in data:
+            str_keys = (
+                isinstance(entry, dict) and
+                all(isinstance(k, str) for k in entry)
+            )
+            if str_keys:
+                yield entry
+            else:
+                msg = error_context(
+                    path, self.key, data, 'expected a dict with string keys'
+                )
+                raise CompilationException(msg)
+
+    def parse(self):
+        node: Target
+        for node in self.get_unparsed_target():
+            node_block = TargetBlock.from_yaml_block(self.yaml, node)
+            refs = self.schema_parser.parse_tests(node_block)
+            self.parse_with_refs(node_block, refs)
+
+    @abstractmethod
+    def get_unparsed_target(self) -> Iterable[Target]:
+        raise NotImplementedError('get_unparsed_target is abstract')
+
+    @abstractmethod
+    def parse_with_refs(
+        self, block: TargetBlock[Target], refs: ParserRef
+    ) -> None:
+        raise NotImplementedError('parse_with_refs is abstract')
+
+
+class SourceParser(YamlParser[SourceTarget, ParsedSourceDefinition]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._renderer = ConfigRenderer(self.root_project.cli_vars)
+
+    def get_unparsed_target(self) -> Iterable[SourceTarget]:
+        path = self.yaml.path.original_file_path
+
+        for data in self.get_key_dicts():
+            try:
+                data = self._renderer.render_schema_source(data)
+                source = UnparsedSourceDefinition.from_dict(data)
+            except (ValidationError, JSONValidationException) as exc:
+                msg = error_context(path, self.key, data, exc)
+                raise CompilationException(msg) from exc
+            else:
+                for table in source.tables:
+                    yield SourceTarget(source, table)
+
     def _calculate_freshness(
         self,
         source: UnparsedSourceDefinition,
@@ -323,19 +379,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         else:
             return None
 
-    def parse_tests(self, block: TargetBlock) -> ParserRef:
-        refs = ParserRef()
-        for column in block.columns:
-            self.parse_column(block, column, refs)
-
-        for test in block.tests:
-            self.parse_test(block, test, None)
-        return refs
-
-    def generate_source_node(
-        self, block: TargetBlock, refs: ParserRef
-    ) -> ParsedSourceDefinition:
-        assert isinstance(block.target, SourceTarget)
+    def parse_with_refs(
+        self, block: TargetBlock[SourceTarget], refs: ParserRef
+    ) -> None:
         source = block.target.source
         table = block.target.table
         unique_id = '.'.join([
@@ -353,7 +399,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         path = block.path.original_file_path
         source_meta = source.meta or {}
 
-        return ParsedSourceDefinition(
+        result = ParsedSourceDefinition(
             package_name=self.project.project_name,
             database=(source.database or self.default_database),
             schema=(source.schema or source.name),
@@ -378,59 +424,41 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             resource_type=NodeType.Source,
             fqn=[self.project.project_name, source.name, table.name],
         )
+        self.results.add_source(self.yaml.file, result)
 
-    def generate_node_patch(
-        self, block: TargetBlock, refs: ParserRef
-    ) -> ParsedNodePatch:
-        assert isinstance(block.target, UnparsedNodeUpdate)
+
+class NodeParser(YamlParser[NodeTarget, ParsedNodePatch]):
+    def get_unparsed_target(self) -> Iterable[NodeTarget]:
+        path = self.yaml.path.original_file_path
+
+        for data in self.get_key_dicts():
+            data.update({
+                'original_file_path': path,
+                'yaml_key': self.key,
+                'package_name': self.schema_parser.project.project_name,
+            })
+            try:
+                model = UnparsedNodeUpdate.from_dict(data)
+            except (ValidationError, JSONValidationException) as exc:
+                msg = error_context(path, self.key, data, exc)
+                raise CompilationException(msg) from exc
+            else:
+                yield model
+
+    def parse_with_refs(
+        self, block: TargetBlock[UnparsedNodeUpdate], refs: ParserRef
+    ) -> None:
         description = block.target.description
         collect_docrefs(block.target, refs, None, description)
 
-        return ParsedNodePatch(
+        result = ParsedNodePatch(
             name=block.target.name,
-            original_file_path=block.path.original_file_path,
+            original_file_path=block.target.original_file_path,
+            yaml_key=block.target.yaml_key,
+            package_name=block.target.package_name,
             description=description,
             columns=refs.column_info,
             docrefs=refs.docrefs,
             meta=block.target.meta,
         )
-
-    def parse_target_model(
-        self, target_block: TargetBlock[UnparsedNodeUpdate]
-    ) -> ParsedNodePatch:
-        refs = self.parse_tests(target_block)
-        patch = self.generate_node_patch(target_block, refs)
-        return patch
-
-    def parse_target_source(
-        self, target_block: TargetBlock[SourceTarget]
-    ) -> ParsedSourceDefinition:
-        refs = self.parse_tests(target_block)
-        patch = self.generate_source_node(target_block, refs)
-        return patch
-
-    def parse_yaml_models(self, yaml_block: YamlBlock):
-        for node in self.read_yaml_models(yaml_block):
-            node_block = TargetBlock.from_yaml_block(yaml_block, node)
-            patch = self.parse_target_model(node_block)
-            self.results.add_patch(yaml_block.file, patch)
-
-    def parse_yaml_sources(
-        self, yaml_block: YamlBlock
-    ):
-        for source in self.read_yaml_sources(yaml_block):
-            source_block = TargetBlock.from_yaml_block(yaml_block, source)
-            source_table = self.parse_target_source(source_block)
-            self.results.add_source(yaml_block.file, source_table)
-
-    def parse_file(self, block: FileBlock) -> None:
-        dct = self._yaml_from_file(block.file)
-        # mark the file as seen, even if there are no macros in it
-        self.results.get_file(block.file)
-        if dct:
-            yaml_block = YamlBlock.from_file_block(block, dct)
-
-            self._parse_format_version(yaml_block)
-
-            self.parse_yaml_models(yaml_block)
-            self.parse_yaml_sources(yaml_block)
+        self.results.add_patch(self.yaml.file, result)

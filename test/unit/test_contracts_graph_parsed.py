@@ -303,6 +303,8 @@ class TestParsedModelNode(ContractTestCase):
         )
         patch = ParsedNodePatch(
             name='foo',
+            yaml_key='models',
+            package_name='test',
             description='The foo model',
             original_file_path='/path/to/schema.yml',
             columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
@@ -408,6 +410,8 @@ class TestParsedModelNode(ContractTestCase):
         # invalid patch: description can't be None
         patch = ParsedNodePatch(
             name='foo',
+            yaml_key='models',
+            package_name='test',
             description=None,
             original_file_path='/path/to/schema.yml',
             columns={},
@@ -1360,10 +1364,14 @@ class TestParsedNodePatch(ContractTestCase):
             'columns': {},
             'docrefs': [],
             'meta': {},
+            'yaml_key': 'models',
+            'package_name': 'test',
         }
-        patch = ParsedNodePatch(
+        patch = self.ContractType(
             name='foo',
             description='The foo model',
+            yaml_key='models',
+            package_name='test',
             original_file_path='/path/to/schema.yml',
             columns={},
             docrefs=[],
@@ -1383,9 +1391,11 @@ class TestParsedNodePatch(ContractTestCase):
                     'documentation_package': 'test',
                 }
             ],
-            'meta': {'key': ['value']}
+            'meta': {'key': ['value']},
+            'yaml_key': 'models',
+            'package_name': 'test',
         }
-        patch = ParsedNodePatch(
+        patch = self.ContractType(
             name='foo',
             description='The foo model',
             original_file_path='/path/to/schema.yml',
@@ -1394,6 +1404,8 @@ class TestParsedNodePatch(ContractTestCase):
                 Docref(documentation_name='foo', documentation_package='test'),
             ],
             meta={'key': ['value']},
+            yaml_key='models',
+            package_name='test',
         )
         self.assert_symmetric(patch, dct)
         pickle.loads(pickle.dumps(patch))

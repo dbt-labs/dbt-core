@@ -374,10 +374,23 @@ class TestUnparsedNodeUpdate(ContractTestCase):
     ContractType = UnparsedNodeUpdate
 
     def test_defaults(self):
-        minimum = self.ContractType(name='foo')
-        from_dict = {'name': 'foo'}
+        minimum = self.ContractType(
+            name='foo',
+            yaml_key='models',
+            original_file_path='/some/fake/path',
+            package_name='test',
+        )
+        from_dict = {
+            'name': 'foo',
+            'yaml_key': 'models',
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test',
+        }
         to_dict = {
             'name': 'foo',
+            'yaml_key': 'models',
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test',
             'columns': [],
             'description': '',
             'tests': [],
@@ -389,6 +402,9 @@ class TestUnparsedNodeUpdate(ContractTestCase):
     def test_contents(self):
         update = self.ContractType(
             name='foo',
+            yaml_key='models',
+            original_file_path='/some/fake/path',
+            package_name='test',
             description='a description',
             tests=['table_test'],
             meta={'key': ['value1', 'value2']},
@@ -411,6 +427,9 @@ class TestUnparsedNodeUpdate(ContractTestCase):
         )
         dct = {
             'name': 'foo',
+            'yaml_key': 'models',
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test',
             'description': 'a description',
             'tests': ['table_test'],
             'meta': {'key': ['value1', 'value2']},
@@ -438,6 +457,9 @@ class TestUnparsedNodeUpdate(ContractTestCase):
     def test_bad_test_type(self):
         dct = {
             'name': 'foo',
+            'yaml_key': 'models',
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test',
             'description': 'a description',
             'tests': ['table_test'],
             'meta': {'key': ['value1', 'value2']},
@@ -456,6 +478,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
                     'meta': {},
+                    'yaml_key': 'models',
+                    'original_file_path': '/some/fake/path',
                 },
             ],
         }
@@ -463,6 +487,9 @@ class TestUnparsedNodeUpdate(ContractTestCase):
 
         dct = {
             'name': 'foo',
+            'yaml_key': 'models',
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test',
             'description': 'a description',
             'tests': ['table_test'],
             'meta': {'key': ['value1', 'value2']},
@@ -481,6 +508,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
                     'meta': {},
+                    'yaml_key': 'models',
+                    'original_file_path': '/some/fake/path',
                 },
             ],
         }
@@ -488,6 +517,9 @@ class TestUnparsedNodeUpdate(ContractTestCase):
 
         # missing a name
         dct = {
+            'yaml_key': 'models',
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test',
             'description': 'a description',
             'tests': ['table_test'],
             'meta': {'key': ['value1', 'value2']},
@@ -506,6 +538,8 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                         {'accepted_values': {'values': ['blue', 'green']}}
                     ],
                     'meta': {},
+                    'yaml_key': 'models',
+                    'original_file_path': '/some/fake/path',
                 },
             ],
         }

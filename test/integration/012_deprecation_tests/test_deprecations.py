@@ -60,18 +60,6 @@ class TestMacroDeprecations(BaseTestDeprecations):
 
 
 class TestMaterializationReturnDeprecation(BaseTestDeprecations):
-    def setUp(self):
-        super().setUp()
-        deprecations.reset_deprecations()
-
-    @property
-    def schema(self):
-        return "deprecation_test_012"
-
-    @staticmethod
-    def dir(path):
-        return path.lstrip("/")
-
     @property
     def models(self):
         return self.dir('custom-models')
@@ -92,4 +80,24 @@ class TestMaterializationReturnDeprecation(BaseTestDeprecations):
         self.assertEqual(deprecations.active_deprecations, set())
         self.run_dbt(strict=False)
         expected = {'materialization-return'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+
+class TestModelsKeyMismatchDeprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('models-key-mismatch')
+
+    @use_profile('postgres')
+    def test_postgres_deprecations_fail(self):
+        # this should fail at compile_time
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(strict=True)
+        self.assertIn('had resource type', str(exc.exception))
+
+    @use_profile('postgres')
+    def test_postgres_deprecations(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(strict=False)
+        expected = {'models-key-mismatch'}
         self.assertEqual(expected, deprecations.active_deprecations)

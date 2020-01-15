@@ -188,11 +188,16 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
                     .format(node_id, old_file)
                 )
 
+        patched = False
         for name in old_file.patches:
             patch = _expect_value(
                 name, old_result.patches, old_file, "patches"
             )
             self.add_patch(source_file, patch)
+            patched = True
+
+        if patched:
+            self.get_file(source_file).patches.sort()
 
         return True
 

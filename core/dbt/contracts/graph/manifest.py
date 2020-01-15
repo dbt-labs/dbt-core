@@ -18,6 +18,7 @@ from dbt.exceptions import (
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt import deprecations
 from dbt import tracking
 import dbt.utils
 
@@ -439,12 +440,25 @@ class Manifest:
         # nodes looking for matching names. We could use _find_by_name if we
         # were ok with doing an O(n*m) search (one nodes scan per patch)
         for node in self.nodes.values():
-            if node.resource_type != NodeType.Model:
+            if node.resource_type == NodeType.Source:
                 continue
             patch = patches.pop(node.name, None)
             if not patch:
                 continue
-            node.patch(patch)
+            if node.resource_type.pluralize() == patch.yaml_key:
+                node.patch(patch)
+            elif patch.yaml_key == 'models':
+                deprecations.warn(
+                    'models-key-mismatch', patch=patch, node=node
+                )
+            else:
+                raise_compiler_error(
+                    f'patch instruction in {patch.original_file_path} under '
+                    f'key "{patch.yaml_key}" was for node "{node.name}", but '
+                    f'the node with the same name (from '
+                    f'{node.original_file_path}) had resource type '
+                    f'"{node.resource_type}"'
+                )
 
         # log debug-level warning about nodes we couldn't find
         if patches:
