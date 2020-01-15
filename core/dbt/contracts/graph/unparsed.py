@@ -280,8 +280,8 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     config: Dict[str, Any] = field(default_factory=dict)
 
     @property
-    def yaml_key(self) -> 'str':
-        return 'sources'
+    def yaml_key(self) -> "str":
+        return "sources"
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)

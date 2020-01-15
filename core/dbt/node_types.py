@@ -42,7 +42,7 @@ class NodeType(StrEnum):
         ]
 
     @classmethod
-    def documentable(cls) -> List['NodeType']:
+    def documentable(cls) -> List["NodeType"]:
         return [
             cls.Model,
             cls.Seed,
@@ -55,10 +55,10 @@ class NodeType(StrEnum):
         ]
 
     def pluralize(self) -> str:
-        if self == 'analysis':
-            return 'analyses'
+        if self == "analysis":
+            return "analyses"
         else:
-            return f'{self}s'
+            return f"{self}s"
 
 
 class RunHookType(StrEnum):

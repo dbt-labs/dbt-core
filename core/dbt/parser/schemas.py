@@ -795,11 +795,13 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
         for data in key_dicts:
             # add extra data to each dict. This updates the dicts
             # in the parser yaml
-            data.update({
-                'original_file_path': path,
-                'yaml_key': self.key,
+            data.update(
+                {
+                    "original_file_path": path,
                 'package_name': self.project.project_name,
-            })
+                    "package_name": self.project.project_name,
+                }
+            )
             try:
                 # target_type: UnparsedNodeUpdate, UnparsedAnalysisUpdate,
                 # or UnparsedMacroUpdate

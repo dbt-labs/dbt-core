@@ -147,7 +147,7 @@ class ParsedNodeMixins(dbtClassMixin):
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
-    def patch(self, patch: 'ParsedNodePatch'):
+    def patch(self, patch: "ParsedNodePatch"):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
