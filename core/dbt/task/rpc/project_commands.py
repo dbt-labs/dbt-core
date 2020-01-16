@@ -73,6 +73,9 @@ class RemoteSeedProjectTask(RPCCommandTask[RPCSeedParameters], SeedTask):
     METHOD_NAME = 'seed'
 
     def set_args(self, params: RPCSeedParameters) -> None:
+        # select has an argparse `dest` value of `models`.
+        self.args.models = self._listify(params.select)
+        self.args.exclude = self._listify(params.exclude)
         if params.threads is not None:
             self.args.threads = params.threads
         self.args.show = params.show

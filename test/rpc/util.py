@@ -240,11 +240,17 @@ class Querier:
 
     def seed(
         self,
+        select: Optional[Union[str, List[str]]] = None,
+        exclude: Optional[Union[str, List[str]]] = None,
         show: bool = None,
         threads: Optional[int] = None,
         request_id: int = 1,
     ):
         params = {}
+        if select is not None:
+            params['select'] = select
+        if exclude is not None:
+            params['exclude'] = exclude
         if show is not None:
             params['show'] = show
         if threads is not None:

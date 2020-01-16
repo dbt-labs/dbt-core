@@ -136,6 +136,22 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
         self.assertTableDoesExist('seed_enabled')
         self.assertTableDoesNotExist('seed_disabled')
 
+    @use_profile('postgres')
+    def test_postgres_simple_seed_selection(self):
+        results = self.run_dbt(['seed', '--select', 'seed_enabled'])
+        self.assertEqual(len(results),  1)
+        self.assertTableDoesExist('seed_enabled')
+        self.assertTableDoesNotExist('seed_disabled')
+        self.assertTableDoesNotExist('seed_tricky')
+
+    @use_profile('postgres')
+    def test_postgres_simple_seed_exclude(self):
+        results = self.run_dbt(['seed', '--exclude', 'seed_enabled'])
+        self.assertEqual(len(results),  1)
+        self.assertTableDoesNotExist('seed_enabled')
+        self.assertTableDoesNotExist('seed_disabled')
+        self.assertTableDoesExist('seed_tricky')
+
 
 class TestSeedParsing(DBTIntegrationTest):
     def setUp(self):
