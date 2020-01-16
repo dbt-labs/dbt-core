@@ -12,8 +12,9 @@ from dbt.contracts.graph.parsed import (
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
-    CompilationException, InternalException
+    CompilationException, InternalException, raise_compiler_error
 )
+from dbt.ui import printer
 from dbt.version import __version__
 
 
@@ -87,7 +88,33 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.get_file(source_file).nodes.append(node.unique_id)
 
     def add_macro(self, source_file: SourceFile, macro: ParsedMacro):
-        # macros can be overwritten (should they be?)
+        if macro.unique_id in self.macros:
+            # detect that the macro exists and emit an error
+            other_path = self.macros[macro.unique_id].original_file_path
+            # subtract 2 for the "Compilation Error" indent
+            # note that the line wrap eats newlines, so if you want newlines,
+            # this is the result :(
+            msg = '\n'.join([
+                printer.line_wrap_message(
+                    f'''\
+                    dbt found two macros named "{macro.name}" in the project
+                    "{macro.package_name}".
+                    ''',
+                    subtract=2
+                ),
+                '',
+                printer.line_wrap_message(
+                    f'''\
+                    To fix this error, rename or remove one of the following
+                    macros:
+                    ''',
+                    subtract=2
+                ),
+                f'   - {macro.original_file_path}',
+                f'   - {other_path}'
+            ])
+            raise_compiler_error(msg)
+
         self.macros[macro.unique_id] = macro
         self.get_file(source_file).macros.append(macro.unique_id)
 
