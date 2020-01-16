@@ -14,7 +14,7 @@ except ImportError:
 
 
 package_name = "dbt-redshift"
-package_version = "0.15.1rc2"
+package_version = "0.15.1"
 description = """The redshift adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
