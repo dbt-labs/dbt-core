@@ -7,6 +7,7 @@ import google.api_core
 import google.oauth2
 import google.cloud.exceptions
 import google.cloud.bigquery
+from google.api_core import retry
 
 import dbt.clients.agate_helper
 import dbt.exceptions
@@ -35,6 +36,7 @@ class BigQueryCredentials(Credentials):
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
     priority: Optional[Priority] = None
+    retries: Optional[int] = 1
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
@@ -57,6 +59,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
              'https://www.googleapis.com/auth/drive')
 
     QUERY_TIMEOUT = 300
+    RETRIES = 1
+    DEFAULT_INITIAL_DELAY = 1.0  # Seconds
+    DEFAULT_MAXIMUM_DELAY = 1.0  # Seconds
 
     @classmethod
     def handle_error(cls, error, message, sql):
@@ -171,6 +176,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
         return credentials.timeout_seconds
 
     @classmethod
+    def get_retries(cls, conn) -> int:
+        credentials = conn.credentials
+        if credentials.retries is not None:
+            return credentials.retries
+        else:
+            return 1
+
+    @classmethod
     def get_table_from_response(cls, resp):
         column_names = [field.name for field in resp.schema]
         return dbt.clients.agate_helper.table_from_data_flat(resp,
@@ -182,21 +195,19 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_config = google.cloud.bigquery.QueryJobConfig()
-        job_config.use_legacy_sql = False
+        job_params = {'use_legacy_sql': False}
 
         priority = conn.credentials.priority
         if priority == Priority.Batch:
-            job_config.priority = google.cloud.bigquery.QueryPriority.BATCH
+            job_params['priority'] = google.cloud.bigquery.QueryPriority.BATCH
         else:
-            job_config.priority = \
-                google.cloud.bigquery.QueryPriority.INTERACTIVE
+            job_params[
+                'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
 
-        query_job = client.query(sql, job_config)
+        def fn():
+            return self._query_and_results(client, sql, conn, job_params)
 
-        # this blocks until the query has completed
-        with self.exception_handler(sql):
-            iterator = query_job.result()
+        query_job, iterator = self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
         return query_job, iterator
 
@@ -243,8 +254,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
         view = google.cloud.bigquery.Table(view_ref)
         callback(view)
 
-        with self.exception_handler(sql):
-            client.create_table(view)
+        def fn():
+            return client.create_table(view)
+        self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_view(self, database, schema, table_name, sql):
         def callback(table):
@@ -258,15 +270,15 @@ class BigQueryConnectionManager(BaseConnectionManager):
         client = conn.handle
 
         table_ref = self.table_ref(database, schema, table_name, conn)
-        job_config = google.cloud.bigquery.QueryJobConfig()
-        job_config.destination = table_ref
-        job_config.write_disposition = 'WRITE_TRUNCATE'
+        job_params = {'destination': table_ref,
+                      'write_disposition': 'WRITE_TRUNCATE'}
 
-        query_job = client.query(sql, job_config=job_config)
+        timeout = self.get_timeout(conn)
 
-        # this waits for the job to complete
-        with self.exception_handler(sql):
-            query_job.result(timeout=self.get_timeout(conn))
+        def fn():
+            return self._query_and_results(client, sql, conn, job_params,
+                                           timeout=timeout)
+        self._retry_and_handle(msg=sql, conn=conn, fn=fn)
 
     def create_date_partitioned_table(self, database, schema, table_name):
         def callback(table):
@@ -295,15 +307,70 @@ class BigQueryConnectionManager(BaseConnectionManager):
         dataset = self.dataset(database, schema, conn)
         client = conn.handle
 
-        with self.exception_handler('drop dataset'):
-            client.delete_dataset(
-                dataset, delete_contents=True, not_found_ok=True
-            )
+        def fn():
+            return client.delete_dataset(
+                dataset, delete_contents=True, not_found_ok=True)
+
+        self._retry_and_handle(
+            msg='drop dataset', conn=conn, fn=fn)
 
     def create_dataset(self, database, schema):
         conn = self.get_thread_connection()
         client = conn.handle
         dataset = self.dataset(database, schema, conn)
 
-        with self.exception_handler('create dataset'):
-            client.create_dataset(dataset, exists_ok=True)
+        def fn():
+            return client.create_dataset(dataset, exists_ok=True)
+        self._retry_and_handle(msg='create dataset', conn=conn, fn=fn)
+
+    def _query_and_results(self, client, sql, conn, job_params, timeout=None):
+        """Query the client and wait for results."""
+        # Cannot reuse job_config if destination is set and ddl is used
+        job_config = google.cloud.bigquery.QueryJobConfig(**job_params)
+        query_job = client.query(sql, job_config=job_config)
+        iterator = query_job.result(timeout=timeout)
+
+        return query_job, iterator
+
+    def _retry_and_handle(self, msg, conn, fn):
+        """retry a function call within the context of exception_handler."""
+        with self.exception_handler(msg):
+            return retry.retry_target(
+                target=fn,
+                predicate=_ErrorCounter(self.get_retries(conn)).count_error,
+                sleep_generator=self._retry_generator(),
+                deadline=None)
+
+    def _retry_generator(self):
+        """Generates retry intervals that exponentially back off."""
+        return retry.exponential_sleep_generator(
+            initial=self.DEFAULT_INITIAL_DELAY,
+            maximum=self.DEFAULT_MAXIMUM_DELAY)
+
+
+class _ErrorCounter(object):
+    """Counts errors seen up to a threshold then raises the next error."""
+
+    def __init__(self, retries):
+        self.retries = retries
+        self.error_count = 0
+
+    def count_error(self, error):
+        if self.retries == 0:
+            return False  # Don't log
+        self.error_count += 1
+        if _is_retryable(error) and self.error_count <= self.retries:
+            logger.debug(
+                'Retry attempt {} of {} after error: {}',
+                self.error_count, self.retries, repr(error))
+            return True
+        else:
+            logger.debug(
+                'Not Retrying after {} previous attempts. Error: {}',
+                self.error_count - 1, repr(error))
+            return False
+
+
+def _is_retryable(error):
+    """Return true for 500 level (retryable) errors."""
+    return isinstance(error, google.cloud.exceptions.ServerError)

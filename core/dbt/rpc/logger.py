@@ -89,6 +89,8 @@ class QueueTimeoutMessage(QueueMessage):
 
 class QueueLogHandler(logbook.queues.MultiProcessingHandler):
     def emit(self, record: logbook.LogRecord):
+        # trigger the cached proeprties here
+        record.pull_information()
         self.queue.put_nowait(QueueLogMessage.from_record(record))
 
     def emit_error(self, error: JSONRPCError):

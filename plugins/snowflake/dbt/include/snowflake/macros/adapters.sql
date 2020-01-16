@@ -11,6 +11,9 @@
   {% else %}
     {%- set cluster_by_string = none -%}
   {%- endif -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
       create or replace {% if temporary -%}
         temporary
@@ -38,6 +41,9 @@
 {% macro snowflake__create_view_as(relation, sql) -%}
   {%- set secure = config.get('secure', default=false) -%}
   {%- set copy_grants = config.get('copy_grants', default=false) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
   create or replace {% if secure -%}
     secure
   {%- endif %} view {{ relation }} {% if copy_grants -%} copy grants {%- endif %} as (
@@ -107,6 +113,13 @@
 {% macro snowflake__current_timestamp() -%}
   convert_timezone('UTC', current_timestamp())
 {%- endmacro %}
+
+
+{% macro snowflake__snapshot_string_as_time(timestamp) -%}
+    {%- set result = "to_timestamp_ntz('" ~ timestamp ~ "')" -%}
+    {{ return(result) }}
+{%- endmacro %}
+
 
 {% macro snowflake__snapshot_get_time() -%}
   to_timestamp_ntz({{ current_timestamp() }})

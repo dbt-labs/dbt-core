@@ -756,12 +756,19 @@ def warn_or_raise(exc, log_fmt=None):
         logger.warning(msg)
 
 
+def warn(msg, node=None):
+    # there's no reason to expose log_fmt to macros - it's only useful for
+    # handling colors
+    return warn_or_error(msg, node=node)
+
+
 # Update this when a new function should be added to the
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
     fn.__name__: fn
     for fn in
     [
+        warn,
         missing_config,
         missing_materialization,
         missing_relation,

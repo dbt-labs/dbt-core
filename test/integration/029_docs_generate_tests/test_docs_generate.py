@@ -1,6 +1,8 @@
 import hashlib
 import json
 import os
+import random
+import time
 from datetime import datetime
 from unittest.mock import ANY, patch
 
@@ -51,6 +53,38 @@ def walk_files(path):
     for root, dirs, files in os.walk(path):
         for basename in files:
             yield os.path.join(root, basename)
+
+
+class TestDocsGenerateEscapes(DBTIntegrationTest):
+    prefix = "pgtest{}{:04}".format(int(time.time()), random.randint(0, 9999))
+
+    @property
+    def schema(self):
+        return 'docs_generate_029'
+
+    @staticmethod
+    def dir(path):
+        return normalize(path)
+
+    @property
+    def models(self):
+        return self.dir("trivial_models")
+
+    def run_and_generate(self):
+        self.assertEqual(len(self.run_dbt(['run'])), 1)
+        os.remove(normalize('target/manifest.json'))
+        os.remove(normalize('target/run_results.json'))
+        self.run_dbt(['docs', 'generate'])
+
+    @use_profile('postgres')
+    def test_postgres_include_schema(self):
+        self.run_and_generate()
+        manifest = _read_json('./target/manifest.json')
+        self.assertIn('nodes', manifest)
+        self.assertEqual(len(manifest['nodes']), 1)
+        self.assertIn('model.test.model', manifest['nodes'])
+        self.assertIn('schema', manifest['nodes']['model.test.model'])
+        self.assertEqual('pg', manifest['nodes']['model.test.model']['schema'][:2])
 
 
 class TestDocsGenerate(DBTIntegrationTest):
@@ -3005,3 +3039,33 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_run_results(self.expected_run_results(
             model_database=self.default_database
         ))
+
+
+class TestDocsGenerateMissingSchema(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return 'docs_generate_029'
+
+    @staticmethod
+    def dir(path):
+        return normalize(path)
+
+    @property
+    def models(self):
+        return self.dir("bq_models_noschema")
+
+    def setUp(self):
+        super().setUp()
+        self.extra_schema = self.unique_schema() + '_bq_test'
+
+    def tearDown(self):
+        with self.adapter.connection_named('__test'):
+            self._drop_schema_named(self.default_database, self.extra_schema)
+        super().tearDown()
+
+    @use_profile('bigquery')
+    def test_bigquery_docs_generate_noschema(self):
+        self.run_dbt([
+            'docs', 'generate',
+            '--vars', "{{extra_schema: {}}}".format(self.extra_schema)
+        ])

@@ -1,5 +1,8 @@
 {% macro postgres__create_table_as(temporary, relation, sql) -%}
   {%- set unlogged = config.get('unlogged', default=false) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+
+  {{ sql_header if sql_header is not none }}
 
   create {% if temporary -%}
     temporary
@@ -103,6 +106,12 @@
 {% macro postgres__current_timestamp() -%}
   now()
 {%- endmacro %}
+
+{% macro postgres__snapshot_string_as_time(timestamp) -%}
+    {%- set result = "'" ~ timestamp ~ "'::timestamp without time zone" -%}
+    {{ return(result) }}
+{%- endmacro %}
+
 
 {% macro postgres__snapshot_get_time() -%}
   {{ current_timestamp() }}::timestamp without time zone
