@@ -92,15 +92,27 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             # detect that the macro exists and emit an error
             other_path = self.macros[macro.unique_id].original_file_path
             # subtract 2 for the "Compilation Error" indent
-            msg = printer.line_wrap_message(
-                f'''\
-                dbt found two macros in the project "{macro.package_name}" with
-                the name "{macro.name}" (defined in
-                "{macro.original_file_path}" and "{other_path}"). Since these
-                resources have the same name, dbt will choose one to be called
-                when {macro.name} is used. To fix this, remove or change the
-                name of one of these macros.''',
-                subtract=2)
+            # note that the line wrap eats newlines, so if you want newlines,
+            # this is the result :(
+            msg = '\n'.join([
+                printer.line_wrap_message(
+                    f'''\
+                    dbt found two macros named "{macro.name}" in the project
+                    "{macro.package_name}".
+                    ''',
+                    subtract=2
+                ),
+                '',
+                printer.line_wrap_message(
+                    f'''\
+                    To fix this error, rename or remove one of the following
+                    macros:
+                    ''',
+                    subtract=2
+                ),
+                f'   - {macro.original_file_path}',
+                f'   - {other_path}'
+            ])
             raise_compiler_error(msg)
 
         self.macros[macro.unique_id] = macro
