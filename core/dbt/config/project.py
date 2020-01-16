@@ -1,4 +1,7 @@
 from copy import deepcopy
+from dataclasses import dataclass
+from itertools import chain
+from typing import List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable
 import hashlib
 import os
 
@@ -21,7 +24,10 @@ from dbt.utils import parse_cli_vars
 from dbt.source_config import SourceConfig
 
 from dbt.contracts.graph.manifest import ManifestMetadata
-from dbt.contracts.project import Project as ProjectContract
+from dbt.contracts.project import (
+    Project as ProjectContract,
+    SemverString,
+)
 from dbt.contracts.project import PackageConfig
 
 from hologram import ValidationError
@@ -129,7 +135,7 @@ def package_config_from_data(packages_data):
     return packages
 
 
-def _parse_versions(versions):
+def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     """Parse multiple versions as read from disk. The versions value may be any
     one of:
         - a single version string ('>0.12.1')
@@ -144,44 +150,61 @@ def _parse_versions(versions):
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
+def _all_source_paths(
+    source_paths: List[str], data_paths: List[str], snapshot_paths: List[str]
+) -> List[str]:
+    return list(chain(source_paths, data_paths, snapshot_paths))
+
+
+T = TypeVar('T')
+
+
+def value_or(value: Optional[T], default: T) -> T:
+    if value is None:
+        return default
+    else:
+        return value
+
+
+@dataclass
 class Project:
-    def __init__(self, project_name, version, project_root, profile_name,
-                 source_paths, macro_paths, data_paths, test_paths,
-                 analysis_paths, docs_paths, target_path, snapshot_paths,
-                 clean_targets, log_path, modules_path, quoting, models,
-                 on_run_start, on_run_end, seeds, snapshots, dbt_version,
-                 packages, query_comment):
-        self.project_name = project_name
-        self.version = version
-        self.project_root = project_root
-        self.profile_name = profile_name
-        self.source_paths = source_paths
-        self.macro_paths = macro_paths
-        self.data_paths = data_paths
-        self.test_paths = test_paths
-        self.analysis_paths = analysis_paths
-        self.docs_paths = docs_paths
-        self.target_path = target_path
-        self.snapshot_paths = snapshot_paths
-        self.clean_targets = clean_targets
-        self.log_path = log_path
-        self.modules_path = modules_path
-        self.quoting = quoting
-        self.models = models
-        self.on_run_start = on_run_start
-        self.on_run_end = on_run_end
-        self.seeds = seeds
-        self.snapshots = snapshots
-        self.dbt_version = dbt_version
-        self.packages = packages
-        self.query_comment = query_comment
+    project_name: str
+    version: Union[SemverString, float]
+    project_root: str
+    profile_name: str
+    source_paths: List[str]
+    macro_paths: List[str]
+    data_paths: List[str]
+    test_paths: List[str]
+    analysis_paths: List[str]
+    docs_paths: List[str]
+    target_path: str
+    snapshot_paths: List[str]
+    clean_targets: List[str]
+    log_path: str
+    modules_path: str
+    quoting: Dict[str, Any]
+    models: Dict[str, Any]
+    on_run_start: List[str]
+    on_run_end: List[str]
+    seeds: Dict[str, Any]
+    snapshots: Dict[str, Any]
+    dbt_version: List[VersionSpecifier]
+    packages: Dict[str, Any]
+    query_comment: Optional[Union[str, NoValue]]
+
+    @property
+    def all_source_paths(self) -> List[str]:
+        return _all_source_paths(
+            self.source_paths, self.data_paths, self.snapshot_paths
+        )
 
     @staticmethod
-    def _preprocess(project_dict):
+    def _preprocess(project_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Pre-process certain special keys to convert them from None values
         into empty containers, and to turn strings into arrays of strings.
         """
-        handlers = {
+        handlers: Dict[Tuple[str, ...], Callable[[Any], Any]] = {
             ('on-run-start',): _list_if_none_or_string,
             ('on-run-end',): _list_if_none_or_string,
         }
@@ -193,7 +216,7 @@ class Project:
             handlers[(k, 'post-hook')] = _list_if_none_or_string
         handlers[('seeds', 'column_types')] = _dict_if_none
 
-        def converter(value, keypath):
+        def converter(value: Any, keypath: Tuple[str, ...]) -> Any:
             if keypath in handlers:
                 handler = handlers[keypath]
                 return handler(value)
@@ -203,16 +226,20 @@ class Project:
         return deep_map(converter, project_dict)
 
     @classmethod
-    def from_project_config(cls, project_dict, packages_dict=None):
+    def from_project_config(
+        cls,
+        project_dict: Dict[str, Any],
+        packages_dict: Optional[Dict[str, Any]] = None,
+    ) -> 'Project':
         """Create a project from its project and package configuration, as read
         by yaml.safe_load().
 
-        :param project_dict dict: The dictionary as read from disk
-        :param packages_dict Optional[dict]: If it exists, the packages file as
+        :param project_dict: The dictionary as read from disk
+        :param packages_dict: If it exists, the packages file as
             read from disk.
         :raises DbtProjectError: If the project is missing or invalid, or if
             the packages file exists and is invalid.
-        :returns Project: The project, with defaults populated.
+        :returns: The project, with defaults populated.
         """
         try:
             project_dict = cls._preprocess(project_dict)
@@ -221,45 +248,60 @@ class Project:
                 'Cycle detected: Project input has a reference to itself',
                 project=project_dict
             )
-        # just for validation.
         try:
-            ProjectContract.from_dict(project_dict)
+            cfg = ProjectContract.from_dict(project_dict)
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
         # name/version are required in the Project definition, so we can assume
         # they are present
-        name = project_dict['name']
-        version = project_dict['version']
+        name = cfg.name
+        version = cfg.version
         # this is added at project_dict parse time and should always be here
         # once we see it.
-        project_root = project_dict['project-root']
+        if cfg.project_root is None:
+            raise DbtProjectError('cfg must have a project root!')
+        else:
+            project_root = cfg.project_root
         # this is only optional in the sense that if it's not present, it needs
         # to have been a cli argument.
-        profile_name = project_dict.get('profile')
-        # these are optional
-        source_paths = project_dict.get('source-paths', ['models'])
-        macro_paths = project_dict.get('macro-paths', ['macros'])
-        data_paths = project_dict.get('data-paths', ['data'])
-        test_paths = project_dict.get('test-paths', ['test'])
-        analysis_paths = project_dict.get('analysis-paths', [])
-        docs_paths = project_dict.get('docs-paths', source_paths[:])
-        target_path = project_dict.get('target-path', 'target')
-        snapshot_paths = project_dict.get('snapshot-paths', ['snapshots'])
-        # should this also include the modules path by default?
-        clean_targets = project_dict.get('clean-targets', [target_path])
-        log_path = project_dict.get('log-path', 'logs')
-        modules_path = project_dict.get('modules-path', 'dbt_modules')
-        # in the default case we'll populate this once we know the adapter type
-        quoting = project_dict.get('quoting', {})
+        profile_name = cfg.profile
+        # these are all the defaults
+        source_paths: List[str] = value_or(cfg.source_paths, ['models'])
+        macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
+        data_paths: List[str] = value_or(cfg.data_paths, ['data'])
+        test_paths: List[str] = value_or(cfg.test_paths, ['test'])
+        analysis_paths: List[str] = value_or(cfg.analysis_paths, [])
+        snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
 
-        models = project_dict.get('models', {})
-        on_run_start = project_dict.get('on-run-start', [])
-        on_run_end = project_dict.get('on-run-end', [])
-        seeds = project_dict.get('seeds', {})
-        snapshots = project_dict.get('snapshots', {})
-        dbt_raw_version = project_dict.get('require-dbt-version', '>=0.0.0')
-        query_comment = project_dict.get('query-comment', NoValue())
+        all_source_paths: List[str] = _all_source_paths(
+            source_paths, data_paths, snapshot_paths
+        )
+
+        docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
+        target_path: str = value_or(cfg.target_path, 'target')
+        clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
+        log_path: str = value_or(cfg.log_path, 'logs')
+        modules_path: str = value_or(cfg.modules_path, 'dbt_modules')
+        # in the default case we'll populate this once we know the adapter type
+        # It would be nice to just pass along a Quoting here, but that would
+        # break many things
+        quoting: Dict[str, Any] = {}
+        if cfg.quoting is not None:
+            quoting = cfg.quoting.to_dict()
+
+        models: Dict[str, Any] = cfg.models
+        seeds: Dict[str, Any] = cfg.seeds
+        snapshots: Dict[str, Any] = cfg.snapshots
+
+        on_run_start: List[str] = value_or(cfg.on_run_start, [])
+        on_run_end: List[str] = value_or(cfg.on_run_end, [])
+
+        # weird type handling: no value_or use
+        dbt_raw_version: Union[List[str], str] = '>=0.0.0'
+        if cfg.require_dbt_version is not None:
+            dbt_raw_version = cfg.require_dbt_version
+        query_comment = cfg.query_comment
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)

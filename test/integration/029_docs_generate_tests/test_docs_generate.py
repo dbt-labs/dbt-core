@@ -848,7 +848,9 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_seeded_manifest(self, model_database=None):
         models_path = self.dir('models')
         model_sql_path = os.path.join(models_path, 'model.sql')
-        schema_yml_path = os.path.join(models_path, 'schema.yml')
+        model_schema_yml_path = os.path.join(models_path, 'schema.yml')
+        seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
+
         my_schema_name = self.unique_schema()
 
         if model_database is None:
@@ -924,7 +926,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'meta': {},
                         },
                     },
-                    'patch_path': schema_yml_path,
+                    'patch_path': model_schema_yml_path,
                     'docrefs': [],
                     'compiled': True,
                     'compiled_sql': ANY,
@@ -949,7 +951,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                     },
-                    'patch_path': schema_yml_path,
+                    'patch_path': seed_schema_yml_path,
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
@@ -1032,7 +1034,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': '',
                     'fqn': ['test', 'schema_test', 'not_null_model_id'],
                     'name': 'not_null_model_id',
-                    'original_file_path': schema_yml_path,
+                    'original_file_path': model_schema_yml_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/not_null_model_id.sql'),
@@ -1080,7 +1082,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': '',
                     'fqn': ['test', 'schema_test', 'test_nothing_model_'],
                     'name': 'test_nothing_model_',
-                    'original_file_path': schema_yml_path,
+                    'original_file_path': model_schema_yml_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/test_nothing_model_.sql'),
@@ -1128,7 +1130,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': '',
                     'fqn': ['test', 'schema_test', 'unique_model_id'],
                     'name': 'unique_model_id',
-                    'original_file_path': schema_yml_path,
+                    'original_file_path': model_schema_yml_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/unique_model_id.sql'),
@@ -1228,7 +1230,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docs': [],
                     'macros': [],
                     'nodes': ['test.test.unique_model_id', 'test.test.not_null_model_id', 'test.test.test_nothing_model_'],
-                    'patches': ['model', 'seed'],
+                    'patches': ['model'],
+                    'sources': [],
+                },
+                normalize('seed/schema.yml'): {
+                    'path': self._path_to('seed', 'schema.yml'),
+                    'checksum': self._checksum_file('seed/schema.yml'),
+                    'docs': [],
+                    'macros': [],
+                    'nodes': [],
+                    'patches': ['seed'],
                     'sources': [],
                 },
             },
@@ -1466,7 +1477,38 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'seed.test.seed': {
                     'alias': 'seed',
                     'build_path': None,
-                    'columns': {},
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'email': {
+                            'name': 'email',
+                            'description': "The user's email",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                    },
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -1481,13 +1523,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
-                    'description': '',
+                    'description': 'The test seed',
                     'docrefs': [],
                     'fqn': ['test', 'seed'],
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
-                    'patch_path': None,
+                    'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
@@ -1735,7 +1777,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('ref_models', 'schema.yml'),
                     'sources': ['source.test.my_source.my_table'],
                 },
-
+                normalize('seed/schema.yml'): {
+                    'path': self._path_to('seed', 'schema.yml'),
+                    'checksum': self._checksum_file('seed/schema.yml'),
+                    'docs': [],
+                    'macros': [],
+                    'nodes': [],
+                    'patches': ['seed'],
+                    'sources': [],
+                },
             },
         }
 
@@ -2017,7 +2067,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'seed.test.seed': {
                     'build_path': None,
-                    'patch_path': None,
+                    'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
@@ -2051,8 +2101,39 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'alias': 'seed',
-                    'columns': {},
-                    'description': '',
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'email': {
+                            'name': 'email',
+                            'description': "The user's email",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                    },
+                    'description': 'The test seed',
                     'docrefs': [],
                     'compiled': True,
                     'compiled_sql': '',
@@ -2150,6 +2231,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': ['nested_view', 'clustered', 'multi_clustered'],
                     'docs': [],
                     'macros': [],
+                    'sources': [],
+                },
+                normalize('seed/schema.yml'): {
+                    'path': self._path_to('seed', 'schema.yml'),
+                    'checksum': self._checksum_file('seed/schema.yml'),
+                    'docs': [],
+                    'macros': [],
+                    'nodes': [],
+                    'patches': ['seed'],
                     'sources': [],
                 },
             },
@@ -2265,7 +2355,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'seed.test.seed': {
                     'build_path': None,
-                    'patch_path': None,
+                    'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
@@ -2299,8 +2389,39 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'alias': 'seed',
-                    'columns': {},
-                    'description': '',
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'email': {
+                            'name': 'email',
+                            'description': "The user's email",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                    },
+                    'description': 'The test seed',
                     'docrefs': [],
                     'compiled': True,
                     'compiled_sql': ANY,
@@ -2367,6 +2488,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': ['model'],
                     'sources': []
                 },
+                normalize('seed/schema.yml'): {
+                    'path': self._path_to('seed', 'schema.yml'),
+                    'checksum': self._checksum_file('seed/schema.yml'),
+                    'docs': [],
+                    'macros': [],
+                    'nodes': [],
+                    'patches': ['seed'],
+                    'sources': [],
+                },
             },
         }
 
@@ -2418,7 +2548,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         """
         models_path = self.dir('models')
         model_sql_path = os.path.join(models_path, 'model.sql')
-        schema_yml_path = os.path.join(models_path, 'schema.yml')
+        model_schema_yml_path = os.path.join(models_path, 'schema.yml')
+        seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
 
         if model_database is None:
             model_database = self.alternative_database
@@ -2516,7 +2647,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'model',
                     'original_file_path': model_sql_path,
                     'package_name': 'test',
-                    'patch_path': schema_yml_path,
+                    'patch_path': model_schema_yml_path,
                     'path': 'model.sql',
                     'raw_sql': LineIndifferent(_read_file(model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
@@ -2599,7 +2730,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
-                    'patch_path': schema_yml_path,
+                    'patch_path': seed_schema_yml_path,
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
@@ -2651,7 +2782,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': AnyStringWith('id is null'),
                     'meta': {},
                     'name': 'not_null_model_id',
-                    'original_file_path': schema_yml_path,
+                    'original_file_path': model_schema_yml_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/not_null_model_id.sql'),
@@ -2709,7 +2840,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': AnyStringWith('select 0'),
                     'meta': {},
                     'name': 'test_nothing_model_',
-                    'original_file_path': schema_yml_path,
+                    'original_file_path': model_schema_yml_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/test_nothing_model_.sql'),
@@ -2767,7 +2898,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': AnyStringWith('count(*)'),
                     'meta': {},
                     'name': 'unique_model_id',
-                    'original_file_path': schema_yml_path,
+                    'original_file_path': model_schema_yml_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/unique_model_id.sql'),
@@ -3013,7 +3144,38 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'seed',
                     'build_path': None,
-                    'columns': {},
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'email': {
+                            'name': 'email',
+                            'description': "The user's email",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                            'data_type': None,
+                            'meta': {},
+                        },
+                    },
                     'compiled': True,
                     'compiled_sql': '',
                     'config': {
@@ -3030,7 +3192,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
-                    'description': '',
+                    'description': 'The test seed',
                     'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
@@ -3040,7 +3202,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
-                    'patch_path': None,
+                    'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
