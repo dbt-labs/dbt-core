@@ -67,7 +67,8 @@ def _generate_stats(manifest):
     for node_name, node in itertools.chain(
             manifest.nodes.items(),
             manifest.macros.items()):
-        if _node_enabled(node): stats[node.resource_type] += 1
+        if _node_enabled(node):
+            stats[node.resource_type] += 1
 
     return stats
 
