@@ -3,6 +3,7 @@ from typing import Optional, Set, List, Dict, ClassVar
 import dbt.links
 import dbt.exceptions
 import dbt.flags
+from dbt.ui import printer
 
 
 class DBTDeprecation:
@@ -28,57 +29,47 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
-            dbt.exceptions.warn_or_error(
-                "* Deprecation Warning: {}\n".format(desc)
-            )
+            msg = printer.line_wrap_message(f"* Deprecation Warning: {desc}\n")
+            dbt.exceptions.warn_or_error(msg)
             active_deprecations.add(self.name)
-
-
-class DBTRepositoriesDeprecation(DBTDeprecation):
-    _name = "repositories"
-
-    _description = """
-    The dbt_project.yml configuration option 'repositories' is
-  deprecated. Please place dependencies in the `packages.yml` file instead.
-  The 'repositories' option will be removed in a future version of dbt.
-
-  For more information, see: https://docs.getdbt.com/docs/package-management
-
-  # Example packages.yml contents:
-
-{recommendation}
-  """.lstrip()
 
 
 class GenerateSchemaNameSingleArgDeprecated(DBTDeprecation):
     _name = 'generate-schema-name-single-arg'
 
-    _description = '''As of dbt v0.14.0, the `generate_schema_name` macro
-  accepts a second "node" argument. The one-argument form of `generate_schema_name`
-  is deprecated, and will become unsupported in a future release.
+    _description = '''\
+    As of dbt v0.14.0, the `generate_schema_name` macro accepts a second "node"
+    argument. The one-argument form of `generate_schema_name` is deprecated,
+    and will become unsupported in a future release.
 
-  For more information, see:
+
+
+    For more information, see:
+
     https://docs.getdbt.com/v0.14/docs/upgrading-to-014
-  '''  # noqa
+    '''
 
 
 class MaterializationReturnDeprecation(DBTDeprecation):
     _name = 'materialization-return'
 
-    _description = '''
+    _description = '''\
     The materialization ("{materialization}") did not explicitly return a list
     of relations to add to the cache. By default the target relation will be
     added, but this behavior will be removed in a future version of dbt.
 
-  For more information, see:
-  https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-returning-relations
+
+
+    For more information, see:
+
+    https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-returning-relations
     '''.lstrip()
 
 
 class NotADictionaryDeprecation(DBTDeprecation):
     _name = 'not-a-dictionary'
 
-    _description = '''
+    _description = '''\
     The object ("{obj}") was used as a dictionary. In a future version of dbt
     this capability will be removed from objects of this type.
     '''.lstrip()
@@ -87,11 +78,14 @@ class NotADictionaryDeprecation(DBTDeprecation):
 class ColumnQuotingDeprecation(DBTDeprecation):
     _name = 'column-quoting-unset'
 
-    _description = '''
+    _description = '''\
     The quote_columns parameter was not set for seeds, so the default value of
     False was chosen. The default will change to True in a future release.
 
+
+
     For more information, see:
+
     https://docs.getdbt.com/v0.15/docs/seeds#section-specify-column-quoting
     '''
 
@@ -99,20 +93,27 @@ class ColumnQuotingDeprecation(DBTDeprecation):
 class ModelsKeyNonModelDeprecation(DBTDeprecation):
     _name = 'models-key-mismatch'
 
-    _description = '''
-    patch instruction in {patch.original_file_path} under key
-    "models" was for node "{node.name}", but the node with the same
-    name (from {node.original_file_path}) had resource type
-    "{node.resource_type}". Nodes should be described under their resource
-    specific key. Support for this will be removed in a future release.
-    '''.strip()
+    _description = '''\
+        "{node.name}" is a {node.resource_type} node, but it is specified in
+        the {patch.yaml_key} section of {patch.original_file_path}.
+
+
+
+        To fix this warning, place the `{node.name}` specification under
+        the {expected_key} key instead.
+
+        This warning will become an error in a future release.
+        '''.strip()
 
 
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
- a future release of dbt. Please use `adapter.{new_name}` instead.
- Documentation for {new_name} can be found here:
- https://docs.getdbt.com/docs/adapter"""
+a future release of dbt. Please use `adapter.{new_name}` instead.
+
+Documentation for {new_name} can be found here:
+
+    https://docs.getdbt.com/docs/adapter
+"""
 
 
 def renamed_method(old_name: str, new_name: str):
@@ -143,7 +144,6 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
-    DBTRepositoriesDeprecation(),
     GenerateSchemaNameSingleArgDeprecated(),
     MaterializationReturnDeprecation(),
     NotADictionaryDeprecation(),

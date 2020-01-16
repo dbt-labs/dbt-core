@@ -18,6 +18,7 @@ from dbt.exceptions import (
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt.ui import printer
 from dbt import deprecations
 from dbt import tracking
 import dbt.utils
@@ -445,20 +446,30 @@ class Manifest:
             patch = patches.pop(node.name, None)
             if not patch:
                 continue
-            if node.resource_type.pluralize() == patch.yaml_key:
+            expected_key = node.resource_type.pluralize()
+            if expected_key == patch.yaml_key:
                 node.patch(patch)
-            elif patch.yaml_key == 'models':
-                deprecations.warn(
-                    'models-key-mismatch', patch=patch, node=node
-                )
-            else:
-                raise_compiler_error(
-                    f'patch instruction in {patch.original_file_path} under '
-                    f'key "{patch.yaml_key}" was for node "{node.name}", but '
-                    f'the node with the same name (from '
-                    f'{node.original_file_path}) had resource type '
-                    f'"{node.resource_type}"'
-                )
+            if expected_key != patch.yaml_key:
+                if patch.yaml_key == 'models':
+                    deprecations.warn(
+                        'models-key-mismatch',
+                        patch=patch, node=node, expected_key=expected_key
+                    )
+                else:
+                    msg = printer.line_wrap_message(
+                        f'''\
+                        '{node.name}' is a {node.resource_type} node, but it is
+                        specified in the {patch.yaml_key} section of
+                        {patch.original_file_path}.
+
+
+
+                        To fix this error, place the `{node.name}`
+                        specification under the {expected_key} key instead.
+                        '''
+                    )
+                    raise_compiler_error(msg)
+            node.patch(patch)
 
         # log debug-level warning about nodes we couldn't find
         if patches:

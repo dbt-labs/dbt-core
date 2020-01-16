@@ -93,7 +93,8 @@ class TestModelsKeyMismatchDeprecation(BaseTestDeprecations):
         # this should fail at compile_time
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(strict=True)
-        self.assertIn('had resource type', str(exc.exception))
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        self.assertIn('"seed" is a seed node, but it is specified in the models section', exc_str)
 
     @use_profile('postgres')
     def test_postgres_deprecations(self):

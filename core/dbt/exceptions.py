@@ -445,13 +445,14 @@ def _get_target_failure_msg(model, target_model_name, target_model_package,
     if include_path:
         source_path_string = ' ({})'.format(model.original_file_path)
 
-    return ("{} '{}'{} depends on model '{}' {}which {}"
-            .format(model.resource_type.title(),
-                    model.unique_id,
-                    source_path_string,
-                    target_model_name,
-                    target_package_string,
-                    reason))
+    return "{} '{}'{} depends on a node named '{}' {}which {}".format(
+        model.resource_type.title(),
+        model.unique_id,
+        source_path_string,
+        target_model_name,
+        target_package_string,
+        reason
+    )
 
 
 def get_target_disabled_msg(model, target_model_name, target_model_package):
