@@ -62,7 +62,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         profile: Profile,
         args: Any,
         dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
-    ) -> 'RuntimeConfig':
+    ) -> "RuntimeConfig":
         """Instantiate a RuntimeConfig from its components.
 
         :param profile: A parsed dbt Profile.
@@ -76,7 +76,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict(omit_none=True)
 
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
 
         return cls(
             project_name=project.project_name,
@@ -124,7 +124,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         )
 
     # Called by 'load_projects' in this class
-    def new_project(self, project_root: str) -> 'RuntimeConfig':
+    def new_project(self, project_root: str) -> "RuntimeConfig":
         """Given a new project root, read in its project dictionary, supply the
         existing project's profile info, and create a new project file.
 

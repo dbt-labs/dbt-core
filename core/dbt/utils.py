@@ -414,7 +414,7 @@ def coerce_dict_str(value: Any) -> Optional[Dict[str, Any]]:
     easier. You get either `None` if it's not a Dict[str, Any], or the
     Dict[str, Any] you expected (to pass it to dbtClassMixin.from_dict(...)).
     """
-    if (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
+    if isinstance(value, dict) and all(isinstance(k, str) for k in value):
         return value
     else:
         return None

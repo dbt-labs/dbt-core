@@ -132,7 +132,7 @@ def _all_source_paths(
                       macro_paths))
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def value_or(value: Optional[T], default: T) -> T:
@@ -333,7 +333,7 @@ class PartialProject(RenderComponents):
         # this is added at project_dict parse time and should always be here
         # once we see it.
         if cfg.project_root is None:
-            raise DbtProjectError('cfg must have a project root!')
+            raise DbtProjectError("cfg must have a project root!")
         else:
             project_root = cfg.project_root
         # this is only optional in the sense that if it's not present, it needs
@@ -346,7 +346,8 @@ class PartialProject(RenderComponents):
         model_paths: List[str] = value_or(cfg.model_paths
                                           if 'model-paths' in rendered.project_dict
                                           else cfg.source_paths, ['models'])
-        macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
+        )
+        macro_paths: List[str] = value_or(cfg.macro_paths, ["macros"])
         # `data_paths` is deprecated but still allowed. Copy it into
         # `seed_paths` to simlify logic throughout the rest of the system.
         seed_paths: List[str] = value_or(cfg.seed_paths
@@ -354,7 +355,7 @@ class PartialProject(RenderComponents):
                                          else cfg.data_paths, ['seeds'])
         test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
-        snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
+        snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
 
         all_source_paths: List[str] = _all_source_paths(
             model_paths, seed_paths, snapshot_paths, analysis_paths,
@@ -363,9 +364,9 @@ class PartialProject(RenderComponents):
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
         asset_paths: List[str] = value_or(cfg.asset_paths, [])
-        target_path: str = value_or(cfg.target_path, 'target')
+        target_path: str = value_or(cfg.target_path, "target")
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
-        log_path: str = value_or(cfg.log_path, 'logs')
+        log_path: str = value_or(cfg.log_path, "logs")
         packages_install_path: str = value_or(cfg.packages_install_path, 'dbt_packages')
         # in the default case we'll populate this once we know the adapter type
         # It would be nice to just pass along a Quoting here, but that would

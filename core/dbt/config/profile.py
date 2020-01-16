@@ -110,9 +110,7 @@ class Profile(HasCredentials):
         self.credentials = credentials
         self.profile_env_vars = {}  # never available on init
 
-    def to_profile_info(
-        self, serialize_credentials: bool = False
-    ) -> Dict[str, Any]:
+    def to_profile_info(self, serialize_credentials: bool = False) -> Dict[str, Any]:
         """Unlike to_project_config, this dict is not a mirror of any existing
         on-disk data structure. It's used when creating a new profile from an
         existing one.
@@ -241,7 +239,7 @@ class Profile(HasCredentials):
         profile_name: str,
         target_name: str,
         user_config: Optional[Dict[str, Any]] = None,
-    ) -> 'Profile':
+    ) -> "Profile":
         """Create a profile from an existing set of Credentials and the
         remaining information.
 
@@ -313,7 +311,7 @@ class Profile(HasCredentials):
         user_config: Optional[Dict[str, Any]] = None,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> 'Profile':
+    ) -> "Profile":
         """Create a profile from its raw profile information.
 
          (this is an intermediate step, mostly useful for unit testing)
@@ -366,7 +364,7 @@ class Profile(HasCredentials):
         renderer: ProfileRenderer,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
-    ) -> 'Profile':
+    ) -> "Profile":
         """
         :param raw_profiles: The profile data, from disk as yaml.
         :param profile_name: The profile name to use.
@@ -413,7 +411,7 @@ class Profile(HasCredentials):
         args: Any,
         renderer: ProfileRenderer,
         project_profile_name: Optional[str],
-    ) -> 'Profile':
+    ) -> "Profile":
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
