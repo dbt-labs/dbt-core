@@ -12,11 +12,13 @@ from dbt.contracts.rpc import (
     RemoteExecutionResult,
     RemoteRunOperationResult,
     RPCSnapshotParameters,
+    RPCSourceFreshnessParameters,
 )
 from dbt.rpc.method import (
     Parameters,
 )
 from dbt.task.compile import CompileTask
+from dbt.task.freshness import FreshnessTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
 from dbt.task.run_operation import RunOperationTask
@@ -150,3 +152,16 @@ class RemoteSnapshotTask(RPCCommandTask[RPCSnapshotParameters], SnapshotTask):
         self.args.exclude = self._listify(params.exclude)
         if params.threads is not None:
             self.args.threads = params.threads
+
+
+class RemoteSourceFreshnessTask(
+    RPCCommandTask[RPCSourceFreshnessParameters],
+    FreshnessTask
+):
+    METHOD_NAME = 'snapshot-freshness'
+
+    def set_args(self, params: RPCSourceFreshnessParameters) -> None:
+        self.args.selected = self._listify(params.select)
+        if params.threads is not None:
+            self.args.threads = params.threads
+        self.args.output = None

@@ -136,6 +136,12 @@ class RPCRunOperationParameters(RPCParameters):
     args: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class RPCSourceFreshnessParameters(RPCParameters):
+    threads: Optional[int] = None
+    select: Union[None, str, List[str]] = None
+
+
 # Outputs
 
 @dataclass
