@@ -594,8 +594,11 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         Specify number of threads to use. Overrides settings in profiles.yml
         '''
     )
-    sub.set_defaults(cls=freshness_task.FreshnessTask,
-                     which='snapshot-freshness', rpc_method=None)
+    sub.set_defaults(
+        cls=freshness_task.FreshnessTask,
+        which='snapshot-freshness',
+        rpc_method='snapshot-freshness',
+    )
     return sub
 
 
