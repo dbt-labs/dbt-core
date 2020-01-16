@@ -582,7 +582,7 @@ def _get_target_failure_msg(
         target_kind,
         target_name,
         target_package_string,
-        reason
+        reason,
     )
 
 
