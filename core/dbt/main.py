@@ -270,7 +270,7 @@ def _build_base_subparser():
     )
 
     base_subparser.add_argument(
-        '-t',
+        "-t",
         "--target",
         default=None,
         type=str,
