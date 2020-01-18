@@ -35,4 +35,6 @@ class CleanTask(ProjectOnlyTask):
             if not self.__is_protected_path(path):
                 shutil.rmtree(path, True)
                 logger.info(" Cleaned {}/*".format(path))
+            else:
+                logger.info("{}/* cannot be cleaned".format(path))
         logger.info("Finished cleaning all paths.")
