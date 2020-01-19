@@ -83,7 +83,17 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
         query = "select value from {schema}.model" \
                 .format(schema=self.unique_schema())
         result = self.run_sql(query, fetch="one")[0]
-        assert result == 1
+        self.assertEqual(result, 1)
+
+    @use_profile('postgres')
+    def test_postgres_duplicate_model_disabled_partial_parsing(self):
+        self.run_dbt(['clean'])
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 1)
 
 
 class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
