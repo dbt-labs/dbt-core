@@ -54,6 +54,25 @@ def print_compile_stats(stats):
     logger.info("Found {}".format(stat_line))
 
 
+def _node_enabled(node):
+    # Disabled models are already excluded from the manifest
+    if node.resource_type == NodeType.Test and not node.config.enabled:
+        return False
+    else:
+        return True
+
+
+def _generate_stats(manifest):
+    stats = defaultdict(int)
+    for node_name, node in itertools.chain(
+            manifest.nodes.items(),
+            manifest.macros.items()):
+        if _node_enabled(node):
+            stats[node.resource_type] += 1
+
+    return stats
+
+
 def _add_prepended_cte(prepended_ctes, new_cte):
     for cte in prepended_ctes:
         if cte.id == new_cte.id:
@@ -199,12 +218,7 @@ class Compiler:
 
         self.link_graph(linker, manifest)
 
-        stats = defaultdict(int)
-
-        for node_name, node in itertools.chain(
-                manifest.nodes.items(),
-                manifest.macros.items()):
-            stats[node.resource_type] += 1
+        stats = _generate_stats(manifest)
 
         if write:
             self.write_graph_file(linker, manifest)
