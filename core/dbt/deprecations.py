@@ -29,7 +29,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
-            msg = printer.line_wrap_message(f"* Deprecation Warning: {desc}\n")
+            msg = printer.line_wrap_message(desc, prefix='* Deprecation Warning: ')
             dbt.exceptions.warn_or_error(msg)
             active_deprecations.add(self.name)
 
@@ -63,7 +63,7 @@ class MaterializationReturnDeprecation(DBTDeprecation):
     For more information, see:
 
     https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-returning-relations
-    '''.lstrip()
+    '''
 
 
 class NotADictionaryDeprecation(DBTDeprecation):
@@ -72,7 +72,7 @@ class NotADictionaryDeprecation(DBTDeprecation):
     _description = '''\
     The object ("{obj}") was used as a dictionary. In a future version of dbt
     this capability will be removed from objects of this type.
-    '''.lstrip()
+    '''
 
 
 class ColumnQuotingDeprecation(DBTDeprecation):
@@ -94,16 +94,16 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     _name = 'models-key-mismatch'
 
     _description = '''\
-        "{node.name}" is a {node.resource_type} node, but it is specified in
-        the {patch.yaml_key} section of {patch.original_file_path}.
+    "{node.name}" is a {node.resource_type} node, but it is specified in
+    the {patch.yaml_key} section of {patch.original_file_path}.
 
 
 
-        To fix this warning, place the `{node.name}` specification under
-        the {expected_key} key instead.
+    To fix this warning, place the `{node.name}` specification under
+    the {expected_key} key instead.
 
-        This warning will become an error in a future release.
-        '''.strip()
+    This warning will become an error in a future release.
+    '''
 
 
 _adapter_renamed_description = """\
