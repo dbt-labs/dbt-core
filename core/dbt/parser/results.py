@@ -14,6 +14,7 @@ from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
     CompilationException, InternalException
 )
+from dbt.node_types import NodeType
 from dbt.version import __version__
 
 
@@ -149,7 +150,10 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             )
 
     def sanitized_update(
-        self, source_file: SourceFile, old_result: 'ParseResult',
+        self,
+        source_file: SourceFile,
+        old_result: 'ParseResult',
+        resource_type: NodeType,
     ) -> bool:
         """Perform a santized update. If the file can't be updated, invalidate
         it and return false.
@@ -180,6 +184,8 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         # the node ID could be in old_result.disabled AND in old_result.nodes.
         # In that case, we have to make sure the path also matches.
         for node_id in old_file.nodes:
+            if old_result.nodes[node_id].resource_type != resource_type:
+                continue
             self._process_node(node_id, source_file, old_file, old_result)
 
         for name in old_file.patches:
