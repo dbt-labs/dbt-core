@@ -16,9 +16,6 @@ from hologram import ValidationError
 
 @dataclass
 class RuntimeConfig(Project, Profile):
-    """The runtime configuration, as constructed from its components. There's a
-    lot because there is a lot of stuff!
-    """
     args: Any
     cli_vars: Dict[str, Any]
 
