@@ -79,10 +79,6 @@ class BaseParser(Generic[FinalValue]):
         source_file.contents = file_contents.strip()
         return source_file
 
-    def parse_file_from_path(self, path: FilePath):
-        block = FileBlock(file=self.load_file(path))
-        self.parse_file(block)
-
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
     def __init__(

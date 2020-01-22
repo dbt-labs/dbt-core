@@ -34,7 +34,7 @@ from dbt.parser.schema_test_builders import (
     TestBuilder, SourceTarget, NodeTarget, Target,
     SchemaTestBlock, TargetBlock, YamlBlock,
 )
-from dbt.utils import get_pseudo_test_path
+from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
 UnparsedSchemaYaml = Union[UnparsedSourceDefinition, UnparsedNodeUpdate]
@@ -118,7 +118,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
 
     def get_paths(self):
         return FilesystemSearcher(
-            self.project, self.project.source_paths, '.yml'
+            self.project, self.project.all_source_paths, '.yml'
         )
 
     def parse_from_dict(self, dct, validate=True) -> ParsedTestNode:
@@ -314,11 +314,7 @@ class YamlParser(Generic[Target, Parsed]):
         path = self.yaml.path.original_file_path
 
         for entry in data:
-            str_keys = (
-                isinstance(entry, dict) and
-                all(isinstance(k, str) for k in entry)
-            )
-            if str_keys:
+            if coerce_dict_str(entry) is not None:
                 yield entry
             else:
                 msg = error_context(
