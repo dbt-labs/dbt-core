@@ -570,7 +570,7 @@ def check_format_version(
         )
 
 
-Parsed = TypeVar(
+Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
     'Parsed',
     UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch
 )
@@ -579,16 +579,13 @@ NodeTarget = TypeVar(
     UnparsedNodeUpdate, UnparsedAnalysisUpdate
 )
 NonSourceTarget = TypeVar(
-    'NonSourceTarget',
-    UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedMacroUpdate
+    "NonSourceTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedMacroUpdate
 )
 
 
 # abstract base class (ABCMeta)
 class YamlReader(metaclass=ABCMeta):
-    def __init__(
-        self, schema_parser: SchemaParser, yaml: YamlBlock, key: str
-    ) -> None:
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock, key: str) -> None:
         self.schema_parser = schema_parser
         # key: models, seeds, snapshots, sources, macros,
         # analyses, exposures
@@ -625,8 +622,9 @@ class YamlReader(metaclass=ABCMeta):
         data = self.yaml.data.get(self.key, [])
         if not isinstance(data, list):
             raise ParsingException(
-                '{} must be a list, got {} instead: ({})'
-                .format(self.key, type(data), _trimmed(str(data)))
+                "{} must be a list, got {} instead: ({})".format(
+                    self.key, type(data), _trimmed(str(data))
+                )
             )
         path = self.yaml.path.original_file_path
 
@@ -636,9 +634,7 @@ class YamlReader(metaclass=ABCMeta):
             # check that entry is a dict and that all dict values
             # are strings
             if coerce_dict_str(entry) is None:
-                msg = error_context(
-                    path, self.key, data, 'expected a dict with string keys'
-                )
+                msg = error_context(path, self.key, data, "expected a dict with string keys")
                 raise ParsingException(msg)
 
             if "name" not in entry:
@@ -798,7 +794,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
             data.update(
                 {
                     "original_file_path": path,
-                'package_name': self.project.project_name,
+                    "yaml_key": self.key,
                     "package_name": self.project.project_name,
                 }
             )
@@ -846,13 +842,8 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
         self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
 
 
-class NodePatchParser(
-    NonSourceParser[NodeTarget, ParsedNodePatch],
-    Generic[NodeTarget]
-):
-    def parse_patch(
-        self, block: TargetBlock[NodeTarget], refs: ParserRef
-    ) -> None:
+class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[NodeTarget]):
+    def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
         # We're not passing the ParsedNodePatch around anymore, so we
         # could possibly skip creating one. Leaving here for now for
         # code consistency.
@@ -939,9 +930,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
     def _target_type(self) -> Type[UnparsedMacroUpdate]:
         return UnparsedMacroUpdate
 
-    def parse_patch(
-        self, block: TargetBlock[UnparsedMacroUpdate], refs: ParserRef
-    ) -> None:
+    def parse_patch(self, block: TargetBlock[UnparsedMacroUpdate], refs: ParserRef) -> None:
         patch = ParsedMacroPatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,

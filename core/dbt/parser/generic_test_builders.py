@@ -79,14 +79,14 @@ class YamlBlock(FileBlock):
 Testable = TypeVar("Testable", UnparsedNodeUpdate, UnpatchedSourceDefinition)
 
 ColumnTarget = TypeVar(
-    'ColumnTarget',
+    "ColumnTarget",
     UnparsedNodeUpdate,
     UnparsedAnalysisUpdate,
     UnpatchedSourceDefinition,
 )
 
 Target = TypeVar(
-    'Target',
+    "Target",
     UnparsedNodeUpdate,
     UnparsedMacroUpdate,
     UnparsedAnalysisUpdate,
@@ -112,9 +112,7 @@ class TargetBlock(YamlBlock, Generic[Target]):
         return []
 
     @classmethod
-    def from_yaml_block(
-        cls, src: YamlBlock, target: Target
-    ) -> 'TargetBlock[Target]':
+    def from_yaml_block(cls, src: YamlBlock, target: Target) -> "TargetBlock[Target]":
         return cls(
             file=src.file,
             data=src.data,

@@ -934,8 +934,8 @@ def raise_duplicate_patch_name(patch_1, existing_patch_path):
         "resource",
     )
     raise_compiler_error(
-        f'dbt found two schema.yml entries for the same resource named '
-        f'{name}. Resources and their associated columns may only be '
+        f"dbt found two schema.yml entries for the same resource named "
+        f"{name}. Resources and their associated columns may only be "
         f"described a single time. To fix this, {fix}"
     )
 
@@ -950,8 +950,8 @@ def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
         'macros'
     )
     raise_compiler_error(
-        f'dbt found two schema.yml entries for the same macro in package '
-        f'{package_name} named {name}. Macros may only be described a single '
+        f"dbt found two schema.yml entries for the same macro in package "
+        f"{package_name} named {name}. Macros may only be described a single "
         f"time. To fix this, {fix}"
     )
 
