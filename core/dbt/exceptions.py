@@ -1,6 +1,6 @@
 import builtins
 import functools
-from typing import NoReturn
+from typing import NoReturn, Optional
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -425,7 +425,9 @@ def doc_invalid_args(model, args):
         model)
 
 
-def doc_target_not_found(model, target_doc_name, target_doc_package):
+def doc_target_not_found(
+    model, target_doc_name: str, target_doc_package: Optional[str]
+) -> NoReturn:
     target_package_string = ''
 
     if target_doc_package is not None:
@@ -708,17 +710,26 @@ def raise_patch_targets_not_found(patches):
     )
 
 
-def raise_duplicate_patch_name(name, patch_1, patch_2):
+def raise_duplicate_patch_name(patch_1, patch_2):
+    name = patch_1.name
     raise_compiler_error(
-        'dbt found two schema.yml entries for the same model named {0}. '
-        'Models and their associated columns may only be described a single '
-        'time. To fix this, remove the model entry for for {0} in one of '
-        'these files:\n  - {1}\n  - {2}'
-        .format(
-            name,
-            patch_1.original_file_path,
-            patch_2.original_file_path,
-        )
+        f'dbt found two schema.yml entries for the same resource named '
+        f'{name}. Resources and their associated columns may only be '
+        f'described a single time. To fix this, remove the resource entry '
+        f'for {name} in one of these files:\n  - '
+        f'{patch_1.original_file_path}\n  - {patch_2.original_file_path}'
+    )
+
+
+def raise_duplicate_macro_patch_name(patch_1, patch_2):
+    package_name = patch_1.package_name
+    name = patch_1.name
+    raise_compiler_error(
+        f'dbt found two schema.yml entries for the same macro in package '
+        f'{package_name} named {name}. Macros may only be described a single '
+        f'time. To fix this, remove the macros entry for for {name} in one '
+        f'of these files:'
+        f'\n  - {patch_1.original_file_path}\n  - {patch_2.original_file_path}'
     )
 
 

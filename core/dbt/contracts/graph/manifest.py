@@ -15,7 +15,7 @@ from hologram import JsonSchemaMixin
 
 from dbt.contracts.graph.parsed import (
     ParsedNode, ParsedMacro, ParsedDocumentation, ParsedNodePatch,
-    ParsedSourceDefinition
+    ParsedMacroPatch, ParsedSourceDefinition
 )
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.util import Writable, Replaceable
@@ -31,6 +31,7 @@ from dbt import tracking
 import dbt.utils
 
 NodeEdgeMap = Dict[str, List[str]]
+MacroKey = Tuple[str, str]
 
 
 @dataclass
@@ -137,6 +138,8 @@ class SourceFile(JsonSchemaMixin):
     sources: List[str] = field(default_factory=list)
     # any node patches in this file. The entries are names, not unique ids!
     patches: List[str] = field(default_factory=list)
+    # any macro patches in this file. The entries are pacakge, name pairs.
+    macro_patches: List[MacroKey] = field(default_factory=list)
 
     @property
     def search_key(self) -> Optional[str]:
@@ -580,7 +583,29 @@ class Manifest:
                 raise_duplicate_resource_name(node, self.nodes[unique_id])
             self.nodes[unique_id] = node
 
-    def patch_nodes(self, patches: MutableMapping[str, ParsedNodePatch]):
+    def patch_macros(
+        self, patches: MutableMapping[MacroKey, ParsedMacroPatch]
+    ) -> None:
+        for macro in self.macros.values():
+            key = (macro.package_name, macro.name)
+            patch = patches.pop(key, None)
+            if not patch:
+                continue
+            macro.patch(patch)
+
+        # log debug-level warning about nodes we couldn't find
+        if patches:
+            for patch in patches.values():
+                # since patches aren't nodes, we can't use the existing
+                # target_not_found warning
+                logger.debug((
+                    'WARNING: Found documentation for macro "{}" which was '
+                    'not found or is disabled').format(patch.name)
+                )
+
+    def patch_nodes(
+        self, patches: MutableMapping[str, ParsedNodePatch]
+    ) -> None:
         """Patch nodes with the given dict of patches. Note that this consumes
         the input!
         This relies on the fact that all nodes have unique _name_ fields, not
@@ -593,7 +618,7 @@ class Manifest:
         for node in self.nodes.values():
             if node.resource_type == NodeType.Source:
                 continue
-            # we know this because of the check above
+            # appease mypy - we know this because of the check above
             assert not isinstance(node, ParsedSourceDefinition)
             patch = patches.pop(node.name, None)
             if not patch:
@@ -629,7 +654,7 @@ class Manifest:
                 # since patches aren't nodes, we can't use the existing
                 # target_not_found warning
                 logger.debug((
-                    'WARNING: Found documentation for model "{}" which was '
+                    'WARNING: Found documentation for resource "{}" which was '
                     'not found or is disabled').format(patch.name)
                 )
 

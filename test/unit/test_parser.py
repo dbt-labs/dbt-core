@@ -11,7 +11,9 @@ from dbt.parser import (
     ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils,
     ParseResult, SnapshotParser, AnalysisParser
 )
-from dbt.parser.schemas import NodeParser, SourceParser
+from dbt.parser.schemas import (
+    TestablePatchParser, SourceParser, AnalysisPatchParser, MacroPatchParser
+)
 from dbt.parser.search import FileBlock
 from dbt.parser.schema_test_builders import YamlBlock
 
@@ -191,8 +193,14 @@ class SchemaParserTest(BaseParserTest):
 class SchemaParserSourceTest(SchemaParserTest):
     def test__read_basic_source(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE, 'test_one.yml')
-        NodeParser(self.parser, block, 'models').parse()
-        SourceParser(self.parser, block, 'sources').parse()
+        analysis_blocks = AnalysisPatchParser(self.parser, block, 'analyses').parse()
+        model_blocks = TestablePatchParser(self.parser, block, 'models').parse()
+        source_blocks = SourceParser(self.parser, block, 'sources').parse()
+        macro_blocks = MacroPatchParser(self.parser, block, 'macros').parse()
+        self.assertEqual(len(analysis_blocks), 0)
+        self.assertEqual(len(model_blocks), 0)
+        self.assertEqual(len(source_blocks), 1)
+        self.assertEqual(len(macro_blocks), 0)
         self.assertEqual(len(list(self.parser.results.patches)), 0)
         self.assertEqual(len(list(self.parser.results.nodes)), 0)
         results = list(self.parser.results.sources.values())
@@ -229,11 +237,16 @@ class SchemaParserSourceTest(SchemaParserTest):
 
     def test__read_basic_source_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
-        NodeParser(self.parser, block, 'models').parse()
+        analysis_blocks = AnalysisPatchParser(self.parser, block, 'analyses').parse()
+        model_blocks = TestablePatchParser(self.parser, block, 'models').parse()
+        source_blocks = SourceParser(self.parser, block, 'sources').parse()
+        macro_blocks = MacroPatchParser(self.parser, block, 'macros').parse()
+        self.assertEqual(len(analysis_blocks), 0)
+        self.assertEqual(len(model_blocks), 0)
+        self.assertEqual(len(source_blocks), 1)
+        self.assertEqual(len(macro_blocks), 0)
         self.assertEqual(len(list(self.parser.results.nodes)), 0)
-        SourceParser(self.parser, block, 'sources').parse()
         self.assertEqual(len(list(self.parser.results.patches)), 0)
-        self.assertEqual(len(list(self.parser.results.nodes)), 2)
         results = list(self.parser.results.sources.values())
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].source_name, 'my_source')

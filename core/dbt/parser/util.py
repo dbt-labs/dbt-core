@@ -1,9 +1,13 @@
-from typing import Optional
+from typing import Optional, Union
 
 import dbt.exceptions
 import dbt.utils
 from dbt.node_types import NodeType
-from dbt.contracts.graph.parsed import ColumnInfo
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import (
+    ColumnInfo, ParsedNode, ParsedMacro, ParsedSourceDefinition,
+    ParsedDocumentation,
+)
 from dbt.config import RuntimeConfig
 from dbt.flags import SINGLE_THREADED_HANDLER
 
@@ -35,15 +39,19 @@ def docs(node, manifest, current_project: str, column_name=None):
     return do_docs
 
 
+class Disabled:
+    pass
+
+
 class ParserUtils:
-    DISABLED = object()
+    DISABLED = Disabled()
 
     @classmethod
     def resolve_source(
-        cls, manifest, target_source_name: Optional[str],
+        cls, manifest: Manifest, target_source_name: Optional[str],
         target_table_name: Optional[str], current_project: str,
         node_package: str
-    ):
+    ) -> Optional[ParsedSourceDefinition]:
         candidate_targets = [current_project, node_package, None]
         target_source = None
         for candidate in candidate_targets:
@@ -62,7 +70,7 @@ class ParserUtils:
         cls, manifest, target_model_name: Optional[str],
         target_model_package: Optional[str], current_project: str,
         node_package: str
-    ):
+    ) -> Optional[Union[ParsedNode, Disabled]]:
         if target_model_package is not None:
             return manifest.find_refable_by_name(
                 target_model_name,
@@ -99,7 +107,7 @@ class ParserUtils:
     def resolve_doc(
         cls, manifest, target_doc_name: str, target_doc_package: Optional[str],
         current_project: str, node_package: str
-    ):
+    ) -> Optional[ParsedDocumentation]:
         """Resolve the given documentation. This follows the same algorithm as
         resolve_ref except the is_enabled checks are unnecessary as docs are
         always enabled.
@@ -131,7 +139,12 @@ class ParserUtils:
         return column
 
     @classmethod
-    def process_docs_for_node(cls, manifest, current_project: str, node):
+    def process_docs_for_node(
+        cls,
+        manifest: Manifest,
+        current_project: str,
+        node: ParsedNode,
+    ) -> None:
         for docref in node.docrefs:
             column_name = docref.column_name
 
@@ -150,7 +163,26 @@ class ParserUtils:
             obj.description = dbt.clients.jinja.get_rendered(raw, context)
 
     @classmethod
-    def process_docs_for_source(cls, manifest, current_project: str, source):
+    def process_docs_for_macro(
+        cls,
+        manifest: Manifest,
+        current_project: str,
+        macro: ParsedMacro,
+    ) -> None:
+        for docref in macro.docrefs:
+            context = {
+                'doc': docs(macro, manifest, current_project)
+            }
+            raw = macro.description or ''
+            macro.description = dbt.clients.jinja.get_rendered(raw, context)
+
+    @classmethod
+    def process_docs_for_source(
+        cls,
+        manifest: Manifest,
+        current_project: str,
+        source: ParsedSourceDefinition
+    ) -> None:
         context = {
             'doc': docs(source, manifest, current_project),
         }
@@ -175,6 +207,8 @@ class ParserUtils:
                 cls.process_docs_for_source(manifest, current_project, node)
             else:
                 cls.process_docs_for_node(manifest, current_project, node)
+        for macro in manifest.macros.values():
+            cls.process_docs_for_macro(manifest, current_project, macro)
         return manifest
 
     @classmethod
@@ -197,13 +231,13 @@ class ParserUtils:
                 current_project,
                 node.package_name)
 
-            if target_model is None or target_model is cls.DISABLED:
+            if target_model is None or isinstance(target_model, Disabled):
                 # This may raise. Even if it doesn't, we don't want to add
                 # this node to the graph b/c there is no destination node
                 node.config.enabled = False
                 dbt.utils.invalid_ref_fail_unless_test(
                     node, target_model_name, target_model_package,
-                    disabled=(target_model is cls.DISABLED)
+                    disabled=isinstance(target_model, Disabled)
                 )
 
                 continue

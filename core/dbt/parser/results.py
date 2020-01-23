@@ -3,16 +3,20 @@ from typing import TypeVar, MutableMapping, Mapping, Union, List
 
 from hologram import JsonSchemaMixin
 
-from dbt.contracts.graph.manifest import SourceFile, RemoteFile, FileHash
+from dbt.contracts.graph.manifest import (
+    SourceFile, RemoteFile, FileHash, MacroKey
+)
 from dbt.contracts.graph.parsed import (
     ParsedNode, HasUniqueID, ParsedMacro, ParsedDocumentation, ParsedNodePatch,
     ParsedSourceDefinition, ParsedAnalysisNode, ParsedHookNode, ParsedRPCNode,
     ParsedModelNode, ParsedSeedNode, ParsedTestNode, ParsedSnapshotNode,
+    ParsedMacroPatch,
 )
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
-    CompilationException, InternalException, raise_compiler_error
+    raise_duplicate_macro_patch_name, CompilationException, InternalException,
+    raise_compiler_error,
 )
 from dbt.node_types import NodeType
 from dbt.ui import printer
@@ -54,6 +58,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     sources: MutableMapping[str, ParsedSourceDefinition] = dict_field()
     docs: MutableMapping[str, ParsedDocumentation] = dict_field()
     macros: MutableMapping[str, ParsedMacro] = dict_field()
+    macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
     disabled: MutableMapping[str, List[ParsedNode]] = dict_field()
@@ -120,13 +125,24 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.docs[doc.unique_id] = doc
         self.get_file(source_file).docs.append(doc.unique_id)
 
-    def add_patch(self, source_file: SourceFile, patch: ParsedNodePatch):
+    def add_patch(
+        self, source_file: SourceFile, patch: ParsedNodePatch
+    ) -> None:
         # matches can't be overwritten
         if patch.name in self.patches:
-            raise_duplicate_patch_name(patch.name, patch,
-                                       self.patches[patch.name])
+            raise_duplicate_patch_name(patch, self.patches[patch.name])
         self.patches[patch.name] = patch
         self.get_file(source_file).patches.append(patch.name)
+
+    def add_macro_patch(
+        self, source_file: SourceFile, patch: ParsedMacroPatch
+    ) -> None:
+        # macros are fully namespaced
+        key = (patch.package_name, patch.name)
+        if key in self.macro_patches:
+            raise_duplicate_macro_patch_name(patch, self.macro_patches[key])
+        self.macro_patches[key] = patch
+        self.get_file(source_file).macro_patches.append(key)
 
     def _get_disabled(
         self, unique_id: str, match_file: SourceFile
@@ -218,9 +234,18 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             )
             self.add_patch(source_file, patch)
             patched = True
-
         if patched:
             self.get_file(source_file).patches.sort()
+
+        macro_patched = False
+        for key in old_file.macro_patches:
+            macro_patch = _expect_value(
+                key, old_result.macro_patches, old_file, "macro_patches"
+            )
+            self.add_macro_patch(source_file, macro_patch)
+            macro_patched = True
+        if macro_patched:
+            self.get_file(source_file).macro_patches.sort()
 
         return True
 
@@ -239,12 +264,13 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         return cls(FileHash.empty(), FileHash.empty(), {})
 
 
-T = TypeVar('T')
+K_T = TypeVar('K_T')
+V_T = TypeVar('V_T')
 
 
 def _expect_value(
-    key: str, src: Mapping[str, T], old_file: SourceFile, name: str
-) -> T:
+    key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str
+) -> V_T:
     if key not in src:
         raise CompilationException(
             'Expected to find "{}" in cached "result.{}" based '

@@ -454,16 +454,25 @@ class ParsedSnapshotNode(ParsedNode):
         return schema
 
 
+@dataclass
+class ParsedPatch(HasYamlMetadata, Replaceable):
+    name: str
+    description: str
+    docrefs: List[Docref]
+    meta: Dict[str, Any]
+
+
 # The parsed node update is only the 'patch', not the test. The test became a
 # regular parsed node. Note that description and columns must be present, but
 # may be empty.
 @dataclass
-class ParsedNodePatch(HasYamlMetadata, Replaceable):
-    name: str
-    description: str
+class ParsedNodePatch(ParsedPatch):
     columns: Dict[str, ColumnInfo]
-    docrefs: List[Docref]
-    meta: Dict[str, Any]
+
+
+@dataclass
+class ParsedMacroPatch(ParsedPatch):
+    pass
 
 
 @dataclass
@@ -479,6 +488,10 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
     tags: List[str] = field(default_factory=list)
     # TODO: is this ever populated?
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
+    docrefs: List[Docref] = field(default_factory=list)
+    description: str = field(default='')
+    meta: Dict[str, Any] = field(default_factory=dict)
+    patch_path: Optional[str] = None
 
     def local_vars(self):
         return {}
@@ -489,6 +502,15 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
         Returns a function that can be called to render the macro results.
         """
         return MacroGenerator(self)
+
+    def patch(self, patch: ParsedMacroPatch):
+        self.patch_path: Optional[str] = patch.original_file_path
+        self.description = patch.description
+        self.docrefs = patch.docrefs
+        self.meta = patch.meta
+        if dbt.flags.STRICT_MODE:
+            assert isinstance(self, JsonSchemaMixin)
+            self.to_dict(validate=True)
 
 
 @dataclass

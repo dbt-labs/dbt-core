@@ -29,3 +29,9 @@ sources:
         columns:
           - name: id
             description: "{{ doc('column_info') }}"
+
+macros:
+  - name: test_nothing
+    description: "{{ doc('macro_info') }}"
+    meta:
+      some_key: 100
