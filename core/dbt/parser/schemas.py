@@ -204,9 +204,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             ParsedGenericTestNode.validate(dct)
         return ParsedGenericTestNode.from_dict(dct)
 
-    def parse_column_tests(
-        self, block: TestBlock, column: UnparsedColumn
-    ) -> None:
+    def parse_column_tests(self, block: TestBlock, column: UnparsedColumn) -> None:
         if not column.tests:
             return
 

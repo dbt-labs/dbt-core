@@ -144,9 +144,7 @@ class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
         return self.target.quote_columns
 
     @classmethod
-    def from_yaml_block(
-        cls, src: YamlBlock, target: Testable
-    ) -> 'TestBlock[Testable]':
+    def from_yaml_block(cls, src: YamlBlock, target: Testable) -> "TestBlock[Testable]":
         return cls(
             file=src.file,
             data=src.data,
