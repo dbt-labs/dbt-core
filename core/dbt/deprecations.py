@@ -29,7 +29,9 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
-            msg = printer.line_wrap_message(desc, prefix='* Deprecation Warning: ')
+            msg = printer.line_wrap_message(
+                desc, prefix='* Deprecation Warning: '
+            )
             dbt.exceptions.warn_or_error(msg)
             active_deprecations.add(self.name)
 
