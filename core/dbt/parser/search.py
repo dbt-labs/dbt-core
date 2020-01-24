@@ -116,8 +116,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
 
         except CompilationException as exc:
             if exc.node is None:
-                # TODO(jeb): attach info about resource type/file path here
-                exc.node = NotImplemented
+                exc.node = source_file
             raise
 
     def __iter__(self) -> Iterator[BlockSearchResult]:
