@@ -22,7 +22,7 @@ import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
-    AdditionalPropertiesAllowed
+    AdditionalPropertiesAllowed, HasYamlMetadata
 )
 from dbt.contracts.util import Replaceable, list_str
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -173,16 +173,17 @@ class ParsedNodeMixins:
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
-    def patch(self, patch):
+    def patch(self, patch: 'ParsedNodePatch'):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
-        self.patch_path = patch.original_file_path
+        self.patch_path: Optional[str] = patch.original_file_path
         self.description = patch.description
         self.columns = patch.columns
         self.docrefs = patch.docrefs
         self.meta = patch.meta
         if dbt.flags.STRICT_MODE:
+            assert isinstance(self, JsonSchemaMixin)
             self.to_dict(validate=True)
 
     def get_materialization(self):
@@ -452,10 +453,9 @@ class ParsedSnapshotNode(ParsedNode):
 # regular parsed node. Note that description and columns must be present, but
 # may be empty.
 @dataclass
-class ParsedNodePatch(JsonSchemaMixin, Replaceable):
+class ParsedNodePatch(HasYamlMetadata, Replaceable):
     name: str
     description: str
-    original_file_path: str
     columns: Dict[str, ColumnInfo]
     docrefs: List[Docref]
     meta: Dict[str, Any]

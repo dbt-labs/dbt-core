@@ -78,7 +78,14 @@ class NodeDescription(NamedTested):
 
 
 @dataclass
-class UnparsedNodeUpdate(ColumnDescription, NodeDescription):
+class HasYamlMetadata(JsonSchemaMixin):
+    original_file_path: str
+    yaml_key: str
+    package_name: str
+
+
+@dataclass
+class UnparsedNodeUpdate(ColumnDescription, NodeDescription, HasYamlMetadata):
     def __post_init__(self):
         NodeDescription.__post_init__(self)
 
@@ -218,6 +225,10 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     )
     loaded_at_field: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
+
+    @property
+    def yaml_key(self) -> 'str':
+        return 'sources'
 
 
 @dataclass

@@ -9,7 +9,7 @@ import json
 import os
 from enum import Enum
 from typing import (
-    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List
+    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List, Union
 )
 from typing_extensions import Protocol
 
@@ -511,18 +511,36 @@ def translate_aliases(kwargs, aliases):
     return result
 
 
-def pluralize(count, string):
-    if count == 1:
-        return "{} {}".format(count, string)
-    elif string == 'analysis':
-        return "{} {}".format(count, 'analyses')
+def _pluralize(string: Union[str, NodeType]) -> str:
+    try:
+        convert = NodeType(string)
+    except ValueError:
+        return f'{string}s'
     else:
-        return "{} {}s".format(count, string)
+        return convert.pluralize()
+
+
+def pluralize(count, string: Union[str, NodeType]):
+    pluralized: str = str(string)
+    if count != 1:
+        pluralized = _pluralize(string)
+    return f'{count} {pluralized}'
 
 
 def restrict_to(*restrictions):
     """Create the metadata for a restricted dataclass field"""
     return {'restrict': list(restrictions)}
+
+
+def coerce_dict_str(value: Any) -> Optional[Dict[str, Any]]:
+    """For annoying mypy reasons, this helper makes dealing with nested dicts
+    easier. You get either `None` if it's not a Dict[str, Any], or the
+    Dict[str, Any] you expected (to pass it to JsonSchemaMixin.from_dict(...)).
+    """
+    if (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
+        return value
+    else:
+        return None
 
 
 # some types need to make constants available to the jinja context as

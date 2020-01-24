@@ -2,7 +2,7 @@ import itertools
 import os
 import pickle
 from datetime import datetime
-from typing import Dict, Optional, Mapping, Callable, Any
+from typing import Dict, Optional, Mapping, Callable, Any, List, Type
 
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
@@ -15,7 +15,7 @@ from dbt.config import Project, RuntimeConfig
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash
 from dbt.exceptions import raise_compiler_error
-from dbt.parser.base import BaseParser
+from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.data_test import DataTestParser
 from dbt.parser.docs import DocumentationParser
@@ -36,7 +36,7 @@ PARSING_STATE = DbtProcessState('parsing')
 DEFAULT_PARTIAL_PARSE = False
 
 
-_parser_types = [
+_parser_types: List[Type[Parser]] = [
     ModelParser,
     SnapshotParser,
     AnalysisParser,
@@ -161,7 +161,7 @@ class ManifestLoader:
         macro_manifest: Manifest,
         old_results: Optional[ParseResult],
     ) -> None:
-        parsers = []
+        parsers: List[Parser] = []
         for cls in _parser_types:
             parser = cls(self.results, project, self.root_project,
                          macro_manifest)

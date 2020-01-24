@@ -1,9 +1,12 @@
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple
 import os
 
 from hologram import ValidationError
 
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.contracts.connection import Credentials
 from dbt.contracts.project import ProfileConfig, UserConfig
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
@@ -11,7 +14,7 @@ from dbt.exceptions import ValidationException
 from dbt.exceptions import RuntimeException
 from dbt.exceptions import validator_error_message
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import parse_cli_vars
+from dbt.utils import parse_cli_vars, coerce_dict_str
 
 from .renderer import ConfigRenderer
 
@@ -42,7 +45,7 @@ defined in your profiles.yml file. You can find profiles.yml here:
 """.format(profiles_file=PROFILES_DIR)
 
 
-def read_profile(profiles_dir):
+def read_profile(profiles_dir: str) -> Dict[str, Any]:
     path = os.path.join(profiles_dir, 'profiles.yml')
 
     contents = None
@@ -57,29 +60,32 @@ def read_profile(profiles_dir):
     return {}
 
 
-def read_user_config(directory):
+def read_user_config(directory: str) -> UserConfig:
     try:
         user_cfg = None
         profile = read_profile(directory)
         if profile:
-            user_cfg = profile.get('config', {})
+            user_cfg = coerce_dict_str(profile.get('config', {}))
+            if user_cfg is not None:
+                return UserConfig.from_dict(user_cfg)
+        return UserConfig()
+
         return UserConfig.from_dict(user_cfg)
     except (RuntimeException, ValidationError):
         return UserConfig()
 
 
+@dataclass
 class Profile:
-    def __init__(self, profile_name, target_name, config, threads,
-                 credentials):
-        self.profile_name = profile_name
-        self.target_name = target_name
-        if isinstance(config, dict):
-            config = UserConfig.from_dict(config)
-        self.config = config
-        self.threads = threads
-        self.credentials = credentials
+    profile_name: str
+    target_name: str
+    config: UserConfig
+    threads: int
+    credentials: Credentials
 
-    def to_profile_info(self, serialize_credentials=False):
+    def to_profile_info(
+        self, serialize_credentials: bool = False
+    ) -> Dict[str, Any]:
         """Unlike to_project_config, this dict is not a mirror of any existing
         on-disk data structure. It's used when creating a new profile from an
         existing one.
@@ -91,21 +97,19 @@ class Profile:
         result = {
             'profile_name': self.profile_name,
             'target_name': self.target_name,
-            'config': self.config.to_dict(),
+            'config': self.config,
             'threads': self.threads,
             'credentials': self.credentials,
         }
         if serialize_credentials:
-            result['credentials'] = result['credentials'].to_dict()
+            result['config'] = self.config.to_dict()
+            result['credentials'] = self.credentials.to_dict()
         return result
 
-    def __str__(self):
-        return str(self.to_profile_info())
-
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not (isinstance(other, self.__class__) and
                 isinstance(self, other.__class__)):
-            return False
+            return NotImplemented
         return self.to_profile_info() == other.to_profile_info()
 
     def validate(self):
@@ -119,7 +123,9 @@ class Profile:
             raise DbtProfileError(validator_error_message(exc)) from exc
 
     @staticmethod
-    def _credentials_from_profile(profile, profile_name, target_name):
+    def _credentials_from_profile(
+        profile: Dict[str, Any], profile_name: str, target_name: str
+    ) -> Credentials:
         # avoid an import cycle
         from dbt.adapters.factory import load_plugin
         # credentials carry their 'type' in their actual type, not their
@@ -143,7 +149,9 @@ class Profile:
         return credentials
 
     @staticmethod
-    def pick_profile_name(args_profile_name, project_profile_name=None):
+    def pick_profile_name(
+        args_profile_name: str, project_profile_name: Optional[str] = None,
+    ) -> str:
         profile_name = project_profile_name
         if args_profile_name is not None:
             profile_name = args_profile_name
@@ -152,7 +160,9 @@ class Profile:
         return profile_name
 
     @staticmethod
-    def _get_profile_data(profile, profile_name, target_name):
+    def _get_profile_data(
+        profile: Dict[str, Any], profile_name: str, target_name: str
+    ) -> Dict[str, Any]:
         if 'outputs' not in profile:
             raise DbtProfileError(
                 "outputs not specified in profile '{}'".format(profile_name)
@@ -170,19 +180,25 @@ class Profile:
         return profile_data
 
     @classmethod
-    def from_credentials(cls, credentials, threads, profile_name, target_name,
-                         user_cfg=None):
+    def from_credentials(
+        cls,
+        credentials: Credentials,
+        threads: int,
+        profile_name: str,
+        target_name: str,
+        user_cfg: Optional[Dict[str, Any]] = None
+    ) -> 'Profile':
         """Create a profile from an existing set of Credentials and the
         remaining information.
 
-        :param credentials dict: The credentials dict for this profile.
-        :param threads int: The number of threads to use for connections.
-        :param profile_name str: The profile name used for this profile.
-        :param target_name str: The target name used for this profile.
-        :param user_cfg Optional[dict]: The user-level config block from the
+        :param credentials: The credentials dict for this profile.
+        :param threads: The number of threads to use for connections.
+        :param profile_name: The profile name used for this profile.
+        :param target_name: The target name used for this profile.
+        :param user_cfg: The user-level config block from the
             raw profiles, if specified.
         :raises DbtProfileError: If the profile is invalid.
-        :returns Profile: The new Profile object.
+        :returns: The new Profile object.
         """
         if user_cfg is None:
             user_cfg = {}
@@ -199,8 +215,13 @@ class Profile:
         return profile
 
     @classmethod
-    def render_profile(cls, raw_profile, profile_name, target_override,
-                       cli_vars):
+    def render_profile(
+        cls,
+        raw_profile: Dict[str, Any],
+        profile_name: str,
+        target_override: Optional[str],
+        cli_vars: Dict[str, Any],
+    ) -> Tuple[str, Dict[str, Any]]:
         """This is a containment zone for the hateful way we're rendering
         profiles.
         """
@@ -233,27 +254,33 @@ class Profile:
         return target_name, profile_data
 
     @classmethod
-    def from_raw_profile_info(cls, raw_profile, profile_name, cli_vars,
-                              user_cfg=None, target_override=None,
-                              threads_override=None):
+    def from_raw_profile_info(
+        cls,
+        raw_profile: Dict[str, Any],
+        profile_name: str,
+        cli_vars: Dict[str, Any],
+        user_cfg: Optional[Dict[str, Any]] = None,
+        target_override: Optional[str] = None,
+        threads_override: Optional[int] = None,
+    ) -> 'Profile':
         """Create a profile from its raw profile information.
 
          (this is an intermediate step, mostly useful for unit testing)
 
-        :param raw_profile dict: The profile data for a single profile, from
+        :param raw_profile: The profile data for a single profile, from
             disk as yaml and its values rendered with jinja.
-        :param profile_name str: The profile name used.
-        :param cli_vars dict: The command-line variables passed as arguments,
+        :param profile_name: The profile name used.
+        :param cli_vars: The command-line variables passed as arguments,
             as a dict.
-        :param user_cfg Optional[dict]: The global config for the user, if it
+        :param user_cfg: The global config for the user, if it
             was present.
-        :param target_override Optional[str]: The target to use, if provided on
+        :param target_override: The target to use, if provided on
             the command line.
-        :param threads_override Optional[str]: The thread count to use, if
+        :param threads_override: The thread count to use, if
             provided on the command line.
         :raises DbtProfileError: If the profile is invalid or missing, or the
             target could not be found
-        :returns Profile: The new Profile object.
+        :returns: The new Profile object.
         """
         # user_cfg is not rendered.
         if user_cfg is None:
@@ -270,7 +297,7 @@ class Profile:
         if threads_override is not None:
             threads = threads_override
 
-        credentials = cls._credentials_from_profile(
+        credentials: Credentials = cls._credentials_from_profile(
             profile_data, profile_name, target_name
         )
 
@@ -283,22 +310,28 @@ class Profile:
         )
 
     @classmethod
-    def from_raw_profiles(cls, raw_profiles, profile_name, cli_vars,
-                          target_override=None, threads_override=None):
+    def from_raw_profiles(
+        cls,
+        raw_profiles: Dict[str, Any],
+        profile_name: str,
+        cli_vars: Dict[str, Any],
+        target_override: Optional[str] = None,
+        threads_override: Optional[int] = None,
+    ) -> 'Profile':
         """
-        :param raw_profiles dict: The profile data, from disk as yaml.
-        :param profile_name str: The profile name to use.
-        :param cli_vars dict: The command-line variables passed as arguments,
-            as a dict.
-        :param target_override Optional[str]: The target to use, if provided on
-            the command line.
-        :param threads_override Optional[str]: The thread count to use, if
-            provided on the command line.
+        :param raw_profiles: The profile data, from disk as yaml.
+        :param profile_name: The profile name to use.
+        :param cli_vars: The command-line variables passed as arguments, as a
+            dict.
+        :param target_override: The target to use, if provided on the command
+            line.
+        :param threads_override: The thread count to use, if provided on the
+            command line.
         :raises DbtProjectError: If there is no profile name specified in the
             project or the command line arguments
         :raises DbtProfileError: If the profile is invalid or missing, or the
             target could not be found
-        :returns Profile: The new Profile object.
+        :returns: The new Profile object.
         """
         if profile_name not in raw_profiles:
             raise DbtProjectError(
@@ -321,7 +354,11 @@ class Profile:
         )
 
     @classmethod
-    def from_args(cls, args, project_profile_name=None):
+    def from_args(
+        cls,
+        args: Any,
+        project_profile_name: Optional[str] = None,
+    ) -> 'Profile':
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.

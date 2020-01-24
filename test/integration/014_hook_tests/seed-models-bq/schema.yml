@@ -1,5 +1,5 @@
 version: 2
-models:
+seeds:
 - name: example_seed
   columns:
   - name: a

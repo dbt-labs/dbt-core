@@ -94,25 +94,21 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             # subtract 2 for the "Compilation Error" indent
             # note that the line wrap eats newlines, so if you want newlines,
             # this is the result :(
-            msg = '\n'.join([
-                printer.line_wrap_message(
-                    f'''\
-                    dbt found two macros named "{macro.name}" in the project
-                    "{macro.package_name}".
-                    ''',
-                    subtract=2
-                ),
-                '',
-                printer.line_wrap_message(
-                    f'''\
-                    To fix this error, rename or remove one of the following
-                    macros:
-                    ''',
-                    subtract=2
-                ),
-                f'   - {macro.original_file_path}',
-                f'   - {other_path}'
-            ])
+            msg = printer.line_wrap_message(
+                f'''\
+                dbt found two macros named "{macro.name}" in the project
+                "{macro.package_name}".
+
+
+                To fix this error, rename or remove one of the following
+                macros:
+
+                    - {macro.original_file_path}
+
+                    - {other_path}
+                ''',
+                subtract=2
+            )
             raise_compiler_error(msg)
 
         self.macros[macro.unique_id] = macro
@@ -188,11 +184,16 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
                     .format(node_id, old_file)
                 )
 
+        patched = False
         for name in old_file.patches:
             patch = _expect_value(
                 name, old_result.patches, old_file, "patches"
             )
             self.add_patch(source_file, patch)
+            patched = True
+
+        if patched:
+            self.get_file(source_file).patches.sort()
 
         return True
 

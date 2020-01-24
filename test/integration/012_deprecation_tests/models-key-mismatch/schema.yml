@@ -1,0 +1,4 @@
+version: 2
+models:
+  - name: seed
+    description: my cool seed

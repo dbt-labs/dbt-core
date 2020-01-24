@@ -18,6 +18,8 @@ from dbt.exceptions import (
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt.ui import printer
+from dbt import deprecations
 from dbt import tracking
 import dbt.utils
 
@@ -439,11 +441,34 @@ class Manifest:
         # nodes looking for matching names. We could use _find_by_name if we
         # were ok with doing an O(n*m) search (one nodes scan per patch)
         for node in self.nodes.values():
-            if node.resource_type != NodeType.Model:
+            if node.resource_type == NodeType.Source:
                 continue
             patch = patches.pop(node.name, None)
             if not patch:
                 continue
+            expected_key = node.resource_type.pluralize()
+            if expected_key == patch.yaml_key:
+                node.patch(patch)
+            if expected_key != patch.yaml_key:
+                if patch.yaml_key == 'models':
+                    deprecations.warn(
+                        'models-key-mismatch',
+                        patch=patch, node=node, expected_key=expected_key
+                    )
+                else:
+                    msg = printer.line_wrap_message(
+                        f'''\
+                        '{node.name}' is a {node.resource_type} node, but it is
+                        specified in the {patch.yaml_key} section of
+                        {patch.original_file_path}.
+
+
+
+                        To fix this error, place the `{node.name}`
+                        specification under the {expected_key} key instead.
+                        '''
+                    )
+                    raise_compiler_error(msg)
             node.patch(patch)
 
         # log debug-level warning about nodes we couldn't find

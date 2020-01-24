@@ -11,6 +11,7 @@ from dbt.parser import (
     ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils,
     ParseResult, SnapshotParser, AnalysisParser
 )
+from dbt.parser.schemas import NodeParser, SourceParser
 from dbt.parser.search import FileBlock
 from dbt.parser.schema_test_builders import YamlBlock
 
@@ -190,19 +191,20 @@ class SchemaParserTest(BaseParserTest):
 class SchemaParserSourceTest(SchemaParserTest):
     def test__read_basic_source(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE, 'test_one.yml')
-        self.assertEqual(len(list(self.parser.read_yaml_models(yaml=block))), 0)
-        results = list(self.parser.read_yaml_sources(yaml=block))
+        NodeParser(self.parser, block, 'models').parse()
+        SourceParser(self.parser, block, 'sources').parse()
+        self.assertEqual(len(list(self.parser.results.patches)), 0)
+        self.assertEqual(len(list(self.parser.results.nodes)), 0)
+        results = list(self.parser.results.sources.values())
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].source.name, 'my_source')
-        self.assertEqual(results[0].table.name, 'my_table')
-        self.assertEqual(results[0].table.description, '')
-        self.assertEqual(len(results[0].tests), 0)
+        self.assertEqual(results[0].source_name, 'my_source')
+        self.assertEqual(results[0].name, 'my_table')
+        self.assertEqual(results[0].description, '')
         self.assertEqual(len(results[0].columns), 0)
 
     def test__parse_basic_source(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE, 'test_one.yml')
         self.parser.parse_file(block)
-        # self.parser.parse_yaml_sources(yaml_block=block)
         self.assert_has_results_length(self.parser.results, sources=1)
         src = list(self.parser.results.sources.values())[0]
         expected = ParsedSourceDefinition(
@@ -227,15 +229,17 @@ class SchemaParserSourceTest(SchemaParserTest):
 
     def test__read_basic_source_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
-        self.assertEqual(len(list(self.parser.read_yaml_models(yaml=block))), 0)
-        results = list(self.parser.read_yaml_sources(yaml=block))
+        NodeParser(self.parser, block, 'models').parse()
+        self.assertEqual(len(list(self.parser.results.nodes)), 0)
+        SourceParser(self.parser, block, 'sources').parse()
+        self.assertEqual(len(list(self.parser.results.patches)), 0)
+        self.assertEqual(len(list(self.parser.results.nodes)), 2)
+        results = list(self.parser.results.sources.values())
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].source.name, 'my_source')
-        self.assertEqual(results[0].table.name, 'my_table')
-        self.assertEqual(results[0].table.description, 'A description of my table')
+        self.assertEqual(results[0].source_name, 'my_source')
+        self.assertEqual(results[0].name, 'my_table')
+        self.assertEqual(results[0].description, 'A description of my table')
         self.assertEqual(len(results[0].columns), 1)
-        self.assertEqual(len(results[0].columns[0].tests), 2)
-        self.assertEqual(len(results[0].tests), 0)
 
     def test__parse_basic_source_tests(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
@@ -274,13 +278,10 @@ class SchemaParserSourceTest(SchemaParserTest):
 class SchemaParserModelsTest(SchemaParserTest):
     def test__read_basic_model_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS, 'test_one.yml')
-        self.assertEqual(len(list(self.parser.read_yaml_sources(yaml=block))), 0)
-        results = list(self.parser.read_yaml_models(yaml=block))
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].name, 'my_model')
-        self.assertEqual(len(results[0].columns), 1)
-        self.assertEqual(len(results[0].columns[0].tests), 3)
-        self.assertEqual(len(results[0].tests), 0)
+        self.parser.parse_file(block)
+        self.assertEqual(len(list(self.parser.results.patches)), 1)
+        self.assertEqual(len(list(self.parser.results.sources)), 0)
+        self.assertEqual(len(list(self.parser.results.nodes)), 3)
 
     def test__parse_basic_model_tests(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_TESTS, 'test_one.yml')
@@ -298,6 +299,8 @@ class SchemaParserModelsTest(SchemaParserTest):
             docrefs=[],
             original_file_path=normalize('models/test_one.yml'),
             meta={},
+            yaml_key='models',
+            package_name='snowplow',
         )
         self.assertEqual(patch, expected_patch)
 
