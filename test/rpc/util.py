@@ -108,6 +108,9 @@ class Querier:
     def __init__(self, server: ServerProcess):
         self.server = server
 
+    def sighup(self):
+        os.kill(self.server.pid, signal.SIGHUP)
+
     def build_request_data(self, method, params, request_id):
         return {
             'jsonrpc': '2.0',
@@ -129,6 +132,14 @@ class Querier:
 
     def status(self, request_id: int = 1):
         return self.request(method='status', request_id=request_id)
+
+    def wait_for_status(self, expected, times=30) -> bool:
+        for _ in range(times):
+            time.sleep(0.5)
+            status = self.is_result(self.status())
+            if status['state'] == expected:
+                return True
+        return False
 
     def ps(self, active=True, completed=False, request_id=1):
         params = {}
@@ -465,7 +476,7 @@ class ProjectDefinition:
 
     def _write_recursive(self, path, inputs):
         for name, value in inputs.items():
-            if name.endswith('.sql') or name.endswith('.csv'):
+            if name.endswith('.sql') or name.endswith('.csv') or name.endswith('.md'):
                 path.join(name).write(value)
             elif name.endswith('.yml'):
                 if isinstance(value, str):

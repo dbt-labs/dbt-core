@@ -357,8 +357,8 @@ class BlockIterator:
 
         if self.current:
             dbt.exceptions.raise_compiler_error((
-                'Reached EOF without finding a close block for '
-                '{0.block_type_name} (from {0.end})'
+                'Reached EOF without finding a close tag for '
+                '{0.block_type_name} (searched from position {0.end})'
             ).format(self.current))
 
         if collect_raw_data:

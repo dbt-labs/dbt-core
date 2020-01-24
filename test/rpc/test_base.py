@@ -790,3 +790,42 @@ def test_source_freshness(
         pass_results = querier.async_wait_for_result(querier.cli_args('source snapshot-freshness --select test_source.test_table'))
         assert len(pass_results['results']) == 1
         assert pass_results['results'][0]['status'] == 'pass'
+
+
+def test_missing_tag_sighup(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
+    project = ProjectDefinition(
+        models={
+            'my_docs.md': '{% docs asdf %}have a close tag{% enddocs %}',
+        },
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+    with querier_ctx as querier:
+        # everything is fine
+        assert querier.wait_for_status('ready') is True
+
+        # write a junk docs file
+        project.models['my_docs.md'] = '{% docs asdf %}do not have a close tag'
+        project.write_models(project_root, remove=True)
+
+        querier.sighup()
+
+        assert querier.wait_for_status('error') is True
+        result = querier.is_result(querier.status())
+        assert 'error' in result
+        assert 'message' in result['error']
+        assert 'without finding a close tag for docs' in result['error']['message']
+
+        project.models['my_docs.md'] = '{% docs asdf %}have a close tag again{% enddocs %}'
+        project.write_models(project_root, remove=True)
+
+        querier.sighup()
+
+        assert querier.wait_for_status('ready') is True
