@@ -100,7 +100,6 @@ class BigQueryColumn(Column):
         return self.dtype.lower() == 'string'
 
     def is_integer(self) -> bool:
-        # snowflake technicality: These are all synonyms with NUMBER(38, 0)
         return self.dtype.lower() == 'int64'
 
     def is_numeric(self) -> bool:
