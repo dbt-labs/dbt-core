@@ -36,5 +36,6 @@ class CleanTask(ProjectOnlyTask):
                 shutil.rmtree(path, True)
                 logger.info(" Cleaned {}/*".format(path))
             else:
-                logger.info("ERROR: not cleaning {}/* because it is protected".format(path))
+                logger.info("ERROR: not cleaning {}/* because it is "
+                            "protected".format(path))
         logger.info("Finished cleaning all paths.")
