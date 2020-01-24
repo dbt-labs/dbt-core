@@ -361,7 +361,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
             return msg.result
         else:
             raise dbt.exceptions.InternalException(
-                'Invalid message type {} (result={})'.format(msg)
+                f'Invalid message type {msg.message_type} ({msg})'
             )
 
     def get_result(self) -> RemoteResult:

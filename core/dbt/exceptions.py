@@ -66,6 +66,12 @@ class RuntimeException(RuntimeError, Exception):
                 node.resource_type,
                 node.original_file_path
             )
+
+        if hasattr(node, 'contents'):
+            # handle FileBlocks. They aren't really nodes but we want to render
+            # out the path we know at least. This indicates an error during
+            # block parsing.
+            return '{}'.format(node.path.original_file_path)
         return "{} {} ({})".format(
             node.resource_type,
             node.name,

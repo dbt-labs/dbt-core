@@ -8,6 +8,7 @@ This is a bugfix release.
 - Suppport BigQuery label configuration for models ([#1942](https://github.com/fishtown-analytics/dbt/issues/1942), [#1964](https://github.com/fishtown-analytics/dbt/pull/1964))
 - Support retrying when BigQuery models fail with server errors ([#1579](https://github.com/fishtown-analytics/dbt/issues/1579), [#1963](https://github.com/fishtown-analytics/dbt/pull/1963))
 - Support sql headers in create table/view statements ([#1879](https://github.com/fishtown-analytics/dbt/issues/1879), [#1967](https://github.com/fishtown-analytics/dbt/pull/1967))
+- Add source snapshot-freshness to dbt rpc ([#2040](https://github.com/fishtown-analytics/dbt/issues/2040), [#2041](https://github.com/fishtown-analytics/dbt/pull/2041))
 
 ### Fixes
 - Fix for catalog generation error when datasets are missing on BigQuery ([#1984](https://github.com/fishtown-analytics/dbt/issues/1984), [#2005](https://github.com/fishtown-analytics/dbt/pull/2005))
