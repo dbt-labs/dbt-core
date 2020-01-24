@@ -167,3 +167,25 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
                 .format(schema=self.unique_schema())
         result = self.run_sql(query, fetch="one")[0]
         assert result == 1
+
+
+class TestModelTestOverlap(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "duplicate_model_025"
+
+    @property
+    def models(self):
+        return "models-3"
+
+    @property
+    def project_config(self):
+        return {'test-paths': [self.models]}
+
+    @use_profile('postgres')
+    def test_postgres_duplicate_test_model_paths(self):
+        # this should be ok: test/model overlap is fine
+        self.run_dbt(['compile'])
+        self.run_dbt(['--partial-parse', 'compile'])
+        self.run_dbt(['--partial-parse', 'compile'])

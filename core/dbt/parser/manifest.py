@@ -129,13 +129,14 @@ class ManifestLoader:
         old_results: Optional[ParseResult],
     ) -> None:
         block = self._get_file(path, parser)
-        if not self._get_cached(block, old_results):
+        if not self._get_cached(block, old_results, parser):
             parser.parse_file(block)
 
     def _get_cached(
         self,
         block: FileBlock,
         old_results: Optional[ParseResult],
+        parser: BaseParser,
     ) -> bool:
         # TODO: handle multiple parsers w/ same files, by
         # tracking parser type vs node type? Or tracking actual
@@ -143,7 +144,9 @@ class ManifestLoader:
         if old_results is None:
             return False
         if old_results.has_file(block.file):
-            return self.results.sanitized_update(block.file, old_results)
+            return self.results.sanitized_update(
+                block.file, old_results, parser.resource_type
+            )
         return False
 
     def _get_file(self, path: FilePath, parser: BaseParser) -> FileBlock:
