@@ -356,10 +356,11 @@ class BlockIterator:
                 self.current = None
 
         if self.current:
+            linecount = self.data[:self.current.end].count('\n') + 1
             dbt.exceptions.raise_compiler_error((
                 'Reached EOF without finding a close tag for '
-                '{0.block_type_name} (searched from position {0.end})'
-            ).format(self.current))
+                '{} (searched from line {})'
+            ).format(self.current.block_type_name, linecount))
 
         if collect_raw_data:
             raw_data = self.data[self.last_position:]
