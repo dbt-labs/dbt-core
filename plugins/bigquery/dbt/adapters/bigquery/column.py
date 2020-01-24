@@ -99,8 +99,14 @@ class BigQueryColumn(Column):
     def is_string(self) -> bool:
         return self.dtype.lower() == 'string'
 
+    def is_integer(self) -> bool:
+        return self.dtype.lower() == 'int64'
+
     def is_numeric(self) -> bool:
-        return False
+        return self.dtype.lower() == 'numeric'
+
+    def is_float(self):
+        return self.dtype.lower() == 'float64'
 
     def can_expand_to(self: Self, other_column: Self) -> bool:
         """returns True if both columns are strings"""

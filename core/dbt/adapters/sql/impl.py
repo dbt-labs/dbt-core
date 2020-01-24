@@ -168,7 +168,7 @@ class SQLAdapter(BaseAdapter):
             kwargs=kwargs
         )
 
-    def get_columns_in_relation(self, relation: str):
+    def get_columns_in_relation(self, relation):
         return self.execute_macro(
             GET_COLUMNS_IN_RELATION_MACRO_NAME,
             kwargs={'relation': relation}

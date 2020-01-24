@@ -1,3 +1,4 @@
+from dbt.adapters.snowflake.column import SnowflakeColumn  # noqa
 from dbt.adapters.snowflake.connections import SnowflakeConnectionManager  # noqa
 from dbt.adapters.snowflake.connections import SnowflakeCredentials
 from dbt.adapters.snowflake.relation import SnowflakeRelation  # noqa
