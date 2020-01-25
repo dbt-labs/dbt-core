@@ -21,7 +21,7 @@ class CleanTask(ProjectOnlyTask):
         abs_path = os.path.abspath(path)
         protected_paths = self.config.source_paths + \
             self.config.test_paths + ['.']
-        protected_abs_paths = [os.path.abspath for p in protected_paths]
+        protected_abs_paths = [os.path.abspath(p) for p in protected_paths]
         return abs_path in set(protected_abs_paths) or \
             self.__is_project_path(abs_path)
 
