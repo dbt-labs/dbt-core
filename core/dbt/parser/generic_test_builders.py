@@ -388,14 +388,11 @@ class TestBuilder(Generic[Testable]):
             tags = [tags]
         if not isinstance(tags, list):
             raise_compiler_error(
-                f'got {tags} ({type(tags)}) for tags, expected a list of '
-                f'strings'
+                f"got {tags} ({type(tags)}) for tags, expected a list of " f"strings"
             )
         for tag in tags:
             if not isinstance(tag, str):
-                raise_compiler_error(
-                    f'got {tag} ({type(tag)}) for tag, expected a str'
-                )
+                raise_compiler_error(f"got {tag} ({type(tag)}) for tag, expected a str")
         return tags[:]
 
     def macro_name(self) -> str:
