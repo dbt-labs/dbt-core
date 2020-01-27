@@ -6,7 +6,7 @@ from typing import Generic, TypeVar, Dict, Any, Tuple, Optional, List, Union
 from dbt.clients.jinja import get_rendered
 from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate, UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition, NamedTested
+    UnparsedSourceTableDefinition, UnparsedColumn
 )
 from dbt.exceptions import raise_compiler_error
 from dbt.parser.search import FileBlock
@@ -79,7 +79,7 @@ class SourceTarget:
         return '{0.name}_{1.name}'.format(self.source, self.table)
 
     @property
-    def columns(self) -> List[NamedTested]:
+    def columns(self) -> List[UnparsedColumn]:
         if self.table.columns is None:
             return []
         else:
@@ -136,17 +136,23 @@ class TargetBlock(YamlBlock, Generic[Target]):
 class SchemaTestBlock(TargetBlock):
     test: Dict[str, Any]
     column_name: Optional[str]
+    tags: List[str]
 
     @classmethod
     def from_target_block(
-        cls, src: TargetBlock, test: Dict[str, Any], column_name: Optional[str]
+        cls,
+        src: TargetBlock,
+        test: Dict[str, Any],
+        column_name: Optional[str],
+        tags: List[str],
     ) -> 'SchemaTestBlock':
         return cls(
             file=src.file,
             data=src.data,
             target=src.target,
             test=test,
-            column_name=column_name
+            column_name=column_name,
+            tags=tags,
         )
 
 
@@ -156,8 +162,6 @@ class TestBuilder(Generic[Target]):
     Test names have the following pattern:
         - the test name itself may be namespaced (package.test)
         - or it may not be namespaced (test)
-        - the test may have arguments embedded in the name (, severity=WARN)
-        - or it may not have arguments.
 
     """
     TEST_NAME_PATTERN = re.compile(
@@ -165,7 +169,7 @@ class TestBuilder(Generic[Target]):
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
     # map magic keys to default values
-    MODIFIER_ARGS = {'severity': 'ERROR'}
+    MODIFIER_ARGS = {'severity': 'ERROR', 'tags': []}
 
     def __init__(
         self,
@@ -243,6 +247,22 @@ class TestBuilder(Generic[Target]):
     def severity(self) -> str:
         return self.modifiers.get('severity', 'ERROR').upper()
 
+    def tags(self) -> List[str]:
+        tags = self.modifiers.get('tags', [])
+        if isinstance(tags, str):
+            tags = [tags]
+        if not isinstance(tags, list):
+            raise_compiler_error(
+                f'got {tags} ({type(tags)}) for tags, expected a list of '
+                f'strings'
+            )
+        for tag in tags:
+            if not isinstance(tag, str):
+                raise_compiler_error(
+                    f'got {tag} ({type(tag)}) for tag, expected a str'
+                )
+        return tags[:]
+
     def test_kwargs_str(self) -> str:
         # sort the dict so the keys are rendered deterministically (for tests)
         return ', '.join((
@@ -286,7 +306,7 @@ class TestBuilder(Generic[Target]):
             model=self.build_model_str(),
             macro=self.macro_name(),
             kwargs=self.test_kwargs_str(),
-            severity=self.severity()
+            severity=self.severity(),
         )
 
     def build_model_str(self):

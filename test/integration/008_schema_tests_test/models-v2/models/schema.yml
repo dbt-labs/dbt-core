@@ -9,10 +9,14 @@ models:
           tests:
             - not_null
             - unique
+          tags:
+            - table_id
         - name: first_name
           description: "The user's first name"
           tests:
             - not_null
+          tags:
+            - table_first_name
         - name: ip_address
           description: "The user's IP address"
           tests:
@@ -28,13 +32,21 @@ models:
         - name: favorite_color
           description: "The user's favorite color"
           tests:
-            - accepted_values: { values: ['blue', 'green'], quote: true }
+            - accepted_values: {
+                values: ['blue', 'green'],
+                quote: true,
+                tags: table_copy_favorite_color  # tags can be a single string
+            }
+          tags:
+            - table_favorite_color
         - name: fav_number
           description: "The user's favorite number"
           tests:
             - accepted_values:
                 values: [3.14159265]
                 quote: false
+                tags:  # tags can be a list of strings
+                  - favorite_number_is_pi
 
 
     - name: table_summary
@@ -47,6 +59,8 @@ models:
             - unique
             - accepted_values: { values: ['blue', 'green'] }
             - relationships: { field: favorite_color, to: ref('table_copy') }
+          tags:
+            - table_favorite_color
         - name: count
           description: "The number of responses for this favorite color"
           tests:
@@ -61,10 +75,14 @@ models:
           tests:
             - not_null
             - unique
+          tags:
+            - xfail
         - name: favorite_color
           description: "The user's favorite color"
           tests:
             - accepted_values: { values: ['blue', 'green'] }
+          tags:
+            - xfail
 
 # all of these constraints will fail
     - name: table_failure_summary
@@ -75,6 +93,8 @@ models:
           tests:
             - accepted_values: { values: ['red'] }
             - relationships: { field: favorite_color, to: ref('table_copy') }
+          tags:
+            - xfail
 
 # this table is disabled so these tests should be ignored
     - name: table_disabled
@@ -94,3 +114,5 @@ models:
           description: "The user ID"
           tests:
             - relationships: { field: id, to: ref('table_failure_copy') }
+          tags:
+            - xfail

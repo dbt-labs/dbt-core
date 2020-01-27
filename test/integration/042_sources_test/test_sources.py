@@ -127,7 +127,7 @@ class TestSources(SuccessfulSourcesTest):
             ['source', 'descendant_model', 'nonsource_descendant'],
             ['expected_multi_source', 'multi_source_model'])
         results = self.run_dbt_with_vars(['test'])
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 6)
 
     @use_profile('postgres')
     def test_postgres_source_selector(self):
@@ -141,11 +141,37 @@ class TestSources(SuccessfulSourcesTest):
         self.assertTablesEqual('source', 'descendant_model')
         self.assertTableDoesNotExist('nonsource_descendant')
         self.assertTableDoesNotExist('multi_source_model')
+
+        # do the same thing, but with tags
+        results = self.run_dbt_with_vars([
+            'run',
+            '--models',
+            'tag:my_test_source_table_tag+'
+        ])
+        self.assertEqual(len(results), 1)
+
         results = self.run_dbt_with_vars([
             'test',
             '--models',
             'source:test_source.test_table+'
         ])
+        self.assertEqual(len(results), 4)
+
+        results = self.run_dbt_with_vars([
+            'test', '--models', 'tag:my_test_source_table_tag+'
+        ])
+        self.assertEqual(len(results), 4)
+
+        results = self.run_dbt_with_vars([
+            'test', '--models', 'tag:my_test_source_tag+'
+        ])
+        # test_table + other_test_table
+        self.assertEqual(len(results), 6)
+
+        results = self.run_dbt_with_vars([
+            'test', '--models', 'tag:id_column'
+        ])
+        # all 4 id column tests
         self.assertEqual(len(results), 4)
 
     @use_profile('postgres')

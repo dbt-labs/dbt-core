@@ -1,4 +1,5 @@
 from enum import Enum
+from itertools import chain
 
 import networkx as nx  # type: ignore
 
@@ -180,7 +181,9 @@ class TagSelector(ManifestSelector):
 
     def search(self, included_nodes, selector):
         """ yields nodes from graph that have the specified tag """
-        for node, real_node in self.parsed_nodes(included_nodes):
+        search = chain(self.parsed_nodes(included_nodes),
+                       self.source_nodes(included_nodes))
+        for node, real_node in search:
             if selector in real_node.tags:
                 yield node
 

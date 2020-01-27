@@ -169,7 +169,14 @@ class TestParsedModelNode(ContractTestCase):
                 'vars': {'foo': 100},
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta': {}}},
+            'columns': {
+                'a': {
+                    'name': 'a',
+                    'description': 'a text field',
+                    'meta': {},
+                    'tags': [],
+                },
+            },
         }
 
         node = self.ContractType(
@@ -347,7 +354,14 @@ class TestParsedModelNode(ContractTestCase):
                 'vars': {},
             },
             'patch_path': '/path/to/schema.yml',
-            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
+            'columns': {
+                'a': {
+                    'name': 'a',
+                    'description': 'a text field',
+                    'meta': {},
+                    'tags': [],
+                },
+            },
             'docrefs': [
                 {
                     'documentation_name': 'foo',
@@ -532,7 +546,14 @@ class TestParsedHookNode(ContractTestCase):
                 'vars': {},
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
+            'columns': {
+                'a': {
+                    'name': 'a',
+                    'description': 'a text field',
+                    'meta': {},
+                    'tags': [],
+                },
+            },
             'index': 13,
         }
 
@@ -644,7 +665,6 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docrefs': [],
             'columns': {},
-            'meta': {},
         }
         node = self.ContractType(
             package_name='test',
@@ -725,7 +745,14 @@ class TestParsedTestNode(ContractTestCase):
                 'extra_key': 'extra value'
             },
             'docrefs': [],
-            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta': {}}},
+            'columns': {
+                'a': {
+                    'name': 'a',
+                    'description': 'a text field',
+                    'meta': {},
+                    'tags': [],
+                },
+            },
             'column_name': 'id',
         }
 
@@ -1384,7 +1411,14 @@ class TestParsedNodePatch(ContractTestCase):
             'name': 'foo',
             'description': 'The foo model',
             'original_file_path': '/path/to/schema.yml',
-            'columns': {'a': {'name': 'a', 'description': 'a text field', 'meta':{}}},
+            'columns': {
+                'a': {
+                    'name': 'a',
+                    'description': 'a text field',
+                    'meta': {},
+                    'tags': [],
+                },
+            },
             'docrefs': [
                 {
                     'documentation_name': 'foo',
@@ -1555,6 +1589,7 @@ class TestParsedSourceDefinition(ContractTestCase):
             'unique_id': 'test.source.my_source.my_source_table',
             'meta': {},
             'source_meta': {},
+            'tags': [],
         }
         source_def = self.ContractType(
             columns={},
@@ -1575,6 +1610,7 @@ class TestParsedSourceDefinition(ContractTestCase):
             source_description='my source description',
             source_name='my_source',
             unique_id='test.source.my_source.my_source_table',
+            tags=[],
         )
         self.assert_symmetric(source_def, source_def_dict)
         minimum = {

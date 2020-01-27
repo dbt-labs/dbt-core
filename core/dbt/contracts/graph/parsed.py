@@ -121,6 +121,7 @@ class ColumnInfo(JsonSchemaMixin, Replaceable):
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
 
 
 # Docrefs are not quite like regular references, as they indicate what they
@@ -513,6 +514,7 @@ class ParsedSourceDefinition(
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     source_meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
 
     @property
     def is_ephemeral_model(self):
@@ -528,10 +530,6 @@ class ParsedSourceDefinition(
 
     @property
     def sources(self):
-        return []
-
-    @property
-    def tags(self):
         return []
 
     @property
