@@ -50,9 +50,16 @@ class SourceConfig:
     def _merge(self, *configs):
         merged_config = {}
         for config in configs:
+            # Do not attempt to deep merge clobber fields
+            config = config.copy()
+            clobber = {
+                key: config.pop(key) for key in list(config.keys())
+                if key in (self.ClobberFields | self.AdapterSpecificConfigs)
+            }
             intermediary_merged = deep_merge(
-                merged_config.copy(), config.copy()
+                merged_config, config
             )
+            intermediary_merged.update(clobber)
 
             merged_config.update(intermediary_merged)
         return merged_config

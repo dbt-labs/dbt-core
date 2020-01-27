@@ -120,6 +120,28 @@ class SourceConfigTest(TestCase):
         }
         self.assertEqual(cfg.config, expect)
 
+    def test__source_config_merge(self):
+        self.root_project_config.models = {'sort': ['a', 'b']}
+        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+                           ['root', 'x'], NodeType.Model)
+        cfg.update_in_model_config({
+            'materialized': 'something',
+            'sort': ['d', 'e']
+        })
+        expect = {
+            'column_types': {},
+            'enabled': True,
+            'materialized': 'something',
+            'post-hook': [],
+            'pre-hook': [],
+            'persist_docs': {},
+            'quoting': {},
+            'sort': ['d', 'e'],
+            'tags': [],
+            'vars': {},
+        }
+        self.assertEqual(cfg.config, expect)
+
     def test_source_config_all_keys_accounted_for(self):
         used_keys = frozenset(SourceConfig.AppendListFields) | \
                     frozenset(SourceConfig.ExtendDictFields) | \
