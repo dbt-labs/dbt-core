@@ -63,12 +63,12 @@
       from
       {{ relation.information_schema('columns') }}
 
-      where table_name ilike '{{ relation.identifier }}'
+      where upper(table_name) = upper('{{ relation.identifier }}')
         {% if relation.schema %}
-        and table_schema ilike '{{ relation.schema }}'
+        and upper(table_schema) = upper('{{ relation.schema }}')
         {% endif %}
         {% if relation.database %}
-        and table_catalog ilike '{{ relation.database }}'
+        and upper(table_catalog) = upper('{{ relation.database }}')
         {% endif %}
       order by ordinal_position
 
