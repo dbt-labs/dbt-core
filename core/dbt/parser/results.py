@@ -106,7 +106,9 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.get_file(source_file).patches.append(patch.name)
 
     def _get_disabled(
-        self, unique_id: str, match_file: SourceFile
+        self,
+        unique_id: str,
+        match_file: SourceFile,
     ) -> List[ParsedNode]:
         if unique_id not in self.disabled:
             raise InternalException(
@@ -127,6 +129,9 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     ) -> None:
         """Nodes are a special kind of complicated - there can be multiple
         with the same name, as long as all but one are disabled.
+
+        Only handle nodes where the matching node has the same resource type
+        as the current parser.
         """
         source_path = source_file.path.original_file_path
         found: bool = False
@@ -184,7 +189,9 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         # the node ID could be in old_result.disabled AND in old_result.nodes.
         # In that case, we have to make sure the path also matches.
         for node_id in old_file.nodes:
-            if old_result.nodes[node_id].resource_type != resource_type:
+            # cheat: look at the first part of the node ID and compare it to
+            # the parser resource type. On a mismatch, bail out.
+            if resource_type != node_id.split('.')[0]:
                 continue
             self._process_node(node_id, source_file, old_file, old_result)
 
