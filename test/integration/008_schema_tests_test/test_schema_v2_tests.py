@@ -70,6 +70,10 @@ class TestSchemaTests(DBTIntegrationTest):
         for result in test_results:
             self.assertTestPassed(result)
 
+        test_results = self.run_dbt(['test', '--models', 'tag:favorite_number_is_pi'])
+        self.assertEqual(len(test_results), 1)
+        self.assertTestPassed(test_results[0])
+
     @use_profile('postgres')
     def test_postgres_schema_test_exclude_failures(self):
         results = self.run_dbt()

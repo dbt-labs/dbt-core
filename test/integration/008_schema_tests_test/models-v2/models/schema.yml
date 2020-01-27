@@ -41,6 +41,8 @@ models:
             - accepted_values:
                 values: [3.14159265]
                 quote: false
+                tags:
+                  - favorite_number_is_pi
 
 
     - name: table_summary

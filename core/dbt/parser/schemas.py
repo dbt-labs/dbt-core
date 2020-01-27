@@ -215,6 +215,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
 
         # copy - we don't want to mutate the tags!
         tags = block.tags[:]
+        tags.extend(builder.tags())
         if 'schema' not in tags:
             tags.append('schema')
 

@@ -169,7 +169,7 @@ class TestBuilder(Generic[Target]):
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
     # map magic keys to default values
-    MODIFIER_ARGS = {'severity': 'ERROR'}
+    MODIFIER_ARGS = {'severity': 'ERROR', 'tags': []}
 
     def __init__(
         self,
@@ -246,6 +246,20 @@ class TestBuilder(Generic[Target]):
 
     def severity(self) -> str:
         return self.modifiers.get('severity', 'ERROR').upper()
+
+    def tags(self) -> List[str]:
+        tags = self.modifiers.get('tags', [])
+        if not isinstance(tags, list):
+            raise_compiler_error(
+                f'got {tags} ({type(tags)}) for tags, expected a list of '
+                f'strings'
+            )
+        for tag in tags:
+            if not isinstance(tag, str):
+                raise_compiler_error(
+                    f'got {tag} ({type(tag)}) for tag, expected a str'
+                )
+        return tags[:]
 
     def test_kwargs_str(self) -> str:
         # sort the dict so the keys are rendered deterministically (for tests)
