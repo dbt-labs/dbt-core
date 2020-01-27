@@ -249,6 +249,8 @@ class TestBuilder(Generic[Target]):
 
     def tags(self) -> List[str]:
         tags = self.modifiers.get('tags', [])
+        if isinstance(tags, str):
+            tags = [tags]
         if not isinstance(tags, list):
             raise_compiler_error(
                 f'got {tags} ({type(tags)}) for tags, expected a list of '

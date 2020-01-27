@@ -32,7 +32,11 @@ models:
         - name: favorite_color
           description: "The user's favorite color"
           tests:
-            - accepted_values: { values: ['blue', 'green'], quote: true }
+            - accepted_values: {
+                values: ['blue', 'green'],
+                quote: true,
+                tags: table_copy_favorite_color  # tags can be a single string
+            }
           tags:
             - table_favorite_color
         - name: fav_number
@@ -41,7 +45,7 @@ models:
             - accepted_values:
                 values: [3.14159265]
                 quote: false
-                tags:
+                tags:  # tags can be a list of strings
                   - favorite_number_is_pi
 
 

@@ -74,6 +74,11 @@ class TestSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(test_results), 1)
         self.assertTestPassed(test_results[0])
 
+        test_results = self.run_dbt(['test', '--models', 'tag:table_copy_favorite_color'])
+        self.assertEqual(len(test_results), 1)
+        self.assertTestPassed(test_results[0])
+
+
     @use_profile('postgres')
     def test_postgres_schema_test_exclude_failures(self):
         results = self.run_dbt()
