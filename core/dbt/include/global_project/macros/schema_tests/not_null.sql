@@ -4,8 +4,8 @@
 {% set column_name = kwargs.get('column_name', kwargs.get('arg')) %}
 
 select count(*)
-from {{ model }}
-where {{ column_name }} is null
+from {{ model }} AS aliased
+where aliased.{{ column_name }} is null
 
 {% endmacro %}
 

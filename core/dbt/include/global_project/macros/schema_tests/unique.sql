@@ -7,11 +7,11 @@ select count(*)
 from (
 
     select
-        {{ column_name }}
+        aliased.{{ column_name }}
 
-    from {{ model }}
-    where {{ column_name }} is not null
-    group by {{ column_name }}
+    from {{ model }} AS aliased
+    where aliased.{{ column_name }} is not null
+    group by aliased.{{ column_name }}
     having count(*) > 1
 
 ) validation_errors
