@@ -23,9 +23,7 @@ class DepsTask(BaseTask):
     def __init__(self, args, config: UnsetProfileConfig):
         super().__init__(args=args, config=config)
 
-    def track_package_install(
-        self, package_name: str, source_type: str, version: str
-    ) -> None:
+    def track_package_install(self, package_name: str, source_type: str, version: str) -> None:
         # Hub packages do not need to be hashed, as they are public
         # Use the string 'local' for local package versions
         if source_type == 'local':

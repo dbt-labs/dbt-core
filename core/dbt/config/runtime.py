@@ -219,7 +219,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
     # Called in main.py, lib.py, task/base.py
     @classmethod
-    def from_args(cls, args: Any) -> 'RuntimeConfig':
+    def from_args(cls, args: Any) -> "RuntimeConfig":
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.

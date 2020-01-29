@@ -489,7 +489,8 @@ def disallow_secret_env_var(env_var_name) -> NoReturn:
 
 
 def invalid_type_error(
-                       version='0.13.0') -> NoReturn:
+    method_name, arg_name, got_value, expected_type, version="0.13.0"
+) -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros
     has changed.
     """

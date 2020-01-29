@@ -983,10 +983,7 @@ def _get_node_column(node, column_name):
     return column
 
 
-DocsContextCallback = Callable[
-    [Union[ParsedNode, ParsedSourceDefinition]],
-    Dict[str, Any]
-]
+DocsContextCallback = Callable[[Union[ParsedNode, ParsedSourceDefinition]], Dict[str, Any]]
 
 
 # node and column descriptions
@@ -1018,9 +1015,7 @@ def _process_docs_for_source(
 
 
 # macro argument descriptions
-def _process_docs_for_macro(
-    context: Dict[str, Any], macro: ParsedMacro
-) -> None:
+def _process_docs_for_macro(context: Dict[str, Any], macro: ParsedMacro) -> None:
     macro.description = get_rendered(macro.description, context)
     for arg in macro.arguments:
         arg.description = get_rendered(arg.description, context)
@@ -1136,7 +1131,7 @@ def _process_refs_for_node(
             target_model_package, target_model_name = ref
         else:
             raise dbt.exceptions.InternalException(
-                f'Refs should always be 1 or 2 arguments - got {len(ref)}'
+                f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
         target_model = manifest.resolve_ref(
@@ -1151,8 +1146,10 @@ def _process_refs_for_node(
             # this node to the graph b/c there is no destination node
             node.config.enabled = False
             invalid_ref_fail_unless_test(
-                node, target_model_name, target_model_package,
-                disabled=(isinstance(target_model, Disabled))
+                node,
+                target_model_name,
+                target_model_package,
+                disabled=(isinstance(target_model, Disabled)),
             )
 
             continue
@@ -1244,9 +1241,7 @@ def _process_sources_for_node(
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
 # created in the manifest, in 'add_refs'
-def process_macro(
-    config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro
-) -> None:
+def process_macro(config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro) -> None:
     ctx = generate_runtime_docs_context(
         config,
         macro,
@@ -1262,9 +1257,7 @@ def process_node(
     config: RuntimeConfig, manifest: Manifest, node: ManifestNode
 ):
 
-    _process_sources_for_node(
-        manifest, config.project_name, node
-    )
+    _process_sources_for_node(manifest, config.project_name, node)
     _process_refs_for_node(manifest, config.project_name, node)
     ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)

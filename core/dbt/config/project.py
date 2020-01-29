@@ -148,13 +148,12 @@ def value_or(value: Optional[T], default: T) -> T:
 def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
     project_root = os.path.normpath(project_root)
-    project_yaml_filepath = os.path.join(project_root, 'dbt_project.yml')
+    project_yaml_filepath = os.path.join(project_root, "dbt_project.yml")
 
     # get the project.yml contents
     if not path_exists(project_yaml_filepath):
         raise DbtProjectError(
-            'no dbt_project.yml found at expected path {}'
-            .format(project_yaml_filepath)
+            "no dbt_project.yml found at expected path {}".format(project_yaml_filepath)
         )
 
     project_dict = _load_yaml(project_yaml_filepath)
@@ -639,7 +638,7 @@ class Project:
         renderer: DbtProjectYamlRenderer,
         *,
         verify_version: bool = False,
-    ) -> 'Project':
+    ) -> "Project":
         partial = cls.partial_load(project_root, verify_version=verify_version)
         return partial.render(renderer)
 

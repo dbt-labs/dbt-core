@@ -40,9 +40,7 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
         )
 
     def _fetch_metadata(self, project, renderer):
-        loaded = project.from_project_root(
-            self.resolve_path(project), renderer
-        )
+        loaded = project.from_project_root(self.resolve_path(project), renderer)
         return ProjectPackageMetadata.from_project(loaded)
 
     def install(self, project, renderer):

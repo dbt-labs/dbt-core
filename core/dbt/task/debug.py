@@ -191,7 +191,7 @@ class DebugTask(BaseTask):
             except dbt.exceptions.DbtProjectError:
                 pass
 
-        args_profile: Optional[str] = getattr(self.args, 'profile', None)
+        args_profile: Optional[str] = getattr(self.args, "profile", None)
 
         try:
             return [Profile.pick_profile_name(args_profile, project_profile)]

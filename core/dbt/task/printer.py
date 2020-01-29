@@ -26,7 +26,7 @@ def get_counts(flat_nodes) -> str:
         t = node.resource_type
 
         if node.resource_type == NodeType.Model:
-            t = '{} {}'.format(node.get_materialization(), t)
+            t = "{} {}".format(node.get_materialization(), t)
         elif node.resource_type == NodeType.Operation:
             t = 'hook'
 

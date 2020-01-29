@@ -889,7 +889,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         target_source_name: str,
         target_table_name: str,
         current_project: str,
-        node_package: str
+        node_package: str,
     ) -> MaybeParsedSource:
         search_name = f'{target_source_name}.{target_table_name}'
         candidates = _search_packages(current_project, node_package)

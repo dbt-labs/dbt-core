@@ -12,5 +12,13 @@ from .snapshots import SnapshotParser  # noqa
 
 from . import (  # noqa
     analysis, base, generic_test, singular_test, docs, hooks, macros, models, schemas,
-    snapshots
+    base,
+    generic_test,
+    singular_test,
+    docs,
+    hooks,
+    macros,
+    models,
+    schemas,
+    snapshots,
 )

@@ -100,7 +100,7 @@ class BaseDatabaseWrapper:
         self._namespace = namespace
 
     def __getattr__(self, name):
-        raise NotImplementedError('subclasses need to implement this')
+        raise NotImplementedError("subclasses need to implement this")
 
     @property
     def config(self):
@@ -209,14 +209,10 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
 class BaseRefResolver(BaseResolver):
     @abc.abstractmethod
-    def resolve(
-        self, name: str, package: Optional[str] = None
-    ) -> RelationProxy:
+    def resolve(self, name: str, package: Optional[str] = None) -> RelationProxy:
         ...
 
-    def _repack_args(
-        self, name: str, package: Optional[str]
-    ) -> List[str]:
+    def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
         if package is None:
             return [name]
         else:
@@ -269,8 +265,7 @@ class BaseSourceResolver(BaseResolver):
     def __call__(self, *args: str) -> RelationProxy:
         if len(args) != 2:
             raise_compiler_error(
-                f"source() takes exactly two arguments ({len(args)} given)",
-                self.model
+                f"source() takes exactly two arguments ({len(args)} given)", self.model
             )
         self.validate_args(args[0], args[1])
         return self.resolve(args[0], args[1])
@@ -288,14 +283,15 @@ class ParseConfigObject(Config):
         self.context_config = context_config
 
     def _transform_config(self, config):
-        for oldkey in ('pre_hook', 'post_hook'):
+        for oldkey in ("pre_hook", "post_hook"):
             if oldkey in config:
-                newkey = oldkey.replace('_', '-')
+                newkey = oldkey.replace("_", "-")
                 if newkey in config:
                     raise_compiler_error(
-                        'Invalid config, has conflicting keys "{}" and "{}"'
-                        .format(oldkey, newkey),
-                        self.model
+                        'Invalid config, has conflicting keys "{}" and "{}"'.format(
+                            oldkey, newkey
+                        ),
+                        self.model,
                     )
                 config[newkey] = config.pop(oldkey)
         return config
@@ -306,9 +302,7 @@ class ParseConfigObject(Config):
         elif len(args) == 0 and len(kwargs) > 0:
             opts = kwargs
         else:
-            raise_compiler_error(
-                "Invalid inline model config",
-                self.model)
+            raise_compiler_error("Invalid inline model config", self.model)
 
         opts = self._transform_config(opts)
 
@@ -319,16 +313,16 @@ class ParseConfigObject(Config):
                 'At parse time, did not receive a context config'
             )
         self.context_config.add_config_call(opts)
-        return ''
+        return ""
 
     def set(self, name, value):
         return self.__call__({name: value})
 
     def require(self, name, validator=None):
-        return ''
+        return ""
 
     def get(self, name, default=None, validator=None):
-        return ''
+        return ""
 
     def persist_relation_docs(self) -> bool:
         return False
@@ -345,7 +339,7 @@ class RuntimeConfigObject(Config):
         # we never use or get a config, only the parser cares
 
     def __call__(self, *args, **kwargs):
-        return ''
+        return ""
 
     def set(self, name, value):
         return self.__call__({name: value})
@@ -413,9 +407,7 @@ class ParseDatabaseWrapper(BaseDatabaseWrapper):
             return getattr(self._adapter, name)
         else:
             raise AttributeError(
-                "'{}' object has no attribute '{}'".format(
-                    self.__class__.__name__, name
-                )
+                "'{}' object has no attribute '{}'".format(self.__class__.__name__, name)
             )
 
 
@@ -429,17 +421,13 @@ class RuntimeDatabaseWrapper(BaseDatabaseWrapper):
             return getattr(self._adapter, name)
         else:
             raise AttributeError(
-                "'{}' object has no attribute '{}'".format(
-                    self.__class__.__name__, name
-                )
+                "'{}' object has no attribute '{}'".format(self.__class__.__name__, name)
             )
 
 
 # `ref` implementations
 class ParseRefResolver(BaseRefResolver):
-    def resolve(
-        self, name: str, package: Optional[str] = None
-    ) -> RelationProxy:
+    def resolve(self, name: str, package: Optional[str] = None) -> RelationProxy:
         self.model.refs.append(self._repack_args(name, package))
 
         return self.Relation.create_from(self.config, self.model)
@@ -449,9 +437,7 @@ ResolveRef = Union[Disabled, ManifestNode]
 
 
 class RuntimeRefResolver(BaseRefResolver):
-    def resolve(
-        self, target_name: str, target_package: Optional[str] = None
-    ) -> RelationProxy:
+    def resolve(self, target_name: str, target_package: Optional[str] = None) -> RelationProxy:
         target_model = self.manifest.resolve_ref(
             target_name,
             target_package,
@@ -633,7 +619,7 @@ class OperationProvider(RuntimeProvider):
     ref = OperationRefResolver
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # Base context collection, used for parsing configs.
@@ -648,9 +634,7 @@ class ProviderContext(ManifestContext):
         context_config: Optional[ContextConfig],
     ) -> None:
         if provider is None:
-            raise InternalException(
-                f"Invalid provider given to context: {provider}"
-            )
+            raise InternalException(f"Invalid provider given to context: {provider}")
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
         self.model: Union[ParsedMacro, ManifestNode] = model
@@ -691,12 +675,14 @@ class ProviderContext(ManifestContext):
         if agate_table is None:
             agate_table = agate_helper.empty_table()
 
-        self.sql_results[name] = AttrDict({
+        self.sql_results[name] = AttrDict(
             {
-            'data': agate_helper.as_matrix(agate_table),
-            'table': agate_table
-        })
-        return ''
+                "response": response,
+                "data": agate_helper.as_matrix(agate_table),
+                "table": agate_table,
+            }
+        )
+        return ""
 
     @contextmember
     def store_raw_result(
@@ -721,25 +707,24 @@ class ProviderContext(ManifestContext):
                     elif value == arg:
                         return
                 raise ValidationException(
-                    'Expected value "{}" to be one of {}'
-                    .format(value, ','.join(map(str, args))))
+                    'Expected value "{}" to be one of {}'.format(value, ",".join(map(str, args)))
+                )
+
             return inner
 
-        return AttrDict({
-            'any': validate_any,
-        })
+        return AttrDict(
+            {
+                "any": validate_any,
+            }
+        )
 
     @contextmember
     def write(self, payload: str) -> str:
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (ParsedMacro, ParsedSourceDefinition)):
-            raise_compiler_error(
-                'cannot "write" macros or sources'
-            )
-        self.model.build_path = self.model.write_node(
-            self.config.target_path, 'run', payload
-        )
-        return ''
+            raise_compiler_error('cannot "write" macros or sources')
+        self.model.build_path = self.model.write_node(self.config.target_path, "run", payload)
+        return ""
 
     @contextmember
     def render(self, string: str) -> str:
@@ -752,16 +737,13 @@ class ProviderContext(ManifestContext):
         try:
             return func(*args, **kwargs)
         except Exception:
-            raise_compiler_error(
-                message_if_exception, self.model
-            )
+            raise_compiler_error(message_if_exception, self.model)
 
     @contextmember
     def load_agate_table(self) -> agate.Table:
         if not isinstance(self.model, (ParsedSeedNode, CompiledSeedNode)):
             raise_compiler_error(
-                'can only load_agate_table for seeds (got a {})'
-                .format(self.model.resource_type)
+                "can only load_agate_table for seeds (got a {})".format(self.model.resource_type)
             )
         path = os.path.join(
             self.model.root_path, self.model.original_file_path
@@ -813,17 +795,13 @@ class ProviderContext(ManifestContext):
 
             select * from {{ ref('package_name', 'model_name') }}"
         """
-        return self.provider.ref(
-            self.db_wrapper, self.model, self.config, self.manifest
-        )
+        return self.provider.ref(self.db_wrapper, self.model, self.config, self.manifest)
 
     @contextproperty
     def source(self) -> Callable:
-        return self.provider.source(
-            self.db_wrapper, self.model, self.config, self.manifest
-        )
+        return self.provider.source(self.db_wrapper, self.model, self.config, self.manifest)
 
-    @contextproperty('config')
+    @contextproperty("config")
     def ctx_config(self) -> Config:
         """The `config` variable exists to handle end-user configuration for
         custom materializations. Configs like `unique_key` can be implemented
@@ -995,7 +973,7 @@ class ProviderContext(ManifestContext):
             node=self.model,
         )
 
-    @contextproperty('adapter')
+    @contextproperty("adapter")
     def ctx_adapter(self) -> BaseDatabaseWrapper:
         """`adapter` is a wrapper around the internal database adapter used by
         dbt. It allows users to make calls to the database in their dbt models.
@@ -1007,8 +985,8 @@ class ProviderContext(ManifestContext):
     @contextproperty
     def api(self) -> Dict[str, Any]:
         return {
-            'Relation': self.db_wrapper.Relation,
-            'Column': self.adapter.Column,
+            "Relation": self.db_wrapper.Relation,
+            "Column": self.adapter.Column,
         }
 
     @contextproperty
@@ -1126,7 +1104,7 @@ class ProviderContext(ManifestContext):
         """  # noqa
         return self.manifest.flat_graph
 
-    @contextproperty('model')
+    @contextproperty("model")
     def ctx_model(self) -> Dict[str, Any]:
         return self.model.to_dict(omit_none=True)
 
@@ -1195,10 +1173,10 @@ class ProviderContext(ManifestContext):
 class MacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:
 
-     - they don't have have all values available that nodes do:
-        - 'this', 'pre_hooks', 'post_hooks', and 'sql' are missing
-        - 'schema' does not use any 'model' information
-     - they can't be configured with config() directives
+    - they don't have have all values available that nodes do:
+       - 'this', 'pre_hooks', 'post_hooks', and 'sql' are missing
+       - 'schema' does not use any 'model' information
+    - they can't be configured with config() directives
     """
 
     def __init__(
@@ -1245,15 +1223,11 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def database(self) -> str:
-        return getattr(
-            self.model, 'database', self.config.credentials.database
-        )
+        return getattr(self.model, "database", self.config.credentials.database)
 
     @contextproperty
     def schema(self) -> str:
-        return getattr(
-            self.model, 'schema', self.config.credentials.schema
-        )
+        return getattr(self.model, "schema", self.config.credentials.schema)
 
     @contextproperty
     def this(self) -> Optional[RelationProxy]:
@@ -1325,9 +1299,7 @@ def generate_runtime_model_context(
     config: RuntimeConfig,
     manifest: Manifest,
 ) -> Dict[str, Any]:
-    ctx = ModelContext(
-        model, config, manifest, RuntimeProvider(), None
-    )
+    ctx = ModelContext(model, config, manifest, RuntimeProvider(), None)
     return ctx.to_dict()
 
 
@@ -1337,9 +1309,7 @@ def generate_runtime_macro_context(
     manifest: Manifest,
     package_name: Optional[str],
 ) -> Dict[str, Any]:
-    ctx = MacroContext(
-        macro, config, manifest, OperationProvider(), package_name
-    )
+    ctx = MacroContext(macro, config, manifest, OperationProvider(), package_name)
     return ctx.to_dict()
 
 
