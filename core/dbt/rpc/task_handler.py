@@ -208,7 +208,6 @@ class StateHandler:
                         .format(self.handler.state)
                     )
                 )
-            # TODO: need to tighten RequestTaskHandler.Task to also
             elif self.handler.task.interpret_results(self.handler.result):
                 self.handler.state = TaskHandlerState.Success
             else:
@@ -444,7 +443,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
 
         if self.task_kwargs is None:
             raise TypeError(
-                'task_kwargs were None - unable to cllect parameters'
+                'task_kwargs were None - unable to collect parameters'
             )
 
         try:

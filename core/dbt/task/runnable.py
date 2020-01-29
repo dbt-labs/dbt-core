@@ -149,7 +149,7 @@ class GraphRunnableTask(ManifestTask):
             with startctx, extended_metadata:
                 logger.debug('Began running node {}'.format(
                     runner.node.unique_id))
-            status: Dict[str, str] = {'state': 'error'}
+            status: Dict[str, str]
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
