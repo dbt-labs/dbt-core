@@ -6,7 +6,7 @@ import json
 import os
 import signal
 from contextlib import contextmanager
-from typing import Iterator, Optional
+from typing import Iterator, Optional, List, Type
 
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Request, Response
@@ -19,7 +19,7 @@ from dbt.logger import (
     log_manager,
 )
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
-from dbt.rpc.method import TaskTypes
+from dbt.rpc.method import TaskTypes, RemoteMethod
 from dbt.rpc.response_manager import ResponseManager
 from dbt.rpc.task_manager import TaskManager
 from dbt.task.base import ConfiguredTask
@@ -73,7 +73,9 @@ def signhup_replace() -> Iterator[bool]:
 class RPCServerTask(ConfiguredTask):
     DEFAULT_LOG_FORMAT = 'json'
 
-    def __init__(self, args, config, tasks: Optional[TaskTypes] = None):
+    def __init__(
+        self, args, config, tasks: Optional[List[Type[RemoteMethod]]] = None
+    ) -> None:
         if os.name == 'nt':
             raise RuntimeException(
                 'The dbt RPC server is not supported on windows'

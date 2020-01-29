@@ -2,7 +2,7 @@ import abc
 import itertools
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Type
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable
 )
 from typing_extensions import Protocol
 
@@ -25,23 +25,6 @@ class ConnectionState(StrEnum):
     OPEN = 'open'
     CLOSED = 'closed'
     FAIL = 'fail'
-
-
-class ConnectionOpenerProtocol(Protocol):
-    @classmethod
-    def open(cls, connection: 'Connection') -> Any:
-        raise NotImplementedError(f'open() not implemented for {cls.__name__}')
-
-
-class LazyHandle:
-    """Opener must be a callable that takes a Connection object and opens the
-    connection, updating the handle on the Connection.
-    """
-    def __init__(self, opener: Type[ConnectionOpenerProtocol]):
-        self.opener = opener
-
-    def resolve(self, connection: 'Connection') -> Any:
-        return self.opener.open(connection)
 
 
 @dataclass(init=False)
@@ -94,6 +77,17 @@ class Connection(ExtensibleJsonSchemaMixin, Replaceable):
     @handle.setter
     def handle(self, value):
         self._handle = value
+
+
+class LazyHandle:
+    """Opener must be a callable that takes a Connection object and opens the
+    connection, updating the handle on the Connection.
+    """
+    def __init__(self, opener: Callable[[Connection], Connection]):
+        self.opener = opener
+
+    def resolve(self, connection: Connection) -> Connection:
+        return self.opener(connection)
 
 
 # see https://github.com/python/mypy/issues/4717#issuecomment-373932080

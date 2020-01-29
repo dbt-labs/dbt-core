@@ -1,8 +1,16 @@
 from collections import Sequence
 
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, Iterable, Dict, Union
 
 from . import data_types as data_types
+from .data_types import (
+    Text as Text,
+    Number as Number,
+    Boolean as Boolean,
+    DateTime as DateTime,
+    Date as Date,
+    TimeDelta as TimeDelta,
+)
 
 
 class MappedSequence(Sequence):
@@ -43,6 +51,12 @@ class Table:
     def print_csv(self, **kwargs: Any) -> None: ...
     def print_json(self, **kwargs: Any) -> None: ...
     def where(self, test: Callable[[Row], bool]) -> 'Table': ...
+    def select(self, key: Union[Iterable[str], str]) -> 'Table': ...
+    # these definitions are much narrower than what's actually accepted
+    @classmethod
+    def from_object(cls, obj: Iterable[Dict[str, Any]], *, column_types: Optional['TypeTester'] = None) -> 'Table': ...
+    @classmethod
+    def from_csv(cls, path: Iterable[str], *, column_types: Optional['TypeTester'] = None) -> 'Table': ...
 
 
 class TypeTester:

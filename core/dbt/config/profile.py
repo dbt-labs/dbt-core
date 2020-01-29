@@ -62,17 +62,14 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
 
 def read_user_config(directory: str) -> UserConfig:
     try:
-        user_cfg = None
         profile = read_profile(directory)
         if profile:
             user_cfg = coerce_dict_str(profile.get('config', {}))
             if user_cfg is not None:
                 return UserConfig.from_dict(user_cfg)
-        return UserConfig()
-
-        return UserConfig.from_dict(user_cfg)
     except (RuntimeException, ValidationError):
-        return UserConfig()
+        pass
+    return UserConfig()
 
 
 @dataclass

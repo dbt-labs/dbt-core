@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, NoReturn, Union, Type, Iterator
+from typing import Dict, List, NoReturn, Union, Type, Iterator, Set
 
 from dbt.exceptions import raise_dependency_error, InternalException
 
@@ -98,7 +98,7 @@ class PackageListing:
 def _check_for_duplicate_project_names(
     final_deps: List[PinnedPackage], config: Project
 ):
-    seen = set()
+    seen: Set[str] = set()
     for package in final_deps:
         project_name = package.get_project_name(config)
         if project_name in seen:

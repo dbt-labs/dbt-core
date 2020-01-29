@@ -25,10 +25,11 @@ class ServeTask(ProjectOnlyTask):
         )
         logger.info("Press Ctrl+C to exit.\n\n")
 
-        httpd = TCPServer(
+        # mypy doesn't think SimpleHTTPRequestHandler is ok here, but it is
+        httpd = TCPServer(  # type: ignore
             ('0.0.0.0', port),
-            SimpleHTTPRequestHandler
-        )
+            SimpleHTTPRequestHandler  # type: ignore
+        )  # type: ignore
 
         try:
             webbrowser.open_new_tab('http://127.0.0.1:{}'.format(port))

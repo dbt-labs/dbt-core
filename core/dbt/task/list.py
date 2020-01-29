@@ -2,7 +2,7 @@ import json
 
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.node_types import NodeType
-import dbt.exceptions
+from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import log_manager, GLOBAL_LOGGER as logger
 
 
@@ -33,11 +33,11 @@ class ListTask(GraphRunnableTask):
         self.args.single_threaded = True
         if self.args.models:
             if self.args.select:
-                raise dbt.exceptions.RuntimeException(
+                raise RuntimeException(
                     '"models" and "select" are mutually exclusive arguments'
                 )
             if self.args.resource_types:
-                raise dbt.exceptions.RuntimeException(
+                raise RuntimeException(
                     '"models" and "resource_type" are mutually exclusive '
                     'arguments'
                 )
@@ -53,6 +53,10 @@ class ListTask(GraphRunnableTask):
         if not nodes:
             logger.warning('No nodes selected!')
             return
+        if self.manifest is None:
+            raise InternalException(
+                'manifest is None in _iterate_selected_nodes'
+            )
         for node in nodes:
             yield self.manifest.nodes[node]
 
@@ -95,7 +99,7 @@ class ListTask(GraphRunnableTask):
         elif output == 'path':
             generator = self.generate_paths
         else:
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 'Invalid output {}'.format(output)
             )
         for result in generator():

@@ -9,7 +9,9 @@ class RPCTask(
 ):
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
-        RemoteManifestMethod.__init__(self, args, config, manifest)
+        RemoteManifestMethod.__init__(
+            self, args, config, manifest  # type: ignore
+        )
 
     def load_manifest(self):
         # we started out with a manifest!

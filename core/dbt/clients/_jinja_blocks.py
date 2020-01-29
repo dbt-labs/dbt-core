@@ -347,6 +347,7 @@ class BlockIterator:
 
             elif self.is_current_end(tag):
                 self.last_position = tag.end
+                assert self.current is not None
                 yield BlockTag(
                     block_type_name=self.current.block_type_name,
                     block_name=self.current.block_name,

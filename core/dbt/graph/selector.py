@@ -1,5 +1,6 @@
 from enum import Enum
 from itertools import chain
+from typing import Set, Iterable, Union, List, Container, Tuple, Optional
 
 import networkx as nx  # type: ignore
 
@@ -16,7 +17,7 @@ SELECTOR_DELIMITER = ':'
 
 
 class SelectionCriteria:
-    def __init__(self, node_spec):
+    def __init__(self, node_spec: str):
         self.raw = node_spec
         self.select_children = False
         self.select_parents = False
@@ -43,7 +44,8 @@ class SelectionCriteria:
 
         if SELECTOR_DELIMITER in node_spec:
             selector_parts = node_spec.split(SELECTOR_DELIMITER, 1)
-            self.selector_type, self.selector_value = selector_parts
+            selector_type, self.selector_value = selector_parts
+            self.selector_type = SELECTOR_FILTERS(selector_type)
         else:
             self.selector_value = node_spec
 
@@ -57,8 +59,8 @@ class SELECTOR_FILTERS(str, Enum):
         return self._value_
 
 
-def split_specs(node_specs):
-    specs = set()
+def split_specs(node_specs: Iterable[str]):
+    specs: Set[str] = set()
     for spec in node_specs:
         parts = spec.split(" ")
         specs.update(parts)
@@ -96,7 +98,9 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-def _node_is_match(qualified_name, package_names, fqn):
+def _node_is_match(
+    qualified_name: List[str], package_names: Set[str], fqn: List[str]
+) -> bool:
     """Determine if a qualfied name matches an fqn, given the set of package
     names in the graph.
 
@@ -120,22 +124,18 @@ def _node_is_match(qualified_name, package_names, fqn):
     return False
 
 
-def warn_if_useless_spec(spec, nodes):
-    if len(nodes) > 0:
-        return
-
-    msg = (
-        "* Spec='{}' does not identify any models"
-        .format(spec['raw'])
-    )
-    dbt.exceptions.warn_or_error(msg, log_fmt='{} and was ignored\n')
-
-
 class ManifestSelector:
+    FILTER: str
+
     def __init__(self, manifest):
         self.manifest = manifest
 
-    def _node_iterator(self, included_nodes, exclude, include):
+    def _node_iterator(
+        self,
+        included_nodes: Set[str],
+        exclude: Optional[Container[str]],
+        include: Optional[Container[str]],
+    ) -> Iterable[Tuple[str, str]]:
         for unique_id, node in self.manifest.nodes.items():
             if unique_id not in included_nodes:
                 continue
@@ -223,6 +223,9 @@ class InvalidSelectorError(Exception):
     pass
 
 
+ValidSelector = Union[QualifiedNameSelector, TagSelector, SourceSelector]
+
+
 class MultiSelector:
     """The base class of the node selector. It only about the manifest and
     selector types, including the glob operator, but does not handle any graph
@@ -233,7 +236,9 @@ class MultiSelector:
     def __init__(self, manifest):
         self.manifest = manifest
 
-    def get_selector(self, selector_type):
+    def get_selector(
+        self, selector_type: str
+    ):
         for cls in self.SELECTORS:
             if cls.FILTER == selector_type:
                 return cls(self.manifest)
@@ -258,30 +263,32 @@ class Graph:
     def __iter__(self):
         return iter(self.graph.nodes())
 
-    def select_childrens_parents(self, selected):
+    def select_childrens_parents(self, selected: Set[str]) -> Set[str]:
         ancestors_for = self.select_children(selected) | selected
         return self.select_parents(ancestors_for) | ancestors_for
 
-    def select_children(self, selected):
-        descendants = set()
+    def select_children(self, selected: Set[str]) -> Set[str]:
+        descendants: Set[str] = set()
         for node in selected:
             descendants.update(nx.descendants(self.graph, node))
         return descendants
 
-    def select_parents(self, selected):
-        ancestors = set()
+    def select_parents(self, selected: Set[str]) -> Set[str]:
+        ancestors: Set[str] = set()
         for node in selected:
             ancestors.update(nx.ancestors(self.graph, node))
         return ancestors
 
-    def select_successors(self, selected):
-        successors = set()
+    def select_successors(self, selected: Set[str]) -> Set[str]:
+        successors: Set[str] = set()
         for node in selected:
             successors.update(self.graph.successors(node))
         return successors
 
-    def collect_models(self, selected, spec):
-        additional = set()
+    def collect_models(
+        self, selected: Set[str], spec: SelectionCriteria,
+    ) -> Set[str]:
+        additional: Set[str] = set()
         if spec.select_childrens_parents:
             additional.update(self.select_childrens_parents(selected))
         if spec.select_parents:
@@ -290,7 +297,7 @@ class Graph:
             additional.update(self.select_children(selected))
         return additional
 
-    def subgraph(self, nodes):
+    def subgraph(self, nodes: Iterable[str]) -> 'Graph':
         cls = type(self)
         return cls(self.graph.subgraph(nodes))
 
@@ -326,7 +333,7 @@ class NodeSelector(MultiSelector):
         return collected
 
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
-        selected_nodes = set()
+        selected_nodes: Set[str] = set()
 
         for raw_spec in split_specs(raw_include_specs):
             spec = SelectionCriteria(raw_spec)

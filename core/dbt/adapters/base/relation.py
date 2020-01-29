@@ -422,8 +422,11 @@ class BaseRelation(FakeAPIObject, Hashable):
         return str(RelationType.External)
 
     @classproperty
-    def RelationType(cls) -> Type[RelationType]:
+    def get_relation_type(cls) -> Type[RelationType]:
         return RelationType
+
+
+Info = TypeVar('Info', bound='InformationSchema')
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -470,10 +473,10 @@ class InformationSchema(BaseRelation):
 
     @classmethod
     def from_relation(
-        cls: Self,
+        cls: Type[Info],
         relation: BaseRelation,
         information_schema_view: Optional[str],
-    ) -> Self:
+    ) -> Info:
         include_policy = cls.get_include_policy(
             relation, information_schema_view
         )

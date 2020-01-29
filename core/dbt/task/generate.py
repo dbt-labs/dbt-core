@@ -12,6 +12,7 @@ from dbt.contracts.results import (
     TableMetadata, CatalogTable, CatalogResults, Primitive, CatalogKey,
     StatsItem, StatsDict, ColumnMetadata
 )
+from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 import dbt.ui.printer
 import dbt.utils
@@ -179,6 +180,10 @@ def _coerce_decimal(value):
 
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
+        if self.manifest is None:
+            raise InternalException(
+                'manifest should not be None in _get_manifest'
+            )
         return self.manifest
 
     def run(self):
@@ -194,6 +199,11 @@ class GenerateTask(CompileTask):
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
             os.path.join(self.config.target_path, 'index.html'))
+
+        if self.manifest is None:
+            raise InternalException(
+                'self.manifest was None in run!'
+            )
 
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):

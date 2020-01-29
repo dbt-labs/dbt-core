@@ -1,7 +1,7 @@
 import itertools
 import json
 import os
-from typing import Callable, Any, Dict, List, Optional
+from typing import Callable, Any, Dict, List, Optional, Mapping
 
 import dbt.tracking
 from dbt.clients.jinja import undefined_error
@@ -248,7 +248,7 @@ class HasCredentialsContext(ConfigRenderContext):
     def add_macros_from(
         self,
         context: Dict[str, Any],
-        macros: Dict[str, ParsedMacro]
+        macros: Mapping[str, ParsedMacro],
     ):
         global_macros: List[Dict[str, Callable]] = []
         local_macros: List[Dict[str, Callable]] = []
@@ -284,7 +284,7 @@ class QueryHeaderContext(HasCredentialsContext):
     def __init__(self, config):
         super().__init__(config)
 
-    def to_dict(self, macros: Optional[Dict[str, ParsedMacro]] = None):
+    def to_dict(self, macros: Optional[Mapping[str, ParsedMacro]] = None):
         context = super().to_dict()
         context['target'] = self.get_target()
         context['dbt_version'] = dbt_version

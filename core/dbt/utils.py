@@ -9,9 +9,8 @@ import json
 import os
 from enum import Enum
 from typing import (
-    Tuple, Type, Any, Optional, TypeVar, Dict, Iterable, Set, List, Union
+    Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable
 )
-from typing_extensions import Protocol
 
 import dbt.exceptions
 
@@ -238,8 +237,14 @@ def deep_merge_item(destination, key, value):
         destination[key] = value
 
 
-def _deep_map(func, value, keypath):
-    atomic_types = (int, float, str, type(None), bool)
+def _deep_map(
+    func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
+    value: Any,
+    keypath: Tuple[Union[str, int], ...],
+) -> Any:
+    atomic_types: Tuple[Type[Any], ...] = (int, float, str, type(None), bool)
+
+    ret: Any
 
     if isinstance(value, list):
         ret = [
@@ -248,13 +253,14 @@ def _deep_map(func, value, keypath):
         ]
     elif isinstance(value, dict):
         ret = {
-            k: _deep_map(func, v, (keypath + (k,)))
+            k: _deep_map(func, v, (keypath + (str(k),)))
             for k, v in value.items()
         }
     elif isinstance(value, atomic_types):
         ret = func(value, keypath)
     else:
-        ok_types = (list, dict) + atomic_types
+        container_types: Tuple[Type[Any], ...] = (list, dict)
+        ok_types = container_types + atomic_types
         raise dbt.exceptions.DbtConfigError(
             'in _deep_map, expected one of {!r}, got {!r}'
             .format(ok_types, type(value))
@@ -315,24 +321,6 @@ def get_pseudo_test_path(node_name, source_path, test_type):
 def get_pseudo_hook_path(hook_name):
     path_parts = ['hooks', "{}.sql".format(hook_name)]
     return os.path.join(*path_parts)
-
-
-class _Tagged(Protocol):
-    tags: Iterable[str]
-
-
-Tagged = TypeVar('Tagged', bound=_Tagged)
-
-
-def get_nodes_by_tags(
-    nodes: Iterable[Tagged], match_tags: Set[str], resource_type: NodeType
-) -> List[Tagged]:
-    matched_nodes = []
-    for node in nodes:
-        node_tags = node.tags
-        if len(set(node_tags) & match_tags):
-            matched_nodes.append(node)
-    return matched_nodes
 
 
 def md5(string):
@@ -421,11 +409,11 @@ def invalid_source_fail_unless_test(node, target_name, target_table_name):
                                                target_table_name)
 
 
-def parse_cli_vars(var_string):
+def parse_cli_vars(var_string: str) -> Dict[str, Any]:
     try:
         cli_vars = yaml_helper.load_yaml_text(var_string)
         var_type = type(cli_vars)
-        if var_type == dict:
+        if var_type is dict:
             return cli_vars
         else:
             type_name = var_type.__name__
@@ -484,7 +472,9 @@ class ForgivingJSONEncoder(JSONEncoder):
             return str(obj)
 
 
-def translate_aliases(kwargs, aliases):
+def translate_aliases(
+    kwargs: Dict[str, Any], aliases: Dict[str, str]
+) -> Dict[str, Any]:
     """Given a dict of keyword arguments and a dict mapping aliases to their
     canonical values, canonicalize the keys in the kwargs dict.
 
@@ -492,7 +482,7 @@ def translate_aliases(kwargs, aliases):
         canonical key.
     :raises: `AliasException`, if a canonical key is defined more than once.
     """
-    result = {}
+    result: Dict[str, Any] = {}
 
     for given_key, value in kwargs.items():
         canonical_key = aliases.get(given_key, given_key)

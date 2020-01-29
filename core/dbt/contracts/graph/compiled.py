@@ -3,6 +3,7 @@ from dbt.contracts.graph.parsed import (
     ParsedAnalysisNode,
     ParsedModelNode,
     ParsedHookNode,
+    ParsedResource,
     ParsedRPCNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
@@ -200,7 +201,7 @@ def compiled_type_for(parsed: ParsedNode):
         return type(parsed)
 
 
-def parsed_instance_for(compiled: CompiledNode) -> ParsedNode:
+def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
     cls = PARSED_TYPES.get(compiled.resource_type)
     if cls is None:
         # how???

@@ -116,6 +116,11 @@ class FormatterMixin:
         self.formatter_class = logbook.StringFormatter
         self.format_string = self._text_format_string
 
+    def reset(self):
+        raise NotImplementedError(
+            'reset() not implemented in FormatterMixin subclass'
+        )
+
 
 class OutputHandler(logbook.StreamHandler, FormatterMixin):
     """Output handler.
@@ -372,7 +377,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
         self._msg_buffer: Optional[List[logbook.LogRecord]] = []
         # if we get 1k messages without a logfile being set, something is wrong
         self._bufmax = 1000
-        self._log_path = None
+        self._log_path: Optional[str] = None
         # we need the base handler class' __init__ to run so handling works
         logbook.Handler.__init__(self, level, filter, bubble)
         if log_dir is not None:
@@ -426,6 +431,8 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
         FormatterMixin.__init__(self, DEBUG_LOG_FORMAT)
 
     def _replay_buffered(self):
+        assert self._msg_buffer is not None, \
+            '_msg_buffer should never be None in _replay_buffered'
         for record in self._msg_buffer:
             super().emit(record)
         self._msg_buffer = None

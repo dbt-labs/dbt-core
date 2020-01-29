@@ -1,6 +1,7 @@
 import itertools
 import os
 from collections import defaultdict
+from typing import List, Dict
 
 import dbt.utils
 import dbt.include
@@ -63,7 +64,7 @@ def _node_enabled(node):
 
 
 def _generate_stats(manifest):
-    stats = defaultdict(int)
+    stats: Dict[NodeType, int] = defaultdict(int)
     for node_name, node in itertools.chain(
             manifest.nodes.items(),
             manifest.macros.items()):
@@ -102,7 +103,7 @@ def recursively_prepend_ctes(model, manifest):
                 'Bad model type: {}'.format(type(model))
             )
 
-    prepended_ctes = []
+    prepended_ctes: List[InjectedCTE] = []
 
     for cte in model.extra_ctes:
         cte_id = cte.id
@@ -227,7 +228,7 @@ class Compiler:
         return linker
 
 
-def compile_manifest(config, manifest, write=True):
+def compile_manifest(config, manifest, write=True) -> Linker:
     compiler = Compiler(config)
     compiler.initialize()
     return compiler.compile(manifest, write=write)
@@ -273,7 +274,9 @@ def _inject_runtime_config(adapter, node, extra_context):
 
 
 def _node_context(adapter, node):
-    return {
-        "run_started_at": dbt.tracking.active_user.run_started_at,
-        "invocation_id": dbt.tracking.active_user.invocation_id,
-    }
+    if dbt.tracking.active_user is not None:
+        return {
+            "run_started_at": dbt.tracking.active_user.run_started_at,
+            "invocation_id": dbt.tracking.active_user.invocation_id,
+        }
+    return {}   # this never happens, but make mypy happy

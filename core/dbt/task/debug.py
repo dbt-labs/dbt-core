@@ -2,6 +2,7 @@
 import os
 import platform
 import sys
+from typing import Optional, Dict, Any, List
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.clients.system
@@ -76,13 +77,13 @@ class DebugTask(BaseTask):
         )
 
         # set by _load_*
-        self.profile = None
+        self.profile: Optional[Profile] = None
         self.profile_fail_details = ''
-        self.raw_profile_data = None
-        self.profile_name = None
-        self.project = None
+        self.raw_profile_data: Optional[Dict[str, Any]] = None
+        self.profile_name: Optional[str] = None
+        self.project: Optional[Project] = None
         self.project_fail_details = ''
-        self.messages = []
+        self.messages: List[str] = []
 
     @property
     def project_profile(self):
@@ -137,6 +138,7 @@ class DebugTask(BaseTask):
     def _profile_found(self):
         if not self.raw_profile_data:
             return red('ERROR not found')
+        assert self.raw_profile_data is not None
         if self.profile_name in self.raw_profile_data:
             return green('OK found')
         else:
@@ -147,6 +149,10 @@ class DebugTask(BaseTask):
                         self.target_name)
         if not requirements:
             return red('ERROR not found')
+        # mypy appeasement, we checked just above
+        assert self.raw_profile_data is not None
+        assert self.profile_name is not None
+        assert self.target_name is not None
         if self.profile_name not in self.raw_profile_data:
             return red('ERROR not found')
         profiles = self.raw_profile_data[self.profile_name]['outputs']
@@ -186,6 +192,10 @@ class DebugTask(BaseTask):
     def _choose_target_name(self):
         has_raw_profile = (self.raw_profile_data and self.profile_name and
                            self.profile_name in self.raw_profile_data)
+        # mypy appeasement, we checked just above
+        assert self.raw_profile_data is not None
+        assert self.profile_name is not None
+
         if has_raw_profile:
             raw_profile = self.raw_profile_data[self.profile_name]
 

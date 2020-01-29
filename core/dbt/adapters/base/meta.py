@@ -1,6 +1,6 @@
 import abc
 from functools import wraps
-from typing import Callable, Optional, Any, FrozenSet, Dict
+from typing import Callable, Optional, Any, FrozenSet, Dict, Set
 
 from dbt.deprecations import warn, renamed_method
 
@@ -86,16 +86,26 @@ available = _Available()
 
 
 class AdapterMeta(abc.ABCMeta):
+    _available_: FrozenSet[str]
+    _parse_replacements_: Dict[str, Callable]
+
     def __new__(mcls, name, bases, namespace, **kwargs):
-        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+        # mypy does not like the `**kwargs`. But `ABCMeta` itself takes
+        # `**kwargs` in its argspec here (and passes them to `type.__new__`.
+        # I'm not sure there is any benefit to it after poking around a bit,
+        # but having it doesn't hurt on the python side (and omitting it could
+        # hurt for obscure metaclass reasons, for all I know)
+        cls = abc.ABCMeta.__new__(  # type: ignore
+            mcls, name, bases, namespace, **kwargs
+        )
 
         # this is very much inspired by ABCMeta's own implementation
 
         # dict mapping the method name to whether the model name should be
         # injected into the arguments. All methods in here are exposed to the
         # context.
-        available = set()
-        replacements = {}
+        available: Set[str] = set()
+        replacements: Dict[str, Any] = {}
 
         # collect base class data first
         for base in bases:
@@ -110,7 +120,7 @@ class AdapterMeta(abc.ABCMeta):
             if parse_replacement is not None:
                 replacements[name] = parse_replacement
 
-        cls._available_: FrozenSet[str] = frozenset(available)
+        cls._available_ = frozenset(available)
         # should this be a namedtuple so it will be immutable like _available_?
-        cls._parse_replacements_: Dict[str, Callable] = replacements
+        cls._parse_replacements_ = replacements
         return cls

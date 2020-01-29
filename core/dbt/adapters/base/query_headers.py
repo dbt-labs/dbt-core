@@ -1,5 +1,5 @@
 from threading import local
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict, Any
 
 from dbt.clients.jinja import QueryStringGenerator
 
@@ -56,7 +56,7 @@ class _QueryComment(local):
             return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
 
     def set(self, comment: Optional[str]):
-        if '*/' in comment:
+        if isinstance(comment, str) and '*/' in comment:
             # tell the user "no" so they don't hurt themselves by writing
             # garbage
             raise RuntimeException(
@@ -65,7 +65,7 @@ class _QueryComment(local):
         self.query_comment = comment
 
 
-QueryStringFunc = Callable[[str, Optional[CompileResultNode]], str]
+QueryStringFunc = Callable[[str, Optional[NodeWrapper]], str]
 
 
 class QueryStringSetter:
@@ -77,13 +77,14 @@ class QueryStringSetter:
         self.generator: QueryStringFunc = lambda name, model: ''
         # if the comment value was None or the empty string, just skip it
         if comment_macro:
+            assert isinstance(comment_macro, str)
             macro = '\n'.join((
                 '{%- macro query_comment_macro(connection_name, node) -%}',
-                self._get_comment_macro(),
+                comment_macro,
                 '{% endmacro %}'
             ))
             ctx = self._get_context()
-            self.generator: QueryStringFunc = QueryStringGenerator(macro, ctx)
+            self.generator = QueryStringGenerator(macro, ctx)
         self.comment = _QueryComment(None)
         self.reset()
 
@@ -105,10 +106,9 @@ class QueryStringSetter:
         self.set('master', None)
 
     def set(self, name: str, node: Optional[CompileResultNode]):
+        wrapped: Optional[NodeWrapper] = None
         if node is not None:
             wrapped = NodeWrapper(node)
-        else:
-            wrapped = None
         comment_str = self.generator(name, wrapped)
         self.comment.set(comment_str)
 
@@ -127,5 +127,5 @@ class MacroQueryStringSetter(QueryStringSetter):
         else:
             return super()._get_comment_macro()
 
-    def _get_context(self):
+    def _get_context(self) -> Dict[str, Any]:
         return QueryHeaderContext(self.config).to_dict(self.manifest.macros)

@@ -145,8 +145,8 @@ def get_validation() -> dbt.utils.AttrDict:
     })
 
 
-def add_sql_handlers(context):
-    sql_results = {}
+def add_sql_handlers(context: Dict[str, Any]) -> None:
+    sql_results: Dict[str, Any] = {}
     context['_sql_results'] = sql_results
     context['store_result'] = _store_result(sql_results)
     context['load_result'] = _load_result(sql_results)
