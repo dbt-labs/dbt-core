@@ -16,8 +16,8 @@ class NodeType(StrEnum):
     Macro = 'macro'
 
     @classmethod
-    def executable(cls):
-        return [v.value for v in [
+    def executable(cls) -> List['NodeType']:
+        return [
             cls.Model,
             cls.Test,
             cls.Snapshot,
@@ -26,15 +26,15 @@ class NodeType(StrEnum):
             cls.Seed,
             cls.Documentation,
             cls.RPCCall,
-        ]]
+        ]
 
     @classmethod
-    def refable(cls):
-        return [v.value for v in [
+    def refable(cls) -> List['NodeType']:
+        return [
             cls.Model,
             cls.Seed,
             cls.Snapshot,
-        ]]
+        ]
 
     @classmethod
     def documentable(cls) -> List['NodeType']:

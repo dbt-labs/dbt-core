@@ -23,7 +23,7 @@ from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
     NodeConfig, DependsOn, ColumnInfo, ParsedTestNode, TestConfig,
     ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
-    ParsedAnalysisNode
+    ParsedAnalysisNode, ParsedDocumentation
 )
 from dbt.contracts.graph.unparsed import FreshnessThreshold, ExternalTable
 
@@ -676,20 +676,49 @@ class ParserUtilsTest(unittest.TestCase):
         x_uid = 'model.project.x'
         y_uid = 'model.otherproject.y'
         src_uid = 'source.thirdproject.src.tbl'
-        remote_docref = mock.MagicMock(documentation_package='otherproject', documentation_name='my_doc', column_name=None)
-        docref = mock.MagicMock(documentation_package='', documentation_name='my_doc', column_name=None)
+        remote_docref = mock.MagicMock(
+            documentation_package='otherproject',
+            documentation_name='my_doc',
+            column_name=None,
+        )
+        docref = mock.MagicMock(
+            documentation_package='',
+            documentation_name='my_doc',
+            column_name=None,
+        )
         self.x_node = mock.MagicMock(
-            refs=[], sources=[['src', 'tbl']], docrefs=[remote_docref], unique_id=x_uid,
-            resource_type=NodeType.Model, depends_on=x_depends_on,
+            __class__=ParsedModelNode,
+            package_name='project',
+            search_name='x',
+            config=mock.MagicMock(enabled=True),
+            refs=[],
+            sources=[['src', 'tbl']],
+            docrefs=[remote_docref],
+            unique_id=x_uid,
+            resource_type=NodeType.Model,
+            depends_on=x_depends_on,
             description='other_project: {{ doc("otherproject", "my_doc") }}',
         )
         self.y_node = mock.MagicMock(
-            refs=[['x']], sources=[], docrefs=[docref], unique_id=y_uid,
-            resource_type=NodeType.Model, depends_on=y_depends_on,
+            __class__=ParsedModelNode,
+            package_name='otherproject',
+            search_name='y',
+            config=mock.MagicMock(enabled=True),
+            refs=[['x']],
+            sources=[],
+            docrefs=[docref],
+            unique_id=y_uid,
+            resource_type=NodeType.Model,
+            depends_on=y_depends_on,
             description='{{ doc("my_doc") }}',
         )
         self.src_node = mock.MagicMock(
-            resource_type=NodeType.Source, unique_id=src_uid,
+            __class__=ParsedSourceDefinition,
+            package_name='project',
+            search_name='src.tbl',
+            config=mock.MagicMock(enabled=True),
+            resource_type=NodeType.Source,
+            unique_id=src_uid,
         )
         nodes = {
             x_uid: self.x_node,
@@ -697,7 +726,13 @@ class ParserUtilsTest(unittest.TestCase):
             src_uid: self.src_node,
         }
         docs = {
-            'otherproject.my_doc': mock.MagicMock(block_contents='some docs')
+            'otherproject.my_doc': mock.MagicMock(
+                __class__=ParsedDocumentation,
+                resource_type=NodeType.Documentation,
+                search_name='my_doc',
+                package_name='otherproject',
+                block_contents='some docs',
+            )
         }
         self.manifest = Manifest(
             nodes=nodes, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()

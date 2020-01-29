@@ -432,7 +432,7 @@ class ModelRunner(CompileRunner):
         context = dbt.context.runtime.generate(
             model, self.config, manifest)
 
-        materialization_macro = manifest.get_materialization_macro(
+        materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name,
             model.get_materialization(),
             self.adapter.type())

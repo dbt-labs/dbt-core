@@ -265,12 +265,12 @@ class HasCredentialsContext(ConfigRenderContext):
             # adapter packages are part of the global project space
             _add_macro_map(context, package_name, macro_map)
 
-            if package_name == self.config.project_name:
-                # If we're in the root project, allow global override
-                global_macros.append(macro_map)
-            elif package_name == self.search_package_name:
+            if package_name == self.search_package_name:
                 # If we're in the current project, allow local override
                 local_macros.append(macro_map)
+            elif package_name == self.config.project_name:
+                # If we're in the root project, allow global override
+                global_macros.append(macro_map)
             elif package_name in PACKAGES:
                 # If it comes from a dbt package, allow global override
                 global_macros.append(macro_map)

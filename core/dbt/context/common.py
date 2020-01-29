@@ -1,11 +1,11 @@
 import agate
 import os
 from typing_extensions import Protocol
-from typing import Union, Callable, Any, Dict, TypeVar, Type
+from typing import Union, Callable, Any, Dict, TypeVar, Type, Optional
 
 from dbt.clients import agate_helper
-from dbt.contracts.graph.compiled import CompiledSeedNode
-from dbt.contracts.graph.parsed import ParsedSeedNode
+from dbt.contracts.graph.compiled import CompiledSeedNode, CompileResultNode
+from dbt.contracts.graph.parsed import ParsedSeedNode, ParsedMacro
 import dbt.exceptions
 import dbt.flags
 import dbt.tracking
@@ -14,6 +14,7 @@ import dbt.writer
 from dbt.adapters.factory import get_adapter
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered
+from dbt.config import RuntimeConfig
 from dbt.context.base import Var, HasCredentialsContext
 from dbt.contracts.graph.manifest import Manifest
 
@@ -300,9 +301,27 @@ class ExecuteMacroContext(ProviderContext):
         - 'this', 'pre_hooks', 'post_hooks', and 'sql' are missing
         - 'schema' does not use any 'model' information
      - they can't be configured with config() directives
+     - the search packge is the root project, unless the macro was executed by
+        fully-qualified name, in which case it's the chosen package.
     """
-    def __init__(self, model, config, manifest: Manifest, provider) -> None:
+    def __init__(
+        self,
+        model: ParsedMacro,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        provider,
+        search_package_name: Optional[str]
+    ) -> None:
         super().__init__(model, config, manifest, provider, None)
+        if search_package_name is None:
+            # if the search package name isn't specified, use the root project
+            self._search_package_name = config.project_name
+        else:
+            self._search_package_name = search_package_name
+
+    @property
+    def search_package_name(self):
+        return self._search_package_name
 
 
 class ModelContext(ProviderContext):
@@ -330,7 +349,11 @@ class ModelContext(ProviderContext):
 
 
 def generate_execute_macro(
-    model, config, manifest: Manifest, provider
+    model: ParsedMacro,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    provider: Provider,
+    package_name: Optional[str],
 ) -> Dict[str, Any]:
     """Internally, macros can be executed like nodes, with some restrictions:
 
@@ -339,12 +362,18 @@ def generate_execute_macro(
         - 'schema' does not use any 'model' information
      - they can't be configured with config() directives
     """
-    ctx = ExecuteMacroContext(model, config, manifest, provider)
+    ctx = ExecuteMacroContext(
+        model, config, manifest, provider, package_name
+    )
     return ctx.to_dict()
 
 
 def generate(
-    model, config, manifest: Manifest, provider, source_config=None
+    model: CompileResultNode,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    provider: Provider,
+    source_config=None,
 ) -> Dict[str, Any]:
     """
     Not meant to be called directly. Call with either:

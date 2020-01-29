@@ -1,6 +1,11 @@
-import dbt.context.common
+from typing import Optional, Dict, Any
+
 from dbt.context import runtime
+from dbt.context.common import generate_execute_macro
 from dbt.exceptions import raise_compiler_error
+from dbt.config import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import ParsedMacro
 
 
 class RefResolver(runtime.RefResolver):
@@ -23,7 +28,12 @@ class Provider(runtime.Provider):
     ref = RefResolver
 
 
-def generate(model, runtime_config, manifest):
-    return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, Provider()
+def generate(
+    model: ParsedMacro,
+    runtime_config: RuntimeConfig,
+    manifest: Manifest,
+    package_name: Optional[str]
+) -> Dict[str, Any]:
+    return generate_execute_macro(
+        model, runtime_config, manifest, Provider(), package_name
     )

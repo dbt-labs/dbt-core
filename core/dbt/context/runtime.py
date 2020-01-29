@@ -1,12 +1,17 @@
-from dbt.utils import get_materialization, add_ephemeral_model_prefix
+from typing import Dict, Any
+
 
 import dbt.clients.jinja
 import dbt.context.base
 import dbt.context.common
 import dbt.flags
-from dbt.parser.util import ParserUtils
 
+from dbt.config import RuntimeConfig
+from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.manifest import Manifest
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.parser.util import ParserUtils
+from dbt.utils import get_materialization, add_ephemeral_model_prefix
 
 
 class RefResolver(dbt.context.common.BaseResolver):
@@ -156,7 +161,9 @@ class Provider(dbt.context.common.Provider):
     source = SourceResolver
 
 
-def generate(model, runtime_config, manifest):
+def generate(
+    model: CompileResultNode, runtime_config: RuntimeConfig, manifest: Manifest
+) -> Dict[str, Any]:
     return dbt.context.common.generate(
         model, runtime_config, manifest, Provider(), None
     )

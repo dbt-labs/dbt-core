@@ -45,6 +45,10 @@ class UnparsedNode(UnparsedBaseNode, HasSQL):
         NodeType.RPCCall,
     ]})
 
+    @property
+    def search_name(self):
+        return self.name
+
 
 @dataclass
 class UnparsedRunHook(UnparsedNode):

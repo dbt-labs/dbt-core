@@ -3,9 +3,12 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from itertools import chain
 from typing import (
-    Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple
+    Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
+    TypeVar, Callable, Iterable, Generic
 )
+from typing_extensions import Protocol
 from uuid import UUID
 
 from hologram import JsonSchemaMixin
@@ -75,8 +78,8 @@ class FileHash(JsonSchemaMixin):
         return FileHash(name='path', checksum=path)
 
     def __eq__(self, other):
-        if not isinstance(other, type(self)):
-            return False
+        if not isinstance(other, FileHash):
+            return NotImplemented
 
         if self.name == 'none' or self.name != other.name:
             return False
@@ -230,12 +233,42 @@ class Specificity(enum.IntEnum):
 
 
 @dataclass
-class MaterializationCandidate:
-    specificity: Specificity
+class MacroCandidate:
     locality: Locality
     macro: ParsedMacro
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, MacroCandidate):
+            return NotImplemented
+        return self.locality == other.locality
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, MacroCandidate):
+            return NotImplemented
+        if self.locality < other.locality:
+            return True
+        if self.locality > other.locality:
+            return False
+        return False
+
+
+@dataclass
+class MaterializationCandidate(MacroCandidate):
+    specificity: Specificity
+
+    @classmethod
+    def from_macro(
+        cls, candidate: MacroCandidate, specificity: Specificity
+    ) -> 'MaterializationCandidate':
+        return cls(
+            locality=candidate.locality,
+            macro=candidate.macro,
+            specificity=specificity,
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, MaterializationCandidate):
+            return NotImplemented
         equal = (
             self.specificity == other.specificity and
             self.locality == other.locality
@@ -250,7 +283,9 @@ class MaterializationCandidate:
 
         return equal
 
-    def __lt__(self, other: 'MaterializationCandidate') -> bool:
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, MaterializationCandidate):
+            return NotImplemented
         if self.specificity < other.specificity:
             return True
         if self.specificity > other.specificity:
@@ -260,6 +295,67 @@ class MaterializationCandidate:
         if self.locality > other.locality:
             return False
         return False
+
+
+M = TypeVar('M', bound=MacroCandidate)
+
+
+class CandidateList(List[M]):
+    def last(self) -> Optional[ParsedMacro]:
+        if not self:
+            return None
+        self.sort()
+        return self[-1].macro
+
+
+def _get_locality(macro: ParsedMacro, root_project_name: str) -> Locality:
+    if macro.package_name == root_project_name:
+        return Locality.Root
+    elif macro.package_name in PACKAGES:
+        return Locality.Core
+    else:
+        return Locality.Imported
+
+
+class Searchable(Protocol):
+    resource_type: NodeType
+    package_name: str
+
+    @property
+    def search_name(self) -> str:
+        raise NotImplementedError('search_name not implemented')
+
+
+N = TypeVar('N', bound=Searchable)
+
+
+@dataclass
+class NameSearcher(Generic[N]):
+    name: str
+    package: Optional[str]
+    nodetypes: List[NodeType]
+
+    def _matches(self, model: N) -> bool:
+        """Return True if the model matches the given name, package, and type.
+
+        If package is None, any package is allowed.
+        nodetypes should be a container of NodeTypes that implements the 'in'
+        operator.
+        """
+        if model.resource_type not in self.nodetypes:
+            return False
+
+        if self.name != model.search_name:
+            return False
+
+        return self.package is None or self.package == model.package_name
+
+    def search(self, haystack: Iterable[N]) -> Optional[N]:
+        """Find an entry in the given iterable by name."""
+        for model in haystack:
+            if self._matches(model):
+                return model
+        return None
 
 
 @dataclass
@@ -320,108 +416,150 @@ class Manifest:
             },
         }
 
-    def find_disabled_by_name(self, name, package=None):
-        return dbt.utils.find_in_list_by_name(self.disabled, name, package,
-                                              NodeType.refable())
+    def find_disabled_by_name(
+        self, name: str, package: Optional[str] = None
+    ) -> Optional[ParsedNode]:
+        searcher: NameSearcher = NameSearcher(
+            name, package, NodeType.refable()
+        )
+        result = searcher.search(self.disabled)
+        if result is not None:
+            assert isinstance(result, ParsedNode)
+        return result
 
-    def _find_by_name(self, name, package, subgraph, nodetype):
-        """
-        Find a node by its given name in the appropriate sugraph. If package is
-        None, all pacakges will be searched.
-        nodetype should be a list of NodeTypes to accept.
-        """
-        search: Union[
-            MutableMapping[str, ParsedMacro],
-            MutableMapping[str, CompileResultNode],
-        ]
-        if subgraph == 'nodes':
-            search = self.nodes
-        elif subgraph == 'macros':
-            search = self.macros
-        else:
-            raise NotImplementedError(
-                'subgraph search for {} not implemented'.format(subgraph)
-            )
-        return dbt.utils.find_in_subgraph_by_name(
-            search,
-            name,
-            package,
-            nodetype)
+    def find_docs_by_name(
+        self, name: str, package: Optional[str] = None
+    ) -> Optional[ParsedDocumentation]:
+        searcher: NameSearcher = NameSearcher(
+            name, package, [NodeType.Documentation]
+        )
+        result = searcher.search(self.docs.values())
+        if result is not None:
+            assert isinstance(result, ParsedDocumentation)
+        return result
 
-    def find_docs_by_name(self, name, package=None):
-        for unique_id, doc in self.docs.items():
-            parts = unique_id.split('.')
-            if len(parts) != 2:
-                msg = "documentation names cannot contain '.' characters"
-                raise_compiler_error(msg, doc)
-
-            found_package, found_node = parts
-
-            if (name == found_node and package in {None, found_package}):
-                return doc
-        return None
-
-    def find_macro_by_name(self, name, package):
-        """Find a macro in the graph by its name and package name, or None for
-        any package.
-        """
-        return self._find_by_name(name, package, 'macros', [NodeType.Macro])
-
-    def find_refable_by_name(self, name, package):
+    def find_refable_by_name(
+        self, name: str, package: Optional[str]
+    ) -> Optional[CompileResultNode]:
         """Find any valid target for "ref()" in the graph by its name and
         package name, or None for any package.
         """
-        return self._find_by_name(name, package, 'nodes', NodeType.refable())
+        searcher: NameSearcher = NameSearcher(
+            name, package, NodeType.refable()
+        )
+        return searcher.search(self.nodes.values())
 
-    def find_source_by_name(self, source_name, table_name, package):
+    def find_source_by_name(
+        self, source_name: str, table_name: str, package: Optional[str]
+    ) -> Optional[ParsedSourceDefinition]:
         """Find any valid target for "source()" in the graph by its name and
         package name, or None for any package.
         """
-        name = '{}.{}'.format(source_name, table_name)
-        return self._find_by_name(name, package, 'nodes', [NodeType.Source])
 
-    def get_materialization_macro(
-        self, project_name: str, materialization_name: str, adapter_type: str
-    ):
-        adapter_macro_name, default_macro_name = [
-            dbt.utils.get_materialization_macro_name(
-                materialization_name=materialization_name,
-                adapter_type=atype,
-                with_prefix=False,
-            )
-            for atype in (adapter_type, None)
-        ]
+        name = f'{source_name}.{table_name}'
+        searcher: NameSearcher = NameSearcher(name, package, [NodeType.Source])
+        result = searcher.search(self.nodes.values())
+        if result is not None:
+            assert isinstance(result, ParsedSourceDefinition)
+        return result
 
-        candidates: List[MaterializationCandidate] = []
-
+    def _find_macros_by_name(
+        self,
+        name: str,
+        root_project_name: str,
+        filter: Optional[Callable[[MacroCandidate], bool]] = None
+    ) -> CandidateList:
+        """Find macros by their name.
+        """
+        candidates: CandidateList = CandidateList()
         for unique_id, macro in self.macros.items():
-            specificity: Specificity
-            locality: Locality
-            if macro.name == adapter_macro_name:
-                specificity = Specificity.Adapter
-            elif macro.name == default_macro_name:
-                specificity = Specificity.Default
-            else:
+            if macro.name != name:
                 continue
-
-            if macro.package_name == project_name:
-                locality = Locality.Root
-            elif macro.package_name in PACKAGES:
-                locality = Locality.Core
-            else:
-                locality = Locality.Imported
-
-            candidate = MaterializationCandidate(
-                specificity=specificity,
-                locality=locality,
+            candidate = MacroCandidate(
+                locality=_get_locality(macro, root_project_name),
                 macro=macro,
             )
-            candidates.append(candidate)
+            if filter is None or filter(candidate):
+                candidates.append(candidate)
 
-        if not candidates:
-            return None
-        candidates.sort()
-        return candidates[-1].macro
+        return candidates
+
+    def _materialization_candidates_for(
+        self, project_name: str,
+        materialization_name: str,
+        adapter_type: Optional[str],
+    ) -> CandidateList:
+
+        if adapter_type is None:
+            specificity = Specificity.Default
+        else:
+            specificity = Specificity.Adapter
+
+        full_name = dbt.utils.get_materialization_macro_name(
+            materialization_name=materialization_name,
+            adapter_type=adapter_type,
+            with_prefix=False,
+        )
+        return CandidateList(
+            MaterializationCandidate.from_macro(m, specificity)
+            for m in self._find_macros_by_name(full_name, project_name)
+        )
+
+    def find_macro_by_name(
+        self, name: str, root_project_name: str, package: Optional[str]
+    ) -> Optional[ParsedMacro]:
+        """Find a macro in the graph by its name and package name, or None for
+        any package. The root project name is used to determine priority:
+         - locally defined macros come first
+         - then imported macros
+         - then macros defined in the root project
+        """
+        filter: Optional[Callable[[MacroCandidate], bool]] = None
+        if package is not None:
+            def filter(candidate: MacroCandidate) -> bool:
+                return package == candidate.macro.package_name
+
+        candidates: CandidateList = self._find_macros_by_name(
+            name=name,
+            root_project_name=root_project_name,
+            filter=filter,
+        )
+
+        return candidates.last()
+
+    def find_generate_macro_by_name(
+        self, name: str, root_project_name: str
+    ) -> Optional[ParsedMacro]:
+        """
+        The `generate_X_name` macros are similar to regular ones, but ignore
+        imported packages.
+            - if there is a `name` macro in the root project, return it
+            - if that does not exist but there is a `name` macro in the 'dbt'
+                internal project (or a plugin), return that
+            - if neither of those exist (unit tests?), return None
+        """
+        def filter(candidate: MacroCandidate) -> bool:
+            return candidate.locality != Locality.Imported
+
+        candidates: CandidateList = self._find_macros_by_name(
+            name=name,
+            root_project_name=root_project_name,
+            # filter out imported packages
+            filter=filter,
+        )
+        return candidates.last()
+
+    def find_materialization_macro_by_name(
+        self, project_name: str, materialization_name: str, adapter_type: str
+    ) -> Optional[ParsedMacro]:
+        candidates: CandidateList = CandidateList(chain.from_iterable(
+            self._materialization_candidates_for(
+                project_name=project_name,
+                materialization_name=materialization_name,
+                adapter_type=atype,
+            ) for atype in (adapter_type, None)
+        ))
+        return candidates.last()
 
     def get_resource_fqns(self) -> Dict[str, Set[Tuple[str, ...]]]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
@@ -450,7 +588,7 @@ class Manifest:
         """
         # because we don't have any mapping from node _names_ to nodes, and we
         # only have the node name in the patch, we have to iterate over all the
-        # nodes looking for matching names. We could use _find_by_name if we
+        # nodes looking for matching names. We could use a NameSearcher if we
         # were ok with doing an O(n*m) search (one nodes scan per patch)
         for node in self.nodes.values():
             if node.resource_type == NodeType.Source:
