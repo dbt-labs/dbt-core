@@ -906,10 +906,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         from dbt.context.providers import generate_runtime_macro_context
 
         macro_context = generate_runtime_macro_context(
-            macro=macro,
-            config=self.config,
-            manifest=manifest,
-            package_name=project
+            macro=macro, config=self.config, manifest=manifest, package_name=project
         )
         macro_context.update(context_override)
 
