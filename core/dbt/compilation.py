@@ -10,7 +10,7 @@ import dbt.tracking
 from dbt.node_types import NodeType
 from dbt.linker import Linker
 
-import dbt.context.runtime
+from dbt.context.providers import generate_runtime_model
 import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
@@ -146,8 +146,9 @@ class Compiler:
         })
         compiled_node = _compiled_type_for(node).from_dict(data)
 
-        context = dbt.context.runtime.generate(
-            compiled_node, self.config, manifest)
+        context = generate_runtime_model(
+            compiled_node, self.config, manifest
+        )
         context.update(extra_context)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
@@ -253,13 +254,11 @@ def compile_node(adapter, config, node, manifest, extra_context, write=True):
         logger.debug('Writing injected SQL for node "{}"'.format(
             node.unique_id))
 
-        written_path = dbt.writer.write_node(
-            node,
+        node.build_path = node.write_node(
             config.target_path,
             'compiled',
-            node.injected_sql)
-
-        node.build_path = written_path
+            node.injected_sql
+        )
 
     return node
 

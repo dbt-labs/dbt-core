@@ -2,11 +2,11 @@ import os.path
 import os
 import shutil
 
-from dbt.task.base import ProjectOnlyTask
+from dbt.task.base import ConfiguredTask
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
-class CleanTask(ProjectOnlyTask):
+class CleanTask(ConfiguredTask):
 
     def __is_project_path(self, path):
         proj_path = os.path.abspath('.')

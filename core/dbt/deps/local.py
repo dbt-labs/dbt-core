@@ -38,13 +38,15 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
             project.project_root,
         )
 
-    def _fetch_metadata(self, project):
-        loaded = project.from_project_root(self.resolve_path(project), {})
+    def _fetch_metadata(self, project, renderer):
+        loaded = project.from_project_root(
+            self.resolve_path(project), renderer
+        )
         return ProjectPackageMetadata.from_project(loaded)
 
-    def install(self, project):
+    def install(self, project, renderer):
         src_path = self.resolve_path(project)
-        dest_path = self.get_installation_path(project)
+        dest_path = self.get_installation_path(project, renderer)
 
         can_create_symlink = system.supports_symlinks()
 

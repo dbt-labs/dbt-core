@@ -19,7 +19,7 @@ import dbt.flags as flags
 from dbt.adapters.factory import get_adapter, reset_adapters, register_adapter
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
-from dbt.context import common
+from dbt.context import providers
 from dbt.logger import GLOBAL_LOGGER as logger, log_manager
 
 
@@ -748,7 +748,7 @@ class DBTIntegrationTest(unittest.TestCase):
         """
         if name is None:
             name = '__test'
-        with patch.object(common, 'get_adapter', return_value=self.adapter):
+        with patch.object(providers, 'get_adapter', return_value=self.adapter):
             with self.adapter.connection_named(name):
                 conn = self.adapter.connections.get_thread_connection()
                 yield conn

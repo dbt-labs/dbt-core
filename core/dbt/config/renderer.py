@@ -1,5 +1,7 @@
+from typing import Dict, Any
+
 from dbt.clients.jinja import get_rendered
-from dbt.context.base import ConfigRenderContext
+
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
@@ -10,8 +12,8 @@ class ConfigRenderer:
     """A renderer provides configuration rendering for a given set of cli
     variables and a render type.
     """
-    def __init__(self, cli_vars):
-        self.context = ConfigRenderContext(cli_vars).to_dict()
+    def __init__(self, context: Dict[str, Any]):
+        self.context = context
 
     @staticmethod
     def _is_deferred_render(keypath):
@@ -102,6 +104,15 @@ class ConfigRenderer:
     def render_schema_source(self, as_parsed):
         try:
             return deep_map(self._render_schema_source_data, as_parsed)
+        except RecursionException:
+            raise DbtProfileError(
+                'Cycle detected: schema.yml input has a reference to itself',
+                project=as_parsed
+            )
+
+    def render_packages_data(self, as_parsed):
+        try:
+            return deep_map(self.render_value, as_parsed)
         except RecursionException:
             raise DbtProfileError(
                 'Cycle detected: schema.yml input has a reference to itself',

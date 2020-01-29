@@ -8,11 +8,12 @@ from typing import (
 
 from hologram import ValidationError
 
-from dbt.context.base import ConfigRenderContext
 
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.config.renderer import ConfigRenderer
+from dbt.config import RuntimeConfig, ConfigRenderer
+from dbt.context.docs import generate_parser_docs
+from dbt.context.target import generate_target_context
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
@@ -27,7 +28,6 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMacroUpdate, UnparsedAnalysisUpdate,
     UnparsedSourceTableDefinition, FreshnessThreshold,
 )
-from dbt.context.parser import docs
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException, CompilationException
@@ -89,12 +89,13 @@ class ParserRef:
 
 
 def collect_docrefs(
+    config: RuntimeConfig,
     target: UnparsedSchemaYaml,
     refs: ParserRef,
     column_name: Optional[str],
     *descriptions: str,
 ) -> None:
-    context = {'doc': docs(target, refs.docrefs, column_name)}
+    context = generate_parser_docs(config, target, refs.docrefs, column_name)
     for description in descriptions:
         get_rendered(description, context)
 
@@ -186,7 +187,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         builds the initial node to be parsed, but rendering is basically the
         same
         """
-        render_ctx = ConfigRenderContext(self.root_project.cli_vars).to_dict()
+        render_ctx = generate_target_context(
+            self.root_project, self.root_project.cli_vars
+        )
         builder = TestBuilder[Target](
             test=block.test,
             target=block.target,
@@ -361,7 +364,13 @@ class YamlDocsReader(Generic[Target, Parsed]):
             description = column.description
             data_type = column.data_type
             meta = column.meta
-            collect_docrefs(block.target, refs, column_name, description)
+            collect_docrefs(
+                self.root_project,
+                block.target,
+                refs,
+                column_name,
+                description,
+            )
 
             refs.add(column, description, data_type, meta)
         return refs
@@ -441,7 +450,9 @@ class YamlParser(Generic[Target, Parsed]):
             description = column.description
             data_type = column.data_type
             meta = column.meta
-            collect_docrefs(block.target, refs, column_name, description)
+            collect_docrefs(
+                self.root_project, block.target, refs, column_name, description
+            )
 
             refs.add(column, description, data_type, meta)
         return refs
@@ -472,7 +483,11 @@ class YamlParser(Generic[Target, Parsed]):
 class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._renderer = ConfigRenderer(self.root_project.cli_vars)
+        self._renderer = ConfigRenderer(
+            generate_target_context(
+                self.root_project, self.root_project.cli_vars
+            )
+        )
 
     def get_block(self, node: SourceTarget) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
@@ -518,7 +533,10 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         description = table.description or ''
         meta = table.meta or {}
         source_description = source.description or ''
-        collect_docrefs(source, refs, None, description, source_description)
+        collect_docrefs(
+            self.root_project, source, refs, None, description,
+            source_description
+        )
 
         loaded_at_field = table.loaded_at_field or source.loaded_at_field
 
@@ -566,7 +584,9 @@ class NonSourceParser(
         self, block: TargetBlock[NonSourceTarget], refs: ParserRef
     ) -> str:
         description = block.target.description
-        collect_docrefs(block.target, refs, None, description)
+        collect_docrefs(
+            self.root_project, block.target, refs, None, description
+        )
         return description
 
     @abstractmethod

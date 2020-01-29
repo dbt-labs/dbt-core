@@ -4,7 +4,9 @@ from unittest import mock
 import dbt.flags as flags
 from dbt.task.debug import DebugTask
 
+from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.config import ConfigRenderer
 from dbt.exceptions import ValidationException, DbtConfigError
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
@@ -248,6 +250,8 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
 
         self.psycopg2.connect.return_value = self.handle
         self.adapter = PostgresAdapter(self.config)
+        self.adapter.connections.query_header = MacroQueryStringSetter(self.config, mock.MagicMock(macros={}))
+
         self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
         self.mock_query_header_add = self.qh_patch.start()
         self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)

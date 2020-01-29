@@ -59,7 +59,7 @@ class SourceConfigTest(TestCase):
             'root': self.root_project_config,
             'snowplow': self.snowplow_project_config
         }
-        self.patcher = mock.patch('dbt.context.parser.get_adapter')
+        self.patcher = mock.patch('dbt.context.providers.get_adapter')
         self.factory = self.patcher.start()
 
     def tearDown(self):

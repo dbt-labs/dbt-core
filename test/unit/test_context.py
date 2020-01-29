@@ -2,7 +2,7 @@ import unittest
 from unittest import mock
 
 from dbt.contracts.graph.parsed import ParsedModelNode, NodeConfig, DependsOn
-from dbt.context import parser, runtime
+from dbt.context import providers
 from dbt.node_types import NodeType
 import dbt.exceptions
 from .mock_adapter import adapter_factory
@@ -44,36 +44,36 @@ class TestVar(unittest.TestCase):
         self.context = mock.MagicMock()
 
     def test_var_default_something(self):
-        var = runtime.Var(self.model, self.context, overrides={'foo': 'baz'})
+        var = providers.RuntimeVar(self.model, self.context, overrides={'foo': 'baz'})
         self.assertEqual(var('foo'), 'baz')
         self.assertEqual(var('foo', 'bar'), 'baz')
 
     def test_var_default_none(self):
-        var = runtime.Var(self.model, self.context, overrides={'foo': None})
+        var = providers.RuntimeVar(self.model, self.context, overrides={'foo': None})
         self.assertEqual(var('foo'), None)
         self.assertEqual(var('foo', 'bar'), None)
 
     def test_var_not_defined(self):
-        var = runtime.Var(self.model, self.context, overrides={})
+        var = providers.RuntimeVar(self.model, self.context, overrides={})
 
         self.assertEqual(var('foo', 'bar'), 'bar')
         with self.assertRaises(dbt.exceptions.CompilationException):
             var('foo')
 
     def test_parser_var_default_something(self):
-        var = parser.Var(self.model, self.context, overrides={'foo': 'baz'})
+        var = providers.ParseVar(self.model, self.context, overrides={'foo': 'baz'})
         self.assertEqual(var('foo'), 'baz')
         self.assertEqual(var('foo', 'bar'), 'baz')
 
     def test_parser_var_default_none(self):
-        var = parser.Var(self.model, self.context, overrides={'foo': None})
+        var = providers.ParseVar(self.model, self.context, overrides={'foo': None})
         self.assertEqual(var('foo'), None)
         self.assertEqual(var('foo', 'bar'), None)
 
     def test_parser_var_not_defined(self):
         # at parse-time, we should not raise if we encounter a missing var
         # that way disabled models don't get parse errors
-        var = parser.Var(self.model, self.context, overrides={})
+        var = providers.ParseVar(self.model, self.context, overrides={})
 
         self.assertEqual(var('foo', 'bar'), 'bar')
         self.assertEqual(var('foo'), None)
@@ -84,7 +84,7 @@ class TestParseWrapper(unittest.TestCase):
         self.mock_config = mock.MagicMock()
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
-        self.wrapper = parser.DatabaseWrapper(self.mock_adapter)
+        self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):
@@ -103,7 +103,7 @@ class TestRuntimeWrapper(unittest.TestCase):
         self.mock_config.quoting = {'database': True, 'schema': True, 'identifier': True}
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
-        self.wrapper = runtime.DatabaseWrapper(self.mock_adapter)
+        self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):

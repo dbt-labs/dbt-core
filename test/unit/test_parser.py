@@ -8,14 +8,15 @@ import dbt.flags
 import dbt.parser
 from dbt.exceptions import CompilationException
 from dbt.parser import (
-    ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils,
-    ParseResult, SnapshotParser, AnalysisParser
+    ModelParser, MacroParser, DataTestParser, SchemaParser, ParseResult,
+    SnapshotParser, AnalysisParser
 )
 from dbt.parser.schemas import (
     TestablePatchParser, SourceParser, AnalysisPatchParser, MacroPatchParser
 )
 from dbt.parser.search import FileBlock
 from dbt.parser.schema_test_builders import YamlBlock
+from dbt.parser.manifest import process_docs, process_sources, process_refs
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import (
@@ -89,15 +90,16 @@ class BaseParserTest(unittest.TestCase):
             'root': self.root_project_config,
             'snowplow': self.snowplow_project_config
         }
-        self.patcher = mock.patch('dbt.context.parser.get_adapter')
+        self.patcher = mock.patch('dbt.context.providers.get_adapter')
         self.factory = self.patcher.start()
-        self.patcher_cmn = mock.patch('dbt.context.common.get_adapter')
-        self.factory_cmn = self.patcher_cmn.start()
+
+        self.parser_patcher = mock.patch('dbt.parser.base.get_adapter')
+        self.factory_parser = self.parser_patcher.start()
 
         self.macro_manifest = Manifest.from_macros()
 
     def tearDown(self):
-        self.patcher_cmn.stop()
+        self.parser_patcher.stop()
         self.patcher.stop()
 
     def file_block_for(self, data: str, filename: str, searched: str):
@@ -682,8 +684,9 @@ class AnalysisParserTest(BaseParserTest):
         self.assertEqual(self.parser.results.files[path].nodes, ['analysis.snowplow.analysis_1'])
 
 
-class ParserUtilsTest(unittest.TestCase):
+class ProcessingTest(BaseParserTest):
     def setUp(self):
+        super().setUp()
         x_depends_on = mock.MagicMock()
         y_depends_on = mock.MagicMock()
         x_uid = 'model.project.x'
@@ -751,19 +754,15 @@ class ParserUtilsTest(unittest.TestCase):
             nodes=nodes, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
         )
 
-    def test_resolve_docs(self):
-        # no error. TODO: real test
-        result = ParserUtils.process_docs(self.manifest, 'project')
-        self.assertIs(result, self.manifest)
+    def test_process_docs(self):
+        process_docs(self.manifest, self.root_project_config)
         self.assertEqual(self.x_node.description, 'other_project: some docs')
         self.assertEqual(self.y_node.description, 'some docs')
 
-    def test_resolve_sources(self):
-        result = ParserUtils.process_sources(self.manifest, 'project')
-        self.assertIs(result, self.manifest)
+    def test_process_sources(self):
+        process_sources(self.manifest, 'project')
         self.x_node.depends_on.nodes.append.assert_called_once_with('source.thirdproject.src.tbl')
 
-    def test_resolve_refs(self):
-        result = ParserUtils.process_refs(self.manifest, 'project')
-        self.assertIs(result, self.manifest)
+    def test_process_refs(self):
+        process_refs(self.manifest, 'project')
         self.y_node.depends_on.nodes.append.assert_called_once_with('model.project.x')

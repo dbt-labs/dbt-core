@@ -212,10 +212,8 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
     return cls.from_dict(compiled.to_dict(), validate=False)
 
 
-# We allow either parsed or compiled nodes, or parsed sources, as some
-# 'compile()' calls in the runner actually just return the original parsed
-# node they were given.
-CompileResultNode = Union[
+# This is anything that can be in manifest.nodes and isn't a Source.
+NonSourceNode = Union[
     CompiledAnalysisNode,
     CompiledModelNode,
     CompiledHookNode,
@@ -229,6 +227,13 @@ CompileResultNode = Union[
     ParsedRPCNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
-    ParsedSourceDefinition,
     ParsedTestNode,
+]
+
+# We allow either parsed or compiled nodes, or parsed sources, as some
+# 'compile()' calls in the runner actually just return the original parsed
+# node they were given.
+CompileResultNode = Union[
+    NonSourceNode,
+    ParsedSourceDefinition,
 ]

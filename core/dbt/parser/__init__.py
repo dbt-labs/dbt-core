@@ -9,9 +9,8 @@ from .results import ParseResult  # noqa
 from .schemas import SchemaParser  # noqa
 from .seeds import SeedParser  # noqa
 from .snapshots import SnapshotParser  # noqa
-from .util import ParserUtils  # noqa
 
 from . import (  # noqa
     analysis, base, data_test, docs, hooks, macros, models, results, schemas,
-    snapshots, util
+    snapshots
 )

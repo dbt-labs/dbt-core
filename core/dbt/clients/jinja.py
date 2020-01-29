@@ -4,7 +4,7 @@ import os
 import tempfile
 from contextlib import contextmanager
 from typing import (
-    List, Union, Set, Optional, Dict, Any, Callable, Iterator, Type
+    List, Union, Set, Optional, Dict, Any, Callable, Iterator, Type, NoReturn
 )
 
 import jinja2
@@ -374,7 +374,7 @@ def get_rendered(string, ctx, node=None,
     return render_template(template, ctx, node)
 
 
-def undefined_error(msg):
+def undefined_error(msg) -> NoReturn:
     raise jinja2.exceptions.UndefinedError(msg)
 
 

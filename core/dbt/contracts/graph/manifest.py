@@ -17,7 +17,7 @@ from dbt.contracts.graph.parsed import (
     ParsedNode, ParsedMacro, ParsedDocumentation, ParsedNodePatch,
     ParsedMacroPatch, ParsedSourceDefinition
 )
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, InternalException, raise_compiler_error,
@@ -363,6 +363,11 @@ class NameSearcher(Generic[N]):
 
 
 @dataclass
+class Disabled:
+    target: ParsedNode
+
+
+@dataclass
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
@@ -444,14 +449,17 @@ class Manifest:
 
     def find_refable_by_name(
         self, name: str, package: Optional[str]
-    ) -> Optional[CompileResultNode]:
+    ) -> Optional[NonSourceNode]:
         """Find any valid target for "ref()" in the graph by its name and
         package name, or None for any package.
         """
         searcher: NameSearcher = NameSearcher(
             name, package, NodeType.refable()
         )
-        return searcher.search(self.nodes.values())
+        result = searcher.search(self.nodes.values())
+        if result is not None:
+            assert not isinstance(result, ParsedSourceDefinition)
+        return result
 
     def find_source_by_name(
         self, source_name: str, table_name: str, package: Optional[str]
@@ -726,6 +734,93 @@ class Manifest:
                 'Expected node {} not found in manifest'.format(unique_id)
             )
         return self.nodes[unique_id]
+
+    def resolve_ref(
+        self,
+        target_model_name: str,
+        target_model_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> Optional[Union[NonSourceNode, Disabled]]:
+        if target_model_package is not None:
+            return self.find_refable_by_name(
+                target_model_name,
+                target_model_package)
+
+        target_model = None
+        disabled_target = None
+
+        # first pass: look for models in the current_project
+        # second pass: look for models in the node's package
+        # final pass: look for models in any package
+        # todo: exclude the packages we have already searched. overriding
+        # a package model in another package doesn't necessarily work atm
+        candidates = [current_project, node_package, None]
+        for candidate in candidates:
+            target_model = self.find_refable_by_name(
+                target_model_name,
+                candidate)
+
+            if target_model is not None and target_model.config.enabled:
+                return target_model
+
+            # it's possible that the node is disabled
+            if disabled_target is None:
+                disabled_target = self.find_disabled_by_name(
+                    target_model_name, candidate
+                )
+
+        if disabled_target is not None:
+            return Disabled(disabled_target)
+        return None
+
+    def resolve_source(
+        self,
+        target_source_name: str,
+        target_table_name: str,
+        current_project: str,
+        node_package: str
+    ) -> Optional[ParsedSourceDefinition]:
+        candidate_targets = [current_project, node_package, None]
+        target_source = None
+        for candidate in candidate_targets:
+            target_source = self.find_source_by_name(
+                target_source_name,
+                target_table_name,
+                candidate
+            )
+            if target_source is not None:
+                return target_source
+
+        return None
+
+    def resolve_doc(
+        self,
+        name: str,
+        package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> Optional[ParsedDocumentation]:
+        """Resolve the given documentation. This follows the same algorithm as
+        resolve_ref except the is_enabled checks are unnecessary as docs are
+        always enabled.
+        """
+        if package is not None:
+            return self.find_docs_by_name(
+                name, package
+            )
+
+        candidate_targets = [
+            current_project,
+            node_package,
+            None,
+        ]
+        target_doc = None
+        for candidate in candidate_targets:
+            target_doc = self.find_docs_by_name(name, candidate)
+            if target_doc is not None:
+                break
+        return target_doc
 
 
 @dataclass

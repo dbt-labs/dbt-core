@@ -14,8 +14,9 @@ import dbt.flags
 from dbt.contracts.connection import (
     Connection, Identifier, ConnectionState, AdapterRequiredConfig, LazyHandle
 )
+from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
-    QueryStringSetter, MacroQueryStringSetter,
+    MacroQueryStringSetter,
 )
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -39,13 +40,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock: RLock = dbt.flags.MP_CONTEXT.RLock()
-        self.query_header = QueryStringSetter(self.profile)
+        self.query_header: Optional[MacroQueryStringSetter] = None
 
-    def set_query_header(self, manifest=None) -> None:
-        if manifest is not None:
-            self.query_header = MacroQueryStringSetter(self.profile, manifest)
-        else:
-            self.query_header = QueryStringSetter(self.profile)
+    def set_query_header(self, manifest: Manifest) -> None:
+        self.query_header = MacroQueryStringSetter(self.profile, manifest)
 
     @staticmethod
     def get_thread_identifier() -> Hashable:
@@ -285,6 +283,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             self.commit()
 
     def _add_query_comment(self, sql: str) -> str:
+        if self.query_header is None:
+            return sql
         return self.query_header.add(sql)
 
     @abc.abstractmethod

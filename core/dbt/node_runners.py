@@ -18,9 +18,8 @@ from dbt.contracts.results import (
 )
 from dbt.compilation import compile_node
 
-import dbt.context.runtime
+from dbt.context.providers import generate_runtime_model
 import dbt.exceptions
-import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
@@ -43,9 +42,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "run_status": run_model_result.status,
         "run_skipped": run_model_result.skip,
         "run_error": None,
-        "model_materialization": dbt.utils.get_materialization(
-            run_model_result.node
-        ),
+        "model_materialization": run_model_result.node.get_materialization(),
         "model_id": dbt.utils.get_hash(run_model_result.node),
         "hashed_contents": dbt.utils.get_hashed_contents(
             run_model_result.node
@@ -429,8 +426,9 @@ class ModelRunner(CompileRunner):
         raise CompilationException(msg, node=model)
 
     def execute(self, model, manifest):
-        context = dbt.context.runtime.generate(
-            model, self.config, manifest)
+        context = generate_runtime_model(
+            model, self.config, manifest
+        )
 
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name,

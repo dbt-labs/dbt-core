@@ -4,8 +4,8 @@ from unittest import mock
 
 import dbt.flags as flags
 
-import dbt.parser.manifest
 from dbt.adapters.snowflake import SnowflakeAdapter
+from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
 from snowflake import connector as snowflake_connector
@@ -60,6 +60,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
+
+        self.adapter.connections.query_header = MacroQueryStringSetter(self.config, mock.MagicMock(macros={}))
 
         self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
         self.mock_query_header_add = self.qh_patch.start()

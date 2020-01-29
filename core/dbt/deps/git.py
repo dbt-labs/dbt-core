@@ -70,7 +70,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             raise
         return os.path.join(get_downloads_path(), dir_)
 
-    def _fetch_metadata(self, project) -> ProjectPackageMetadata:
+    def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
         path = self._checkout()
         if self.revision == 'master' and self.warn_unpinned:
             warn_or_error(
@@ -79,11 +79,11 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
                 .format(self.git, PIN_PACKAGE_URL),
                 log_fmt=printer.yellow('WARNING: {}')
             )
-        loaded = Project.from_project_root(path, {})
+        loaded = Project.from_project_root(path, renderer)
         return ProjectPackageMetadata.from_project(loaded)
 
-    def install(self, project):
-        dest_path = self.get_installation_path(project)
+    def install(self, project, renderer):
+        dest_path = self.get_installation_path(project, renderer)
         if os.path.exists(dest_path):
             if system.path_is_symlink(dest_path):
                 system.remove_file(dest_path)

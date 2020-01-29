@@ -20,7 +20,6 @@ from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
 from dbt.ui import printer
 from dbt.utils import deep_map
-from dbt.utils import parse_cli_vars
 from dbt.source_config import SourceConfig
 
 from dbt.contracts.graph.manifest import ManifestMetadata
@@ -164,6 +163,37 @@ def value_or(value: Optional[T], default: T) -> T:
         return default
     else:
         return value
+
+
+def _raw_project_from(project_root: str) -> Dict[str, Any]:
+
+    project_root = os.path.normpath(project_root)
+    project_yaml_filepath = os.path.join(project_root, 'dbt_project.yml')
+
+    # get the project.yml contents
+    if not path_exists(project_yaml_filepath):
+        raise DbtProjectError(
+            'no dbt_project.yml found at expected path {}'
+            .format(project_yaml_filepath)
+        )
+
+    project_dict = _load_yaml(project_yaml_filepath)
+    return project_dict
+
+
+@dataclass
+class PartialProject:
+    profile_name: Optional[str]
+    project_name: Optional[str]
+    project_root: str
+    project_dict: Dict[str, Any]
+
+    def render(self, renderer):
+        return Project.render_from_dict(
+            self.project_root,
+            self.project_dict,
+            renderer,
+        )
 
 
 @dataclass
@@ -401,42 +431,41 @@ class Project:
             raise DbtProjectError(validator_error_message(e)) from e
 
     @classmethod
-    def from_project_root(cls, project_root, cli_vars):
-        """Create a project from a root directory. Reads in dbt_project.yml and
-        packages.yml, if it exists.
-
-        :param project_root str: The path to the project root to load.
-        :raises DbtProjectError: If the project is missing or invalid, or if
-            the packages file exists and is invalid.
-        :returns Project: The project, with defaults populated.
-        """
-        project_root = os.path.normpath(project_root)
-        project_yaml_filepath = os.path.join(project_root, 'dbt_project.yml')
-
-        # get the project.yml contents
-        if not path_exists(project_yaml_filepath):
-            raise DbtProjectError(
-                'no dbt_project.yml found at expected path {}'
-                .format(project_yaml_filepath)
-            )
-
-        if isinstance(cli_vars, str):
-            cli_vars = parse_cli_vars(cli_vars)
-        renderer = ConfigRenderer(cli_vars)
-
-        project_dict = _load_yaml(project_yaml_filepath)
+    def render_from_dict(
+        cls,
+        project_root: str,
+        project_dict: Dict[str, Any],
+        renderer: ConfigRenderer,
+    ) -> 'Project':
         rendered_project = renderer.render_project(project_dict)
         rendered_project['project-root'] = project_root
         packages_dict = package_data_from_root(project_root)
-        return cls.from_project_config(rendered_project, packages_dict)
+        rendered_packages = renderer.render_packages_data(packages_dict)
+        return cls.from_project_config(rendered_project, rendered_packages)
 
     @classmethod
-    def from_current_directory(cls, cli_vars):
-        return cls.from_project_root(os.getcwd(), cli_vars)
+    def partial_load(
+        cls, project_root: str
+    ) -> PartialProject:
+        project_root = os.path.normpath(project_root)
+        project_dict = _raw_project_from(project_root)
+
+        project_name = project_dict.get('name')
+        profile_name = project_dict.get('profile')
+
+        return PartialProject(
+            profile_name=profile_name,
+            project_name=project_name,
+            project_root=project_root,
+            project_dict=project_dict,
+        )
 
     @classmethod
-    def from_args(cls, args):
-        return cls.from_current_directory(getattr(args, 'vars', '{}'))
+    def from_project_root(
+        cls, project_root: str, renderer: ConfigRenderer
+    ) -> 'Project':
+        partial = cls.partial_load(project_root)
+        return partial.render(renderer)
 
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
