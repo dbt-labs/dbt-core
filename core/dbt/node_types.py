@@ -20,7 +20,7 @@ class NodeType(StrEnum):
     Metric = 'metric'
 
     @classmethod
-    def executable(cls) -> List['NodeType']:
+    def executable(cls) -> List["NodeType"]:
         return [
             cls.Model,
             cls.Test,
@@ -34,7 +34,7 @@ class NodeType(StrEnum):
         ]
 
     @classmethod
-    def refable(cls) -> List['NodeType']:
+    def refable(cls) -> List["NodeType"]:
         return [
             cls.Model,
             cls.Seed,

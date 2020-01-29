@@ -889,9 +889,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         if manifest is None:
             manifest = self._macro_manifest
 
-        macro = manifest.find_macro_by_name(
-            macro_name, self.config.project_name, project
-        )
+        macro = manifest.find_macro_by_name(macro_name, self.config.project_name, project)
         if macro is None:
             if project is None:
                 package_name = 'any package'

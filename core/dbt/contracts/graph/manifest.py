@@ -4,7 +4,7 @@ from itertools import chain, islice
 from mashumaro import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
-    Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
+    Dict,
     TypeVar, Callable, Generic, cast, AbstractSet, ClassVar
 )
 from typing_extensions import Protocol
@@ -346,7 +346,7 @@ class MaterializationCandidate(MacroCandidate):
     @classmethod
     def from_macro(
         cls, candidate: MacroCandidate, specificity: Specificity
-    ) -> 'MaterializationCandidate':
+    ) -> "MaterializationCandidate":
         return cls(
             locality=candidate.locality,
             macro=candidate.macro,
@@ -381,7 +381,7 @@ class MaterializationCandidate(MacroCandidate):
         return False
 
 
-M = TypeVar('M', bound=MacroCandidate)
+M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
@@ -409,7 +409,7 @@ class Searchable(Protocol):
 
     @property
     def search_name(self) -> str:
-        raise NotImplementedError('search_name not implemented')
+        raise NotImplementedError("search_name not implemented")
 
 
 D = TypeVar('D')
@@ -672,7 +672,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return disabled_by_file_id
 
     def _materialization_candidates_for(
-        self, project_name: str,
+        self,
+        project_name: str,
         materialization_name: str,
         adapter_type: Optional[str],
     ) -> CandidateList:
@@ -695,13 +696,16 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def find_materialization_macro_by_name(
         self, project_name: str, materialization_name: str, adapter_type: str
     ) -> Optional[ParsedMacro]:
-        candidates: CandidateList = CandidateList(chain.from_iterable(
-            self._materialization_candidates_for(
-                project_name=project_name,
-                materialization_name=materialization_name,
-                adapter_type=atype,
-            ) for atype in (adapter_type, None)
-        ))
+        candidates: CandidateList = CandidateList(
+            chain.from_iterable(
+                self._materialization_candidates_for(
+                    project_name=project_name,
+                    materialization_name=materialization_name,
+                    adapter_type=atype,
+                )
+                for atype in (adapter_type, None)
+            )
+        )
         return candidates.last()
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:

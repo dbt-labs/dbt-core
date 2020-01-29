@@ -759,7 +759,7 @@ class ParsedSourceDefinition(
 
     @property
     def search_name(self):
-        return f'{self.source_name}.{self.name}'
+        return f"{self.source_name}.{self.name}"
 
 
 @dataclass
