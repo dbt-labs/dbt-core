@@ -59,6 +59,11 @@ Check the requirements for the '{package}' package, or run dbt again with \
 --no-version-check
 """
 
+MALFORMED_PACKAGE_ERROR = """\
+packages.yml is malformed, please make sure that it matches 
+https://docs.getdbt.com/docs/package-management#section-how-do-i-add-a-package-to-my-project
+"""
+
 
 def _list_if_none(value):
     if value is None:
@@ -130,7 +135,7 @@ def package_config_from_data(packages_data):
         packages = PackageConfig.from_dict(packages_data)
     except ValidationError as e:
         raise DbtProjectError(
-            'Invalid package config: {}'.format(validator_error_message(e))
+            MALFORMED_PACKAGE_ERROR
         ) from e
     return packages
 
