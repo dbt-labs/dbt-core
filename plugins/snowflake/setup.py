@@ -44,6 +44,8 @@ setup(
         'azure-storage-blob~=2.1',
         'azure-storage-common~=2.1',
         'urllib3<1.25.0',
+        # this seems sufficiently broad
+        'cryptography>=2,<3',
     ],
     zip_safe=False,
     classifiers=[

@@ -314,6 +314,25 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 private_key=None, application='dbt')
         ])
 
+    def test_authenticator_oauth_authentication(self):
+        self.config.credentials = self.config.credentials.replace(
+            authenticator='oauth',
+            token='my-oauth-token',
+        )
+        self.adapter = SnowflakeAdapter(self.config)
+        conn = self.adapter.connections.set_connection_name(name='new_connection_with_new_config')
+
+        self.snowflake.assert_not_called()
+        conn.handle
+        self.snowflake.assert_has_calls([
+            mock.call(
+                account='test_account', autocommit=False,
+                client_session_keep_alive=False, database='test_database',
+                role=None, schema='public', user='test_user',
+                warehouse='test_warehouse', authenticator='oauth', token='my-oauth-token',
+                private_key=None, application='dbt')
+        ])
+
     @mock.patch('dbt.adapters.snowflake.SnowflakeCredentials._get_private_key', return_value='test_key')
     def test_authenticator_private_key_authentication(self, mock_get_private_key):
         self.config.credentials = self.config.credentials.replace(

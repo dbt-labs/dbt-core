@@ -1,21 +1,20 @@
-import re
-from io import StringIO
-from contextlib import contextmanager
 import datetime
 import pytz
+import re
+from contextlib import contextmanager
+from dataclasses import dataclass
+from io import StringIO
+from typing import Optional
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 import snowflake.connector
 import snowflake.connector.errors
 
 import dbt.exceptions
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
-
-from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -28,6 +27,7 @@ class SnowflakeCredentials(Credentials):
     authenticator: Optional[str]
     private_key_path: Optional[str]
     private_key_passphrase: Optional[str]
+    token: Optional[str]
     client_session_keep_alive: bool = False
 
     @property
@@ -46,6 +46,8 @@ class SnowflakeCredentials(Credentials):
             result['password'] = self.password
         if self.authenticator:
             result['authenticator'] = self.authenticator
+            if self.authenticator == 'oauth':
+                result['token'] = self.token
         result['private_key'] = self._get_private_key()
         return result
 
