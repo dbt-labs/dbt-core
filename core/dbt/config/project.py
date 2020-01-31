@@ -106,9 +106,7 @@ def package_config_from_data(packages_data: Dict[str, Any]):
         PackageConfig.validate(packages_data)
         packages = PackageConfig.from_dict(packages_data)
     except ValidationError as e:
-        raise DbtProjectError(
-            MALFORMED_PACKAGE_ERROR.format(error=str(e.message))
-        ) from e
+        raise DbtProjectError(MALFORMED_PACKAGE_ERROR.format(error=str(e.message))) from e
     return packages
 
 
