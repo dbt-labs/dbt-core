@@ -2,7 +2,9 @@ import itertools
 import os
 
 from abc import abstractmethod
-from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar
+from typing import (
+    Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
+)
 
 from hologram import ValidationError
 
@@ -18,10 +20,12 @@ from dbt.contracts.graph.parsed import (
     ColumnInfo,
     Docref,
     ParsedTestNode,
+    ParsedMacroPatch,
 )
 from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition, UnparsedNodeUpdate, UnparsedColumn,
-    UnparsedSourceTableDefinition, FreshnessThreshold
+    UnparsedMacroUpdate, UnparsedAnalysisUpdate,
+    UnparsedSourceTableDefinition, FreshnessThreshold,
 )
 from dbt.context.parser import docs
 from dbt.exceptions import (
@@ -32,13 +36,18 @@ from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
 from dbt.parser.schema_test_builders import (
-    TestBuilder, SourceTarget, NodeTarget, Target,
-    SchemaTestBlock, TargetBlock, YamlBlock,
+    TestBuilder, SourceTarget, Target, SchemaTestBlock, TargetBlock, YamlBlock,
+    TestBlock,
 )
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
-UnparsedSchemaYaml = Union[UnparsedSourceDefinition, UnparsedNodeUpdate]
+UnparsedSchemaYaml = Union[
+    UnparsedSourceDefinition,
+    UnparsedNodeUpdate,
+    UnparsedAnalysisUpdate,
+    UnparsedMacroUpdate,
+]
 
 TestDef = Union[str, Dict[str, Any]]
 
@@ -104,7 +113,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         - read_yaml_{models,sources}: read in yaml as a dictionary, then
             validate it against the basic structures required so we can start
             parsing (NodeTarget, SourceTarget)
-            - these return potentially many Targets per yaml block, since earch
+            - these return potentially many Targets per yaml block, since each
               source can have multiple tables
         - parse_target_{model,source}: Read in the underlying target, parse and
             return a list of all its tests (model and column tests), collect
@@ -163,17 +172,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             )
         return None
 
-    def parse_column(
-        self, block: TargetBlock, column: UnparsedColumn, refs: ParserRef
+    def parse_column_tests(
+        self, block: TestBlock, column: UnparsedColumn
     ) -> None:
-        column_name = column.name
-        description = column.description
-        data_type = column.data_type
-        meta = column.meta
-        collect_docrefs(block.target, refs, column_name, description)
-
-        refs.add(column, description, data_type, meta)
-
         if not column.tests:
             return
 
@@ -235,11 +236,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
 
     def parse_test(
         self,
-        target_block: TargetBlock,
+        target_block: TestBlock,
         test: TestDef,
         column: Optional[UnparsedColumn],
     ) -> None:
-
         if isinstance(test, str):
             test = {test: {}}
 
@@ -250,7 +250,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             column_name = column.name
             column_tags = column.tags
 
-        block = SchemaTestBlock.from_target_block(
+        block = SchemaTestBlock.from_test_block(
             src=target_block,
             test=test,
             column_name=column_name,
@@ -267,14 +267,12 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             )
             raise CompilationException(msg) from exc
 
-    def parse_tests(self, block: TargetBlock) -> ParserRef:
-        refs = ParserRef()
+    def parse_tests(self, block: TestBlock) -> None:
         for column in block.columns:
-            self.parse_column(block, column, refs)
+            self.parse_column_tests(block, column)
 
         for test in block.tests:
             self.parse_test(block, test, None)
-        return refs
 
     def parse_file(self, block: FileBlock) -> None:
         dct = self._yaml_from_file(block.file)
@@ -285,17 +283,113 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
 
             self._parse_format_version(yaml_block)
 
-            parser: YamlParser
+            parser: YamlDocsReader
             for key in NodeType.documentable():
+                plural = key.pluralize()
                 if key == NodeType.Source:
-                    parser = SourceParser(self, yaml_block, key.pluralize())
-                    parser.parse()
+                    parser = SourceParser(self, yaml_block, plural)
+                elif key == NodeType.Macro:
+                    parser = MacroPatchParser(self, yaml_block, plural)
+                elif key == NodeType.Analysis:
+                    parser = AnalysisPatchParser(self, yaml_block, plural)
                 else:
-                    parser = NodeParser(self, yaml_block, key.pluralize())
-                    parser.parse()
+                    parser = TestablePatchParser(self, yaml_block, plural)
+                for test_block in parser.parse():
+                    self.parse_tests(test_block)
 
 
-Parsed = TypeVar('Parsed', ParsedSourceDefinition, ParsedNodePatch)
+Parsed = TypeVar(
+    'Parsed',
+    ParsedSourceDefinition, ParsedNodePatch, ParsedMacroPatch
+)
+NodeTarget = TypeVar(
+    'NodeTarget',
+    UnparsedNodeUpdate, UnparsedAnalysisUpdate
+)
+NonSourceTarget = TypeVar(
+    'NonSourceTarget',
+    UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedMacroUpdate
+)
+
+
+class YamlDocsReader(Generic[Target, Parsed]):
+    def __init__(
+        self, schema_parser: SchemaParser, yaml: YamlBlock, key: str
+    ) -> None:
+        self.schema_parser = schema_parser
+        self.key = key
+        self.yaml = yaml
+
+    @property
+    def results(self):
+        return self.schema_parser.results
+
+    @property
+    def project(self):
+        return self.schema_parser.project
+
+    @property
+    def default_database(self):
+        return self.schema_parser.default_database
+
+    @property
+    def root_project(self):
+        return self.schema_parser.root_project
+
+    def get_key_dicts(self) -> Iterable[Dict[str, Any]]:
+        data = self.yaml.data.get(self.key, [])
+        if not isinstance(data, list):
+            raise CompilationException(
+                '{} must be a list, got {} instead: ({})'
+                .format(self.key, type(data), _trimmed(str(data)))
+            )
+        path = self.yaml.path.original_file_path
+
+        for entry in data:
+            if coerce_dict_str(entry) is not None:
+                yield entry
+            else:
+                msg = error_context(
+                    path, self.key, data, 'expected a dict with string keys'
+                )
+                raise CompilationException(msg)
+
+    def parse_docs(self, block: TargetBlock) -> ParserRef:
+        refs = ParserRef()
+        for column in block.columns:
+            column_name = column.name
+            description = column.description
+            data_type = column.data_type
+            meta = column.meta
+            collect_docrefs(block.target, refs, column_name, description)
+
+            refs.add(column, description, data_type, meta)
+        return refs
+
+    @abstractmethod
+    def get_unparsed_target(self) -> Iterable[Target]:
+        raise NotImplementedError('get_unparsed_target is abstract')
+
+    @abstractmethod
+    def get_block(self, node: Target) -> TargetBlock:
+        raise NotImplementedError('get_block is abstract')
+
+    @abstractmethod
+    def parse_patch(
+        self, block: TargetBlock[Target], refs: ParserRef
+    ) -> None:
+        raise NotImplementedError('parse_patch is abstract')
+
+    def parse(self) -> List[TestBlock]:
+        node: Target
+        test_blocks: List[TestBlock] = []
+        for node in self.get_unparsed_target():
+            node_block = self.get_block(node)
+            if isinstance(node_block, TestBlock):
+                test_blocks.append(node_block)
+            refs = self.parse_docs(node_block)
+            self.parse_patch(node_block, refs)
+        return test_blocks
 
 
 class YamlParser(Generic[Target, Parsed]):
@@ -340,28 +434,48 @@ class YamlParser(Generic[Target, Parsed]):
                 )
                 raise CompilationException(msg)
 
+    def parse_docs(self, block: TargetBlock) -> ParserRef:
+        refs = ParserRef()
+        for column in block.columns:
+            column_name = column.name
+            description = column.description
+            data_type = column.data_type
+            meta = column.meta
+            collect_docrefs(block.target, refs, column_name, description)
+
+            refs.add(column, description, data_type, meta)
+        return refs
+
     def parse(self):
         node: Target
         for node in self.get_unparsed_target():
             node_block = TargetBlock.from_yaml_block(self.yaml, node)
-            refs = self.schema_parser.parse_tests(node_block)
-            self.parse_with_refs(node_block, refs)
+            refs = self.parse_docs(node_block)
+            self.parse_tests(node_block)
+            self.parse_patch(node_block, refs)
+
+    def parse_tests(self, target: TargetBlock[Target]) -> None:
+        # some yaml parsers just don't have tests (macros, analyses)
+        pass
 
     @abstractmethod
     def get_unparsed_target(self) -> Iterable[Target]:
         raise NotImplementedError('get_unparsed_target is abstract')
 
     @abstractmethod
-    def parse_with_refs(
+    def parse_patch(
         self, block: TargetBlock[Target], refs: ParserRef
     ) -> None:
-        raise NotImplementedError('parse_with_refs is abstract')
+        raise NotImplementedError('parse_patch is abstract')
 
 
-class SourceParser(YamlParser[SourceTarget, ParsedSourceDefinition]):
+class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._renderer = ConfigRenderer(self.root_project.cli_vars)
+
+    def get_block(self, node: SourceTarget) -> TestBlock:
+        return TestBlock.from_yaml_block(self.yaml, node)
 
     def get_unparsed_target(self) -> Iterable[SourceTarget]:
         path = self.yaml.path.original_file_path
@@ -393,7 +507,7 @@ class SourceParser(YamlParser[SourceTarget, ParsedSourceDefinition]):
         else:
             return None
 
-    def parse_with_refs(
+    def parse_patch(
         self, block: TargetBlock[SourceTarget], refs: ParserRef
     ) -> None:
         source = block.target.source
@@ -445,30 +559,46 @@ class SourceParser(YamlParser[SourceTarget, ParsedSourceDefinition]):
         self.results.add_source(self.yaml.file, result)
 
 
-class NodeParser(YamlParser[NodeTarget, ParsedNodePatch]):
-    def get_unparsed_target(self) -> Iterable[NodeTarget]:
+class NonSourceParser(
+    YamlDocsReader[NonSourceTarget, Parsed], Generic[NonSourceTarget, Parsed]
+):
+    def collect_docrefs(
+        self, block: TargetBlock[NonSourceTarget], refs: ParserRef
+    ) -> str:
+        description = block.target.description
+        collect_docrefs(block.target, refs, None, description)
+        return description
+
+    @abstractmethod
+    def _target_type(self) -> Type[NonSourceTarget]:
+        raise NotImplementedError('_unsafe_from_dict not implemented')
+
+    def get_unparsed_target(self) -> Iterable[NonSourceTarget]:
         path = self.yaml.path.original_file_path
 
         for data in self.get_key_dicts():
             data.update({
                 'original_file_path': path,
                 'yaml_key': self.key,
-                'package_name': self.schema_parser.project.project_name,
+                'package_name': self.project.project_name,
             })
             try:
-                model = UnparsedNodeUpdate.from_dict(data)
+                model = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
                 raise CompilationException(msg) from exc
             else:
                 yield model
 
-    def parse_with_refs(
-        self, block: TargetBlock[UnparsedNodeUpdate], refs: ParserRef
-    ) -> None:
-        description = block.target.description
-        collect_docrefs(block.target, refs, None, description)
 
+class NodePatchParser(
+    NonSourceParser[NodeTarget, ParsedNodePatch],
+    Generic[NodeTarget]
+):
+    def parse_patch(
+        self, block: TargetBlock[NodeTarget], refs: ParserRef
+    ) -> None:
+        description = self.collect_docrefs(block, refs)
         result = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -480,3 +610,43 @@ class NodeParser(YamlParser[NodeTarget, ParsedNodePatch]):
             meta=block.target.meta,
         )
         self.results.add_patch(self.yaml.file, result)
+
+
+class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
+    def get_block(self, node: UnparsedNodeUpdate) -> TestBlock:
+        return TestBlock.from_yaml_block(self.yaml, node)
+
+    def _target_type(self) -> Type[UnparsedNodeUpdate]:
+        return UnparsedNodeUpdate
+
+
+class AnalysisPatchParser(NodePatchParser[UnparsedAnalysisUpdate]):
+    def get_block(self, node: UnparsedAnalysisUpdate) -> TargetBlock:
+        return TargetBlock.from_yaml_block(self.yaml, node)
+
+    def _target_type(self) -> Type[UnparsedAnalysisUpdate]:
+        return UnparsedAnalysisUpdate
+
+
+class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
+    def get_block(self, node: UnparsedMacroUpdate) -> TargetBlock:
+        return TargetBlock.from_yaml_block(self.yaml, node)
+
+    def _target_type(self) -> Type[UnparsedMacroUpdate]:
+        return UnparsedMacroUpdate
+
+    def parse_patch(
+        self, block: TargetBlock[UnparsedMacroUpdate], refs: ParserRef
+    ) -> None:
+        description = self.collect_docrefs(block, refs)
+
+        result = ParsedMacroPatch(
+            name=block.target.name,
+            original_file_path=block.target.original_file_path,
+            yaml_key=block.target.yaml_key,
+            package_name=block.target.package_name,
+            description=description,
+            docrefs=refs.docrefs,
+            meta=block.target.meta,
+        )
+        self.results.add_macro_patch(self.yaml.file, result)

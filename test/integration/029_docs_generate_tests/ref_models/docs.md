@@ -25,3 +25,7 @@ My table
 {% docs column_info %}
 An ID field
 {% enddocs %}
+
+{% docs macro_info %}
+My custom test that I wrote that does nothing
+{% enddocs %}

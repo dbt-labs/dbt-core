@@ -309,6 +309,7 @@ class ManifestLoader:
             files=self.results.files,
         )
         manifest.patch_nodes(self.results.patches)
+        manifest.patch_macros(self.results.macro_patches)
         manifest = ParserUtils.process_sources(
             manifest, self.root_project.project_name
         )
