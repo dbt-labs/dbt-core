@@ -48,8 +48,8 @@ class ParserUtils:
 
     @classmethod
     def resolve_source(
-        cls, manifest: Manifest, target_source_name: Optional[str],
-        target_table_name: Optional[str], current_project: str,
+        cls, manifest: Manifest, target_source_name: str,
+        target_table_name: str, current_project: str,
         node_package: str
     ) -> Optional[ParsedSourceDefinition]:
         candidate_targets = [current_project, node_package, None]

@@ -727,7 +727,7 @@ def raise_duplicate_macro_patch_name(patch_1, patch_2):
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same macro in package '
         f'{package_name} named {name}. Macros may only be described a single '
-        f'time. To fix this, remove the macros entry for for {name} in one '
+        f'time. To fix this, remove the macros entry for {name} in one '
         f'of these files:'
         f'\n  - {patch_1.original_file_path}\n  - {patch_2.original_file_path}'
     )

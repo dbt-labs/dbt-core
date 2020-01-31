@@ -20,7 +20,8 @@ from dbt.contracts.graph.parsed import (
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
-    raise_duplicate_resource_name, InternalException, raise_compiler_error
+    raise_duplicate_resource_name, InternalException, raise_compiler_error,
+    warn_or_error
 )
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -593,14 +594,11 @@ class Manifest:
                 continue
             macro.patch(patch)
 
-        # log debug-level warning about nodes we couldn't find
         if patches:
             for patch in patches.values():
-                # since patches aren't nodes, we can't use the existing
-                # target_not_found warning
-                logger.debug((
-                    'WARNING: Found documentation for macro "{}" which was '
-                    'not found or is disabled').format(patch.name)
+                warn_or_error(
+                    f'WARNING: Found documentation for macro "{patch.name}" '
+                    f'which was not found'
                 )
 
     def patch_nodes(
