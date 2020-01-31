@@ -689,10 +689,6 @@ def generate_parser_model(
     manifest: Manifest,
     source_config: SourceConfig,
 ) -> Dict[str, Any]:
-    # during parsing, we don't have a connection, but we might need one, so we
-    # have to acquire it.
-    # In the future, it would be nice to lazily open the connection, as in some
-    # projects it would be possible to parse without connecting to the db
     ctx = ModelContext(
         model, config, manifest, ParseProvider(), source_config
     )
@@ -728,7 +724,6 @@ def generate_runtime_macro(
     manifest: Manifest,
     package_name: Optional[str],
 ) -> Dict[str, Any]:
-
     ctx = MacroContext(
         macro, config, manifest, OperationProvider(), package_name
     )

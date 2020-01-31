@@ -190,7 +190,7 @@ class BaseContext(metaclass=ContextMeta):
     if os.environ.get('DBT_MACRO_DEBUGGING'):
         @contextmember
         @staticmethod
-        def debug_here():
+        def debug():
             import sys
             import ipdb  # type: ignore
             frame = sys._getframe(3)

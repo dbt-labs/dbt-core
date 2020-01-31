@@ -189,9 +189,11 @@ class PartialProject:
     project_dict: Dict[str, Any]
 
     def render(self, renderer):
+        packages_dict = package_data_from_root(self.project_root)
         return Project.render_from_dict(
             self.project_root,
             self.project_dict,
+            packages_dict,
             renderer,
         )
 
@@ -435,11 +437,11 @@ class Project:
         cls,
         project_root: str,
         project_dict: Dict[str, Any],
+        packages_dict: Dict[str, Any],
         renderer: ConfigRenderer,
     ) -> 'Project':
         rendered_project = renderer.render_project(project_dict)
         rendered_project['project-root'] = project_root
-        packages_dict = package_data_from_root(project_root)
         rendered_packages = renderer.render_packages_data(packages_dict)
         return cls.from_project_config(rendered_project, rendered_packages)
 

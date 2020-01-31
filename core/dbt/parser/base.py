@@ -287,11 +287,14 @@ class ConfiguredParser(
 
         Note: this mutates the config object when config() calls are rendered.
         """
+        # during parsing, we don't have a connection, but we might need one, so
+        # we have to acquire it.
         with get_adapter(self.root_project).connection_for(parsed_node):
             context = self._context_for(parsed_node, config)
 
-            get_rendered(parsed_node.raw_sql, context, parsed_node,
-                         capture_macros=True)
+            get_rendered(
+                parsed_node.raw_sql, context, parsed_node, capture_macros=True
+            )
 
     def update_parsed_node_schema(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
