@@ -2,13 +2,23 @@ import unittest
 from unittest import mock
 
 import copy
+from collections import namedtuple
+from itertools import product
 from datetime import datetime
+
+import pytest
 
 import dbt.flags
 from dbt import tracking
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.parsed import (
-    ParsedModelNode, DependsOn, NodeConfig, ParsedSeedNode
+    ParsedModelNode,
+    DependsOn,
+    NodeConfig,
+    ParsedSeedNode,
+    ParsedMacro,
+    ParsedSourceDefinition,
+    ParsedDocumentation,
 )
 from dbt.contracts.graph.compiled import CompiledModelNode
 from dbt.node_types import NodeType
@@ -613,3 +623,571 @@ class MixedManifestTest(unittest.TestCase):
             else:
                 self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
         self.assertEqual(compiled_count, 2)
+
+
+
+# Tests of the manifest search code (find_X_by_Y)
+
+
+def MockMacro(package, name='my_macro', kwargs={}):
+    macro = mock.MagicMock(
+        __class__=ParsedMacro,
+        resource_type=NodeType.Macro,
+        package_name=package,
+        unique_id=f'macro.{package}.{name}',
+        **kwargs
+    )
+    macro.name = name
+    return macro
+
+
+def MockMaterialization(package, name='my_materialization', adapter_type=None, kwargs={}):
+    if adapter_type is None:
+        adapter_type = 'default'
+    kwargs['adapter_type'] = adapter_type
+    return MockMacro(package, f'materialization_{name}_{adapter_type}', kwargs)
+
+
+def MockSource(package, source_name, name, kwargs={}):
+    src = mock.MagicMock(
+        __class__=ParsedSourceDefinition,
+        resource_type=NodeType.Source,
+        source_name=source_name,
+        package_name=package,
+        unique_id=f'source.{package}.{source_name}.{name}',
+        search_name=f'{source_name}.{name}',
+        **kwargs
+    )
+    src.name = name
+    return src
+
+
+def MockNode(package, name, resource_type=NodeType.Model, kwargs={}):
+    if resource_type == NodeType.Model:
+        cls = ParsedModelNode
+    elif resource_type == NodeType.Seed:
+        cls = ParsedSeedNode
+    else:
+        raise ValueError(f'I do not know how to handle {resource_type}')
+    node = mock.MagicMock(
+        __class__=cls,
+        resource_type=resource_type,
+        package_name=package,
+        unique_id=f'macro.{package}.{name}',
+        search_name=name,
+        **kwargs
+    )
+    node.name = name
+    return node
+
+
+def MockDocumentation(package, name, kwargs={}):
+    doc = mock.MagicMock(
+        __class__=ParsedDocumentation,
+        resource_type=NodeType.Documentation,
+        package_name=package,
+        search_name=name,
+        unique_id=f'{package}.{name}',
+    )
+    doc.name = name
+    return doc
+
+
+class TestManifestSearch(unittest.TestCase):
+    _macros = []
+    _models = []
+    _docs = []
+    @property
+    def macros(self):
+        return self._macros
+
+    @property
+    def nodes(self):
+        return self._nodes
+
+    @property
+    def docs(self):
+        return self._docs
+
+    def setUp(self):
+        self.manifest = Manifest(
+            nodes={
+                n.unique_id: n for n in self.nodes
+            },
+            macros={
+                m.unique_id: m for m in self.macros
+            },
+            docs={
+                d.unique_id: d for d in self.docs
+            },
+            generated_at=datetime.utcnow(),
+            disabled=[],
+            files={}
+        )
+
+
+def make_manifest(nodes=[], macros=[], docs=[]):
+    return Manifest(
+        nodes={
+            n.unique_id: n for n in nodes
+        },
+        macros={
+            m.unique_id: m for m in macros
+        },
+        docs={
+            d.unique_id: d for d in docs
+        },
+        generated_at=datetime.utcnow(),
+        disabled=[],
+        files={}
+    )
+
+
+FindMacroSpec = namedtuple('FindMacroSpec', 'macros,expected')
+
+macro_parameter_sets = [
+    # empty
+    FindMacroSpec(
+        macros=[],
+        expected={None: None, 'root': None, 'dep': None, 'dbt': None},
+    ),
+
+    # just root
+    FindMacroSpec(
+        macros=[MockMacro('root')],
+        expected={None: 'root', 'root': 'root', 'dep': None, 'dbt': None},
+    ),
+
+    # just dep
+    FindMacroSpec(
+        macros=[MockMacro('dep')],
+        expected={None: 'dep', 'root': None, 'dep': 'dep', 'dbt': None},
+    ),
+
+    # just dbt
+    FindMacroSpec(
+        macros=[MockMacro('dbt')],
+        expected={None: 'dbt', 'root': None, 'dep': None, 'dbt': 'dbt'},
+    ),
+
+    # root overrides dep
+    FindMacroSpec(
+        macros=[MockMacro('root'), MockMacro('dep')],
+        expected={None: 'root', 'root': 'root', 'dep': 'dep', 'dbt': None},
+    ),
+
+    # root overrides core
+    FindMacroSpec(
+        macros=[MockMacro('root'), MockMacro('dbt')],
+        expected={None: 'root', 'root': 'root', 'dep': None, 'dbt': 'dbt'},
+    ),
+
+    # dep overrides core
+    FindMacroSpec(
+        macros=[MockMacro('dep'), MockMacro('dbt')],
+        expected={None: 'dep', 'root': None, 'dep': 'dep', 'dbt': 'dbt'},
+    ),
+
+    # root overrides dep overrides core
+    FindMacroSpec(
+        macros=[MockMacro('root'), MockMacro('dep'), MockMacro('dbt')],
+        expected={None: 'root', 'root': 'root', 'dep': 'dep', 'dbt': 'dbt'},
+    ),
+]
+
+
+def id_macro(arg):
+    if isinstance(arg, list):
+        macro_names = '__'.join(f'{m.package_name}' for m in arg)
+        return f'm_[{macro_names}]'
+    if isinstance(arg, dict):
+        arg_names = '__'.join(f'{k}_{v}' for k, v in arg.items())
+        return f'exp_{{{arg_names}}}'
+
+
+@pytest.mark.parametrize('macros,expectations', macro_parameter_sets, ids=id_macro)
+def test_find_macro_by_name(macros, expectations):
+    manifest = make_manifest(macros=macros)
+    for package, expected in expectations.items():
+        result = manifest.find_macro_by_name(name='my_macro', root_project_name='root', package=package)
+        if expected is None:
+            assert result is expected
+        else:
+            assert result.package_name == expected
+
+
+# these don't use a search package, so we don't need to do as much
+generate_name_parameter_sets = [
+    # empty
+    FindMacroSpec(
+        macros=[],
+        expected=None,
+    ),
+
+    # just root
+    FindMacroSpec(
+        macros=[MockMacro('root')],
+        expected='root',
+    ),
+
+    # just dep
+    FindMacroSpec(
+        macros=[MockMacro('dep')],
+        expected=None,
+    ),
+
+    # just dbt
+    FindMacroSpec(
+        macros=[MockMacro('dbt')],
+        expected='dbt',
+    ),
+
+    # root overrides dep
+    FindMacroSpec(
+        macros=[MockMacro('root'), MockMacro('dep')],
+        expected='root',
+    ),
+
+    # root overrides core
+    FindMacroSpec(
+        macros=[MockMacro('root'), MockMacro('dbt')],
+        expected='root',
+    ),
+
+    # dep overrides core
+    FindMacroSpec(
+        macros=[MockMacro('dep'), MockMacro('dbt')],
+        expected='dbt',
+    ),
+
+    # root overrides dep overrides core
+    FindMacroSpec(
+        macros=[MockMacro('root'), MockMacro('dep'), MockMacro('dbt')],
+        expected='root',
+    ),
+]
+
+
+@pytest.mark.parametrize('macros,expected', generate_name_parameter_sets, ids=id_macro)
+def test_find_generate_macro_by_name(macros, expected):
+    manifest = make_manifest(macros=macros)
+    result = manifest.find_generate_macro_by_name(name='my_macro', root_project_name='root')
+    if expected is None:
+        assert result is expected
+    else:
+        assert result.package_name == expected
+
+
+FindMaterializationSpec = namedtuple('FindMaterializationSpec', 'macros,adapter_type,expected')
+
+
+def _materialization_parameter_sets():
+    sets = [
+        FindMaterializationSpec(macros=[], adapter_type='foo', expected=None),
+    ]
+
+    # default only, each project
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type=None)],
+            adapter_type='foo',
+            expected=(project, 'default'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
+
+    # other type only, each project
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='bar')],
+            adapter_type='foo',
+            expected=None,
+        ) for project in ['root', 'dep', 'dbt']
+    )
+
+    # matching type only, each project
+    sets.extend(
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type='foo')],
+            adapter_type='foo',
+            expected=(project, 'foo'),
+        ) for project in ['root', 'dep', 'dbt']
+    )
+
+    sets.extend([
+        # matching type and default everywhere
+        FindMaterializationSpec(
+            macros=[MockMaterialization(project, adapter_type=atype) for (project, atype) in product(['root', 'dep', 'dbt'], ['foo', None])],
+            adapter_type='foo',
+            expected=('root', 'foo')
+        ),
+        # default in core, override is in dep, and root has unrelated override
+        # should find the dep override.
+        FindMaterializationSpec(
+            macros=[MockMaterialization('root', adapter_type='bar'), MockMaterialization('dep', adapter_type='foo'), MockMaterialization('dbt', adapter_type=None)],
+            adapter_type='foo',
+            expected=('dep', 'foo'),
+        ),
+        # default in core, unrelated override is in dep, and root has an override
+        # should find the root override.
+        FindMaterializationSpec(
+            macros=[MockMaterialization('root', adapter_type='foo'), MockMaterialization('dep', adapter_type='bar'), MockMaterialization('dbt', adapter_type=None)],
+            adapter_type='foo',
+            expected=('root', 'foo'),
+        ),
+        # default in core, override is in dep, and root has an override too.
+        # should find the root override.
+        FindMaterializationSpec(
+            macros=[MockMaterialization('root', adapter_type='foo'), MockMaterialization('dep', adapter_type='foo'), MockMaterialization('dbt', adapter_type=None)],
+            adapter_type='foo',
+            expected=('root', 'foo'),
+        ),
+        # core has default + adapter, dep has adapter, root has default
+        # should find the dependency implementation, because it's the most specific
+        FindMaterializationSpec(
+            macros=[
+                MockMaterialization('root', adapter_type=None),
+                MockMaterialization('dep', adapter_type='foo'),
+                MockMaterialization('dbt', adapter_type=None),
+                MockMaterialization('dbt', adapter_type='foo'),
+            ],
+            adapter_type='foo',
+            expected=('dep', 'foo'),
+        ),
+    ])
+
+    return sets
+
+
+def id_mat(arg):
+    if isinstance(arg, list):
+        macro_names = '__'.join(f'{m.package_name}_{m.adapter_type}' for m in arg)
+        return f'm_[{macro_names}]'
+    elif isinstance(arg, tuple):
+        return '_'.join(arg)
+
+
+@pytest.mark.parametrize(
+    'macros,adapter_type,expected',
+    _materialization_parameter_sets(),
+    ids=id_mat,
+)
+def test_find_materialization_by_name(macros, adapter_type, expected):
+    manifest = make_manifest(macros=macros)
+    result = manifest.find_materialization_macro_by_name(
+        project_name='root',
+        materialization_name='my_materialization',
+        adapter_type=adapter_type,
+    )
+    if expected is None:
+        assert result is expected
+    else:
+        expected_package, expected_adapter_type = expected
+        assert result.adapter_type == expected_adapter_type
+        assert result.package_name == expected_package
+
+
+FindNodeSpec = namedtuple('FindNodeSpec', 'nodes,package,expected')
+
+
+def _refable_parameter_sets():
+    sets = [
+        # empties
+        FindNodeSpec(nodes=[], package=None, expected=None),
+        FindNodeSpec(nodes=[], package='root', expected=None),
+    ]
+    sets.extend(
+        # only one model, no package specified -> find it in any package
+        FindNodeSpec(
+            nodes=[MockNode(project, 'my_model')],
+            package=None,
+            expected=(project, 'my_model'),
+        ) for project in ['root', 'dep']
+    )
+    # only one model, no package specified -> find it in any package
+    sets.extend([
+        FindNodeSpec(
+            nodes=[MockNode('root', 'my_model')],
+            package='root',
+            expected=('root', 'my_model'),
+        ),
+        FindNodeSpec(
+            nodes=[MockNode('dep', 'my_model')],
+            package='root',
+            expected=None,
+        ),
+
+        # a source with that name exists, but not a refable
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_model')],
+            package=None,
+            expected=None
+        ),
+
+        # a source with that name exists, and a refable
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_model'), MockNode('root', 'my_model')],
+            package=None,
+            expected=('root', 'my_model'),
+        ),
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_model'), MockNode('root', 'my_model')],
+            package='root',
+            expected=('root', 'my_model'),
+        ),
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_model'), MockNode('root', 'my_model')],
+            package='dep',
+            expected=None,
+        ),
+
+    ])
+    return sets
+
+
+def id_nodes(arg):
+    if isinstance(arg, list):
+        node_names = '__'.join(f'{n.package_name}_{n.search_name}' for n in arg)
+        return f'm_[{node_names}]'
+    elif isinstance(arg, tuple):
+        return '_'.join(arg)
+
+
+@pytest.mark.parametrize(
+    'nodes,package,expected',
+    _refable_parameter_sets(),
+    ids=id_nodes,
+)
+def test_find_refable_by_name(nodes, package, expected):
+    manifest = make_manifest(nodes=nodes)
+    result = manifest.find_refable_by_name(name='my_model', package=package)
+    if expected is None:
+        assert result is expected
+    else:
+        assert result is not None
+        assert len(expected) == 2
+        expected_package, expected_name = expected
+        assert result.name == expected_name
+        assert result.package_name == expected_package
+
+
+def _source_parameter_sets():
+    sets = [
+        # empties
+        FindNodeSpec(nodes=[], package=None, expected=None),
+        FindNodeSpec(nodes=[], package='root', expected=None),
+    ]
+    sets.extend(
+        # models with the name, but not sources
+        FindNodeSpec(
+            nodes=[MockNode('root', name)],
+            package=project,
+            expected=None,
+        )
+        for project in ('root', None) for name in ('my_source', 'my_table')
+    )
+    # exists in root alongside nodes with name parts
+    sets.extend(
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_table'), MockNode('root', 'my_source'), MockNode('root', 'my_table')],
+            package=project,
+            expected=('root', 'my_source', 'my_table'),
+        )
+        for project in ('root', None)
+    )
+    sets.extend(
+        # wrong source name
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_other_source', 'my_table')],
+            package=project,
+            expected=None,
+        )
+        for project in ('root', None)
+    )
+    sets.extend(
+        # wrong table name
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_other_table')],
+            package=project,
+            expected=None,
+        )
+        for project in ('root', None)
+    )
+    sets.append(
+        # wrong project name (should not be found in 'root')
+        FindNodeSpec(
+            nodes=[MockSource('other', 'my_source', 'my_table')],
+            package='root',
+            expected=None,
+        )
+    )
+    sets.extend(
+        # exists in root check various projects (other project -> not found)
+        FindNodeSpec(
+            nodes=[MockSource('root', 'my_source', 'my_table')],
+            package=project,
+            expected=('root', 'my_source', 'my_table'),
+        )
+        for project in ('root', None)
+    )
+
+    return sets
+
+
+@pytest.mark.parametrize(
+    'nodes,package,expected',
+    _source_parameter_sets(),
+    ids=id_nodes,
+)
+def test_find_source_by_name(nodes, package, expected):
+    manifest = make_manifest(nodes=nodes)
+    result = manifest.find_source_by_name(source_name='my_source', table_name='my_table', package=package)
+    if expected is None:
+        assert result is expected
+    else:
+        assert result is not None
+        assert len(expected) == 3
+        expected_package, expected_source_name, expected_name = expected
+        assert result.source_name == expected_source_name
+        assert result.name == expected_name
+        assert result.package_name == expected_package
+
+
+FindDocSpec = namedtuple('FindDocSpec', 'docs,package,expected')
+
+
+def _docs_parameter_sets():
+    sets = []
+    sets.extend(
+        # empty
+        FindDocSpec(docs=[], package=project, expected=None)
+        for project in ('root', None)
+    )
+    sets.extend(
+        # basic: exists in root
+        FindDocSpec(docs=[MockDocumentation('root', 'my_doc')], package=project, expected=('root', 'my_doc'))
+        for project in ('root', None)
+    )
+    sets.extend([
+        # exists in other
+        FindDocSpec(docs=[MockDocumentation('dep', 'my_doc')], package='root', expected=None),
+        FindDocSpec(docs=[MockDocumentation('dep', 'my_doc')], package=None, expected=('dep', 'my_doc')),
+    ])
+    return sets
+
+
+@pytest.mark.parametrize(
+    'docs,package,expected',
+    _docs_parameter_sets(),
+    ids=id_nodes,
+)
+def test_find_doc_by_name(docs, package, expected):
+    manifest = make_manifest(docs=docs)
+    result = manifest.find_docs_by_name(name='my_doc', package=package)
+    if expected is None:
+        assert result is expected
+    else:
+        assert result is not None
+        assert len(expected) == 2
+        expected_package, expected_name = expected
+        assert result.name == expected_name
+        assert result.package_name == expected_package

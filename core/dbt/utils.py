@@ -81,65 +81,6 @@ def compiler_warning(model, msg, resource_type='model'):
     )
 
 
-def id_matches(unique_id, target_name, target_package, nodetypes, model):
-    """Return True if the unique ID matches the given name, package, and type.
-
-    If package is None, any package is allowed.
-    nodetypes should be a container of NodeTypes that implements the 'in'
-    operator.
-    """
-    node_type = model.resource_type
-    node_parts = unique_id.split('.', 2)
-    if len(node_parts) != 3:
-        msg = "unique_id {} is malformed".format(unique_id)
-        dbt.exceptions.raise_compiler_error(msg, model)
-
-    resource_type, package_name, node_name = node_parts
-    if resource_type not in nodetypes:
-        return False
-
-    if node_type == NodeType.Source.value:
-        if node_name.count('.') != 1:
-            msg = "{} names must contain exactly 1 '.' character"\
-                .format(node_type)
-            dbt.exceptions.raise_compiler_error(msg, model)
-    else:
-        if '.' in node_name:
-            msg = "{} names cannot contain '.' characters".format(node_type)
-            dbt.exceptions.raise_compiler_error(msg, model)
-
-    if target_name != node_name:
-        return False
-
-    return target_package is None or target_package == package_name
-
-
-def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
-    """Find an entry in a subgraph by name. Any mapping that implements
-    .items() and maps unique id -> something can be used as the subgraph.
-
-    Names are like:
-        '{nodetype}.{target_package}.{target_name}'
-
-    You can use `None` for the package name as a wildcard.
-    """
-    for name, model in subgraph.items():
-        if id_matches(name, target_name, target_package, nodetype, model):
-            return model
-
-    return None
-
-
-def find_in_list_by_name(haystack, target_name, target_package, nodetype):
-    """Find an entry in the given list by name."""
-    for model in haystack:
-        name = model.unique_id
-        if id_matches(name, target_name, target_package, nodetype, model):
-            return model
-
-    return None
-
-
 MACRO_PREFIX = 'dbt_macro__'
 DOCS_PREFIX = 'dbt_docs__'
 

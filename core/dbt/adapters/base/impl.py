@@ -967,7 +967,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         if manifest is None:
             manifest = self._internal_manifest
 
-        macro = manifest.find_macro_by_name(macro_name, project)
+        macro = manifest.find_macro_by_name(
+            macro_name, self.config.project_name, project
+        )
         if macro is None:
             if project is None:
                 package_name = 'any package'
@@ -982,9 +984,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         # ends up calling get_adapter, so the import has to be here.
         import dbt.context.operation
         macro_context = dbt.context.operation.generate(
-            macro,
-            self.config,
-            manifest
+            model=macro,
+            runtime_config=self.config,
+            manifest=manifest,
+            package_name=project
         )
         macro_context.update(context_override)
 
@@ -1018,9 +1021,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         information_schemas = self._get_catalog_information_schemas(manifest)
         # make it a list so macros can index into it.
         kwargs = {'information_schemas': information_schemas}
-        table = self.execute_macro(GET_CATALOG_MACRO_NAME,
-                                   kwargs=kwargs,
-                                   release=True)
+        table = self.execute_macro(
+            GET_CATALOG_MACRO_NAME,
+            kwargs=kwargs,
+            release=True,
+            # pass in the full manifest so we get any local project overrides
+            manifest=manifest,
+        )
 
         results = self._catalog_filter_table(table, manifest)
         return results

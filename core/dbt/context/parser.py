@@ -141,10 +141,10 @@ def generate(model, runtime_config, manifest, source_config):
         )
 
 
-def generate_macro(model, runtime_config, manifest):
+def generate_macro(model, runtime_config, manifest, package_name):
     # parser.generate_macro is called by the get_${attr}_func family of Parser
     # methods, which preparse and cache the generate_${attr}_name family of
     # macros for use during parsing
     return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, Provider()
+        model, runtime_config, manifest, Provider(), package_name
     )

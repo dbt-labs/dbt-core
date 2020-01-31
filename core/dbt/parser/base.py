@@ -16,12 +16,11 @@ from dbt.config import Project, RuntimeConfig
 from dbt.contracts.graph.manifest import (
     Manifest, SourceFile, FilePath, FileHash
 )
-from dbt.contracts.graph.parsed import HasUniqueID
+from dbt.contracts.graph.parsed import HasUniqueID, ParsedMacro
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
     CompilationException, validator_error_message
 )
-from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.node_types import NodeType
 from dbt.source_config import SourceConfig
 from dbt.parser.results import ParseResult, ManifestNodes
@@ -128,6 +127,15 @@ class ConfiguredParser(
     def default_database(self):
         return self.root_project.credentials.database
 
+    def _build_generate_macro_function(self, macro: ParsedMacro) -> Callable:
+        context = dbt.context.parser.generate_macro(
+            model=macro,
+            runtime_config=self.root_project,
+            manifest=self.macro_manifest,
+            package_name=None,
+        )
+        return macro.generator(context)
+
     def get_schema_func(self) -> RelationUpdate:
         """The get_schema function is set by a few different things:
             - if there is a 'generate_schema_name' macro in the root project,
@@ -141,25 +149,16 @@ class ConfiguredParser(
         if self._get_schema_func is not None:
             return self._get_schema_func
 
-        get_schema_macro = self.macro_manifest.find_macro_by_name(
-            'generate_schema_name',
-            self.root_project.project_name
+        get_schema_macro = self.macro_manifest.find_generate_macro_by_name(
+            name='generate_schema_name',
+            root_project_name=self.root_project.project_name,
         )
-        if get_schema_macro is None:
-            get_schema_macro = self.macro_manifest.find_macro_by_name(
-                'generate_schema_name',
-                GLOBAL_PROJECT_NAME
-            )
         # this is only true in tests!
         if get_schema_macro is None:
             def get_schema(custom_schema_name=None, node=None):
                 return self.default_schema
         else:
-            root_context = dbt.context.parser.generate_macro(
-                get_schema_macro, self.root_project,
-                self.macro_manifest
-            )
-            get_schema = get_schema_macro.generator(root_context)
+            get_schema = self._build_generate_macro_function(get_schema_macro)
 
         self._get_schema_func = get_schema
         return self._get_schema_func
@@ -177,16 +176,10 @@ class ConfiguredParser(
         if self._get_alias_func is not None:
             return self._get_alias_func
 
-        get_alias_macro = self.macro_manifest.find_macro_by_name(
-            'generate_alias_name',
-            self.root_project.project_name
+        get_alias_macro = self.macro_manifest.find_generate_macro_by_name(
+            name='generate_alias_name',
+            root_project_name=self.root_project.project_name,
         )
-        if get_alias_macro is None:
-            get_alias_macro = self.macro_manifest.find_macro_by_name(
-                'generate_alias_name',
-                GLOBAL_PROJECT_NAME
-            )
-
         # the generate_alias_name macro might not exist
         if get_alias_macro is None:
             def get_alias(custom_alias_name, node):
@@ -195,11 +188,7 @@ class ConfiguredParser(
                 else:
                     return custom_alias_name
         else:
-            root_context = dbt.context.parser.generate_macro(
-                get_alias_macro, self.root_project,
-                self.macro_manifest
-            )
-            get_alias = get_alias_macro.generator(root_context)
+            get_alias = self._build_generate_macro_function(get_alias_macro)
 
         self._get_alias_func = get_alias
         return self._get_alias_func

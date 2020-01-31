@@ -9,6 +9,7 @@ from unittest.mock import ANY, patch
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyString, AnyStringWith, normalize, Normalized
 
+from dbt.exceptions import CompilationException
 
 def _read_file(path):
     with open(path, 'r') as fp:
@@ -3447,3 +3448,33 @@ class TestDocsGenerateMissingSchema(DBTIntegrationTest):
             'docs', 'generate',
             '--vars', "{{extra_schema: {}}}".format(self.extra_schema)
         ])
+
+
+class TestDocsGenerateOverride(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return 'docs_generate_029'
+
+    @staticmethod
+    def dir(path):
+        return normalize(path)
+
+    @property
+    def models(self):
+        return self.dir("trivial_models")
+
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': [self.dir('fail_macros')],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_override_used(self):
+        self.assertEqual(len(self.run_dbt(['run'])), 1)
+        # this should pick up our failure macro and raise a compilation exception
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['docs', 'generate'])
+
+        self.assertIn('rejected: no catalogs for you', str(exc.exception))
