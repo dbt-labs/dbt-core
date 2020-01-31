@@ -30,7 +30,7 @@
 
     where (
         {%- for schema in schemas -%}
-          sch.nspname = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+          upper(sch.nspname) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
         {%- endfor -%}
       )
       and not pg_is_other_temp_schema(sch.oid) -- not a temporary schema belonging to another session

@@ -17,7 +17,7 @@
         from {{ information_schema.replace(information_schema_view='SCHEMATA') }}
         where (
           {%- for schema in schemas -%}
-            schema_name = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+            upper(schema_name) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
           {%- endfor -%}
         )
     ),

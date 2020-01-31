@@ -51,7 +51,7 @@
       join columns using ("table_database", "table_schema", "table_name")
       where (
         {%- for schema in schemas -%}
-          "table_schema" = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+          upper("table_schema") = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
         {%- endfor -%}
       )
       order by "column_index"

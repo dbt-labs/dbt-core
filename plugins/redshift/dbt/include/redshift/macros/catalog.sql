@@ -96,7 +96,7 @@
 
     where (
         {%- for schema in schemas -%}
-          table_schema = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+          upper(table_schema) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
         {%- endfor -%}
       )
 
@@ -185,7 +185,7 @@
     from svv_table_info
     where (
         {%- for schema in schemas -%}
-          schema = '{{ schema }}'{%- if not loop.last %} or {% endif -%}
+          upper(schema) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
         {%- endfor -%}
     )
 

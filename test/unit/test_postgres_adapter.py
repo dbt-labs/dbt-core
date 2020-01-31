@@ -199,11 +199,12 @@ class TestPostgresAdapter(unittest.TestCase):
         mock_manifest.get_used_schemas.return_value = {('dbt', 'foo'),
                                                        ('dbt', 'quux')}
 
-        catalog = self.adapter.get_catalog(mock_manifest)
+        catalog, exceptions = self.adapter.get_catalog(mock_manifest)
         self.assertEqual(
             set(map(tuple, catalog)),
             {('dbt', 'foo', 'bar'), ('dbt', 'FOO', 'baz'), ('dbt', 'quux', 'bar')}
         )
+        self.assertEqual(exceptions, [])
 
 
 class TestConnectingPostgresAdapter(unittest.TestCase):
