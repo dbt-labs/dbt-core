@@ -60,7 +60,14 @@ Check the requirements for the '{package}' package, or run dbt again with \
 """
 
 MALFORMED_PACKAGE_ERROR = """\
-packages.yml is malformed, please make sure that it matches 
+The packages.yml file in this project is malformed. Please double check the contents
+of this file and fix any errors before retrying.
+
+You can find more information on the syntax for this file here:
+https://docs.getdbt.com/docs/package-management
+
+Validator Error:
+{error}
 https://docs.getdbt.com/docs/package-management#section-how-do-i-add-a-package-to-my-project
 """
 
@@ -135,7 +142,7 @@ def package_config_from_data(packages_data):
         packages = PackageConfig.from_dict(packages_data)
     except ValidationError as e:
         raise DbtProjectError(
-            MALFORMED_PACKAGE_ERROR
+            MALFORMED_PACKAGE_ERROR.format(error=str(e))
         ) from e
     return packages
 
