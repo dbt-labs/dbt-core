@@ -274,7 +274,7 @@ class GenerateTask(CompileTask):
         sources: Dict[str, CatalogTable],
         generated_at: datetime,
         compile_results: Optional[Any],
-        errors: Optional[List[str]]
+        errors: Optional[List[str]],
     ) -> CatalogArtifact:
         return CatalogArtifact.from_results(
             generated_at=generated_at,

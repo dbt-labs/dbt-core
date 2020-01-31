@@ -948,9 +948,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         results = self._catalog_filter_table(table, manifest)
         return results
 
-    def get_catalog(
-        self, manifest: Manifest
-    ) -> Tuple[agate.Table, List[Exception]]:
+    def get_catalog(self, manifest: Manifest) -> Tuple[agate.Table, List[Exception]]:
         schema_map = self._get_catalog_schemas(manifest)
 
         with executor(self.config) as tpe:
@@ -1139,7 +1137,7 @@ join diff_count using (id)
 
 
 def catch_as_completed(
-    futures  # typing: List[Future[agate.Table]]
+    futures,  # typing: List[Future[agate.Table]]
 ) -> Tuple[agate.Table, List[Exception]]:
 
     # catalogs: agate.Table = agate.Table(rows=[])
@@ -1152,15 +1150,10 @@ def catch_as_completed(
         if exc is None:
             catalog = future.result()
             tables.append(catalog)
-        elif (
-            isinstance(exc, KeyboardInterrupt) or
-            not isinstance(exc, Exception)
-        ):
+        elif isinstance(exc, KeyboardInterrupt) or not isinstance(exc, Exception):
             raise exc
         else:
-            warn_or_error(
-                f'Encountered an error while generating catalog: {str(exc)}'
-            )
+            warn_or_error(f"Encountered an error while generating catalog: {str(exc)}")
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
     return merge_tables(tables), exceptions
