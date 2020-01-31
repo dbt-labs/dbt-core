@@ -68,7 +68,6 @@ https://docs.getdbt.com/docs/package-management
 
 Validator Error:
 {error}
-https://docs.getdbt.com/docs/package-management#section-how-do-i-add-a-package-to-my-project
 """
 
 
@@ -142,7 +141,7 @@ def package_config_from_data(packages_data):
         packages = PackageConfig.from_dict(packages_data)
     except ValidationError as e:
         raise DbtProjectError(
-            MALFORMED_PACKAGE_ERROR.format(error=str(e))
+            MALFORMED_PACKAGE_ERROR.format(error=str(e.message))
         ) from e
     return packages
 
