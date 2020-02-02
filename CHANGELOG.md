@@ -1,4 +1,4 @@
-## dbt 0.15.2 (Unreleased)
+## dbt 0.15.2 (February 2, 2020)
 
 This is a bugfix release.
 
