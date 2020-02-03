@@ -50,9 +50,11 @@ DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 class TimeoutEmitter(Emitter):
     def __init__(self):
         super().__init__(
-            COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL,
-            buffer_size=30, on_failure=self.handle_failure,
-            method='post',
+            COLLECTOR_URL,
+            protocol=COLLECTOR_PROTOCOL,
+            buffer_size=30,
+            on_failure=self.handle_failure,
+            method="post",
             # don't set this.
             byte_limit=None,
         )
@@ -76,30 +78,32 @@ class TimeoutEmitter(Emitter):
             sp_logger.warning(msg)
 
     def http_post(self, payload):
-        self._log_request('POST', payload)
+        self._log_request("POST", payload)
 
         r = requests.post(
             self.endpoint,
             data=payload,
-            headers={'content-type': 'application/json; charset=utf-8'},
-            timeout=5.0
+            headers={"content-type": "application/json; charset=utf-8"},
+            timeout=5.0,
         )
 
-        self._log_result('GET', r.status_code)
+        self._log_result("GET", r.status_code)
         return r
 
     def http_get(self, payload):
-        self._log_request('GET', payload)
+        self._log_request("GET", payload)
 
         r = requests.get(self.endpoint, params=payload, timeout=5.0)
 
-        self._log_result('GET', r.status_code)
+        self._log_result("GET", r.status_code)
         return r
 
 
 emitter = TimeoutEmitter()
 tracker = Tracker(
-    emitter, namespace="cf", app_id="dbt",
+    emitter,
+    namespace="cf",
+    app_id="dbt",
 )
 
 
