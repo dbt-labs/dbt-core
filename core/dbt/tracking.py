@@ -31,8 +31,13 @@ DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
 class TimeoutEmitter(Emitter):
     def __init__(self):
-        super().__init__(COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL,
-                         buffer_size=1, on_failure=self.handle_failure)
+        super().__init__(
+            COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL,
+            buffer_size=30, on_failure=self.handle_failure,
+            method='post',
+            # don't set this.
+            byte_limit=None,
+        )
 
     @staticmethod
     def handle_failure(num_ok, unsent):
@@ -41,21 +46,43 @@ class TimeoutEmitter(Emitter):
         logger.warning('Error sending message, disabling tracking')
         do_not_track()
 
-    def http_get(self, payload):
-        sp_logger.info("Sending GET request to {}...".format(self.endpoint))
-        sp_logger.debug("Payload: {}".format(payload))
-        r = requests.get(self.endpoint, params=payload, timeout=5.0)
+    def _log_request(self, request, payload):
+        sp_logger.info(f"Sending {request} request to {self.endpoint}...")
+        sp_logger.debug(f"Payload: {payload}")
 
-        msg = "GET request finished with status code: " + str(r.status_code)
-        if self.is_good_status_code(r.status_code):
+    def _log_result(self, request, status_code):
+        msg = f"{request} request finished with status code: {status_code}"
+        if self.is_good_status_code(status_code):
             sp_logger.info(msg)
         else:
             sp_logger.warning(msg)
+
+    def http_post(self, payload):
+        self._log_request('POST', payload)
+
+        r = requests.post(
+            self.endpoint,
+            data=payload,
+            headers={'content-type': 'application/json; charset=utf-8'},
+            timeout=5.0
+        )
+
+        self._log_result('GET', r.status_code)
+        return r
+
+    def http_get(self, payload):
+        self._log_request('GET', payload)
+
+        r = requests.get(self.endpoint, params=payload, timeout=5.0)
+
+        self._log_result('GET', r.status_code)
         return r
 
 
 emitter = TimeoutEmitter()
-tracker = Tracker(emitter, namespace="cf", app_id="dbt")
+tracker = Tracker(
+    emitter, namespace="cf", app_id="dbt",
+)
 
 
 class User:
