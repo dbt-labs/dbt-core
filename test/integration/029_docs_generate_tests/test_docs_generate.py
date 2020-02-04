@@ -126,7 +126,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             }
         }
 
-    def run_and_generate(self, extra=None, seed_count=1, model_count=1, alternate_db=None):
+    def run_and_generate(self, extra=None, seed_count=1, model_count=1, alternate_db=None, args=None):
         if alternate_db is None:
             alternate_db = self.alternative_database
         project = {
@@ -150,7 +150,10 @@ class TestDocsGenerate(DBTIntegrationTest):
         os.remove(normalize('target/manifest.json'))
         os.remove(normalize('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
-        self.run_dbt(['docs', 'generate', vars_arg])
+        base_args = ['docs', 'generate', vars_arg]
+        if args:
+            base_args.extend(args)
+        self.run_dbt(base_args)
 
     def _no_stats(self):
         return {
@@ -3392,6 +3395,12 @@ class TestDocsGenerate(DBTIntegrationTest):
         # sort the results so we can make reasonable assertions
         run_result['results'].sort(key=lambda r: r['node']['unique_id'])
         self.assertEqual(run_result['results'], expected_run_results)
+
+    @use_profile('postgres')
+    def test__postgres__run_and_generate_no_compile(self):
+        self.run_and_generate(alternate_db=self.default_database, args=['--no-compile'])
+        self.verify_catalog(self.expected_postgres_catalog())
+        self.assertFalse(os.path.exists('./target/manifest.json'))
 
     @use_profile('postgres')
     def test__postgres__run_and_generate(self):
