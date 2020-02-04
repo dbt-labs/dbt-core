@@ -8,3 +8,4 @@ ipdb
 pytest-xdist>=1.28.0,<2
 flaky>=3.5.3,<4
 mypy==0.761
+wheel
