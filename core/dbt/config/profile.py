@@ -424,8 +424,7 @@ class Profile(HasCredentials):
         threads_override = getattr(args, "threads", None)
         target_override = getattr(args, "target", None)
         raw_profiles = read_profile(flags.PROFILES_DIR)
-        profile_name = cls.pick_profile_name(getattr(args, 'profile', None),
-                                             project_profile_name)
+        profile_name = cls.pick_profile_name(getattr(args, "profile", None), project_profile_name)
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,
             profile_name=profile_name,
