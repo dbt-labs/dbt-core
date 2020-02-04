@@ -114,7 +114,7 @@ class DebugTask(BaseTask):
         print("python path: {}".format(sys.executable))
         print("os info: {}".format(platform.platform()))
         print("Using profiles.yml file at {}".format(self.profile_path))
-        print('Using dbt_project.yml file at {}'.format(self.project_path))
+        print("Using dbt_project.yml file at {}".format(self.project_path))
         print("")
         self.test_configuration()
         self.test_dependencies()
@@ -272,8 +272,8 @@ class DebugTask(BaseTask):
                     self.profile = profile
 
         if profile_errors:
-            self.profile_fail_details = '\n\n'.join(profile_errors)
-            return red('ERROR invalid')
+            self.profile_fail_details = "\n\n".join(profile_errors)
+            return red("ERROR invalid")
         return green('OK found and valid')
 
     def test_git(self):
