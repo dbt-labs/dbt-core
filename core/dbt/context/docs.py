@@ -1,6 +1,4 @@
-from typing import (
-    Any, Dict, Union
-)
+from typing import Any, Dict, Union
 
 from dbt.exceptions import (
     doc_invalid_args,
