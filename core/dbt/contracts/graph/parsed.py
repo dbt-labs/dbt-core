@@ -125,17 +125,6 @@ class ColumnInfo(JsonSchemaMixin, Replaceable):
     tags: List[str] = field(default_factory=list)
 
 
-# Docrefs are not quite like regular references, as they indicate what they
-# apply to as well as what they are referring to (so the doc package + doc
-# name, but also the column name if relevant). This is because column
-# descriptions are rendered separately from their models.
-@dataclass
-class Docref(JsonSchemaMixin, Replaceable):
-    documentation_name: str
-    documentation_package: str
-    column_name: Optional[str] = None
-
-
 @dataclass
 class HasFqn(JsonSchemaMixin, Replaceable):
     fqn: List[str]
@@ -186,7 +175,6 @@ class ParsedNodeMixins(JsonSchemaMixin):
         self.patch_path: Optional[str] = patch.original_file_path
         self.description = patch.description
         self.columns = patch.columns
-        self.docrefs = patch.docrefs
         self.meta = patch.meta
         if dbt.flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
@@ -221,7 +209,6 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[Any]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
-    docrefs: List[Docref] = field(default_factory=list)
     description: str = field(default='')
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -467,7 +454,6 @@ class ParsedSnapshotNode(ParsedNode):
 class ParsedPatch(HasYamlMetadata, Replaceable):
     name: str
     description: str
-    docrefs: List[Docref]
     meta: Dict[str, Any]
 
 
@@ -497,7 +483,6 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
     tags: List[str] = field(default_factory=list)
     # TODO: is this ever populated?
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     patch_path: Optional[str] = None
@@ -516,7 +501,6 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
     def patch(self, patch: ParsedMacroPatch):
         self.patch_path: Optional[str] = patch.original_file_path
         self.description = patch.description
-        self.docrefs = patch.docrefs
         self.meta = patch.meta
         self.arguments = patch.arguments
         if dbt.flags.STRICT_MODE:
@@ -550,7 +534,6 @@ class ParsedSourceDefinition(
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None
-    docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)

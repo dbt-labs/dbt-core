@@ -3,7 +3,7 @@ import pickle
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
-    TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All, Docref,
+    TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All,
     GenericSnapshotConfig, CheckSnapshotConfig, SnapshotStrategy,
     IntermediateSnapshotNode, ParsedNodePatch, ParsedMacro,
     MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation, ParsedHookNode
@@ -89,7 +89,6 @@ class TestParsedModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -168,7 +167,6 @@ class TestParsedModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {'foo': 100},
             },
-            'docrefs': [],
             'columns': {
                 'a': {
                     'name': 'a',
@@ -243,7 +241,6 @@ class TestParsedModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -280,7 +277,6 @@ class TestParsedModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -315,9 +311,6 @@ class TestParsedModelNode(ContractTestCase):
             description='The foo model',
             original_file_path='/path/to/schema.yml',
             columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
-            docrefs=[
-                Docref(documentation_name='foo', documentation_package='test'),
-            ],
             meta={},
         )
 
@@ -362,12 +355,6 @@ class TestParsedModelNode(ContractTestCase):
                     'tags': [],
                 },
             },
-            'docrefs': [
-                {
-                    'documentation_name': 'foo',
-                    'documentation_package': 'test',
-                }
-            ],
         }
 
         expected = self.ContractType(
@@ -392,9 +379,6 @@ class TestParsedModelNode(ContractTestCase):
             config=NodeConfig(),
             patch_path='/path/to/schema.yml',
             columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
-            docrefs=[
-                Docref(documentation_name='foo', documentation_package='test'),
-            ],
         )
         self.assert_symmetric(expected, expected_dict)  # sanity check
         self.assertEqual(initial, expected)
@@ -429,7 +413,6 @@ class TestParsedModelNode(ContractTestCase):
             description=None,
             original_file_path='/path/to/schema.yml',
             columns={},
-            docrefs=[],
         )
         with self.assertRaises(ValidationError):
             initial.patch(patch)
@@ -468,7 +451,6 @@ class TestParsedHookNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -545,7 +527,6 @@ class TestParsedHookNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
-            'docrefs': [],
             'columns': {
                 'a': {
                     'name': 'a',
@@ -620,7 +601,6 @@ class TestParsedHookNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
             'index': 'a string!?',
@@ -663,7 +643,6 @@ class TestParsedTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'error',
             },
-            'docrefs': [],
             'columns': {},
         }
         node = self.ContractType(
@@ -744,7 +723,6 @@ class TestParsedTestNode(ContractTestCase):
                 'severity': 'WARN',
                 'extra_key': 'extra value'
             },
-            'docrefs': [],
             'columns': {
                 'a': {
                     'name': 'a',
@@ -821,7 +799,6 @@ class TestParsedTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'ERROR',
             },
-            'docrefs': [],
             'columns': {},
             'column_name': {},
             'meta': {},
@@ -860,7 +837,6 @@ class TestParsedTestNode(ContractTestCase):
                 'vars': {},
                 'severtiy': 'WARN',
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -897,7 +873,6 @@ class TestParsedTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'WERROR',  # invalid severity
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -1163,7 +1138,6 @@ class TestParsedSnapshotNode(ContractTestCase):
                 'strategy': 'timestamp',
                 'updated_at': 'last_update',
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -1269,7 +1243,6 @@ class TestParsedSnapshotNode(ContractTestCase):
                 'strategy': 'check',
                 'check_cols': 'all',
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -1373,7 +1346,6 @@ class TestParsedSnapshotNode(ContractTestCase):
                 'strategy': 'timestamp',
                 'updated_at': 'last_update',
             },
-            'docrefs': [],
             'columns': {},
             'meta': {},
         }
@@ -1389,7 +1361,6 @@ class TestParsedNodePatch(ContractTestCase):
             'description': 'The foo model',
             'original_file_path': '/path/to/schema.yml',
             'columns': {},
-            'docrefs': [],
             'meta': {},
             'yaml_key': 'models',
             'package_name': 'test',
@@ -1401,7 +1372,6 @@ class TestParsedNodePatch(ContractTestCase):
             package_name='test',
             original_file_path='/path/to/schema.yml',
             columns={},
-            docrefs=[],
             meta={},
         )
         self.assert_symmetric(patch, dct)
@@ -1419,12 +1389,6 @@ class TestParsedNodePatch(ContractTestCase):
                     'tags': [],
                 },
             },
-            'docrefs': [
-                {
-                    'documentation_name': 'foo',
-                    'documentation_package': 'test',
-                }
-            ],
             'meta': {'key': ['value']},
             'yaml_key': 'models',
             'package_name': 'test',
@@ -1434,9 +1398,6 @@ class TestParsedNodePatch(ContractTestCase):
             description='The foo model',
             original_file_path='/path/to/schema.yml',
             columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
-            docrefs=[
-                Docref(documentation_name='foo', documentation_package='test'),
-            ],
             meta={'key': ['value']},
             yaml_key='models',
             package_name='test',
@@ -1462,7 +1423,6 @@ class TestParsedMacro(ContractTestCase):
             'depends_on': {'macros': []},
             'meta': {},
             'description': 'my macro description',
-            'docrefs': [],
             'arguments': [],
         }
         macro = ParsedMacro(
@@ -1478,7 +1438,6 @@ class TestParsedMacro(ContractTestCase):
             depends_on=MacroDependsOn(),
             meta={},
             description='my macro description',
-            docrefs=[],
             arguments=[],
         )
         self.assert_symmetric(macro, macro_dict)
@@ -1498,7 +1457,6 @@ class TestParsedMacro(ContractTestCase):
             'depends_on': {'macros': []},
             'meta': {},
             'description': 'my macro description',
-            'docrefs': [],
             'arguments': [],
         }
         self.assert_fails_validation(bad_missing_uid)
@@ -1517,7 +1475,6 @@ class TestParsedMacro(ContractTestCase):
             'depends_on': {'macros': []},
             'meta': {},
             'description': 'my macro description',
-            'docrefs': [],
             'arguments': [],
             'extra': 'too many fields'
         }
@@ -1599,7 +1556,6 @@ class TestParsedSourceDefinition(ContractTestCase):
             'identifier': 'my_source_table',
             'resource_type': str(NodeType.Source),
             'description': '',
-            'docrefs': [],
             'columns': {},
             'quoting': {},
             'unique_id': 'test.source.my_source.my_source_table',
@@ -1609,7 +1565,6 @@ class TestParsedSourceDefinition(ContractTestCase):
         }
         source_def = self.ContractType(
             columns={},
-            docrefs=[],
             database='some_db',
             description='',
             fqn=['test', 'source', 'my_source', 'my_source_table'],

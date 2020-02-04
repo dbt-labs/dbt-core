@@ -446,17 +446,9 @@ def _process_docs_for_node(
     context: Dict[str, Any],
     node: NonSourceNode,
 ):
-    for docref in node.docrefs:
-        column_name = docref.column_name
-
-        if column_name is None:
-            obj = node
-        else:
-            obj = _get_node_column(node, column_name)
-
-        # At this point, we know that our documentation string has a
-        # 'docs("...")' pointing at it. We want to render it.
-        obj.description = get_rendered(obj.description, context)
+    node.description = get_rendered(node.description, context)
+    for column_name, column in node.columns.items():
+        column.description = get_rendered(column.description, context)
 
 
 def _process_docs_for_source(
@@ -479,10 +471,9 @@ def _process_docs_for_source(
 def _process_docs_for_macro(
     context: Dict[str, Any], macro: ParsedMacro
 ) -> None:
-    for docref in macro.docrefs:
-        macro.description = get_rendered(macro.description, context)
-        for arg in macro.arguments:
-            arg.description = get_rendered(arg.description, context)
+    macro.description = get_rendered(macro.description, context)
+    for arg in macro.arguments:
+        arg.description = get_rendered(arg.description, context)
 
 
 def process_docs(manifest: Manifest, config: RuntimeConfig):

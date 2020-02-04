@@ -311,7 +311,6 @@ class SchemaParserModelsTest(SchemaParserTest):
             name='my_model',
             description='A description of my model',
             columns={'color': ColumnInfo(name='color', description='The color value')},
-            docrefs=[],
             original_file_path=normalize('models/test_one.yml'),
             meta={},
             yaml_key='models',
@@ -692,16 +691,6 @@ class ProcessingTest(BaseParserTest):
         x_uid = 'model.project.x'
         y_uid = 'model.otherproject.y'
         src_uid = 'source.thirdproject.src.tbl'
-        remote_docref = mock.MagicMock(
-            documentation_package='otherproject',
-            documentation_name='my_doc',
-            column_name=None,
-        )
-        docref = mock.MagicMock(
-            documentation_package='',
-            documentation_name='my_doc',
-            column_name=None,
-        )
         self.x_node = mock.MagicMock(
             __class__=ParsedModelNode,
             package_name='project',
@@ -709,7 +698,6 @@ class ProcessingTest(BaseParserTest):
             config=mock.MagicMock(enabled=True),
             refs=[],
             sources=[['src', 'tbl']],
-            docrefs=[remote_docref],
             unique_id=x_uid,
             resource_type=NodeType.Model,
             depends_on=x_depends_on,
@@ -722,7 +710,6 @@ class ProcessingTest(BaseParserTest):
             config=mock.MagicMock(enabled=True),
             refs=[['x']],
             sources=[],
-            docrefs=[docref],
             unique_id=y_uid,
             resource_type=NodeType.Model,
             depends_on=y_depends_on,
