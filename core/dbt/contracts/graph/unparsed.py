@@ -111,8 +111,15 @@ class UnparsedNodeUpdate(HasColumnTests, HasTests, HasYamlMetadata):
 
 
 @dataclass
+class MacroArgument(JsonSchemaMixin):
+    name: str
+    type: Optional[str] = None
+    description: str = ''
+
+
+@dataclass
 class UnparsedMacroUpdate(HasDocs, HasYamlMetadata):
-    pass
+    arguments: List[MacroArgument] = field(default_factory=list)
 
 
 class TimePeriod(StrEnum):

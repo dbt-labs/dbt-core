@@ -649,6 +649,16 @@ class AnalysisPatchParser(NodePatchParser[UnparsedAnalysisUpdate]):
 
 
 class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
+    def collect_docrefs(
+        self, block: TargetBlock[UnparsedMacroUpdate], refs: ParserRef
+    ) -> str:
+        description = block.target.description
+        arg_docs = [arg.description for arg in block.target.arguments]
+        collect_docrefs(
+            self.root_project, block.target, refs, None, description, *arg_docs
+        )
+        return description
+
     def get_block(self, node: UnparsedMacroUpdate) -> TargetBlock:
         return TargetBlock.from_yaml_block(self.yaml, node)
 
@@ -665,6 +675,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             original_file_path=block.target.original_file_path,
             yaml_key=block.target.yaml_key,
             package_name=block.target.package_name,
+            arguments=block.target.arguments,
             description=description,
             docrefs=refs.docrefs,
             meta=block.target.meta,

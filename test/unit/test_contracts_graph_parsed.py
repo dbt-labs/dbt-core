@@ -8,7 +8,7 @@ from dbt.contracts.graph.parsed import (
     IntermediateSnapshotNode, ParsedNodePatch, ParsedMacro,
     MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation, ParsedHookNode
 )
-from dbt.contracts.graph.unparsed import Quoting, FreshnessThreshold
+from dbt.contracts.graph.unparsed import Quoting
 
 from hologram import ValidationError
 from .utils import ContractTestCase
@@ -1463,6 +1463,7 @@ class TestParsedMacro(ContractTestCase):
             'meta': {},
             'description': 'my macro description',
             'docrefs': [],
+            'arguments': [],
         }
         macro = ParsedMacro(
             name='foo',
@@ -1478,6 +1479,7 @@ class TestParsedMacro(ContractTestCase):
             meta={},
             description='my macro description',
             docrefs=[],
+            arguments=[],
         )
         self.assert_symmetric(macro, macro_dict)
         self.assertEqual(macro.local_vars(), {})
@@ -1493,7 +1495,11 @@ class TestParsedMacro(ContractTestCase):
             'root_path': '/root/',
             'resource_type': 'macro',
             'tags': [],
-            'depends_on': {'macros': []}
+            'depends_on': {'macros': []},
+            'meta': {},
+            'description': 'my macro description',
+            'docrefs': [],
+            'arguments': [],
         }
         self.assert_fails_validation(bad_missing_uid)
 
@@ -1509,6 +1515,10 @@ class TestParsedMacro(ContractTestCase):
             'unique_id': 'macro.test.foo',
             'tags': [],
             'depends_on': {'macros': []},
+            'meta': {},
+            'description': 'my macro description',
+            'docrefs': [],
+            'arguments': [],
             'extra': 'too many fields'
         }
         self.assert_fails_validation(bad_extra_field)

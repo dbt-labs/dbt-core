@@ -10,6 +10,7 @@ import dbt.flags
 
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
+from dbt.clients.jinja import get_rendered
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
@@ -453,10 +454,9 @@ def _process_docs_for_node(
         else:
             obj = _get_node_column(node, column_name)
 
-        raw = obj.description or ''
         # At this point, we know that our documentation string has a
         # 'docs("...")' pointing at it. We want to render it.
-        obj.description = dbt.clients.jinja.get_rendered(raw, context)
+        obj.description = get_rendered(obj.description, context)
 
 
 def _process_docs_for_source(
@@ -465,16 +465,14 @@ def _process_docs_for_source(
 ):
     table_description = source.description
     source_description = source.source_description
-    table_description = dbt.clients.jinja.get_rendered(table_description,
-                                                       context)
-    source_description = dbt.clients.jinja.get_rendered(source_description,
-                                                        context)
+    table_description = get_rendered(table_description, context)
+    source_description = get_rendered(source_description, context)
     source.description = table_description
     source.source_description = source_description
 
     for column in source.columns.values():
         column_desc = column.description
-        column_desc = dbt.clients.jinja.get_rendered(column_desc, context)
+        column_desc = get_rendered(column_desc, context)
         column.description = column_desc
 
 
@@ -482,8 +480,9 @@ def _process_docs_for_macro(
     context: Dict[str, Any], macro: ParsedMacro
 ) -> None:
     for docref in macro.docrefs:
-        raw = macro.description or ''
-        macro.description = dbt.clients.jinja.get_rendered(raw, context)
+        macro.description = get_rendered(macro.description, context)
+        for arg in macro.arguments:
+            arg.description = get_rendered(arg.description, context)
 
 
 def process_docs(manifest: Manifest, config: RuntimeConfig):

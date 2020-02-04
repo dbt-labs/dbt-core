@@ -831,6 +831,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'path', 'original_file_path', 'package_name', 'raw_sql',
                 'root_path', 'name', 'unique_id', 'tags', 'resource_type',
                 'depends_on', 'meta', 'description', 'patch_path', 'docrefs',
+                'arguments'
             }
         )
         # Don't compare the sql, just make sure it exists
@@ -856,6 +857,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'patch_path': None,
                 'docrefs': [],
                 'meta': {},
+                'arguments': [],
             },
             without_sql,
         )
@@ -1303,6 +1305,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         macro_info = LineIndifferent(
             '{% docs macro_info %}\nMy custom test that I wrote that does nothing\n{% enddocs %}'
         )
+        macro_arg_info = LineIndifferent(
+            '{% docs macro_arg_info %}\nThe model for my custom test\n{% enddocs %}'
+        )
 
         return {
             'nodes': {
@@ -1736,6 +1741,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': self.test_root_dir,
                     'unique_id': 'test.macro_info',
                 },
+                'test.macro_arg_info': {
+                    'block_contents': 'The model for my custom test',
+                    'file_contents': macro_arg_info,
+                    'name': 'macro_arg_info',
+                    'original_file_path': docs_path,
+                    'package_name': 'test',
+                    'path': 'docs.md',
+                    'root_path': self.test_root_dir,
+                    'unique_id': 'test.macro_arg_info',
+                },
             },
             'child_map': {
                 'model.test.ephemeral_copy': ['model.test.ephemeral_summary'],
@@ -1822,6 +1837,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'test.table_info',
                         'test.column_info',
                         'test.macro_info',
+                        'test.macro_arg_info',
                     ],
                     'macros': [],
                     'nodes': [],
@@ -1866,6 +1882,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'documentation_name': 'macro_info',
                             'documentation_package': '',
                         },
+                        {
+                            'column_name': None,
+                            'documentation_name': 'macro_arg_info',
+                            'documentation_package': '',
+                        },
                     ],
                     'meta': {
                         'some_key': 100,
@@ -1875,6 +1896,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'macro.test.test_nothing',
                     'tags': [],
                     'root_path': self.test_root_dir,
+                    'arguments': [
+                        {
+                            'name': 'model',
+                            'type': 'Relation',
+                            'description': 'The model for my custom test',
+                        },
+                    ],
                 }
             }
         }

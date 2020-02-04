@@ -23,7 +23,7 @@ import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
-    AdditionalPropertiesAllowed, HasYamlMetadata
+    AdditionalPropertiesAllowed, HasYamlMetadata, MacroArgument
 )
 from dbt.contracts.util import Replaceable, list_str
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -481,7 +481,7 @@ class ParsedNodePatch(ParsedPatch):
 
 @dataclass
 class ParsedMacroPatch(ParsedPatch):
-    pass
+    arguments: List[MacroArgument] = field(default_factory=list)
 
 
 @dataclass
@@ -498,9 +498,10 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
     # TODO: is this ever populated?
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     docrefs: List[Docref] = field(default_factory=list)
-    description: str = field(default='')
+    description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     patch_path: Optional[str] = None
+    arguments: List[MacroArgument] = field(default_factory=list)
 
     def local_vars(self):
         return {}
@@ -517,6 +518,7 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
         self.description = patch.description
         self.docrefs = patch.docrefs
         self.meta = patch.meta
+        self.arguments = patch.arguments
         if dbt.flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
             self.to_dict(validate=True)
