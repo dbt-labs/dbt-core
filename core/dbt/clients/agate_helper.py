@@ -169,8 +169,8 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         elif not isinstance(value, type(existing_type)):
             # actual type mismatch!
             raise RuntimeException(
-                f'Tables contain columns with the same names ({key}), '
-                f'but different types ({value} vs {existing_type})'
+                f"Tables contain columns with the same names ({key}), "
+                f"but different types ({value} vs {existing_type})"
             )
 
     def finalize(self) -> Dict[str, agate.data_types.DataType]:
@@ -184,9 +184,7 @@ class ColumnTypeBuilder(Dict[str, NullableAgateType]):
         return result
 
 
-def _merged_column_types(
-    tables: List[agate.Table]
-) -> Dict[str, agate.data_types.DataType]:
+def _merged_column_types(tables: List[agate.Table]) -> Dict[str, agate.data_types.DataType]:
     # this is a lot like agate.Table.merge, but with handling for all-null
     # rows being "any type".
     new_columns: ColumnTypeBuilder = ColumnTypeBuilder()
@@ -212,10 +210,7 @@ def merge_tables(tables: List[agate.Table]) -> agate.Table:
 
     rows: List[agate.Row] = []
     for table in tables:
-        if (
-            table.column_names == column_names and
-            table.column_types == column_types
-        ):
+        if table.column_names == column_names and table.column_types == column_types:
             rows.extend(table.rows)
         else:
             for row in table.rows:
