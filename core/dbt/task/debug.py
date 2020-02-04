@@ -226,10 +226,10 @@ class DebugTask(BaseTask):
         renderer = ConfigRenderer(generate_base_context(self.cli_vars))
 
         target_name, _ = Profile.render_profile(
-            raw_profile,
-            self.profile_name,
-            getattr(self.args, 'target', None),
-            renderer
+            raw_profile=raw_profile,
+            profile_name=profile_name,
+            target_override=getattr(self.args, 'target', None),
+            renderer=renderer
         )
         return target_name
 
@@ -256,7 +256,7 @@ class DebugTask(BaseTask):
         renderer = ConfigRenderer(generate_base_context(self.cli_vars))
         for profile_name in profile_names:
             try:
-                profile: Profile = QueryCommentedProfile.from_args(
+                profile: Profile = QueryCommentedProfile.render_from_args(
                     self.args, renderer, profile_name
                 )
             except dbt.exceptions.DbtConfigError as exc:

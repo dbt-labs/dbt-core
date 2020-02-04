@@ -753,9 +753,10 @@ class Manifest:
         # first pass: look for models in the current_project
         # second pass: look for models in the node's package
         # final pass: look for models in any package
-        # todo: exclude the packages we have already searched. overriding
-        # a package model in another package doesn't necessarily work atm
-        candidates = [current_project, node_package, None]
+        if current_project == node_package:
+            candidates = [current_project, None]
+        else:
+            candidates = [current_project, node_package, None]
         for candidate in candidates:
             target_model = self.find_refable_by_name(
                 target_model_name,

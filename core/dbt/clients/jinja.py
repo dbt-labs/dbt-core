@@ -3,8 +3,9 @@ import linecache
 import os
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import (
-    List, Union, Set, Optional, Dict, Any, Callable, Iterator, Type, NoReturn
+    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn
 )
 
 import jinja2
@@ -164,6 +165,18 @@ class BaseMacroGenerator:
                 return e.value
 
 
+@dataclass
+class MacroProxy:
+    generator: 'MacroGenerator'
+
+    @property
+    def node(self):
+        return self.generator.node
+
+    def __call__(self, *args, **kwargs):
+        return self.generator.call_macro(*args, **kwargs)
+
+
 class MacroGenerator(BaseMacroGenerator):
     def __init__(self, node, context: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(context)
@@ -185,9 +198,9 @@ class MacroGenerator(BaseMacroGenerator):
             e.stack.append(self.node)
             raise e
 
-    def __call__(self, context: Dict[str, Any]) -> Callable:
+    def __call__(self, context: Dict[str, Any]) -> MacroProxy:
         self.context = context
-        return self.call_macro
+        return MacroProxy(self)
 
 
 class QueryStringGenerator(BaseMacroGenerator):

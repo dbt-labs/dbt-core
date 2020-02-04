@@ -10,7 +10,6 @@ from typing import (
     Tuple,
     NewType,
     MutableMapping,
-    Callable,
 )
 
 from hologram import JsonSchemaMixin
@@ -507,7 +506,7 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
         return {}
 
     @property
-    def generator(self) -> Callable[[Dict[str, Any]], Callable]:
+    def generator(self) -> MacroGenerator:
         """
         Returns a function that can be called to render the macro results.
         """

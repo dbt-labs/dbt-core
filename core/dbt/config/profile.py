@@ -147,7 +147,8 @@ class Profile(HasCredentials):
 
     @staticmethod
     def pick_profile_name(
-        args_profile_name: str, project_profile_name: Optional[str] = None,
+        args_profile_name: Optional[str],
+        project_profile_name: Optional[str] = None,
     ) -> str:
         profile_name = project_profile_name
         if args_profile_name is not None:
@@ -370,7 +371,7 @@ class Profile(HasCredentials):
         threads_override = getattr(args, 'threads', None)
         target_override = getattr(args, 'target', None)
         raw_profiles = read_profile(args.profiles_dir)
-        profile_name = cls.pick_profile_name(args.profile,
+        profile_name = cls.pick_profile_name(getattr(args, 'profile', None),
                                              project_profile_name)
 
         return cls.from_raw_profiles(

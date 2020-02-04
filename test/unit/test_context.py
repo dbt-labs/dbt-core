@@ -3,7 +3,13 @@ import os
 from typing import Set, Dict, Any
 from unittest import mock
 
-from dbt.contracts.graph.parsed import ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
+import pytest
+
+# make sure 'postgres' is in PACKAGES
+from dbt.adapters import postgres  # noqa
+from dbt.contracts.graph.parsed import (
+    ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
+)
 from dbt.context import base, target, configured, providers, docs
 from dbt.node_types import NodeType
 import dbt.exceptions
@@ -317,28 +323,31 @@ def mock_model():
     )
 
 
-import pytest
-
-
 @pytest.fixture
 def get_adapter():
     with mock.patch.object(providers, 'get_adapter') as patch:
         yield patch
 
 
-def test_query_header_context():
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
+@pytest.fixture
+def config():
+    return config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
 
+
+@pytest.fixture
+def manifest(config):
+    return mock_manifest(config)
+
+
+def test_query_header_context(config, manifest):
     ctx = configured.generate_query_header_context(
         config=config,
-        manifest=mock_manifest(config),
+        manifest=manifest,
     )
     assert_has_keys(REQUIRED_QUERY_HEADER_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_parse_context(get_adapter):
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
-    manifest = mock_manifest(config)
+def test_macro_parse_context(config, manifest, get_adapter):
     ctx = providers.generate_parser_macro(
         macro=manifest.macros['macro.root.macro_a'],
         config=config,
@@ -348,9 +357,7 @@ def test_macro_parse_context(get_adapter):
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_runtime_context(get_adapter):
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
-    manifest = mock_manifest(config)
+def test_macro_runtime_context(config, manifest, get_adapter):
     ctx = providers.generate_runtime_macro(
         macro=manifest.macros['macro.root.macro_a'],
         config=config,
@@ -360,34 +367,45 @@ def test_macro_runtime_context(get_adapter):
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_parse_context(get_adapter):
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
+def test_model_parse_context(config, manifest, get_adapter):
     ctx = providers.generate_parser_model(
         model=mock_model(),
         config=config,
-        manifest=mock_manifest(config),
+        manifest=manifest,
         source_config=mock.MagicMock(),
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_runtime_context(get_adapter):
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
+def test_model_runtime_context(config, manifest, get_adapter):
     ctx = providers.generate_runtime_model(
         model=mock_model(),
         config=config,
-        manifest=mock_manifest(config),
+        manifest=manifest,
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_docs_parse_context():
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
+def test_docs_parse_context(config):
     ctx = docs.generate_parser_docs(config, mock_model(), [])
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_docs_runtime_context():
-    config = config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
+def test_docs_runtime_context(config):
     ctx = docs.generate_runtime_docs(config, mock_model(), [], 'root')
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
+
+
+def test_macro_namespace(config, manifest):
+    mn = configured._MacroNamespace('root', 'search')
+    mn.add_macros(manifest.macros.values(), {})
+
+    # same pkg, same name
+    with pytest.raises(dbt.exceptions.CompilationException):
+        mn.add_macros(manifest.macros.values(), {})
+
+    mn.add_macro(mock_macro('some_macro', 'dbt'), {})
+
+    # same namespace, same name (different pkg!)
+    with pytest.raises(dbt.exceptions.CompilationException):
+        mn.add_macro(mock_macro('some_macro', 'dbt_postgres'), {})
