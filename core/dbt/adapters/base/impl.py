@@ -19,7 +19,7 @@ from dbt.exceptions import (
 import dbt.flags
 
 from dbt import deprecations
-from dbt.clients.agate_helper import empty_table
+from dbt.clients.agate_helper import empty_table, merge_tables
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
@@ -1024,15 +1024,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             'information_schema'
         ])
 
-        # calculate the possible schemas for a given schema name
-        all_schema_names: Set[str] = set()
-        for schema in schemas:
-            all_schema_names.update({schema, schema.lower(), schema.upper()})
-
         with self.connection_named(name):
             kwargs = {
                 'information_schema': information_schema,
-                'schemas': all_schema_names
+                'schemas': schemas
             }
             table = self.execute_macro(
                 GET_CATALOG_MACRO_NAME,
@@ -1140,7 +1135,8 @@ def catch_as_completed(
     futures  # typing: List[Future[agate.Table]]
 ) -> Tuple[agate.Table, List[Exception]]:
 
-    catalogs: agate.Table = agate.Table(rows=[])
+    # catalogs: agate.Table = agate.Table(rows=[])
+    tables: List[agate.Table] = []
     exceptions: List[Exception] = []
 
     for future in as_completed(futures):
@@ -1148,7 +1144,7 @@ def catch_as_completed(
         # we want to re-raise on ctrl+c and BaseException
         if exc is None:
             catalog = future.result()
-            catalogs = agate.Table.merge([catalogs, catalog])
+            tables.append(catalog)
         elif (
             isinstance(exc, KeyboardInterrupt) or
             not isinstance(exc, Exception)
@@ -1160,4 +1156,4 @@ def catch_as_completed(
             )
             # exc is not None, derives from Exception, and isn't ctrl+c
             exceptions.append(exc)
-    return catalogs, exceptions
+    return merge_tables(tables), exceptions

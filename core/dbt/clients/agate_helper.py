@@ -4,7 +4,9 @@ import agate
 import datetime
 import isodate
 import json
-from typing import Iterable
+from typing import Iterable, List, Dict, Union
+
+from dbt.exceptions import RuntimeException
 
 
 BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
@@ -104,3 +106,85 @@ def from_csv(abspath, text_columns):
         if fp.read(1) != BOM:
             fp.seek(0)
         return agate.Table.from_csv(fp, column_types=type_tester)
+
+
+class _NullMarker:
+    pass
+
+
+NullableAgateType = Union[agate.data_types.DataType, _NullMarker]
+
+
+class ColumnTypeBuilder(Dict[str, NullableAgateType]):
+    def __init__(self):
+        super().__init__()
+
+    def __setitem__(self, key, value):
+        if key not in self:
+            super().__setitem__(key, value)
+            return
+
+        existing_type = self[key]
+        if isinstance(existing_type, _NullMarker):
+            # overwrite
+            super().__setitem__(key, value)
+        elif isinstance(value, _NullMarker):
+            # use the existing value
+            return
+        elif not isinstance(value, type(existing_type)):
+            # actual type mismatch!
+            raise RuntimeException(
+                f'Tables contain columns with the same names ({key}), '
+                f'but different types ({value} vs {existing_type})'
+            )
+
+    def finalize(self) -> Dict[str, agate.data_types.DataType]:
+        result: Dict[str, agate.data_types.DataType] = {}
+        for key, value in self.items():
+            if isinstance(value, _NullMarker):
+                # this is what agate would do.
+                result[key] = agate.data_types.Number()
+            else:
+                result[key] = value
+        return result
+
+
+def _merged_column_types(
+    tables: List[agate.Table]
+) -> Dict[str, agate.data_types.DataType]:
+    # this is a lot like agate.Table.merge, but with handling for all-null
+    # rows being "any type".
+    new_columns: ColumnTypeBuilder = ColumnTypeBuilder()
+    for table in tables:
+        for i in range(len(table.columns)):
+            column_name: str = table.column_names[i]
+            column_type: NullableAgateType = table.column_types[i]
+            # avoid over-sensitive type inference
+            if all(x is None for x in table.columns[column_name]):
+                column_type = _NullMarker()
+            new_columns[column_name] = column_type
+
+    return new_columns.finalize()
+
+
+def merge_tables(tables: List[agate.Table]) -> agate.Table:
+    """This is similar to agate.Table.merge, but it handles rows of all 'null'
+    values more gracefully during merges.
+    """
+    new_columns = _merged_column_types(tables)
+    column_names = tuple(new_columns.keys())
+    column_types = tuple(new_columns.values())
+
+    rows: List[agate.Row] = []
+    for table in tables:
+        if (
+            table.column_names == column_names and
+            table.column_types == column_types
+        ):
+            rows.extend(table.rows)
+        else:
+            for row in table.rows:
+                data = [row.get(name, None) for name in column_names]
+                rows.append(agate.Row(data, column_names))
+    # _is_fork to tell agate that we already made things into `Row`s.
+    return agate.Table(rows, column_names, column_types, _is_fork=True)

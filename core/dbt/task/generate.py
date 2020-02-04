@@ -235,15 +235,15 @@ class GenerateTask(CompileTask):
         results.write(path)
         write_manifest(self.config, self.manifest)
 
-        dbt.ui.printer.print_timestamped_line(
-            'Catalog written to {}'.format(os.path.abspath(path))
-        )
-
         if exceptions:
             logger.error(
                 'dbt encountered {} failure{} while writing the catalog'
-                .format(len(exceptions), (len(exceptions) == 1) * 's')
+                .format(len(exceptions), (len(exceptions) != 1) * 's')
             )
+
+        dbt.ui.printer.print_timestamped_line(
+            'Catalog written to {}'.format(os.path.abspath(path))
+        )
 
         return results
 

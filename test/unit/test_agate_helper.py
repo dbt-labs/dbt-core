@@ -1,5 +1,7 @@
 import unittest
 
+import agate
+
 from datetime import datetime
 from decimal import Decimal
 from isodate import tzinfo
@@ -95,3 +97,39 @@ class TestAgateHelper(unittest.TestCase):
                 fp.write('a\n{}'.format(dt).encode('utf-8'))
             tbl = agate_helper.from_csv(path, ())
             self.assertEqual(tbl[0][0], expected)
+
+    def test_merge_allnull(self):
+        t1 = agate.Table([(1, 'a', None), (2, 'b', None)], ('a', 'b', 'c'))
+        t2 = agate.Table([(3, 'c', None), (4, 'd', None)], ('a', 'b', 'c'))
+        result = agate_helper.merge_tables([t1, t2])
+        self.assertEqual(result.column_names, ('a', 'b', 'c'))
+        assert isinstance(result.column_types[0], agate.data_types.Number)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate.data_types.Number)
+        self.assertEqual(len(result), 4)
+
+    def test_merge_mixed(self):
+        t1 = agate.Table([(1, 'a', None), (2, 'b', None)], ('a', 'b', 'c'))
+        t2 = agate.Table([(3, 'c', 'dog'), (4, 'd', 'cat')], ('a', 'b', 'c'))
+        t3 = agate.Table([(3, 'c', None), (4, 'd', None)], ('a', 'b', 'c'))
+
+        result = agate_helper.merge_tables([t1, t2])
+        self.assertEqual(result.column_names, ('a', 'b', 'c'))
+        assert isinstance(result.column_types[0], agate.data_types.Number)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate.data_types.Text)
+        self.assertEqual(len(result), 4)
+
+        result = agate_helper.merge_tables([t2, t3])
+        self.assertEqual(result.column_names, ('a', 'b', 'c'))
+        assert isinstance(result.column_types[0], agate.data_types.Number)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate.data_types.Text)
+        self.assertEqual(len(result), 4)
+
+        result = agate_helper.merge_tables([t1, t2, t3])
+        self.assertEqual(result.column_names, ('a', 'b', 'c'))
+        assert isinstance(result.column_types[0], agate.data_types.Number)
+        assert isinstance(result.column_types[1], agate.data_types.Text)
+        assert isinstance(result.column_types[2], agate.data_types.Text)
+        self.assertEqual(len(result), 6)
