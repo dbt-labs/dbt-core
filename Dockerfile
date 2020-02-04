@@ -26,19 +26,23 @@ RUN pip3 install tox wheel
 
 RUN python2.7 -m pip install virtualenv wheel && \
     python2.7 -m virtualenv /home/tox/venv2.7 && \
-    /home/tox/venv2.7/bin/python -m pip install -U pip tox
+    /home/tox/venv2.7/bin/python -m pip install -U pip tox && \
+    chown -R dbt_test_user /home/tox/venv2.7
 
 RUN python3.6 -m pip install -U pip wheel && \
     python3.6 -m venv /home/tox/venv3.6 && \
-    /home/tox/venv3.6/bin/python -m pip install -U pip tox
+    /home/tox/venv3.6/bin/python -m pip install -U pip tox && \
+    chown -R dbt_test_user /home/tox/venv3.6
 
 RUN python3.7 -m pip install -U pip wheel && \
     python3.7 -m venv /home/tox/venv3.7 && \
-    /home/tox/venv3.7/bin/python -m pip install -U pip tox
+    /home/tox/venv3.7/bin/python -m pip install -U pip tox && \
+    chown -R dbt_test_user /home/tox/venv3.7
 
 RUN python3.8 -m pip install -U pip wheel && \
     python3.8 -m venv /home/tox/venv3.8 && \
-    /home/tox/venv3.8/bin/python -m pip install -U pip tox
+    /home/tox/venv3.8/bin/python -m pip install -U pip tox && \
+    chown -R dbt_test_user /home/tox/venv3.8
 
 USER dbt_test_user
 
