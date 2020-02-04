@@ -150,7 +150,7 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasTests, HasYamlMetadata):
 class MacroArgument(dbtClassMixin):
     name: str
     type: Optional[str] = None
-    description: str = ''
+    description: str = ""
 
 
 @dataclass

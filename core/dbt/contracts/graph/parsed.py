@@ -512,7 +512,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     tags: List[str] = field(default_factory=list)
     # TODO: is this ever populated?
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
-    description: str = ''
+    description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
