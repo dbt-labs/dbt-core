@@ -65,7 +65,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-
+  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -87,13 +87,12 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-
+  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
   steps:
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '3.7'
       architecture: 'x64'
-
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
   - script: python -m tox -e pywin-bigquery
@@ -105,7 +104,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-
+  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -123,3 +122,33 @@ jobs:
       REDSHIFT_TEST_PORT: $(REDSHIFT_TEST_PORT)
       REDSHIFT_TEST_HOST: $(REDSHIFT_TEST_HOST)
     displayName: Run integration tests
+
+- job: BuildWheel
+  pool:
+    vmImage: 'vs2017-win2016'
+  dependsOn:
+    - UnitTest
+    - PostgresIntegrationTest
+    - SnowflakeIntegrationTest
+    - BigQueryIntegrationTest
+    - RedshiftIntegrationTest
+  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.7'
+        architecture: 'x64'
+    - script: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      displayName: Install dependencies
+    - task: ShellScript@2
+      inputs:
+        scriptPath: scripts/build-wheels.sh
+    - task: CopyFiles@2
+      inputs:
+        sourceFolder: '$(Build.SourcesDirectory)/dist'
+        contents: '(*.whl|*.tar.gz)'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: dists
