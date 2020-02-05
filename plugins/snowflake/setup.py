@@ -14,7 +14,7 @@ except ImportError:
 
 
 package_name = "dbt-snowflake"
-package_version = "0.15.2a1"
+package_version = "0.15.2"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -44,6 +44,8 @@ setup(
         'azure-storage-blob~=2.1',
         'azure-storage-common~=2.1',
         'urllib3<1.25.0',
+        # this seems sufficiently broad
+        'cryptography>=2,<3',
     ],
     zip_safe=False,
     classifiers=[

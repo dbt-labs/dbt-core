@@ -88,3 +88,32 @@ class TestTargetConfigs(DBTIntegrationTest):
         dirs = list(self.new_dirs())
         self.assertEqual(len(dirs), 1)
         self.assertTrue(os.path.exists(os.path.join(dirs[0], 'manifest.json')))
+
+
+class TestDisabledConfigs(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'seeds': {
+                'quote_columns': False,
+                'test': {
+                    'seed': {
+                        'enabled': False,
+                    }
+                }
+            },
+        }
+
+    @property
+    def models(self):
+        return "empty-models"
+
+    @use_profile('postgres')
+    def test_postgres_disable_seed_partial_parse(self):
+        self.run_dbt(['--partial-parse', 'seed'])
+        self.run_dbt(['--partial-parse', 'seed'])

@@ -1,4 +1,20 @@
-## dbt 0.15.1 (To be released)
+## dbt 0.15.2 (February 2, 2020)
+
+This is a bugfix release.
+
+### Features
+- Add support for Snowflake OAuth authentication ([#2050](https://github.com/fishtown-analytics/dbt/issues/2050), [#2069](https://github.com/fishtown-analytics/dbt/pull/2069))
+- Add a -t flag as an alias for `dbt run --target` ([#1281](https://github.com/fishtown-analytics/dbt/issues/1281), [#2057](https://github.com/fishtown-analytics/dbt/pull/2057))
+
+### Fixes
+- Fix for UnicodeDecodeError when installing dbt via pip ([#1771](https://github.com/fishtown-analytics/dbt/issues/1771), [#2076](https://github.com/fishtown-analytics/dbt/pull/2076))
+- Fix for ability to clean "protected" paths in the `dbt clean` command and improve logging ([#2059](https://github.com/fishtown-analytics/dbt/issues/2059), [#2060](https://github.com/fishtown-analytics/dbt/pull/2060))
+- Fix for dbt server error when `{% docs %}` tags are malformed ([#2066](https://github.com/fishtown-analytics/dbt/issues/2066), [#2067](https://github.com/fishtown-analytics/dbt/pull/2067))
+- Fix for errant duplicate resource errors when models are disabled and partial parsing is enabled ([#2055](https://github.com/fishtown-analytics/dbt/issues/2055), [#2056](https://github.com/fishtown-analytics/dbt/pull/2056))
+- Fix for errant duplicate resource errors when a resource is included in multiple source paths ([#2064](https://github.com/fishtown-analytics/dbt/issues/2064), [#2065](https://github.com/fishtown-analytics/dbt/pull/2065/files))
+
+
+## dbt 0.15.1 (January 17, 2020)
 
 This is a bugfix release.
 

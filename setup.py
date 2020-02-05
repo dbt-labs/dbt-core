@@ -1,7 +1,16 @@
 #!/usr/bin/env python
-from setuptools import setup
 import os
+import sys
 
+from setuptools import setup
+try:
+    from setuptools import find_namespace_packages
+except ImportError:
+    # the user has a downlevel version of setuptools.
+    print('Error: dbt requires setuptools v40.1.0 or higher.')
+    print('Please upgrade setuptools with "pip install --upgrade setuptools" '
+          'and try again')
+    sys.exit(1)
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, 'README.md')) as f:
@@ -9,7 +18,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 package_name = "dbt"
-package_version = "0.15.2a1"
+package_version = "0.15.2"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
