@@ -238,9 +238,7 @@ class BaseMacroGenerator:
     def call_macro(self, *args, **kwargs):
         # called from __call__ methods
         if self.context is None:
-            raise InternalException(
-                'Context is still None in call_macro!'
-            )
+            raise InternalException("Context is still None in call_macro!")
         assert self.context is not None
 
         macro = self.get_macro()
