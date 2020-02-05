@@ -38,9 +38,7 @@ colorama.init(wrap=colorama_wrap)
 
 STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = (
-    '{record.time:%Y-%m-%d %H:%M:%S.%f%z} '
-    '({record.thread_name}): '
-    '{record.message}'
+    "{record.time:%Y-%m-%d %H:%M:%S.%f%z} " "({record.thread_name}): " "{record.message}"
 )
 
 SECRET_ENV_PREFIX = 'DBT_ENV_SECRET_'
