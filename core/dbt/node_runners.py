@@ -6,19 +6,19 @@ from typing import List, Dict, Any, Optional
 
 from dbt import deprecations
 from dbt.adapters.base import BaseRelation
-from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.exceptions import (
-    NotImplementedException, CompilationException, RuntimeException,
-    InternalException, missing_materialization
-)
-from dbt.node_types import NodeType
+from dbt.clients.jinja import MacroGenerator
+from dbt.compilation import compile_node
+from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     RunModelResult, collect_timing_info, SourceFreshnessResult, PartialResult,
 )
-from dbt.compilation import compile_node
-
-from dbt.context.providers import generate_runtime_model
+from dbt.exceptions import (
+    NotImplementedException, CompilationException, RuntimeException,
+    InternalException, missing_materialization
+)
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_types import NodeType
 import dbt.exceptions
 import dbt.tracking
 import dbt.ui.printer
@@ -447,7 +447,7 @@ class ModelRunner(CompileRunner):
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
         try:
-            result = materialization_macro.generator(context)()
+            result = MacroGenerator(materialization_macro, context)()
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 

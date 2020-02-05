@@ -7,6 +7,7 @@ import pytest
 
 # make sure 'postgres' is in PACKAGES
 from dbt.adapters import postgres  # noqa
+from dbt.clients.jinja import MacroStack
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
 )
@@ -397,7 +398,7 @@ def test_docs_runtime_context(config):
 
 
 def test_macro_namespace(config, manifest):
-    mn = configured._MacroNamespace('root', 'search')
+    mn = configured.MacroNamespace('root', 'search', MacroStack())
     mn.add_macros(manifest.macros.values(), {})
 
     # same pkg, same name

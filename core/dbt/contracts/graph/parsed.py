@@ -17,7 +17,6 @@ from hologram.helpers import (
     StrEnum, register_pattern
 )
 
-from dbt.clients.jinja import MacroGenerator
 from dbt.clients.system import write_file
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
@@ -147,9 +146,22 @@ class HasUniqueID(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class DependsOn(JsonSchemaMixin, Replaceable):
-    nodes: List[str] = field(default_factory=list)
+class MacroDependsOn(JsonSchemaMixin, Replaceable):
     macros: List[str] = field(default_factory=list)
+
+    # 'in' on lists is O(n) so this is O(n^2) for # of macros
+    def add_macro(self, value: str):
+        if value not in self.macros:
+            self.macros.append(value)
+
+
+@dataclass
+class DependsOn(MacroDependsOn):
+    nodes: List[str] = field(default_factory=list)
+
+    def add_node(self, value: str):
+        if value not in self.nodes:
+            self.nodes.append(value)
 
 
 @dataclass
@@ -485,11 +497,6 @@ class ParsedMacroPatch(ParsedPatch):
 
 
 @dataclass
-class MacroDependsOn(JsonSchemaMixin, Replaceable):
-    macros: List[str] = field(default_factory=list)
-
-
-@dataclass
 class ParsedMacro(UnparsedMacro, HasUniqueID):
     name: str
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
@@ -504,13 +511,6 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
 
     def local_vars(self):
         return {}
-
-    @property
-    def generator(self) -> MacroGenerator:
-        """
-        Returns a function that can be called to render the macro results.
-        """
-        return MacroGenerator(self)
 
     def patch(self, patch: ParsedMacroPatch):
         self.patch_path: Optional[str] = patch.original_file_path

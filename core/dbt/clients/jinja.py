@@ -2,8 +2,8 @@ import codecs
 import linecache
 import os
 import tempfile
+import threading
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import (
     List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn
 )
@@ -15,12 +15,16 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
-import dbt.exceptions
-import dbt.utils
+from dbt.utils import (
+    get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name
+)
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
+from dbt.exceptions import (
+    InternalException, raise_compiler_error, CompilationException,
+    invalid_materialization_argument, MacroReturn
+)
 from dbt.flags import MACRO_DEBUGGING
-
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
@@ -64,7 +68,7 @@ class MacroFuzzParser(jinja2.parser.Parser):
         # modified to fuzz macros defined in the same file. this way
         # dbt can understand the stack of macros being called.
         #  - @cmcarthur
-        node.name = dbt.utils.get_dbt_macro_name(
+        node.name = get_dbt_macro_name(
             self.parse_assign_target(name_only=True).name)
 
         self.parse_signature(node)
@@ -138,7 +142,7 @@ class BaseMacroGenerator:
         # make the module. previously we set both vars and local, but that's
         # redundant: They both end up in the same place
         module = template.make_module(vars=self.context, shared=False)
-        macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
+        macro = module.__dict__[get_dbt_macro_name(name)]
         module.__dict__.update(self.context)
         return macro
 
@@ -147,11 +151,11 @@ class BaseMacroGenerator:
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            dbt.exceptions.raise_compiler_error(str(e))
+            raise_compiler_error(str(e))
 
     def call_macro(self, *args, **kwargs):
         if self.context is None:
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 'Context is still None in call_macro!'
             )
         assert self.context is not None
@@ -161,46 +165,76 @@ class BaseMacroGenerator:
         with self.exception_handler():
             try:
                 return macro(*args, **kwargs)
-            except dbt.exceptions.MacroReturn as e:
+            except MacroReturn as e:
                 return e.value
 
 
-@dataclass
-class MacroProxy:
-    generator: 'MacroGenerator'
+class MacroStack(threading.local):
+    def __init__(self):
+        super().__init__()
+        self.call_stack = []
 
     @property
-    def node(self):
-        return self.generator.node
+    def depth(self) -> int:
+        return len(self.call_stack)
 
-    def __call__(self, *args, **kwargs):
-        return self.generator.call_macro(*args, **kwargs)
+    def push(self, name):
+        self.call_stack.append(name)
+
+    def pop(self, name):
+        got = self.call_stack.pop()
+        if got != name:
+            raise InternalException(f'popped {got}, expected {name}')
 
 
 class MacroGenerator(BaseMacroGenerator):
-    def __init__(self, node, context: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self,
+        macro,
+        context: Optional[Dict[str, Any]] = None,
+        node: Optional[Any] = None,
+        stack: Optional[MacroStack] = None
+    ) -> None:
         super().__init__(context)
+        self.macro = macro
         self.node = node
+        self.stack = stack
 
     def get_template(self):
-        return template_cache.get_node_template(self.node)
+        return template_cache.get_node_template(self.macro)
 
     def get_name(self) -> str:
-        return self.node.name
+        return self.macro.name
 
     @contextmanager
     def exception_handler(self) -> Iterator[None]:
         try:
             yield
         except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
-            dbt.exceptions.raise_compiler_error(str(e), self.node)
-        except dbt.exceptions.CompilationException as e:
-            e.stack.append(self.node)
+            raise_compiler_error(str(e), self.macro)
+        except CompilationException as e:
+            e.stack.append(self.macro)
             raise e
 
-    def __call__(self, context: Dict[str, Any]) -> MacroProxy:
-        self.context = context
-        return MacroProxy(self)
+    @contextmanager
+    def track_call(self):
+        if self.stack is None or self.node is None:
+            yield
+        else:
+            unique_id = self.macro.unique_id
+            depth = self.stack.depth
+            # only mark depth=0 as a dependency
+            if depth == 0:
+                self.node.depends_on.add_macro(unique_id)
+            self.stack.push(unique_id)
+            try:
+                yield
+            finally:
+                self.stack.pop(unique_id)
+
+    def __call__(self, *args, **kwargs):
+        with self.track_call():
+            return self.call_macro(*args, **kwargs)
 
 
 class QueryStringGenerator(BaseMacroGenerator):
@@ -250,11 +284,13 @@ class MaterializationExtension(jinja2.ext.Extension):
                 adapter_name = value.value
 
             else:
-                dbt.exceptions.invalid_materialization_argument(
-                    materialization_name, target.name)
+                invalid_materialization_argument(
+                    materialization_name, target.name
+                )
 
-        node.name = dbt.utils.get_materialization_macro_name(
-            materialization_name, adapter_name)
+        node.name = get_materialization_macro_name(
+            materialization_name, adapter_name
+        )
 
         node.body = parser.parse_statements(('name:endmaterialization',),
                                             drop_needle=True)
@@ -271,7 +307,7 @@ class DocumentationExtension(jinja2.ext.Extension):
 
         node.args = []
         node.defaults = []
-        node.name = dbt.utils.get_docs_macro_name(docs_name)
+        node.name = get_docs_macro_name(docs_name)
         node.body = parser.parse_statements(('name:enddocs',),
                                             drop_needle=True)
         return node
@@ -308,7 +344,7 @@ def create_macro_capture_env(node):
                         self.node.name, path))
 
             # match jinja's message
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 "{!r} is undefined".format(self.name),
                 node=self.node
             )
@@ -356,9 +392,9 @@ def catch_jinja(node=None) -> Iterator[None]:
         yield
     except jinja2.exceptions.TemplateSyntaxError as e:
         e.translated = False
-        raise dbt.exceptions.CompilationException(str(e), node) from e
+        raise CompilationException(str(e), node) from e
     except jinja2.exceptions.UndefinedError as e:
-        raise dbt.exceptions.CompilationException(str(e), node) from e
+        raise CompilationException(str(e), node) from e
 
 
 def parse(string):
