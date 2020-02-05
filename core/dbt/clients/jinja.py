@@ -28,7 +28,7 @@ from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
 from dbt.contracts.graph.compiled import CompiledGenericTestNode
 from dbt.contracts.graph.parsed import ParsedGenericTestNode
 from dbt.exceptions import (
-    InternalException, raise_compiler_error, CompilationException,
+    InternalException,
     invalid_materialization_argument, MacroReturn, JinjaRenderingException,
     UndefinedMacroException
 )
@@ -276,7 +276,7 @@ class MacroStack(threading.local):
     def pop(self, name):
         got = self.call_stack.pop()
         if got != name:
-            raise InternalException(f'popped {got}, expected {name}')
+            raise InternalException(f"popped {got}, expected {name}")
 
 
 class MacroGenerator(BaseMacroGenerator):
@@ -285,7 +285,7 @@ class MacroGenerator(BaseMacroGenerator):
         macro,
         context: Optional[Dict[str, Any]] = None,
         node: Optional[Any] = None,
-        stack: Optional[MacroStack] = None
+        stack: Optional[MacroStack] = None,
     ) -> None:
         super().__init__(context)
         self.macro = macro
@@ -377,13 +377,9 @@ class MaterializationExtension(jinja2.ext.Extension):
                 adapter_name = value.value
 
             else:
-                invalid_materialization_argument(
-                    materialization_name, target.name
-                )
+                invalid_materialization_argument(materialization_name, target.name)
 
-        node.name = get_materialization_macro_name(
-            materialization_name, adapter_name
-        )
+        node.name = get_materialization_macro_name(materialization_name, adapter_name)
 
         node.body = parser.parse_statements(('name:endmaterialization',),
                                             drop_needle=True)
