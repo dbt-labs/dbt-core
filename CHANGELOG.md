@@ -2,6 +2,7 @@
 
 ### Features
 - I added this changelog entry
+- I updated this changelog entry
 
 ## dbt 0.15.2 (February 2, 2020)
 
