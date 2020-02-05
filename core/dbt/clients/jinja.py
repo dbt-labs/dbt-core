@@ -72,8 +72,7 @@ class MacroFuzzParser(jinja2.parser.Parser):
         # modified to fuzz macros defined in the same file. this way
         # dbt can understand the stack of macros being called.
         #  - @cmcarthur
-        node.name = get_dbt_macro_name(
-            self.parse_assign_target(name_only=True).name)
+        node.name = get_dbt_macro_name(self.parse_assign_target(name_only=True).name)
 
         self.parse_signature(node)
         node.body = self.parse_statements(('name:endmacro',),
