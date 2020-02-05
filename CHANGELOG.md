@@ -1,3 +1,8 @@
+## dbt 0.16.0 (Unnkown)
+
+### Features
+- I added this changelog entry
+
 ## dbt 0.15.2 (February 2, 2020)
 
 This is a bugfix release.
