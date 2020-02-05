@@ -65,7 +65,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
+  condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/users/'))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -87,7 +87,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
+  condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/users/'))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -104,7 +104,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
+  condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/users/'))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -132,7 +132,7 @@ jobs:
     - SnowflakeIntegrationTest
     - BigQueryIntegrationTest
     - RedshiftIntegrationTest
-  condition: and(succeeded(), not(variables.System.PullRequest.IsFork))
+  condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/users/'))
   steps:
     - task: UsePythonVersion@0
       inputs:
