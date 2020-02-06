@@ -14,11 +14,8 @@ from dbt.contracts.results import (
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
-<<<<<<< HEAD
 from dbt.logger import GLOBAL_LOGGER as logger
-=======
 from dbt.perf_utils import get_full_manifest
->>>>>>> 483b8745... fix --no-compile flag for docs generate
 import dbt.ui.printer
 import dbt.utils
 import dbt.compilation
@@ -191,7 +188,7 @@ class GenerateTask(CompileTask):
             )
         return self.manifest
 
-    def run(self):
+    def run(self) -> CatalogResults:
         compile_results = None
         if self.args.compile:
             compile_results = CompileTask.run(self)
@@ -271,7 +268,7 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
-    def interpret_results(self, results):
+    def interpret_results(self, results: Optional[CatalogResults]) -> bool:
         if results is None:
             return False
         if results.errors:
