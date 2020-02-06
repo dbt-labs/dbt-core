@@ -60,7 +60,7 @@ Check the requirements for the '{package}' package, or run dbt again with \
 """
 
 MALFORMED_PACKAGE_ERROR = """\
-The packages.yml file in this project is malformed. Please double check 
+The packages.yml file in this project is malformed. Please double check
 the contents of this file and fix any errors before retrying.
 
 You can find more information on the syntax for this file here:
