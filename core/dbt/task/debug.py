@@ -16,7 +16,7 @@ from dbt.config import Project, Profile
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.ui.printer import green, red
 
-from dbt.task.base import BaseTask
+from dbt.task.base import BaseTask, get_nearest_project_dir
 
 PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 
@@ -70,7 +70,15 @@ class DebugTask(BaseTask):
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
         self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')
-        self.project_dir = args.project_dir or os.getcwd()
+        try:
+            self.project_dir = get_nearest_project_dir(self.args)
+        except dbt.exceptions.Exception:
+            # we probably couldn't find a project directory. Set project dir
+            # to whatever was given, or default to the current directory.
+            if args.project_dir:
+                self.project_dir = args.project_dir
+            else:
+                self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, 'dbt_project.yml')
         self.cli_vars = dbt.utils.parse_cli_vars(
             getattr(self.args, 'vars', '{}')
@@ -112,6 +120,7 @@ class DebugTask(BaseTask):
         print('python path: {}'.format(sys.executable))
         print('os info: {}'.format(platform.platform()))
         print('Using profiles.yml file at {}'.format(self.profile_path))
+        print('Using dbt_project.yml file at {}'.format(self.project_path))
         print('')
         self.test_configuration()
         self.test_dependencies()
@@ -160,7 +169,7 @@ class DebugTask(BaseTask):
             return red('ERROR not found')
         return green('OK found')
 
-    def _choose_profile_name(self):
+    def _choose_profile_names(self) -> Optional[List[str]]:
         assert self.project or self.project_fail_details, \
             '_load_project() required'
 
@@ -171,7 +180,7 @@ class DebugTask(BaseTask):
         args_profile = getattr(self.args, 'profile', None)
 
         try:
-            return Profile.pick_profile_name(args_profile, project_profile)
+            return [Profile.pick_profile_name(args_profile, project_profile)]
         except dbt.exceptions.DbtConfigError:
             pass
         # try to guess
@@ -182,25 +191,25 @@ class DebugTask(BaseTask):
                 self.messages.append('The profiles.yml has no profiles')
             elif len(profiles) == 1:
                 self.messages.append(ONLY_PROFILE_MESSAGE.format(profiles[0]))
-                return profiles[0]
+                return profiles
             else:
                 self.messages.append(MULTIPLE_PROFILE_MESSAGE.format(
                     '\n'.join(' - {}'.format(o) for o in profiles)
                 ))
+                return profiles
         return None
 
-    def _choose_target_name(self):
-        has_raw_profile = (self.raw_profile_data and self.profile_name and
-                           self.profile_name in self.raw_profile_data)
-        # mypy appeasement, we checked just above
-        assert self.raw_profile_data is not None
-        assert self.profile_name is not None
+    def _choose_target_name(self, profile_name: str):
+        has_raw_profile = (self.raw_profile_data and profile_name and
+                           profile_name in self.raw_profile_data)
 
         if has_raw_profile:
-            raw_profile = self.raw_profile_data[self.profile_name]
+            # mypy appeasement, we checked just above
+            assert self.raw_profile_data is not None
+            raw_profile = self.raw_profile_data[profile_name]
 
             target_name, _ = Profile.render_profile(
-                raw_profile, self.profile_name,
+                raw_profile, profile_name,
                 getattr(self.args, 'target', None), self.cli_vars
             )
             return target_name
@@ -224,16 +233,24 @@ class DebugTask(BaseTask):
             if isinstance(raw_profile_data, dict):
                 self.raw_profile_data = raw_profile_data
 
-        self.profile_name = self._choose_profile_name()
-        self.target_name = self._choose_target_name()
-        try:
-            self.profile = QueryCommentedProfile.from_args(
-                self.args, self.profile_name
-            )
-        except dbt.exceptions.DbtConfigError as exc:
-            self.profile_fail_details = str(exc)
-            return red('ERROR invalid')
+        profile_errors = []
+        profile_names = self._choose_profile_names()
+        for profile_name in profile_names:
+            try:
+                profile: Profile = QueryCommentedProfile.from_args(
+                    self.args, profile_name
+                )
+            except dbt.exceptions.DbtConfigError as exc:
+                profile_errors.append(str(exc))
+            else:
+                if len(profile_names) == 1:
+                    # if a profile was specified, set it on the task
+                    self.target_name = self._choose_target_name(profile_name)
+                    self.profile = profile
 
+        if profile_errors:
+            self.profile_fail_details = '\n\n'.join(profile_errors)
+            return red('ERROR invalid')
         return green('OK found and valid')
 
     def test_git(self):
@@ -279,8 +296,6 @@ class DebugTask(BaseTask):
             return
         if self.profile_fail_details == FILE_NOT_FOUND:
             return
-        if self.profile_name is None:
-            return  # we expect an error (no profile provided)
         print('Profile loading failed for the following reason:')
         print(self.profile_fail_details)
         print('')

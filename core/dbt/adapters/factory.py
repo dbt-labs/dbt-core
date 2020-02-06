@@ -49,10 +49,10 @@ class AdpaterContainer:
             mod: Any = import_module('.' + name, 'dbt.adapters')
         except ModuleNotFoundError as exc:
             # if we failed to import the target module in particular, inform
-            # the user about it via a runtiem error
-            logger.info(f'Error importing adapter: {exc}')
+            # the user about it via a runtime error
             if exc.name == 'dbt.adapters.' + name:
                 raise RuntimeException(f'Could not find adapter type {name}!')
+            logger.info(f'Error importing adapter: {exc}')
             # otherwise, the error had to have come from some underlying
             # library. Log the stack trace.
             logger.debug('', exc_info=True)
