@@ -29,6 +29,7 @@ class GenerateTest(unittest.TestCase):
         result = generate.CatalogResults(
             nodes=generate.Catalog(columns).make_unique_id_map(self.manifest),
             generated_at=datetime.utcnow(),
+            errors=None,
         )
         return result.to_dict(omit_none=False)['nodes']
 

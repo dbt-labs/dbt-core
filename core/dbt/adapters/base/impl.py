@@ -1,4 +1,6 @@
 import abc
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future  # noqa - we use this for typing only
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
@@ -17,10 +19,11 @@ from dbt.exceptions import (
 import dbt.flags
 
 from dbt import deprecations
-from dbt.clients.agate_helper import empty_table
+from dbt.clients.agate_helper import empty_table, merge_tables
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
+from dbt.exceptions import warn_or_error
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
@@ -117,7 +120,7 @@ def _relation_name(rel: Optional[BaseRelation]) -> str:
         return str(rel)
 
 
-class SchemaSearchMap(dict):
+class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
     """A utility class to keep track of what information_schema tables to
     search for what schemas
     """
@@ -1009,28 +1012,50 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return table.where(_catalog_filter_schemas(manifest))
 
-    def _get_catalog_information_schemas(
-        self, manifest: Manifest
-    ) -> List[InformationSchema]:
-        return list(self._get_cache_schemas(manifest).keys())
+    def _get_one_catalog(
+        self,
+        information_schema: InformationSchema,
+        schemas: Set[str],
+        manifest: Manifest,
+    ) -> agate.Table:
 
-    def get_catalog(self, manifest: Manifest) -> agate.Table:
-        """Get the catalog for this manifest by running the get catalog macro.
-        Returns an agate.Table of catalog information.
-        """
-        information_schemas = self._get_catalog_information_schemas(manifest)
-        # make it a list so macros can index into it.
-        kwargs = {'information_schemas': information_schemas}
-        table = self.execute_macro(
-            GET_CATALOG_MACRO_NAME,
-            kwargs=kwargs,
-            release=True,
-            # pass in the full manifest so we get any local project overrides
-            manifest=manifest,
-        )
+        name = '.'.join([
+            str(information_schema.database),
+            'information_schema'
+        ])
+
+        with self.connection_named(name):
+            kwargs = {
+                'information_schema': information_schema,
+                'schemas': schemas
+            }
+            table = self.execute_macro(
+                GET_CATALOG_MACRO_NAME,
+                kwargs=kwargs,
+                release=True,
+                # pass in the full manifest so we get any local project
+                # overrides
+                manifest=manifest,
+            )
 
         results = self._catalog_filter_table(table, manifest)
         return results
+
+    def get_catalog(
+        self, manifest: Manifest
+    ) -> Tuple[agate.Table, List[Exception]]:
+        # snowflake is super slow. split it out into the specified threads
+        num_threads = self.config.threads
+        schema_map = self._get_cache_schemas(manifest)
+
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [
+                executor.submit(self._get_one_catalog, info, schemas, manifest)
+                for info, schemas in schema_map.items() if len(schemas) > 0
+            ]
+            catalogs, exceptions = catch_as_completed(futures)
+
+        return catalogs, exceptions
 
     def cancel_open_connections(self):
         """Cancel all open connections."""
@@ -1104,3 +1129,31 @@ class BaseAdapter(metaclass=AdapterMeta):
         The second parameter is the value returned by pre_mdoel_hook.
         """
         pass
+
+
+def catch_as_completed(
+    futures  # typing: List[Future[agate.Table]]
+) -> Tuple[agate.Table, List[Exception]]:
+
+    # catalogs: agate.Table = agate.Table(rows=[])
+    tables: List[agate.Table] = []
+    exceptions: List[Exception] = []
+
+    for future in as_completed(futures):
+        exc = future.exception()
+        # we want to re-raise on ctrl+c and BaseException
+        if exc is None:
+            catalog = future.result()
+            tables.append(catalog)
+        elif (
+            isinstance(exc, KeyboardInterrupt) or
+            not isinstance(exc, Exception)
+        ):
+            raise exc
+        else:
+            warn_or_error(
+                f'Encountered an error while generating catalog: {str(exc)}'
+            )
+            # exc is not None, derives from Exception, and isn't ctrl+c
+            exceptions.append(exc)
+    return merge_tables(tables), exceptions

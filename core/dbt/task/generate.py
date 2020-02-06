@@ -14,6 +14,7 @@ from dbt.contracts.results import (
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
+from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.ui.printer
 import dbt.utils
 import dbt.compilation
@@ -194,7 +195,9 @@ class GenerateTask(CompileTask):
                 dbt.ui.printer.print_timestamped_line(
                     'compile failed, cannot generate docs'
                 )
-                return CatalogResults({}, datetime.utcnow(), compile_results)
+                return CatalogResults(
+                    {}, datetime.utcnow(), compile_results, None
+                )
 
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
@@ -208,7 +211,7 @@ class GenerateTask(CompileTask):
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):
             dbt.ui.printer.print_timestamped_line("Building catalog")
-            catalog_table = adapter.get_catalog(self.manifest)
+            catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(_coerce_decimal, row)))
@@ -216,34 +219,51 @@ class GenerateTask(CompileTask):
         ]
 
         catalog = Catalog(catalog_data)
+
+        errors: Optional[List[str]] = None
+        if exceptions:
+            errors = [str(e) for e in exceptions]
+
         results = self.get_catalog_results(
             nodes=catalog.make_unique_id_map(self.manifest),
             generated_at=datetime.utcnow(),
             compile_results=compile_results,
+            errors=errors,
         )
 
         path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         results.write(path)
         write_manifest(self.config, self.manifest)
 
+        if exceptions:
+            logger.error(
+                'dbt encountered {} failure{} while writing the catalog'
+                .format(len(exceptions), (len(exceptions) != 1) * 's')
+            )
+
         dbt.ui.printer.print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))
         )
+
         return results
 
     def get_catalog_results(
         self,
         nodes: Dict[str, CatalogTable],
         generated_at: datetime,
-        compile_results: Optional[Any]
+        compile_results: Optional[Any],
+        errors: Optional[List[str]]
     ) -> CatalogResults:
         return CatalogResults(
             nodes=nodes,
             generated_at=generated_at,
             _compile_results=compile_results,
+            errors=errors,
         )
 
     def interpret_results(self, results):
+        if results.errors:
+            return False
         compile_results = results._compile_results
         if compile_results is None:
             return True

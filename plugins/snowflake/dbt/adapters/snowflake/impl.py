@@ -1,11 +1,14 @@
 from typing import Mapping, Any, Optional
 
+import agate
+
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
 from dbt.adapters.snowflake import SnowflakeColumn
-from dbt.utils import filter_null_values
+from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import RuntimeException
+from dbt.utils import filter_null_values
 
 
 class SnowflakeAdapter(SQLAdapter):
@@ -23,7 +26,9 @@ class SnowflakeAdapter(SQLAdapter):
         return "CURRENT_TIMESTAMP()"
 
     @classmethod
-    def _catalog_filter_table(cls, table, manifest):
+    def _catalog_filter_table(
+        cls, table: agate.Table, manifest: Manifest
+    ) -> agate.Table:
         # On snowflake, users can set QUOTED_IDENTIFIERS_IGNORE_CASE, so force
         # the column names to their lowercased forms.
         lowered = table.rename(
