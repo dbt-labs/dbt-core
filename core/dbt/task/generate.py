@@ -15,6 +15,7 @@ from dbt.contracts.results import (
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.perf_utils import get_full_manifest
 import dbt.ui.printer
 import dbt.utils
 import dbt.compilation
@@ -187,7 +188,7 @@ class GenerateTask(CompileTask):
             )
         return self.manifest
 
-    def run(self):
+    def run(self) -> CatalogResults:
         compile_results = None
         if self.args.compile:
             compile_results = CompileTask.run(self)
@@ -196,8 +197,13 @@ class GenerateTask(CompileTask):
                     'compile failed, cannot generate docs'
                 )
                 return CatalogResults(
-                    {}, datetime.utcnow(), compile_results, None
+                    nodes={},
+                    generated_at=datetime.utcnow(),
+                    errors=None,
+                    _compile_results=compile_results
                 )
+        else:
+            self.manifest = get_full_manifest(self.config)
 
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
@@ -233,7 +239,8 @@ class GenerateTask(CompileTask):
 
         path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         results.write(path)
-        write_manifest(self.config, self.manifest)
+        if self.args.compile:
+            write_manifest(self.config, self.manifest)
 
         if exceptions:
             logger.error(
@@ -261,7 +268,9 @@ class GenerateTask(CompileTask):
             errors=errors,
         )
 
-    def interpret_results(self, results):
+    def interpret_results(self, results: Optional[CatalogResults]) -> bool:
+        if results is None:
+            return False
         if results.errors:
             return False
         compile_results = results._compile_results
