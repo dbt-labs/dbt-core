@@ -863,3 +863,25 @@ def test_missing_tag_sighup(
         querier.sighup()
 
         assert querier.wait_for_status('ready') is True
+
+
+def test_rpc_vars(
+    project_root, profiles_root, postgres_profile, unique_schema
+):
+    project = ProjectDefinition(
+        models={
+            'my_model.sql': 'select {{ var("param") }} as id',
+        },
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+
+    with querier_ctx as querier:
+        results = querier.async_wait_for_result(querier.cli_args('run --vars "{param: 100}"'))
+        assert len(results['results']) == 1
+        assert results['results'][0]['node']['compiled_sql'] == 'select 100 as id'

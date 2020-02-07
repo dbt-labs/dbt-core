@@ -12,6 +12,7 @@ from dbt.rpc.method import (
     Result,
 )
 from dbt.exceptions import InternalException
+from dbt.utils import parse_cli_vars
 
 from .base import RPCTask
 
@@ -36,6 +37,11 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
 
     def set_config(self, config):
         super().set_config(config)
+
+        # patch up config with args/cli_vars
+        self.config.args = self.args
+        self.config.cli_vars = parse_cli_vars(getattr(self.args, 'vars', '{}'))
+
         if self.task_type is None:
             raise InternalException('task type not set for set_config')
         if issubclass(self.task_type, RemoteManifestMethod):
