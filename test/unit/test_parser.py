@@ -28,7 +28,9 @@ from dbt.contracts.graph.parsed import (
     ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
     ParsedAnalysisNode, ParsedDocumentation
 )
-from dbt.contracts.graph.unparsed import FreshnessThreshold, ExternalTable
+from dbt.contracts.graph.unparsed import (
+    FreshnessThreshold, ExternalTable, Docs
+)
 
 from .utils import config_from_parts_or_dicts, normalize
 
@@ -315,6 +317,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             meta={},
             yaml_key='models',
             package_name='snowplow',
+            docs=Docs(show=True),
         )
         self.assertEqual(patch, expected_patch)
 

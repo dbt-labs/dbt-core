@@ -20,7 +20,7 @@ from hologram.helpers import (
 from dbt.clients.system import write_file
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
-    UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
+    UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     AdditionalPropertiesAllowed, HasYamlMetadata, MacroArgument
 )
@@ -188,6 +188,7 @@ class ParsedNodeMixins(JsonSchemaMixin):
         self.description = patch.description
         self.columns = patch.columns
         self.meta = patch.meta
+        self.docs = patch.docs
         if dbt.flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
             self.to_dict(validate=True)
@@ -224,6 +225,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     description: str = field(default='')
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
 
@@ -467,6 +469,7 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
     name: str
     description: str
     meta: Dict[str, Any]
+    docs: Docs
 
 
 # The parsed node update is only the 'patch', not the test. The test became a

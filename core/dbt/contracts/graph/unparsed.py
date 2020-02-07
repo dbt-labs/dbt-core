@@ -59,11 +59,17 @@ class UnparsedRunHook(UnparsedNode):
 
 
 @dataclass
+class Docs(JsonSchemaMixin, Replaceable):
+    show: bool = True
+
+
+@dataclass
 class HasDocs(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    docs: Docs = field(default_factory=Docs)
 
 
 TestDef = Union[Dict[str, Any], str]

@@ -4,9 +4,9 @@ from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
     TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All,
-    GenericSnapshotConfig, CheckSnapshotConfig, SnapshotStrategy,
-    IntermediateSnapshotNode, ParsedNodePatch, ParsedMacro,
-    MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation, ParsedHookNode
+    CheckSnapshotConfig, SnapshotStrategy, IntermediateSnapshotNode,
+    ParsedNodePatch, ParsedMacro, Docs, MacroDependsOn, ParsedSourceDefinition,
+    ParsedDocumentation, ParsedHookNode
 )
 from dbt.contracts.graph.unparsed import Quoting
 
@@ -59,8 +59,8 @@ class TestNodeConfig(ContractTestCase):
 class TestParsedModelNode(ContractTestCase):
     ContractType = ParsedModelNode
 
-    def test_ok(self):
-        node_dict = {
+    def _model_ok(self):
+        return {
             'name': 'foo',
             'root_path': '/root/',
             'resource_type': str(NodeType.Model),
@@ -89,9 +89,14 @@ class TestParsedModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
         }
+
+
+    def test_ok(self):
+        node_dict = self._model_ok()
         node = self.ContractType(
             package_name='test',
             root_path='/root/',
@@ -167,6 +172,7 @@ class TestParsedModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {'foo': 100},
             },
+            'docs': {'show': True},
             'columns': {
                 'a': {
                     'name': 'a',
@@ -212,74 +218,14 @@ class TestParsedModelNode(ContractTestCase):
 
     def test_invalid_bad_tags(self):
         # bad top-level field
-        bad_tags = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Model),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
-            'database': 'test_db',
-            'description': 'My parsed node',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': 100,
-            'config': {
-                'column_types': {},
-                'enabled': True,
-                'materialized': None,
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-            },
-            'columns': {},
-            'meta': {},
-        }
+        bad_tags = self._model_ok()
+        bad_tags['tags'] = 100
         self.assert_fails_validation(bad_tags)
 
     def test_invalid_bad_materialized(self):
         # bad nested field
-        bad_materialized = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Model),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
-            'database': 'test_db',
-            'description': 'My parsed node',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': ['tag'],
-            'config': {
-                'column_types': {},
-                'enabled': True,
-                'materialized': None,
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-            },
-            'columns': {},
-            'meta': {},
-        }
+        bad_materialized = self._model_ok()
+        bad_materialized['config']['materialized'] = None
         self.assert_fails_validation(bad_materialized)
 
     def test_patch_ok(self):
@@ -311,6 +257,7 @@ class TestParsedModelNode(ContractTestCase):
             description='The foo model',
             original_file_path='/path/to/schema.yml',
             columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
+            docs=Docs(),
             meta={},
         )
 
@@ -355,6 +302,7 @@ class TestParsedModelNode(ContractTestCase):
                     'tags': [],
                 },
             },
+            'docs': {'show': True},
         }
 
         expected = self.ContractType(
@@ -379,6 +327,7 @@ class TestParsedModelNode(ContractTestCase):
             config=NodeConfig(),
             patch_path='/path/to/schema.yml',
             columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
+            docs=Docs(),
         )
         self.assert_symmetric(expected, expected_dict)  # sanity check
         self.assertEqual(initial, expected)
@@ -413,6 +362,7 @@ class TestParsedModelNode(ContractTestCase):
             description=None,
             original_file_path='/path/to/schema.yml',
             columns={},
+            docs=Docs(),
         )
         with self.assertRaises(ValidationError):
             initial.patch(patch)
@@ -421,8 +371,8 @@ class TestParsedModelNode(ContractTestCase):
 class TestParsedHookNode(ContractTestCase):
     ContractType = ParsedHookNode
 
-    def test_ok(self):
-        node_dict = {
+    def _hook_ok(self):
+        return {
             'name': 'foo',
             'root_path': '/root/',
             'resource_type': str(NodeType.Operation),
@@ -451,9 +401,14 @@ class TestParsedHookNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
+            'index': 10,
         }
+
+    def test_ok(self):
+        node_dict = self._hook_ok()
         node = self.ContractType(
             package_name='test',
             root_path='/root/',
@@ -473,12 +428,14 @@ class TestParsedHookNode(ContractTestCase):
             alias='bar',
             tags=[],
             config=NodeConfig(),
+            index=10,
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
         self.assertFalse(node.is_refable)
         self.assertEqual(node.get_materialization(), 'view')
 
+        node.index = None
         minimum = {
             'name': 'foo',
             'root_path': '/root/',
@@ -527,6 +484,7 @@ class TestParsedHookNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
+            'docs': {'show': True},
             'columns': {
                 'a': {
                     'name': 'a',
@@ -572,44 +530,75 @@ class TestParsedHookNode(ContractTestCase):
 
     def test_invalid_index_type(self):
         # bad top-level field
-        bad_index = {
+        bad_index = self._hook_ok()
+        bad_index['index'] = 'a string!?'
+        self.assert_fails_validation(bad_index)
+
+
+class TestParsedTestNode(ContractTestCase):
+    ContractType = ParsedTestNode
+
+    def _minimum(self):
+        return {
             'name': 'foo',
             'root_path': '/root/',
-            'resource_type': str(NodeType.Operation),
+            'resource_type': str(NodeType.Test),
             'path': '/root/x/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
+            'unique_id': 'test.test.foo',
+            'fqn': ['test', 'models', 'foo'],
+            'database': 'test_db',
+            'schema': 'test_schema',
+            'alias': 'bar',
+            'meta': {},
+        }
+
+    def _complex(self):
+        return {
+            'name': 'foo',
+            'root_path': '/root/',
+            'resource_type': str(NodeType.Test),
+            'path': '/root/x/path.sql',
+            'original_file_path': '/root/path.sql',
+            'package_name': 'test',
+            'raw_sql': 'select * from {{ ref("bar") }}',
+            'unique_id': 'test.test.foo',
             'fqn': ['test', 'models', 'foo'],
             'refs': [],
             'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
+            'depends_on': {'macros': [], 'nodes': ['model.test.bar']},
             'database': 'test_db',
             'description': 'My parsed node',
             'schema': 'test_schema',
             'alias': 'bar',
-            'tags': [],
+            'tags': ['tag'],
+            'meta': {},
             'config': {
-                'column_types': {},
+                'column_types': {'a': 'text'},
                 'enabled': True,
-                'materialized': None,
+                'materialized': 'table',
                 'persist_docs': {},
                 'post-hook': [],
                 'pre-hook': [],
                 'quoting': {},
                 'tags': [],
                 'vars': {},
+                'severity': 'WARN',
+                'extra_key': 'extra value'
             },
-            'columns': {},
-            'meta': {},
-            'index': 'a string!?',
+            'docs': {'show': False},
+            'columns': {
+                'a': {
+                    'name': 'a',
+                    'description': 'a text field',
+                    'meta': {},
+                    'tags': [],
+                },
+            },
+            'column_name': 'id',
         }
-        self.assert_fails_validation(bad_index)
-
-
-class TestParsedTestNode(ContractTestCase):
-    ContractType = ParsedTestNode
 
     def test_ok(self):
         node_dict = {
@@ -643,6 +632,7 @@ class TestParsedTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'error',
             },
+            'docs': {'show': True},
             'columns': {},
         }
         node = self.ContractType(
@@ -672,67 +662,12 @@ class TestParsedTestNode(ContractTestCase):
         self.assertFalse(node.is_refable)
         self.assertEqual(node.get_materialization(), 'view')
 
-        minimum = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'test.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'meta': {},
-        }
+        minimum = self._minimum()
         self.assert_from_dict(node, minimum)
         pickle.loads(pickle.dumps(node))
 
     def test_complex(self):
-        node_dict = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from {{ ref("bar") }}',
-            'unique_id': 'test.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': ['model.test.bar']},
-            'database': 'test_db',
-            'description': 'My parsed node',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': ['tag'],
-            'meta': {},
-            'config': {
-                'column_types': {'a': 'text'},
-                'enabled': True,
-                'materialized': 'table',
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-                'severity': 'WARN',
-                'extra_key': 'extra value'
-            },
-            'columns': {
-                'a': {
-                    'name': 'a',
-                    'description': 'a text field',
-                    'meta': {},
-                    'tags': [],
-                },
-            },
-            'column_name': 'id',
-        }
+        node_dict = self._complex()
 
         cfg = TestConfig(
             column_types={'a': 'text'},
@@ -763,127 +698,28 @@ class TestParsedTestNode(ContractTestCase):
             config=cfg,
             columns={'a': ColumnInfo('a', 'a text field',{})},
             column_name='id',
+            docs=Docs(show=False),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
 
     def test_invalid_column_name_type(self):
         # bad top-level field
-        bad_column_name = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
-            'database': 'test_db',
-            'description': 'My parsed node',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': 100,
-            'config': {
-                'column_types': {},
-                'enabled': True,
-                'materialized': None,
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-                'severity': 'ERROR',
-            },
-            'columns': {},
-            'column_name': {},
-            'meta': {},
-        }
+        bad_column_name = self._complex()
+        bad_column_name['column_name'] = {}
         self.assert_fails_validation(bad_column_name)
 
-    def test_invalid_missing_severity(self):
-        # note the typo ('severtiy')
-        missing_config_value = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
-            'database': 'test_db',
-            'description': 'My parsed node',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': ['tag'],
-            'config': {
-                'column_types': {},
-                'enabled': True,
-                'materialized': None,
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-                'severtiy': 'WARN',
-            },
-            'columns': {},
-            'meta': {},
-        }
-        self.assert_fails_validation(missing_config_value)
-
     def test_invalid_severity(self):
-        invalid_config_value = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
-            'database': 'test_db',
-            'description': 'My parsed node',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': ['tag'],
-            'config': {
-                'column_types': {},
-                'enabled': True,
-                'materialized': None,
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-                'severity': 'WERROR',  # invalid severity
-            },
-            'columns': {},
-            'meta': {},
-        }
+        invalid_config_value = self._complex()
+        invalid_config_value['config']['severity'] = 'WERROR'
         self.assert_fails_validation(invalid_config_value)
 
 
 class TestTimestampSnapshotConfig(ContractTestCase):
     ContractType = TimestampSnapshotConfig
 
-    def test_basics(self):
-        cfg_dict = {
+    def _cfg_basic(self):
+        return {
             'column_types': {},
             'enabled': True,
             'materialized': 'view',
@@ -899,6 +735,9 @@ class TestTimestampSnapshotConfig(ContractTestCase):
             'target_database': 'some_snapshot_db',
             'target_schema': 'some_snapshot_schema',
         }
+
+    def test_basics(self):
+        cfg_dict = self._cfg_basic()
         cfg = self.ContractType(
             strategy=SnapshotStrategy.Timestamp,
             updated_at='last_update',
@@ -942,49 +781,22 @@ class TestTimestampSnapshotConfig(ContractTestCase):
         self.assert_symmetric(cfg, cfg_dict)
 
     def test_invalid_wrong_strategy(self):
-        bad_type = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'tags': [],
-            'vars': {},
-            'target_database': 'some_snapshot_db',
-            'target_schema': 'some_snapshot_schema',
-            'unique_key': 'id',
-            'strategy': 'check',
-            'updated_at': 'last_update',
-        }
+        bad_type = self._cfg_basic()
+        bad_type['strategy'] = 'check'
         self.assert_fails_validation(bad_type)
 
     def test_invalid_missing_updated_at(self):
-        bad_fields = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'tags': [],
-            'vars': {},
-            'target_database': 'some_snapshot_db',
-            'target_schema': 'some_snapshot_schema',
-            'unique_key': 'id',
-            'strategy': 'timestamp',
-            'check_cols': 'all'
-        }
+        bad_fields = self._cfg_basic()
+        del bad_fields['updated_at']
+        bad_fields['check_cols'] = 'all'
         self.assert_fails_validation(bad_fields)
 
 
 class TestCheckSnapshotConfig(ContractTestCase):
     ContractType = CheckSnapshotConfig
 
-    def test_basics(self):
-        cfg_dict = {
+    def _cfg_ok(self):
+        return {
             'column_types': {},
             'enabled': True,
             'materialized': 'view',
@@ -1000,6 +812,9 @@ class TestCheckSnapshotConfig(ContractTestCase):
             'strategy': 'check',
             'check_cols': 'all',
         }
+
+    def test_basics(self):
+        cfg_dict = self._cfg_ok()
         cfg = self.ContractType(
             strategy=SnapshotStrategy.Check,
             check_cols=All.All,
@@ -1043,68 +858,26 @@ class TestCheckSnapshotConfig(ContractTestCase):
         self.assert_symmetric(cfg, cfg_dict)
 
     def test_invalid_wrong_strategy(self):
-        wrong_strategy = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'tags': [],
-            'vars': {},
-            'target_database': 'some_snapshot_db',
-            'target_schema': 'some_snapshot_schema',
-            'unique_key': 'id',
-            'strategy': 'timestamp',
-            'check_cols': 'all',
-        }
+        wrong_strategy = self._cfg_ok()
+        wrong_strategy['strategy'] = 'timestamp'
         self.assert_fails_validation(wrong_strategy)
 
     def test_invalid_missing_check_cols(self):
-        wrong_fields = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'tags': [],
-            'vars': {},
-            'target_database': 'some_snapshot_db',
-            'target_schema': 'some_snapshot_schema',
-            'unique_key': 'id',
-            'strategy': 'check',
-            'updated_at': 'last_update'
-        }
+        wrong_fields = self._cfg_ok()
+        del wrong_fields['check_cols']
         self.assert_fails_validation(wrong_fields)
 
     def test_invalid_check_value(self):
-        invalid_check_type = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'tags': [],
-            'vars': {},
-            'target_database': 'some_snapshot_db',
-            'target_schema': 'some_snapshot_schema',
-            'unique_key': 'id',
-            'strategy': 'timestamp',
-            'check_cols': 'some',
-        }
+        invalid_check_type = self._cfg_ok()
+        invalid_check_type['check_cols'] = 'some'
         self.assert_fails_validation(invalid_check_type)
 
 
 class TestParsedSnapshotNode(ContractTestCase):
     ContractType = ParsedSnapshotNode
 
-    def test_timestamp_ok(self):
-        node_dict = {
+    def _ts_ok(self):
+        return {
             'name': 'foo',
             'root_path': '/root/',
             'resource_type': str(NodeType.Snapshot),
@@ -1138,9 +911,13 @@ class TestParsedSnapshotNode(ContractTestCase):
                 'strategy': 'timestamp',
                 'updated_at': 'last_update',
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
         }
+
+    def test_timestamp_ok(self):
+        node_dict = self._ts_ok()
 
         node = self.ContractType(
             package_name='test',
@@ -1243,6 +1020,7 @@ class TestParsedSnapshotNode(ContractTestCase):
                 'strategy': 'check',
                 'check_cols': 'all',
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
         }
@@ -1312,43 +1090,8 @@ class TestParsedSnapshotNode(ContractTestCase):
         self.assertFalse(node.is_ephemeral)
 
     def test_invalid_bad_resource_type(self):
-        bad_resource_type = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Model),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'refs': [],
-            'sources': [],
-            'depends_on': {'macros': [], 'nodes': []},
-            'database': 'test_db',
-            'description': '',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'tags': [],
-            'config': {
-                'column_types': {},
-                'enabled': True,
-                'materialized': 'view',
-                'persist_docs': {},
-                'post-hook': [],
-                'pre-hook': [],
-                'quoting': {},
-                'tags': [],
-                'vars': {},
-                'target_database': 'some_snapshot_db',
-                'target_schema': 'some_snapshot_schema',
-                'unique_key': 'id',
-                'strategy': 'timestamp',
-                'updated_at': 'last_update',
-            },
-            'columns': {},
-            'meta': {},
-        }
+        bad_resource_type = self._ts_ok()
+        bad_resource_type['resource_type'] = str(NodeType.Model)
         self.assert_fails_validation(bad_resource_type)
 
 
@@ -1361,6 +1104,7 @@ class TestParsedNodePatch(ContractTestCase):
             'description': 'The foo model',
             'original_file_path': '/path/to/schema.yml',
             'columns': {},
+            'docs': {'show': True},
             'meta': {},
             'yaml_key': 'models',
             'package_name': 'test',
@@ -1372,6 +1116,7 @@ class TestParsedNodePatch(ContractTestCase):
             package_name='test',
             original_file_path='/path/to/schema.yml',
             columns={},
+            docs=Docs(),
             meta={},
         )
         self.assert_symmetric(patch, dct)
@@ -1389,6 +1134,7 @@ class TestParsedNodePatch(ContractTestCase):
                     'tags': [],
                 },
             },
+            'docs': {'show': False},
             'meta': {'key': ['value']},
             'yaml_key': 'models',
             'package_name': 'test',
@@ -1401,6 +1147,7 @@ class TestParsedNodePatch(ContractTestCase):
             meta={'key': ['value']},
             yaml_key='models',
             package_name='test',
+            docs=Docs(show=False),
         )
         self.assert_symmetric(patch, dct)
         pickle.loads(pickle.dumps(patch))
@@ -1409,8 +1156,8 @@ class TestParsedNodePatch(ContractTestCase):
 class TestParsedMacro(ContractTestCase):
     ContractType = ParsedMacro
 
-    def test_ok(self):
-        macro_dict = {
+    def _ok_dict(self):
+        return {
             'name': 'foo',
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
@@ -1425,6 +1172,9 @@ class TestParsedMacro(ContractTestCase):
             'description': 'my macro description',
             'arguments': [],
         }
+
+    def test_ok(self):
+        macro_dict = self._ok_dict()
         macro = ParsedMacro(
             name='foo',
             path='/root/path.sql',
@@ -1445,47 +1195,22 @@ class TestParsedMacro(ContractTestCase):
         pickle.loads(pickle.dumps(macro))
 
     def test_invalid_missing_unique_id(self):
-        bad_missing_uid = {
-            'name': 'foo',
-            'path': '/root/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
-            'root_path': '/root/',
-            'resource_type': 'macro',
-            'tags': [],
-            'depends_on': {'macros': []},
-            'meta': {},
-            'description': 'my macro description',
-            'arguments': [],
-        }
+        bad_missing_uid = self._ok_dict()
+        del bad_missing_uid['unique_id']
         self.assert_fails_validation(bad_missing_uid)
 
     def test_invalid_extra_field(self):
-        bad_extra_field = {
-            'name': 'foo',
-            'path': '/root/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
-            'root_path': '/root/',
-            'resource_type': 'macro',
-            'unique_id': 'macro.test.foo',
-            'tags': [],
-            'depends_on': {'macros': []},
-            'meta': {},
-            'description': 'my macro description',
-            'arguments': [],
-            'extra': 'too many fields'
-        }
+
+        bad_extra_field = self._ok_dict()
+        bad_extra_field['extra'] = 'too many fields'
         self.assert_fails_validation(bad_extra_field)
 
 
 class TestParsedDocumentation(ContractTestCase):
     ContractType = ParsedDocumentation
 
-    def test_ok(self):
-        doc_dict = {
+    def _ok_dict(self):
+        return {
             'block_contents': 'some doc contents',
             'file_contents': '{% doc foo %}some doc contents{% enddoc %}',
             'name': 'foo',
@@ -1495,6 +1220,9 @@ class TestParsedDocumentation(ContractTestCase):
             'root_path': '/root',
             'unique_id': 'test.foo',
         }
+
+    def test_ok(self):
+        doc_dict = self._ok_dict()
         doc = self.ContractType(
             package_name='test',
             root_path='/root',
@@ -1509,36 +1237,36 @@ class TestParsedDocumentation(ContractTestCase):
         pickle.loads(pickle.dumps(doc))
 
     def test_invalid_missing(self):
-        bad_missing_contents = {
-            # 'block_contents': 'some doc contents',
-            'file_contents': '{% doc foo %}some doc contents{% enddoc %}',
-            'name': 'foo',
-            'original_file_path': '/root/docs/doc.md',
-            'package_name': 'test',
-            'path': '/root/docs',
-            'root_path': '/root',
-            'unique_id': 'test.foo',
-        }
+        bad_missing_contents = self._ok_dict()
+        del bad_missing_contents['block_contents']
         self.assert_fails_validation(bad_missing_contents)
 
     def test_invalid_extra(self):
-        bad_extra_field = {
-            'block_contents': 'some doc contents',
-            'file_contents': '{% doc foo %}some doc contents{% enddoc %}',
-            'name': 'foo',
-            'original_file_path': '/root/docs/doc.md',
-            'package_name': 'test',
-            'path': '/root/docs',
-            'root_path': '/root',
-            'unique_id': 'test.foo',
-
-            'extra': 'more',
-        }
+        bad_extra_field = self._ok_dict()
+        bad_extra_field['extra'] = 'more'
         self.assert_fails_validation(bad_extra_field)
 
 
 class TestParsedSourceDefinition(ContractTestCase):
     ContractType = ParsedSourceDefinition
+
+    def _minimum_dict(self):
+        return {
+            'package_name': 'test',
+            'root_path': '/root',
+            'path': '/root/models/sources.yml',
+            'original_file_path': '/root/models/sources.yml',
+            'database': 'some_db',
+            'schema': 'some_schema',
+            'fqn': ['test', 'source', 'my_source', 'my_source_table'],
+            'source_name': 'my_source',
+            'name': 'my_source_table',
+            'source_description': 'my source description',
+            'loader': 'stitch',
+            'identifier': 'my_source_table',
+            'resource_type': str(NodeType.Source),
+            'unique_id': 'test.source.my_source.my_source_table',
+        }
 
     def test_basic(self):
         source_def_dict = {
@@ -1584,59 +1312,16 @@ class TestParsedSourceDefinition(ContractTestCase):
             tags=[],
         )
         self.assert_symmetric(source_def, source_def_dict)
-        minimum = {
-            'package_name': 'test',
-            'root_path': '/root',
-            'path': '/root/models/sources.yml',
-            'original_file_path': '/root/models/sources.yml',
-            'database': 'some_db',
-            'schema': 'some_schema',
-            'fqn': ['test', 'source', 'my_source', 'my_source_table'],
-            'source_name': 'my_source',
-            'name': 'my_source_table',
-            'source_description': 'my source description',
-            'loader': 'stitch',
-            'identifier': 'my_source_table',
-            'resource_type': str(NodeType.Source),
-            'unique_id': 'test.source.my_source.my_source_table',
-        }
+        minimum = self._minimum_dict()
         self.assert_from_dict(source_def, minimum)
         pickle.loads(pickle.dumps(source_def))
 
     def test_invalid_missing(self):
-        bad_missing_name = {
-            'package_name': 'test',
-            'root_path': '/root',
-            'path': '/root/models/sources.yml',
-            'original_file_path': '/root/models/sources.yml',
-            'database': 'some_db',
-            'schema': 'some_schema',
-            'fqn': ['test', 'source', 'my_source', 'my_source_table'],
-            'source_name': 'my_source',
-            # 'name': 'my_source_table',
-            'source_description': 'my source description',
-            'loader': 'stitch',
-            'identifier': 'my_source_table',
-            'resource_type': str(NodeType.Source),
-            'unique_id': 'test.source.my_source.my_source_table',
-        }
+        bad_missing_name = self._minimum_dict()
+        del bad_missing_name['name']
         self.assert_fails_validation(bad_missing_name)
 
     def test_invalid_bad_resource_type(self):
-        bad_resource_type = {
-            'package_name': 'test',
-            'root_path': '/root',
-            'path': '/root/models/sources.yml',
-            'original_file_path': '/root/models/sources.yml',
-            'database': 'some_db',
-            'schema': 'some_schema',
-            'fqn': ['test', 'source', 'my_source', 'my_source_table'],
-            'source_name': 'my_source',
-            'name': 'my_source_table',
-            'source_description': 'my source description',
-            'loader': 'stitch',
-            'identifier': 'my_source_table',
-            'resource_type': str(NodeType.Model),
-            'unique_id': 'test.source.my_source.my_source_table',
-        }
+        bad_resource_type = self._minimum_dict()
+        bad_resource_type['resource_type'] = str(NodeType.Model)
         self.assert_fails_validation(bad_resource_type)
