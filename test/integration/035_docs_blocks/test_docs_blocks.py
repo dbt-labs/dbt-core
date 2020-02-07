@@ -174,5 +174,5 @@ class TestDuplicateDocsBlock(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_duplicate_doc_ref(self):
-        # with self.assertRaises(dbt.exceptions.CompilationException):
-        self.run_dbt(expect_pass=False)
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            self.run_dbt(expect_pass=False)
