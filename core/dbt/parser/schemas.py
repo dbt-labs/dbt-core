@@ -8,7 +8,7 @@ from typing import (
 
 from hologram import ValidationError
 
-
+from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig, ConfigRenderer
@@ -251,6 +251,12 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             column_tags: List[str] = []
         else:
             column_name = column.name
+            should_quote = (
+                column.quote or
+                (column.quote is None and target_block.quote_columns)
+            )
+            if should_quote:
+                column_name = get_adapter(self.root_project).quote(column_name)
             column_tags = column.tags
 
         block = SchemaTestBlock.from_test_block(

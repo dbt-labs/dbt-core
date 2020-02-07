@@ -1608,6 +1608,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'database': False,
                         'schema': None,
                         'identifier': True,
+                        'column': None,
                     },
                     'database': self.default_database,
                     'description': 'My table',

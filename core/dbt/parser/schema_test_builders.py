@@ -82,6 +82,15 @@ class SourceTarget:
         return '{0.name}_{1.name}'.format(self.source, self.table)
 
     @property
+    def quote_columns(self) -> Optional[bool]:
+        result = None
+        if self.source.quoting.column is not None:
+            result = self.source.quoting.column
+        if self.table.quoting.column is not None:
+            result = self.table.quoting.column
+        return result
+
+    @property
     def columns(self) -> Sequence[UnparsedColumn]:
         if self.table.columns is None:
             return []
@@ -159,6 +168,10 @@ class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
             return []
         else:
             return self.target.tests
+
+    @property
+    def quote_columns(self) -> Optional[bool]:
+        return self.target.quote_columns
 
     @classmethod
     def from_yaml_block(
