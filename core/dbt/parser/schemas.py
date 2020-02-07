@@ -465,10 +465,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             column_tags: List[str] = []
         else:
             column_name = column.name
-            should_quote = (
-                column.quote or
-                (column.quote is None and target_block.quote_columns)
-            )
+            should_quote = column.quote or (column.quote is None and target_block.quote_columns)
             if should_quote:
                 column_name = get_adapter(self.root_project).quote(column_name)
             column_tags = column.tags

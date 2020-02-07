@@ -187,7 +187,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     @classmethod
     def create_from_source(cls: Type[Self], source: ParsedSourceDefinition, **kwargs: Any) -> Self:
         source_quoting = source.quoting.to_dict(omit_none=True)
-        source_quoting.pop('column', None)
+        source_quoting.pop("column", None)
         quote_policy = deep_merge(
             cls.get_default_quote_policy().to_dict(omit_none=True),
             source_quoting,
