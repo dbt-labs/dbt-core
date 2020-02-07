@@ -7,10 +7,10 @@ from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.task.base import ProjectOnlyTask
+from dbt.task.base import ConfiguredTask
 
 
-class ServeTask(ProjectOnlyTask):
+class ServeTask(ConfiguredTask):
     def run(self):
         os.chdir(self.config.target_path)
 

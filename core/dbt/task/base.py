@@ -128,20 +128,14 @@ def move_to_nearest_project_dir(args):
     os.chdir(nearest_project_dir)
 
 
-class RequiresProjectTask(BaseTask):
-    @classmethod
-    def from_args(cls, args):
-        move_to_nearest_project_dir(args)
-        return super().from_args(args)
-
-
-class ConfiguredTask(RequiresProjectTask):
+class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
     def __init__(self, args, config):
         super().__init__(args, config)
         register_adapter(self.config)
 
-
-class ProjectOnlyTask(RequiresProjectTask):
-    ConfigType = Project
+    @classmethod
+    def from_args(cls, args):
+        move_to_nearest_project_dir(args)
+        return super().from_args(args)

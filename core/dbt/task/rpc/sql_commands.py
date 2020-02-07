@@ -1,24 +1,50 @@
 import base64
-from datetime import datetime
 import signal
 import threading
+from datetime import datetime
+from typing import Dict, Any
 
+from dbt import flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest, compile_node
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import ParsedRPCNode
 from dbt.contracts.rpc import RPCExecParameters
 from dbt.contracts.rpc import RemoteExecutionResult
 from dbt.exceptions import RPCKilledException, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.parser.results import ParseResult
+from dbt.parser.manifest import process_node, process_macro
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
-from dbt.parser.util import ParserUtils
 from dbt.rpc.error import invalid_params
 from dbt.rpc.node_runners import RPCCompileRunner, RPCExecuteRunner
 from dbt.task.compile import CompileTask
 from dbt.task.run import RunTask
 
 from .base import RPCTask
+
+
+def add_new_refs(
+    manifest: Manifest,
+    config: RuntimeConfig,
+    node: ParsedRPCNode,
+    macros: Dict[str, Any]
+) -> None:
+    """Given a new node that is not in the manifest, insert the new node
+    into it as if it were part of regular ref processing.
+    """
+    if config.args.single_threaded or flags.SINGLE_THREADED_HANDLER:
+        manifest = manifest.deepcopy()
+    # it's ok for macros to silently override a local project macro name
+    manifest.macros.update(macros)
+
+    for macro in macros.values():
+        process_macro(config, manifest, macro)
+
+    manifest.add_nodes({node.unique_id: node})
+    process_node(config, manifest, node)
 
 
 class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
@@ -117,7 +143,7 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
             macro_manifest=self.manifest,
         )
         rpc_node = rpc_parser.parse_remote(sql, self.args.name)
-        self.manifest = ParserUtils.add_new_refs(
+        add_new_refs(
             manifest=self.manifest,
             config=self.config,
             node=rpc_node,

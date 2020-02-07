@@ -3,8 +3,7 @@ from typing import Optional, Callable, Dict, Any
 
 from dbt.clients.jinja import QueryStringGenerator
 
-# this generates an import cycle, as usual
-from dbt.context.base import QueryHeaderContext
+from dbt.context.configured import generate_query_header_context
 from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
@@ -68,9 +67,9 @@ class _QueryComment(local):
 QueryStringFunc = Callable[[str, Optional[NodeWrapper]], str]
 
 
-class QueryStringSetter:
-    """The base query string setter. This is only used once."""
-    def __init__(self, config: AdapterRequiredConfig):
+class MacroQueryStringSetter:
+    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest):
+        self.manifest = manifest
         self.config = config
 
         comment_macro = self._get_comment_macro()
@@ -88,16 +87,21 @@ class QueryStringSetter:
         self.comment = _QueryComment(None)
         self.reset()
 
-    def _get_context(self):
-        return QueryHeaderContext(self.config).to_dict()
-
-    def _get_comment_macro(self) -> Optional[str]:
+    def _get_comment_macro(self):
+        if (
+            self.config.query_comment != NoValue() and
+            self.config.query_comment
+        ):
+            return self.config.query_comment
         # if the query comment is null/empty string, there is no comment at all
-        if not self.config.query_comment:
+        elif not self.config.query_comment:
             return None
         else:
             # else, the default
             return DEFAULT_QUERY_COMMENT
+
+    def _get_context(self) -> Dict[str, Any]:
+        return generate_query_header_context(self.config, self.manifest)
 
     def add(self, sql: str) -> str:
         return self.comment.add(sql)
@@ -111,21 +115,3 @@ class QueryStringSetter:
             wrapped = NodeWrapper(node)
         comment_str = self.generator(name, wrapped)
         self.comment.set(comment_str)
-
-
-class MacroQueryStringSetter(QueryStringSetter):
-    def __init__(self, config: AdapterRequiredConfig, manifest: Manifest):
-        self.manifest = manifest
-        super().__init__(config)
-
-    def _get_comment_macro(self):
-        if (
-            self.config.query_comment != NoValue() and
-            self.config.query_comment
-        ):
-            return self.config.query_comment
-        else:
-            return super()._get_comment_macro()
-
-    def _get_context(self) -> Dict[str, Any]:
-        return QueryHeaderContext(self.config).to_dict(self.manifest.macros)

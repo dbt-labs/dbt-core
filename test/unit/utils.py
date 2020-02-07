@@ -33,20 +33,63 @@ def mock_connection(name):
     return conn
 
 
-def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
-    from dbt.config import Project, Profile, RuntimeConfig
+def profile_from_dict(profile, profile_name, cli_vars='{}'):
+    from dbt.config import Profile, ConfigRenderer
+    from dbt.context.base import generate_base_context
     from dbt.utils import parse_cli_vars
-    from copy import deepcopy
     if not isinstance(cli_vars, dict):
         cli_vars = parse_cli_vars(cli_vars)
-    if not isinstance(project, Project):
-        project = Project.from_project_config(deepcopy(project), packages)
+
+    renderer = ConfigRenderer(generate_base_context(cli_vars))
+    return Profile.from_raw_profile_info(
+        profile,
+        profile_name,
+        renderer,
+    )
+
+
+def project_from_dict(project, profile, packages=None, cli_vars='{}'):
+    from dbt.context.target import generate_target_context
+    from dbt.config import Project, ConfigRenderer
+    from dbt.utils import parse_cli_vars
+    if not isinstance(cli_vars, dict):
+        cli_vars = parse_cli_vars(cli_vars)
+
+    renderer = ConfigRenderer(generate_target_context(profile, cli_vars))
+
+    project_root = project.pop('project-root', os.getcwd())
+
+    return Project.render_from_dict(
+            project_root, project, packages, renderer
+        )
+
+
+def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
+    from dbt.config import Project, Profile, RuntimeConfig
+    from copy import deepcopy
+
+    if isinstance(project, Project):
+        profile_name = project.profile_name
+    else:
+        profile_name = project.get('profile')
+
     if not isinstance(profile, Profile):
-        profile = Profile.from_raw_profile_info(deepcopy(profile),
-                                                project.profile_name,
-                                                cli_vars)
+        profile = profile_from_dict(
+            deepcopy(profile),
+            profile_name,
+            cli_vars,
+        )
+
+    if not isinstance(project, Project):
+        project = project_from_dict(
+            deepcopy(project),
+            profile,
+            packages,
+            cli_vars,
+        )
+
     args = Obj()
-    args.vars = repr(cli_vars)
+    args.vars = cli_vars
     args.profile_dir = '/dev/null'
     return RuntimeConfig.from_parts(
         project=project,

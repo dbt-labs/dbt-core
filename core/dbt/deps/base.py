@@ -69,7 +69,7 @@ class PinnedPackage(BasePackage):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _fetch_metadata(self, project):
+    def _fetch_metadata(self, project, renderer):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -80,17 +80,17 @@ class PinnedPackage(BasePackage):
     def nice_version_name(self):
         raise NotImplementedError
 
-    def fetch_metadata(self, project):
+    def fetch_metadata(self, project, renderer):
         if not self._cached_metadata:
-            self._cached_metadata = self._fetch_metadata(project)
+            self._cached_metadata = self._fetch_metadata(project, renderer)
         return self._cached_metadata
 
-    def get_project_name(self, project):
-        metadata = self.fetch_metadata(project)
+    def get_project_name(self, project, renderer):
+        metadata = self.fetch_metadata(project, renderer)
         return metadata.name
 
-    def get_installation_path(self, project):
-        dest_dirname = self.get_project_name(project)
+    def get_installation_path(self, project, renderer):
+        dest_dirname = self.get_project_name(project, renderer)
         return os.path.join(project.modules_path, dest_dirname)
 
 

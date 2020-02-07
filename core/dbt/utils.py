@@ -242,10 +242,6 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-def get_materialization(node):
-    return node.config.materialized
-
-
 def is_enabled(node):
     return node.config.enabled
 

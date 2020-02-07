@@ -372,7 +372,7 @@ def raise_dependency_error(msg) -> NoReturn:
 
 
 def invalid_type_error(method_name, arg_name, got_value, expected_type,
-                       version='0.13.0'):
+                       version='0.13.0') -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros
     has changed.
     """
@@ -385,13 +385,13 @@ def invalid_type_error(method_name, arg_name, got_value, expected_type,
                          got_value=got_value, got_type=got_type))
 
 
-def ref_invalid_args(model, args):
+def ref_invalid_args(model, args) -> NoReturn:
     raise_compiler_error(
         "ref() takes at most two arguments ({} given)".format(len(args)),
         model)
 
 
-def ref_bad_context(model, args):
+def ref_bad_context(model, args) -> NoReturn:
     ref_args = ', '.join("'{}'".format(a) for a in args)
     ref_string = '{{{{ ref({}) }}}}'.format(ref_args)
 
@@ -419,7 +419,7 @@ To fix this, add the following hint to the top of the model "{model_name}":
     raise_compiler_error(error_msg, model)
 
 
-def doc_invalid_args(model, args):
+def doc_invalid_args(model, args) -> NoReturn:
     raise_compiler_error(
         "doc() takes at most two arguments ({} given)".format(len(args)),
         model)
@@ -497,7 +497,7 @@ def source_disabled_message(model, target_name, target_table_name):
                     target_table_name))
 
 
-def source_target_not_found(model, target_name, target_table_name):
+def source_target_not_found(model, target_name, target_table_name) -> NoReturn:
     msg = source_disabled_message(model, target_name, target_table_name)
     raise_compiler_error(msg, model)
 
@@ -525,8 +525,7 @@ def macro_not_found(model, target_macro_id):
 
 
 def materialization_not_available(model, adapter_type):
-    from dbt.utils import get_materialization  # noqa
-    materialization = get_materialization(model)
+    materialization = model.get_materialization()
 
     raise_compiler_error(
         "Materialization '{}' is not available for {}!"
@@ -535,8 +534,7 @@ def materialization_not_available(model, adapter_type):
 
 
 def missing_materialization(model, adapter_type):
-    from dbt.utils import get_materialization  # noqa
-    materialization = get_materialization(model)
+    materialization = model.get_materialization()
 
     valid_types = "'default'"
 
@@ -643,6 +641,29 @@ def approximate_relation_match(target, relation):
         '\nSearched for: {target}\nFound: {relation}'
         .format(target=target,
                 relation=relation))
+
+
+def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
+    duped_name = node_1.namespace
+    if node_1.package_name != node_2.package_name:
+        extra = (
+            ' ({} and {} are both in the {} namespace)'
+            .format(node_1.package_name, node_2.package_name, namespace)
+        )
+    else:
+        extra = ''
+
+    raise_compiler_error(
+        'dbt found two macros with the name "{}" in the namespace "{}"{}. '
+        'Since these macros have the same name and exist in the same '
+        'namespace, dbt will be unable to decide which to call. To fix this, '
+        'change the name of one of these macros:\n- {} ({})\n- {} ({})'
+        .format(
+            duped_name, namespace, extra,
+            node_1.unique_id, node_1.original_file_path,
+            node_2.unique_id, node_2.original_file_path
+        )
+    )
 
 
 def raise_duplicate_resource_name(node_1, node_2):

@@ -1,21 +1,25 @@
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+import os
+from typing import Dict, Any
 
 from .profile import Profile
 from .project import Project
+from .renderer import ConfigRenderer
 from dbt.utils import parse_cli_vars
+from dbt.context.base import generate_base_context
+from dbt.context.target import generate_target_context
+from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.project import Configuration
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import validator_error_message
 from dbt.adapters.factory import get_relation_class_by_name
 
-
 from hologram import ValidationError
 
 
 @dataclass
-class RuntimeConfig(Project, Profile):
+class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     args: Any
     cli_vars: Dict[str, Any]
 
@@ -86,8 +90,11 @@ class RuntimeConfig(Project, Profile):
         # copy profile
         profile = Profile(**self.to_profile_info())
         profile.validate()
+
         # load the new project and its packages. Don't pass cli variables.
-        project = Project.from_project_root(project_root, {})
+        renderer = ConfigRenderer(generate_target_context(profile, {}))
+
+        project = Project.from_project_root(project_root, renderer)
 
         cfg = self.from_parts(
             project=project,
@@ -126,9 +133,7 @@ class RuntimeConfig(Project, Profile):
             self.validate_version()
 
     @classmethod
-    def from_args(
-        cls, args: Any, project_profile_name: Optional[str] = None
-    ) -> 'RuntimeConfig':
+    def from_args(cls, args: Any) -> 'RuntimeConfig':
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.
@@ -138,17 +143,20 @@ class RuntimeConfig(Project, Profile):
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
-        # project_profile_name is ignored, we just need it to appease mypy
-        # (Profile.from_args uses it)
+        # profile_name from the project
+        partial = Project.partial_load(os.getcwd())
 
-        # build the project and read in packages.yml
-        project = Project.from_args(args)
-
-        # build the profile
-        profile = Profile.from_args(
-            args=args,
-            project_profile_name=project.profile_name
+        # build the profile using the base renderer and the one fact we know
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
+        renderer = ConfigRenderer(generate_base_context(cli_vars=cli_vars))
+        profile = Profile.render_from_args(
+            args, renderer, partial.profile_name
         )
+
+        # get a new renderer using our target information and render the
+        # project
+        renderer = ConfigRenderer(generate_target_context(profile, cli_vars))
+        project = partial.render(renderer)
 
         return cls.from_parts(
             project=project,

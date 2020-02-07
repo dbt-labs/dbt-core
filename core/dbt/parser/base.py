@@ -7,10 +7,11 @@ from typing import (
 
 from hologram import ValidationError
 
-import dbt.context.parser
+from dbt.context.providers import generate_parser_model, generate_parser_macro
 import dbt.flags
 from dbt import deprecations
 from dbt import hooks
+from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.contracts.graph.manifest import (
@@ -128,13 +129,10 @@ class ConfiguredParser(
         return self.root_project.credentials.database
 
     def _build_generate_macro_function(self, macro: ParsedMacro) -> Callable:
-        context = dbt.context.parser.generate_macro(
-            model=macro,
-            runtime_config=self.root_project,
-            manifest=self.macro_manifest,
-            package_name=None,
+        root_context = generate_parser_macro(
+            macro, self.root_project, self.macro_manifest, None
         )
-        return macro.generator(context)
+        return macro.generator(root_context)
 
     def get_schema_func(self) -> RelationUpdate:
         """The get_schema function is set by a few different things:
@@ -277,7 +275,7 @@ class ConfiguredParser(
     def _context_for(
         self, parsed_node: IntermediateNode, config: SourceConfig
     ) -> Dict[str, Any]:
-        return dbt.context.parser.generate(
+        return generate_parser_model(
             parsed_node, self.root_project, self.macro_manifest, config
         )
 
@@ -289,10 +287,14 @@ class ConfiguredParser(
 
         Note: this mutates the config object when config() calls are rendered.
         """
-        context = self._context_for(parsed_node, config)
+        # during parsing, we don't have a connection, but we might need one, so
+        # we have to acquire it.
+        with get_adapter(self.root_project).connection_for(parsed_node):
+            context = self._context_for(parsed_node, config)
 
-        get_rendered(parsed_node.raw_sql, context, parsed_node,
-                     capture_macros=True)
+            get_rendered(
+                parsed_node.raw_sql, context, parsed_node, capture_macros=True
+            )
 
     def update_parsed_node_schema(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]

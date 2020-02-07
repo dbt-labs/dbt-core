@@ -47,12 +47,12 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
     def nice_version_name(self):
         return 'version {}'.format(self.version)
 
-    def _fetch_metadata(self, project) -> RegistryPackageMetadata:
+    def _fetch_metadata(self, project, renderer) -> RegistryPackageMetadata:
         dct = registry.package_version(self.package, self.version)
         return RegistryPackageMetadata.from_dict(dct)
 
-    def install(self, project):
-        metadata = self.fetch_metadata(project)
+    def install(self, project, renderer):
+        metadata = self.fetch_metadata(project, renderer)
 
         tar_name = '{}.{}.tar.gz'.format(self.package, self.version)
         tar_path = os.path.realpath(
@@ -63,7 +63,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         download_url = metadata.downloads.tarball
         system.download(download_url, tar_path)
         deps_path = project.modules_path
-        package_name = self.get_project_name(project)
+        package_name = self.get_project_name(project, renderer)
         system.untar_package(tar_path, deps_path, package_name)
 
 

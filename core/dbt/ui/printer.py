@@ -5,7 +5,6 @@ from typing import Dict, Optional, Tuple
 from dbt.logger import GLOBAL_LOGGER as logger, DbtStatusMessage, TextOnly
 from dbt.node_types import NodeType
 from dbt.tracking import InvocationProcessor
-from dbt.utils import get_materialization
 import dbt.ui.colors
 
 
@@ -96,7 +95,7 @@ def get_counts(flat_nodes) -> str:
         t = node.resource_type
 
         if node.resource_type == NodeType.Model:
-            t = '{} {}'.format(get_materialization(node), t)
+            t = '{} {}'.format(node.get_materialization(), t)
         elif node.resource_type == NodeType.Operation:
             t = 'hook'
 

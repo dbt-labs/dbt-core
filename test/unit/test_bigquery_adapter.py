@@ -10,6 +10,7 @@ from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
+from dbt.adapters.base.query_headers import MacroQueryStringSetter
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -80,6 +81,8 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             profile=profile,
         )
         adapter = BigQueryAdapter(config)
+
+        adapter.connections.query_header = MacroQueryStringSetter(config, MagicMock(macros={}))
 
         self.qh_patch = patch.object(adapter.connections.query_header, 'add')
         self.mock_query_header_add = self.qh_patch.start()

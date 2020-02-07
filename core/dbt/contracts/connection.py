@@ -2,7 +2,8 @@ import abc
 import itertools
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
+    Union
 )
 from typing_extensions import Protocol
 
@@ -13,6 +14,7 @@ from hologram.helpers import (
 
 from dbt.contracts.util import Replaceable
 from dbt.exceptions import InternalException
+from dbt.helper_types import NoValue
 from dbt.utils import translate_aliases
 
 
@@ -150,9 +152,31 @@ class Credentials(
         return serialized
 
 
+class UserConfigContract(Protocol):
+    send_anonymous_usage_stats: bool
+    use_colors: bool
+    partial_parse: Optional[bool]
+    printer_width: Optional[int]
+
+    def set_values(self, cookie_dir: str) -> None:
+        ...
+
+    def to_dict(
+        self, omit_none: bool = True, validate: bool = False
+    ) -> Dict[str, Any]:
+        ...
+
+
 class HasCredentials(Protocol):
     credentials: Credentials
+    profile_name: str
+    config: UserConfigContract
+    target_name: str
+    threads: int
 
 
-class AdapterRequiredConfig(HasCredentials):
-    query_comment: Optional[str]
+class AdapterRequiredConfig(HasCredentials, Protocol):
+    project_name: str
+    query_comment: Optional[Union[str, NoValue]]
+    cli_vars: Dict[str, Any]
+    target_path: str

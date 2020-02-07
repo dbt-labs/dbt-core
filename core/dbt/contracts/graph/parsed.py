@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field, Field
 from typing import (
     Optional,
@@ -9,7 +10,6 @@ from typing import (
     Tuple,
     NewType,
     MutableMapping,
-    Callable,
 )
 
 from hologram import JsonSchemaMixin
@@ -18,6 +18,7 @@ from hologram.helpers import (
 )
 
 from dbt.clients.jinja import MacroGenerator
+from dbt.clients.system import write_file
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
@@ -226,6 +227,14 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     meta: Dict[str, Any] = field(default_factory=dict)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
+
+    def write_node(self, target_path: str, subdirectory: str, payload: str):
+        full_path = os.path.join(
+            target_path, subdirectory, self.package_name, self.path
+        )
+
+        write_file(full_path, payload)
+        return full_path
 
 
 @dataclass
@@ -497,7 +506,7 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
         return {}
 
     @property
-    def generator(self) -> Callable[[Dict[str, Any]], Callable]:
+    def generator(self) -> MacroGenerator:
         """
         Returns a function that can be called to render the macro results.
         """

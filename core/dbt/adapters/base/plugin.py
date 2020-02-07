@@ -1,6 +1,7 @@
 from typing import List, Optional, Type
 
 from dbt.adapters.base import BaseAdapter, Credentials
+from dbt.exceptions import CompilationException
 
 
 class AdapterPlugin:
@@ -23,8 +24,12 @@ class AdapterPlugin:
         self.adapter: Type[BaseAdapter] = adapter
         self.credentials: Type[Credentials] = credentials
         self.include_path: str = include_path
-        project = Project.from_project_root(include_path, {})
-        self.project_name: str = project.project_name
+        partial = Project.partial_load(include_path)
+        if partial.project_name is None:
+            raise CompilationException(
+                f'Invalid project at {include_path}: name not set!'
+            )
+        self.project_name: str = partial.project_name
         self.dependencies: List[str]
         if dependencies is None:
             self.dependencies = []

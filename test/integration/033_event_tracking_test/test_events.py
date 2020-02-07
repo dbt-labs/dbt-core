@@ -256,9 +256,9 @@ class TestEventTrackingSuccess(TestEventTracking):
         ]
 
         expected_contexts = [
-            self.build_context('deps', 'start', adapter_type=None),
+            self.build_context('deps', 'start'),
             package_context,
-            self.build_context('deps', 'end', result_type='ok', adapter_type=None)
+            self.build_context('deps', 'end', result_type='ok')
         ]
 
         self.run_event_test(["deps"], expected_calls, expected_contexts)

@@ -248,12 +248,14 @@ class BaseAdapter(metaclass=AdapterMeta):
         self, name: str, node: Optional[CompileResultNode] = None
     ) -> Iterator[None]:
         try:
-            self.connections.query_header.set(name, node)
+            if self.connections.query_header is not None:
+                self.connections.query_header.set(name, node)
             self.acquire_connection(name)
             yield
         finally:
             self.release_connection()
-            self.connections.query_header.reset()
+            if self.connections.query_header is not None:
+                self.connections.query_header.reset()
 
     @contextmanager
     def connection_for(
@@ -983,12 +985,12 @@ class BaseAdapter(metaclass=AdapterMeta):
                 'dbt could not find a macro with the name "{}" in {}'
                 .format(macro_name, package_name)
             )
-        # This causes a reference cycle, as dbt.context.runtime.generate()
+        # This causes a reference cycle, as generate_runtime_macro()
         # ends up calling get_adapter, so the import has to be here.
-        import dbt.context.operation
-        macro_context = dbt.context.operation.generate(
-            model=macro,
-            runtime_config=self.config,
+        from dbt.context.providers import generate_runtime_macro
+        macro_context = generate_runtime_macro(
+            macro=macro,
+            config=self.config,
             manifest=manifest,
             package_name=project
         )

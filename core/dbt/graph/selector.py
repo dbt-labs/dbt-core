@@ -5,7 +5,7 @@ from typing import Set, Iterable, Union, List, Container, Tuple, Optional
 import networkx as nx  # type: ignore
 
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import is_enabled, coalesce
+from dbt.utils import coalesce
 from dbt.node_types import NodeType
 import dbt.exceptions
 
@@ -351,7 +351,7 @@ class NodeSelector(MultiSelector):
         node = self.manifest.nodes[node_name]
         if node.resource_type == NodeType.Source:
             return True
-        return not node.empty and is_enabled(node)
+        return not node.empty and node.config.enabled
 
     def _is_match(self, node_name, resource_types, tags, required):
         node = self.manifest.nodes[node_name]

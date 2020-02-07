@@ -1,24 +1,25 @@
-from typing import Optional
-
 import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
-from dbt.config import Project
+from dbt.config import RuntimeConfig, ConfigRenderer
+from dbt.context.target import generate_target_context
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.clients import system
 
-from dbt.task.base import ProjectOnlyTask
+from dbt.task.base import ConfiguredTask
 
 
-class DepsTask(ProjectOnlyTask):
-    def __init__(self, args, config: Optional[Project] = None):
+class DepsTask(ConfiguredTask):
+    def __init__(self, args, config: RuntimeConfig):
         super().__init__(args=args, config=config)
 
-    def track_package_install(self, package_name, source_type, version):
+    def track_package_install(
+        self, package_name: str, source_type: str, version: str
+    ) -> None:
         version = 'local' if source_type == 'local' else version
 
         h_package_name = dbt.utils.md5(package_name)
@@ -40,9 +41,13 @@ class DepsTask(ProjectOnlyTask):
         with downloads_directory():
             final_deps = resolve_packages(packages, self.config)
 
+            renderer = ConfigRenderer(generate_target_context(
+                self.config, self.config.cli_vars
+            ))
+
             for package in final_deps:
                 logger.info('Installing {}', package)
-                package.install(self.config)
+                package.install(self.config, renderer)
                 logger.info('  Installed from {}\n',
                             package.nice_version_name())
 

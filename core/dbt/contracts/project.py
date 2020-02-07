@@ -1,4 +1,5 @@
 from dbt.contracts.util import Replaceable, Mergeable, list_str
+from dbt.contracts.connection import UserConfigContract
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import tracking
 from dbt.ui import printer
@@ -175,7 +176,7 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class UserConfig(ExtensibleJsonSchemaMixin, Replaceable):
+class UserConfig(ExtensibleJsonSchemaMixin, Replaceable, UserConfigContract):
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
     use_colors: bool = DEFAULT_USE_COLORS
     partial_parse: Optional[bool] = None
@@ -192,13 +193,6 @@ class UserConfig(ExtensibleJsonSchemaMixin, Replaceable):
 
         if self.printer_width:
             printer.printer_width(self.printer_width)
-
-    @classmethod
-    def from_maybe_dict(cls, value: Optional[Dict[str, Any]]) -> 'UserConfig':
-        if value is None:
-            return cls()
-        else:
-            return cls.from_dict(value)
 
 
 @dataclass

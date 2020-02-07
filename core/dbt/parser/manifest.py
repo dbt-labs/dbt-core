@@ -2,7 +2,7 @@ import itertools
 import os
 import pickle
 from datetime import datetime
-from typing import Dict, Optional, Mapping, Callable, Any, List, Type
+from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union
 
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
@@ -12,8 +12,12 @@ from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
-from dbt.contracts.graph.compiled import CompileResultNode
-from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash
+from dbt.context.docs import generate_runtime_docs
+from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
+from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
+from dbt.contracts.graph.parsed import (
+    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo
+)
 from dbt.exceptions import raise_compiler_error
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
@@ -27,7 +31,6 @@ from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
-from dbt.parser.util import ParserUtils
 from dbt.version import __version__
 
 
@@ -292,6 +295,12 @@ class ManifestLoader:
 
         return None
 
+    def process_manifest(self, manifest: Manifest):
+        project_name = self.root_project.project_name
+        process_sources(manifest, project_name)
+        process_refs(manifest, project_name)
+        process_docs(manifest, self.root_project)
+
     def create_manifest(self) -> Manifest:
         nodes: Dict[str, CompileResultNode] = {}
         nodes.update(self.results.nodes)
@@ -310,15 +319,7 @@ class ManifestLoader:
         )
         manifest.patch_nodes(self.results.patches)
         manifest.patch_macros(self.results.macro_patches)
-        manifest = ParserUtils.process_sources(
-            manifest, self.root_project.project_name
-        )
-        manifest = ParserUtils.process_refs(
-            manifest, self.root_project.project_name
-        )
-        manifest = ParserUtils.process_docs(
-            manifest, self.root_project.project_name
-        )
+        self.process_manifest(manifest)
         return manifest
 
     @classmethod
@@ -420,7 +421,208 @@ def _project_directories(config):
         yield full_obj
 
 
-def load_all_projects(config) -> Mapping[str, Project]:
+def _get_node_column(node, column_name):
+    """Given a ParsedNode, add some fields that might be missing. Return a
+    reference to the dict that refers to the given column, creating it if
+    it doesn't yet exist.
+    """
+    if column_name in node.columns:
+        column = node.columns[column_name]
+    else:
+        node.columns[column_name] = ColumnInfo(name=column_name)
+        node.columns[column_name] = column
+
+    return column
+
+
+DocsContextCallback = Callable[
+    [Union[ParsedNode, ParsedSourceDefinition]],
+    Dict[str, Any]
+]
+
+
+def _process_docs_for_node(
+    context: Dict[str, Any],
+    node: NonSourceNode,
+):
+    for docref in node.docrefs:
+        column_name = docref.column_name
+
+        if column_name is None:
+            obj = node
+        else:
+            obj = _get_node_column(node, column_name)
+
+        raw = obj.description or ''
+        # At this point, we know that our documentation string has a
+        # 'docs("...")' pointing at it. We want to render it.
+        obj.description = dbt.clients.jinja.get_rendered(raw, context)
+
+
+def _process_docs_for_source(
+    context: Dict[str, Any],
+    source: ParsedSourceDefinition,
+):
+    table_description = source.description
+    source_description = source.source_description
+    table_description = dbt.clients.jinja.get_rendered(table_description,
+                                                       context)
+    source_description = dbt.clients.jinja.get_rendered(source_description,
+                                                        context)
+    source.description = table_description
+    source.source_description = source_description
+
+    for column in source.columns.values():
+        column_desc = column.description
+        column_desc = dbt.clients.jinja.get_rendered(column_desc, context)
+        column.description = column_desc
+
+
+def _process_docs_for_macro(
+    context: Dict[str, Any], macro: ParsedMacro
+) -> None:
+    for docref in macro.docrefs:
+        raw = macro.description or ''
+        macro.description = dbt.clients.jinja.get_rendered(raw, context)
+
+
+def process_docs(manifest: Manifest, config: RuntimeConfig):
+    for node in manifest.nodes.values():
+        ctx = generate_runtime_docs(
+            config,
+            node,
+            manifest,
+            config.project_name,
+        )
+        if node.resource_type == NodeType.Source:
+            assert isinstance(node, ParsedSourceDefinition)  # appease mypy
+            _process_docs_for_source(ctx, node)
+        else:
+            assert not isinstance(node, ParsedSourceDefinition)
+            _process_docs_for_node(ctx, node)
+    for macro in manifest.macros.values():
+        ctx = generate_runtime_docs(
+            config,
+            macro,
+            manifest,
+            config.project_name,
+        )
+        _process_docs_for_macro(ctx, macro)
+
+
+def _process_refs_for_node(
+    manifest: Manifest, current_project: str, node: NonSourceNode
+):
+    """Given a manifest and a node in that manifest, process its refs"""
+    for ref in node.refs:
+        target_model: Optional[Union[Disabled, NonSourceNode]] = None
+        target_model_name: str
+        target_model_package: Optional[str] = None
+
+        if len(ref) == 1:
+            target_model_name = ref[0]
+        elif len(ref) == 2:
+            target_model_package, target_model_name = ref
+        else:
+            raise dbt.exceptions.InternalException(
+                f'Refs should always be 1 or 2 arguments - got {len(ref)}'
+            )
+
+        target_model = manifest.resolve_ref(
+            target_model_name,
+            target_model_package,
+            current_project,
+            node.package_name,
+        )
+
+        if target_model is None or isinstance(target_model, Disabled):
+            # This may raise. Even if it doesn't, we don't want to add
+            # this node to the graph b/c there is no destination node
+            node.config.enabled = False
+            dbt.utils.invalid_ref_fail_unless_test(
+                node, target_model_name, target_model_package,
+                disabled=(isinstance(target_model, Disabled))
+            )
+
+            continue
+
+        target_model_id = target_model.unique_id
+
+        node.depends_on.nodes.append(target_model_id)
+        # TODO: I think this is extraneous, node should already be the same
+        # as manifest.nodes[node.unique_id] (we're mutating node here, not
+        # making a new one)
+        manifest.update_node(node)
+
+
+def process_refs(manifest: Manifest, current_project: str):
+    for node in manifest.nodes.values():
+        if node.resource_type == NodeType.Source:
+            continue
+        assert not isinstance(node, ParsedSourceDefinition)
+        _process_refs_for_node(manifest, current_project, node)
+    return manifest
+
+
+def _process_sources_for_node(
+    manifest: Manifest, current_project: str, node: NonSourceNode
+):
+    target_source = None
+    for source_name, table_name in node.sources:
+        target_source = manifest.resolve_source(
+            source_name,
+            table_name,
+            current_project,
+            node.package_name,
+        )
+
+        if target_source is None:
+            # this folows the same pattern as refs
+            node.config.enabled = False
+            dbt.utils.invalid_source_fail_unless_test(
+                node,
+                source_name,
+                table_name)
+            continue
+        target_source_id = target_source.unique_id
+        node.depends_on.nodes.append(target_source_id)
+        manifest.update_node(node)
+
+
+def process_sources(manifest: Manifest, current_project: str):
+    for node in manifest.nodes.values():
+        if node.resource_type == NodeType.Source:
+            continue
+        assert not isinstance(node, ParsedSourceDefinition)
+        _process_sources_for_node(manifest, current_project, node)
+    return manifest
+
+
+def process_macro(
+    config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro
+) -> None:
+    ctx = generate_runtime_docs(
+        config,
+        macro,
+        manifest,
+        config.project_name,
+    )
+    _process_docs_for_macro(ctx, macro)
+
+
+def process_node(
+    config: RuntimeConfig, manifest: Manifest, node: NonSourceNode
+):
+
+    _process_sources_for_node(
+        manifest, config.project_name, node
+    )
+    _process_refs_for_node(manifest, config.project_name, node)
+    ctx = generate_runtime_docs(config, node, manifest, config.project_name)
+    _process_docs_for_node(ctx, node)
+
+
+def load_all_projects(config: RuntimeConfig) -> Mapping[str, Project]:
     all_projects = {config.project_name: config}
     project_paths = itertools.chain(
         internal_project_names(),

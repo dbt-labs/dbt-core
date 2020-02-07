@@ -6,7 +6,7 @@ from hologram import ValidationError
 
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.contracts.connection import Credentials
+from dbt.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
@@ -14,7 +14,7 @@ from dbt.exceptions import ValidationException
 from dbt.exceptions import RuntimeException
 from dbt.exceptions import validator_error_message
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import parse_cli_vars, coerce_dict_str
+from dbt.utils import coerce_dict_str
 
 from .renderer import ConfigRenderer
 
@@ -73,7 +73,7 @@ def read_user_config(directory: str) -> UserConfig:
 
 
 @dataclass
-class Profile:
+class Profile(HasCredentials):
     profile_name: str
     target_name: str
     config: UserConfig
@@ -147,7 +147,8 @@ class Profile:
 
     @staticmethod
     def pick_profile_name(
-        args_profile_name: str, project_profile_name: Optional[str] = None,
+        args_profile_name: Optional[str],
+        project_profile_name: Optional[str] = None,
     ) -> str:
         profile_name = project_profile_name
         if args_profile_name is not None:
@@ -217,13 +218,11 @@ class Profile:
         raw_profile: Dict[str, Any],
         profile_name: str,
         target_override: Optional[str],
-        cli_vars: Dict[str, Any],
+        renderer: ConfigRenderer,
     ) -> Tuple[str, Dict[str, Any]]:
         """This is a containment zone for the hateful way we're rendering
         profiles.
         """
-        renderer = ConfigRenderer(cli_vars=cli_vars)
-
         # rendering profiles is a bit complex. Two constraints cause trouble:
         # 1) users should be able to use environment/cli variables to specify
         #    the target in their profile.
@@ -255,7 +254,7 @@ class Profile:
         cls,
         raw_profile: Dict[str, Any],
         profile_name: str,
-        cli_vars: Dict[str, Any],
+        renderer: ConfigRenderer,
         user_cfg: Optional[Dict[str, Any]] = None,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
@@ -267,8 +266,7 @@ class Profile:
         :param raw_profile: The profile data for a single profile, from
             disk as yaml and its values rendered with jinja.
         :param profile_name: The profile name used.
-        :param cli_vars: The command-line variables passed as arguments,
-            as a dict.
+        :param renderer: The config renderer.
         :param user_cfg: The global config for the user, if it
             was present.
         :param target_override: The target to use, if provided on
@@ -285,7 +283,7 @@ class Profile:
 
         # TODO: should it be, and the values coerced to bool?
         target_name, profile_data = cls.render_profile(
-            raw_profile, profile_name, target_override, cli_vars
+            raw_profile, profile_name, target_override, renderer
         )
 
         # valid connections never include the number of threads, but it's
@@ -311,15 +309,14 @@ class Profile:
         cls,
         raw_profiles: Dict[str, Any],
         profile_name: str,
-        cli_vars: Dict[str, Any],
+        renderer: ConfigRenderer,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
     ) -> 'Profile':
         """
         :param raw_profiles: The profile data, from disk as yaml.
         :param profile_name: The profile name to use.
-        :param cli_vars: The command-line variables passed as arguments, as a
-            dict.
+        :param renderer: The config renderer.
         :param target_override: The target to use, if provided on the command
             line.
         :param threads_override: The thread count to use, if provided on the
@@ -344,17 +341,18 @@ class Profile:
         return cls.from_raw_profile_info(
             raw_profile=raw_profile,
             profile_name=profile_name,
-            cli_vars=cli_vars,
+            renderer=renderer,
             user_cfg=user_cfg,
             target_override=target_override,
             threads_override=threads_override,
         )
 
     @classmethod
-    def from_args(
+    def render_from_args(
         cls,
         args: Any,
-        project_profile_name: Optional[str] = None,
+        renderer: ConfigRenderer,
+        project_profile_name: Optional[str],
     ) -> 'Profile':
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
@@ -370,17 +368,16 @@ class Profile:
             target could not be found.
         :returns Profile: The new Profile object.
         """
-        cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
         threads_override = getattr(args, 'threads', None)
         target_override = getattr(args, 'target', None)
         raw_profiles = read_profile(args.profiles_dir)
-        profile_name = cls.pick_profile_name(args.profile,
+        profile_name = cls.pick_profile_name(getattr(args, 'profile', None),
                                              project_profile_name)
 
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,
             profile_name=profile_name,
-            cli_vars=cli_vars,
+            renderer=renderer,
             target_override=target_override,
             threads_override=threads_override
         )
