@@ -312,3 +312,28 @@ class TestBQSchemaTests(DBTIntegrationTest):
                 )
 
         self.assertEqual(sum(x.status for x in test_results), 0)
+
+
+class TestQuotedSchemaTestColumns(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "quote-required-models"
+
+    @use_profile('postgres')
+    def test_postgres_quote_required_column(self):
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
+        results = self.run_dbt(['test', '-m', 'model'])
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt(['test', '-m', 'model_again'])
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt(['test', '-m', 'model_noquote'])
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt(['test', '-m', 'source:my_source'])
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(['test', '-m', 'source:my_source_2'])
+        self.assertEqual(len(results), 2)

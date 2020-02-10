@@ -80,6 +80,7 @@ class HasTests(HasDocs):
 
 @dataclass
 class UnparsedColumn(HasTests):
+    quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
 
 
@@ -107,7 +108,7 @@ class UnparsedAnalysisUpdate(HasColumnDocs, HasDocs, HasYamlMetadata):
 
 @dataclass
 class UnparsedNodeUpdate(HasColumnTests, HasTests, HasYamlMetadata):
-    pass
+    quote_columns: Optional[bool] = None
 
 
 @dataclass
@@ -225,6 +226,7 @@ class Quoting(JsonSchemaMixin, Mergeable):
     database: Optional[bool] = None
     schema: Optional[bool] = None
     identifier: Optional[bool] = None
+    column: Optional[bool] = None
 
 
 @dataclass
