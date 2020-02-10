@@ -1,5 +1,6 @@
 import abc
 import shlex
+import yaml
 from typing import Type, Optional
 
 
@@ -38,9 +39,13 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
     def set_config(self, config):
         super().set_config(config)
 
-        # patch up config with args/cli_vars
+        # read any cli vars we got and use it to update cli_vars
+        self.config.cli_vars.update(
+            parse_cli_vars(getattr(self.args, 'vars', '{}'))
+        )
+        # rewrite args.vars to reflect our merged vars
+        self.args.vars = yaml.safe_dump(self.config.cli_vars)
         self.config.args = self.args
-        self.config.cli_vars = parse_cli_vars(getattr(self.args, 'vars', '{}'))
 
         if self.task_type is None:
             raise InternalException('task type not set for set_config')
