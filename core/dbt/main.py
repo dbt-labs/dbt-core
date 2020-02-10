@@ -287,7 +287,6 @@ def _build_base_subparser():
 def _build_docs_subparser(subparsers, base_subparser):
     docs_sub = subparsers.add_parser(
         'docs',
-        parents=[base_subparser],
         help='''
         Generate or serve the documentation website for your project.
         '''
@@ -298,7 +297,6 @@ def _build_docs_subparser(subparsers, base_subparser):
 def _build_source_subparser(subparsers, base_subparser):
     source_sub = subparsers.add_parser(
         'source',
-        parents=[base_subparser],
         help='''
         Manage your project's sources
         ''',
@@ -884,7 +882,9 @@ def parse_args(args, cls=DBTArgumentParser):
         sys.exit(1)
 
     parsed = p.parse_args(args)
-    parsed.profiles_dir = os.path.expanduser(parsed.profiles_dir)
+
+    if hasattr(parsed, 'profiles_dir'):
+        parsed.profiles_dir = os.path.expanduser(parsed.profiles_dir)
 
     if not hasattr(parsed, 'which'):
         # the user did not provide a valid subcommand. trigger the help message
