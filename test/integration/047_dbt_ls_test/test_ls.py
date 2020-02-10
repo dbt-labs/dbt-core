@@ -268,7 +268,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                 {
                     'name': 'not_null_outer_id',
                     'package_name': 'test',
-                    'depends_on': {'nodes': ['model.test.outer'], 'macros': []},
+                    'depends_on': {'nodes': ['model.test.outer'], 'macros': ['macro.dbt.test_not_null']},
                     'tags': ['schema'],
                     'config': {
                         'enabled': True,
@@ -309,7 +309,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                 {
                     'name': 'unique_outer_id',
                     'package_name': 'test',
-                    'depends_on': {'nodes': ['model.test.outer'], 'macros': []},
+                    'depends_on': {'nodes': ['model.test.outer'], 'macros': ['macro.dbt.test_unique']},
                     'tags': ['schema'],
                     'config': {
                         'enabled': True,

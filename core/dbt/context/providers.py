@@ -14,7 +14,7 @@ from dbt.config import RuntimeConfig
 from dbt.context.base import (
     contextmember, contextproperty, Var
 )
-from dbt.context.configured import ManifestContext
+from dbt.context.configured import ManifestContext, MacroNamespace
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
     NonSourceNode, CompiledSeedNode
@@ -450,6 +450,14 @@ class ProviderContext(ManifestContext):
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
+
+    def _get_namespace(self):
+        return MacroNamespace(
+            self.config.project_name,
+            self.search_package,
+            self.macro_stack,
+            self.model,
+        )
 
     @contextproperty
     def _sql_results(self) -> Dict[str, AttrDict]:

@@ -7,6 +7,8 @@ from typing import (
 
 from hologram import ValidationError
 
+from dbt.clients.jinja import MacroGenerator
+from dbt.clients.system import load_file_contents
 from dbt.context.providers import generate_parser_model, generate_parser_macro
 import dbt.flags
 from dbt import deprecations
@@ -26,7 +28,6 @@ from dbt.node_types import NodeType
 from dbt.source_config import SourceConfig
 from dbt.parser.results import ParseResult, ManifestNodes
 from dbt.parser.search import FileBlock
-from dbt.clients.system import load_file_contents
 
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
@@ -132,7 +133,7 @@ class ConfiguredParser(
         root_context = generate_parser_macro(
             macro, self.root_project, self.macro_manifest, None
         )
-        return macro.generator(root_context)
+        return MacroGenerator(macro, root_context)
 
     def get_schema_func(self) -> RelationUpdate:
         """The get_schema function is set by a few different things:

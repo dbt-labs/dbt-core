@@ -20,6 +20,7 @@ import dbt.flags
 
 from dbt import deprecations
 from dbt.clients.agate_helper import empty_table, merge_tables
+from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
@@ -996,7 +997,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
         macro_context.update(context_override)
 
-        macro_function = macro.generator(macro_context)
+        macro_function = MacroGenerator(macro, macro_context)
 
         try:
             result = macro_function(**kwargs)
