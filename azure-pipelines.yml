@@ -32,6 +32,8 @@ jobs:
   dependsOn: UnitTest
 
   steps:
+  - pwsh: echo "True"
+    displayName: Skip everything
   - pwsh: |
       choco install postgresql --params '/Password:password' --params-global --version 10.6
       Set-Content "c:\program files\postgresql\10\data\pg_hba.conf" "host   all   all   ::1/128        trust"
@@ -65,7 +67,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-
+  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -87,13 +89,12 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-
+  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
   steps:
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '3.7'
       architecture: 'x64'
-
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
   - script: python -m tox -e pywin-bigquery
@@ -105,7 +106,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-
+  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -123,3 +124,32 @@ jobs:
       REDSHIFT_TEST_PORT: $(REDSHIFT_TEST_PORT)
       REDSHIFT_TEST_HOST: $(REDSHIFT_TEST_HOST)
     displayName: Run integration tests
+
+- job: BuildWheel
+  pool:
+    vmImage: 'vs2017-win2016'
+  dependsOn:
+    - UnitTest
+    - PostgresIntegrationTest
+    - RedshiftIntegrationTest
+    - SnowflakeIntegrationTest
+    - BigQueryIntegrationTest
+  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.7'
+        architecture: 'x64'
+    - script: python -m pip install --upgrade pip setuptools && python -m pip install -r requirements.txt && python -m pip install -r dev_requirements.txt
+      displayName: Install dependencies
+    - task: ShellScript@2
+      inputs:
+        scriptPath: scripts/build-wheels.sh
+    - task: CopyFiles@2
+      inputs:
+        contents: 'dist\?(*.whl|*.tar.gz)'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: dists
