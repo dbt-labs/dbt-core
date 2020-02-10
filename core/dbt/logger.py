@@ -36,9 +36,8 @@ colorama.init(wrap=colorama_wrap)
 
 
 STDOUT_LOG_FORMAT = '{record.message}'
-# TODO: can we change the time to just "{record.time:%Y-%m-%d %H:%M:%S.%f%z}"?
 DEBUG_LOG_FORMAT = (
-    '{record.time:%Y-%m-%d %H:%M:%S%z},{record.time.microsecond:03} '
+    '{record.time:%Y-%m-%d %H:%M:%S.%f%z} '
     '({record.thread_name}): '
     '{record.message}'
 )
