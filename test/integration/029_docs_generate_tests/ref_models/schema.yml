@@ -35,3 +35,7 @@ macros:
     description: "{{ doc('macro_info') }}"
     meta:
       some_key: 100
+    arguments:
+      - name: model
+        type: Relation
+        description: "{{ doc('macro_arg_info') }}"

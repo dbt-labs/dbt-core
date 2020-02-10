@@ -387,7 +387,7 @@ def test_model_runtime_context(config, manifest, get_adapter):
 
 
 def test_docs_parse_context(config):
-    ctx = docs.generate_parser_docs(config, mock_model(), [])
+    ctx = docs.generate_parser_docs(config, mock_model())
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
 
 

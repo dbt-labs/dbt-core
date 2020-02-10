@@ -379,10 +379,8 @@ def render_template(template, ctx, node=None):
         return template.render(ctx)
 
 
-def get_rendered(string, ctx, node=None,
-                 capture_macros=False):
-    template = get_template(string, ctx, node,
-                            capture_macros=capture_macros)
+def get_rendered(string, ctx, node=None, capture_macros=False):
+    template = get_template(string, ctx, node, capture_macros=capture_macros)
 
     return render_template(template, ctx, node)
 

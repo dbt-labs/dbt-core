@@ -19,7 +19,6 @@ from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ParsedSourceDefinition,
     ColumnInfo,
-    Docref,
     ParsedTestNode,
     ParsedMacroPatch,
 )
@@ -76,7 +75,6 @@ class ParserRef:
     """A helper object to hold parse-time references."""
     def __init__(self):
         self.column_info: Dict[str, ColumnInfo] = {}
-        self.docrefs: List[Docref] = []
 
     def add(self, column: UnparsedColumn, description, data_type, meta):
         self.column_info[column.name] = ColumnInfo(
@@ -88,14 +86,12 @@ class ParserRef:
         )
 
 
-def collect_docrefs(
+def column_info(
     config: RuntimeConfig,
     target: UnparsedSchemaYaml,
-    refs: ParserRef,
-    column_name: Optional[str],
     *descriptions: str,
 ) -> None:
-    context = generate_parser_docs(config, target, refs.docrefs, column_name)
+    context = generate_parser_docs(config, target)
     for description in descriptions:
         get_rendered(description, context)
 
@@ -360,15 +356,12 @@ class YamlDocsReader(Generic[Target, Parsed]):
     def parse_docs(self, block: TargetBlock) -> ParserRef:
         refs = ParserRef()
         for column in block.columns:
-            column_name = column.name
             description = column.description
             data_type = column.data_type
             meta = column.meta
-            collect_docrefs(
+            column_info(
                 self.root_project,
                 block.target,
-                refs,
-                column_name,
                 description,
             )
 
@@ -446,12 +439,11 @@ class YamlParser(Generic[Target, Parsed]):
     def parse_docs(self, block: TargetBlock) -> ParserRef:
         refs = ParserRef()
         for column in block.columns:
-            column_name = column.name
             description = column.description
             data_type = column.data_type
             meta = column.meta
-            collect_docrefs(
-                self.root_project, block.target, refs, column_name, description
+            column_info(
+                self.root_project, block.target, description
             )
 
             refs.add(column, description, data_type, meta)
@@ -533,9 +525,8 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         description = table.description or ''
         meta = table.meta or {}
         source_description = source.description or ''
-        collect_docrefs(
-            self.root_project, source, refs, None, description,
-            source_description
+        column_info(
+            self.root_project, source, description, source_description
         )
 
         loaded_at_field = table.loaded_at_field or source.loaded_at_field
@@ -566,7 +557,6 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
             source_meta=source_meta,
             meta=meta,
             loader=source.loader,
-            docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,
             freshness=freshness,
             quoting=quoting,
@@ -580,12 +570,12 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
 class NonSourceParser(
     YamlDocsReader[NonSourceTarget, Parsed], Generic[NonSourceTarget, Parsed]
 ):
-    def collect_docrefs(
-        self, block: TargetBlock[NonSourceTarget], refs: ParserRef
+    def collect_column_info(
+        self, block: TargetBlock[NonSourceTarget]
     ) -> str:
         description = block.target.description
-        collect_docrefs(
-            self.root_project, block.target, refs, None, description
+        column_info(
+            self.root_project, block.target, description
         )
         return description
 
@@ -618,7 +608,7 @@ class NodePatchParser(
     def parse_patch(
         self, block: TargetBlock[NodeTarget], refs: ParserRef
     ) -> None:
-        description = self.collect_docrefs(block, refs)
+        description = self.collect_column_info(block)
         result = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -626,7 +616,6 @@ class NodePatchParser(
             package_name=block.target.package_name,
             description=description,
             columns=refs.column_info,
-            docrefs=refs.docrefs,
             meta=block.target.meta,
         )
         self.results.add_patch(self.yaml.file, result)
@@ -649,6 +638,16 @@ class AnalysisPatchParser(NodePatchParser[UnparsedAnalysisUpdate]):
 
 
 class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
+    def collect_column_info(
+        self, block: TargetBlock[UnparsedMacroUpdate]
+    ) -> str:
+        description = block.target.description
+        arg_docs = [arg.description for arg in block.target.arguments]
+        column_info(
+            self.root_project, block.target, description, *arg_docs
+        )
+        return description
+
     def get_block(self, node: UnparsedMacroUpdate) -> TargetBlock:
         return TargetBlock.from_yaml_block(self.yaml, node)
 
@@ -658,15 +657,15 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
     def parse_patch(
         self, block: TargetBlock[UnparsedMacroUpdate], refs: ParserRef
     ) -> None:
-        description = self.collect_docrefs(block, refs)
+        description = self.collect_column_info(block)
 
         result = ParsedMacroPatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
             yaml_key=block.target.yaml_key,
             package_name=block.target.package_name,
+            arguments=block.target.arguments,
             description=description,
-            docrefs=refs.docrefs,
             meta=block.target.meta,
         )
         self.results.add_macro_patch(self.yaml.file, result)
