@@ -121,7 +121,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.get_file(source_file).macros.append(macro.unique_id)
 
     def add_doc(self, source_file: SourceFile, doc: ParsedDocumentation):
-        # Docs also can be overwritten (should they be?)
+        _check_duplicates(doc, self.docs)
         self.docs[doc.unique_id] = doc
         self.get_file(source_file).docs.append(doc.unique_id)
 

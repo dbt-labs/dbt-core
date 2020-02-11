@@ -158,3 +158,21 @@ class TestBadDocsBlocks(DBTIntegrationTest):
         # The run should fail since we could not find the docs reference.
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt(expect_pass=False)
+
+class TestDuplicateDocsBlock(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return 'docs_blocks_035'
+
+    @staticmethod
+    def dir(path):
+        return os.path.normpath(path)
+
+    @property
+    def models(self):
+        return self.dir("duplicate_docs")
+
+    @use_profile('postgres')
+    def test_postgres_duplicate_doc_ref(self):
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            self.run_dbt(expect_pass=False)
