@@ -203,7 +203,7 @@ class DebugTask(BaseTask):
         if self.raw_profile_data:
             profiles = [k for k in self.raw_profile_data if k != 'config']
             if project_profile is None:
-                self.messages.append('Could not load dbt_project.yml')
+                self.messages.append("Could not load dbt_project.yml")
             elif len(profiles) == 0:
                 self.messages.append('The profiles.yml has no profiles')
             elif len(profiles) == 1:
