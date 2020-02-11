@@ -14,6 +14,22 @@ from .utils import ContractTestCase
 class TestCompiledModelNode(ContractTestCase):
     ContractType = CompiledModelNode
 
+    def _minimum(self):
+        return {
+            'name': 'foo',
+            'root_path': '/root/',
+            'resource_type': str(NodeType.Model),
+            'path': '/root/x/path.sql',
+            'original_file_path': '/root/path.sql',
+            'package_name': 'test',
+            'raw_sql': 'select * from wherever',
+            'unique_id': 'model.test.foo',
+            'fqn': ['test', 'models', 'foo'],
+            'database': 'test_db',
+            'schema': 'test_schema',
+            'alias': 'bar',
+        }
+
     def test_basic_uncompiled(self):
         node_dict = {
             'name': 'foo',
@@ -44,6 +60,7 @@ class TestCompiledModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
             'compiled': False,
@@ -80,20 +97,7 @@ class TestCompiledModelNode(ContractTestCase):
         self.assertFalse(node.is_ephemeral)
         self.assertEqual(node.local_vars(), {})
 
-        minimum = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Model),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-        }
+        minimum = self._minimum()
         self.assert_from_dict(node, minimum)
         pickle.loads(pickle.dumps(node))
 
@@ -127,6 +131,7 @@ class TestCompiledModelNode(ContractTestCase):
                 'tags': [],
                 'vars': {},
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
             'compiled': True,
@@ -170,43 +175,34 @@ class TestCompiledModelNode(ContractTestCase):
         self.assertEqual(node.local_vars(), {})
 
     def test_invalid_extra_fields(self):
-        bad_extra = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Model),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'notvalid': 'nope',
-        }
+        bad_extra = self._minimum()
+        bad_extra['notvalid'] = 'nope'
         self.assert_fails_validation(bad_extra)
 
     def test_invalid_bad_type(self):
-        bad_type = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Macro),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-        }
+        bad_type = self._minimum()
+        bad_type['resource_type'] = str(NodeType.Macro)
         self.assert_fails_validation(bad_type)
 
 
 class TestCompiledTestNode(ContractTestCase):
     ContractType = CompiledTestNode
+
+    def _minimum(self):
+        return {
+            'name': 'foo',
+            'root_path': '/root/',
+            'resource_type': str(NodeType.Test),
+            'path': '/root/x/path.sql',
+            'original_file_path': '/root/path.sql',
+            'package_name': 'test',
+            'raw_sql': 'select * from wherever',
+            'unique_id': 'model.test.foo',
+            'fqn': ['test', 'models', 'foo'],
+            'database': 'test_db',
+            'schema': 'test_schema',
+            'alias': 'bar',
+        }
 
     def test_basic_uncompiled(self):
         node_dict = {
@@ -239,6 +235,7 @@ class TestCompiledTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'error',
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
             'compiled': False,
@@ -275,20 +272,7 @@ class TestCompiledTestNode(ContractTestCase):
         self.assertFalse(node.is_ephemeral)
         self.assertEqual(node.local_vars(), {})
 
-        minimum = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-        }
+        minimum = self._minimum()
         self.assert_from_dict(node, minimum)
         pickle.loads(pickle.dumps(node))
 
@@ -323,6 +307,7 @@ class TestCompiledTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'warn',
             },
+            'docs': {'show': True},
             'columns': {},
             'meta': {},
             'compiled': True,
@@ -368,36 +353,11 @@ class TestCompiledTestNode(ContractTestCase):
         self.assertEqual(node.local_vars(), {})
 
     def test_invalid_extra_fields(self):
-        bad_extra = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Test),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-            'extra': 'extra value',
-        }
+        bad_extra = self._minimum()
+        bad_extra['extra'] = 'extra value'
         self.assert_fails_validation(bad_extra)
 
     def test_invalid_resource_type(self):
-        bad_type = {
-            'name': 'foo',
-            'root_path': '/root/',
-            'resource_type': str(NodeType.Model),
-            'path': '/root/x/path.sql',
-            'original_file_path': '/root/path.sql',
-            'package_name': 'test',
-            'raw_sql': 'select * from wherever',
-            'unique_id': 'model.test.foo',
-            'fqn': ['test', 'models', 'foo'],
-            'database': 'test_db',
-            'schema': 'test_schema',
-            'alias': 'bar',
-        }
+        bad_type = self._minimum()
+        bad_type['resource_type'] = str(NodeType.Model)
         self.assert_fails_validation(bad_type)

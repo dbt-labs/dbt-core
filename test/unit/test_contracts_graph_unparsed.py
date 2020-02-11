@@ -5,7 +5,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedRunHook, UnparsedMacro, Time, TimePeriod,
     FreshnessStatus, FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
-    UnparsedNodeUpdate
+    UnparsedNodeUpdate, Docs
 )
 from dbt.node_types import NodeType
 from .utils import ContractTestCase
@@ -312,6 +312,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                 {
                     'name': 'table1',
                     'description': '',
+                    'docs': {'show': True},
                     'tests': [],
                     'columns': [],
                     'quoting': {},
@@ -323,6 +324,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                 {
                     'name': 'table2',
                     'description': 'table 2',
+                    'docs': {'show': True},
                     'tests': [],
                     'columns': [],
                     'quoting': {'database': True},
@@ -398,6 +400,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'package_name': 'test',
             'columns': [],
             'description': '',
+            'docs': {'show': True},
             'tests': [],
             'meta': {},
         }
@@ -430,6 +433,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     tags=['a', 'b'],
                 ),
             ],
+            docs=Docs(show=False),
         )
         dct = {
             'name': 'foo',
@@ -443,6 +447,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 {
                     'name': 'x',
                     'description': 'x description',
+                    'docs': {'show': True},
                     'tests': [],
                     'meta': {'key2': 'value3'},
                     'tags': [],
@@ -450,6 +455,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 {
                     'name': 'y',
                     'description': 'y description',
+                    'docs': {'show': True},
                     'tests': [
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
@@ -458,6 +464,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     'tags': ['a', 'b'],
                 },
             ],
+            'docs': {'show': False},
         }
         self.assert_symmetric(update, dct)
         pickle.loads(pickle.dumps(update))
@@ -475,12 +482,14 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 {
                     'name': 'x',
                     'description': 'x description',
+                    'docs': {'show': True},
                     'tests': [],
                     'meta': {'key2': 'value3'},
                 },
                 {
                     'name': 'y',
                     'description': 'y description',
+                    'docs': {'show': True},
                     'tests': [
                         100,
                         {'accepted_values': {'values': ['blue', 'green']}}
@@ -490,6 +499,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     'original_file_path': '/some/fake/path',
                 },
             ],
+            'docs': {'show': True},
         }
         self.assert_fails_validation(dct)
 
@@ -505,12 +515,15 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 # column missing a name
                 {
                     'description': 'x description',
+                    'docs': {'show': True},
                     'tests': [],
                     'meta': {'key2': 'value3'},
+
                 },
                 {
                     'name': 'y',
                     'description': 'y description',
+                    'docs': {'show': True},
                     'tests': [
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
@@ -520,6 +533,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     'original_file_path': '/some/fake/path',
                 },
             ],
+            'docs': {'show': True},
         }
         self.assert_fails_validation(dct)
 
@@ -535,12 +549,14 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 {
                     'name': 'x',
                     'description': 'x description',
+                    'docs': {'show': True},
                     'tests': [],
                     'meta': {'key2': 'value3'},
                 },
                 {
                     'name': 'y',
                     'description': 'y description',
+                    'docs': {'show': True},
                     'tests': [
                         'unique',
                         {'accepted_values': {'values': ['blue', 'green']}}
@@ -550,5 +566,6 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     'original_file_path': '/some/fake/path',
                 },
             ],
+            'docs': {'show': True},
         }
         self.assert_fails_validation(dct)

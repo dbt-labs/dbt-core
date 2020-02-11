@@ -623,6 +623,7 @@ class NodePatchParser(
             description=description,
             columns=refs.column_info,
             meta=block.target.meta,
+            docs=block.target.docs,
         )
         self.results.add_patch(self.yaml.file, result)
 
@@ -673,5 +674,6 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             arguments=block.target.arguments,
             description=description,
             meta=block.target.meta,
+            docs=block.target.docs,
         )
         self.results.add_macro_patch(self.yaml.file, result)

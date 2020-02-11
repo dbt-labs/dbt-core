@@ -3,6 +3,8 @@ version: 2
 models:
   - name: model
     description: "The test model"
+    docs:
+      show: false
     columns:
       - name: id
         description: The user ID number
