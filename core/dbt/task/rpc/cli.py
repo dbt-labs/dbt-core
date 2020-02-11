@@ -1,5 +1,6 @@
 import abc
 import shlex
+import yaml
 from typing import Type, Optional
 
 
@@ -12,6 +13,7 @@ from dbt.rpc.method import (
     Result,
 )
 from dbt.exceptions import InternalException
+from dbt.utils import parse_cli_vars
 
 from .base import RPCTask
 
@@ -36,6 +38,15 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
 
     def set_config(self, config):
         super().set_config(config)
+
+        # read any cli vars we got and use it to update cli_vars
+        self.config.cli_vars.update(
+            parse_cli_vars(getattr(self.args, 'vars', '{}'))
+        )
+        # rewrite args.vars to reflect our merged vars
+        self.args.vars = yaml.safe_dump(self.config.cli_vars)
+        self.config.args = self.args
+
         if self.task_type is None:
             raise InternalException('task type not set for set_config')
         if issubclass(self.task_type, RemoteManifestMethod):
