@@ -79,8 +79,7 @@ class MacroParser(BaseParser[ParsedMacro]):
                 # things have gone disastrously wrong, we thought we only
                 # parsed one block!
                 raise ParsingException(
-                    f'Found multiple macros in {block.full_block}, expected 1',
-                    node=base_node
+                    f"Found multiple macros in {block.full_block}, expected 1", node=base_node
                 )
 
             macro_name = macro_nodes[0].name
@@ -88,7 +87,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             if not macro_name.startswith(MACRO_PREFIX):
                 continue
 
-            name: str = macro_name.replace(MACRO_PREFIX, '')
+            name: str = macro_name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
             yield node
 
