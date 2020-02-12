@@ -20,7 +20,7 @@ class ServeTask(ProjectOnlyTask):
 
         logger.info("Serving docs at 0.0.0.0:{}".format(port))
         logger.info(
-            "To access from your browser, navigate to http://localhost:{}."
+            "To access from your browser, navigate to: http://localhost:{}"
             .format(port)
         )
         logger.info("Press Ctrl+C to exit.\n\n")
