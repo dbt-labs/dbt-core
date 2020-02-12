@@ -619,7 +619,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                if conn.handle and not conn.handle.closed:
+                if conn.handle and not getattr(conn.handle, 'closed', True):
                     conn.handle.rollback()
                 print(sql)
                 print(e)
@@ -1065,16 +1065,16 @@ class DBTIntegrationTest(unittest.TestCase):
             )
         )
 
-    def assertTableDoesNotExist(self, table, schema=None):
-        columns = self.get_table_columns(table, schema)
+    def assertTableDoesNotExist(self, table, schema=None, database=None):
+        columns = self.get_table_columns(table, schema, database)
 
         self.assertEqual(
             len(columns),
             0
         )
 
-    def assertTableDoesExist(self, table, schema=None):
-        columns = self.get_table_columns(table, schema)
+    def assertTableDoesExist(self, table, schema=None, database=None):
+        columns = self.get_table_columns(table, schema, database)
 
         self.assertGreater(
             len(columns),
