@@ -40,10 +40,10 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'snowflake-connector-python>=1.6.12,<2.1',
-        'azure-storage-blob~=2.1',
-        'azure-storage-common~=2.1',
-        'urllib3<1.25.0',
+        'snowflake-connector-python==2.2.0',
+        'azure-common<2.0.0',
+        'azure-storage-blob<12.0.0',
+        'urllib3>=1.20,<1.26.0',
         # this seems sufficiently broad
         'cryptography>=2,<3',
     ],
