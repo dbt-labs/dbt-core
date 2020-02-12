@@ -76,9 +76,7 @@ class RelationUpdate:
             root_project_name=config.project_name,
         )
         if macro is None:
-            raise InternalException(
-                f'No macro with name generate_{component}_name found'
-            )
+            raise InternalException(f"No macro with name generate_{component}_name found")
 
         root_context = generate_generate_name_macro_context(
             macro, config, manifest
@@ -86,9 +84,7 @@ class RelationUpdate:
         self.updater = MacroGenerator(macro, root_context)
         self.component = component
 
-    def __call__(
-        self, parsed_node: Any, config_dict: Dict[str, Any]
-    ) -> None:
+    def __call__(self, parsed_node: Any, config_dict: Dict[str, Any]) -> None:
         override = config_dict.get(self.component)
         new_value = self.updater(override, parsed_node)
         if isinstance(new_value, str):
