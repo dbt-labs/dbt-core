@@ -16,7 +16,7 @@ jobs:
           name: Build wheels
           command: |
             python3.8 -m venv "${PYTHON_ENV}"
-            export PYTHON_BIN=${PYTHON_ENV}
+            export PYTHON_BIN="${PYTHON_ENV}/bin/python"
             $PYTHON_BIN -m pip install -U pip setuptools
             $PYTHON_BIN -m pip install -r requirements.txt
             $PYTHON_BIN -m pip install -r dev_requirements.txt

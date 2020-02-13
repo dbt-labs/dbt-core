@@ -23,9 +23,9 @@ RUN mkdir /home/tox && chown dbt_test_user /home/tox
 WORKDIR /usr/app
 VOLUME /usr/app
 
-RUN pip3 install -U "tox==3.14.4" wheel "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" "setuptools==45.2.0"
+RUN pip3 install -U "tox==3.14.4" wheel "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" setuptools
 # tox fails if the 'python' interpreter (python2) doesn't have `tox` installed
-RUN pip install -U "tox==3.14.4" "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" "setuptools==44.0.0"
+RUN pip install -U "tox==3.14.4" "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" setuptools
 
 USER dbt_test_user
 
