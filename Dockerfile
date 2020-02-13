@@ -12,7 +12,8 @@ RUN apt-get update && \
         python python-dev python-pip \
         python3.6 python3.6-dev python3-pip python3.6-venv \
         python3.7 python3.7-dev python3.7-venv \
-        python3.8 python3.8-dev python3.8-venv && \
+        python3.8 python3.8-dev python3.8-venv \
+        python3.9 python3.9-dev python3.9-venv && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN useradd -mU dbt_test_user
@@ -22,27 +23,9 @@ RUN mkdir /home/tox && chown dbt_test_user /home/tox
 WORKDIR /usr/app
 VOLUME /usr/app
 
-RUN pip3 install tox wheel
-
-RUN python2.7 -m pip install virtualenv wheel && \
-    python2.7 -m virtualenv /home/tox/venv2.7 && \
-    /home/tox/venv2.7/bin/python -m pip install -U pip tox && \
-    chown -R dbt_test_user /home/tox/venv2.7
-
-RUN python3.6 -m pip install -U pip wheel && \
-    python3.6 -m venv /home/tox/venv3.6 && \
-    /home/tox/venv3.6/bin/python -m pip install -U pip tox && \
-    chown -R dbt_test_user /home/tox/venv3.6
-
-RUN python3.7 -m pip install -U pip wheel && \
-    python3.7 -m venv /home/tox/venv3.7 && \
-    /home/tox/venv3.7/bin/python -m pip install -U pip tox && \
-    chown -R dbt_test_user /home/tox/venv3.7
-
-RUN python3.8 -m pip install -U pip wheel && \
-    python3.8 -m venv /home/tox/venv3.8 && \
-    /home/tox/venv3.8/bin/python -m pip install -U pip tox && \
-    chown -R dbt_test_user /home/tox/venv3.8
+RUN pip3 install -U "tox==3.14.4" wheel "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" "setuptools==45.2.0"
+# tox fails if the 'python' interpreter (python2) doesn't have `tox` installed
+RUN pip install -U "tox==3.14.4" "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" "setuptools==44.0.0"
 
 USER dbt_test_user
 
