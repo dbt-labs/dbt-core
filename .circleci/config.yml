@@ -2,7 +2,7 @@ version: 2
 jobs:
   unit:
     docker: &test_only
-      - image: fishtownjacob/test-container:3
+      - image: fishtownjacob/test-container:4
         environment:
           DBT_INVOCATION_ENV: circle
     steps:
@@ -15,18 +15,20 @@ jobs:
       - run:
           name: Build wheels
           command: |
+            python3.8 -m venv "${PYTHON_ENV}"
+            export PYTHON_BIN="${PYTHON_ENV}/bin/python"
             $PYTHON_BIN -m pip install -U pip setuptools
             $PYTHON_BIN -m pip install -r requirements.txt
             $PYTHON_BIN -m pip install -r dev_requirements.txt
             /bin/bash ./scripts/build-wheels.sh
           environment:
-            PYTHON_BIN: /home/tox/venv3.8/bin/python
+            PYTHON_ENV: /home/tox/build_venv/
       - store_artifacts:
           path: ./dist
           destination: dist
   integration-postgres-py36:
     docker: &test_and_postgres
-      - image: fishtownjacob/test-container:3
+      - image: fishtownjacob/test-container:4
         environment:
           DBT_INVOCATION_ENV: circle
       - image: postgres
