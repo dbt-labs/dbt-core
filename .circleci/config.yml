@@ -15,12 +15,14 @@ jobs:
       - run:
           name: Build wheels
           command: |
+            python3.8 -m venv "${PYTHON_ENV}"
+            export PYTHON_BIN=${PYTHON_ENV}
             $PYTHON_BIN -m pip install -U pip setuptools
             $PYTHON_BIN -m pip install -r requirements.txt
             $PYTHON_BIN -m pip install -r dev_requirements.txt
             /bin/bash ./scripts/build-wheels.sh
           environment:
-            PYTHON_BIN: /home/tox/venv3.8/bin/python
+            PYTHON_ENV: /home/tox/build_venv/
       - store_artifacts:
           path: ./dist
           destination: dist
