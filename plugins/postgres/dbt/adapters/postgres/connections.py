@@ -16,6 +16,7 @@ from typing import Optional
 class PostgresCredentials(Credentials):
     host: str
     user: str
+    role: Optional[str]
     port: Port
     password: str  # on postgres the password is mandatory
     search_path: Optional[str] = None
@@ -97,6 +98,9 @@ class PostgresConnectionManager(SQLConnectionManager):
                 port=credentials.port,
                 connect_timeout=10,
                 **kwargs)
+
+            if credentials.role:
+                handle.cursor().execute('set role {}'.format(credentials.role))
 
             connection.handle = handle
             connection.state = 'open'
