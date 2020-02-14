@@ -133,7 +133,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             )
 
             if credentials.role:
-                handle.cursor().execute('set role {}'.format(credentials.role))
+                handle.cursor().execute("set role {}".format(credentials.role))
 
             connection.handle = handle
             connection.state = "open"
