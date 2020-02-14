@@ -135,6 +135,15 @@ class TestPostgresAdapter(unittest.TestCase):
             keepalives_idle=256)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_role(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(role='somerole')
+        connection = self.adapter.acquire_connection('dummy')
+
+        cursor = connection.handle.cursor()
+
+        cursor.execute.assert_called_once_with('set role somerole')
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_search_path(self, psycopg2):
         self.config.credentials = self.config.credentials.replace(search_path="test")
         connection = self.adapter.acquire_connection('dummy')
