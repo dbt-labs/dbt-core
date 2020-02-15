@@ -1,3 +1,71 @@
+## dbt next (Release TBD)
+
+### Features
+- Add a "docs" field to models, with a "show" subfield ([#1671](https://github.com/fishtown-analytics/dbt/issues/1671), [#2107](https://github.com/fishtown-analytics/dbt/pull/2107))
+
+### Fixes
+- Fix issue where dbt did not give an error in the presence of duplicate doc names ([#2054](https://github.com/fishtown-analytics/dbt/issues/2054), [#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
+- Include vars provided to the cli method when running the actual method ([#2092](https://github.com/fishtown-analytics/dbt/issues/2092), [#2104](https://github.com/fishtown-analytics/dbt/pull/2104))
+- Improved error messages with malformed packages.yml ([#2017](https://github.com/fishtown-analytics/dbt/issues/2017), [#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
+
+Contributors:
+ - [@bubbomb](https://github.com/bubbomb) ([#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
+ - [@sonac](https://github.com/sonac) ([#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
+
+
+## dbt 0.16.0b1 (February 11, 2020)
+
+### Breaking changes
+- Update the debug log format ([#2099](https://github.com/fishtown-analytics/dbt/pull/2099))
+- Removed `docrefs` from output ([#2096](https://github.com/fishtown-analytics/dbt/pull/2096))
+- Contexts updated to be more consistent and well-defined ([#1053](https://github.com/fishtown-analytics/dbt/issues/1053), [#1981](https://github.com/fishtown-analytics/dbt/issues/1981), [#1255](https://github.com/fishtown-analytics/dbt/issues/1255), [#2085](https://github.com/fishtown-analytics/dbt/pull/2085))
+- The syntax of the `get_catalog` macro has changed ([#2037](https://github.com/fishtown-analytics/dbt/pull/2037))
+- Agate type inference is no longer locale-specific. Only a small number of date/datetime formats are supported. If a seed has a specified column type, agate will not perform any type inference (it will instead be cast from a string). ([#999](https://github.com/fishtown-analytics/dbt/issues/999), [#1639](https://github.com/fishtown-analytics/dbt/issues/1639), [#1920](https://github.com/fishtown-analytics/dbt/pull/1920))
+
+### Features
+- Add column-level quoting control for tests ([#2106](https://github.com/fishtown-analytics/dbt/issues/2106), [#2047](https://github.com/fishtown-analytics/dbt/pull/2047))
+- Add the macros every node uses to its `depends_on.macros` list ([#2082](https://github.com/fishtown-analytics/dbt/issues/2082), [#2103](https://github.com/fishtown-analytics/dbt/pull/2103))
+- Add `arguments` field to macros ([#2081](https://github.com/fishtown-analytics/dbt/issues/2081), [#2083](https://github.com/fishtown-analytics/dbt/issues/2083), [#2096](https://github.com/fishtown-analytics/dbt/pull/2096))
+- Batch the anonymous usage statistics requests to improve performance ([#2008](https://github.com/fishtown-analytics/dbt/issues/2008), [#2089](https://github.com/fishtown-analytics/dbt/pull/2089))
+- Add documentation for macros/analyses ([#1041](https://github.com/fishtown-analytics/dbt/issues/1041), [#2068](https://github.com/fishtown-analytics/dbt/pull/2068))
+- Search for docs in 'data' and 'snapshots' folders, in addition to 'models' ([#1832](https://github.com/fishtown-analytics/dbt/issues/1832), [#2058](https://github.com/fishtown-analytics/dbt/pull/2058))
+- Add documentation for snapshots and seeds ([#1974](https://github.com/fishtown-analytics/dbt/issues/1974), [#2051](https://github.com/fishtown-analytics/dbt/pull/2051))
+- Add `Column.is_number`/`Column.is_float` methods ([#1969](https://github.com/fishtown-analytics/dbt/issues/1969), [#2046](https://github.com/fishtown-analytics/dbt/pull/2046))
+- Detect duplicate macros and cause an error when they are detected ([#1891](https://github.com/fishtown-analytics/dbt/issues/1891), [#2045](https://github.com/fishtown-analytics/dbt/pull/2045))
+- Add support for `--select` on `dbt seed` ([#1711](https://github.com/fishtown-analytics/dbt/issues/1711), [#2042](https://github.com/fishtown-analytics/dbt/pull/2042))
+- Add tags for sources (like model tags) and columns (tags apply to tests of that column) ([#1906](https://github.com/fishtown-analytics/dbt/issues/1906), [#1586](https://github.com/fishtown-analytics/dbt/issues/1586), [#2039](https://github.com/fishtown-analytics/dbt/pull/2039))
+- Improve the speed of catalog generation by performing multiple smaller queries instead of one huge query ([#2009](https://github.com/fishtown-analytics/dbt/issues/2009), [#2037](https://github.com/fishtown-analytics/dbt/pull/2037))
+- Added `toyaml` and `fromyaml` methods to the base context ([#1911](https://github.com/fishtown-analytics/dbt/issues/1911), [#2036](https://github.com/fishtown-analytics/dbt/pull/2036))
+- Added `database_schemas` to the on-run-end context ([#1924](https://github.com/fishtown-analytics/dbt/issues/1924), [#2031](https://github.com/fishtown-analytics/dbt/pull/2031))
+- Added the concept of `builtins` to the dbt context, make it possible to override functions like `ref` ([#1603](https://github.com/fishtown-analytics/dbt/issues/1603), [#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
+- Add a `meta` key to most `schema.yml` objects ([#1362](https://github.com/fishtown-analytics/dbt/issues/1362), [#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
+- Parse model hooks and collect `ref` statements ([#1957](https://github.com/fishtown-analytics/dbt/issues/1957), [#2025](https://github.com/fishtown-analytics/dbt/pull/2025))
+
+
+### Fixes
+- Fix the help output for `dbt docs` and `dbt source` to not include misleading flags ([#2038](https://github.com/fishtown-analytics/dbt/issues/2038), [#2105](https://github.com/fishtown-analytics/dbt/pull/2105))
+- Allow `dbt debug` from subdirectories ([#2086](https://github.com/fishtown-analytics/dbt/issues/2086), [#2094](https://github.com/fishtown-analytics/dbt/pull/2094))
+- Fix the `--no-compile` flag to `dbt docs generate` not crash dbt ([#2090](https://github.com/fishtown-analytics/dbt/issues/2090), [#2093](https://github.com/fishtown-analytics/dbt/pull/2093))
+- Ovewrwrite source config fields that should clobber, rather than deep merging them ([#2049](https://github.com/fishtown-analytics/dbt/issues/2049), [#2062]
+(https://github.com/fishtown-analytics/dbt/pull/2062))
+- Fix a bug in macro search where built-in macros could not be overridden for `dbt run-operation` ([#2032](https://github.com/fishtown-analytics/dbt/issues/2032), [#2035](https://github.com/fishtown-analytics/dbt/pull/2035))
+- dbt now detects dependencies with the same name as the current project as an error instead of silently clobbering each other ([#2029](https://github.com/fishtown-analytics/dbt/issues/2029), [#2030](https://github.com/fishtown-analytics/dbt/pull/2030))
+- Exclude tests of disabled models in compile statistics ([#1804](https://github.com/fishtown-analytics/dbt/issues/1804), [#2026](https://github.com/fishtown-analytics/dbt/pull/2026))
+- Do not show ephemeral models as being cancelled during ctrl+c ([#1993](https://github.com/fishtown-analytics/dbt/issues/1993), [#2024](https://github.com/fishtown-analytics/dbt/pull/2024))
+- Improve errors on plugin import failure ([#2006](https://github.com/fishtown-analytics/dbt/issues/2006), [#2022](https://github.com/fishtown-analytics/dbt/pull/2022))
+- Fix the behavior of the `project-dir` argument when running `dbt debug` ([#1733](https://github.com/fishtown-analytics/dbt/issues/1733), [#1989](https://github.com/fishtown-analytics/dbt/pull/1989))
+
+### Under the hood
+- Improve the CI process for externally-contributed PRs ([#2033](https://github.com/fishtown-analytics/dbt/issues/2033), [#2097](https://github.com/fishtown-analytics/dbt/pull/2097))
+- lots and lots of mypy/typing fixes ([#2010](https://github.com/fishtown-analytics/dbt/pull/2010))
+
+Contributors:
+ - [@heisencoder](https://github.com/heisencoder) ([#2099](https://github.com/fishtown-analytics/dbt/pull/2099))
+ - [@NiallRees](https://github.com/NiallRees) ([#2026](https://github.com/fishtown-analytics/dbt/pull/2026))
+ - [@franloza](https://github.com/franloza) ([#1989](https://github.com/fishtown-analytics/dbt/pull/1989))
+ - [@tayloramurphy](https://github.com/tayloramurphy) ([#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
+ - [@alanmcruickshank](https://github.com/alanmcruickshank) ([#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
+
 ## dbt 0.15.2 (February 2, 2020)
 
 This is a bugfix release.
@@ -13,6 +81,9 @@ This is a bugfix release.
 - Fix for errant duplicate resource errors when models are disabled and partial parsing is enabled ([#2055](https://github.com/fishtown-analytics/dbt/issues/2055), [#2056](https://github.com/fishtown-analytics/dbt/pull/2056))
 - Fix for errant duplicate resource errors when a resource is included in multiple source paths ([#2064](https://github.com/fishtown-analytics/dbt/issues/2064), [#2065](https://github.com/fishtown-analytics/dbt/pull/2065/files))
 
+Contributors:
+ - [@markberger](https://github.com/markeberger) ([#2076](https://github.com/fishtown-analytics/dbt/pull/2076))
+ - [@emilieschario](https://github.com/emilieschario) ([#2060](https://github.com/fishtown-analytics/dbt/pull/2060))
 
 ## dbt 0.15.1 (January 17, 2020)
 
