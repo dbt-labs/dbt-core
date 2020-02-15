@@ -11,6 +11,7 @@ from google.api_core import retry
 
 import dbt.clients.agate_helper
 import dbt.exceptions
+import dbt.utils
 from dbt.adapters.base import BaseConnectionManager, Credentials
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -230,6 +231,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
             table = client.get_table(query_job.destination)
             status = 'CREATE TABLE ({})'.format(table.num_rows)
 
+        elif query_job.statement_type == 'SCRIPT':
+            billed = query_job.total_bytes_billed
+            status = 'SCRIPT ({} billed)'.format(dbt.utils.format_bytes(billed))
+
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
             status = '{} ({})'.format(
                 query_job.statement_type,
@@ -237,6 +242,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
             )
 
         else:
+            import ipdb; ipdb.set_trace()
             status = 'OK'
 
         return status, res

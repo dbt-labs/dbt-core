@@ -480,3 +480,12 @@ class classproperty(object):
 
     def __get__(self, obj, objtype):
         return self.func(objtype)
+
+
+def format_bytes(num_bytes):
+    for unit in ['Bytes', 'KB', 'MB', 'GB', 'TB']:
+        if abs(num_bytes) < 1024.0:
+            return f"{num_bytes:3.1f} {unit}"
+        num_bytes /= 1024.0
+
+    return "> 1024 TB"

@@ -82,7 +82,7 @@
       {{ relation.include(database=(not is_scripting), schema=(not is_scripting)) }}
   {{ partition_by(partition_by_dict) }}
   {{ cluster_by(raw_cluster_by) }}
-  {%- if not temporary -%}
+  {%- if not temporary %}
     {{ bigquery_table_options(
         persist_docs=raw_persist_docs,
         kms_key_name=raw_kms_key_name,
