@@ -118,7 +118,7 @@ class BigQueryPartitionByStringDeprecation(DBTDeprecation):
 
     - Provided partition_by: {raw_partition_by}
 
-    
+
     - dbt inferred: {inferred_partition_by}
 
 
@@ -126,6 +126,7 @@ class BigQueryPartitionByStringDeprecation(DBTDeprecation):
     For more information, see:
     https://docs.getdbt.com/docs/upgrading-to-0-16-0
     '''
+
 
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in

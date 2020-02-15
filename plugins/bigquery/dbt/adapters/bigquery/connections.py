@@ -232,8 +232,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
             status = 'CREATE TABLE ({})'.format(table.num_rows)
 
         elif query_job.statement_type == 'SCRIPT':
-            billed = query_job.total_bytes_billed
-            status = 'SCRIPT ({} billed)'.format(dbt.utils.format_bytes(billed))
+            processed = dbt.utils.format_bytes(query_job.total_bytes_processed)
+            status = f'SCRIPT ({processed} processed)'
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
             status = '{} ({})'.format(
@@ -242,7 +242,6 @@ class BigQueryConnectionManager(BaseConnectionManager):
             )
 
         else:
-            import ipdb; ipdb.set_trace()
             status = 'OK'
 
         return status, res
