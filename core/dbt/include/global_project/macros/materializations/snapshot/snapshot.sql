@@ -163,14 +163,14 @@
     {% set updates_select = snapshot_staging_table_updates(strategy, sql, target_relation) %}
 
     {% call statement('build_snapshot_staging_relation_inserts') %}
-        {{ create_table_as(True, tmp_relation, inserts_select) }};
+        {{ create_table_as(True, tmp_relation, inserts_select) }}
     {% endcall %}
 
     {% call statement('build_snapshot_staging_relation_updates') %}
         insert into {{ tmp_relation }} (dbt_change_type, dbt_scd_id, dbt_valid_to)
         select dbt_change_type, dbt_scd_id, dbt_valid_to from (
             {{ updates_select }}
-        ) dbt_sbq;
+        ) dbt_sbq
     {% endcall %}
 
     {% do return(tmp_relation) %}
