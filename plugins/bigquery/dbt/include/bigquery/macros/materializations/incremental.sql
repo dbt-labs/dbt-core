@@ -1,6 +1,6 @@
 
 {% macro bq_partition_merge(tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns) %}
-  {%- set partition_type = 
+  {%- set partition_type =
       'date' if partition_by.data_type in ('timestamp, datetime') 
       else partition_by.data_type -%}
 
@@ -13,14 +13,14 @@
 
   {%- set source_sql -%}
   (
-    select * from {{tmp_relation}}
+    select * from {{ tmp_relation }}
   )
   {%- endset -%}
 
   -- generated script to merge partitions into {{ target_relation }}
   declare dbt_partitions_for_upsert array<{{ partition_type }}>;
   declare _dbt_max_partition {{ partition_by.data_type }};
- 
+
   set _dbt_max_partition = (
       select max({{ partition_by.field }}) from {{ this }}
   );
@@ -31,12 +31,15 @@
   -- 2. define partitions to update
   set (dbt_partitions_for_upsert) = (
       select as struct
-          array_agg(distinct {{pprint_partition_field(partition_by)}})
-      from {{tmp_relation.identifier}}
+          array_agg(distinct {{ pprint_partition_field(partition_by) }})
+      from {{ tmp_relation }}
   );
 
   -- 3. run the merge statement
   {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns, [predicate]) }}
+
+  -- 4. clean up the temp table
+  drop table if exists {{ tmp_relation }}
 
 {% endmacro %}
 

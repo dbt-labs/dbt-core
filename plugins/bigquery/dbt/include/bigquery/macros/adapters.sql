@@ -47,6 +47,9 @@
   {%- if description is not none -%}
     {%- do opts.update({'description': "'" ~ description ~ "'"}) -%}
   {%- endif -%}
+  {%- if temporary -%}
+    {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
+  {%- endif -%}
   {%- if kms_key_name -%}
     {%- do opts.update({'kms_key_name': "'" ~ kms_key_name ~ "'"}) -%}
   {%- endif -%}
@@ -78,22 +81,20 @@
 
   {{ sql_header if sql_header is not none }}
 
-  create or replace {% if temporary -%}temp{%- endif %} table
-      {{ relation.include(database=(not is_scripting), schema=(not is_scripting)) }}
+  create or replace table {{ relation }}
   {{ partition_by(partition_by_dict) }}
   {{ cluster_by(raw_cluster_by) }}
-  {%- if not temporary %}
-    {{ bigquery_table_options(
-        persist_docs=raw_persist_docs,
-        kms_key_name=raw_kms_key_name,
-        labels=raw_labels) }}
-    {%- endif %}
+  {{ bigquery_table_options(
+      persist_docs=raw_persist_docs,
+      temporary=temporary,
+      kms_key_name=raw_kms_key_name,
+      labels=raw_labels
+  ) }}
   as (
     {{ sql }}
   );
 
 {%- endmacro -%}
-
 
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
@@ -151,11 +152,4 @@
 
 {% macro bigquery__check_schema_exists(information_schema, schema) %}
   {{ return(adapter.check_schema_exists(information_schema.database, schema)) }}
-{% endmacro %}
-
-
-{% macro bigquery__make_temp_relation(base_relation, suffix) %}
-    {% set tmp_identifier = base_relation.identifier ~ suffix %}
-    {% set tmp_relation = api.Relation.create(identifier=tmp_identifier) -%}
-    {% do return(tmp_relation) %}
 {% endmacro %}
