@@ -185,6 +185,7 @@ class ManifestMetadata(JsonSchemaMixin, Replaceable):
     project_id: Optional[str] = None
     user_id: Optional[UUID] = None
     send_anonymous_usage_stats: Optional[bool] = None
+    adapter_type: Optional[str] = None
 
     def __post_init__(self):
         if tracking.active_user is None:

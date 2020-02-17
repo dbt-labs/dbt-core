@@ -1163,6 +1163,7 @@ class TestParsedMacro(ContractTestCase):
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
             'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
+            'macro_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
             'unique_id': 'macro.test.foo',
@@ -1175,11 +1176,12 @@ class TestParsedMacro(ContractTestCase):
 
     def test_ok(self):
         macro_dict = self._ok_dict()
-        macro = ParsedMacro(
+        macro = self.ContractType(
             name='foo',
             path='/root/path.sql',
             original_file_path='/root/path.sql',
             package_name='test',
+            macro_sql='{% macro foo() %}select 1 as id{% endmacro %}',
             raw_sql='{% macro foo() %}select 1 as id{% endmacro %}',
             root_path='/root/',
             resource_type=NodeType.Macro,
@@ -1200,7 +1202,6 @@ class TestParsedMacro(ContractTestCase):
         self.assert_fails_validation(bad_missing_uid)
 
     def test_invalid_extra_field(self):
-
         bad_extra_field = self._ok_dict()
         bad_extra_field['extra'] = 'too many fields'
         self.assert_fails_validation(bad_extra_field)

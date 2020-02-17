@@ -286,11 +286,15 @@ class ManifestTest(unittest.TestCase):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.do_not_track = True
         self.assertEqual(
-            ManifestMetadata(project_id='098f6bcd4621d373cade4e832627b4f6'),
+            ManifestMetadata(
+                project_id='098f6bcd4621d373cade4e832627b4f6',
+                adapter_type='postgres',
+            ),
             ManifestMetadata(
                 project_id='098f6bcd4621d373cade4e832627b4f6',
                 user_id='cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
                 send_anonymous_usage_stats=False,
+                adapter_type='postgres',
             )
         )
 
@@ -299,7 +303,10 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.do_not_track = True
-        metadata = ManifestMetadata(project_id='098f6bcd4621d373cade4e832627b4f6')
+        metadata = ManifestMetadata(
+            project_id='098f6bcd4621d373cade4e832627b4f6',
+            adapter_type='postgres',
+        )
         manifest = Manifest(nodes={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             metadata=metadata, files={})
@@ -317,6 +324,7 @@ class ManifestTest(unittest.TestCase):
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
                     'send_anonymous_usage_stats': False,
+                    'adapter_type': 'postgres',
                 },
                 'disabled': [],
                 'files': {},

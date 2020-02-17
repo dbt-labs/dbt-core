@@ -10,6 +10,7 @@ from dbt.utils import parse_cli_vars
 from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig
+from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import validator_error_message
@@ -162,4 +163,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             project=project,
             profile=profile,
             args=args,
+        )
+
+    def get_metadata(self) -> ManifestMetadata:
+        return ManifestMetadata(
+            project_id=self.hashed_name(),
+            adapter_type=self.credentials.type
         )

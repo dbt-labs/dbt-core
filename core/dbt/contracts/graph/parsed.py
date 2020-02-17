@@ -488,6 +488,7 @@ class ParsedMacroPatch(ParsedPatch):
 @dataclass
 class ParsedMacro(UnparsedMacro, HasUniqueID):
     name: str
+    macro_sql: str
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
     # TODO: can macros even have tags?
     tags: List[str] = field(default_factory=list)

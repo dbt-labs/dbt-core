@@ -595,12 +595,49 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize('macros/macro.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             path=normalize('macros/macro.sql'),
-            raw_sql=raw_sql
+            raw_sql=raw_sql,
+            macro_sql=raw_sql,
         )
         self.assertEqual(macro, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/macros/macro.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].macros, ['macro.snowplow.foo'])
+
+    def test_multiple_blocks(self):
+        raw_sql = '{% macro foo(a, b) %}a ~ b{% endmacro %}\n{% macro bar(c, d) %}c + d{% endmacro %}'
+        block = self.file_block_for(raw_sql, 'macro.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, macros=2)
+        macros = sorted(self.parser.results.macros.values(), key=lambda m: m.name)
+        expected_bar = ParsedMacro(
+            name='bar',
+            resource_type=NodeType.Macro,
+            unique_id='macro.snowplow.bar',
+            package_name='snowplow',
+            original_file_path=normalize('macros/macro.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            path=normalize('macros/macro.sql'),
+            raw_sql=raw_sql,
+            macro_sql='{% macro bar(c, d) %}c + d{% endmacro %}',
+        )
+        expected_foo = ParsedMacro(
+            name='foo',
+            resource_type=NodeType.Macro,
+            unique_id='macro.snowplow.foo',
+            package_name='snowplow',
+            original_file_path=normalize('macros/macro.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            path=normalize('macros/macro.sql'),
+            raw_sql=raw_sql,
+            macro_sql='{% macro foo(a, b) %}a ~ b{% endmacro %}',
+        )
+        self.assertEqual(macros, [expected_bar, expected_foo])
+        path = get_abs_os_path('./dbt_modules/snowplow/macros/macro.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(
+            sorted(self.parser.results.files[path].macros),
+            ['macro.snowplow.bar', 'macro.snowplow.foo'],
+        )
 
 
 class DataTestParserTest(BaseParserTest):
