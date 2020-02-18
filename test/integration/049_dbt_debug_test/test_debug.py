@@ -92,6 +92,18 @@ class TestDebugInvalidProject(DBTIntegrationTest):
         self.capsys = capsys
 
     @use_profile('postgres')
+    def test_postgres_empty_project(self):
+        with open('dbt_project.yml', 'w') as f:
+            pass
+        self.run_dbt(['debug', '--profile', 'test'])
+        splitout = self.capsys.readouterr().out.split('\n')
+        for line in splitout:
+            if line.strip().startswith('dbt_project.yml file'):
+                self.assertIn('ERROR invalid', line)
+            elif line.strip().startswith('profiles.yml file'):
+                self.assertNotIn('ERROR invalid', line)
+
+    @use_profile('postgres')
     def test_postgres_badproject(self):
         # load a special project that is an error
         self.use_default_project(overrides={

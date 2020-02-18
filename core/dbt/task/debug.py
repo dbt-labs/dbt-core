@@ -182,10 +182,10 @@ class DebugTask(BaseTask):
         project_profile: Optional[str] = None
         if os.path.exists(self.project_path):
             try:
-                project_profile = load_yaml_text(
-                    dbt.clients.system.load_file_contents(self.project_path)
-                ).get('profile')
-            except dbt.exceptions.Exception:
+                project_profile = Project.partial_load(
+                    os.path.dirname(self.project_path)
+                ).profile_name
+            except dbt.exceptions.DbtProjectError:
                 pass
 
         args_profile: Optional[str] = getattr(self.args, 'profile', None)
@@ -196,19 +196,20 @@ class DebugTask(BaseTask):
             pass
         # try to guess
 
+        profiles = []
         if self.raw_profile_data:
             profiles = [k for k in self.raw_profile_data if k != 'config']
-            if len(profiles) == 0:
+            if project_profile is None:
+                self.messages.append('Could not load dbt_project.yml')
+            elif len(profiles) == 0:
                 self.messages.append('The profiles.yml has no profiles')
             elif len(profiles) == 1:
                 self.messages.append(ONLY_PROFILE_MESSAGE.format(profiles[0]))
-                return profiles
             else:
                 self.messages.append(MULTIPLE_PROFILE_MESSAGE.format(
                     '\n'.join(' - {}'.format(o) for o in profiles)
                 ))
-                return profiles
-        return None
+        return profiles
 
     def _choose_target_name(self, profile_name: str):
         has_raw_profile = (
