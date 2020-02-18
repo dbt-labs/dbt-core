@@ -41,8 +41,9 @@ setup(
     install_requires=[
         'dbt-core=={}'.format(package_version),
         'dbt-postgres=={}'.format(package_version),
-        'boto3>=1.6.23,<1.10.0',
-        'botocore>=1.9.23,<1.13.0',
+        # match snowflake-connector-python supported ranges
+        'boto3>=1.4.4,<1.12',
+        'botocore>=1.5.0,<1.15',
     ],
     zip_safe=False,
     classifiers=[
