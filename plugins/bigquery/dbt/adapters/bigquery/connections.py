@@ -3,16 +3,18 @@ from dataclasses import dataclass
 from typing import Optional, Any, Dict
 
 import google.auth
-import google.api_core
-import google.oauth2
-import google.cloud.exceptions
 import google.cloud.bigquery
-from google.api_core import retry
+import google.cloud.exceptions
+from google.api_core import retry, client_info
+from google.oauth2 import service_account
 
-import dbt.clients.agate_helper
-import dbt.exceptions
+from dbt.clients import agate_helper, gcloud
+from dbt.exceptions import (
+    FailedToConnectException, RuntimeException, DatabaseException
+)
 from dbt.adapters.base import BaseConnectionManager, Credentials
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.version import __version__ as dbt_version
 
 from hologram.helpers import StrEnum
 
@@ -70,7 +72,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         error_msg = "\n".join(
             [item['message'] for item in error.errors])
 
-        raise dbt.exceptions.DatabaseException(error_msg) from error
+        raise DatabaseException(error_msg) from error
 
     def clear_transaction(self):
         pass
@@ -91,12 +93,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
             logger.debug(e)
-            if isinstance(e, dbt.exceptions.RuntimeException):
+            if isinstance(e, RuntimeException):
                 # during a sql query, an internal to dbt exception was raised.
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise dbt.exceptions.RuntimeException(str(e)) from e
+            raise RuntimeException(str(e)) from e
 
     def cancel_open(self) -> None:
         pass
@@ -116,7 +118,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
     @classmethod
     def get_bigquery_credentials(cls, profile_credentials):
         method = profile_credentials.method
-        creds = google.oauth2.service_account.Credentials
+        creds = service_account.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
             credentials, project_id = google.auth.default(scopes=cls.SCOPE)
@@ -131,15 +133,21 @@ class BigQueryConnectionManager(BaseConnectionManager):
             return creds.from_service_account_info(details, scopes=cls.SCOPE)
 
         error = ('Invalid `method` in profile: "{}"'.format(method))
-        raise dbt.exceptions.FailedToConnectException(error)
+        raise FailedToConnectException(error)
 
     @classmethod
     def get_bigquery_client(cls, profile_credentials):
         database = profile_credentials.database
         creds = cls.get_bigquery_credentials(profile_credentials)
         location = getattr(profile_credentials, 'location', None)
-        return google.cloud.bigquery.Client(database, creds,
-                                            location=location)
+
+        info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
+        return google.cloud.bigquery.Client(
+            database,
+            creds,
+            location=location,
+            client_info=info,
+        )
 
     @classmethod
     def open(cls, connection):
@@ -152,7 +160,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         except google.auth.exceptions.DefaultCredentialsError:
             logger.info("Please log into GCP to continue")
-            dbt.clients.gcloud.setup_default_credentials()
+            gcloud.setup_default_credentials()
 
             handle = cls.get_bigquery_client(connection.credentials)
 
@@ -164,7 +172,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
             connection.handle = None
             connection.state = 'fail'
 
-            raise dbt.exceptions.FailedToConnectException(str(e))
+            raise FailedToConnectException(str(e))
 
         connection.handle = handle
         connection.state = 'open'
@@ -186,8 +194,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
     @classmethod
     def get_table_from_response(cls, resp):
         column_names = [field.name for field in resp.schema]
-        return dbt.clients.agate_helper.table_from_data_flat(resp,
-                                                             column_names)
+        return agate_helper.table_from_data_flat(resp, column_names)
 
     def raw_execute(self, sql, fetch=False):
         conn = self.get_thread_connection()
@@ -219,7 +226,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         if fetch:
             res = self.get_table_from_response(iterator)
         else:
-            res = dbt.clients.agate_helper.empty_table()
+            res = agate_helper.empty_table()
 
         if query_job.statement_type == 'CREATE_VIEW':
             status = 'CREATE VIEW'
