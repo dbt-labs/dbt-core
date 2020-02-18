@@ -7,6 +7,9 @@ import sys
 import tempfile
 import textwrap
 import venv  # type: ignore
+import zipfile
+
+from typing import Dict
 
 from argparse import ArgumentParser
 from dataclasses import dataclass
@@ -71,6 +74,10 @@ class Arguments:
     upload_pypi: bool
     test_upload: bool
     build_homebrew: bool
+    build_docker: bool
+    upload_docker: bool
+    write_requirements: bool
+    write_dockerfile: bool
 
     @classmethod
     def parse(cls) -> 'Arguments':
@@ -116,6 +123,18 @@ class Arguments:
             action='store_false',
             help='skip building pypi',
         )
+        parser.add_argument(
+            '--no-build-docker',
+            dest='build_docker',
+            action='store_false',
+            help='skip building docker images',
+        )
+        parser.add_argument(
+            '--no-upload-docker',
+            dest='upload_docker',
+            action='store_false',
+            help='skip uploading docker images',
+        )
 
         uploading = parser.add_mutually_exclusive_group()
 
@@ -137,15 +156,26 @@ class Arguments:
             '--no-upload',
             dest='test_upload',
             action='store_false',
-            help='Skip uploading to pypi',
+            help='Skip uploading to pypitest',
         )
 
         parser.add_argument(
             '--no-build-homebrew',
             dest='build_homebrew',
             action='store_false',
-            help='Skip building homebrew packages'
-
+            help='Skip building homebrew packages',
+        )
+        parser.add_argument(
+            '--no-write-requirements',
+            dest='write_requirements',
+            action='store_false',
+            help='Skip writing the requirements file. It must exist.'
+        )
+        parser.add_argument(
+            '--no-write-dockerfile',
+            dest='write_dockerfile',
+            action='store_false',
+            help='Skip writing the dockerfile. It must exist.'
         )
         parsed = parser.parse_args()
 
@@ -166,6 +196,10 @@ class Arguments:
             upload_pypi=upload_pypi,
             test_upload=parsed.test_upload,
             build_homebrew=parsed.build_homebrew,
+            build_docker=parsed.build_docker,
+            upload_docker=parsed.upload_docker,
+            write_requirements=parsed.write_requirements,
+            write_dockerfile=parsed.write_dockerfile,
         )
 
 
@@ -265,25 +299,50 @@ class PypiBuilder:
         print('uploaded packages')
 
 
-class PoetVirtualenv(venv.EnvBuilder):
-    def __init__(self, dbt_version: Version) -> None:
+class PipInstaller(venv.EnvBuilder):
+    def __init__(self, packages: List[str]) -> None:
         super().__init__(with_pip=True)
-        self.dbt_version = dbt_version
+        self.packages = packages
 
     def post_setup(self, context):
         # we can't run from the dbt directory or this gets all weird, so
         # install from an empty temp directory and then remove it.
         tmp = tempfile.mkdtemp()
-        cmd = [
-            context.env_exe, '-m', 'pip', 'install', '--upgrade',
-            'homebrew-pypi-poet', f'dbt=={self.dbt_version}'
-        ]
-        print(f'installing homebrew-pypi-poet and dbt=={self.dbt_version}')
+        cmd = [context.env_exe, '-m', 'pip', 'install', '--upgrade']
+        cmd.extend(self.packages)
+        print(f'installing {self.packages}')
         try:
             run_command(cmd, cwd=tmp)
         finally:
             os.rmdir(tmp)
-        print(f'finished installing homebrew-pypi-poet and dbt')
+        print(f'finished installing {self.packages}')
+
+    def create(self, venv_path):
+        os.makedirs(venv_path.parent, exist_ok=True)
+        if venv_path.exists():
+            shutil.rmtree(venv_path)
+        return super().create(venv_path)
+
+
+def _require_wheels(dbt_path: Path) -> List[Path]:
+    dist_path = dbt_path / 'dist'
+    wheels = list(dist_path.glob('*.whl'))
+    if not wheels:
+        raise ValueError(
+            f'No wheels found in {dist_path} - run scripts/build-wheels.sh'
+        )
+    return wheels
+
+
+class DistFolderEnv(PipInstaller):
+    def __init__(self, dbt_path: Path) -> None:
+        self.wheels = _require_wheels(dbt_path)
+        super().__init__(packages=self.wheels)
+
+
+class PoetVirtualenv(PipInstaller):
+    def __init__(self, dbt_version: Version) -> None:
+        super().__init__([f'dbt=={dbt_version}', 'homebrew-pypi-poet'])
 
 
 @dataclass
@@ -291,6 +350,16 @@ class HomebrewTemplate:
     url_data: str
     hash_data: str
     dependencies: str
+
+
+def _make_venv_at(root: Path, name: str, builder: venv.EnvBuilder):
+    venv_path = root / name
+    os.makedirs(root, exist_ok=True)
+    if venv_path.exists():
+        shutil.rmtree(venv_path)
+
+    builder.create(venv_path)
+    return venv_path
 
 
 class HomebrewBuilder:
@@ -307,16 +376,10 @@ class HomebrewBuilder:
         self.set_default = set_default
         self._template: Optional[HomebrewTemplate] = None
 
-    def make_venv(self) -> Path:
-        build_path = self.dbt_path / 'build'
-        venv_path = build_path / 'tmp-venv'
-        os.makedirs(build_path, exist_ok=True)
-        if venv_path.exists():
-            shutil.rmtree(venv_path)
-
+    def make_venv(self) -> PoetVirtualenv:
         env = PoetVirtualenv(self.version)
-        env.create(venv_path)
-        return venv_path
+        env.create(self.homebrew_venv_path)
+        return env
 
     @property
     def versioned_formula_path(self) -> Path:
@@ -329,6 +392,10 @@ class HomebrewBuilder:
         return (
             self.homebrew_path / 'Formula/dbt.rb'
         )
+
+    @property
+    def homebrew_venv_path(self) -> Path:
+        return self.dbt_path / 'build' / 'homebrew-venv'
 
     @staticmethod
     def _dbt_homebrew_formula_fmt() -> str:
@@ -409,9 +476,9 @@ class HomebrewBuilder:
     @property
     def template(self) -> HomebrewTemplate:
         if self._template is None:
-            env_path = self.make_venv()
+            self.make_venv()
             print('done setting up virtualenv')
-            poet = env_path / 'bin/poet'
+            poet = self.homebrew_venv_path / 'bin/poet'
 
             # get the dbt package info
             url_data, hash_data = self._get_pypi_dbt_info()
@@ -445,28 +512,24 @@ class HomebrewBuilder:
                 return url, digest
         raise ValueError(f'Never got a valid sdist for dbt=={self.version}')
 
-    @staticmethod
-    def _get_recursive_dependencies(poet_exe: Path) -> str:
+    def _get_recursive_dependencies(self, poet_exe: Path) -> str:
         cmd = [str(poet_exe), '--resources', 'dbt']
-        raw = collect_output(cmd)
-        lines = []
-        skipping = False
+        raw = collect_output(cmd).split('\n')
+        return '\n'.join(self._remove_dbt_resource(raw))
+
+    def _remove_dbt_resource(self, lines: List[str]) -> Iterator[str]:
+        # TODO: fork poet or extract the good bits to avoid this
+        line_iter = iter(lines)
         # don't do a double-newline or "brew audit" gets mad
-        skip_next = False
-        for line in raw.split('\n'):
-            # TODO: fork poet or extract the good bits to avoid this
-            if skipping:
-                if line.strip() == 'end':
-                    skipping = False
-                    skip_next = True
-            elif skip_next is True:
-                skip_next = False
-            else:
-                if line.strip() == 'resource "dbt" do':
-                    skipping = True
-                else:
-                    lines.append(line)
-        return '\n'.join(lines)
+        for line in line_iter:
+            # skip the contents of the "dbt" resource block.
+            if line.strip() == 'resource "dbt" do':
+                for skip in line_iter:
+                    if skip.strip() == 'end':
+                        # skip the newline after 'end'
+                        next(line_iter)
+                        break
+            yield line
 
     def create_versioned_formula_file(self):
         formula_contents = self.get_formula_data(versioned=True)
@@ -519,6 +582,188 @@ class HomebrewBuilder:
             self.commit_default_formula()
 
 
+class WheelInfo:
+    def __init__(self, path):
+        self.path = path
+
+    @staticmethod
+    def _extract_distinfo_path(wfile: zipfile.ZipFile) -> zipfile.Path:
+        zpath = zipfile.Path(root=wfile)
+        for path in zpath.iterdir():
+            if path.name.endswith('.dist-info'):
+                return path
+        raise ValueError('Wheel with no dist-info?')
+
+    def get_metadata(self) -> Dict[str, str]:
+        with zipfile.ZipFile(self.path) as wf:
+            distinfo = self._extract_distinfo_path(wf)
+            metadata = distinfo / 'METADATA'
+            metadata_dict: Dict[str, str] = {}
+            for line in metadata.read_text().split('\n'):
+                parts = line.split(': ', 1)
+                if len(parts) == 2:
+                    metadata_dict[parts[0]] = parts[1]
+            return metadata_dict
+
+    def package_name(self) -> str:
+        metadata = self.get_metadata()
+        if 'Name' not in metadata:
+            raise ValueError('Wheel with no name?')
+        return metadata['Name']
+
+
+class DockerBuilder:
+    """The docker builder requires the existence of a dbt package"""
+    def __init__(self, dbt_path: Path, version: Version) -> None:
+        self.dbt_path = dbt_path
+        self.version = version
+
+    @property
+    def docker_path(self) -> Path:
+        return self.dbt_path / 'docker'
+
+    @property
+    def dockerfile_name(self) -> str:
+        return f'Dockerfile.{self.version}'
+
+    @property
+    def dockerfile_path(self) -> Path:
+        return self.docker_path / self.dockerfile_name
+
+    @property
+    def requirements_path(self) -> Path:
+        return self.docker_path / 'requirements'
+
+    @property
+    def requirements_file_name(self) -> str:
+        return f'requirements.{self.version}.txt'
+
+    @property
+    def dockerfile_venv_path(self) -> Path:
+        return self.dbt_path / 'build' / 'docker-venv'
+
+    @property
+    def requirements_txt_path(self) -> Path:
+        return self.requirements_path / self.requirements_file_name
+
+    def make_venv(self) -> DistFolderEnv:
+        env = DistFolderEnv(self.dbt_path)
+        env.create(self.dockerfile_venv_path)
+        return env
+
+    def get_frozen(self) -> str:
+        env = self.make_venv()
+        pip_path = self.dockerfile_venv_path / 'bin/pip'
+        cmd = [pip_path, 'freeze']
+        wheel_names = {
+            WheelInfo(wheel_path).package_name() for wheel_path in env.wheels
+        }
+        # remove the dependencies in dbt itself
+        return '\n'.join([
+            dep for dep in collect_output(cmd).split('\n')
+            if dep.split('==')[0] not in wheel_names
+        ])
+
+    def write_lockfile(self):
+        freeze = self.get_frozen()
+        path = self.requirements_txt_path
+        if path.exists():
+            raise ValueError(f'Found existing requirements file at {path}!')
+        os.makedirs(path.parent, exist_ok=True)
+        path.write_text(freeze)
+
+    def get_dockerfile_contents(self):
+        dist_path = (self.dbt_path / 'dist').relative_to(Path.cwd())
+        wheel_paths = ' '.join(
+            os.path.join('.', 'dist', p.name)
+            for p in _require_wheels(self.dbt_path)
+        )
+
+        requirements_path = self.requirements_txt_path.relative_to(Path.cwd())
+
+        return textwrap.dedent(
+            f'''\
+            FROM python:3.8.1-slim-buster
+
+            RUN apt-get update && \
+                apt-get dist-upgrade -y && \
+                apt-get install -y  --no-install-recommends \
+                    netcat curl git ssh  software-properties-common \
+                    make build-essential ca-certificates libpq-dev && \
+                apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+            COPY {requirements_path} ./{self.requirements_file_name}
+            COPY {dist_path} ./dist
+            RUN pip install --upgrade pip setuptools
+            RUN pip install --requirement ./{self.requirements_file_name}
+            RUN pip install {wheel_paths}
+
+            RUN useradd -mU dbt_user
+
+            ENV PYTHONIOENCODING=utf-8
+            ENV LANG C.UTF-8
+
+            WORKDIR /usr/app
+            VOLUME /usr/app
+
+            USER dbt_user
+            CMD ['dbt', 'run']
+            '''
+        )
+
+    def write_dockerfile(self):
+        dockerfile = self.get_dockerfile_contents()
+        path = self.dockerfile_path
+        if path.exists():
+            raise ValueError(f'Found existing docker file at {path}!')
+        os.makedirs(path.parent, exist_ok=True)
+        path.write_text(dockerfile)
+
+    @property
+    def image_tag(self):
+        return f'dbt:{self.version}'
+
+    @property
+    def remote_tag(self):
+        return f'fishtownanalytics/{self.image_tag}'
+
+    def create_docker_image(self):
+        run_command(
+            [
+                'docker', 'build',
+                '-f', self.dockerfile_path,
+                '--tag', self.image_tag,
+                # '--no-cache',
+                self.dbt_path,
+            ],
+            cwd=self.dbt_path
+        )
+
+    def set_remote_tag(self):
+        # tag it
+        run_command(
+            ['docker', 'tag', self.image_tag, self.remote_tag],
+            cwd=self.dbt_path,
+        )
+
+    def build(
+        self,
+        write_requirements: bool = True,
+        write_dockerfile: bool = True
+    ):
+        if write_requirements:
+            self.write_lockfile()
+        if write_dockerfile:
+            self.write_dockerfile()
+        self.create_docker_image()
+        self.set_remote_tag()
+
+    def push(self):
+        run_command(
+            ['docker', 'push', self.remote_tag]
+        )
+
+
 def sanity_check():
     if sys.version_info[:len(HOMEBREW_PYTHON)] != HOMEBREW_PYTHON:
         python_version_str = '.'.join(str(i) for i in HOMEBREW_PYTHON)
@@ -531,7 +776,7 @@ def sanity_check():
     except ImportError:
         print(
             'The wheel package is required to build. Please run:\n'
-            'pip install -r dev_requirements'
+            'pip install -r dev_requirements.txt'
         )
         sys.exit(1)
 
@@ -543,14 +788,16 @@ def upgrade_to(args: Arguments):
     builder = PypiBuilder(args.path)
     if args.build_pypi:
         builder.build()
+
     if args.upload_pypi:
         if args.test_upload:
             builder.upload()
             input(
-                f'Ensure https://test.pypi.org/project/dbt/{args.version}/ exists '
-                'and looks reasonable'
+                f'Ensure https://test.pypi.org/project/dbt/{args.version}/ '
+                'exists and looks reasonable'
             )
         builder.upload(test=False)
+
     if args.build_homebrew:
         HomebrewBuilder(
             dbt_path=args.path,
@@ -558,6 +805,18 @@ def upgrade_to(args: Arguments):
             homebrew_path=args.homebrew_path,
             set_default=args.homebrew_set_default,
         ).build()
+
+    if args.build_docker:
+        builder = DockerBuilder(
+            dbt_path=args.path,
+            version=args.version,
+        )
+        builder.build(
+            write_requirements=args.write_requirements,
+            write_dockerfile=args.write_dockerfile,
+        )
+        if args.upload_docker:
+            builder.push()
 
 
 def main():
