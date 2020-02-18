@@ -1,3 +1,4 @@
+import re
 import unittest
 from contextlib import contextmanager
 from unittest.mock import patch, MagicMock, Mock
@@ -162,7 +163,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
 
     @patch('dbt.adapters.bigquery.impl.google.auth.default')
     @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
-    def test_location_value(self, mock_bq, mock_auth_default):
+    def test_location_user_agent(self, mock_bq, mock_auth_default):
         creds = MagicMock()
         mock_auth_default.return_value = (creds, MagicMock())
         adapter = self.get_adapter('loc')
@@ -173,7 +174,16 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         mock_client.assert_not_called()
         connection.handle
         mock_client.assert_called_once_with('dbt-unit-000000', creds,
-                                            location='Luna Station')
+                                            location='Luna Station',
+                                            client_info=HasUserAgent())
+
+
+class HasUserAgent:
+    PAT = re.compile(r'dbt-\d+\.\d+\.\d+[a-zA-Z]+\d+')
+
+    def __eq__(self, other):
+        compare = getattr(other, 'user_agent', '')
+        return bool(self.PAT.match(compare))
 
 
 class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
