@@ -833,12 +833,18 @@ class TestDocsGenerate(DBTIntegrationTest):
             {
                 'path', 'original_file_path', 'package_name', 'raw_sql',
                 'root_path', 'name', 'unique_id', 'tags', 'resource_type',
-                'depends_on', 'meta', 'description', 'patch_path', 'arguments'
+                'depends_on', 'meta', 'description', 'patch_path', 'arguments',
+                'macro_sql',
             }
         )
         # Don't compare the sql, just make sure it exists
         self.assertTrue(len(macro['raw_sql']) > 10)
-        without_sql = {k: v for k, v in macro.items() if k != 'raw_sql'}
+        self.assertTrue(len(macro['macro_sql']) > 10)
+        self.assertIn(macro['macro_sql'], macro['raw_sql'])
+        without_sql = {
+            k: v for k, v in macro.items()
+            if k not in {'macro_sql', 'raw_sql'}
+        }
         # Windows means we can't hard-code these.
         helpers_path = Normalized('macros/materializations/helpers.sql')
         root_path = Normalized(os.path.join(
@@ -1219,6 +1225,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'send_anonymous_usage_stats': False,
                 'user_id': None,
+                'adapter_type': self.adapter_type,
             },
             'disabled': [],
             'files': {
@@ -1732,6 +1739,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'send_anonymous_usage_stats': False,
                 'user_id': None,
+                'adapter_type': self.adapter_type,
             },
             'disabled': [],
             'files': {
@@ -1834,6 +1842,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'test_nothing',
                     'depends_on': {'macros': []},
                     'description': 'My custom test that I wrote that does nothing',
+                    'macro_sql': AnyStringWith('macro test_nothing'),
                     'raw_sql': AnyStringWith('macro test_nothing'),
                     'original_file_path': self.dir('macros/dummy_test.sql'),
                     'path': self.dir('macros/dummy_test.sql'),
@@ -2252,6 +2261,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'send_anonymous_usage_stats': False,
                 'user_id': None,
+                'adapter_type': self.adapter_type,
             },
             'disabled': [],
             'files': {
@@ -2552,6 +2562,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'send_anonymous_usage_stats': False,
                 'user_id': None,
+                'adapter_type': self.adapter_type,
             },
             'disabled': [],
             'files': {

@@ -22,7 +22,6 @@ from dbt.ui import printer
 from dbt.utils import deep_map
 from dbt.source_config import SourceConfig
 
-from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import (
     Project as ProjectContract,
     SemverString,
@@ -189,6 +188,12 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
         )
 
     project_dict = _load_yaml(project_yaml_filepath)
+
+    if not isinstance(project_dict, dict):
+        raise DbtProjectError(
+            'dbt_project.yml does not parse to a dictionary'
+        )
+
     return project_dict
 
 
@@ -545,6 +550,3 @@ class Project:
                 ]
             )
             raise DbtProjectError(msg)
-
-    def get_metadata(self) -> ManifestMetadata:
-        return ManifestMetadata(self.hashed_name())

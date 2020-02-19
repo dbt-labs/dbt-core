@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, List
 
 import jinja2
 
@@ -29,11 +29,14 @@ class MacroParser(BaseParser[ParsedMacro]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def parse_macro(self, base_node: UnparsedMacro, name: str) -> ParsedMacro:
+    def parse_macro(
+        self, block: jinja.BlockTag, base_node: UnparsedMacro, name: str
+    ) -> ParsedMacro:
         unique_id = self.generate_unique_id(name)
 
         return ParsedMacro(
             path=base_node.path,
+            macro_sql=block.full_block,
             original_file_path=base_node.original_file_path,
             package_name=base_node.package_name,
             raw_sql=base_node.raw_sql,
@@ -46,20 +49,40 @@ class MacroParser(BaseParser[ParsedMacro]):
     def parse_unparsed_macros(
         self, base_node: UnparsedMacro
     ) -> Iterable[ParsedMacro]:
-        try:
-            ast = jinja.parse(base_node.raw_sql)
-        except CompilationException as e:
-            e.node = base_node
-            raise e
+        blocks: List[jinja.BlockTag] = [
+            t for t in
+            jinja.extract_toplevel_blocks(
+                base_node.raw_sql,
+                allowed_blocks={'macro', 'materialization'},
+                collect_raw_data=False,
+            )
+            if isinstance(t, jinja.BlockTag)
+        ]
 
-        for macro_node in ast.find_all(jinja2.nodes.Macro):
-            macro_name = macro_node.name
+        for block in blocks:
+            try:
+                ast = jinja.parse(block.full_block)
+            except CompilationException as e:
+                e.node = base_node
+                raise e
+
+            macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
+
+            if len(macro_nodes) != 1:
+                # things have gone disastrously wrong, we thought we only
+                # parsed one block!
+                raise CompilationException(
+                    f'Found multiple macros in {block.full_block}, expected 1',
+                    node=base_node
+                )
+
+            macro_name = macro_nodes[0].name
 
             if not macro_name.startswith(MACRO_PREFIX):
                 continue
 
-            name = macro_name.replace(MACRO_PREFIX, '')
-            node = self.parse_macro(base_node, name)
+            name: str = macro_name.replace(MACRO_PREFIX, '')
+            node = self.parse_macro(block, base_node, name)
             yield node
 
     def parse_file(self, block: FileBlock):
