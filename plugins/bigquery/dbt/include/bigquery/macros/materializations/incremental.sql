@@ -36,7 +36,7 @@
   );
 
   -- 3. run the merge statement
-  {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns, [predicate]) }}
+  {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns, [predicate]) }};
 
   -- 4. clean up the temp table
   drop table if exists {{ tmp_relation }}
@@ -76,7 +76,7 @@
      {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
 
      {#-- if partitioned, use BQ scripting to get the range of partition values to be updated --#}
-     {% if partition_by %}
+     {% if partition_by is not none %}
         {% set build_sql = bq_partition_merge(
             tmp_relation,
             target_relation,

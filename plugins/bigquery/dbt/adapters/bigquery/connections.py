@@ -67,13 +67,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
     DEFAULT_MAXIMUM_DELAY = 1.0  # Seconds
 
     @classmethod
-    def handle_error(cls, error, message, sql):
-        logger.debug(message.format(sql=sql))
-        logger.debug(str(error))
-        error_msg = "\n".join(
-            [item['message'] for item in error.errors])
-
-        raise DatabaseException(error_msg) from error
+    def handle_error(cls, error, message):
+        error_msg = "\n".join([item['message'] for item in error.errors])
+        raise DatabaseException(error_msg)
 
     def clear_transaction(self):
         pass
@@ -84,12 +80,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
             yield
 
         except google.cloud.exceptions.BadRequest as e:
-            message = "Bad request while running:\n{sql}"
-            self.handle_error(e, message, sql)
+            message = "Bad request while running query"
+            self.handle_error(e, message)
 
         except google.cloud.exceptions.Forbidden as e:
-            message = "Access denied while running:\n{sql}"
-            self.handle_error(e, message, sql)
+            message = "Access denied while running query"
+            self.handle_error(e, message)
 
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
@@ -99,7 +95,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise RuntimeException(str(e)) from e
+            raise RuntimeException(str(e))
 
     def cancel_open(self) -> None:
         pass
@@ -377,9 +373,6 @@ class _ErrorCounter(object):
                 self.error_count, self.retries, repr(error))
             return True
         else:
-            logger.debug(
-                'Not Retrying after {} previous attempts. Error: {}',
-                self.error_count - 1, repr(error))
             return False
 
 

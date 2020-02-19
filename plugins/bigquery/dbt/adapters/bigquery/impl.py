@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Set
 
 import dbt.deprecations
@@ -36,6 +37,73 @@ BigQuery integer range partitioning is only supported by the
 
 See: {dbt.links.BigQueryNewPartitionBy}
 """
+
+
+@dataclass
+class PartitionConfig(Dict):
+    field: str
+    data_type: str
+
+    @classmethod
+    def _parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
+        if isinstance(raw_partition_by, dict):
+            if raw_partition_by.get('field'):
+                if raw_partition_by.get('data_type'):
+                    return cls(**raw_partition_by)
+                else:  # assume date type as default
+                    return cls(**raw_partition_by, data_type='date')
+            else:
+                dbt.exceptions.raise_compiler_error(
+                    'Config `partition_by` is missing required item `field`'
+                )
+
+        elif isinstance(raw_partition_by, str):
+            raw_partition_by = raw_partition_by.strip()
+            if 'range_bucket' in raw_partition_by.lower():
+                dbt.exceptions.raise_compiler_error(
+                    BQ_INTEGER_RANGE_NOT_SUPPORTED
+                )
+
+            elif raw_partition_by.lower().startswith('date('):
+                matches = re.match(r'date\((.+)\)', raw_partition_by,
+                                   re.IGNORECASE)
+                if not matches:
+                    dbt.exceptions.raise_compiler_error(
+                        f"Specified partition_by '{raw_partition_by}' "
+                        "is not parseable")
+
+                partition_by = matches.group(1)
+                data_type = 'timestamp'
+
+            else:
+                partition_by = raw_partition_by
+                data_type = 'date'
+
+            inferred_partition_by = {
+                'field': partition_by,
+                'data_type': data_type
+            }
+
+            dbt.deprecations.warn(
+                'bq-partition-by-string',
+                raw_partition_by=raw_partition_by,
+                inferred_partition_by=inferred_partition_by
+            )
+
+            return cls(**inferred_partition_by)
+        else:
+            return None
+
+    @classmethod
+    def parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
+        try:
+            return cls._parse(raw_partition_by)
+        except TypeError:
+            dbt.exceptions.raise_compiler_error(
+                f'Invalid partition_by config:\n'
+                f'  Got: {raw_partition_by}\n'
+                f'  Expected a dictionary with "field" and "data_type" keys'
+            )
 
 
 def _stub_relation(*args, **kwargs):
@@ -497,54 +565,7 @@ class BigQueryAdapter(BaseAdapter):
         it was a string. Check the type of `partition_by`, raise error
         or warning if string, and attempt to convert to dict.
         """
-
-        if isinstance(raw_partition_by, dict):
-            if raw_partition_by.get('field'):
-                if raw_partition_by.get('data_type'):
-                    return raw_partition_by
-                else:  # assume date type as default
-                    return dict(raw_partition_by, data_type='date')
-            else:
-                dbt.exceptions.raise_compiler_error(
-                    'Config `partition_by` is missing required item `field`'
-                )
-
-        elif isinstance(raw_partition_by, str):
-            raw_partition_by = raw_partition_by.strip()
-            if 'range_bucket' in raw_partition_by.lower():
-                dbt.exceptions.raise_compiler_error(
-                    BQ_INTEGER_RANGE_NOT_SUPPORTED
-                )
-
-            elif raw_partition_by.lower().startswith('date('):
-                matches = re.match(r'date\((.+)\)', raw_partition_by,
-                                   re.IGNORECASE)
-                if not matches:
-                    dbt.exceptions.raise_compiler_error(
-                        f"Specified partition_by '{raw_partition_by}' "
-                        "is not parseable")
-
-                partition_by = matches.group(1)
-                data_type = 'timestamp'
-
-            else:
-                partition_by = raw_partition_by
-                data_type = 'date'
-
-            inferred_partition_by = {
-                'field': partition_by,
-                'data_type': data_type
-            }
-
-            dbt.deprecations.warn(
-                'bq-partition-by-string',
-                raw_partition_by=raw_partition_by,
-                inferred_partition_by=inferred_partition_by
-            )
-
-            return inferred_partition_by
-        else:
-            return None
+        return PartitionConfig.parse(raw_partition_by)
 
     @available.parse_none
     def alter_table_add_columns(self, relation, columns):
