@@ -3,15 +3,21 @@
 ### Features
 - Add a "docs" field to models, with a "show" subfield ([#1671](https://github.com/fishtown-analytics/dbt/issues/1671), [#2107](https://github.com/fishtown-analytics/dbt/pull/2107))
 - Add a dbt-{dbt_version} user agent field to the bigquery connector ([#2121](https://github.com/fishtown-analytics/dbt/issues/2121), [#2146](https://github.com/fishtown-analytics/dbt/pull/2146))
+- Add clickable docs URL link in CLI output ([#2027](https://github.com/fishtown-analytics/dbt/issues/2027), [#2131](https://github.com/fishtown-analytics/dbt/pull/2131))
+- Add `role` parameter in Postgres target configuration ([#1955](https://github.com/fishtown-analytics/dbt/issues/1955), [#2137](https://github.com/fishtown-analytics/dbt/pull/2137))
 
 ### Fixes
 - Fix issue where dbt did not give an error in the presence of duplicate doc names ([#2054](https://github.com/fishtown-analytics/dbt/issues/2054), [#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
 - Include vars provided to the cli method when running the actual method ([#2092](https://github.com/fishtown-analytics/dbt/issues/2092), [#2104](https://github.com/fishtown-analytics/dbt/pull/2104))
 - Improved error messages with malformed packages.yml ([#2017](https://github.com/fishtown-analytics/dbt/issues/2017), [#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
+- Fix issue running `dbt debug` with an empty `dbt_project.yml` file ([#2116](https://github.com/fishtown-analytics/dbt/issues/2116), [#2120](https://github.com/fishtown-analytics/dbt/pull/2120))
 
 Contributors:
  - [@bubbomb](https://github.com/bubbomb) ([#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
  - [@sonac](https://github.com/sonac) ([#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
+ - [@aaronsteers](https://github.com/aaronsteers) ([#2131](https://github.com/fishtown-analytics/dbt/pull/2131))
+ - [@shooka](https://github.com/shooka) ([#2137](https://github.com/fishtown-analytics/dbt/pull/2137))
+ - [@nchammas](https://github.com/nchammas) ([#2120](https://github.com/fishtown-analytics/dbt/pull/2120))
 
 
 ## dbt 0.16.0b1 (February 11, 2020)
