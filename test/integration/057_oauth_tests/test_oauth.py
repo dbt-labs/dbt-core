@@ -30,7 +30,22 @@ Log in as the test user, get a resonse page with some environment variables.
 Update CI providers and test.env with the new values (If you kept the security
 integration the same, just the refresh token changed)
 """
+import os
+import pytest
 from test.integration.base import DBTIntegrationTest, use_profile
+
+
+def env_set_truthy(key):
+    """Return the value if it was set to a "truthy" string value, or None
+    otherwise.
+    """
+    value = os.getenv(key)
+    if not value or value.lower() in ('0', 'false', 'f'):
+        return None
+    return value
+
+
+OAUTH_TESTS_DISABLED = env_set_truthy('DBT_INTEGRATION_TEST_SNOWFLAKE_OAUTH_DISABLED')
 
 
 class TestSnowflakeOauth(DBTIntegrationTest):
@@ -59,6 +74,7 @@ class TestSnowflakeOauth(DBTIntegrationTest):
         del profile['test']['outputs']['noaccess']
         return profile
 
+    @pytest.mark.skipif(OAUTH_TESTS_DISABLED, reason='oauth tests disabled')
     @use_profile('snowflake')
     def test_snowflake_basic(self):
         self.run_dbt()
