@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Set
+from hologram import JsonSchemaMixin
 
 import dbt.deprecations
 import dbt.exceptions
@@ -40,7 +41,7 @@ See: {dbt.links.BigQueryNewPartitionBy}
 
 
 @dataclass
-class PartitionConfig(Dict):
+class PartitionConfig(JsonSchemaMixin):
     field: str
     data_type: str
 

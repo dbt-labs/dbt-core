@@ -390,14 +390,14 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
         adapter = self.get_adapter('oauth')
 
         self.assertEqual(
-            adapter.parse_partition_by("date(ts)"), {
+            adapter.parse_partition_by("date(ts)").to_dict(), {
                 "field": "ts",
                 "data_type": "timestamp"
             }
         )
 
         self.assertEqual(
-            adapter.parse_partition_by("ts"), {
+            adapter.parse_partition_by("ts").to_dict(), {
                 "field": "ts",
                 "data_type": "date"
             }
@@ -406,7 +406,7 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
         self.assertEqual(
             adapter.parse_partition_by({
                 "field": "ts",
-            }), {
+            }.to_dict()), {
                 "field": "ts",
                 "data_type": "date"
             }
@@ -416,10 +416,16 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
             adapter.parse_partition_by({
                 "field": "ts",
                 "data_type": "date",
-            }), {
+            }).to_dict(), {
                 "field": "ts",
                 "data_type": "date"
             }
+        )
+
+        # Invalid, should return None
+        self.assertEqual(
+            adapter.parse_partition_by({}),
+            None
         )
 
         # passthrough
@@ -432,7 +438,7 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
                     "end": 100,
                     "interval": 20
                 }
-            }), {
+            }).to_dict(), {
                 "field": "id",
                 "data_type": "int64",
                 "range": {
