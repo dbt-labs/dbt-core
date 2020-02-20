@@ -41,9 +41,20 @@ See: {dbt.links.BigQueryNewPartitionBy}
 
 
 @dataclass
-class PartitionConfig(JsonSchemaMixin):
+class PartitionConfig(Dict[str, Any], JsonSchemaMixin):
     field: str
     data_type: str
+    range: Optional[Dict[str, any]] = None
+
+    def render(self, alias: Optional[str] = None):
+        column: str = self.field
+        if alias:
+            column = f'{alias}.{self.field}'
+
+        if self.data_type in ('timestamp', 'datetime'):
+            return f'date({column})'
+        else:
+            return column
 
     @classmethod
     def _parse(cls, raw_partition_by) -> Optional['PartitionConfig']:

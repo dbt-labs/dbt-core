@@ -5,10 +5,7 @@
       else partition_by.data_type -%}
 
   {% set predicate -%}
-      {{ pprint_partition_field(
-          partition_by,
-          alias = 'DBT_INTERNAL_DEST')
-      }} in unnest(dbt_partitions_for_upsert)
+      {{ partition_by.render(alias='DBT_INTERNAL_DEST') }} in unnest(dbt_partitions_for_upsert)
   {%- endset %}
 
   {%- set source_sql -%}
@@ -31,7 +28,7 @@
   -- 2. define partitions to update
   set (dbt_partitions_for_upsert) = (
       select as struct
-          array_agg(distinct {{ pprint_partition_field(partition_by) }})
+          array_agg(distinct {{ partition_by.render() }})
       from {{ tmp_relation }}
   );
 

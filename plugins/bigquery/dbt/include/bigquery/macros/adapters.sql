@@ -1,28 +1,15 @@
-{% macro pprint_partition_field(partition_by_dict, alias = '') %}
-    {%- set partition_col_exp -%}
-        {%- if alias -%} {{alias}}.{{partition_by_dict.field}}
-        {%- else -%} {{partition_by_dict.field}}
-        {%- endif -%}
-    {%- endset -%}
-    {%- if partition_by_dict.data_type in ('timestamp','datetime') -%}
-        date({{partition_col_exp}})
-    {%- else -%}
-        {{partition_col_exp}}
-    {%- endif -%}
-{% endmacro %}
 
-{% macro partition_by(partition_by_dict) %}
-    {%- if partition_by_dict is not none -%}
-        {%- set partition_by_type = partition_by_dict.data_type|trim|lower -%}
-        {%- if partition_by_type in ('date','timestamp','datetime') -%}
-            partition by {{pprint_partition_field(partition_by_dict)}}
-        {%- elif partition_by_type in ('int64') -%}
-            {%- set pbr = partition_by_dict.range -%}
-            partition by range_bucket(
-                {{partition_by_dict.field}},
-                generate_array({{pbr.start}}, {{pbr.end}}, {{pbr.interval}})
-            )
-        {%- endif -%}
+{% macro partition_by(partition_config) -%}
+    {%- if partition_config is none -%}
+      {% do return('') %}
+    {%- elif partition_config.data_type | lower in ('date','timestamp','datetime') -%}
+        partition by {{ partition_config.render() }}
+    {%- elif partition_config.data_type | lower in ('int64') -%}
+        {%- set range = partition_config.range -%}
+        partition by range_bucket(
+            {{ partition_config.field }},
+            generate_array({{ range.start}}, {{ range.end }}, {{ range.interval }})
+        )
     {%- endif -%}
 {%- endmacro -%}
 
