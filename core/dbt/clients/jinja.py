@@ -9,7 +9,6 @@ from typing import (
 )
 
 import jinja2
-import jinja2._compat
 import jinja2.ext
 import jinja2.nodes
 import jinja2.parser
@@ -47,8 +46,6 @@ def _linecache_inject(source, write):
         rnd = codecs.encode(os.urandom(12), 'hex')  # type: ignore
         filename = rnd.decode('ascii')
 
-    # encode, though I don't think this matters
-    filename = jinja2._compat.encode_filename(filename)
     # put ourselves in the cache
     cache_entry = (
         len(source),
@@ -79,10 +76,7 @@ class MacroFuzzParser(jinja2.parser.Parser):
 
 class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
     def _parse(self, source, name, filename):
-        return MacroFuzzParser(
-            self, source, name,
-            jinja2._compat.encode_filename(filename)
-        ).parse()
+        return MacroFuzzParser(self, source, name, filename).parse()
 
     def _compile(self, source, filename):
         """Override jinja's compilation to stash the rendered source inside
