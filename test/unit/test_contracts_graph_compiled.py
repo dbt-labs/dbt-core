@@ -139,7 +139,7 @@ class TestCompiledModelNode(ContractTestCase):
             'extra_ctes': [{'id': 'whatever', 'sql': 'select * from other'}],
             'extra_ctes_injected': True,
             'injected_sql': 'with whatever as (select * from other) select * from whatever',
-            'wrapped_sql': 'None',
+            'wrapped_sql': None,
         }
         node = self.ContractType(
             package_name='test',

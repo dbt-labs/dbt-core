@@ -248,7 +248,6 @@ def _is_writable(node):
 def compile_node(adapter, config, node, manifest, extra_context, write=True):
     compiler = Compiler(config)
     node = compiler.compile_node(node, manifest, extra_context)
-    node = _inject_runtime_config(adapter, node, extra_context)
 
     if write and _is_writable(node):
         logger.debug('Writing injected SQL for node "{}"'.format(
@@ -261,21 +260,3 @@ def compile_node(adapter, config, node, manifest, extra_context, write=True):
         )
 
     return node
-
-
-def _inject_runtime_config(adapter, node, extra_context):
-    wrapped_sql = node.wrapped_sql
-    context = _node_context(adapter, node)
-    context.update(extra_context)
-    sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
-    node.wrapped_sql = sql
-    return node
-
-
-def _node_context(adapter, node):
-    if dbt.tracking.active_user is not None:
-        return {
-            "run_started_at": dbt.tracking.active_user.run_started_at,
-            "invocation_id": dbt.tracking.active_user.invocation_id,
-        }
-    return {}   # this never happens, but make mypy happy
