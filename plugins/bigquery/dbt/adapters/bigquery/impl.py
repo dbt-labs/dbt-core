@@ -500,7 +500,9 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
-    def _partitions_match(self, table, conf_partition: Dict[str, Any]):
+    def _partitions_match(
+        self, table, conf_partition: Optional[PartitionConfig]
+    ) -> bool:
         """
         Check if the actual and configured partitions for a table are a match.
         BigQuery tables can be replaced if:
@@ -513,24 +515,21 @@ class BigQueryAdapter(BaseAdapter):
 
         if not is_partitioned and not conf_partition:
             return True
-
-        if table.time_partitioning is not None:
+        elif conf_partition and table.time_partitioning is not None:
             table_field = table.time_partitioning.field
-            return table_field == conf_partition.get('field')
-
-        elif table.range_partitioning is not None:
+            return table_field == conf_partition.field
+        elif conf_partition and table.range_partitioning is not None:
             dest_part = table.range_partition.range_
-            conf_part = conf_partition.get('range', {})
+            conf_part = conf_partition.range or {}
 
-            return dest_part.field == conf_partition.get('field') \
+            return dest_part.field == conf_partition.field \
                 and dest_part.start == conf_part.get('start') \
                 and dest_part.end == conf_part.get('end') \
                 and dest_part.interval == conf_part.get('interval')
-
         else:
             return False
 
-    def _clusters_match(self, table, conf_cluster):
+    def _clusters_match(self, table, conf_cluster) -> bool:
         """
         Check if the actual and configured clustering columns for a table
         are a match. BigQuery tables can be replaced if clustering columns
@@ -542,7 +541,12 @@ class BigQueryAdapter(BaseAdapter):
         return table.clustering_fields == conf_cluster
 
     @available.parse(lambda *a, **k: True)
-    def is_replaceable(self, relation, conf_partition: dict, conf_cluster):
+    def is_replaceable(
+        self,
+        relation,
+        conf_partition: Optional[PartitionConfig],
+        conf_cluster
+    ) -> bool:
         """
         Check if a given partition and clustering column spec for a table
         can replace an existing relation in the database. BigQuery does not
@@ -568,7 +572,9 @@ class BigQueryAdapter(BaseAdapter):
         ))
 
     @available
-    def parse_partition_by(self, raw_partition_by: Any):
+    def parse_partition_by(
+        self, raw_partition_by: Any
+    ) -> Optional[PartitionConfig]:
         """
         dbt v0.16.0 expects `partition_by` to be a dictionary where previously
         it was a string. Check the type of `partition_by`, raise error
