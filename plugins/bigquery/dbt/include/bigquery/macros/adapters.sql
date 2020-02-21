@@ -69,7 +69,7 @@
   {{ sql_header if sql_header is not none }}
 
   create or replace table {{ relation }}
-  {{ partition_by(partition_config.to_dict()) }}
+  {{ partition_by(partition_config) }}
   {{ cluster_by(raw_cluster_by) }}
   {{ bigquery_table_options(
       persist_docs=raw_persist_docs,

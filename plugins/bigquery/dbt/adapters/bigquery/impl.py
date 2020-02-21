@@ -44,7 +44,7 @@ See: {dbt.links.BigQueryNewPartitionBy}
 class PartitionConfig(JsonSchemaMixin):
     field: str
     data_type: str = 'date'
-    range: Optional[Dict[str, any]] = None
+    range: Optional[Dict[str, Any]] = None
 
     def render(self, alias: Optional[str] = None):
         column: str = self.field
@@ -61,9 +61,10 @@ class PartitionConfig(JsonSchemaMixin):
         if isinstance(raw_partition_by, dict):
             try:
                 return cls.from_dict(raw_partition_by)
-            except ValidationError:
+            except ValidationError as exc:
+                msg = dbt.exceptions.validator_error_message(exc)
                 dbt.exceptions.raise_compiler_error(
-                    'Config `partition_by` is missing required item `field`'
+                    f'Could not parse partition config: {msg}'
                 )
 
         elif isinstance(raw_partition_by, str):

@@ -406,7 +406,7 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
         self.assertEqual(
             adapter.parse_partition_by({
                 "field": "ts",
-            }.to_dict()), {
+            }).to_dict(), {
                 "field": "ts",
                 "data_type": "date"
             }
@@ -422,11 +422,9 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
             }
         )
 
-        # Invalid, should return None
-        self.assertEqual(
-            adapter.parse_partition_by({}),
-            None
-        )
+        # Invalid, should raise an error
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by({})
 
         # passthrough
         self.assertEqual(
