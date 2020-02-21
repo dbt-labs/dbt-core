@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Set
-from hologram import JsonSchemaMixin
+from hologram import JsonSchemaMixin, ValidationError
 
 import dbt.deprecations
 import dbt.exceptions
@@ -41,9 +41,9 @@ See: {dbt.links.BigQueryNewPartitionBy}
 
 
 @dataclass
-class PartitionConfig(Dict[str, Any], JsonSchemaMixin):
+class PartitionConfig(JsonSchemaMixin):
     field: str
-    data_type: str
+    data_type: str = 'date'
     range: Optional[Dict[str, any]] = None
 
     def render(self, alias: Optional[str] = None):
@@ -59,12 +59,9 @@ class PartitionConfig(Dict[str, Any], JsonSchemaMixin):
     @classmethod
     def _parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
         if isinstance(raw_partition_by, dict):
-            if raw_partition_by.get('field'):
-                if raw_partition_by.get('data_type'):
-                    return cls(**raw_partition_by)
-                else:  # assume date type as default
-                    return cls(**raw_partition_by, data_type='date')
-            else:
+            try:
+                return cls.from_dict(raw_partition_by)
+            except ValidationError:
                 dbt.exceptions.raise_compiler_error(
                     'Config `partition_by` is missing required item `field`'
                 )
@@ -91,18 +88,17 @@ class PartitionConfig(Dict[str, Any], JsonSchemaMixin):
                 partition_by = raw_partition_by
                 data_type = 'date'
 
-            inferred_partition_by = {
-                'field': partition_by,
-                'data_type': data_type
-            }
+            inferred_partition_by = cls(
+                field=partition_by,
+                data_type=data_type
+            )
 
             dbt.deprecations.warn(
                 'bq-partition-by-string',
                 raw_partition_by=raw_partition_by,
                 inferred_partition_by=inferred_partition_by
             )
-
-            return cls(**inferred_partition_by)
+            return inferred_partition_by
         else:
             return None
 

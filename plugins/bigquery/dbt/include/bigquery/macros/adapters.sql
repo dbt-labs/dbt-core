@@ -64,12 +64,12 @@
   {%- set raw_labels = config.get('labels', []) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
 
-  {%- set partition_by_dict = adapter.parse_partition_by(raw_partition_by) -%}
+  {%- set partition_config = adapter.parse_partition_by(raw_partition_by) -%}
 
   {{ sql_header if sql_header is not none }}
 
   create or replace table {{ relation }}
-  {{ partition_by(partition_by_dict) }}
+  {{ partition_by(partition_config.to_dict()) }}
   {{ cluster_by(raw_cluster_by) }}
   {{ bigquery_table_options(
       persist_docs=raw_persist_docs,
