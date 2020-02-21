@@ -1,5 +1,8 @@
 ## dbt next (Release TBD)
 
+### Breaking changes
+- Arguments to source tests are not parsed in the config-rendering context, and are passed as their literal unparsed values to macros ([#2150](https://github.com/fishtown-analytics/dbt/pull/2150))
+
 ### Features
 - Add a "docs" field to models, with a "show" subfield ([#1671](https://github.com/fishtown-analytics/dbt/issues/1671), [#2107](https://github.com/fishtown-analytics/dbt/pull/2107))
 - Add a dbt-{dbt_version} user agent field to the bigquery connector ([#2121](https://github.com/fishtown-analytics/dbt/issues/2121), [#2146](https://github.com/fishtown-analytics/dbt/pull/2146))
