@@ -35,30 +35,6 @@ class TestDeprecations(BaseTestDeprecations):
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
-class TestMacroDeprecations(BaseTestDeprecations):
-    @property
-    def models(self):
-        return self.dir('boring-models')
-
-    @property
-    def project_config(self):
-        return {
-            'macro-paths': [self.dir('deprecated-macros')],
-        }
-
-    @use_profile('postgres')
-    def test_postgres_deprecations_fail(self):
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            self.run_dbt(strict=True)
-
-    @use_profile('postgres')
-    def test_postgres_deprecations(self):
-        self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
-        expected = {'generate-schema-name-single-arg'}
-        self.assertEqual(expected, deprecations.active_deprecations)
-
-
 class TestMaterializationReturnDeprecation(BaseTestDeprecations):
     @property
     def models(self):

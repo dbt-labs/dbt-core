@@ -541,21 +541,21 @@ class Manifest:
         return candidates.last()
 
     def find_generate_macro_by_name(
-        self, name: str, root_project_name: str
+        self, component: str, root_project_name: str
     ) -> Optional[ParsedMacro]:
         """
         The `generate_X_name` macros are similar to regular ones, but ignore
         imported packages.
-            - if there is a `name` macro in the root project, return it
-            - if that does not exist but there is a `name` macro in the 'dbt'
-                internal project (or a plugin), return that
-            - if neither of those exist (unit tests?), return None
+            - if there is a `generate_{component}_name` macro in the root
+              project, return it
+            - return the `generate_{component}_name` macro from the 'dbt'
+              internal project
         """
         def filter(candidate: MacroCandidate) -> bool:
             return candidate.locality != Locality.Imported
 
         candidates: CandidateList = self._find_macros_by_name(
-            name=name,
+            name=f'generate_{component}_name',
             root_project_name=root_project_name,
             # filter out imported packages
             filter=filter,
