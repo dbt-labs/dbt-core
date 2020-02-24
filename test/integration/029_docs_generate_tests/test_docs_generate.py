@@ -962,7 +962,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -1044,7 +1044,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': '',
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'test.test.not_null_model_id': {
                     'alias': 'not_null_model_id',
@@ -1373,7 +1373,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'model.test.ephemeral_summary': {
                     'alias': 'ephemeral_summary',
@@ -1437,7 +1437,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [ANY],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'model.test.view_summary': {
                     'alias': 'view_summary',
@@ -1500,7 +1500,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
@@ -1579,7 +1579,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': '',
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'source.test.my_source.my_table': {
                     'columns': {
@@ -1952,7 +1952,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'model.test.multi_clustered': {
                     'alias': 'multi_clustered',
@@ -2031,7 +2031,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'model.test.nested_view': {
                     'alias': 'nested_view',
@@ -2111,7 +2111,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'model.test.nested_table': {
                     'alias': 'nested_table',
@@ -2155,7 +2155,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -2237,7 +2237,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': '',
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
             },
             'child_map': {
@@ -2462,7 +2462,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -2544,7 +2544,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
             },
             'parent_map': {
@@ -2784,7 +2784,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': model_database,
                     'tags': [],
                     'unique_id': 'model.test.model',
-                    'wrapped_sql': 'None'
+                    'wrapped_sql': None
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2873,7 +2873,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'seed.test.seed',
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -3163,7 +3163,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'model.test.ephemeral_summary',
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -3242,7 +3242,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'model.test.view_summary',
-                    'wrapped_sql': 'None',
+                    'wrapped_sql': None,
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -3331,7 +3331,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'seed.test.seed',
-                    'wrapped_sql': 'None'
+                    'wrapped_sql': None
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],

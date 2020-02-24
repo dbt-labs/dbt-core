@@ -1,5 +1,8 @@
 ## dbt next (Release TBD)
 
+### Breaking changes
+- Arguments to source tests are not parsed in the config-rendering context, and are passed as their literal unparsed values to macros ([#2150](https://github.com/fishtown-analytics/dbt/pull/2150))
+
 ### Features
 - Add a "docs" field to models, with a "show" subfield ([#1671](https://github.com/fishtown-analytics/dbt/issues/1671), [#2107](https://github.com/fishtown-analytics/dbt/pull/2107))
 - Add a dbt-{dbt_version} user agent field to the bigquery connector ([#2121](https://github.com/fishtown-analytics/dbt/issues/2121), [#2146](https://github.com/fishtown-analytics/dbt/pull/2146))
@@ -8,6 +11,7 @@
 - Fix issue where dbt did not give an error in the presence of duplicate doc names ([#2054](https://github.com/fishtown-analytics/dbt/issues/2054), [#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
 - Include vars provided to the cli method when running the actual method ([#2092](https://github.com/fishtown-analytics/dbt/issues/2092), [#2104](https://github.com/fishtown-analytics/dbt/pull/2104))
 - Improved error messages with malformed packages.yml ([#2017](https://github.com/fishtown-analytics/dbt/issues/2017), [#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
+- Fix an issue where dbt rendered source test args, fix issue where dbt ran an extra compile pass over the wrapped SQL. ([#2114](https://github.com/fishtown-analytics/dbt/issues/2114), [#2150](https://github.com/fishtown-analytics/dbt/pull/2150))
 
 Contributors:
  - [@bubbomb](https://github.com/bubbomb) ([#2080](https://github.com/fishtown-analytics/dbt/pull/2080))

@@ -72,10 +72,24 @@ class ConfigRenderer:
                 pass
         return result
 
+    @staticmethod
+    def _is_schema_test(keypath) -> bool:
+        # we got passed an UnparsedSourceDefinition
+        if len(keypath) > 2 and keypath[0] == 'tables':
+            if keypath[2] == 'tests':
+                return True
+            elif keypath[2] == 'columns':
+                if len(keypath) > 4 and keypath[4] == 'tests':
+                    return True
+        return False
+
     def _render_schema_source_data(self, value, keypath):
         # things to not render:
         # - descriptions
+        # - test arguments
         if len(keypath) > 0 and keypath[-1] == 'description':
+            return value
+        elif self._is_schema_test(keypath):
             return value
 
         return self.render_value(value)
