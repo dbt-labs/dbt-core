@@ -170,7 +170,7 @@
         insert into {{ tmp_relation }} (dbt_change_type, dbt_scd_id, dbt_valid_to)
         select dbt_change_type, dbt_scd_id, dbt_valid_to from (
             {{ updates_select }}
-        ) dbt_sbq;
+        ) dbt_sbq
     {% endcall %}
 
     {% do return(tmp_relation) %}

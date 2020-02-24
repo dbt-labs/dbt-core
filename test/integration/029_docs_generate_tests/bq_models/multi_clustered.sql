@@ -1,7 +1,7 @@
 {{
     config(
         materialized='table',
-        partition_by='updated_at',
+        partition_by={'field': 'updated_at', 'data_type': 'date'},
         cluster_by=['first_name','email']
     )
 }}
