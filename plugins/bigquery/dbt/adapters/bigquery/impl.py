@@ -97,7 +97,7 @@ class PartitionConfig(JsonSchemaMixin):
             dbt.deprecations.warn(
                 'bq-partition-by-string',
                 raw_partition_by=raw_partition_by,
-                inferred_partition_by=inferred_partition_by
+                inferred_partition_by=inferred_partition_by.to_dict()
             )
             return inferred_partition_by
         else:
