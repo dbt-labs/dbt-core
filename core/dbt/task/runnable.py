@@ -519,7 +519,7 @@ class GraphRunnableTask(ManifestTask):
         def create_schema(relation: BaseRelation) -> None:
             db = relation.database or ""
             schema = relation.schema
-            with adapter.connection_named(f'create_{db}_{schema}'):
+            with adapter.connection_named(f"create_{db}_{schema}"):
                 adapter.create_schema(relation)
 
         list_futures = []
