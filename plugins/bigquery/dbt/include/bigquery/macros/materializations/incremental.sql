@@ -1,5 +1,21 @@
 
-{% macro bq_partition_merge(tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns) %}
+{% macro dbt_bigquery_validate_get_incremental_strategy(config) %}
+  {#-- Find and validate the incremental strategy #}
+  {%- set strategy = config.get("incremental_strategy", default="merge") -%}
+
+  {% set invalid_strategy_msg -%}
+    Invalid incremental strategy provided: {{ strategy }}
+    Expected one of: 'merge', 'insert_overwrite'
+  {%- endset %}
+  {% if strategy not in ['merge', 'insert_overwrite'] %}
+    {% do exceptions.raise_compiler_error(invalid_strategy_msg) %}
+  {% endif %}
+
+  {% do return(strategy) %}
+{% endmacro %}
+
+
+{% macro bq_partition_merge(strategy, tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns) %}
   {%- set partition_type =
       'date' if partition_by.data_type in ('timestamp, datetime') 
       else partition_by.data_type -%}
@@ -31,9 +47,15 @@
           array_agg(distinct {{ partition_by.render() }})
       from {{ tmp_relation }}
   );
-
+  
   -- 3. run the merge statement
+  {% if strategy == 'merge' %}
   {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns, [predicate]) }};
+  {% elif strategy == 'insert_overwrite' %}
+  {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate]) }};
+  {% else %}
+    {% do exceptions.raise_compiler_error('invalid strategy: ' ~ strategy) %}
+  {% endif %}
 
   -- 4. clean up the temp table
   drop table if exists {{ tmp_relation }}
@@ -49,6 +71,9 @@
   {%- set target_relation = this %}
   {%- set existing_relation = load_relation(this) %}
   {%- set tmp_relation = make_temp_relation(this) %}
+  
+  {#-- Validate early so we don't run SQL if the strategy is invalid --#}
+  {% set strategy = dbt_bigquery_validate_get_incremental_strategy(config) -%}
 
   {%- set raw_partition_by = config.get('partition_by', none) -%}
   {%- set partition_by = adapter.parse_partition_by(raw_partition_by) -%}
@@ -75,6 +100,7 @@
      {#-- if partitioned, use BQ scripting to get the range of partition values to be updated --#}
      {% if partition_by is not none %}
         {% set build_sql = bq_partition_merge(
+            strategy,
             tmp_relation,
             target_relation,
             sql,
