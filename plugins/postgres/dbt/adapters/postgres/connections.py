@@ -21,6 +21,7 @@ class PostgresCredentials(Credentials):
     password: str  # on postgres the password is mandatory
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
+    sslmode: Optional[str] = None
 
     _ALIASES = {
         'dbname': 'database',
@@ -33,7 +34,8 @@ class PostgresCredentials(Credentials):
 
     def _connection_keys(self):
         return ('host', 'port', 'user', 'database', 'schema', 'search_path',
-                'keepalives_idle')
+                'keepalives_idle' #, 'sslmode'
+                )
 
 
 class PostgresConnectionManager(SQLConnectionManager):
@@ -88,6 +90,9 @@ class PostgresConnectionManager(SQLConnectionManager):
             # see https://postgresql.org/docs/9.5/libpq-connect.html
             kwargs['options'] = '-c search_path={}'.format(
                 search_path.replace(' ', '\\ '))
+
+        if credentials.sslmode:
+             kwargs['sslmode'] = credentials.sslmode
 
         try:
             handle = psycopg2.connect(
