@@ -38,6 +38,13 @@ class TestChangingPartitions(DBTIntegrationTest):
         after = {"partition_by": "cur_date", "cluster_by": None}
         self.run_changes(before, after)
         self.run_changes(after, before)
+    
+    @use_profile('bigquery')
+    def test_bigquery_change_partitions_from_int(self):
+        before = {"partition_by": {"field": "id", "data_type": "int64", "range": {"start": 0, "end": 10, "interval": 1}}, "cluster_by": None}
+        after = {"partition_by": {"field": "cur_date", "data_type": "date"}, "cluster_by": None}
+        self.run_changes(before, after)
+        self.run_changes(after, before)
 
     @use_profile('bigquery')
     def test_bigquery_add_clustering(self):
