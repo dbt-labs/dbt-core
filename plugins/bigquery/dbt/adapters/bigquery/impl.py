@@ -519,13 +519,13 @@ class BigQueryAdapter(BaseAdapter):
             table_field = table.time_partitioning.field
             return table_field == conf_partition.field
         elif conf_partition and table.range_partitioning is not None:
-            dest_part = table.range_partition.range_
+            dest_part = table.range_partitioning
             conf_part = conf_partition.range or {}
 
             return dest_part.field == conf_partition.field \
-                and dest_part.start == conf_part.get('start') \
-                and dest_part.end == conf_part.get('end') \
-                and dest_part.interval == conf_part.get('interval')
+                and dest_part.range_.start == conf_part.get('start') \
+                and dest_part.range_.end == conf_part.get('end') \
+                and dest_part.range_.interval == conf_part.get('interval')
         else:
             return False
 
