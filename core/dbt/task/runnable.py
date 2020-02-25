@@ -1,6 +1,6 @@
 import os
 import time
-from concurrent.futures import as_completed, wait
+from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable
