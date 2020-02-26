@@ -74,6 +74,13 @@ Contributors:
  - [@tayloramurphy](https://github.com/tayloramurphy) ([#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
  - [@alanmcruickshank](https://github.com/alanmcruickshank) ([#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
 
+## dbt 0.15.3 (February 19, 2020)
+
+This is a bugfix release.
+
+### Fixes
+- Use refresh tokens in snowflake instead of access tokens ([#2126](https://github.com/fishtown-analytics/dbt/issues/2126), [#2141](https://github.com/fishtown-analytics/dbt/pull/2141))
+
 ## dbt 0.15.2 (February 2, 2020)
 
 This is a bugfix release.

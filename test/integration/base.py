@@ -210,7 +210,20 @@ class DBTIntegrationTest(unittest.TestCase):
                         'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
                         'schema': self.unique_schema(),
                         'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
-                    }
+                    },
+                    'oauth': {
+                        'type': 'snowflake',
+                        'threads': 4,
+                        'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
+                        'user': os.getenv('SNOWFLAKE_TEST_USER'),
+                        'oauth_client_id': os.getenv('SNOWFLAKE_TEST_OAUTH_CLIENT_ID'),
+                        'oauth_client_secret': os.getenv('SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET'),
+                        'token': os.getenv('SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN'),
+                        'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
+                        'schema': self.unique_schema(),
+                        'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
+                        'authenticator': 'oauth',
+                    },
                 },
                 'target': 'default2'
             }
