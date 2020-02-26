@@ -160,9 +160,14 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
 
 
 def _all_source_paths(
-    source_paths: List[str], data_paths: List[str], snapshot_paths: List[str]
+    source_paths: List[str],
+    data_paths: List[str],
+    snapshot_paths: List[str],
+    analysis_paths: List[str],
+    macro_paths: List[str],
 ) -> List[str]:
-    return list(chain(source_paths, data_paths, snapshot_paths))
+    return list(chain(source_paths, data_paths, snapshot_paths, analysis_paths,
+                      macro_paths))
 
 
 T = TypeVar('T')
@@ -244,7 +249,8 @@ class Project:
     @property
     def all_source_paths(self) -> List[str]:
         return _all_source_paths(
-            self.source_paths, self.data_paths, self.snapshot_paths
+            self.source_paths, self.data_paths, self.snapshot_paths,
+            self.analysis_paths, self.macro_paths
         )
 
     @staticmethod
@@ -323,7 +329,8 @@ class Project:
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
 
         all_source_paths: List[str] = _all_source_paths(
-            source_paths, data_paths, snapshot_paths
+            source_paths, data_paths, snapshot_paths, analysis_paths,
+            macro_paths
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
