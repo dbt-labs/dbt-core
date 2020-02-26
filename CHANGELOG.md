@@ -1,4 +1,4 @@
-## dbt next (Release TBD)
+## dbt 0.16.0b3 (February 26, 2020)
 
 ### Breaking changes
 - Arguments to source tests are not parsed in the config-rendering context, and are passed as their literal unparsed values to macros ([#2150](https://github.com/fishtown-analytics/dbt/pull/2150))
