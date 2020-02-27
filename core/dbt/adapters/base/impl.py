@@ -1,6 +1,5 @@
 import abc
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from concurrent.futures import Future  # noqa - we use this for typing only
+from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
@@ -27,7 +26,7 @@ from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import filter_null_values
+from dbt.utils import filter_null_values, executor
 
 from dbt.adapters.base.connections import BaseConnectionManager, Connection
 from dbt.adapters.base.meta import AdapterMeta, available
@@ -358,6 +357,12 @@ class BaseAdapter(metaclass=AdapterMeta):
         # databases
         return info_schema_name_map
 
+    def _list_relations_get_connection(
+        self, db: BaseRelation, schema: str
+    ) -> List[BaseRelation]:
+        with self.connection_named(f'list_{db.database}_{schema}'):
+            return self.list_relations_without_caching(db, schema)
+
     def _relations_cache_for_schemas(self, manifest: Manifest) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
@@ -365,16 +370,22 @@ class BaseAdapter(metaclass=AdapterMeta):
         if not dbt.flags.USE_CACHE:
             return
 
-        info_schema_name_map = self._get_cache_schemas(manifest,
-                                                       exec_only=True)
-        for db, schema in info_schema_name_map.search():
-            for relation in self.list_relations_without_caching(db, schema):
-                self.cache.add(relation)
+        schema_map = self._get_cache_schemas(manifest, exec_only=True)
+        with executor(self.config) as tpe:
+            futures: List[Future[List[BaseRelation]]] = [
+                tpe.submit(self._list_relations_get_connection, db, schema)
+                for db, schema in schema_map.search()
+            ]
+            for future in as_completed(futures):
+                # if we can't read the relations we need to just raise anyway,
+                # so just call future.result() and let that raise on failure
+                for relation in future.result():
+                    self.cache.add(relation)
 
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        self.cache.update_schemas(info_schema_name_map.schemas_searched())
+        self.cache.update_schemas(schema_map.schemas_searched())
 
     def set_relations_cache(
         self, manifest: Manifest, clear: bool = False
@@ -1047,13 +1058,11 @@ class BaseAdapter(metaclass=AdapterMeta):
     def get_catalog(
         self, manifest: Manifest
     ) -> Tuple[agate.Table, List[Exception]]:
-        # snowflake is super slow. split it out into the specified threads
-        num_threads = self.config.threads
         schema_map = self._get_cache_schemas(manifest)
 
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(self._get_one_catalog, info, schemas, manifest)
+        with executor(self.config) as tpe:
+            futures: List[Future[agate.Table]] = [
+                tpe.submit(self._get_one_catalog, info, schemas, manifest)
                 for info, schemas in schema_map.items() if len(schemas) > 0
             ]
             catalogs, exceptions = catch_as_completed(futures)

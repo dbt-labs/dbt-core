@@ -25,6 +25,7 @@ def normalize(path):
 
 class Obj:
     which = 'blah'
+    single_threaded = False
 
 
 def mock_connection(name):

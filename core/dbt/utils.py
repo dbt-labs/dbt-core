@@ -1,4 +1,5 @@
 import collections
+import concurrent.futures
 import copy
 import datetime
 import decimal
@@ -8,6 +9,7 @@ import itertools
 import json
 import os
 from enum import Enum
+from typing_extensions import Protocol
 from typing import (
     Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable
 )
@@ -489,3 +491,48 @@ def format_bytes(num_bytes):
         num_bytes /= 1024.0
 
     return "> 1024 TB"
+
+
+# a little concurrent.futures.Executor for single-threaded mode
+class SingleThreadedExecutor(concurrent.futures.Executor):
+    def submit(*args, **kwargs):
+        # this basic pattern comes from concurrent.futures.Executor itself,
+        # but without handling the `fn=` form.
+        if len(args) >= 2:
+            self, fn, *args = args
+        elif not args:
+            raise TypeError(
+                "descriptor 'submit' of 'SingleThreadedExecutor' object needs "
+                "an argument"
+            )
+        else:
+            raise TypeError(
+                'submit expected at least 1 positional argument, '
+                'got %d' % (len(args) - 1)
+            )
+        fut = concurrent.futures.Future()
+        try:
+            result = fn(*args, **kwargs)
+        except Exception as exc:
+            fut.set_exception(exc)
+        else:
+            fut.set_result(result)
+        return fut
+
+
+class ThreadedArgs(Protocol):
+    single_threaded: bool
+
+
+class HasThreadingConfig(Protocol):
+    args: ThreadedArgs
+    threads: Optional[int]
+
+
+def executor(config: HasThreadingConfig) -> concurrent.futures.Executor:
+    if config.args.single_threaded:
+        return SingleThreadedExecutor()
+    else:
+        return concurrent.futures.ThreadPoolExecutor(
+            max_workers=config.threads
+        )
