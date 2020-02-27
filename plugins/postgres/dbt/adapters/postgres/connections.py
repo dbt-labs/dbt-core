@@ -107,7 +107,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             kwargs["options"] = "-c search_path={}".format(search_path.replace(" ", "\\ "))
 
         if credentials.sslmode:
-            kwargs['sslmode'] = credentials.sslmode
+            kwargs["sslmode"] = credentials.sslmode
 
         if credentials.sslcert is not None:
             kwargs["sslcert"] = credentials.sslcert
