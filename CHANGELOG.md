@@ -21,7 +21,7 @@
 Contributors:
  - [@bubbomb](https://github.com/bubbomb) ([#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
  - [@sonac](https://github.com/sonac) ([#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
-
+ - [@mhmcdonald](https://github.com/mhmcdonald) ([#2164](https://github.com/fishtown-analytics/dbt/pull/2164))
 
 ## dbt 0.16.0b1 (February 11, 2020)
 
