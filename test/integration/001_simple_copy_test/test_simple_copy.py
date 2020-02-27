@@ -71,7 +71,6 @@ class TestSimpleCopy(BaseTestSimpleCopy):
                 select * from {schema}.unrelated_materialized_view
             )
         '''.format(schema=self.unique_schema()))
-
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()

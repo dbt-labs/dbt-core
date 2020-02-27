@@ -1,22 +1,30 @@
-## dbt next (Release TBD)
+## dbt 0.16.0b3 (February 26, 2020)
 
 ### Breaking changes
 - Arguments to source tests are not parsed in the config-rendering context, and are passed as their literal unparsed values to macros ([#2150](https://github.com/fishtown-analytics/dbt/pull/2150))
+- `generate_schema_name` macros that accept a single argument are no longer supported ([#2143](https://github.com/fishtown-analytics/dbt/pull/2143))
 
 ### Features
 - Add a "docs" field to models, with a "show" subfield ([#1671](https://github.com/fishtown-analytics/dbt/issues/1671), [#2107](https://github.com/fishtown-analytics/dbt/pull/2107))
 - Add a dbt-{dbt_version} user agent field to the bigquery connector ([#2121](https://github.com/fishtown-analytics/dbt/issues/2121), [#2146](https://github.com/fishtown-analytics/dbt/pull/2146))
-- Adding optional "sslmode" parameter for postgres ([#2152](https://github.com/fishtown-analytics/dbt/issues/2152))
- 
+- Adding optional "sslmode" parameter for postgres ([#2152](https://github.com/fishtown-analytics/dbt/issues/2152), [#2154](https://github.com/fishtown-analytics/dbt/pull/2154))
+- Add support for `generate_database_name` macro ([#1695](https://github.com/fishtown-analytics/dbt/issues/1695), [#2143](https://github.com/fishtown-analytics/dbt/pull/2143))
+- Expand the search path for schema.yml (and by extension, the default docs path) to include macro-paths and analysis-paths (in addition to source-paths, data-paths, and snapshot-paths) ([#2155](https://github.com/fishtown-analytics/dbt/issues/2155), [#2160](https://github.com/fishtown-analytics/dbt/pull/2160))
+
 ### Fixes
 - Fix issue where dbt did not give an error in the presence of duplicate doc names ([#2054](https://github.com/fishtown-analytics/dbt/issues/2054), [#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
 - Include vars provided to the cli method when running the actual method ([#2092](https://github.com/fishtown-analytics/dbt/issues/2092), [#2104](https://github.com/fishtown-analytics/dbt/pull/2104))
 - Improved error messages with malformed packages.yml ([#2017](https://github.com/fishtown-analytics/dbt/issues/2017), [#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
 - Fix an issue where dbt rendered source test args, fix issue where dbt ran an extra compile pass over the wrapped SQL. ([#2114](https://github.com/fishtown-analytics/dbt/issues/2114), [#2150](https://github.com/fishtown-analytics/dbt/pull/2150))
+- Set more upper bounds for jinja2,requests, and idna dependencies, upgrade snowflake-connector-python ([#2147](https://github.com/fishtown-analytics/dbt/issues/2147), [#2151](https://github.com/fishtown-analytics/dbt/pull/2151))
+
+### Under the hood
+- Parallelize filling the cache and listing schemas in each database during startup ([#2127](https://github.com/fishtown-analytics/dbt/issues/2127), [#2157](https://github.com/fishtown-analytics/dbt/pull/2157))
 
 Contributors:
  - [@bubbomb](https://github.com/bubbomb) ([#2080](https://github.com/fishtown-analytics/dbt/pull/2080))
  - [@sonac](https://github.com/sonac) ([#2078](https://github.com/fishtown-analytics/dbt/pull/2078))
+ - [@dholleran-lendico](https://github.com/dholleran-lendico) ([#2154](https://github.com/fishtown-analytics/dbt/pull/2154))
 
 
 ## dbt 0.16.0b1 (February 11, 2020)
@@ -71,6 +79,13 @@ Contributors:
  - [@franloza](https://github.com/franloza) ([#1989](https://github.com/fishtown-analytics/dbt/pull/1989))
  - [@tayloramurphy](https://github.com/tayloramurphy) ([#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
  - [@alanmcruickshank](https://github.com/alanmcruickshank) ([#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
+
+## dbt 0.15.3 (February 19, 2020)
+
+This is a bugfix release.
+
+### Fixes
+- Use refresh tokens in snowflake instead of access tokens ([#2126](https://github.com/fishtown-analytics/dbt/issues/2126), [#2141](https://github.com/fishtown-analytics/dbt/pull/2141))
 
 ## dbt 0.15.2 (February 2, 2020)
 

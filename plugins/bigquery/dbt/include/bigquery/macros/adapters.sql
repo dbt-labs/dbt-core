@@ -1,25 +1,26 @@
-{% macro partition_by(raw_partition_by) %}
-  {%- if raw_partition_by is none -%}
-    {{ return('') }}
-  {% endif %}
 
-  {% set partition_by_clause %}
-    partition by {{ raw_partition_by }}
-  {%- endset -%}
-
-  {{ return(partition_by_clause) }}
+{% macro partition_by(partition_config) -%}
+    {%- if partition_config is none -%}
+      {% do return('') %}
+    {%- elif partition_config.data_type | lower in ('date','timestamp','datetime') -%}
+        partition by {{ partition_config.render() }}
+    {%- elif partition_config.data_type | lower in ('int64') -%}
+        {%- set range = partition_config.range -%}
+        partition by range_bucket(
+            {{ partition_config.field }},
+            generate_array({{ range.start}}, {{ range.end }}, {{ range.interval }})
+        )
+    {%- endif -%}
 {%- endmacro -%}
-
 
 {% macro cluster_by(raw_cluster_by) %}
   {%- if raw_cluster_by is not none -%}
-  cluster by
-  {% if raw_cluster_by is string -%}
+  cluster by {% if raw_cluster_by is string -%}
     {% set raw_cluster_by = [raw_cluster_by] %}
   {%- endif -%}
   {%- for cluster in raw_cluster_by -%}
     {{ cluster }}
-    {%- if not loop.last -%},{%- endif -%}
+    {%- if not loop.last -%}, {% endif -%}
   {%- endfor -%}
 
   {% endif %}
@@ -63,19 +64,24 @@
   {%- set raw_labels = config.get('labels', []) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
 
+  {%- set partition_config = adapter.parse_partition_by(raw_partition_by) -%}
+
   {{ sql_header if sql_header is not none }}
 
   create or replace table {{ relation }}
-  {{ partition_by(raw_partition_by) }}
+  {{ partition_by(partition_config) }}
   {{ cluster_by(raw_cluster_by) }}
   {{ bigquery_table_options(
-      persist_docs=raw_persist_docs, temporary=temporary, kms_key_name=raw_kms_key_name,
-      labels=raw_labels) }}
+      persist_docs=raw_persist_docs,
+      temporary=temporary,
+      kms_key_name=raw_kms_key_name,
+      labels=raw_labels
+  ) }}
   as (
     {{ sql }}
   );
-{%- endmacro -%}
 
+{%- endmacro -%}
 
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}

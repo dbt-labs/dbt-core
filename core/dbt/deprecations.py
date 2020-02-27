@@ -108,6 +108,26 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     '''
 
 
+class BigQueryPartitionByStringDeprecation(DBTDeprecation):
+    _name = 'bq-partition-by-string'
+
+    _description = '''
+    As of dbt v0.16.0, the `partition_by` config in BigQuery accepts a
+    dictionary containing `field` and `data_type`.
+
+
+    - Provided partition_by: {raw_partition_by}
+
+
+    - dbt inferred: {inferred_partition_by}
+
+
+
+    For more information, see:
+    https://docs.getdbt.com/docs/upgrading-to-0-16-0
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
 a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -151,6 +171,7 @@ deprecations_list: List[DBTDeprecation] = [
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),
     ModelsKeyNonModelDeprecation(),
+    BigQueryPartitionByStringDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {
