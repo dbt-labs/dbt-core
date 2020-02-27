@@ -91,7 +91,7 @@ class PostgresConnectionManager(SQLConnectionManager):
                 search_path.replace(' ', '\\ '))
 
         if credentials.sslmode:
-             kwargs['sslmode'] = credentials.sslmode
+            kwargs['sslmode'] = credentials.sslmode
 
         try:
             handle = psycopg2.connect(
