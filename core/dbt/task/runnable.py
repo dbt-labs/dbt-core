@@ -6,6 +6,8 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable
 
 from dbt.task.base import ConfiguredTask
+# TODO: move this...
+from dbt.adapters.base.impl import SchemaSearchMap
 from dbt.adapters.factory import get_adapter
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
@@ -376,23 +378,36 @@ class GraphRunnableTask(ManifestTask):
         return len(failures) == 0
 
     def get_model_schemas(
-        self, selected_uids: Iterable[str]
-    ) -> Set[Tuple[str, str]]:
+        self, adapter, selected_uids: Iterable[str]
+    ) -> SchemaSearchMap:
         if self.manifest is None:
             raise InternalException('manifest was None in get_model_schemas')
+        search_map = SchemaSearchMap()
 
-        schemas: Set[Tuple[str, str]] = set()
         for node in self.manifest.nodes.values():
             if node.unique_id not in selected_uids:
                 continue
             if node.is_refable and not node.is_ephemeral:
-                schemas.add((node.database, node.schema))
+                relation = adapter.Relation.create_from(self.config, node)
+                # we're going to be creating these schemas, so preserve the
+                # case.
+                search_map.add(relation, preserve_case=True)
 
-        return schemas
+        return search_map
 
     def create_schemas(self, adapter, selected_uids: Iterable[str]):
-        required_schemas = self.get_model_schemas(selected_uids)
-        required_databases = set(db for db, _ in required_schemas)
+        required_schemas = self.get_model_schemas(adapter, selected_uids)
+        # we want the string form of the information schema database
+        required_databases: List[str] = []
+        for info in required_schemas:
+            include_policy = info.include_policy.replace(
+                schema=False, identifier=False, database=True
+            )
+            db_only = info.replace(
+                include_policy=include_policy,
+                information_schema_view=None,
+            )
+            required_databases.append(str(db_only))
 
         existing_schemas_lowered: Set[Tuple[str, str]] = set()
 
@@ -418,8 +433,12 @@ class GraphRunnableTask(ManifestTask):
             for ls_future in as_completed(list_futures):
                 existing_schemas_lowered.update(ls_future.result())
 
-            for db, schema in required_schemas:
-                db_schema = (db.lower(), schema.lower())
+            for info, schema in required_schemas.search():
+                db = info.database
+                lower_schema: Optional[str] = None
+                if schema is not None:
+                    lower_schema = schema.lower()
+                db_schema = (db.lower(), lower_schema)
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
                     create_futures.append(

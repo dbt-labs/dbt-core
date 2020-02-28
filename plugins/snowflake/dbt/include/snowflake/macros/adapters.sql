@@ -79,6 +79,24 @@
 
 {% endmacro %}
 
+{% macro snowflake__list_schemas(database) -%}
+  {# 10k limit from here: https://docs.snowflake.net/manuals/sql-reference/sql/show-schemas.html#usage-notes #}
+  {% set maximum = 10000 %}
+  {% set sql -%}
+    show terse schemas in database {{ database }}
+    limit {{ maximum }}
+  {%- endset %}
+  {% set result = run_query(sql) %}
+  {% if (result | length) >= maximum %}
+    {% set msg %}
+      Too many schemas in database {{ database }}! dbt can only get
+      information about databases with fewer than {{ maximum }} schemas.
+    {% endset %}
+    {% do exceptions.raise_compiler_error(msg) %}
+  {% endif %}
+  {{ return(result) }}
+{% endmacro %}
+
 
 {% macro snowflake__list_relations_without_caching(information_schema, schema) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}

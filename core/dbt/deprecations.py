@@ -36,22 +36,6 @@ class DBTDeprecation:
             active_deprecations.add(self.name)
 
 
-class GenerateSchemaNameSingleArgDeprecated(DBTDeprecation):
-    _name = 'generate-schema-name-single-arg'
-
-    _description = '''\
-    As of dbt v0.14.0, the `generate_schema_name` macro accepts a second "node"
-    argument. The one-argument form of `generate_schema_name` is deprecated,
-    and will become unsupported in a future release.
-
-
-
-    For more information, see:
-
-    https://docs.getdbt.com/v0.14/docs/upgrading-to-014
-    '''
-
-
 class MaterializationReturnDeprecation(DBTDeprecation):
     _name = 'materialization-return'
 
@@ -166,7 +150,6 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
-    GenerateSchemaNameSingleArgDeprecated(),
     MaterializationReturnDeprecation(),
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),

@@ -1,8 +1,9 @@
-from typing import Mapping, Any, Optional
+from typing import Mapping, Any, Optional, List
 
 import agate
 
 from dbt.adapters.sql import SQLAdapter
+from dbt.adapters.sql.impl import LIST_SCHEMAS_MACRO_NAME
 from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
 from dbt.adapters.snowflake import SnowflakeColumn
@@ -81,3 +82,13 @@ class SnowflakeAdapter(SQLAdapter):
     ) -> None:
         if context is not None:
             self._use_warehouse(context)
+
+    def list_schemas(self, database: str) -> List[str]:
+        results = self.execute_macro(
+            LIST_SCHEMAS_MACRO_NAME,
+            kwargs={'database': database}
+        )
+        # this uses 'show terse schemas in database', and the column name we
+        # want is 'name'
+
+        return [row['name'] for row in results]

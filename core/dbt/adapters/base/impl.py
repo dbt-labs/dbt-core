@@ -124,23 +124,30 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
     """A utility class to keep track of what information_schema tables to
     search for what schemas
     """
-    def add(self, relation: BaseRelation):
+    def add(self, relation: BaseRelation, preserve_case=False):
         key = relation.information_schema_only()
         if key not in self:
             self[key] = set()
-        lowered: Optional[str] = None
+        schema: Optional[str] = None
         if relation.schema is not None:
-            lowered = relation.schema.lower()
-        self[key].add(lowered)
+            if preserve_case:
+                schema = relation.schema
+            else:
+                schema = relation.schema.lower()
+        self[key].add(schema)
 
-    def search(self):
+    def search(self) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
         for information_schema_name, schemas in self.items():
             for schema in schemas:
                 yield information_schema_name, schema
 
-    def schemas_searched(self):
-        result: Set[Tuple[str, str]] = set()
+    def schemas_searched(self) -> Set[Tuple[str, Optional[str]]]:
+        result: Set[Tuple[str, Optional[str]]] = set()
         for information_schema_name, schemas in self.items():
+            if information_schema_name.database is None:
+                raise InternalException(
+                    'Got a None database in an information schema!'
+                )
             result.update(
                 (information_schema_name.database, schema)
                 for schema in schemas
