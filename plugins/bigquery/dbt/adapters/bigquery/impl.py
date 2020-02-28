@@ -180,6 +180,9 @@ class BigQueryAdapter(BaseAdapter):
 
     @available
     def list_schemas(self, database: str) -> List[str]:
+        # the database string we get here is potentially quoted. Strip that off
+        # for the API call.
+        database = database.strip('`')
         conn = self.connections.get_thread_connection()
         client = conn.handle
 
