@@ -9,8 +9,9 @@ import dbt.clients.gcloud
 import dbt.clients.agate_helper
 import dbt.links
 
-from dbt.adapters.base import BaseAdapter, available, RelationType
-from dbt.adapters.base.impl import SchemaSearchMap
+from dbt.adapters.base import (
+    BaseAdapter, available, RelationType, SchemaSearchMap
+)
 from dbt.adapters.bigquery.relation import (
     BigQueryRelation, BigQueryInformationSchema
 )

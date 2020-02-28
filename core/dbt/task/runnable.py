@@ -6,8 +6,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable
 
 from dbt.task.base import ConfiguredTask
-# TODO: move this...
-from dbt.adapters.base.impl import SchemaSearchMap
+from dbt.adapters.base import SchemaSearchMap
 from dbt.adapters.factory import get_adapter
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
@@ -409,7 +408,7 @@ class GraphRunnableTask(ManifestTask):
             )
             required_databases.append(str(db_only))
 
-        existing_schemas_lowered: Set[Tuple[str, str]] = set()
+        existing_schemas_lowered: Set[Tuple[str, Optional[str]]] = set()
 
         def list_schemas(db: str) -> List[Tuple[str, str]]:
             with adapter.connection_named(f'list_{db}'):
@@ -434,10 +433,15 @@ class GraphRunnableTask(ManifestTask):
                 existing_schemas_lowered.update(ls_future.result())
 
             for info, schema in required_schemas.search():
-                db = info.database
+                if info.database is None:
+                    raise InternalException(
+                        'Got an information schema with no database!'
+                    )
+                db: str = info.database
                 lower_schema: Optional[str] = None
                 if schema is not None:
                     lower_schema = schema.lower()
+
                 db_schema = (db.lower(), lower_schema)
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
