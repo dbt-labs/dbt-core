@@ -34,7 +34,10 @@ from dbt.utils import filter_null_values, executor
 from dbt.adapters.base.connections import Connection, AdapterResponse
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
-    ComponentName, BaseRelation, InformationSchema, SchemaSearchMap
+    ComponentName,
+    BaseRelation,
+    InformationSchema,
+    SchemaSearchMap,
 )
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.cache import RelationsCache, _make_key

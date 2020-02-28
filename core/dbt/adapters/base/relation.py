@@ -416,6 +416,7 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
     search for what schemas. The schema values are all lowercased to avoid
     duplication.
     """
+
     def add(self, relation: BaseRelation):
         key = relation.information_schema_only()
         if key not in self:
@@ -440,14 +441,13 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
                 dbt.exceptions.raise_compiler_error(str(seen))
 
         for information_schema_name, schema in self.search():
-            path = {
-                'database': information_schema_name.database,
-                'schema': schema
-            }
-            new.add(information_schema_name.incorporate(
-                path=path,
-                quote_policy={'database': False},
-                include_policy={'database': False},
-            ))
+            path = {"database": information_schema_name.database, "schema": schema}
+            new.add(
+                information_schema_name.incorporate(
+                    path=path,
+                    quote_policy={"database": False},
+                    include_policy={"database": False},
+                )
+            )
 
         return new
