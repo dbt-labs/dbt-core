@@ -129,13 +129,18 @@ class SnowflakeCredentials(Credentials):
 
     def _get_private_key(self):
         """Get Snowflake private key by path or None."""
-        if not self.private_key_path or self.private_key_passphrase is None:
+        if not self.private_key_path:
             return None
+
+        if self.private_key_passphrase:
+            encoded_passphrase = self.private_key_passphrase.encode()
+        else:
+            encoded_passphrase = None
 
         with open(self.private_key_path, 'rb') as key:
             p_key = serialization.load_pem_private_key(
                 key.read(),
-                password=self.private_key_passphrase.encode(),
+                password=encoded_passphrase,
                 backend=default_backend())
 
         return p_key.private_bytes(
