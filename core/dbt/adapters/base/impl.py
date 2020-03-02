@@ -961,11 +961,12 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         macro_function = MacroGenerator(macro, macro_context)
 
-        try:
-            result = macro_function(**kwargs)
-        finally:
-            if release:
-                self.release_connection()
+        with self.connections.exception_handler(f'macro {macro_name}'):
+            try:
+                result = macro_function(**kwargs)
+            finally:
+                if release:
+                    self.release_connection()
         return result
 
     @classmethod

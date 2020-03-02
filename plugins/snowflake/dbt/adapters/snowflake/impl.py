@@ -8,7 +8,7 @@ from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
 from dbt.adapters.snowflake import SnowflakeColumn
 from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import RuntimeException, DatabaseException
 from dbt.utils import filter_null_values
 
 
@@ -84,10 +84,17 @@ class SnowflakeAdapter(SQLAdapter):
             self._use_warehouse(context)
 
     def list_schemas(self, database: str) -> List[str]:
-        results = self.execute_macro(
-            LIST_SCHEMAS_MACRO_NAME,
-            kwargs={'database': database}
-        )
+        try:
+            results = self.execute_macro(
+                LIST_SCHEMAS_MACRO_NAME,
+                kwargs={'database': database}
+            )
+        except DatabaseException as exc:
+            msg = (
+                f'Database error while listing schemas in database '
+                f'"{database}"\n{exc}'
+            )
+            raise RuntimeException(msg)
         # this uses 'show terse schemas in database', and the column name we
         # want is 'name'
 
