@@ -912,7 +912,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         macro_function = MacroGenerator(macro, macro_context)
 
-        with self.connections.exception_handler(f'macro {macro_name}'):
+        with self.connections.exception_handler(f"macro {macro_name}"):
             result = macro_function(**kwargs)
         return result
 
