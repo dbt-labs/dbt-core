@@ -82,7 +82,9 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
         # be filtered out
         if table_schema is None:
             return False
-        return (table_database.lower(), table_schema.lower()) in schemas
+        # Since we parse the data from the yaml, so we explicitly want to cast
+        # it to a string
+        return (str(table_database).lower(), str(table_schema).lower()) in schemas
     return test
 
 
