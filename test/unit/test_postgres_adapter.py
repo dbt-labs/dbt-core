@@ -134,6 +134,7 @@ class TestPostgresAdapter(unittest.TestCase):
             connect_timeout=10,
             keepalives_idle=256)
 
+
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_role(self, psycopg2):
         self.config.credentials = self.config.credentials.replace(role='somerole')
@@ -158,6 +159,22 @@ class TestPostgresAdapter(unittest.TestCase):
             port=5432,
             connect_timeout=10,
             options="-c search_path=test")
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_sslmode(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(sslmode="require")
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=10,
+            sslmode="require")
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_schema_with_space(self, psycopg2):

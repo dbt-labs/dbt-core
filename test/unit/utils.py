@@ -25,6 +25,7 @@ def normalize(path):
 
 class Obj:
     which = 'blah'
+    single_threaded = False
 
 
 def mock_connection(name):
@@ -133,3 +134,32 @@ class ContractTestCase(TestCase):
 
         with self.assertRaises(ValidationError):
             cls.from_dict(dct)
+
+
+def generate_name_macros(package):
+    from dbt.contracts.graph.parsed import ParsedMacro
+    from dbt.node_types import NodeType
+    name_sql = {}
+    for component in ('database', 'schema', 'alias'):
+        if component == 'alias':
+            source = 'node.name'
+        else:
+            source = f'target.{component}'
+        name = f'generate_{component}_name'
+        sql = f'{{% macro {name}(value, node) %}} {{% if value %}} {{{{ value }}}} {{% else %}} {{{{ {source} }}}} {{% endif %}} {{% endmacro %}}'
+        name_sql[name] = sql
+
+    all_sql = '\n'.join(name_sql.values())
+    for name, sql in name_sql.items():
+        pm = ParsedMacro(
+            name=name,
+            resource_type=NodeType.Macro,
+            unique_id=f'macro.{package}.{name}',
+            package_name=package,
+            original_file_path=normalize('macros/macro.sql'),
+            root_path='./dbt_modules/root',
+            path=normalize('macros/macro.sql'),
+            raw_sql=all_sql,
+            macro_sql=sql,
+        )
+        yield pm

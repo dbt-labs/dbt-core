@@ -383,3 +383,66 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         mock_bq.QueryJobConfig.assert_called_once()
         self.mock_client.query.assert_called_once_with(
           'sql', job_config=mock_bq.QueryJobConfig())
+
+
+class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
+    def test_parse_partition_by(self):
+        adapter = self.get_adapter('oauth')
+
+        self.assertEqual(
+            adapter.parse_partition_by("date(ts)").to_dict(), {
+                "field": "ts",
+                "data_type": "timestamp"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by("ts").to_dict(), {
+                "field": "ts",
+                "data_type": "date"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date"
+            }
+        )
+
+        # Invalid, should raise an error
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by({})
+
+        # passthrough
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "id",
+                "data_type": "int64",
+                "range": {
+                    "start": 1,
+                    "end": 100,
+                    "interval": 20
+                }
+            }).to_dict(), {
+                "field": "id",
+                "data_type": "int64",
+                "range": {
+                    "start": 1,
+                    "end": 100,
+                    "interval": 20
+                }
+            }
+        )

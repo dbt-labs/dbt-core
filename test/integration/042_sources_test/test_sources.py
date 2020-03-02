@@ -377,6 +377,19 @@ class TestMalformedSources(BaseSourcesTest):
             self.run_dbt_with_vars(['seed'], strict=True)
 
 
+class TestRenderingInSourceTests(BaseSourcesTest):
+    @property
+    def models(self):
+        return "malformed_schema_tests"
+
+    @use_profile('postgres')
+    def test_postgres_render_in_source_tests(self):
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        # syntax error at or near "{", because the test isn't rendered
+        self.run_dbt_with_vars(['test'], expect_pass=False)
+
+
 class TestUnquotedSources(SuccessfulSourcesTest):
     @property
     def project_config(self):

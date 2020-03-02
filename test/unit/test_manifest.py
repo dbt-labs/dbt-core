@@ -633,9 +633,7 @@ class MixedManifestTest(unittest.TestCase):
         self.assertEqual(compiled_count, 2)
 
 
-
 # Tests of the manifest search code (find_X_by_Y)
-
 
 def MockMacro(package, name='my_macro', kwargs={}):
     macro = mock.MagicMock(
@@ -654,6 +652,11 @@ def MockMaterialization(package, name='my_materialization', adapter_type=None, k
         adapter_type = 'default'
     kwargs['adapter_type'] = adapter_type
     return MockMacro(package, f'materialization_{name}_{adapter_type}', kwargs)
+
+
+def MockGenerateMacro(package, component='some_component', kwargs={}):
+    name = f'generate_{component}_name'
+    return MockMacro(package, name=name, kwargs=kwargs)
 
 
 def MockSource(package, source_name, name, kwargs={}):
@@ -834,43 +837,43 @@ generate_name_parameter_sets = [
 
     # just root
     FindMacroSpec(
-        macros=[MockMacro('root')],
+        macros=[MockGenerateMacro('root')],
         expected='root',
     ),
 
     # just dep
     FindMacroSpec(
-        macros=[MockMacro('dep')],
+        macros=[MockGenerateMacro('dep')],
         expected=None,
     ),
 
     # just dbt
     FindMacroSpec(
-        macros=[MockMacro('dbt')],
+        macros=[MockGenerateMacro('dbt')],
         expected='dbt',
     ),
 
     # root overrides dep
     FindMacroSpec(
-        macros=[MockMacro('root'), MockMacro('dep')],
+        macros=[MockGenerateMacro('root'), MockGenerateMacro('dep')],
         expected='root',
     ),
 
     # root overrides core
     FindMacroSpec(
-        macros=[MockMacro('root'), MockMacro('dbt')],
+        macros=[MockGenerateMacro('root'), MockGenerateMacro('dbt')],
         expected='root',
     ),
 
     # dep overrides core
     FindMacroSpec(
-        macros=[MockMacro('dep'), MockMacro('dbt')],
+        macros=[MockGenerateMacro('dep'), MockGenerateMacro('dbt')],
         expected='dbt',
     ),
 
     # root overrides dep overrides core
     FindMacroSpec(
-        macros=[MockMacro('root'), MockMacro('dep'), MockMacro('dbt')],
+        macros=[MockGenerateMacro('root'), MockGenerateMacro('dep'), MockGenerateMacro('dbt')],
         expected='root',
     ),
 ]
@@ -879,7 +882,9 @@ generate_name_parameter_sets = [
 @pytest.mark.parametrize('macros,expected', generate_name_parameter_sets, ids=id_macro)
 def test_find_generate_macro_by_name(macros, expected):
     manifest = make_manifest(macros=macros)
-    result = manifest.find_generate_macro_by_name(name='my_macro', root_project_name='root')
+    result = manifest.find_generate_macro_by_name(
+        component='some_component', root_project_name='root'
+    )
     if expected is None:
         assert result is expected
     else:

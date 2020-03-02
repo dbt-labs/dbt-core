@@ -32,7 +32,7 @@ from dbt.contracts.graph.unparsed import (
     FreshnessThreshold, ExternalTable, Docs
 )
 
-from .utils import config_from_parts_or_dicts, normalize
+from .utils import config_from_parts_or_dicts, normalize, generate_name_macros
 
 
 def get_abs_os_path(unix_path):
@@ -41,6 +41,32 @@ def get_abs_os_path(unix_path):
 
 class BaseParserTest(unittest.TestCase):
     maxDiff = None
+
+    def _generate_macros(self):
+        name_sql = {}
+        for component in ('database', 'schema', 'alias'):
+            if component == 'alias':
+                source = 'node.name'
+            else:
+                source = f'target.{component}'
+            name = f'generate_{component}_name'
+            sql = f'{{% macro {name}(value, node) %}} {{% if value %}} {{{{ value }}}} {{% else %}} {{{{ {source} }}}} {{% endif %}} {{% endmacro %}}'
+            name_sql[name] = sql
+
+        all_sql = '\n'.join(name_sql.values())
+        for name, sql in name_sql.items():
+            pm = ParsedMacro(
+                name=name,
+                resource_type=NodeType.Macro,
+                unique_id=f'macro.root.{name}',
+                package_name='root',
+                original_file_path=normalize('macros/macro.sql'),
+                root_path=get_abs_os_path('./dbt_modules/root'),
+                path=normalize('macros/macro.sql'),
+                raw_sql=all_sql,
+                macro_sql=sql,
+            )
+            yield pm
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -98,7 +124,9 @@ class BaseParserTest(unittest.TestCase):
         self.parser_patcher = mock.patch('dbt.parser.base.get_adapter')
         self.factory_parser = self.parser_patcher.start()
 
-        self.macro_manifest = Manifest.from_macros()
+        self.macro_manifest = Manifest.from_macros(
+            macros={m.unique_id: m for m in generate_name_macros('root')}
+        )
 
     def tearDown(self):
         self.parser_patcher.stop()

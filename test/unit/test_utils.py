@@ -139,3 +139,16 @@ class TestDeepMap(unittest.TestCase):
         with self.assertRaises(dbt.exceptions.DbtConfigError):
             dbt.utils.deep_map(lambda x, _: x, {'foo': object()})
 
+
+
+class TestBytesFormatting(unittest.TestCase):
+
+    def test__simple_cases(self):
+        self.assertEqual(dbt.utils.format_bytes(-1), '-1.0 Bytes')
+        self.assertEqual(dbt.utils.format_bytes(0), '0.0 Bytes')
+        self.assertEqual(dbt.utils.format_bytes(20), '20.0 Bytes')
+        self.assertEqual(dbt.utils.format_bytes(1030), '1.0 KB')
+        self.assertEqual(dbt.utils.format_bytes(1024**2*1.5), '1.5 MB')
+        self.assertEqual(dbt.utils.format_bytes(1024**3*52.6), '52.6 GB')
+        self.assertEqual(dbt.utils.format_bytes(1024**4*128), '128.0 TB')
+        self.assertEqual(dbt.utils.format_bytes(1024**5+1), '> 1024 TB')

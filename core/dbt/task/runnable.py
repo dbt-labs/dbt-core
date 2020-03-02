@@ -1,8 +1,9 @@
 import os
 import time
+from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
-from typing import Optional, Dict, List, Set, Tuple
+from typing import Optional, Dict, List, Set, Tuple, Iterable
 
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
@@ -374,7 +375,9 @@ class GraphRunnableTask(ManifestTask):
         failures = [r for r in results if r.error or r.fail]
         return len(failures) == 0
 
-    def get_model_schemas(self, selected_uids):
+    def get_model_schemas(
+        self, selected_uids: Iterable[str]
+    ) -> Set[Tuple[str, str]]:
         if self.manifest is None:
             raise InternalException('manifest was None in get_model_schemas')
 
@@ -387,18 +390,45 @@ class GraphRunnableTask(ManifestTask):
 
         return schemas
 
-    def create_schemas(self, adapter, selected_uids):
+    def create_schemas(self, adapter, selected_uids: Iterable[str]):
         required_schemas = self.get_model_schemas(selected_uids)
         required_databases = set(db for db, _ in required_schemas)
 
         existing_schemas_lowered: Set[Tuple[str, str]] = set()
-        for db in required_databases:
-            existing_schemas_lowered.update(
-                (db.lower(), s.lower()) for s in adapter.list_schemas(db))
 
-        for db, schema in required_schemas:
-            if (db.lower(), schema.lower()) not in existing_schemas_lowered:
+        def list_schemas(db: str) -> List[Tuple[str, str]]:
+            with adapter.connection_named(f'list_{db}'):
+                return [
+                    (db.lower(), s.lower())
+                    for s in adapter.list_schemas(db)
+                ]
+
+        def create_schema(db: str, schema: str) -> None:
+            with adapter.connection_named(f'create_{db}_{schema}'):
                 adapter.create_schema(db, schema)
+
+        list_futures = []
+        create_futures = []
+
+        with dbt.utils.executor(self.config) as tpe:
+            list_futures = [
+                tpe.submit(list_schemas, db) for db in required_databases
+            ]
+
+            for ls_future in as_completed(list_futures):
+                existing_schemas_lowered.update(ls_future.result())
+
+            for db, schema in required_schemas:
+                db_schema = (db.lower(), schema.lower())
+                if db_schema not in existing_schemas_lowered:
+                    existing_schemas_lowered.add(db_schema)
+                    create_futures.append(
+                        tpe.submit(create_schema, db, schema)
+                    )
+
+            for create_future in as_completed(create_futures):
+                # trigger/re-raise any excceptions while creating schemas
+                create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
         return ExecutionResult(
