@@ -1,36 +1,31 @@
 
 
-{% macro get_merge_sql(target, source, unique_key, dest_columns) -%}
-  {{ adapter_macro('get_merge_sql', target, source, unique_key, dest_columns) }}
+{% macro get_merge_sql(target, source, unique_key, dest_columns, predicates=none) -%}
+  {{ adapter_macro('get_merge_sql', target, source, unique_key, dest_columns, predicates) }}
 {%- endmacro %}
+
 
 {% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
   {{ adapter_macro('get_delete_insert_merge_sql', target, source, unique_key, dest_columns) }}
 {%- endmacro %}
 
 
-{% macro get_quoted_csv(column_names) %}
-    {% set quoted = [] %}
-    {% for col in column_names -%}
-        {%- do quoted.append(adapter.quote(col)) -%}
-    {%- endfor %}
-
-    {%- set dest_cols_csv = quoted | join(', ') -%}
-    {{ return(dest_cols_csv) }}
-{% endmacro %}
-
-
-{% macro common_get_merge_sql(target, source, unique_key, dest_columns) -%}
-    {%- set dest_cols_csv =  get_quoted_csv(dest_columns | map(attribute="name")) -%}
-
-    merge into {{ target }} as DBT_INTERNAL_DEST
-    using {{ source }} as DBT_INTERNAL_SOURCE
+{% macro default__get_merge_sql(target, source, unique_key, dest_columns, predicates) -%}
+    {%- set predicates = [] if predicates is none else [] + predicates -%}
+    {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
 
     {% if unique_key %}
-        on DBT_INTERNAL_SOURCE.{{ unique_key }} = DBT_INTERNAL_DEST.{{ unique_key }}
+        {% set unique_key_match %}
+            DBT_INTERNAL_SOURCE.{{ unique_key }} = DBT_INTERNAL_DEST.{{ unique_key }}
+        {% endset %}
+        {% do predicates.append(unique_key_match) %}
     {% else %}
-        on FALSE
+        {% do predicates.append('FALSE') %}
     {% endif %}
+
+    merge into {{ target }} as DBT_INTERNAL_DEST
+        using {{ source }} as DBT_INTERNAL_SOURCE
+        on {{ predicates | join(' and ') }}
 
     {% if unique_key %}
     when matched then update set
@@ -45,16 +40,17 @@
     values
         ({{ dest_cols_csv }})
 
-{%- endmacro %}
+{% endmacro %}
 
-{% macro default__get_merge_sql(target, source, unique_key, dest_columns) -%}
-    {% set typename = adapter.type() %}
 
-    {{ exceptions.raise_compiler_error(
-        'get_merge_sql is not implemented for {}'.format(typename)
-       )
-    }}
+{% macro get_quoted_csv(column_names) %}
+    {% set quoted = [] %}
+    {% for col in column_names -%}
+        {%- do quoted.append(adapter.quote(col)) -%}
+    {%- endfor %}
 
+    {%- set dest_cols_csv = quoted | join(', ') -%}
+    {{ return(dest_cols_csv) }}
 {% endmacro %}
 
 

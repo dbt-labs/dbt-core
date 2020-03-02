@@ -210,7 +210,20 @@ class DBTIntegrationTest(unittest.TestCase):
                         'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
                         'schema': self.unique_schema(),
                         'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
-                    }
+                    },
+                    'oauth': {
+                        'type': 'snowflake',
+                        'threads': 4,
+                        'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
+                        'user': os.getenv('SNOWFLAKE_TEST_USER'),
+                        'oauth_client_id': os.getenv('SNOWFLAKE_TEST_OAUTH_CLIENT_ID'),
+                        'oauth_client_secret': os.getenv('SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET'),
+                        'token': os.getenv('SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN'),
+                        'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
+                        'schema': self.unique_schema(),
+                        'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
+                        'authenticator': 'oauth',
+                    },
                 },
                 'target': 'default2'
             }
@@ -619,7 +632,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                if conn.handle and not conn.handle.closed:
+                if conn.handle and not getattr(conn.handle, 'closed', True):
                     conn.handle.rollback()
                 print(sql)
                 print(e)
@@ -1065,16 +1078,16 @@ class DBTIntegrationTest(unittest.TestCase):
             )
         )
 
-    def assertTableDoesNotExist(self, table, schema=None):
-        columns = self.get_table_columns(table, schema)
+    def assertTableDoesNotExist(self, table, schema=None, database=None):
+        columns = self.get_table_columns(table, schema, database)
 
         self.assertEqual(
             len(columns),
             0
         )
 
-    def assertTableDoesExist(self, table, schema=None):
-        columns = self.get_table_columns(table, schema)
+    def assertTableDoesExist(self, table, schema=None, database=None):
+        columns = self.get_table_columns(table, schema, database)
 
         self.assertGreater(
             len(columns),

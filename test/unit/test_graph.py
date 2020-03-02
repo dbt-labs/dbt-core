@@ -11,9 +11,11 @@ import dbt.parser
 import dbt.config
 import dbt.utils
 import dbt.parser.manifest
-from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash
+from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash, Manifest
+from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
+from dbt.node_types import NodeType
 
 try:
     from queue import Empty
@@ -22,7 +24,19 @@ except ImportError:
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, generate_name_macros
+
+
+def MockMacro(package, name='my_macro', kwargs={}):
+    macro = MagicMock(
+        __class__=ParsedMacro,
+        resource_type=NodeType.Macro,
+        package_name=package,
+        unique_id=f'macro.{package}.{name}',
+        **kwargs
+    )
+    macro.name = name
+    return macro
 
 
 class GraphTest(unittest.TestCase):
@@ -37,6 +51,7 @@ class GraphTest(unittest.TestCase):
         self.mock_hook_constructor.stop()
         self.load_patch.stop()
         self.load_source_file_patcher.stop()
+        # self.relation_update_patcher.stop()
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -101,6 +116,12 @@ class GraphTest(unittest.TestCase):
         self.mock_source_file = self.load_source_file_patcher.start()
         self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 
+        # self.relation_update_patcher = patch.object(RelationUpdate, '_relation_components', lambda: [])
+        # self.mock_relation_update = self.relation_update_patcher.start()
+        self.internal_manifest = Manifest.from_macros(macros={
+            n.unique_id: n for n in generate_name_macros('test_models_compile')
+        })
+
         def filesystem_iter(iter_self):
             if 'sql' not in iter_self.extension:
                 return []
@@ -153,7 +174,7 @@ class GraphTest(unittest.TestCase):
 
     def load_manifest(self, config):
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.load()
+        loader.load(internal_manifest=self.internal_manifest)
         return loader.create_manifest()
 
     def test__single_model(self):
@@ -303,7 +324,7 @@ class GraphTest(unittest.TestCase):
         config = self.get_config()
 
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.load()
+        loader.load(internal_manifest=self.internal_manifest)
         loader.create_manifest()
         results = loader.results
 

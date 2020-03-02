@@ -1,3 +1,4 @@
+import re
 import unittest
 from contextlib import contextmanager
 from unittest.mock import patch, MagicMock, Mock
@@ -162,7 +163,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
 
     @patch('dbt.adapters.bigquery.impl.google.auth.default')
     @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
-    def test_location_value(self, mock_bq, mock_auth_default):
+    def test_location_user_agent(self, mock_bq, mock_auth_default):
         creds = MagicMock()
         mock_auth_default.return_value = (creds, MagicMock())
         adapter = self.get_adapter('loc')
@@ -173,7 +174,16 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         mock_client.assert_not_called()
         connection.handle
         mock_client.assert_called_once_with('dbt-unit-000000', creds,
-                                            location='Luna Station')
+                                            location='Luna Station',
+                                            client_info=HasUserAgent())
+
+
+class HasUserAgent:
+    PAT = re.compile(r'dbt-\d+\.\d+\.\d+[a-zA-Z]+\d+')
+
+    def __eq__(self, other):
+        compare = getattr(other, 'user_agent', '')
+        return bool(self.PAT.match(compare))
 
 
 class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
@@ -373,3 +383,66 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         mock_bq.QueryJobConfig.assert_called_once()
         self.mock_client.query.assert_called_once_with(
           'sql', job_config=mock_bq.QueryJobConfig())
+
+
+class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
+    def test_parse_partition_by(self):
+        adapter = self.get_adapter('oauth')
+
+        self.assertEqual(
+            adapter.parse_partition_by("date(ts)").to_dict(), {
+                "field": "ts",
+                "data_type": "timestamp"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by("ts").to_dict(), {
+                "field": "ts",
+                "data_type": "date"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date"
+            }
+        )
+
+        # Invalid, should raise an error
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by({})
+
+        # passthrough
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "id",
+                "data_type": "int64",
+                "range": {
+                    "start": 1,
+                    "end": 100,
+                    "interval": 20
+                }
+            }).to_dict(), {
+                "field": "id",
+                "data_type": "int64",
+                "range": {
+                    "start": 1,
+                    "end": 100,
+                    "interval": 20
+                }
+            }
+        )

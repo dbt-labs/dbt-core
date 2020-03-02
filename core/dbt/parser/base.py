@@ -2,7 +2,7 @@ import abc
 import itertools
 import os
 from typing import (
-    List, Dict, Any, Callable, Iterable, Optional, Generic, TypeVar
+    List, Dict, Any, Iterable, Generic, TypeVar
 )
 
 from hologram import ValidationError
@@ -11,7 +11,6 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.clients.system import load_file_contents
 from dbt.context.providers import generate_parser_model, generate_parser_macro
 import dbt.flags
-from dbt import deprecations
 from dbt import hooks
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
@@ -19,10 +18,10 @@ from dbt.config import Project, RuntimeConfig
 from dbt.contracts.graph.manifest import (
     Manifest, SourceFile, FilePath, FileHash
 )
-from dbt.contracts.graph.parsed import HasUniqueID, ParsedMacro
+from dbt.contracts.graph.parsed import HasUniqueID
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
-    CompilationException, validator_error_message
+    CompilationException, validator_error_message, InternalException
 )
 from dbt.node_types import NodeType
 from dbt.source_config import SourceConfig
@@ -39,7 +38,6 @@ IntermediateNode = TypeVar('IntermediateNode', bound=Any)
 FinalNode = TypeVar('FinalNode', bound=ManifestNodes)
 
 
-RelationUpdate = Callable[[Optional[str], IntermediateNode], str]
 ConfiguredBlockType = TypeVar('ConfiguredBlockType', bound=FileBlock)
 
 
@@ -94,6 +92,31 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
         self.macro_manifest = macro_manifest
 
 
+class RelationUpdate:
+    def __init__(
+        self, config: RuntimeConfig, manifest: Manifest, component: str
+    ) -> None:
+        macro = manifest.find_generate_macro_by_name(
+            component=component,
+            root_project_name=config.project_name,
+        )
+        if macro is None:
+            raise InternalException(
+                f'No macro with name generate_{component}_name found'
+            )
+
+        root_context = generate_parser_macro(macro, config, manifest, None)
+        self.updater = MacroGenerator(macro, root_context)
+        self.component = component
+
+    def __call__(
+        self, parsed_node: Any, config_dict: Dict[str, Any]
+    ) -> None:
+        override = config_dict.get(self.component)
+        new_value = self.updater(override, parsed_node).strip()
+        setattr(parsed_node, self.component, new_value)
+
+
 class ConfiguredParser(
     Parser[FinalNode],
     Generic[ConfiguredBlockType, IntermediateNode, FinalNode],
@@ -106,8 +129,16 @@ class ConfiguredParser(
         macro_manifest: Manifest,
     ) -> None:
         super().__init__(results, project, root_project, macro_manifest)
-        self._get_schema_func: Optional[RelationUpdate] = None
-        self._get_alias_func: Optional[RelationUpdate] = None
+
+        self._update_node_database = RelationUpdate(
+            manifest=macro_manifest, config=root_project, component='database'
+        )
+        self._update_node_schema = RelationUpdate(
+            manifest=macro_manifest, config=root_project, component='schema'
+        )
+        self._update_node_alias = RelationUpdate(
+            manifest=macro_manifest, config=root_project, component='alias'
+        )
 
     @abc.abstractclassmethod
     def get_compiled_path(cls, block: ConfiguredBlockType) -> str:
@@ -128,69 +159,6 @@ class ConfiguredParser(
     @property
     def default_database(self):
         return self.root_project.credentials.database
-
-    def _build_generate_macro_function(self, macro: ParsedMacro) -> Callable:
-        root_context = generate_parser_macro(
-            macro, self.root_project, self.macro_manifest, None
-        )
-        return MacroGenerator(macro, root_context)
-
-    def get_schema_func(self) -> RelationUpdate:
-        """The get_schema function is set by a few different things:
-            - if there is a 'generate_schema_name' macro in the root project,
-                it will be used.
-            - if that does not exist but there is a 'generate_schema_name'
-                macro in the 'dbt' internal project, that will be used
-            - if neither of those exist (unit tests?), a function that returns
-                the 'default schema' as set in the root project's 'credentials'
-                is used
-        """
-        if self._get_schema_func is not None:
-            return self._get_schema_func
-
-        get_schema_macro = self.macro_manifest.find_generate_macro_by_name(
-            name='generate_schema_name',
-            root_project_name=self.root_project.project_name,
-        )
-        # this is only true in tests!
-        if get_schema_macro is None:
-            def get_schema(custom_schema_name=None, node=None):
-                return self.default_schema
-        else:
-            get_schema = self._build_generate_macro_function(get_schema_macro)
-
-        self._get_schema_func = get_schema
-        return self._get_schema_func
-
-    def get_alias_func(self) -> RelationUpdate:
-        """The get_alias function is set by a few different things:
-            - if there is a 'generate_alias_name' macro in the root project,
-                it will be used.
-            - if that does not exist but there is a 'generate_alias_name'
-                macro in the 'dbt' internal project, that will be used
-            - if neither of those exist (unit tests?), a function that returns
-                the 'default alias' as set in the model's filename or alias
-                configuration.
-        """
-        if self._get_alias_func is not None:
-            return self._get_alias_func
-
-        get_alias_macro = self.macro_manifest.find_generate_macro_by_name(
-            name='generate_alias_name',
-            root_project_name=self.root_project.project_name,
-        )
-        # the generate_alias_name macro might not exist
-        if get_alias_macro is None:
-            def get_alias(custom_alias_name, node):
-                if custom_alias_name is None:
-                    return node.name
-                else:
-                    return custom_alias_name
-        else:
-            get_alias = self._build_generate_macro_function(get_alias_macro)
-
-        self._get_alias_func = get_alias
-        return self._get_alias_func
 
     def get_fqn(self, path: str, name: str) -> List[str]:
         """Get the FQN for the node. This impacts node selection and config
@@ -297,33 +265,6 @@ class ConfiguredParser(
                 parsed_node.raw_sql, context, parsed_node, capture_macros=True
             )
 
-    def update_parsed_node_schema(
-        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
-    ) -> None:
-        # Special macro defined in the global project. Use the root project's
-        # definition, not the current package
-        schema_override = config_dict.get('schema')
-        get_schema = self.get_schema_func()
-        try:
-            schema = get_schema(schema_override, parsed_node)
-        except dbt.exceptions.CompilationException as exc:
-            too_many_args = (
-                "macro 'dbt_macro__generate_schema_name' takes not more than "
-                "1 argument(s)"
-            )
-            if too_many_args not in str(exc):
-                raise
-            deprecations.warn('generate-schema-name-single-arg')
-            schema = get_schema(schema_override)  # type: ignore
-        parsed_node.schema = schema.strip()
-
-    def update_parsed_node_alias(
-        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
-    ) -> None:
-        alias_override = config_dict.get('alias')
-        get_alias = self.get_alias_func()
-        parsed_node.alias = get_alias(alias_override, parsed_node).strip()
-
     def update_parsed_node_config(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
@@ -333,6 +274,13 @@ class ConfiguredParser(
         # re-mangle hooks, in case we got new ones
         self._mangle_hooks(final_config_dict)
         parsed_node.config = parsed_node.config.from_dict(final_config_dict)
+
+    def update_parsed_node_name(
+        self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
+    ) -> None:
+        self._update_node_database(parsed_node, config_dict)
+        self._update_node_schema(parsed_node, config_dict)
+        self._update_node_alias(parsed_node, config_dict)
 
     def update_parsed_node(
         self, parsed_node: IntermediateNode, config: SourceConfig
@@ -347,15 +295,10 @@ class ConfiguredParser(
         model_tags = config_dict.get('tags', [])
         parsed_node.tags.extend(model_tags)
 
-        # do this once before we parse the node schema/alias, so
+        # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config(parsed_node, config_dict)
-
-        parsed_node.database = config_dict.get(
-            'database', self.default_database
-        ).strip()
-        self.update_parsed_node_schema(parsed_node, config_dict)
-        self.update_parsed_node_alias(parsed_node, config_dict)
+        self.update_parsed_node_name(parsed_node, config_dict)
 
         # at this point, we've collected our hooks. Use the node context to
         # render each hook and collect refs/sources

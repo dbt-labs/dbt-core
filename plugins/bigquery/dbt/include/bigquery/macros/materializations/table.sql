@@ -63,6 +63,13 @@
     {%- set should_create = (old_relation is none or exists_not_as_table) -%}
     {{ make_date_partitioned_table(model, target_relation, partitions, should_create, verbose) }}
   {% else %}
+    {%- set raw_partition_by = config.get('partition_by', none) -%}
+    {%- set partition_by = adapter.parse_partition_by(raw_partition_by) -%}
+    {%- set cluster_by = config.get('cluster_by', none) -%}
+    {% if not adapter.is_replaceable(old_relation, partition_by, cluster_by) %}
+      {% do log("Hard refreshing " ~ old_relation ~ " because it is not replaceable") %}
+      {% do adapter.drop_relation(old_relation) %}
+    {% endif %}
     {% call statement('main') -%}
       {{ create_table_as(False, target_relation, sql) }}
     {% endcall -%}

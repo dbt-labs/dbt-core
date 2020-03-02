@@ -29,13 +29,3 @@ sources:
         columns:
           - name: id
             description: "{{ doc('column_info') }}"
-
-macros:
-  - name: test_nothing
-    description: "{{ doc('macro_info') }}"
-    meta:
-      some_key: 100
-    arguments:
-      - name: model
-        type: Relation
-        description: "{{ doc('macro_arg_info') }}"
