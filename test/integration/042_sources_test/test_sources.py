@@ -207,7 +207,7 @@ class TestSources(SuccessfulSourcesTest):
         self.assertTableDoesNotExist('nonsource_descendant')
 
     @use_profile('postgres')
-    def test_yaml_parse_decimal(self):
+    def test_postgres_yaml_parse_decimal(self):
         results = self.run_dbt_with_vars([
             'run', '--models', 'source:19.25'
         ])
