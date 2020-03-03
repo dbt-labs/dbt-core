@@ -253,6 +253,9 @@ class PypiBuilder:
             shutil.rmtree(dist_path)
         if make:
             os.makedirs(dist_path)
+        build_path = path / 'build'
+        if build_path.exists():
+            shutil.rmtree(build_path)
         return dist_path
 
     @staticmethod
