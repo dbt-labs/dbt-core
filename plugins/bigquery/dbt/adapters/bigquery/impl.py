@@ -9,8 +9,9 @@ import dbt.clients.gcloud
 import dbt.clients.agate_helper
 import dbt.links
 
-from dbt.adapters.base import BaseAdapter, available, RelationType
-from dbt.adapters.base.impl import SchemaSearchMap
+from dbt.adapters.base import (
+    BaseAdapter, available, RelationType, SchemaSearchMap
+)
 from dbt.adapters.bigquery.relation import (
     BigQueryRelation, BigQueryInformationSchema
 )
@@ -179,6 +180,9 @@ class BigQueryAdapter(BaseAdapter):
 
     @available
     def list_schemas(self, database: str) -> List[str]:
+        # the database string we get here is potentially quoted. Strip that off
+        # for the API call.
+        database = database.strip('`')
         conn = self.connections.get_thread_connection()
         client = conn.handle
 
