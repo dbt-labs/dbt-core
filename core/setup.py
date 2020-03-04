@@ -58,9 +58,6 @@ setup(
         'sqlparse>=0.2.3,<0.4',
         'networkx>=2.3,<3',
         'minimal-snowplow-tracker==0.0.2',
-        # match snowflake-connector-python
-        'requests>=2.18.0,<2.23.0',
-        'idna<2.9',
         'colorama>=0.3.9,<0.5',
         'agate>=1.6,<2',
         'isodate>=0.6,<0.7',
@@ -71,6 +68,10 @@ setup(
         'logbook>=1.5,<1.6',
         'pytest-logbook>=1.2.0,<1.3',
         'typing-extensions>=3.7.4,<3.8',
+        # the following are all to match snowflake-connector-python
+        'requests>=2.18.0,<2.23.0',
+        'idna<2.9',
+        'cffi>=1.9,<1.14',
     ],
     zip_safe=False,
     classifiers=[

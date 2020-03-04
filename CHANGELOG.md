@@ -1,3 +1,8 @@
+## dbt 0.16.0rc2 (March 4, 2020)
+
+### Under the hood
+- Pin cffi to <1.14 to avoid a version conflict with snowflake-connector-python ([#2180](https://github.com/fishtown-analytics/dbt/issues/2180), [#2181](https://github.com/fishtown-analytics/dbt/pull/2181))
+
 ## dbt 0.16.0rc1 (March 4, 2020)
 
 ### Breaking changes
@@ -14,7 +19,7 @@
   - Support hiding models from the docs (these nodes still render in the DAG view as "hidden") ([dbt-docs#71](https://github.com/fishtown-analytics/dbt-docs/pull/71))
   - Render `meta` fields as "details" in node views ([dbt-docs#73](https://github.com/fishtown-analytics/dbt-docs/pull/73))
   - Default to lower-casing Snowflake columns specified in all-caps ([dbt-docs#74](https://github.com/fishtown-analytics/dbt-docs/pull/74))
-  - Upgrade site dependencies 
+  - Upgrade site dependencies
 - Support `insert_overwrite` materializtion for BigQuery incremental models ([#2153](https://github.com/fishtown-analytics/dbt/pull/2153))
 
 
