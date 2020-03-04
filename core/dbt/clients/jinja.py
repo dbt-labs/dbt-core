@@ -436,7 +436,7 @@ def create_undefined(node=None):
             return self
 
         def __reduce__(self):
-            raise_compiler_error(f'{self.name} is undefined', node=node)
+            raise_compiler_error(f"{self.name} is undefined", node=node)
 
     return Undefined
 
@@ -467,7 +467,7 @@ def get_environment(
     }
 
     if capture_macros:
-        args['undefined'] = create_undefined(node)
+        args["undefined"] = create_undefined(node)
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
