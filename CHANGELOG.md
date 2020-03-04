@@ -1,4 +1,4 @@
-## dbt 0.16.next (Release TBD)
+## dbt 0.16.0rc1 (March 4, 2020)
 
 ### Breaking changes
 - When overriding the snowflake__list_schemas macro, you must now run a result with a column named 'name' instead of the first column ([#2171](https://github.com/fishtown-analytics/dbt/pull/2171))
