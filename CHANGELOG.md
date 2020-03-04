@@ -7,6 +7,15 @@
 ### Features
 - Remove the requirement to have a passphrase when using Snowflake key pair authentication ([#1805](https://github.com/fishtown-analytics/dbt/issues/1805), [#2164](https://github.com/fishtown-analytics/dbt/pull/2164))
 - Adding optional "sslmode" parameter for postgres ([#2152](https://github.com/fishtown-analytics/dbt/issues/2152), [#2154](https://github.com/fishtown-analytics/dbt/pull/2154))
+- Docs website changes:
+  - Handle non-array `accepted_values` test arguments ([dbt-docs#70](https://github.com/fishtown-analytics/dbt-docs/pull/70))
+  - Support filtering by resource type ([dbt-docs#77](https://github.com/fishtown-analytics/dbt-docs/pull/77))
+  - Render analyses, macros, and custom data tests ([dbt-docs#72](https://github.com/fishtown-analytics/dbt-docs/pull/72), [dbt-docs#77](https://github.com/fishtown-analytics/dbt-docs/pull/77), [dbt-docs#69](https://github.com/fishtown-analytics/dbt-docs/pull/69))
+  - Support hiding models from the docs (these nodes still render in the DAG view as "hidden") ([dbt-docs#71](https://github.com/fishtown-analytics/dbt-docs/pull/71))
+  - Render `meta` fields as "details" in node views ([dbt-docs#73](https://github.com/fishtown-analytics/dbt-docs/pull/73))
+  - Default to lower-casing Snowflake columns specified in all-caps ([dbt-docs#74](https://github.com/fishtown-analytics/dbt-docs/pull/74))
+  - Upgrade site dependencies 
+
 
 ### Under the hood
 - Use `show terse schemas in database` (chosen based on data collected by Michael Weinberg) instead of `select ... from information_schema.schemata` when collecting the list of schemas in a database ([#2166](https://github.com/fishtown-analytics/dbt/issues/2166), [#2171](https://github.com/fishtown-analytics/dbt/pull/2171))
