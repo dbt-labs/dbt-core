@@ -16,7 +16,11 @@ class TestBigQueryScripting(DBTIntegrationTest):
 
     def assert_incrementals(self):
         results = self.run_dbt()
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
 
         self.run_dbt()
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
+
+        results = self.run_dbt(['seed'])
+
+        self.assertTablesEqual('incremental_overwrite', 'incremental_overwrite_expected')

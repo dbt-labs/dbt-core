@@ -10,6 +10,11 @@
 {%- endmacro %}
 
 
+{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates) -%}
+  {{ adapter_macro('get_insert_overwrite_merge_sql', target, source, dest_columns, predicates) }}
+{%- endmacro %}
+
+
 {% macro default__get_merge_sql(target, source, unique_key, dest_columns, predicates) -%}
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
@@ -76,4 +81,24 @@
 
 {% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
     {{ common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) }}
+{% endmacro %}
+
+
+{% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates) -%}
+    {%- set predicates = [] if predicates is none else [] + predicates -%}
+    {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
+
+    merge into {{ target }} as DBT_INTERNAL_DEST
+        using {{ source }} as DBT_INTERNAL_SOURCE
+        on FALSE
+    
+    when not matched by source
+        {% if predicates %} and {{ predicates | join(' and ') }} {% endif %}
+        then delete
+
+    when not matched then insert
+        ({{ dest_cols_csv }})
+    values
+        ({{ dest_cols_csv }})
+
 {% endmacro %}

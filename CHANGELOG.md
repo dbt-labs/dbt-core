@@ -15,6 +15,7 @@
   - Render `meta` fields as "details" in node views ([dbt-docs#73](https://github.com/fishtown-analytics/dbt-docs/pull/73))
   - Default to lower-casing Snowflake columns specified in all-caps ([dbt-docs#74](https://github.com/fishtown-analytics/dbt-docs/pull/74))
   - Upgrade site dependencies 
+- Support `insert_overwrite` materializtion for BigQuery incremental models ([#2153](https://github.com/fishtown-analytics/dbt/pull/2153))
 
 
 ### Under the hood
