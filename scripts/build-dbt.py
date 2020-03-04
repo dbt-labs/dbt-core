@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import venv  # type: ignore
 import zipfile
 
@@ -293,6 +294,7 @@ class PypiBuilder:
         print('built pypi packages')
 
     def upload(self, *, test=True):
+        run_command(['twine', 'check'])
         cmd = ['twine', 'upload']
         if test:
             cmd.extend(['--repository', 'pypitest'])
@@ -381,7 +383,23 @@ class HomebrewBuilder:
 
     def make_venv(self) -> PoetVirtualenv:
         env = PoetVirtualenv(self.version)
-        env.create(self.homebrew_venv_path)
+        max_attempts = 10
+        for attempt in range(1, max_attempts+1):
+            # after uploading to pypi, it can take a few minutes for installing
+            # to work. Retry a few times...
+            try:
+                env.create(self.homebrew_venv_path)
+                return
+            except subprocess.CalledProcessError:
+                if attempt == max_attempts:
+                    raise
+                else:
+                    print(
+                        f'installation failed - waiting 60s for pypi to see '
+                        f'the new version (attempt {attempt}/{max_attempts})'
+                    )
+                    time.sleep(60)
+
         return env
 
     @property
@@ -532,7 +550,8 @@ class HomebrewBuilder:
                         # skip the newline after 'end'
                         next(line_iter)
                         break
-            yield line
+            else:
+                yield line
 
     def create_versioned_formula_file(self):
         formula_contents = self.get_formula_data(versioned=True)
@@ -565,6 +584,13 @@ class HomebrewBuilder:
     def run_tests(formula_path: Path):
         path = os.path.normpath(formula_path)
         run_command(['brew', 'uninstall', '--force', path])
+        versions = [
+            l.strip() for l in
+            collect_output(['brew', 'list']).split('\n')
+            if l.strip().startswith('dbt@')
+        ]
+        if versions:
+            run_command(['brew', 'unlink'] + versions)
         run_command(['brew', 'install', path])
         run_command(['brew', 'test', path])
         run_command(['brew', 'audit', '--strict', path])
@@ -651,6 +677,7 @@ class DockerBuilder:
 
     def make_venv(self) -> DistFolderEnv:
         env = DistFolderEnv(self.dbt_path)
+
         env.create(self.dockerfile_venv_path)
         return env
 
@@ -691,8 +718,8 @@ class DockerBuilder:
             RUN apt-get update && \
                 apt-get dist-upgrade -y && \
                 apt-get install -y  --no-install-recommends \
-                    netcat curl git ssh  software-properties-common \
-                    make build-essential ca-certificates libpq-dev && \
+                    git software-properties-common make build-essential \
+                    ca-certificates libpq-dev && \
                 apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
             COPY {requirements_path} ./{self.requirements_file_name}
@@ -802,6 +829,11 @@ def upgrade_to(args: Arguments):
         builder.upload(test=False)
 
     if args.build_homebrew:
+        if args.upload_pypi:
+            print('waiting a minute for pypi before trying to pip install')
+            # if we uploaded to pypi, wait a minute before we bother trying to
+            # pip install
+            time.sleep(60)
         HomebrewBuilder(
             dbt_path=args.path,
             version=args.version,
