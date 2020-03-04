@@ -1,3 +1,5 @@
+## dbt next (release TBD)
+
 ## dbt 0.16.0rc2 (March 4, 2020)
 
 ### Under the hood
