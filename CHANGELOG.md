@@ -33,6 +33,9 @@ Contributors:
 
 ### Features
 - Add a "docs" field to models, with a "show" subfield ([#1671](https://github.com/fishtown-analytics/dbt/issues/1671), [#2107](https://github.com/fishtown-analytics/dbt/pull/2107))
+- Add an optional "sslmode" parameter for postgres ([#2152](https://github.com/fishtown-analytics/dbt/issues/2152), [#2154](https://github.com/fishtown-analytics/dbt/pull/2154))
+- Remove the requirement to have a passphrase when using Snowflake key pair authentication ([#1804](https://github.com/fishtown-analytics/dbt/issues/1805), [#2164](https://github.com/fishtown-analytics/dbt/pull/2164))
+- Support a cost-effective approach for incremental models on BigQuery using scription ([#1034](https://github.com/fishtown-analytics/dbt/issues/1034), [#2140](https://github.com/fishtown-analytics/dbt/pull/2140))
 - Add a dbt-{dbt_version} user agent field to the bigquery connector ([#2121](https://github.com/fishtown-analytics/dbt/issues/2121), [#2146](https://github.com/fishtown-analytics/dbt/pull/2146))
 - Add support for `generate_database_name` macro ([#1695](https://github.com/fishtown-analytics/dbt/issues/1695), [#2143](https://github.com/fishtown-analytics/dbt/pull/2143))
 - Expand the search path for schema.yml (and by extension, the default docs path) to include macro-paths and analysis-paths (in addition to source-paths, data-paths, and snapshot-paths) ([#2155](https://github.com/fishtown-analytics/dbt/issues/2155), [#2160](https://github.com/fishtown-analytics/dbt/pull/2160))
@@ -70,19 +73,20 @@ Contributors:
 - Add support for `--select` on `dbt seed` ([#1711](https://github.com/fishtown-analytics/dbt/issues/1711), [#2042](https://github.com/fishtown-analytics/dbt/pull/2042))
 - Add tags for sources (like model tags) and columns (tags apply to tests of that column) ([#1906](https://github.com/fishtown-analytics/dbt/issues/1906), [#1586](https://github.com/fishtown-analytics/dbt/issues/1586), [#2039](https://github.com/fishtown-analytics/dbt/pull/2039))
 - Improve the speed of catalog generation by performing multiple smaller queries instead of one huge query ([#2009](https://github.com/fishtown-analytics/dbt/issues/2009), [#2037](https://github.com/fishtown-analytics/dbt/pull/2037))
-- Added `toyaml` and `fromyaml` methods to the base context ([#1911](https://github.com/fishtown-analytics/dbt/issues/1911), [#2036](https://github.com/fishtown-analytics/dbt/pull/2036))
-- Added `database_schemas` to the on-run-end context ([#1924](https://github.com/fishtown-analytics/dbt/issues/1924), [#2031](https://github.com/fishtown-analytics/dbt/pull/2031))
-- Added the concept of `builtins` to the dbt context, make it possible to override functions like `ref` ([#1603](https://github.com/fishtown-analytics/dbt/issues/1603), [#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
+- Add`toyaml` and `fromyaml` methods to the base context ([#1911](https://github.com/fishtown-analytics/dbt/issues/1911), [#2036](https://github.com/fishtown-analytics/dbt/pull/2036))
+- Add `database_schemas` to the on-run-end context ([#1924](https://github.com/fishtown-analytics/dbt/issues/1924), [#2031](https://github.com/fishtown-analytics/dbt/pull/2031))
+- Add the concept of `builtins` to the dbt context, make it possible to override functions like `ref` ([#1603](https://github.com/fishtown-analytics/dbt/issues/1603), [#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
 - Add a `meta` key to most `schema.yml` objects ([#1362](https://github.com/fishtown-analytics/dbt/issues/1362), [#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
+- Add clickable docs URL link in CLI output ([#2027](https://github.com/fishtown-analytics/dbt/issues/2027), [#2131](https://github.com/fishtown-analytics/dbt/pull/2131))
+- Add `role` parameter in Postgres target configuration ([#1955](https://github.com/fishtown-analytics/dbt/issues/1955), [#2137](https://github.com/fishtown-analytics/dbt/pull/2137))
 - Parse model hooks and collect `ref` statements ([#1957](https://github.com/fishtown-analytics/dbt/issues/1957), [#2025](https://github.com/fishtown-analytics/dbt/pull/2025))
-
 
 ### Fixes
 - Fix the help output for `dbt docs` and `dbt source` to not include misleading flags ([#2038](https://github.com/fishtown-analytics/dbt/issues/2038), [#2105](https://github.com/fishtown-analytics/dbt/pull/2105))
 - Allow `dbt debug` from subdirectories ([#2086](https://github.com/fishtown-analytics/dbt/issues/2086), [#2094](https://github.com/fishtown-analytics/dbt/pull/2094))
 - Fix the `--no-compile` flag to `dbt docs generate` not crash dbt ([#2090](https://github.com/fishtown-analytics/dbt/issues/2090), [#2093](https://github.com/fishtown-analytics/dbt/pull/2093))
-- Ovewrwrite source config fields that should clobber, rather than deep merging them ([#2049](https://github.com/fishtown-analytics/dbt/issues/2049), [#2062]
-(https://github.com/fishtown-analytics/dbt/pull/2062))
+- Fix issue running `dbt debug` with an empty `dbt_project.yml` file ([#2116](https://github.com/fishtown-analytics/dbt/issues/2116), [#2120](https://github.com/fishtown-analytics/dbt/pull/2120))
+- Ovewrwrite source config fields that should clobber, rather than deep merging them ([#2049](https://github.com/fishtown-analytics/dbt/issues/2049), [#2062](https://github.com/fishtown-analytics/dbt/pull/2062))
 - Fix a bug in macro search where built-in macros could not be overridden for `dbt run-operation` ([#2032](https://github.com/fishtown-analytics/dbt/issues/2032), [#2035](https://github.com/fishtown-analytics/dbt/pull/2035))
 - dbt now detects dependencies with the same name as the current project as an error instead of silently clobbering each other ([#2029](https://github.com/fishtown-analytics/dbt/issues/2029), [#2030](https://github.com/fishtown-analytics/dbt/pull/2030))
 - Exclude tests of disabled models in compile statistics ([#1804](https://github.com/fishtown-analytics/dbt/issues/1804), [#2026](https://github.com/fishtown-analytics/dbt/pull/2026))
@@ -95,11 +99,14 @@ Contributors:
 - lots and lots of mypy/typing fixes ([#2010](https://github.com/fishtown-analytics/dbt/pull/2010))
 
 Contributors:
- - [@heisencoder](https://github.com/heisencoder) ([#2099](https://github.com/fishtown-analytics/dbt/pull/2099))
- - [@NiallRees](https://github.com/NiallRees) ([#2026](https://github.com/fishtown-analytics/dbt/pull/2026))
- - [@franloza](https://github.com/franloza) ([#1989](https://github.com/fishtown-analytics/dbt/pull/1989))
- - [@tayloramurphy](https://github.com/tayloramurphy) ([#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
+ - [@aaronsteers](https://github.com/aaronsteers) ([#2131](https://github.com/fishtown-analytics/dbt/pull/2131))
  - [@alanmcruickshank](https://github.com/alanmcruickshank) ([#2028](https://github.com/fishtown-analytics/dbt/pull/2028))
+ - [@franloza](https://github.com/franloza) ([#1989](https://github.com/fishtown-analytics/dbt/pull/1989))
+ - [@heisencoder](https://github.com/heisencoder) ([#2099](https://github.com/fishtown-analytics/dbt/pull/2099))
+ - [@nchammas](https://github.com/nchammas) ([#2120](https://github.com/fishtown-analytics/dbt/pull/2120))
+ - [@NiallRees](https://github.com/NiallRees) ([#2026](https://github.com/fishtown-analytics/dbt/pull/2026))
+ - [@shooka](https://github.com/shooka) ([#2137](https://github.com/fishtown-analytics/dbt/pull/2137))
+ - [@tayloramurphy](https://github.com/tayloramurphy) ([#2015](https://github.com/fishtown-analytics/dbt/pull/2015))
 
 ## dbt 0.15.3 (February 19, 2020)
 
