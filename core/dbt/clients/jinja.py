@@ -311,37 +311,17 @@ def _is_dunder_name(name):
     return name.startswith('__') and name.endswith('__')
 
 
-def create_macro_capture_env(node):
-
-    class ParserMacroCapture(jinja2.Undefined):
-        """
-        This class sets up the parser to capture macros.
-        """
+def create_undefined(node=None):
+    class Undefined(jinja2.Undefined):
         def __init__(self, hint=None, obj=None, name=None, exc=None):
             super().__init__(hint=hint, name=name)
             self.node = node
             self.name = name
-            self.package_name = node.package_name
+            self.hint = hint
             # jinja uses these for safety, so we have to override them.
             # see https://github.com/pallets/jinja/blob/master/jinja2/sandbox.py#L332-L339 # noqa
             self.unsafe_callable = False
             self.alters_data = False
-
-        def __deepcopy__(self, memo):
-            path = os.path.join(self.node.root_path,
-                                self.node.original_file_path)
-
-            logger.debug(
-                'dbt encountered an undefined variable, "{}" in node {}.{} '
-                '(source path: {})'
-                .format(self.name, self.node.package_name,
-                        self.node.name, path))
-
-            # match jinja's message
-            raise_compiler_error(
-                "{!r} is undefined".format(self.name),
-                node=self.node
-            )
 
         def __getitem__(self, name):
             # Propagate the undefined value if a caller accesses this as if it
@@ -355,15 +335,17 @@ def create_macro_capture_env(node):
                     .format(type(self).__name__, name)
                 )
 
-            self.package_name = self.name
             self.name = name
 
-            return self
+            return self.__class__(hint=self.hint, name=self.name)
 
         def __call__(self, *args, **kwargs):
             return self
 
-    return ParserMacroCapture
+        def __reduce__(self):
+            raise_compiler_error(f'{self.name} is undefined', node=node)
+
+    return Undefined
 
 
 def get_environment(node=None, capture_macros=False):
@@ -372,7 +354,7 @@ def get_environment(node=None, capture_macros=False):
     }
 
     if capture_macros:
-        args['undefined'] = create_macro_capture_env(node)
+        args['undefined'] = create_undefined(node)
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
