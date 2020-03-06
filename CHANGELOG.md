@@ -1,5 +1,8 @@
 ## dbt next (release TBD)
 
+### Fixes
+- When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
+
 ## dbt 0.16.0rc2 (March 4, 2020)
 
 ### Under the hood
