@@ -445,7 +445,7 @@ class HasTestMetadata(dbtClassMixin):
 
 @dataclass
 class ParsedSingularTestNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore
