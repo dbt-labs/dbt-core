@@ -19,7 +19,7 @@ from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ParsedSourceDefinition,
     ColumnInfo,
-    ParsedTestNode,
+    ParsedSchemaTestNode,
     ParsedMacroPatch,
 )
 from dbt.contracts.graph.unparsed import (
@@ -102,7 +102,7 @@ def _trimmed(inp: str) -> str:
     return inp[:44] + '...' + inp[-3:]
 
 
-class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
+class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     """
     The schema parser is really big because schemas are really complicated!
 
@@ -131,8 +131,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             self.project, self.project.all_source_paths, '.yml'
         )
 
-    def parse_from_dict(self, dct, validate=True) -> ParsedTestNode:
-        return ParsedTestNode.from_dict(dct, validate=validate)
+    def parse_from_dict(self, dct, validate=True) -> ParsedSchemaTestNode:
+        return ParsedSchemaTestNode.from_dict(dct, validate=validate)
 
     def _parse_format_version(
         self, yaml: YamlBlock
@@ -178,7 +178,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         for test in column.tests:
             self.parse_test(block, test, column)
 
-    def parse_node(self, block: SchemaTestBlock) -> ParsedTestNode:
+    def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the
         same

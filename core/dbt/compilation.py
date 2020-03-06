@@ -24,12 +24,12 @@ graph_file_name = 'graph.gpickle'
 
 
 def _compiled_type_for(model: ParsedNode):
-    if model.resource_type not in COMPILED_TYPES:
+    if type(model) not in COMPILED_TYPES:
         raise dbt.exceptions.InternalException(
             'Asked to compile {} node, but it has no compiled form'
-            .format(model.resource_type)
+            .format(type(model))
         )
-    return COMPILED_TYPES[model.resource_type]
+    return COMPILED_TYPES[type(model)]
 
 
 def print_compile_stats(stats):

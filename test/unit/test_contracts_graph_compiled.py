@@ -1,7 +1,7 @@
 import pickle
 
 from dbt.contracts.graph.compiled import (
-    CompiledModelNode, InjectedCTE, CompiledTestNode
+    CompiledModelNode, InjectedCTE, CompiledSchemaTestNode
 )
 from dbt.contracts.graph.parsed import (
     DependsOn, NodeConfig, TestConfig
@@ -183,8 +183,8 @@ class TestCompiledModelNode(ContractTestCase):
         self.assert_fails_validation(bad_type)
 
 
-class TestCompiledTestNode(ContractTestCase):
-    ContractType = CompiledTestNode
+class TestCompiledSchemaTestNode(ContractTestCase):
+    ContractType = CompiledSchemaTestNode
 
     def _minimum(self):
         return {

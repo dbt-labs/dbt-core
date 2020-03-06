@@ -2,11 +2,26 @@ import pickle
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import (
-    ParsedModelNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
-    TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All,
-    CheckSnapshotConfig, SnapshotStrategy, IntermediateSnapshotNode,
-    ParsedNodePatch, ParsedMacro, Docs, MacroDependsOn, ParsedSourceDefinition,
-    ParsedDocumentation, ParsedHookNode
+    ParsedModelNode,
+    DependsOn,
+    NodeConfig,
+    ColumnInfo,
+    Hook,
+    ParsedSchemaTestNode,
+    TestConfig,
+    ParsedSnapshotNode,
+    TimestampSnapshotConfig,
+    All,
+    CheckSnapshotConfig,
+    SnapshotStrategy,
+    IntermediateSnapshotNode,
+    ParsedNodePatch,
+    ParsedMacro,
+    Docs,
+    MacroDependsOn,
+    ParsedSourceDefinition,
+    ParsedDocumentation,
+    ParsedHookNode,
 )
 from dbt.contracts.graph.unparsed import Quoting
 
@@ -535,8 +550,8 @@ class TestParsedHookNode(ContractTestCase):
         self.assert_fails_validation(bad_index)
 
 
-class TestParsedTestNode(ContractTestCase):
-    ContractType = ParsedTestNode
+class TestParsedSchemaTestNode(ContractTestCase):
+    ContractType = ParsedSchemaTestNode
 
     def _minimum(self):
         return {

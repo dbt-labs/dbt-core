@@ -1,18 +1,18 @@
 from dbt.contracts.graph.parsed import (
     ParsedNode,
     ParsedAnalysisNode,
-    ParsedModelNode,
+    ParsedDataTestNode,
     ParsedHookNode,
+    ParsedModelNode,
     ParsedResource,
     ParsedRPCNode,
+    ParsedSchemaTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
     ParsedSourceDefinition,
-    ParsedTestNode,
     SeedConfig,
     TestConfig,
     TestMetadata,
-    PARSED_TYPES,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
@@ -116,7 +116,14 @@ class CompiledSnapshotNode(CompiledNode):
 
 
 @dataclass
-class CompiledTestNode(CompiledNode):
+class CompiledDataTestNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    column_name: Optional[str] = None
+    config: TestConfig = field(default_factory=TestConfig)
+
+
+@dataclass
+class CompiledSchemaTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
@@ -183,20 +190,33 @@ def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     return str(parsed)
 
 
-COMPILED_TYPES: Dict[NodeType, Type[CompiledNode]] = {
-    NodeType.Analysis: CompiledAnalysisNode,
-    NodeType.Model: CompiledModelNode,
-    NodeType.Operation: CompiledHookNode,
-    NodeType.RPCCall: CompiledRPCNode,
-    NodeType.Seed: CompiledSeedNode,
-    NodeType.Snapshot: CompiledSnapshotNode,
-    NodeType.Test: CompiledTestNode,
+PARSED_TYPES: Dict[Type[CompiledNode], Type[ParsedResource]] = {
+    CompiledAnalysisNode: ParsedAnalysisNode,
+    CompiledModelNode: ParsedModelNode,
+    CompiledHookNode: ParsedHookNode,
+    CompiledRPCNode: ParsedRPCNode,
+    CompiledSeedNode: ParsedSeedNode,
+    CompiledSnapshotNode: ParsedSnapshotNode,
+    CompiledDataTestNode: ParsedDataTestNode,
+    CompiledSchemaTestNode: ParsedSchemaTestNode,
 }
 
 
-def compiled_type_for(parsed: ParsedNode):
-    if parsed.resource_type in COMPILED_TYPES:
-        return COMPILED_TYPES[parsed.resource_type]
+COMPILED_TYPES: Dict[Type[ParsedResource], Type[CompiledNode]] = {
+    ParsedAnalysisNode: CompiledAnalysisNode,
+    ParsedModelNode: CompiledModelNode,
+    ParsedHookNode: CompiledHookNode,
+    ParsedRPCNode: CompiledRPCNode,
+    ParsedSeedNode: CompiledSeedNode,
+    ParsedSnapshotNode: CompiledSnapshotNode,
+    ParsedDataTestNode: CompiledDataTestNode,
+    ParsedSchemaTestNode: CompiledSchemaTestNode,
+}
+
+
+def compiled_type_for(parsed: ParsedNode) -> Type[CompiledNode]:
+    if type(parsed) in COMPILED_TYPES:
+        return COMPILED_TYPES[type(parsed)]
     else:
         return type(parsed)
 
@@ -215,19 +235,21 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
 # This is anything that can be in manifest.nodes and isn't a Source.
 NonSourceNode = Union[
     CompiledAnalysisNode,
+    CompiledDataTestNode,
     CompiledModelNode,
     CompiledHookNode,
     CompiledRPCNode,
+    CompiledSchemaTestNode,
     CompiledSeedNode,
     CompiledSnapshotNode,
-    CompiledTestNode,
     ParsedAnalysisNode,
+    ParsedDataTestNode,
     ParsedModelNode,
     ParsedHookNode,
     ParsedRPCNode,
+    ParsedSchemaTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
-    ParsedTestNode,
 ]
 
 # We allow either parsed or compiled nodes, or parsed sources, as some

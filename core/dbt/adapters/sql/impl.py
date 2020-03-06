@@ -227,6 +227,12 @@ class SQLAdapter(BaseAdapter):
     def quote(self, identifier):
         return '"{}"'.format(identifier)
 
+    @classmethod
+    def unquote(cls, identifier: str) -> str:
+        if identifier.startswith('"') and identifier.endswith('"'):
+            return identifier[1:-1]
+        return identifier
+
     def list_schemas(self, database: str) -> List[str]:
         results = self.execute_macro(
             LIST_SCHEMAS_MACRO_NAME,
