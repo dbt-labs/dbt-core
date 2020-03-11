@@ -398,6 +398,14 @@ def _build_run_subparser(subparsers, base_subparser):
         help='''
         Compile SQL and execute against the current target database.
         ''')
+    run_sub.add_argument(
+        '-x',
+        '--fail-fast',
+        action='store_true',
+        help='''
+            Stop execution upon a first failure.
+            '''
+    )
     run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
     return run_sub
 
@@ -553,6 +561,14 @@ def _build_test_subparser(subparsers, base_subparser):
         action='store_true',
         help='''
         Run constraint validations from schema.yml files
+        '''
+    )
+    sub.add_argument(
+        '-x',
+        '--fail-fast',
+        action='store_true',
+        help='''
+        Stop execution upon a first test failure.
         '''
     )
 
