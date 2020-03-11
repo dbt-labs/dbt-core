@@ -515,11 +515,11 @@ def _build_run_subparser(subparsers, base_subparser):
         """,
     )
     run_sub.add_argument(
-        '-x',
-        '--fail-fast',
+        "-x",
+        "--fail-fast",
         dest="sub_fail_fast",
-        action='store_true',
-        help='''
+        action="store_true",
+        help="""
         Stop execution upon a first failure.
         """,
     )
@@ -721,13 +721,13 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        '-x',
-        '--fail-fast',
+        "-x",
+        "--fail-fast",
         dest="sub_fail_fast",
-        action='store_true',
-        help='''
+        action="store_true",
+        help="""
         Stop execution upon a first test failure.
-        '''
+        """,
     )
     sub.add_argument(
         "--store-failures",

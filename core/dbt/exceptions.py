@@ -337,7 +337,7 @@ class DbtConfigError(RuntimeException):
 
 class FailFastException(RuntimeException):
     CODE = 10013
-    MESSAGE = 'FailFast Error'
+    MESSAGE = "FailFast Error"
 
     def __init__(self, message, result=None, node=None):
         super().__init__(msg=message, node=node)
