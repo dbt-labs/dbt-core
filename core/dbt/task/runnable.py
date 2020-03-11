@@ -42,6 +42,12 @@ MANIFEST_FILE_NAME = 'manifest.json'
 RUNNING_STATE = DbtProcessState('running')
 
 
+def _lower(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    return value.lower()
+
+
 def write_manifest(config, manifest):
     if dbt.flags.WRITE_JSON:
         manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
@@ -412,12 +418,21 @@ class GraphRunnableTask(ManifestTask):
         existing_schemas_lowered: Set[Tuple[str, Optional[str]]] = set()
 
         def list_schemas(info: InformationSchema) -> List[Tuple[str, str]]:
+            # the database name should never be None here (or where are we
+            # listing schemas from?)
+            if info.database is None:
+                raise InternalException(
+                    f'Got an invalid information schema of {info} (database '
+                    f'was None)'
+                )
             database_name = info.database
             database_quoted = str(info)
             with adapter.connection_named(f'list_{database_name}'):
+                # we should never create a null schema, so just filter them out
                 return [
                     (database_name.lower(), s.lower())
                     for s in adapter.list_schemas(database_quoted)
+                    if s is not None
                 ]
 
         def create_schema(db: str, schema: str) -> None:
