@@ -1,4 +1,4 @@
-## dbt next (release TBD)
+## dbt 0.16.0rc3 (March 11, 2020)
 
 ### Fixes
 - If database quoting is enabled, do not attempt to create schemas that already exist ([#2186](https://github.com/fishtown-analytics/dbt/issues/2186), [#2187](https://github.com/fishtown-analytics/dbt/pull/2187))
