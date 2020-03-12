@@ -98,14 +98,15 @@ class MacroQueryStringSetter:
         self.reset()
 
     def _get_comment_macro(self) -> Optional[str]:
-        if not self.config.query_comment.get('comment'):
-            # query comment is not specified, using default value
-            return DEFAULT_QUERY_COMMENT
-
         comment = self.config.query_comment.get('comment')
+
         if comment in ('None', ''):
             # query comment is disabled.
             return None
+
+        if not comment:
+            # query comment is not specified, using default value
+            return DEFAULT_QUERY_COMMENT
 
         # using custom query comment
         return comment
