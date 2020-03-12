@@ -161,7 +161,7 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     seeds: Dict[str, Any] = field(default_factory=dict)
     snapshots: Dict[str, Any] = field(default_factory=dict)
     packages: List[PackageSpec] = field(default_factory=list)
-    query_comment: Union[Dict[str, Any], str] = field(default_factory=dict)
+    query_comment: Optional[Union[Dict[str, Any], str]] = None
 
     @classmethod
     def from_dict(cls, data, validate=True):
