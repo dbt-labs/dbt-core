@@ -41,7 +41,7 @@
   {% else %} {# dynamic #}
   
       {% set predicate -%}
-          {{ partition_by.render(alias='DBT_INTERNAL_DEST') }} in unnest(dbt_partitions_for_upsert)
+          {{ partition_by.render(alias='DBT_INTERNAL_DEST') }} in unnest(dbt_partitions_for_replacement)
       {%- endset %}
 
       {%- set source_sql -%}
@@ -51,7 +51,7 @@
       {%- endset -%}
 
       -- generated script to merge partitions into {{ target_relation }}
-      declare dbt_partitions_for_upsert array<{{ partition_type }}>;
+      declare dbt_partitions_for_replacement array<{{ partition_type }}>;
       declare _dbt_max_partition {{ partition_by.data_type }};
 
       set _dbt_max_partition = (
@@ -62,7 +62,7 @@
       {{ create_table_as(True, tmp_relation, sql) }}
 
       -- 2. define partitions to update
-      set (dbt_partitions_for_upsert) = (
+      set (dbt_partitions_for_replacement) = (
           select as struct
               array_agg(distinct {{ partition_by.render() }})
           from {{ tmp_relation }}
