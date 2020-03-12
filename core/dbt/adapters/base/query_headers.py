@@ -36,13 +36,13 @@ class _QueryComment(local):
         if self.append:
             # replace last ';' with '<comment>;'
             sql = sql.rstrip()
-            if sql[-1] == ';':
+            if sql[-1] == ";":
                 sql = sql[:-1]
-                return '{}\n/* {} */;'.format(sql, self.query_comment.strip())
+                return "{}\n/* {} */;".format(sql, self.query_comment.strip())
 
-            return '{}\n/* {} */'.format(sql, self.query_comment.strip())
+            return "{}\n/* {} */".format(sql, self.query_comment.strip())
 
-        return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
+        return "/* {} */\n{}".format(self.query_comment.strip(), sql)
 
     def set(self, comment: Optional[str], append: bool):
         if isinstance(comment, str) and "*/" in comment:
