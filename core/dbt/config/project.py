@@ -202,6 +202,19 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
     return project_dict
 
 
+def _query_comment_from_cfg(cfg_query_comment) -> Dict[str, Any]:
+    if isinstance(cfg_query_comment, NoValue):
+        return {'comment': NoValue(), 'append': False}
+
+    if isinstance(cfg_query_comment, str):
+        return {'comment': cfg_query_comment, 'append': False}
+
+    return {
+        'comment': cfg_query_comment['comment'],
+        'append': cfg_query_comment['append']
+    }
+
+
 @dataclass
 class PartialProject:
     profile_name: Optional[str]
@@ -244,7 +257,7 @@ class Project:
     snapshots: Dict[str, Any]
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
-    query_comment: Optional[Union[str, NoValue]]
+    query_comment: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -356,7 +369,7 @@ class Project:
         dbt_raw_version: Union[List[str], str] = '>=0.0.0'
         if cfg.require_dbt_version is not None:
             dbt_raw_version = cfg.require_dbt_version
-        query_comment = cfg.query_comment
+        query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)

@@ -47,14 +47,24 @@ class _QueryComment(local):
     """
     def __init__(self, initial):
         self.query_comment: Optional[str] = initial
+        self.append = False
 
     def add(self, sql: str) -> str:
         if not self.query_comment:
             return sql
-        else:
-            return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
 
-    def set(self, comment: Optional[str]):
+        if self.append:
+            # replace last ';' with '<comment>;'
+            sql = sql.rstrip()
+            if sql[-1] == ';':
+                sql = sql[:-1]
+                return '{}\n/* {} */;'.format(sql, self.query_comment.strip())
+
+            return '{}\n/* {} */'.format(sql, self.query_comment.strip())
+
+        return '/* {} */\n{}'.format(self.query_comment.strip(), sql)
+
+    def set(self, comment: Optional[str], append: bool):
         if isinstance(comment, str) and '*/' in comment:
             # tell the user "no" so they don't hurt themselves by writing
             # garbage
@@ -62,6 +72,7 @@ class _QueryComment(local):
                 f'query comment contains illegal value "*/": {comment}'
             )
         self.query_comment = comment
+        self.append = append
 
 
 QueryStringFunc = Callable[[str, Optional[NodeWrapper]], str]
@@ -87,18 +98,19 @@ class MacroQueryStringSetter:
         self.comment = _QueryComment(None)
         self.reset()
 
-    def _get_comment_macro(self):
-        if (
-            self.config.query_comment != NoValue() and
-            self.config.query_comment
-        ):
-            return self.config.query_comment
-        # if the query comment is null/empty string, there is no comment at all
-        elif not self.config.query_comment:
+    def _get_comment_macro(self) -> Optional[str]:
+        comment = self.config.query_comment.get('comment', NoValue())
+
+        if comment in ('None', ''):
+            # query comment is disabled.
             return None
-        else:
-            # else, the default
+
+        if comment == NoValue():
+            # query comment is not specified, using default value
             return DEFAULT_QUERY_COMMENT
+
+        # using custom query comment
+        return comment
 
     def _get_context(self) -> Dict[str, Any]:
         return generate_query_header_context(self.config, self.manifest)
@@ -114,4 +126,5 @@ class MacroQueryStringSetter:
         if node is not None:
             wrapped = NodeWrapper(node)
         comment_str = self.generator(name, wrapped)
-        self.comment.set(comment_str)
+        # self.comment.set(comment_str, self.config.query_comment['append'])
+        self.comment.set(comment_str, True)
