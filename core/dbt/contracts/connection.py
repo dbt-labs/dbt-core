@@ -3,7 +3,6 @@ import itertools
 from dataclasses import dataclass, field
 from typing import (
     Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
-    Union
 )
 from typing_extensions import Protocol
 
@@ -14,7 +13,6 @@ from hologram.helpers import (
 
 from dbt.contracts.util import Replaceable
 from dbt.exceptions import InternalException
-from dbt.helper_types import NoValue
 from dbt.utils import translate_aliases
 
 
@@ -177,6 +175,6 @@ class HasCredentials(Protocol):
 
 class AdapterRequiredConfig(HasCredentials, Protocol):
     project_name: str
-    query_comment: Optional[Union[str, NoValue]]
+    query_comment: Dict[str, Any]
     cli_vars: Dict[str, Any]
     target_path: str

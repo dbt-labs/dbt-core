@@ -15,6 +15,7 @@ from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
 from dbt.context.base import generate_base_context
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
+from dbt.helper_types import NoValueEncoder
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
