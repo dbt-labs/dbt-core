@@ -14,7 +14,6 @@ from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import validator_error_message
 from dbt.exceptions import warn_or_error
-from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
@@ -203,16 +202,10 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
 
 def _query_comment_from_cfg(cfg_query_comment) -> Dict[str, Any]:
-    if isinstance(cfg_query_comment, NoValue):
-        return {'comment': NoValue(), 'append': False}
-
     if isinstance(cfg_query_comment, str):
         return {'comment': cfg_query_comment, 'append': False}
 
-    return {
-        'comment': cfg_query_comment['comment'],
-        'append': cfg_query_comment['append']
-    }
+    return cfg_query_comment
 
 
 @dataclass
@@ -454,11 +447,10 @@ class Project:
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
+            'query-comment': self.query_comment
         })
         if with_packages:
             result.update(self.packages.to_dict())
-        if self.query_comment != NoValue():
-            result['query-comment'] = self.query_comment
 
         return result
 
