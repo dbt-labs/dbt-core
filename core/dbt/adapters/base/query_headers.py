@@ -8,7 +8,6 @@ from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import RuntimeException
-from dbt.helper_types import NoValue
 
 
 DEFAULT_QUERY_COMMENT = '''
@@ -99,15 +98,14 @@ class MacroQueryStringSetter:
         self.reset()
 
     def _get_comment_macro(self) -> Optional[str]:
-        comment = self.config.query_comment.get('comment', NoValue())
+        if not self.config.query_comment.get('comment'):
+            # query comment is not specified, using default value
+            return DEFAULT_QUERY_COMMENT
 
+        comment = self.config.query_comment.get('comment')
         if comment in ('None', ''):
             # query comment is disabled.
             return None
-
-        if comment == NoValue():
-            # query comment is not specified, using default value
-            return DEFAULT_QUERY_COMMENT
 
         # using custom query comment
         return comment
@@ -126,5 +124,6 @@ class MacroQueryStringSetter:
         if node is not None:
             wrapped = NodeWrapper(node)
         comment_str = self.generator(name, wrapped)
-        # self.comment.set(comment_str, self.config.query_comment['append'])
-        self.comment.set(comment_str, True)
+
+        self.comment.set(
+            comment_str, self.config.query_comment.get('append', False))

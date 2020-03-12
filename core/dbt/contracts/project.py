@@ -3,7 +3,6 @@ from dbt.contracts.connection import UserConfigContract
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import tracking
 from dbt.ui import printer
-from dbt.helper_types import NoValue
 
 from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import HyphenatedJsonSchemaMixin, register_pattern, \
@@ -162,7 +161,7 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     seeds: Dict[str, Any] = field(default_factory=dict)
     snapshots: Dict[str, Any] = field(default_factory=dict)
     packages: List[PackageSpec] = field(default_factory=list)
-    query_comment: Optional[Union[Dict[str, Any], str]] = NoValue()
+    query_comment: Union[Dict[str, Any], str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data, validate=True):
