@@ -129,5 +129,7 @@ class MacroQueryStringSetter:
             wrapped = NodeWrapper(node)
         comment_str = self.generator(name, wrapped)
 
-        self.comment.set(
-            comment_str, self.config.query_comment.get('append', False))
+        append = False
+        if self.config.query_comment:
+            append = self.config.query_comment.get('append', False)
+        self.comment.set(comment_str, append)
