@@ -853,7 +853,7 @@ class TestProject(BaseConfigTest):
 
     def test_default_query_comment(self):
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
-        self.assertEqual(project.query_comment, {})
+        self.assertEqual(project.query_comment, None)
 
     def test_default_query_comment_append(self):
         self.default_project_data.update({
