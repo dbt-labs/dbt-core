@@ -21,6 +21,9 @@
 ### Fixes
 - If database quoting is enabled, do not attempt to create schemas that already exist ([#2186](https://github.com/fishtown-analytics/dbt/issues/2186), [#2187](https://github.com/fishtown-analytics/dbt/pull/2187))
 
+### Features
+- Support for appending query comments to SQL queries. ([#2199](https://github.com/fishtown-analytics/dbt/pull/2199))
+
 ## dbt 0.16.0rc2 (March 4, 2020)
 
 ### Under the hood
