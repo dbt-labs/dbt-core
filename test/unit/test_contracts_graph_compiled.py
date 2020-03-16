@@ -313,7 +313,6 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             'extra_ctes': [{'id': 'whatever', 'sql': 'select * from other'}],
             'extra_ctes_injected': True,
             'injected_sql': 'with whatever as (select * from other) select * from whatever',
-            'wrapped_sql': 'select count(*) from (with whatever as (select * from other) select * from whatever) sbq',
             'column_name': 'id',
         }
         node = self.ContractType(
@@ -341,7 +340,6 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             extra_ctes=[InjectedCTE('whatever', 'select * from other')],
             extra_ctes_injected=True,
             injected_sql='with whatever as (select * from other) select * from whatever',
-            wrapped_sql='select count(*) from (with whatever as (select * from other) select * from whatever) sbq',
             column_name='id',
         )
         self.assert_symmetric(node, node_dict)

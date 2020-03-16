@@ -34,7 +34,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
     'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
-    'injected_sql', 'wrapped_sql'
+    'injected_sql',
 })
 
 

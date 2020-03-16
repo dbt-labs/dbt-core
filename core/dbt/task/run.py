@@ -94,7 +94,7 @@ class RunTask(CompileTask):
     def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
         compiled = compile_node(adapter, self.config, hook, self.manifest,
                                 extra_context)
-        statement = compiled.wrapped_sql
+        statement = compiled.injected_sql
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)
         return hook_obj.sql or ''

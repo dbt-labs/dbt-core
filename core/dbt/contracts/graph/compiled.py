@@ -1,4 +1,5 @@
 from dbt.contracts.graph.parsed import (
+    HasTestMetadata,
     ParsedNode,
     ParsedAnalysisNode,
     ParsedDataTestNode,
@@ -12,7 +13,6 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     SeedConfig,
     TestConfig,
-    TestMetadata,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
@@ -42,7 +42,6 @@ class CompiledNode(ParsedNode):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     injected_sql: Optional[str] = None
-    wrapped_sql: Optional[str] = None
 
     def prepend_ctes(self, prepended_ctes: List[InjectedCTE]):
         self.extra_ctes_injected = True
@@ -123,11 +122,13 @@ class CompiledDataTestNode(CompiledNode):
 
 
 @dataclass
-class CompiledSchemaTestNode(CompiledNode):
+class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
-    test_metadata: Optional[TestMetadata] = None
+
+
+CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]
 
 
 def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
@@ -214,7 +215,11 @@ COMPILED_TYPES: Dict[Type[ParsedResource], Type[CompiledNode]] = {
 }
 
 
-def compiled_type_for(parsed: ParsedNode) -> Type[CompiledNode]:
+# for some types, the compiled type is the parsed type, so make this easy
+CompiledType = Union[Type[CompiledNode], Type[ParsedResource]]
+
+
+def compiled_type_for(parsed: ParsedNode) -> CompiledType:
     if type(parsed) in COMPILED_TYPES:
         return COMPILED_TYPES[type(parsed)]
     else:
@@ -222,7 +227,7 @@ def compiled_type_for(parsed: ParsedNode) -> Type[CompiledNode]:
 
 
 def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
-    cls = PARSED_TYPES.get(compiled.resource_type)
+    cls = PARSED_TYPES.get(type(compiled))
     if cls is None:
         # how???
         raise ValueError('invalid resource_type: {}'

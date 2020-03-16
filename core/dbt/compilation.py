@@ -160,33 +160,6 @@ class Compiler:
 
         injected_node, _ = prepend_ctes(compiled_node, manifest)
 
-        should_wrap = {NodeType.Test, NodeType.Operation}
-        if injected_node.resource_type in should_wrap:
-            # data tests get wrapped in count(*)
-            # TODO : move this somewhere more reasonable
-            if 'data' in injected_node.tags and \
-               injected_node.resource_type == NodeType.Test:
-                injected_node.wrapped_sql = (
-                    "select count(*) as errors "
-                    "from (\n{test_sql}\n) sbq").format(
-                        test_sql=injected_node.injected_sql)
-            else:
-                # don't wrap schema tests or analyses.
-                injected_node.wrapped_sql = injected_node.injected_sql
-
-        elif injected_node.resource_type == NodeType.Snapshot:
-            # unfortunately we do everything automagically for
-            # snapshots. in the future it'd be nice to generate
-            # the SQL at the parser level.
-            pass
-
-        elif(injected_node.resource_type == NodeType.Model and
-             injected_node.get_materialization() == 'ephemeral'):
-            pass
-
-        else:
-            injected_node.wrapped_sql = None
-
         return injected_node
 
     def write_graph_file(self, linker, manifest):
