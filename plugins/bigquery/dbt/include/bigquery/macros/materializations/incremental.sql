@@ -24,9 +24,7 @@
   
       {% set predicate -%}
           {{ partition_by.render(alias='DBT_INTERNAL_DEST') }} in (
-              {% for partition in partitions %}
-                '{{partition}}' {{- ',' if not loop.last -}}
-              {% endfor %}
+              {{ partitions | join (', ') }}
           )
       {%- endset %}
 
