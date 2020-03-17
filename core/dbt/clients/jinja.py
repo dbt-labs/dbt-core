@@ -17,7 +17,7 @@ import jinja2.parser
 import jinja2.sandbox
 
 from dbt.utils import (
-    get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name,
+    get_dbt_macro_name,
     get_test_macro_name, deep_map_render
 )
 
@@ -632,7 +632,7 @@ def add_rendered_test_kwargs(
     renderer, then insert that value into the given context as the special test
     keyword arguments member.
     """
-    looks_like_func = r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$'
+    looks_like_func = r"^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$"
 
     def _convert_function(
         value: Any, keypath: Tuple[Union[str, int], ...]
@@ -645,7 +645,7 @@ def add_rendered_test_kwargs(
 
             if re.match(looks_like_func, value) is not None:
                 # curly braces to make rendering happy
-                value = f'{{{{ {value} }}}}'
+                value = f"{{{{ {value} }}}}"
 
             value = get_rendered(
                 value, context, node, capture_macros=capture_macros,

@@ -25,7 +25,7 @@ def get_nice_generic_test_name(
     flat_args = []
     for arg_name in sorted(args):
         # the model is already embedded in the name, so skip it
-        if arg_name == 'model':
+        if arg_name == "model":
             continue
         arg_val = args[arg_name]
 
@@ -205,14 +205,14 @@ class TestBuilder(Generic[Testable]):
     ) -> None:
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args: Dict[str, Any] = test_args
-        if 'model' in self.args:
+        if "model" in self.args:
             raise_compiler_error(
                 'Test arguments include "model", which is a reserved argument',
             )
         self.package_name: str = package_name
         self.target: Testable = target
 
-        self.args['model'] = self.build_model_str()
+        self.args["model"] = self.build_model_str()
 
         match = self.TEST_NAME_PATTERN.match(test_name)
         if match is None:

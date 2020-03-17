@@ -60,9 +60,7 @@ from dbt.parser.generic_test_builders import (
     TestBlock, Testable
 )
 from dbt.ui import warning_tag
-from dbt.utils import (
-    get_pseudo_test_path, coerce_dict_str
-)
+from dbt.utils import get_pseudo_test_path, coerce_dict_str
 
 
 UnparsedSchemaYaml = Union[
@@ -453,9 +451,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         add_rendered_test_kwargs(context, node, capture_macros=True)
 
         # the parsed node is not rendered in the native context.
-        get_rendered(
-            node.raw_sql, context, node, capture_macros=True
-        )
+        get_rendered(node.raw_sql, context, node, capture_macros=True)
 
     def parse_test(
         self,
