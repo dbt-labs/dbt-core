@@ -1,3 +1,5 @@
+import agate
+import decimal
 import unittest
 from unittest import mock
 
@@ -6,13 +8,12 @@ from dbt.task.debug import DebugTask
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.adapters.postgres import PostgresAdapter
-from dbt.config import ConfigRenderer
+from dbt.clients import agate_helper
 from dbt.exceptions import ValidationException, DbtConfigError
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError
-import agate
 
 from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection
 
@@ -394,3 +395,27 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.adapter.cleanup_connections()
         self._adapter = PostgresAdapter(self.config)
         self.adapter.verify_database('postgres')
+
+
+class TestPostgresFilterCatalog(unittest.TestCase):
+    def test__catalog_filter_table(self):
+        manifest = mock.MagicMock()
+        manifest.get_used_schemas.return_value = [['a', 'B'], ['a', '1234']]
+        column_names = ['table_name', 'table_database', 'table_schema', 'something']
+        rows = [
+            ['foo', 'a', 'b', '1234'],  # include
+            ['foo', 'a', '1234', '1234'],  # include, w/ table schema as str
+            ['foo', 'c', 'B', '1234'],  # skip
+            ['1234', 'A', 'B', '1234'],  # include, w/ table name as str
+        ]
+        table = agate.Table(
+            rows, column_names, agate_helper.DEFAULT_TYPE_TESTER
+        )
+
+        result = PostgresAdapter._catalog_filter_table(table, manifest)
+        assert len(result) == 3
+        for row in result.rows:
+            assert isinstance(row['table_schema'], str)
+            assert isinstance(row['table_database'], str)
+            assert isinstance(row['table_name'], str)
+            assert isinstance(row['something'], decimal.Decimal)
