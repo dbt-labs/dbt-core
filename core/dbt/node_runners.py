@@ -20,11 +20,10 @@ from dbt.contracts.results import (
 )
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
-    InternalException, missing_materialization
+    InternalException, missing_materialization, raise_compiler_error
 )
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-import dbt.exceptions
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
@@ -570,7 +569,7 @@ class TestRunner(CompileRunner):
             num_cols = len(table.columns)
             # since we just wrapped our query in `select count(*)`, we are in
             # big trouble!
-            raise dbt.exceptions.InternalException(
+            raise InternalException(
                 f"dbt itnernally failed to execute {test.unique_id}: "
                 f"Returned {num_rows} rows and {num_cols} cols, but expected "
                 f"1 row and 1 column"
@@ -587,7 +586,7 @@ class TestRunner(CompileRunner):
         num_rows = len(table.rows)
         if num_rows != 1:
             num_cols = len(table.columns)
-            dbt.exceptions.raise_compiler_error(
+            raise_compiler_error(
                 f"Bad test {test.test_metadata.name}: "
                 f"Returned {num_rows} rows and {num_cols} cols, but expected "
                 f"1 row and 1 column"

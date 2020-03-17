@@ -337,3 +337,27 @@ class TestQuotedSchemaTestColumns(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         results = self.run_dbt(['test', '-m', 'source:my_source_2'])
         self.assertEqual(len(results), 2)
+
+
+class TestVarsSchemaTests(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "models-v2/render_test_arg_models"
+
+    @property
+    def project_config(self):
+        return {
+            "macro-paths": ["macros-v2/macros"],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_argument_rendering(self):
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(['test', '--vars', '{myvar: foo}'])
+        self.assertEqual(len(results), 1)
+        self.run_dbt(['test'], expect_pass=False)

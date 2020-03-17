@@ -1,8 +1,9 @@
 ## dbt next (release TBD)
 ### Features
-- Added --fail-fast argument for dbt run and dbt test to fail on first test failure or runtime error. ([#1649](https://github.com/fishtown-analytics/dbt/issues/1649))
-- Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138))
+- Added --fail-fast argument for dbt run and dbt test to fail on first test failure or runtime error. ([#1649](https://github.com/fishtown-analytics/dbt/issues/1649), [#2224](https://github.com/fishtown-analytics/dbt/pull/2224))
+- Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138), [#2199](https://github.com/fishtown-analytics/dbt/pull/2199))
 - Added a `get-manifest` API call. ([#2168](https://github.com/fishtown-analytics/dbt/issues/2168), [#2232](https://github.com/fishtown-analytics/dbt/pull/2232))
+- Users can now use jinja as arguments to tests. Test arguments are rendered in the native context and injected into the test execution context directly. ([#2149](https://github.com/fishtown-analytics/dbt/issues/2149), [#2220](https://github.com/fishtown-analytics/dbt/pull/2220))
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
@@ -10,7 +11,6 @@
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
- - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224))
  - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
 
 

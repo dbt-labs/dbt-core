@@ -5,7 +5,7 @@ from typing import (
     Generic, TypeVar, Dict, Any, Tuple, Optional, List, Sequence
 )
 
-from dbt.clients.jinja import get_rendered
+from dbt.clients.jinja import get_rendered, SCHEMA_TEST_KWARGS_NAME
 from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedColumn, UnparsedMacroUpdate,
@@ -20,6 +20,9 @@ def get_nice_schema_test_name(
 ) -> Tuple[str, str]:
     flat_args = []
     for arg_name in sorted(args):
+        # the model is already embedded in the name, so skip it
+        if arg_name == 'model':
+            continue
         arg_val = args[arg_name]
 
         if isinstance(arg_val, dict):
@@ -233,8 +236,14 @@ class TestBuilder(Generic[Testable]):
     ) -> None:
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args: Dict[str, Any] = test_args
+        if 'model' in self.args:
+            raise_compiler_error(
+                'Test arguments include "model", which is a reserved argument',
+            )
         self.package_name: str = package_name
         self.target: Testable = target
+
+        self.args['model'] = self.build_model_str()
 
         match = self.TEST_NAME_PATTERN.match(test_name)
         if match is None:
@@ -337,8 +346,6 @@ class TestBuilder(Generic[Testable]):
             raise self._bad_type()
         return fmt.format(self.target)
 
-        raise NotImplementedError('describe_test_target not implemented!')
-
     def get_test_name(self) -> Tuple[str, str]:
         if isinstance(self.target, UnparsedNodeUpdate):
             name = self.name
@@ -353,19 +360,18 @@ class TestBuilder(Generic[Testable]):
     def build_raw_sql(self) -> str:
         return (
             "{{{{ config(severity='{severity}') }}}}"
-            "{{{{ {macro}(model={model}, {kwargs}) }}}}"
+            "{{{{ {macro}(**{kwargs_name}) }}}}"
         ).format(
-            model=self.build_model_str(),
             macro=self.macro_name(),
-            kwargs=self.test_kwargs_str(),
             severity=self.severity(),
+            kwargs_name=SCHEMA_TEST_KWARGS_NAME,
         )
 
     def build_model_str(self):
         if isinstance(self.target, UnparsedNodeUpdate):
-            fmt = "ref('{0.name}')"
+            fmt = "{{{{ ref('{0.name}') }}}}"
         elif isinstance(self.target, SourceTarget):
-            fmt = "source('{0.source.name}', '{0.table.name}')"
+            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
         else:
             raise self._bad_type()
         return fmt.format(self.target)

@@ -308,7 +308,6 @@ class HasTestMetadata(JsonSchemaMixin):
 @dataclass
 class ParsedDataTestNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
-    column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
 

@@ -1,7 +1,7 @@
 import itertools
 import os
 from collections import defaultdict
-from typing import List, Dict
+from typing import List, Dict, Any
 
 import dbt.utils
 import dbt.include
@@ -11,11 +11,17 @@ from dbt.node_types import NodeType
 from dbt.linker import Linker
 
 from dbt.context.providers import generate_runtime_model
+from dbt.contracts.graph.manifest import Manifest
 import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.config
-from dbt.contracts.graph.compiled import InjectedCTE, COMPILED_TYPES
+from dbt.contracts.graph.compiled import (
+    InjectedCTE,
+    COMPILED_TYPES,
+    NonSourceCompiledNode,
+    CompiledSchemaTestNode,
+)
 from dbt.contracts.graph.parsed import ParsedNode
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -130,6 +136,22 @@ class Compiler:
         dbt.clients.system.make_directory(self.config.target_path)
         dbt.clients.system.make_directory(self.config.modules_path)
 
+    def _create_node_context(
+        self,
+        node: NonSourceCompiledNode,
+        manifest: Manifest,
+        extra_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        context = generate_runtime_model(
+            node, self.config, manifest
+        )
+        context.update(extra_context)
+        if isinstance(node, CompiledSchemaTestNode):
+            # for test nodes, add a special keyword args value to the context
+            dbt.clients.jinja.add_rendered_test_kwargs(context, node)
+
+        return context
+
     def compile_node(self, node, manifest, extra_context=None):
         if extra_context is None:
             extra_context = {}
@@ -146,10 +168,9 @@ class Compiler:
         })
         compiled_node = _compiled_type_for(node).from_dict(data)
 
-        context = generate_runtime_model(
-            compiled_node, self.config, manifest
+        context = self._create_node_context(
+            compiled_node, manifest, extra_context
         )
-        context.update(extra_context)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
             node.raw_sql,

@@ -22,6 +22,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     ParsedDocumentation,
     ParsedHookNode,
+    TestMetadata,
 )
 from dbt.contracts.graph.unparsed import Quoting
 
@@ -568,6 +569,10 @@ class TestParsedSchemaTestNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'meta': {},
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
 
     def _complex(self):
@@ -613,6 +618,10 @@ class TestParsedSchemaTestNode(ContractTestCase):
                 },
             },
             'column_name': 'id',
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
 
     def test_ok(self):
@@ -649,6 +658,10 @@ class TestParsedSchemaTestNode(ContractTestCase):
             },
             'docs': {'show': True},
             'columns': {},
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
         node = self.ContractType(
             package_name='test',
@@ -670,6 +683,7 @@ class TestParsedSchemaTestNode(ContractTestCase):
             tags=[],
             meta={},
             config=TestConfig(),
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -714,6 +728,7 @@ class TestParsedSchemaTestNode(ContractTestCase):
             columns={'a': ColumnInfo('a', 'a text field',{})},
             column_name='id',
             docs=Docs(show=False),
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)

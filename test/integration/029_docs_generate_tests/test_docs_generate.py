@@ -1073,7 +1073,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/not_null_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(model=ref('model'), column_name='id') }}",
+                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': self.test_root_dir,
@@ -1091,7 +1091,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test_metadata': {
                         'namespace': None,
                         'name': 'not_null',
-                        'kwargs': {'column_name': 'id'},
+                        'kwargs': {
+                            'column_name': 'id',
+                            'model': "{{ ref('model') }}",
+                        },
                     },
                 },
                 'test.test.test_nothing_model_': {
@@ -1123,7 +1126,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/test_nothing_model_.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(model=ref('model'), ) }}",
+                    'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': self.test_root_dir,
@@ -1141,7 +1144,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test_metadata': {
                         'namespace': 'test',
                         'name': 'nothing',
-                        'kwargs': {},
+                        'kwargs': {
+                            'model': "{{ ref('model') }}",
+                        },
                     },
                 },
                 'test.test.unique_model_id': {
@@ -1173,7 +1178,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/unique_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(model=ref('model'), column_name='id') }}",
+                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': self.test_root_dir,
@@ -1191,7 +1196,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test_metadata': {
                         'namespace': None,
                         'name': 'unique',
-                        'kwargs': {'column_name': 'id'},
+                        'kwargs': {
+                            'column_name': 'id',
+                            'model': "{{ ref('model') }}",
+                        },
                     },
                 },
             },
@@ -2999,7 +3007,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/not_null_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(model=ref('model'), column_name='id') }}",
+                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': self.test_root_dir,
@@ -3010,7 +3018,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test_metadata': {
                         'namespace': None,
                         'name': 'not_null',
-                        'kwargs': {'column_name': 'id'},
+                        'kwargs': {
+                            'column_name': 'id',
+                            'model': "{{ ref('model') }}",
+                        },
                     },
                 },
                 'thread_id': ANY,
@@ -3059,7 +3070,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/test_nothing_model_.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(model=ref('model'), ) }}",
+                    'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': self.test_root_dir,
@@ -3070,7 +3081,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test_metadata': {
                         'namespace': 'test',
                         'name': 'nothing',
-                        'kwargs': {},
+                        'kwargs': {
+                            'model': "{{ ref('model') }}",
+                        },
                     },
                 },
                 'thread_id': ANY,
@@ -3119,7 +3132,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/unique_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(model=ref('model'), column_name='id') }}",
+                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': self.test_root_dir,
@@ -3130,7 +3143,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test_metadata': {
                         'namespace': None,
                         'name': 'unique',
-                        'kwargs': {'column_name': 'id'},
+                        'kwargs': {
+                            'column_name': 'id',
+                            'model': "{{ ref('model') }}",
+                        },
                     },
                 },
                 'thread_id': ANY,

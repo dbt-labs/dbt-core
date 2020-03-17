@@ -364,6 +364,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[0].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
                 'values': ['red', 'blue', 'green'],
             }
         )
@@ -385,6 +386,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[1].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
                 'arg': 100,
             },
         )
@@ -403,6 +405,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[2].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
             },
         )
 

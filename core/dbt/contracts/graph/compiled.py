@@ -117,7 +117,6 @@ class CompiledSnapshotNode(CompiledNode):
 @dataclass
 class CompiledDataTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
-    column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
 
@@ -237,8 +236,7 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
     return cls.from_dict(compiled.to_dict(), validate=False)
 
 
-# This is anything that can be in manifest.nodes and isn't a Source.
-NonSourceNode = Union[
+NonSourceCompiledNode = Union[
     CompiledAnalysisNode,
     CompiledDataTestNode,
     CompiledModelNode,
@@ -247,6 +245,9 @@ NonSourceNode = Union[
     CompiledSchemaTestNode,
     CompiledSeedNode,
     CompiledSnapshotNode,
+]
+
+NonSourceParsedNode = Union[
     ParsedAnalysisNode,
     ParsedDataTestNode,
     ParsedModelNode,
@@ -255,6 +256,13 @@ NonSourceNode = Union[
     ParsedSchemaTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
+]
+
+
+# This is anything that can be in manifest.nodes and isn't a Source.
+NonSourceNode = Union[
+    NonSourceCompiledNode,
+    NonSourceParsedNode,
 ]
 
 # We allow either parsed or compiled nodes, or parsed sources, as some

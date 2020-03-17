@@ -4,7 +4,7 @@ from dbt.contracts.graph.compiled import (
     CompiledModelNode, InjectedCTE, CompiledSchemaTestNode
 )
 from dbt.contracts.graph.parsed import (
-    DependsOn, NodeConfig, TestConfig
+    DependsOn, NodeConfig, TestConfig, TestMetadata
 )
 from dbt.node_types import NodeType
 
@@ -200,6 +200,10 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             'database': 'test_db',
             'schema': 'test_schema',
             'alias': 'bar',
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
 
     def test_basic_uncompiled(self):
@@ -239,6 +243,10 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             'compiled': False,
             'extra_ctes': [],
             'extra_ctes_injected': False,
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
         node = self.ContractType(
             package_name='test',
@@ -263,6 +271,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             compiled=False,
             extra_ctes=[],
             extra_ctes_injected=False,
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -314,6 +323,10 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             'extra_ctes_injected': True,
             'injected_sql': 'with whatever as (select * from other) select * from whatever',
             'column_name': 'id',
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
         node = self.ContractType(
             package_name='test',
@@ -341,6 +354,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             extra_ctes_injected=True,
             injected_sql='with whatever as (select * from other) select * from whatever',
             column_name='id',
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
