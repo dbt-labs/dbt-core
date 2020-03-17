@@ -369,9 +369,7 @@ class Compiler:
         )
         compiled_node = _compiled_type_for(node).from_dict(data)
 
-        context = self._create_node_context(
-            compiled_node, manifest, extra_context
-        )
+        context = self._create_node_context(compiled_node, manifest, extra_context)
 
         compiled_node.compiled_sql = jinja.get_rendered(
             node.raw_sql,
