@@ -2,6 +2,7 @@
 
 ### Fixes
 - When dbt encounters databases, schemas, or tables with names that look like numbers, treat them as strings ([#2206](https://github.com/fishtown-analytics/dbt/issues/2206), [#2208](https://github.com/fishtown-analytics/dbt/pull/2208))
+- Increased the lower bound for google-cloud-bigquery ([#2213](https://github.com/fishtown-analytics/dbt/issues/2213), [#2214](https://github.com/fishtown-analytics/dbt/pull/2214))
 
 ## dbt 0.16.0rc3 (March 11, 2020)
 
