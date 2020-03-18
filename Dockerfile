@@ -6,7 +6,9 @@ RUN apt-get update && \
     apt-get dist-upgrade -y && \
     apt-get install -y  --no-install-recommends \
         netcat postgresql curl git ssh  software-properties-common \
-        make build-essential ca-certificates libpq-dev && \
+        make build-essential ca-certificates libpq-dev \
+        libsasl2-dev libsasl2-2 libsasl2-modules-gssapi-mit \
+        && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get install -y \
         python python-dev python-pip \
