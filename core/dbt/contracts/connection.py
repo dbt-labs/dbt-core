@@ -197,7 +197,7 @@ class HasCredentials(Protocol):
         raise NotImplementedError("to_target_dict not implemented")
 
 
-DEFAULT_QUERY_COMMENT = '''
+DEFAULT_QUERY_COMMENT = """
 {%- set comment_dict = {} -%}
 {%- do comment_dict.update(
     app='dbt',
@@ -214,7 +214,7 @@ DEFAULT_QUERY_COMMENT = '''
   {%- do comment_dict.update(connection_name=connection_name) -%}
 {%- endif -%}
 {{ return(tojson(comment_dict)) }}
-'''
+"""
 
 
 @dataclass
