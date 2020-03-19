@@ -3,7 +3,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import (
     Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
-)
+    Union)
 from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin
@@ -195,12 +195,12 @@ DEFAULT_QUERY_COMMENT = '''
 
 @dataclass
 class QueryComment(JsonSchemaMixin):
-    comment: str = DEFAULT_QUERY_COMMENT
+    comment: Optional[str] = DEFAULT_QUERY_COMMENT
     append: bool = False
 
 
 class AdapterRequiredConfig(HasCredentials, Protocol):
     project_name: str
-    query_comment: QueryComment
+    query_comment: Optional[Union[QueryComment, str]]
     cli_vars: Dict[str, Any]
     target_path: str

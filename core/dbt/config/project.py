@@ -203,17 +203,14 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
 
 def _query_comment_from_cfg(
-        cfg_query_comment: Union[str, Dict[str, Any]]
+        cfg_query_comment: Union[QueryComment, str]
 ) -> QueryComment:
     if isinstance(cfg_query_comment, str):
         if cfg_query_comment in ('None', ''):
             return QueryComment(comment='')
         return QueryComment(comment=cfg_query_comment)
 
-    return QueryComment(
-        comment=cfg_query_comment.get('comment'),
-        append=cfg_query_comment.get('append', False)
-    )
+    return cfg_query_comment
 
 
 @dataclass
