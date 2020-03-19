@@ -6,6 +6,9 @@
 ### Features
 - Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138))
 
+Contributers:
+ - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
+
 ## dbt 0.16.0rc2 (March 4, 2020)
 
 ### Under the hood
