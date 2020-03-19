@@ -55,5 +55,4 @@ class TestQueryHeaders(TestCase):
         })
         config = config_from_parts_or_dicts(self.project_cfg, self.profile_cfg)
         query_header = MacroQueryStringSetter(config, mock.MagicMock(macros={}))
-        sql = query_header.add(self.query)
-        self.assertEqual(sql, self.query)
+        self.assertEqual(query_header.add(self.query), self.query)

@@ -195,7 +195,7 @@ DEFAULT_QUERY_COMMENT = '''
 
 @dataclass
 class QueryComment(JsonSchemaMixin):
-    comment: Optional[str] = DEFAULT_QUERY_COMMENT
+    comment: str = DEFAULT_QUERY_COMMENT
     append: bool = False
 
 
