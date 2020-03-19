@@ -78,25 +78,14 @@ class MacroQueryStringSetter:
         self.reset()
 
     def _get_comment_macro(self) -> Optional[str]:
-        default_comment = QueryComment().comment
         if not self.config.query_comment:
-            return default_comment
+            return QueryComment().comment
 
-        if isinstance(self.config.query_comment, str):
-            if self.config.query_comment in ('None', ''):
-                # query comment is disabled.
-                return None
-            return self.config.query_comment
+        query_comment = self.config.query_comment
+        if isinstance(query_comment, str):
+            return query_comment
 
-        comment = self.config.query_comment.comment
-
-        if comment in ('None', ''):
-            return None
-
-        if not comment:
-            return default_comment
-
-        return comment
+        return query_comment.comment
 
     def _get_context(self) -> Dict[str, Any]:
         return generate_query_header_context(self.config, self.manifest)
