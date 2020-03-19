@@ -14,6 +14,7 @@ import dbt.exceptions
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
 from dbt.context.base import generate_base_context
+from dbt.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
@@ -869,7 +870,7 @@ class TestProject(BaseConfigTest):
             },
         })
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
-        self.assertEqual(project.query_comment.comment, None)
+        self.assertEqual(project.query_comment.comment, DEFAULT_QUERY_COMMENT)
         self.assertEqual(project.query_comment.append, True)
 
     def test_custom_query_comment_append(self):

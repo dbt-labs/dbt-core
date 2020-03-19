@@ -89,11 +89,13 @@ class MacroQueryStringSetter:
             return self.config.query_comment
 
         comment = self.config.query_comment.comment
+
+        if comment in ('None', ''):
+            return None
+
         if not comment:
-            # query comment is not specified, using default value
             return default_comment
 
-        # using custom query comment
         return comment
 
     def _get_context(self) -> Dict[str, Any]:
