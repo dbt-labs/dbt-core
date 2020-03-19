@@ -82,12 +82,13 @@ class MacroQueryStringSetter:
         if not self.config.query_comment:
             return default_comment
 
+        if isinstance(self.config.query_comment, str):
+            if self.config.query_comment in ('None', ''):
+                # query comment is disabled.
+                return None
+            return self.config.query_comment
+
         comment = self.config.query_comment.comment
-
-        if comment in ('None', ''):
-            # query comment is disabled.
-            return None
-
         if not comment:
             # query comment is not specified, using default value
             return default_comment
@@ -111,6 +112,6 @@ class MacroQueryStringSetter:
         comment_str = self.generator(name, wrapped)
 
         append = False
-        if self.config.query_comment:
+        if isinstance(self.config.query_comment, QueryComment):
             append = self.config.query_comment.append
         self.comment.set(comment_str, append)
