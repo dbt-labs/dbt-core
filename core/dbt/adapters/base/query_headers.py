@@ -4,30 +4,10 @@ from typing import Optional, Callable, Dict, Any
 from dbt.clients.jinja import QueryStringGenerator
 
 from dbt.context.configured import generate_query_header_context
-from dbt.contracts.connection import AdapterRequiredConfig
+from dbt.contracts.connection import AdapterRequiredConfig, QueryComment
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import RuntimeException
-
-
-DEFAULT_QUERY_COMMENT = '''
-{%- set comment_dict = {} -%}
-{%- do comment_dict.update(
-    app='dbt',
-    dbt_version=dbt_version,
-    profile_name=target.get('profile_name'),
-    target_name=target.get('target_name'),
-) -%}
-{%- if node is not none -%}
-  {%- do comment_dict.update(
-    node_id=node.unique_id,
-  ) -%}
-{% else %}
-  {# in the node context, the connection name is the node_id #}
-  {%- do comment_dict.update(connection_name=connection_name) -%}
-{%- endif -%}
-{{ return(tojson(comment_dict)) }}
-'''
 
 
 class NodeWrapper:
@@ -98,10 +78,11 @@ class MacroQueryStringSetter:
         self.reset()
 
     def _get_comment_macro(self) -> Optional[str]:
+        default_comment = QueryComment().comment
         if not self.config.query_comment:
-            return DEFAULT_QUERY_COMMENT
+            return default_comment
 
-        comment = self.config.query_comment.get('comment')
+        comment = self.config.query_comment.comment
 
         if comment in ('None', ''):
             # query comment is disabled.
@@ -109,7 +90,7 @@ class MacroQueryStringSetter:
 
         if not comment:
             # query comment is not specified, using default value
-            return DEFAULT_QUERY_COMMENT
+            return default_comment
 
         # using custom query comment
         return comment
@@ -131,5 +112,5 @@ class MacroQueryStringSetter:
 
         append = False
         if self.config.query_comment:
-            append = self.config.query_comment.get('append', False)
+            append = self.config.query_comment.append
         self.comment.set(comment_str, append)

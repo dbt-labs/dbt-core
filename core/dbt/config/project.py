@@ -9,6 +9,7 @@ from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.contracts.connection import QueryComment
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
@@ -201,11 +202,18 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
     return project_dict
 
 
-def _query_comment_from_cfg(cfg_query_comment) -> Dict[str, Any]:
+def _query_comment_from_cfg(
+        cfg_query_comment: Union[str, Dict[str, Any]]
+) -> QueryComment:
     if isinstance(cfg_query_comment, str):
-        return {'comment': cfg_query_comment, 'append': False}
+        if cfg_query_comment in ('None', ''):
+            return QueryComment(comment='')
+        return QueryComment(comment=cfg_query_comment)
 
-    return cfg_query_comment
+    return QueryComment(
+        comment=cfg_query_comment.get('comment'),
+        append=cfg_query_comment.get('append', False)
+    )
 
 
 @dataclass
@@ -250,7 +258,7 @@ class Project:
     snapshots: Dict[str, Any]
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
-    query_comment: Dict[str, Any]
+    query_comment: Optional[Union[QueryComment, str]]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -362,7 +370,10 @@ class Project:
         dbt_raw_version: Union[List[str], str] = '>=0.0.0'
         if cfg.require_dbt_version is not None:
             dbt_raw_version = cfg.require_dbt_version
-        query_comment = _query_comment_from_cfg(cfg.query_comment)
+
+        query_comment = None
+        if cfg.query_comment is not None:
+            query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)
@@ -447,8 +458,10 @@ class Project:
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
-            'query-comment': self.query_comment
         })
+        if self.query_comment is not None:
+            result['query-comment'] = self.query_comment.to_dict()
+
         if with_packages:
             result.update(self.packages.to_dict())
 

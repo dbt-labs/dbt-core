@@ -848,8 +848,15 @@ class TestProject(BaseConfigTest):
             'query-comment': 'None',
         })
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
-        self.assertEqual(project.query_comment['comment'], 'None')
-        self.assertEqual(project.query_comment['append'], False)
+        self.assertEqual(project.query_comment.comment, '')
+        self.assertEqual(project.query_comment.append, False)
+
+        self.default_project_data.update({
+            'query-comment': '',
+        })
+        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        self.assertEqual(project.query_comment.comment, '')
+        self.assertEqual(project.query_comment.append, False)
 
     def test_default_query_comment(self):
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
@@ -862,8 +869,8 @@ class TestProject(BaseConfigTest):
             },
         })
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
-        self.assertEqual(project.query_comment.get('comment'), None)
-        self.assertEqual(project.query_comment['append'], True)
+        self.assertEqual(project.query_comment.comment, None)
+        self.assertEqual(project.query_comment.append, True)
 
     def test_custom_query_comment_append(self):
         self.default_project_data.update({
@@ -873,8 +880,8 @@ class TestProject(BaseConfigTest):
             },
         })
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
-        self.assertEqual(project.query_comment['comment'], 'run by user test')
-        self.assertEqual(project.query_comment['append'], True)
+        self.assertEqual(project.query_comment.comment, 'run by user test')
+        self.assertEqual(project.query_comment.append, True)
 
 class TestProjectWithConfigs(BaseConfigTest):
     def setUp(self):
