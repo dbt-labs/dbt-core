@@ -294,7 +294,9 @@ class PypiBuilder:
         print('built pypi packages')
 
     def upload(self, *, test=True):
-        run_command(['twine', 'check'])
+        cmd = ['twine', 'check']
+        cmd.extend(str(p) for p in self._all_packages_in(self.dbt_path))
+        run_command(cmd)
         cmd = ['twine', 'upload']
         if test:
             cmd.extend(['--repository', 'pypitest'])

@@ -7,6 +7,7 @@ from typing import Optional, Dict, List, Set, Tuple, Iterable
 
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import SchemaSearchMap
+from dbt.adapters.base.relation import InformationSchema
 from dbt.adapters.factory import get_adapter
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
@@ -39,6 +40,12 @@ import dbt.graph.selector
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
 RUNNING_STATE = DbtProcessState('running')
+
+
+def _lower(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    return value.lower()
 
 
 def write_manifest(config, manifest):
@@ -406,15 +413,26 @@ class GraphRunnableTask(ManifestTask):
                 include_policy=include_policy,
                 information_schema_view=None,
             )
-            required_databases.append(str(db_only))
+            required_databases.append(db_only)
 
         existing_schemas_lowered: Set[Tuple[str, Optional[str]]] = set()
 
-        def list_schemas(db: str) -> List[Tuple[str, str]]:
-            with adapter.connection_named(f'list_{db}'):
+        def list_schemas(info: InformationSchema) -> List[Tuple[str, str]]:
+            # the database name should never be None here (or where are we
+            # listing schemas from?)
+            if info.database is None:
+                raise InternalException(
+                    f'Got an invalid information schema of {info} (database '
+                    f'was None)'
+                )
+            database_name = info.database
+            database_quoted = str(info)
+            with adapter.connection_named(f'list_{database_name}'):
+                # we should never create a null schema, so just filter them out
                 return [
-                    (db.lower(), s.lower())
-                    for s in adapter.list_schemas(db)
+                    (database_name.lower(), s.lower())
+                    for s in adapter.list_schemas(database_quoted)
+                    if s is not None
                 ]
 
         def create_schema(db: str, schema: str) -> None:

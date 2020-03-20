@@ -3,6 +3,17 @@
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
 
+## dbt 0.16.0 (Release date TBD)
+
+### Fixes
+- When dbt encounters databases, schemas, or tables with names that look like numbers, treat them as strings ([#2206](https://github.com/fishtown-analytics/dbt/issues/2206), [#2208](https://github.com/fishtown-analytics/dbt/pull/2208))
+- Increased the lower bound for google-cloud-bigquery ([#2213](https://github.com/fishtown-analytics/dbt/issues/2213), [#2214](https://github.com/fishtown-analytics/dbt/pull/2214))
+
+## dbt 0.16.0rc3 (March 11, 2020)
+
+### Fixes
+- If database quoting is enabled, do not attempt to create schemas that already exist ([#2186](https://github.com/fishtown-analytics/dbt/issues/2186), [#2187](https://github.com/fishtown-analytics/dbt/pull/2187))
+
 ## dbt 0.16.0rc2 (March 4, 2020)
 
 ### Under the hood

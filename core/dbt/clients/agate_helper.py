@@ -4,7 +4,7 @@ import agate
 import datetime
 import isodate
 import json
-from typing import Iterable, List, Dict, Union
+from typing import Iterable, List, Dict, Union, Optional, Any
 
 from dbt.exceptions import RuntimeException
 
@@ -34,7 +34,7 @@ class ISODateTime(agate.data_types.DateTime):
         )
 
 
-def build_type_tester(text_columns: Iterable[str]):
+def build_type_tester(text_columns: Iterable[str]) -> agate.TypeTester:
     types = [
         agate.data_types.Number(null_values=('null', '')),
         agate.data_types.Date(null_values=('null', ''),
@@ -57,7 +57,19 @@ def build_type_tester(text_columns: Iterable[str]):
 DEFAULT_TYPE_TESTER = build_type_tester(())
 
 
-def table_from_data(data, column_names):
+def table_from_rows(
+    rows: List[Any],
+    column_names: Iterable[str],
+    text_only_columns: Optional[Iterable[str]] = None,
+) -> agate.Table:
+    if text_only_columns is None:
+        column_types = DEFAULT_TYPE_TESTER
+    else:
+        column_types = build_type_tester(text_only_columns)
+    return agate.Table(rows, column_names, column_types=column_types)
+
+
+def table_from_data(data, column_names: Iterable[str]) -> agate.Table:
     "Convert list of dictionaries into an Agate table"
 
     # The agate table is generated from a list of dicts, so the column order
@@ -72,7 +84,7 @@ def table_from_data(data, column_names):
         return table.select(column_names)
 
 
-def table_from_data_flat(data, column_names):
+def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
     "Convert list of dictionaries into an Agate table"
 
     rows = []
@@ -85,7 +97,7 @@ def table_from_data_flat(data, column_names):
                 row.append(value)
         rows.append(row)
 
-    return agate.Table(rows, column_names, column_types=DEFAULT_TYPE_TESTER)
+    return table_from_rows(rows=rows, column_names=column_names)
 
 
 def empty_table():

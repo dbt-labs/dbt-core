@@ -47,7 +47,7 @@ class TestColumnQuotingDefault(BaseColumnQuotingTest):
 
     @use_profile('bigquery')
     def test_bigquery_column_quotes(self):
-        self._run_columnn_quotes(strategy='insert_overwrite')
+        self._run_columnn_quotes(strategy='merge')
 
 
 class TestColumnQuotingDisabled(BaseColumnQuotingTest):
@@ -74,10 +74,6 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     @use_profile('snowflake')
     def test_snowflake_column_quotes(self):
         self._run_columnn_quotes()
-
-    @use_profile('bigquery')
-    def test_bigquery_column_quotes(self):
-        self._run_columnn_quotes(strategy='insert_overwrite')
 
     @use_profile('snowflake')
     def test_snowflake_column_quotes_merged(self):
@@ -112,10 +108,6 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
     @use_profile('snowflake')
     def test_snowflake_column_quotes(self):
         self._run_columnn_quotes()
-
-    @use_profile('bigquery')
-    def test_bigquery_column_quotes(self):
-        self._run_columnn_quotes(strategy='insert_overwrite')
 
     @use_profile('snowflake')
     def test_snowflake_column_quotes_merged(self):

@@ -3,7 +3,7 @@ from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
-    Optional, Tuple, Callable, Container, FrozenSet, Type, Dict, Any, List,
+    Optional, Tuple, Callable, Iterable, FrozenSet, Type, Dict, Any, List,
     Mapping, Iterator, Union, Set
 )
 
@@ -18,7 +18,7 @@ from dbt.exceptions import (
 import dbt.flags
 
 from dbt import deprecations
-from dbt.clients.agate_helper import empty_table, merge_tables
+from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
@@ -51,21 +51,6 @@ def _expect_row_value(key: str, row: agate.Row):
             .format(key, row.keys())
         )
     return row[key]
-
-
-def _relations_filter_schemas(
-    schemas: Container[str]
-) -> Callable[[agate.Row], bool]:
-    def test(row):
-        referenced_schema = _expect_row_value('referenced_schema', row)
-        dependent_schema = _expect_row_value('dependent_schema', row)
-        # handle the null schema
-        if referenced_schema is not None:
-            referenced_schema = referenced_schema.lower()
-        if dependent_schema is not None:
-            dependent_schema = dependent_schema.lower()
-        return referenced_schema in schemas or dependent_schema in schemas
-    return test
 
 
 def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
@@ -913,6 +898,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         context_override: Optional[Dict[str, Any]] = None,
         kwargs: Dict[str, Any] = None,
         release: bool = False,
+        text_only_columns: Optional[Iterable[str]] = None,
     ) -> agate.Table:
         """Look macro_name up in the manifest and execute its results.
 
@@ -976,6 +962,12 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
         """
+        # force database + schema to be strings
+        table = table_from_rows(
+            table.rows,
+            table.column_names,
+            text_only_columns=['table_database', 'table_schema', 'table_name']
+        )
         return table.where(_catalog_filter_schemas(manifest))
 
     def _get_one_catalog(
