@@ -1,4 +1,4 @@
-## dbt 0.16.0 (Release date TBD)
+## dbt 0.16.0rc4 (March 20, 2020)
 
 ### Fixes
 - When dbt encounters databases, schemas, or tables with names that look like numbers, treat them as strings ([#2206](https://github.com/fishtown-analytics/dbt/issues/2206), [#2208](https://github.com/fishtown-analytics/dbt/pull/2208))
