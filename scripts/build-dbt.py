@@ -583,7 +583,7 @@ class HomebrewBuilder:
         )
 
     @staticmethod
-    def run_tests(formula_path: Path):
+    def run_tests(formula_path: Path, audit: bool = True):
         path = os.path.normpath(formula_path)
         run_command(['brew', 'uninstall', '--force', path])
         versions = [
@@ -595,11 +595,12 @@ class HomebrewBuilder:
             run_command(['brew', 'unlink'] + versions)
         run_command(['brew', 'install', path])
         run_command(['brew', 'test', path])
-        run_command(['brew', 'audit', '--strict', path])
+        if audit:
+            run_command(['brew', 'audit', '--strict', path])
 
     def create_default_package(self):
         os.remove(self.default_formula_path)
-        formula_contents = self.create_formula_data(versioned=False)
+        formula_contents = self.get_formula_data(versioned=False)
         self.default_formula_path.write_text(formula_contents)
 
     def build(self):
@@ -609,7 +610,7 @@ class HomebrewBuilder:
 
         if self.set_default:
             self.create_default_package()
-            self.run_tests(formula_path=self.default_formula_path)
+            self.run_tests(formula_path=self.default_formula_path, audit=False)
             self.commit_default_formula()
 
 
