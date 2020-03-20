@@ -589,7 +589,7 @@ class HomebrewBuilder:
         versions = [
             l.strip() for l in
             collect_output(['brew', 'list']).split('\n')
-            if l.strip().startswith('dbt@')
+            if l.strip().startswith('dbt@') or l.strip() == 'dbt'
         ]
         if versions:
             run_command(['brew', 'unlink'] + versions)
