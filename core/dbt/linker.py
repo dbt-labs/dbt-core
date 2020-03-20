@@ -175,7 +175,7 @@ class GraphQueue:
         self.inner.join()
 
     def wait_until_something_was_done(self):
-        with self.some_task_done:
+        with self.lock:
             self.some_task_done.wait()
             return self.inner.unfinished_tasks
 
