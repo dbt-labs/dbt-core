@@ -779,6 +779,15 @@ class DockerBuilder:
             cwd=self.dbt_path,
         )
 
+    def commit_docker_folder(self):
+        # commit the contents of docker/
+        run_command(
+            ['git', 'add', 'docker'],
+            cwd=self.dbt_path
+        )
+        commit_msg = f'Add {self.image_tag} dockerfiles and requirements'
+        run_command(['git', 'commit', '-m', commit_msg], cwd=self.dbt_path)
+
     def build(
         self,
         write_requirements: bool = True,
@@ -788,6 +797,7 @@ class DockerBuilder:
             self.write_lockfile()
         if write_dockerfile:
             self.write_dockerfile()
+        self.commit_docker_folder()
         self.create_docker_image()
         self.set_remote_tag()
 
