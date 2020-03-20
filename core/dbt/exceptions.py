@@ -345,7 +345,7 @@ class FailFastException(RuntimeException):
 
     @property
     def type(self):
-        return 'FailFast'
+        return "FailFast"
 
 
 class DbtProjectError(DbtConfigError):
