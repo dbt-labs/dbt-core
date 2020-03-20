@@ -174,7 +174,11 @@ class GraphRunnableTask(ManifestTask):
         fail_fast = getattr(self.config.args, 'fail_fast', False)
 
         if (result.fail is not None or result.error is not None) and fail_fast:
-            self._raise_next_tick = FailFastException(result)
+            self._raise_next_tick = FailFastException(
+                message='Falling early due to test failure or runtime error',
+                result=result,
+                node=getattr(result, 'node', None)
+            )
         elif result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the

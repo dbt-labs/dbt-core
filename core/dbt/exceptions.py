@@ -281,15 +281,17 @@ class DbtConfigError(RuntimeException):
         self.result_type = result_type
 
 
-class FailFastException(Exception):
+class FailFastException(RuntimeException):
     CODE = 10013
     MESSAGE = 'FailFast Error'
 
-    def __init__(self, result=None):
+    def __init__(self, message, result=None, node=None):
+        super().__init__(msg=message, node=node)
         self.result = result
 
-    def __str__(self):
-        return 'Falling early due to test failure or runtime error'
+    @property
+    def type(self):
+        return 'FailFast'
 
 
 class DbtProjectError(DbtConfigError):
