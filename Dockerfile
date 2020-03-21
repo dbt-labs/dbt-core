@@ -1,12 +1,15 @@
 FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND noninteractive
+ARG DOCKERIZE_VERSION=v0.6.1
 
 RUN apt-get update && \
     apt-get dist-upgrade -y && \
     apt-get install -y  --no-install-recommends \
         netcat postgresql curl git ssh  software-properties-common \
-        make build-essential ca-certificates libpq-dev && \
+        make build-essential ca-certificates libpq-dev \
+        libsasl2-dev libsasl2-2 libsasl2-modules-gssapi-mit \
+        && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get install -y \
         python python-dev python-pip \
@@ -19,6 +22,9 @@ RUN apt-get update && \
 RUN useradd -mU dbt_test_user
 RUN mkdir /usr/app && chown dbt_test_user /usr/app
 RUN mkdir /home/tox && chown dbt_test_user /home/tox
+RUN curl -LO https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && \
+    tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && \
+    rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
 WORKDIR /usr/app
 VOLUME /usr/app

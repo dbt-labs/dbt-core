@@ -1,7 +1,11 @@
+import io
+import json
 import os
+from unittest import mock
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.logger import log_manager
 
 
 class BaseTestSimpleCopy(DBTIntegrationTest):
@@ -20,7 +24,6 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
     @property
     def project_config(self):
         return self.seed_quote_cfg_with({})
-
 
     def seed_quote_cfg_with(self, extra):
         cfg = {
@@ -392,3 +395,54 @@ class TestMixedCaseDatabase(BaseTestSimpleCopy):
     def test_postgres_run_mixed_case(self):
         self.run_dbt()
         self.run_dbt()
+
+
+class TestQuotedDatabase(BaseTestSimpleCopy):
+
+    @property
+    def project_config(self):
+        return self.seed_quote_cfg_with({
+            'quoting': {
+                'database': True,
+            },
+            "data-paths": [self.dir("seed-initial")],
+        })
+
+    def setUp(self):
+        super().setUp()
+        self.initial_stdout = log_manager.stdout
+        self.initial_stderr = log_manager.stderr
+        self.stringbuf = io.StringIO()
+        log_manager.set_output_stream(self.stringbuf)
+
+    def tearDown(self):
+        log_manager.set_output_stream(self.initial_stdout, self.initial_stderr)
+        super().tearDown()
+
+    def seed_get_json(self, expect_pass=True):
+        self.run_dbt(
+            ['--debug', '--log-format=json', '--single-threaded', 'seed'],
+            expect_pass=expect_pass
+        )
+        logs = []
+        for line in self.stringbuf.getvalue().split('\n'):
+            try:
+                log = json.loads(line)
+            except ValueError:
+                continue
+
+            if log['extra'].get('run_state') != 'internal':
+                continue
+            logs.append(log)
+        self.assertGreater(len(logs), 0)
+        return logs
+
+    @use_profile('postgres')
+    def test_postgres_no_create_schemas(self):
+        logs = self.seed_get_json()
+        for log in logs:
+            msg = log['message']
+            self.assertFalse(
+                'create schema if not exists' in msg,
+                f'did not expect schema creation: {msg}'
+            )
