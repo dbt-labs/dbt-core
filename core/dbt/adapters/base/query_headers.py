@@ -78,14 +78,7 @@ class MacroQueryStringSetter:
         self.reset()
 
     def _get_comment_macro(self) -> Optional[str]:
-        if not self.config.query_comment:
-            return QueryComment().comment
-
-        query_comment = self.config.query_comment
-        if isinstance(query_comment, str):
-            return query_comment
-
-        return query_comment.comment
+        return self.config.query_comment.comment
 
     def _get_context(self) -> Dict[str, Any]:
         return generate_query_header_context(self.config, self.manifest)

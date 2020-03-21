@@ -846,7 +846,7 @@ class TestProject(BaseConfigTest):
 
     def test_query_comment_disabled(self):
         self.default_project_data.update({
-            'query-comment': 'None',
+            'query-comment': None,
         })
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
         self.assertEqual(project.query_comment.comment, '')
@@ -861,7 +861,7 @@ class TestProject(BaseConfigTest):
 
     def test_default_query_comment(self):
         project = dbt.config.Project.from_project_config(self.default_project_data, None)
-        self.assertEqual(project.query_comment, None)
+        self.assertEqual(project.query_comment, QueryComment())
 
     def test_default_query_comment_append(self):
         self.default_project_data.update({

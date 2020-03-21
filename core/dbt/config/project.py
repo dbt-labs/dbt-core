@@ -15,6 +15,7 @@ from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import validator_error_message
 from dbt.exceptions import warn_or_error
+from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
@@ -203,12 +204,16 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
 
 def _query_comment_from_cfg(
-        cfg_query_comment: Union[QueryComment, str]
+        cfg_query_comment: Union[QueryComment, NoValue, str]
 ) -> QueryComment:
+    if not cfg_query_comment:
+        return QueryComment(comment='')
+
     if isinstance(cfg_query_comment, str):
-        if cfg_query_comment in ('None', ''):
-            return QueryComment(comment='')
         return QueryComment(comment=cfg_query_comment)
+
+    if isinstance(cfg_query_comment, NoValue):
+        return QueryComment()
 
     return cfg_query_comment
 
@@ -255,7 +260,7 @@ class Project:
     snapshots: Dict[str, Any]
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
-    query_comment: Optional[Union[QueryComment, str]]
+    query_comment: QueryComment
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -368,9 +373,7 @@ class Project:
         if cfg.require_dbt_version is not None:
             dbt_raw_version = cfg.require_dbt_version
 
-        query_comment = None
-        if cfg.query_comment is not None:
-            query_comment = _query_comment_from_cfg(cfg.query_comment)
+        query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)
@@ -456,7 +459,7 @@ class Project:
                 v.to_version_string() for v in self.dbt_version
             ],
         })
-        if self.query_comment is not None:
+        if self.query_comment:
             result['query-comment'] = self.query_comment.to_dict()
 
         if with_packages:
