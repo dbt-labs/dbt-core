@@ -167,7 +167,7 @@ class TestNullQueryComments(TestDefaultQueryComments):
     @property
     def project_config(self):
         cfg = super().project_config
-        cfg.update({'query-comment': 'None'})
+        cfg.update({'query-comment': ''})
         return cfg
 
     def matches_comment(self, msg) -> bool:
