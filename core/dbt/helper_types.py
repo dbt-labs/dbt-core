@@ -79,7 +79,7 @@ class PathEncoder(FieldEncoder):
 
 
 class NVEnum(StrEnum):
-    novalue = 'novalue'
+    novalue = "novalue"
 
     def __eq__(self, other):
         return isinstance(other, NVEnum)
@@ -88,6 +88,7 @@ class NVEnum(StrEnum):
 @dataclass
 class NoValue(dbtClassMixin):
     """Sometimes, you want a way to say none that isn't None"""
+
     novalue: NVEnum = NVEnum.novalue
 
 

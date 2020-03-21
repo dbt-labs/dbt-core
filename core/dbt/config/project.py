@@ -168,7 +168,7 @@ def _query_comment_from_cfg(
     cfg_query_comment: Union[QueryComment, NoValue, str, None]
 ) -> QueryComment:
     if not cfg_query_comment:
-        return QueryComment(comment='')
+        return QueryComment(comment="")
 
     if isinstance(cfg_query_comment, str):
         return QueryComment(comment=cfg_query_comment)
