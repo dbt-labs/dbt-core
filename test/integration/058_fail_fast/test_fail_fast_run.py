@@ -43,7 +43,7 @@ class TestFastFailingDuringRun(DBTIntegrationTest):
         self.assertFalse(len(vals) == count, 'Execution was not stopped before run end')
 
     @use_profile('postgres')
-    def test_postgres_run_duplicate_hook_defs(self):
+    def test_postgres_fail_fast_run(self):
         with self.assertRaises(FailFastException):
             self.run_dbt(['run', '--threads', '1', '--fail-fast'])
             self.check_audit_table()
