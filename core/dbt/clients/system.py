@@ -10,7 +10,7 @@ import tarfile
 import requests
 import stat
 from typing import (
-    Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable
+    Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
 )
 
 import dbt.exceptions
@@ -323,8 +323,8 @@ def run_cmd(
     return out, err
 
 
-def download(url: str, path: str) -> None:
-    response = requests.get(url)
+def download(url: str, path: str, timeout: Union[float, tuple] = None) -> None:
+    response = requests.get(url, timeout=timeout)
     with open(path, 'wb') as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)
