@@ -14,7 +14,7 @@ except ImportError:
 
 
 package_name = "dbt-snowflake"
-package_version = "0.16.0rc4"
+package_version = "0.16.0"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
