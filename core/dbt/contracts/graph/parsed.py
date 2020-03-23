@@ -20,7 +20,7 @@ from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
 from dbt.contracts.graph.unparsed import (
-    UnparsedNode, UnparsedDocumentation, Quoting, Docs,
+    UnparsedNode,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
