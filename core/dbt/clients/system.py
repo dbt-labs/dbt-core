@@ -11,9 +11,7 @@ import sys
 import tarfile
 import requests
 import stat
-from typing import (
-    Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
-)
+from typing import Type, NoReturn, List, Optional, Dict, Any, Tuple, Callable, Union
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
