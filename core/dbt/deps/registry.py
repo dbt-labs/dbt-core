@@ -52,7 +52,6 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         return RegistryPackageMetadata.from_dict(dct)
 
     def install(self, project, renderer):
-        connection_timeout = float(os.getenv('DBT_HTTP_TIMEOUT', 10))
         metadata = self.fetch_metadata(project, renderer)
 
         tar_name = '{}.{}.tar.gz'.format(self.package, self.version)
@@ -62,7 +61,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         system.make_directory(os.path.dirname(tar_path))
 
         download_url = metadata.downloads.tarball
-        system.download(download_url, tar_path, timeout=connection_timeout)
+        system.download(download_url, tar_path)
         deps_path = project.modules_path
         package_name = self.get_project_name(project, renderer)
         system.untar_package(tar_path, deps_path, package_name)
