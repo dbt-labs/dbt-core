@@ -1192,7 +1192,6 @@ class TestParsedMacro(ContractTestCase):
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'macro_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
@@ -1212,7 +1211,6 @@ class TestParsedMacro(ContractTestCase):
             original_file_path='/root/path.sql',
             package_name='test',
             macro_sql='{% macro foo() %}select 1 as id{% endmacro %}',
-            raw_sql='{% macro foo() %}select 1 as id{% endmacro %}',
             root_path='/root/',
             resource_type=NodeType.Macro,
             unique_id='macro.test.foo',
@@ -1243,7 +1241,6 @@ class TestParsedDocumentation(ContractTestCase):
     def _ok_dict(self):
         return {
             'block_contents': 'some doc contents',
-            'file_contents': '{% doc foo %}some doc contents{% enddoc %}',
             'name': 'foo',
             'original_file_path': '/root/docs/doc.md',
             'package_name': 'test',
@@ -1259,7 +1256,6 @@ class TestParsedDocumentation(ContractTestCase):
             root_path='/root',
             path='/root/docs',
             original_file_path='/root/docs/doc.md',
-            file_contents='{% doc foo %}some doc contents{% enddoc %}',
             name='foo',
             unique_id='test.foo',
             block_contents='some doc contents'

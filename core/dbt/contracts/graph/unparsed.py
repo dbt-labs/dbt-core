@@ -271,13 +271,17 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class UnparsedDocumentationFile(JsonSchemaMixin, Replaceable):
+class UnparsedDocumentation(JsonSchemaMixin, Replaceable):
     package_name: str
     root_path: str
     path: str
     original_file_path: str
-    file_contents: str
 
     @property
     def resource_type(self):
         return NodeType.Documentation
+
+
+@dataclass
+class UnparsedDocumentationFile(UnparsedDocumentation):
+    file_contents: str

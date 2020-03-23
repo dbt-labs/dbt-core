@@ -16,7 +16,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import InternalException, RuntimeException
+from dbt.exceptions import RuntimeException
 
 from hologram import JsonSchemaMixin
 from dataclasses import dataclass, field
@@ -95,13 +95,6 @@ class CompiledRPCNode(CompiledNode):
 class CompiledSeedNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
-    seed_file_path: str = ''
-
-    def __post_init__(self):
-        if self.seed_file_path == '':
-            raise InternalException(
-                'Seeds should always have a seed_file_path'
-            )
 
     @property
     def empty(self):

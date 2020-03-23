@@ -197,7 +197,6 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {},
                 'disabled': [],
-                'files': {},
             }
         )
 
@@ -211,7 +210,6 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['docs'], {})
         self.assertEqual(serialized['disabled'], [])
-        self.assertEqual(serialized['files'], {})
         parent_map = serialized['parent_map']
         child_map = serialized['child_map']
         # make sure there aren't any extra/missing keys.
@@ -327,7 +325,6 @@ class ManifestTest(unittest.TestCase):
                     'adapter_type': 'postgres',
                 },
                 'disabled': [],
-                'files': {},
             }
         )
 
@@ -357,7 +354,6 @@ class ManifestTest(unittest.TestCase):
             original_file_path='seed.csv',
             root_path='',
             raw_sql='-- csv --',
-            seed_file_path='data/seed.csv'
         )
         manifest = Manifest(nodes=nodes, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
@@ -544,7 +540,6 @@ class MixedManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {},
                 'disabled': [],
-                'files': {},
             }
         )
 

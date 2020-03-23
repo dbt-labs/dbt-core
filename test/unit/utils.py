@@ -149,7 +149,6 @@ def generate_name_macros(package):
         sql = f'{{% macro {name}(value, node) %}} {{% if value %}} {{{{ value }}}} {{% else %}} {{{{ {source} }}}} {{% endif %}} {{% endmacro %}}'
         name_sql[name] = sql
 
-    all_sql = '\n'.join(name_sql.values())
     for name, sql in name_sql.items():
         pm = ParsedMacro(
             name=name,
@@ -159,7 +158,6 @@ def generate_name_macros(package):
             original_file_path=normalize('macros/macro.sql'),
             root_path='./dbt_modules/root',
             path=normalize('macros/macro.sql'),
-            raw_sql=all_sql,
             macro_sql=sql,
         )
         yield pm

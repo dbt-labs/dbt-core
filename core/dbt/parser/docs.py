@@ -57,6 +57,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
                     'block_contents': item().strip(),
                 }
             )
+            merged.pop('file_contents', None)
             yield ParsedDocumentation.from_dict(merged)
 
     def parse_block(self, block: FullBlock) -> Iterable[ParsedDocumentation]:

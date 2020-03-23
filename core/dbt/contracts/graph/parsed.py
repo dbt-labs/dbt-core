@@ -20,7 +20,7 @@ from hologram.helpers import (
 from dbt.clients.system import write_file
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
-    UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting, Docs,
+    UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     AdditionalPropertiesAllowed, HasYamlMetadata, MacroArgument
 )
@@ -274,13 +274,6 @@ class SeedConfig(NodeConfig):
 class ParsedSeedNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
-    seed_file_path: str = ''
-
-    def __post_init__(self):
-        if self.seed_file_path == '':
-            raise dbt.exceptions.InternalException(
-                'Seeds should always have a seed_file_path'
-            )
 
     @property
     def empty(self):
@@ -496,7 +489,7 @@ class ParsedMacroPatch(ParsedPatch):
 
 
 @dataclass
-class ParsedMacro(UnparsedMacro, HasUniqueID):
+class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     name: str
     macro_sql: str
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
@@ -523,7 +516,7 @@ class ParsedMacro(UnparsedMacro, HasUniqueID):
 
 
 @dataclass
-class ParsedDocumentation(UnparsedDocumentationFile, HasUniqueID):
+class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
     name: str
     block_contents: str
 

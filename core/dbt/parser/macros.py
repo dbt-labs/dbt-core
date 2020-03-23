@@ -39,7 +39,6 @@ class MacroParser(BaseParser[ParsedMacro]):
             macro_sql=block.full_block,
             original_file_path=base_node.original_file_path,
             package_name=base_node.package_name,
-            raw_sql=base_node.raw_sql,
             root_path=base_node.root_path,
             resource_type=base_node.resource_type,
             name=name,

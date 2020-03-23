@@ -533,7 +533,9 @@ class ProviderContext(ManifestContext):
                 'can only load_agate_table for seeds (got a {})'
                 .format(self.model.resource_type)
             )
-        path = self.model.seed_file_path
+        path = os.path.join(
+            self.model.root_path, self.model.original_file_path
+        )
         column_types = self.model.config.column_types
         try:
             table = agate_helper.from_csv(path, text_columns=column_types)

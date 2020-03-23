@@ -831,19 +831,17 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(
             set(macro),
             {
-                'path', 'original_file_path', 'package_name', 'raw_sql',
+                'path', 'original_file_path', 'package_name',
                 'root_path', 'name', 'unique_id', 'tags', 'resource_type',
                 'depends_on', 'meta', 'description', 'patch_path', 'arguments',
                 'macro_sql',
             }
         )
         # Don't compare the sql, just make sure it exists
-        self.assertTrue(len(macro['raw_sql']) > 10)
         self.assertTrue(len(macro['macro_sql']) > 10)
-        self.assertIn(macro['macro_sql'], macro['raw_sql'])
         without_sql = {
             k: v for k, v in macro.items()
-            if k not in {'macro_sql', 'raw_sql'}
+            if k not in {'macro_sql'}
         }
         # Windows means we can't hard-code these.
         helpers_path = Normalized('macros/materializations/helpers.sql')
@@ -983,7 +981,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
-                    'seed_file_path': Normalized(os.path.join(self.test_root_dir, 'seed', 'seed.csv')),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -1233,94 +1230,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'adapter_type': self.adapter_type,
             },
             'disabled': [],
-            'files': {
-                normalize('macros/dummy_test.sql'): {
-                    'path': self._path_to('macros', 'dummy_test.sql'),
-                    'checksum': self._checksum_file('macros/dummy_test.sql'),
-                    'docs': [],
-                    'macros': ['macro.test.test_nothing'],
-                    'nodes': [],
-                    'sources': [],
-                    'patches': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/macro.md'): {
-                    'checksum': self._checksum_file('macros/macro.md'),
-                    'docs': [
-                        'test.macro_info',
-                        'test.macro_arg_info',
-                    ],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'path': self._path_to('macros', 'macro.md'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/schema.yml'): {
-                    'path': self._path_to('macros', 'schema.yml'),
-                    'checksum': self._checksum_file('macros/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [['test', 'test_nothing']],
-                },
-                normalize('models/model.sql'): {
-                    'path': self._path_to('models', 'model.sql'),
-                    'checksum': self._checksum_file('models/model.sql'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['model.test.model'],
-                    'sources': [],
-                    'patches': [],
-                    'macro_patches': [],
-                },
-                normalize('seed/seed.csv'): {
-                    'path': self._path_to('seed', 'seed.csv'),
-                    'checksum': {
-                        'name': 'path',
-                        'checksum': self._absolute_path_to('seed', 'seed.csv'),
-                    },
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['seed.test.seed'],
-                    'sources': [],
-                    'patches': [],
-                    'macro_patches': [],
-                },
-                normalize('models/readme.md'): {
-                    'path': self._path_to('models', 'readme.md'),
-                    'checksum': self._checksum_file('models/readme.md'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'sources': [],
-                    'patches': [],
-                    'macro_patches': [],
-                },
-                normalize('models/schema.yml'): {
-                    'path': self._path_to('models', 'schema.yml'),
-                    'checksum': self._checksum_file('models/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['test.test.unique_model_id', 'test.test.not_null_model_id', 'test.test.test_nothing_model_'],
-                    'sources': [],
-                    'patches': ['model'],
-                    'macro_patches': [],
-                },
-                normalize('seed/schema.yml'): {
-                    'path': self._path_to('seed', 'schema.yml'),
-                    'checksum': self._checksum_file('seed/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'sources': [],
-                    'patches': ['seed'],
-                    'macro_patches': [],
-                },
-            },
         }
 
     def expected_postgres_references_manifest(self, model_database=None):
@@ -1593,7 +1502,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'refs': [],
                     'resource_type': 'seed',
                     'root_path': self.test_root_dir,
-                    'seed_file_path': normalize(os.path.join(self.test_root_dir, 'seed', 'seed.csv')),
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1651,7 +1559,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'dbt.__overview__': ANY,
                 'test.column_info': {
                     'block_contents': 'An ID field',
-                    'file_contents': column_info,
                     'name': 'column_info',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1663,7 +1570,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'block_contents': (
                         'A summmary table of the ephemeral copy of the seed data'
                     ),
-                    'file_contents': ephemeral_summary,
                     'name': 'ephemeral_summary',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1673,7 +1579,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.source_info': {
                     'block_contents': 'My source',
-                    'file_contents': source_info,
                     'name': 'source_info',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1683,7 +1588,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.summary_count': {
                     'block_contents': 'The number of instances of the first name',
-                    'file_contents': summary_count,
                     'name': 'summary_count',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1693,7 +1597,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.summary_first_name': {
                     'block_contents': 'The first name being summarized',
-                    'file_contents': summary_first_name,
                     'name': 'summary_first_name',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1703,7 +1606,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.table_info': {
                     'block_contents': 'My table',
-                    'file_contents': table_info,
                     'name': 'table_info',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1716,7 +1618,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'A view of the summary of the ephemeral copy of the '
                         'seed data'
                     ),
-                    'file_contents': view_summary,
                     'name': 'view_summary',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1726,7 +1627,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.macro_info': {
                     'block_contents': 'My custom test that I wrote that does nothing',
-                    'file_contents': macro_info,
                     'name': 'macro_info',
                     'original_file_path': self.dir('macros/macro.md'),
                     'package_name': 'test',
@@ -1736,7 +1636,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.macro_arg_info': {
                     'block_contents': 'The model for my custom test',
-                    'file_contents': macro_arg_info,
                     'name': 'macro_arg_info',
                     'original_file_path': self.dir('macros/macro.md'),
                     'package_name': 'test',
@@ -1766,129 +1665,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'adapter_type': self.adapter_type,
             },
             'disabled': [],
-            'files': {
-                normalize('macros/dummy_test.sql'): {
-                    'checksum': self._checksum_file('macros/dummy_test.sql'),
-                    'docs': [],
-                    'nodes': [],
-                    'macros': ['macro.test.test_nothing'],
-                    'patches': [],
-                    'path': self._path_to('macros', 'dummy_test.sql'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('ref_models/view_summary.sql'): {
-                    'checksum': self._checksum_file('ref_models/view_summary.sql'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['model.test.view_summary'],
-                    'patches': [],
-                    'path': self._path_to('ref_models', 'view_summary.sql'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('ref_models/ephemeral_summary.sql'): {
-                    'checksum': self._checksum_file('ref_models/ephemeral_summary.sql'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['model.test.ephemeral_summary'],
-                    'patches': [],
-                    'path': self._path_to('ref_models', 'ephemeral_summary.sql'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('ref_models/ephemeral_copy.sql'): {
-                    'checksum': self._checksum_file('ref_models/ephemeral_copy.sql'),
-                    'nodes': ['model.test.ephemeral_copy'],
-                    'docs': [],
-                    'macros': [],
-                    'patches': [],
-                    'path': self._path_to('ref_models', 'ephemeral_copy.sql'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('seed/seed.csv'): {
-                    'checksum': {
-                        'name': 'path',
-                        'checksum': self._absolute_path_to('seed', 'seed.csv'),
-                    },
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['seed.test.seed'],
-                    'patches': [],
-                    'path': self._path_to('seed', 'seed.csv'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('ref_models/docs.md'): {
-                    'checksum': self._checksum_file('ref_models/docs.md'),
-                    'docs': [
-                        'test.ephemeral_summary',
-                        'test.summary_first_name',
-                        'test.summary_count',
-                        'test.view_summary',
-                        'test.source_info',
-                        'test.table_info',
-                        'test.column_info',
-                    ],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'path': self._path_to('ref_models', 'docs.md'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/macro.md'): {
-                    'checksum': self._checksum_file('macros/macro.md'),
-                    'docs': [
-                        'test.macro_info',
-                        'test.macro_arg_info',
-                    ],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'path': self._path_to('macros', 'macro.md'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('ref_models/schema.yml'): {
-                    'checksum': self._checksum_file('ref_models/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': ['ephemeral_summary', 'view_summary'],
-                    'path': self._path_to('ref_models', 'schema.yml'),
-                    'sources': ['source.test.my_source.my_table'],
-                    'macro_patches': [],
-                },
-                normalize('macros/schema.yml'): {
-                    'path': self._path_to('macros', 'schema.yml'),
-                    'checksum': self._checksum_file('macros/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [['test', 'test_nothing']],
-                },
-                normalize('seed/schema.yml'): {
-                    'path': self._path_to('seed', 'schema.yml'),
-                    'checksum': self._checksum_file('seed/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': ['seed'],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-            },
             'macros': {
                 'macro.test.test_nothing': {
                     'name': 'test_nothing',
                     'depends_on': {'macros': []},
                     'description': 'My custom test that I wrote that does nothing',
                     'macro_sql': AnyStringWith('macro test_nothing'),
-                    'raw_sql': AnyStringWith('macro test_nothing'),
                     'original_file_path': self.dir('macros/dummy_test.sql'),
                     'path': self.dir('macros/dummy_test.sql'),
                     'package_name': 'test',
@@ -2204,7 +1986,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
-                    'seed_file_path': normalize(os.path.join(self.test_root_dir, 'seed', 'seed.csv')),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -2306,114 +2087,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'adapter_type': self.adapter_type,
             },
             'disabled': [],
-            'files': {
-                normalize('macros/dummy_test.sql'): {
-                    'checksum': self._checksum_file('macros/dummy_test.sql'),
-                    'path': self._path_to('macros', 'dummy_test.sql'),
-                    'macros': ['macro.test.test_nothing'],
-                    'patches': [],
-                    'docs': [],
-                    'nodes': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('bq_models/clustered.sql'): {
-                    'checksum': self._checksum_file('bq_models/clustered.sql'),
-                    'path': self._path_to('bq_models', 'clustered.sql'),
-                    'nodes': ['model.test.clustered'],
-                    'patches': [],
-                    'docs': [],
-                    'macros': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('bq_models/multi_clustered.sql'): {
-                    'checksum': self._checksum_file('bq_models/multi_clustered.sql'),
-                    'path': self._path_to('bq_models', 'multi_clustered.sql'),
-                    'nodes': ['model.test.multi_clustered'],
-                    'patches': [],
-                    'docs': [],
-                    'macros': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('bq_models/nested_table.sql'): {
-                    'checksum': self._checksum_file('bq_models/nested_table.sql'),
-                    'path': self._path_to('bq_models', 'nested_table.sql'),
-                    'nodes': ['model.test.nested_table'],
-                    'patches': [],
-                    'docs': [],
-                    'macros': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('bq_models/nested_view.sql'): {
-                    'checksum': self._checksum_file('bq_models/nested_view.sql'),
-                    'path': self._path_to('bq_models', 'nested_view.sql'),
-                    'nodes': ['model.test.nested_view'],
-                    'patches': [],
-                    'docs': [],
-                    'macros': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('seed/seed.csv'): {
-                    'checksum': {
-                        'name': 'path',
-                        'checksum': self._absolute_path_to('seed', 'seed.csv'),
-                    },
-                    'path': self._path_to('seed', 'seed.csv'),
-                    'nodes': ['seed.test.seed'],
-                    'patches': [],
-                    'docs': [],
-                    'macros': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('bq_models/schema.yml'): {
-                    'checksum': self._checksum_file('bq_models/schema.yml'),
-                    'path': self._path_to('bq_models', 'schema.yml'),
-                    'nodes': [],
-                    'patches': ['nested_view', 'clustered', 'multi_clustered'],
-                    'docs': [],
-                    'macros': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/macro.md'): {
-                    'checksum': self._checksum_file('macros/macro.md'),
-                    'docs': [
-                        'test.macro_info',
-                        'test.macro_arg_info',
-                    ],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'path': self._path_to('macros', 'macro.md'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/schema.yml'): {
-                    'path': self._path_to('macros', 'schema.yml'),
-                    'checksum': self._checksum_file('macros/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [['test', 'test_nothing']],
-                },
-                normalize('seed/schema.yml'): {
-                    'path': self._path_to('seed', 'schema.yml'),
-                    'checksum': self._checksum_file('seed/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': ['seed'],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-            },
         }
 
     def _checksum_file(self, path):
@@ -2534,7 +2207,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_dir,
-                    'seed_file_path': Normalized(os.path.join(self.test_root_dir, 'seed', 'seed.csv')),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -2630,98 +2302,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'adapter_type': self.adapter_type,
             },
             'disabled': [],
-            'files': {
-                normalize('macros/dummy_test.sql'): {
-                    'checksum': self._checksum_file('macros/dummy_test.sql'),
-                    'path': self._path_to('macros', 'dummy_test.sql'),
-                    'docs': [],
-                    'macros': ['macro.test.test_nothing'],
-                    'nodes': [],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/macro.md'): {
-                    'checksum': self._checksum_file('macros/macro.md'),
-                    'docs': [
-                        'test.macro_info',
-                        'test.macro_arg_info',
-                    ],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'path': self._path_to('macros', 'macro.md'),
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('macros/schema.yml'): {
-                    'path': self._path_to('macros', 'schema.yml'),
-                    'checksum': self._checksum_file('macros/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [['test', 'test_nothing']],
-                },
-                normalize('rs_models/model.sql'): {
-                    'checksum': self._checksum_file('rs_models/model.sql'),
-                    'path': self._path_to('rs_models', 'model.sql'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['model.test.model'],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('seed/seed.csv'): {
-                    'checksum': {
-                        'name': 'path',
-                        'checksum': self._absolute_path_to('seed', 'seed.csv'),
-                    },
-                    'path': self._path_to('seed', 'seed.csv'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': ['seed.test.seed'],
-                    'patches': [],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('rs_models/schema.yml'): {
-                    'checksum': self._checksum_file('rs_models/schema.yml'),
-                    'path': self._path_to('rs_models', 'schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': ['model'],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-                normalize('seed/schema.yml'): {
-                    'path': self._path_to('seed', 'schema.yml'),
-                    'checksum': self._checksum_file('seed/schema.yml'),
-                    'docs': [],
-                    'macros': [],
-                    'nodes': [],
-                    'patches': ['seed'],
-                    'sources': [],
-                    'macro_patches': [],
-                },
-            },
         }
-
-    def verify_files(self, got_files, expected_files):
-        # I'm sure this will be fun on windows. We just want to look at this
-        # project's files.
-        my_files = {
-            os.path.relpath(k, self.test_root_dir): v
-            for k, v in got_files.items()
-            if k.startswith(self.test_root_dir)
-        }
-
-        self.assertEqual(set(my_files), set(expected_files))
-        for k in my_files:
-            self.assertEqual(my_files[k], expected_files[k])
 
     def verify_manifest(self, expected_manifest):
         self.assertTrue(os.path.exists('./target/manifest.json'))
@@ -2730,7 +2311,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         manifest_keys = frozenset({
             'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
-            'docs', 'metadata', 'docs', 'disabled', 'files'
+            'docs', 'metadata', 'docs', 'disabled'
         })
 
         self.assertEqual(frozenset(manifest), manifest_keys)
@@ -2741,8 +2322,6 @@ class TestDocsGenerate(DBTIntegrationTest):
             elif key == 'generated_at':
                 self.assertBetween(manifest['generated_at'],
                                    start=self.generate_start_time)
-            elif key == 'files':
-                self.verify_files(manifest[key], expected_manifest[key])
             else:
                 self.assertIn(key, expected_manifest)  # sanity check
                 self.assertEqual(manifest[key], expected_manifest[key])
@@ -2955,7 +2534,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'refs': [],
                     'resource_type': 'seed',
                     'root_path': self.test_root_dir,
-                    'seed_file_path': Normalized(os.path.join(self.test_root_dir, 'seed', 'seed.csv')),
                     'schema': schema,
                     'database': self.default_database,
                     'tags': [],
@@ -3415,7 +2993,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'refs': [],
                     'resource_type': 'seed',
                     'root_path': self.test_root_dir,
-                    'seed_file_path': Normalized(os.path.join(self.test_root_dir, 'seed', 'seed.csv')),
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
