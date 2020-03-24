@@ -369,6 +369,11 @@ class Querier:
             method='run_sql', params=params, request_id=request_id
         )
 
+    def get_manifest(self, request_id=1):
+        return self.request(
+            method='get-manifest', params={}, request_id=request_id
+        )
+
     def is_result(self, data: Dict[str, Any], id=None) -> Dict[str, Any]:
         if id is not None:
             assert data['id'] == id

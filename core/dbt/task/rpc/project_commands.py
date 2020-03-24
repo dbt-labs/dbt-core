@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import List, Optional, Union
 
-
+from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.rpc import (
+    GetManifestParameters,
+    GetManifestResult,
     RPCCompileParameters,
     RPCDocsGenerateParameters,
     RPCRunOperationParameters,
@@ -188,3 +190,30 @@ class RemoteSourceFreshnessTask(
         if params.threads is not None:
             self.args.threads = params.threads
         self.args.output = None
+
+
+# this is a weird and special method.
+class GetManifest(
+    RemoteManifestMethod[GetManifestParameters, GetManifestResult]
+):
+    METHOD_NAME = 'get-manifest'
+
+    def set_args(self, params: GetManifestParameters) -> None:
+        self.args.models = None
+        self.args.exclude = None
+
+    def handle_request(self) -> GetManifestResult:
+        task = RemoteCompileProjectTask(self.args, self.config, self.manifest)
+        task.handle_request()
+
+        manifest: Optional[WritableManifest] = None
+        if task.manifest is not None:
+            manifest = task.manifest.writable_manifest()
+
+        return GetManifestResult(
+            logs=[],
+            manifest=manifest,
+        )
+
+    def interpret_results(self, results):
+        return results.manifest is not None
