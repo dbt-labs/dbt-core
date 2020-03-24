@@ -25,7 +25,10 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import ExecutionResult
 from dbt.exceptions import (
-    InternalException, NotImplementedException, RuntimeException
+    InternalException,
+    NotImplementedException,
+    RuntimeException,
+    FailFastException
 )
 from dbt.linker import Linker, GraphQueue
 from dbt.perf_utils import get_full_manifest
@@ -167,11 +170,20 @@ class GraphRunnableTask(ManifestTask):
                 with finishctx, DbtModelState(status):
                     logger.debug('Finished running node {}'.format(
                         runner.node.unique_id))
-        if result.error is not None and self.raise_on_first_error():
+
+        fail_fast = getattr(self.config.args, 'fail_fast', False)
+
+        if (result.fail is not None or result.error is not None) and fail_fast:
+            self._raise_next_tick = FailFastException(
+                message='Falling early due to test failure or runtime error',
+                result=result,
+                node=getattr(result, 'node', None)
+            )
+        elif result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
             # next 'tick' - should be soon since our thread is about to finish!
-            self._raise_next_tick = result.error
+            self._raise_next_tick = RuntimeException(result.error)
 
         return result
 
@@ -191,7 +203,7 @@ class GraphRunnableTask(ManifestTask):
 
     def _raise_set_error(self):
         if self._raise_next_tick is not None:
-            raise RuntimeException(self._raise_next_tick)
+            raise self._raise_next_tick
 
     def run_queue(self, pool):
         """Given a pool, submit jobs from the queue to the pool.
@@ -226,7 +238,15 @@ class GraphRunnableTask(ManifestTask):
             self._submit(pool, args, callback)
 
         # block on completion
-        self.job_queue.join()
+        if getattr(self.config.args, 'fail_fast', False):
+            # checkout for an errors after task completion in case of
+            # fast failure
+            while self.job_queue.wait_until_something_was_done():
+                self._raise_set_error()
+        else:
+            # wait until every task will be complete
+            self.job_queue.join()
+
         # if an error got set during join(), raise it.
         self._raise_set_error()
 
@@ -255,6 +275,34 @@ class GraphRunnableTask(ManifestTask):
                 cause = None
             self._mark_dependent_errors(node.unique_id, result, cause)
 
+    def _cancel_connections(self, pool):
+        """Given a pool, cancel all adapter connections and wait until all
+        runners gentle terminates.
+        """
+        pool.close()
+        pool.terminate()
+
+        adapter = get_adapter(self.config)
+
+        if not adapter.is_cancelable():
+            msg = ("The {} adapter does not support query "
+                   "cancellation. Some queries may still be "
+                   "running!".format(adapter.type()))
+
+            yellow = dbt.ui.printer.COLOR_FG_YELLOW
+            dbt.ui.printer.print_timestamped_line(msg, yellow)
+            raise
+
+        for conn_name in adapter.cancel_open_connections():
+            if self.manifest is not None:
+                node = self.manifest.nodes.get(conn_name)
+                if node is not None and node.is_ephemeral_model:
+                    continue
+            # if we don't have a manifest/don't have a node, print anyway.
+            dbt.ui.printer.print_cancel_line(conn_name)
+
+        pool.join()
+
     def execute_nodes(self):
         num_threads = self.config.threads
         target_name = self.config.target_name
@@ -270,34 +318,15 @@ class GraphRunnableTask(ManifestTask):
         try:
             self.run_queue(pool)
 
+        except FailFastException as failure:
+            self._cancel_connections(pool)
+            dbt.ui.printer.print_run_result_error(failure.result)
+            raise
+
         except KeyboardInterrupt:
-            pool.close()
-            pool.terminate()
-
-            adapter = get_adapter(self.config)
-
-            if not adapter.is_cancelable():
-                msg = ("The {} adapter does not support query "
-                       "cancellation. Some queries may still be "
-                       "running!".format(adapter.type()))
-
-                yellow = dbt.ui.printer.COLOR_FG_YELLOW
-                dbt.ui.printer.print_timestamped_line(msg, yellow)
-                raise
-
-            for conn_name in adapter.cancel_open_connections():
-                if self.manifest is not None:
-                    node = self.manifest.nodes.get(conn_name)
-                    if node is not None and node.is_ephemeral_model:
-                        continue
-                # if we don't have a manifest/don't have a node, print anyway.
-                dbt.ui.printer.print_cancel_line(conn_name)
-
-            pool.join()
-
+            self._cancel_connections(pool)
             dbt.ui.printer.print_run_end_messages(self.node_results,
-                                                  early_exit=True)
-
+                                                  keyboard_interrupt=True)
             raise
 
         pool.close()
