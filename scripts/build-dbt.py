@@ -583,23 +583,24 @@ class HomebrewBuilder:
         )
 
     @staticmethod
-    def run_tests(formula_path: Path):
+    def run_tests(formula_path: Path, audit: bool = True):
         path = os.path.normpath(formula_path)
         run_command(['brew', 'uninstall', '--force', path])
         versions = [
             l.strip() for l in
             collect_output(['brew', 'list']).split('\n')
-            if l.strip().startswith('dbt@')
+            if l.strip().startswith('dbt@') or l.strip() == 'dbt'
         ]
         if versions:
             run_command(['brew', 'unlink'] + versions)
         run_command(['brew', 'install', path])
         run_command(['brew', 'test', path])
-        run_command(['brew', 'audit', '--strict', path])
+        if audit:
+            run_command(['brew', 'audit', '--strict', path])
 
     def create_default_package(self):
         os.remove(self.default_formula_path)
-        formula_contents = self.create_formula_data(versioned=False)
+        formula_contents = self.get_formula_data(versioned=False)
         self.default_formula_path.write_text(formula_contents)
 
     def build(self):
@@ -609,7 +610,7 @@ class HomebrewBuilder:
 
         if self.set_default:
             self.create_default_package()
-            self.run_tests(formula_path=self.default_formula_path)
+            self.run_tests(formula_path=self.default_formula_path, audit=False)
             self.commit_default_formula()
 
 
@@ -778,6 +779,15 @@ class DockerBuilder:
             cwd=self.dbt_path,
         )
 
+    def commit_docker_folder(self):
+        # commit the contents of docker/
+        run_command(
+            ['git', 'add', 'docker'],
+            cwd=self.dbt_path
+        )
+        commit_msg = f'Add {self.image_tag} dockerfiles and requirements'
+        run_command(['git', 'commit', '-m', commit_msg], cwd=self.dbt_path)
+
     def build(
         self,
         write_requirements: bool = True,
@@ -787,6 +797,7 @@ class DockerBuilder:
             self.write_lockfile()
         if write_dockerfile:
             self.write_dockerfile()
+        self.commit_docker_folder()
         self.create_docker_image()
         self.set_remote_tag()
 

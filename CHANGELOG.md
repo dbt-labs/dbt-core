@@ -1,8 +1,6 @@
 ## dbt next (release TBD)
 ### Features
 - Added --fail-fast argument for dbt run and dbt test to fail on first test failure or runtime error. ([#1649](https://github.com/fishtown-analytics/dbt/issues/1649))
-
-### Features
 - Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138))
 - Added a `get-manifest` API call. ([#2168](https://github.com/fishtown-analytics/dbt/issues/2168), [#2232](https://github.com/fishtown-analytics/dbt/pull/2232))
 
@@ -12,13 +10,13 @@
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
-
-Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224))
  - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
 
 
-## dbt 0.16.0 (Release date TBD)
+## dbt 0.16.0 (March 23, 2020)
+
+## dbt 0.16.0rc4 (March 20, 2020)
 
 ### Fixes
 - When dbt encounters databases, schemas, or tables with names that look like numbers, treat them as strings ([#2206](https://github.com/fishtown-analytics/dbt/issues/2206), [#2208](https://github.com/fishtown-analytics/dbt/pull/2208))
