@@ -239,30 +239,31 @@ def _search_packages(
 @dataclass
 class ManifestMetadata(BaseArtifactMetadata):
     """Metadata for the manifest."""
+
     dbt_schema_version: str = field(
         default_factory=lambda: str(WritableManifest.dbt_schema_version)
     )
     project_id: Optional[str] = field(
         default=None,
         metadata={
-            'description': 'A unique identifier for the project',
+            "description": "A unique identifier for the project",
         },
     )
     user_id: Optional[UUID] = field(
         default=None,
         metadata={
-            'description': 'A unique identifier for the user',
+            "description": "A unique identifier for the user",
         },
     )
     send_anonymous_usage_stats: Optional[bool] = field(
         default=None,
-        metadata=dict(description=(
-            'Whether dbt is configured to send anonymous usage statistics'
-        )),
+        metadata=dict(
+            description=("Whether dbt is configured to send anonymous usage statistics")
+        ),
     )
     adapter_type: Optional[str] = field(
         default=None,
-        metadata=dict(description='The type name of the adapter'),
+        metadata=dict(description="The type name of the adapter"),
     )
 
     def __post_init__(self):
@@ -1128,14 +1129,10 @@ class WritableManifest(ArtifactMixin):
         ))
     )
     macros: Mapping[UniqueID, ParsedMacro] = field(
-        metadata=dict(description=(
-            'The macros defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The macros defined in the dbt project and its dependencies"))
     )
     docs: Mapping[UniqueID, ParsedDocumentation] = field(
-        metadata=dict(description=(
-            'The docs defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The docs defined in the dbt project and its dependencies"))
     )
     exposures: Mapping[UniqueID, ParsedExposure] = field(
         metadata=dict(
@@ -1152,16 +1149,16 @@ class WritableManifest(ArtifactMixin):
     )
     disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(metadata=dict(
         description='A mapping of the disabled nodes in the target'
-    ))
-    parent_map: Optional[NodeEdgeMap] = field(metadata=dict(
-        description='A mapping from child nodes to their dependencies',
-    ))
-    child_map: Optional[NodeEdgeMap] = field(metadata=dict(
-        description='A mapping from parent nodes to their dependents',
-    ))
-    metadata: ManifestMetadata = field(metadata=dict(
-        description='Metadata about the manifest',
-    ))
+            description="A mapping from parent nodes to their dependents",
+        )
+    )
+    metadata: ManifestMetadata = field(
+        metadata=dict(
+            description="Metadata about the manifest",
+        )
+    )
+
+
 def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])

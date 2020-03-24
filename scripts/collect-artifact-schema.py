@@ -86,5 +86,5 @@ def main():
     collect_artifact_schema(parsed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
