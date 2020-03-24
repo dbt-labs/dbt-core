@@ -7,6 +7,7 @@
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
 - Added timeout to registry download call ([#2195](https://github.com/fishtown-analytics/dbt/issues/2195), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
+- When a macro is called with invalid arguments, include the calling model in the output ([#2073](https://github.com/fishtown-analytics/dbt/issues/2073), [#2238](https://github.com/fishtown-analytics/dbt/pull/2238))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))

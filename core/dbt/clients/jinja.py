@@ -371,6 +371,9 @@ def catch_jinja(node=None) -> Iterator[None]:
         raise CompilationException(str(e), node) from e
     except jinja2.exceptions.UndefinedError as e:
         raise CompilationException(str(e), node) from e
+    except CompilationException as exc:
+        exc.add_node(node)
+        raise
 
 
 def parse(string):
