@@ -48,6 +48,25 @@ class DocsRuntimeContext(ConfiguredContext):
 
     @contextmember
     def doc(self, *args: str) -> str:
+        """The `doc` function is used to reference docs blocks in schema.yml
+        files. It is analogous to the `ref` function. For more information,
+        consult the Documentation guide.
+
+        > orders.md:
+
+            {% docs orders %}
+            # docs
+            - go
+            - here
+            {% enddocs %}
+
+        > schema.yml
+
+            version: 2
+                models:
+                  - name: orders
+                    description: "{{ doc('orders') }}"
+        """
         # when you call doc(), this is what happens at runtime
         if len(args) == 1:
             doc_package_name = None

@@ -182,10 +182,29 @@ class SourceFile(JsonSchemaMixin):
 
 @dataclass
 class ManifestMetadata(JsonSchemaMixin, Replaceable):
-    project_id: Optional[str] = None
-    user_id: Optional[UUID] = None
-    send_anonymous_usage_stats: Optional[bool] = None
-    adapter_type: Optional[str] = None
+    """Metadata for the manifest."""
+    project_id: Optional[str] = field(
+        default=None,
+        metadata={
+            'description': 'A unique identifier for the project',
+        },
+    )
+    user_id: Optional[UUID] = field(
+        default=None,
+        metadata={
+            'description': 'A unique identifier for the user',
+        },
+    )
+    send_anonymous_usage_stats: Optional[bool] = field(
+        default=None,
+        metadata=dict(description=(
+            'Whether dbt is configured to send anonymous usage statistics'
+        )),
+    )
+    adapter_type: Optional[str] = field(
+        default=None,
+        metadata=dict(description='The type name of the adapter'),
+    )
 
     def __post_init__(self):
         if tracking.active_user is None:
@@ -826,11 +845,33 @@ class Manifest:
 
 @dataclass
 class WritableManifest(JsonSchemaMixin, Writable):
-    nodes: Mapping[str, CompileResultNode]
-    macros: Mapping[str, ParsedMacro]
-    docs: Mapping[str, ParsedDocumentation]
-    disabled: Optional[List[ParsedNode]]
-    generated_at: datetime
-    parent_map: Optional[NodeEdgeMap]
-    child_map: Optional[NodeEdgeMap]
-    metadata: ManifestMetadata
+    nodes: Mapping[str, CompileResultNode] = field(
+        metadata=dict(description=(
+            'The nodes defined in the dbt project and its dependencies'
+        )),
+    )
+    macros: Mapping[str, ParsedMacro] = field(
+        metadata=dict(description=(
+            'The macros defined in the dbt project and its dependencies'
+        ))
+    )
+    docs: Mapping[str, ParsedDocumentation] = field(
+        metadata=dict(description=(
+            'The docs defined in the dbt project and its dependencies'
+        ))
+    )
+    disabled: Optional[List[ParsedNode]] = field(metadata=dict(
+        description='A list of the disabled nodes in the target'
+    ))
+    generated_at: datetime = field(metadata=dict(
+        description='The time at which the manifest was generated',
+    ))
+    parent_map: Optional[NodeEdgeMap] = field(metadata=dict(
+        description='A mapping from child nodes to their dependencies',
+    ))
+    child_map: Optional[NodeEdgeMap] = field(metadata=dict(
+        description='A mapping from parent nodes to their dependents',
+    ))
+    metadata: ManifestMetadata = field(metadata=dict(
+        description='Metadata about the manifest',
+    ))
