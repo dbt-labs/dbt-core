@@ -9,6 +9,7 @@ from hologram import JsonSchemaMixin
 from hologram.helpers import StrEnum
 
 from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
     TimingInfo,
     CatalogResults,
@@ -143,7 +144,12 @@ class RPCSourceFreshnessParameters(RPCParameters):
     select: Union[None, str, List[str]] = None
 
 
+@dataclass
+class GetManifestParameters(RPCParameters):
+    pass
+
 # Outputs
+
 
 @dataclass
 class RemoteResult(JsonSchemaMixin):
@@ -320,6 +326,11 @@ class KillResultStatus(StrEnum):
 class KillResult(RemoteResult):
     state: KillResultStatus = KillResultStatus.Missing
     logs: List[LogMessage] = field(default_factory=list)
+
+
+@dataclass
+class GetManifestResult(RemoteResult):
+    manifest: Optional[WritableManifest]
 
 
 # this is kind of carefuly structured: BlocksManifestTasks is implied by
@@ -526,7 +537,33 @@ class PollInProgressResult(PollResult):
     pass
 
 
+@dataclass
+class PollGetManifestResult(GetManifestResult, PollResult):
+    state: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
+    )
+
+    @classmethod
+    def from_result(
+        cls: Type['PollGetManifestResult'],
+        base: GetManifestResult,
+        tags: TaskTags,
+        timing: TaskTiming,
+        logs: List[LogMessage],
+    ) -> 'PollGetManifestResult':
+        return cls(
+            manifest=base.manifest,
+            logs=logs,
+            tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
+        )
+
 # Manifest parsing types
+
 
 class ManifestStatus(StrEnum):
     Init = 'init'
