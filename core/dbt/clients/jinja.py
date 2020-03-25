@@ -1,6 +1,7 @@
 import codecs
 import linecache
 import os
+import re
 import tempfile
 import threading
 from contextlib import contextmanager
@@ -10,15 +11,19 @@ from typing import (
 
 import jinja2
 import jinja2.ext
+import jinja2.nativetypes  # type: ignore
 import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
 from dbt.utils import (
-    get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name
+    get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name,
+    deep_map
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
+from dbt.contracts.graph.compiled import CompiledSchemaTestNode
+from dbt.contracts.graph.parsed import ParsedSchemaTestNode
 from dbt.exceptions import (
     InternalException, raise_compiler_error, CompilationException,
     invalid_materialization_argument, MacroReturn
@@ -91,6 +96,33 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             filename = _linecache_inject(source, write)
 
         return super()._compile(source, filename)  # type: ignore
+
+
+class NativeSandboxEnvironment(MacroFuzzEnvironment):
+    code_generator_class = jinja2.nativetypes.NativeCodeGenerator
+
+
+class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
+    environment_class = NativeSandboxEnvironment
+
+    def render(self, *args, **kwargs):
+        """Render the template to produce a native Python type. If the
+        result is a single node, its value is returned. Otherwise, the
+        nodes are concatenated as strings. If the result can be parsed
+        with :func:`ast.literal_eval`, the parsed value is returned.
+        Otherwise, the string is returned.
+        """
+        vars = dict(*args, **kwargs)
+        try:
+            return jinja2.nativetypes.native_concat(
+                self.root_render_func(self.new_context(vars)),
+                preserve_quotes=True
+            )
+        except Exception:
+            return self.environment.handle_exception()
+
+
+NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
 
 
 class TemplateCache:
@@ -348,7 +380,11 @@ def create_undefined(node=None):
     return Undefined
 
 
-def get_environment(node=None, capture_macros=False):
+def get_environment(
+    node=None,
+    capture_macros: bool = False,
+    native: bool = False,
+) -> jinja2.Environment:
     args: Dict[str, List[Union[str, Type[jinja2.ext.Extension]]]] = {
         'extensions': ['jinja2.ext.do']
     }
@@ -359,7 +395,13 @@ def get_environment(node=None, capture_macros=False):
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
 
-    return MacroFuzzEnvironment(**args)
+    env_cls: Type[jinja2.Environment]
+    if native:
+        env_cls = NativeSandboxEnvironment
+    else:
+        env_cls = MacroFuzzEnvironment
+
+    return env_cls(**args)
 
 
 @contextmanager
@@ -378,21 +420,39 @@ def parse(string):
         return get_environment().parse(str(string))
 
 
-def get_template(string, ctx, node=None, capture_macros=False):
+def get_template(
+    string: str,
+    ctx: Dict[str, Any],
+    node=None,
+    capture_macros: bool = False,
+    native: bool = False,
+):
     with catch_jinja(node):
-        env = get_environment(node, capture_macros)
+        env = get_environment(node, capture_macros, native=native)
 
         template_source = str(string)
         return env.from_string(template_source, globals=ctx)
 
 
-def render_template(template, ctx, node=None):
+def render_template(template, ctx: Dict[str, Any], node=None) -> str:
     with catch_jinja(node):
         return template.render(ctx)
 
 
-def get_rendered(string, ctx, node=None, capture_macros=False):
-    template = get_template(string, ctx, node, capture_macros=capture_macros)
+def get_rendered(
+    string: str,
+    ctx: Dict[str, Any],
+    node=None,
+    capture_macros: bool = False,
+    native: bool = False,
+) -> str:
+    template = get_template(
+        string,
+        ctx,
+        node,
+        capture_macros=capture_macros,
+        native=native,
+    )
 
     return render_template(template, ctx, node)
 
@@ -424,3 +484,35 @@ def extract_toplevel_blocks(
         allowed_blocks=allowed_blocks,
         collect_raw_data=collect_raw_data
     )
+
+
+SCHEMA_TEST_KWARGS_NAME = '_dbt_schema_test_kwargs'
+
+
+def add_rendered_test_kwargs(
+    context: Dict[str, Any],
+    node: Union[ParsedSchemaTestNode, CompiledSchemaTestNode],
+    capture_macros: bool = False,
+) -> None:
+    """Render each of the test kwargs in the given context using the native
+    renderer, then insert that value into the given context as the special test
+    keyword arguments member.
+    """
+    looks_like_func = r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$'
+
+    # we never care about the keypath
+    def _convert_function(value: Any, _: Any) -> Any:
+        if isinstance(value, str):
+            if re.match(looks_like_func, value) is not None:
+                # curly braces to make rendering happy
+                value = f'{{{{ {value} }}}}'
+
+            value = get_rendered(
+                value, context, node, capture_macros=capture_macros,
+                native=True
+            )
+
+        return value
+
+    kwargs = deep_map(_convert_function, node.test_metadata.kwargs)
+    context[SCHEMA_TEST_KWARGS_NAME] = kwargs

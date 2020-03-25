@@ -24,7 +24,7 @@ from dbt.contracts.graph.manifest import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
-    NodeConfig, DependsOn, ColumnInfo, ParsedTestNode, TestConfig,
+    NodeConfig, DependsOn, ColumnInfo, ParsedDataTestNode, TestConfig,
     ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
     ParsedAnalysisNode, ParsedDocumentation
 )
@@ -364,6 +364,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[0].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
                 'values': ['red', 'blue', 'green'],
             }
         )
@@ -385,6 +386,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[1].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
                 'arg': 100,
             },
         )
@@ -403,6 +405,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[2].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
             },
         )
 
@@ -687,7 +690,7 @@ class DataTestParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_results_length(self.parser.results, nodes=1)
         node = list(self.parser.results.nodes.values())[0]
-        expected = ParsedTestNode(
+        expected = ParsedDataTestNode(
             alias='test_1',
             name='test_1',
             database='test',

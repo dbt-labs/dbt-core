@@ -53,7 +53,7 @@ setup(
         'scripts/dbt',
     ],
     install_requires=[
-        'Jinja2>=2.10,<3',
+        'Jinja2>=2.11,<3',
         'PyYAML>=3.11',
         'sqlparse>=0.2.3,<0.4',
         'networkx>=2.3,<3',
@@ -64,7 +64,7 @@ setup(
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<0.17',
         'dataclasses==0.6;python_version<"3.7"',
-        'hologram==0.0.6',
+        'hologram==0.0.7',
         'logbook>=1.5,<1.6',
         'pytest-logbook>=1.2.0,<1.3',
         'typing-extensions>=3.7.4,<3.8',
