@@ -570,7 +570,7 @@ class TestRunner(CompileRunner):
             # since we just wrapped our query in `select count(*)`, we are in
             # big trouble!
             raise InternalException(
-                f"dbt itnernally failed to execute {test.unique_id}: "
+                f"dbt internally failed to execute {test.unique_id}: "
                 f"Returned {num_rows} rows and {num_cols} cols, but expected "
                 f"1 row and 1 column"
             )
