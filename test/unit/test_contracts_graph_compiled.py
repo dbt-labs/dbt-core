@@ -1,10 +1,10 @@
 import pickle
 
 from dbt.contracts.graph.compiled import (
-    CompiledModelNode, InjectedCTE, CompiledTestNode
+    CompiledModelNode, InjectedCTE, CompiledSchemaTestNode
 )
 from dbt.contracts.graph.parsed import (
-    DependsOn, NodeConfig, TestConfig
+    DependsOn, NodeConfig, TestConfig, TestMetadata
 )
 from dbt.node_types import NodeType
 
@@ -183,8 +183,8 @@ class TestCompiledModelNode(ContractTestCase):
         self.assert_fails_validation(bad_type)
 
 
-class TestCompiledTestNode(ContractTestCase):
-    ContractType = CompiledTestNode
+class TestCompiledSchemaTestNode(ContractTestCase):
+    ContractType = CompiledSchemaTestNode
 
     def _minimum(self):
         return {
@@ -200,6 +200,10 @@ class TestCompiledTestNode(ContractTestCase):
             'database': 'test_db',
             'schema': 'test_schema',
             'alias': 'bar',
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
 
     def test_basic_uncompiled(self):
@@ -239,6 +243,10 @@ class TestCompiledTestNode(ContractTestCase):
             'compiled': False,
             'extra_ctes': [],
             'extra_ctes_injected': False,
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
         node = self.ContractType(
             package_name='test',
@@ -263,6 +271,7 @@ class TestCompiledTestNode(ContractTestCase):
             compiled=False,
             extra_ctes=[],
             extra_ctes_injected=False,
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -313,8 +322,11 @@ class TestCompiledTestNode(ContractTestCase):
             'extra_ctes': [{'id': 'whatever', 'sql': 'select * from other'}],
             'extra_ctes_injected': True,
             'injected_sql': 'with whatever as (select * from other) select * from whatever',
-            'wrapped_sql': 'select count(*) from (with whatever as (select * from other) select * from whatever) sbq',
             'column_name': 'id',
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
         node = self.ContractType(
             package_name='test',
@@ -341,8 +353,8 @@ class TestCompiledTestNode(ContractTestCase):
             extra_ctes=[InjectedCTE('whatever', 'select * from other')],
             extra_ctes_injected=True,
             injected_sql='with whatever as (select * from other) select * from whatever',
-            wrapped_sql='select count(*) from (with whatever as (select * from other) select * from whatever) sbq',
             column_name='id',
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)

@@ -9,17 +9,21 @@ from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
 from dbt.compilation import compile_node
 from dbt.context.providers import generate_runtime_model
+from dbt.contracts.graph.compiled import (
+    CompiledDataTestNode,
+    CompiledSchemaTestNode,
+    CompiledTestNode,
+)
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     RunModelResult, collect_timing_info, SourceFreshnessResult, PartialResult,
 )
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
-    InternalException, missing_materialization
+    InternalException, missing_materialization, raise_compiler_error
 )
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-import dbt.exceptions
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
@@ -172,7 +176,7 @@ class BaseRunner(metaclass=abc.ABCMeta):
 
     def _handle_catchable_exception(self, e, ctx):
         if e.node is None:
-            e.node = ctx.node
+            e.add_node(ctx.node)
 
         logger.debug(str(e), exc_info=True)
         return str(e)
@@ -554,27 +558,55 @@ class TestRunner(CompileRunner):
         dbt.ui.printer.print_start_line(description, self.node_index,
                                         self.num_nodes)
 
-    def execute_test(self, test):
-        res, table = self.adapter.execute(
-            test.wrapped_sql,
-            auto_begin=True,
-            fetch=True)
+    def execute_data_test(self, test: CompiledDataTestNode):
+        sql = (
+            f'select count(*) as errors from (\n{test.injected_sql}\n) sbq'
+        )
+        res, table = self.adapter.execute(sql, auto_begin=True, fetch=True)
 
         num_rows = len(table.rows)
         if num_rows != 1:
             num_cols = len(table.columns)
-            dbt.exceptions.raise_compiler_error(
+            # since we just wrapped our query in `select count(*)`, we are in
+            # big trouble!
+            raise InternalException(
+                f"dbt internally failed to execute {test.unique_id}: "
+                f"Returned {num_rows} rows and {num_cols} cols, but expected "
+                f"1 row and 1 column"
+            )
+        return table[0][0]
+
+    def execute_schema_test(self, test: CompiledSchemaTestNode):
+        res, table = self.adapter.execute(
+            test.injected_sql,
+            auto_begin=True,
+            fetch=True,
+        )
+
+        num_rows = len(table.rows)
+        if num_rows != 1:
+            num_cols = len(table.columns)
+            raise_compiler_error(
                 f"Bad test {test.test_metadata.name}: "
-                f"Returned {num_rows} rows "
-                f"and {num_cols} cols but expected 1 row and 1 column"
+                f"Returned {num_rows} rows and {num_cols} cols, but expected "
+                f"1 row and 1 column"
             )
         return table[0][0]
 
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, test, manifest):
-        failed_rows = self.execute_test(test)
+    def execute(self, test: CompiledTestNode, manifest: Manifest):
+        if isinstance(test, CompiledDataTestNode):
+            failed_rows = self.execute_data_test(test)
+        elif isinstance(test, CompiledSchemaTestNode):
+            failed_rows = self.execute_schema_test(test)
+        else:
+
+            raise InternalException(
+                f'Expected compiled schema test or compiled data test, got '
+                f'{type(test)}'
+            )
         severity = test.config.severity.upper()
 
         if failed_rows == 0:

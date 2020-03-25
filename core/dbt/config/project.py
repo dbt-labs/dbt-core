@@ -274,7 +274,7 @@ class Project:
         """Pre-process certain special keys to convert them from None values
         into empty containers, and to turn strings into arrays of strings.
         """
-        handlers: Dict[Tuple[str, ...], Callable[[Any], Any]] = {
+        handlers: Dict[Tuple[Union[str, int], ...], Callable[[Any], Any]] = {
             ('on-run-start',): _list_if_none_or_string,
             ('on-run-end',): _list_if_none_or_string,
         }
@@ -286,7 +286,7 @@ class Project:
             handlers[(k, 'post-hook')] = _list_if_none_or_string
         handlers[('seeds', 'column_types')] = _dict_if_none
 
-        def converter(value: Any, keypath: Tuple[str, ...]) -> Any:
+        def converter(value: Any, keypath: Tuple[Union[str, int], ...]) -> Any:
             if keypath in handlers:
                 handler = handlers[keypath]
                 return handler(value)

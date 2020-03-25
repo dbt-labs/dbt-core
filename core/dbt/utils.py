@@ -212,7 +212,10 @@ def _deep_map(
     return ret
 
 
-def deep_map(func, value):
+def deep_map(
+    func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
+    value: Any
+) -> Any:
     """map the function func() onto each non-container value in 'value'
     recursively, returning a new value. As long as func does not manipulate
     value, then deep_map will also not manipulate it.

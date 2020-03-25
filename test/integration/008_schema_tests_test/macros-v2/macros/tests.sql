@@ -24,3 +24,19 @@
     )
 
 {% endmacro %}
+
+
+{% macro test_equivalent(model, value) %}
+    {% set expected = 'foo-bar' %}
+    select
+    {% if value == expected %}
+        0
+    {% else %}
+        {% set msg -%}
+        got "{{ value }}", expected "{{ expected }}"
+        {%- endset %}
+        {% do log(msg, info=True) %}
+        1
+    {% endif %}
+    as id
+{% endmacro %}

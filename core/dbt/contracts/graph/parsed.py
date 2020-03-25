@@ -301,11 +301,21 @@ class TestMetadata(JsonSchemaMixin):
 
 
 @dataclass
-class ParsedTestNode(ParsedNode):
+class HasTestMetadata(JsonSchemaMixin):
+    test_metadata: TestMetadata
+
+
+@dataclass
+class ParsedDataTestNode(ParsedNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    config: TestConfig = field(default_factory=TestConfig)
+
+
+@dataclass
+class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
-    test_metadata: Optional[TestMetadata] = None
 
 
 @dataclass(init=False)
@@ -580,17 +590,3 @@ class ParsedSourceDefinition(
 ParsedResource = Union[
     ParsedMacro, ParsedNode, ParsedDocumentation, ParsedSourceDefinition
 ]
-
-
-PARSED_TYPES: Dict[NodeType, Type[ParsedResource]] = {
-    NodeType.Analysis: ParsedAnalysisNode,
-    NodeType.Documentation: ParsedDocumentation,
-    NodeType.Macro: ParsedMacro,
-    NodeType.Model: ParsedModelNode,
-    NodeType.Operation: ParsedHookNode,
-    NodeType.RPCCall: ParsedRPCNode,
-    NodeType.Seed: ParsedSeedNode,
-    NodeType.Snapshot: ParsedSnapshotNode,
-    NodeType.Source: ParsedSourceDefinition,
-    NodeType.Test: ParsedTestNode,
-}

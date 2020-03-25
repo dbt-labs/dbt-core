@@ -9,7 +9,7 @@ from typing import (
 from hologram import ValidationError
 
 from dbt.adapters.factory import get_adapter
-from dbt.clients.jinja import get_rendered
+from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig, ConfigRenderer
 from dbt.context.docs import generate_parser_docs
@@ -19,7 +19,7 @@ from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ParsedSourceDefinition,
     ColumnInfo,
-    ParsedTestNode,
+    ParsedSchemaTestNode,
     ParsedMacroPatch,
 )
 from dbt.contracts.graph.unparsed import (
@@ -38,7 +38,10 @@ from dbt.parser.schema_test_builders import (
     TestBuilder, SourceTarget, Target, SchemaTestBlock, TargetBlock, YamlBlock,
     TestBlock,
 )
-from dbt.utils import get_pseudo_test_path, coerce_dict_str
+from dbt.source_config import SourceConfig
+from dbt.utils import (
+    get_pseudo_test_path, coerce_dict_str
+)
 
 
 UnparsedSchemaYaml = Union[
@@ -102,7 +105,7 @@ def _trimmed(inp: str) -> str:
     return inp[:44] + '...' + inp[-3:]
 
 
-class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
+class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     """
     The schema parser is really big because schemas are really complicated!
 
@@ -131,8 +134,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             self.project, self.project.all_source_paths, '.yml'
         )
 
-    def parse_from_dict(self, dct, validate=True) -> ParsedTestNode:
-        return ParsedTestNode.from_dict(dct, validate=validate)
+    def parse_from_dict(self, dct, validate=True) -> ParsedSchemaTestNode:
+        return ParsedSchemaTestNode.from_dict(dct, validate=validate)
 
     def _parse_format_version(
         self, yaml: YamlBlock
@@ -178,7 +181,22 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         for test in column.tests:
             self.parse_test(block, test, column)
 
-    def parse_node(self, block: SchemaTestBlock) -> ParsedTestNode:
+    def _build_raw_test_keyword_args(
+        self, parsed_node: ParsedSchemaTestNode, builder: TestBuilder
+    ) -> Dict[str, Any]:
+        """Build up the test keyword arguments."""
+        kwargs = parsed_node.test_metadata.kwargs.copy()
+        if isinstance(builder.target, UnparsedNodeUpdate):
+            fmt = "{{{{ ref('{0.name}') }}}}"
+        elif isinstance(builder.target, SourceTarget):
+            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
+        else:
+            raise TypeError(f'invalid target type "{type(builder.target)}"')
+
+        kwargs['model'] = fmt.format(builder.target)
+        return kwargs
+
+    def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the
         same
@@ -232,6 +250,23 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         self.render_update(node, config)
         self.add_result_node(block, node)
         return node
+
+    def render_with_context(
+        self, node: ParsedSchemaTestNode, config: SourceConfig,
+    ) -> None:
+        """Given the parsed node and a SourceConfig to use during parsing,
+        collect all the refs that might be squirreled away in the test
+        arguments. This includes the implicit "model" argument.
+        """
+        # make a base context that doesn't have the magic kwargs field
+        context = self._context_for(node, config)
+        # update it with the rendered test kwargs (which collects any refs)
+        add_rendered_test_kwargs(context, node, capture_macros=True)
+
+        # the parsed node is not rendered in the native context.
+        get_rendered(
+            node.raw_sql, context, node, capture_macros=True
+        )
 
     def parse_test(
         self,
