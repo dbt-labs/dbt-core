@@ -49,20 +49,6 @@ def get_nice_schema_test_name(
     return filename, name
 
 
-def as_kwarg(key: str, value: Any) -> str:
-    test_value = str(value)
-    is_function = re.match(r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$',
-                           test_value)
-
-    # if the value is a function, don't wrap it in quotes!
-    if is_function:
-        formatted_value = value
-    else:
-        formatted_value = value.__repr__()
-
-    return "{key}={value}".format(key=key, value=formatted_value)
-
-
 @dataclass
 class YamlBlock(FileBlock):
     data: Dict[str, Any]
@@ -324,27 +310,11 @@ class TestBuilder(Generic[Testable]):
                 )
         return tags[:]
 
-    def test_kwargs_str(self) -> str:
-        # sort the dict so the keys are rendered deterministically (for tests)
-        return ', '.join((
-            as_kwarg(key, self.args[key])
-            for key in sorted(self.args)
-        ))
-
     def macro_name(self) -> str:
         macro_name = 'test_{}'.format(self.name)
         if self.namespace is not None:
             macro_name = "{}.{}".format(self.namespace, macro_name)
         return macro_name
-
-    def describe_test_target(self) -> str:
-        if isinstance(self.target, UnparsedNodeUpdate):
-            fmt = "model('{0}')"
-        elif isinstance(self.target, SourceTarget):
-            fmt = "source('{0.source}', '{0.table}')"
-        else:
-            raise self._bad_type()
-        return fmt.format(self.target)
 
     def get_test_name(self) -> Tuple[str, str]:
         if isinstance(self.target, UnparsedNodeUpdate):

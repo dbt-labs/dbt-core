@@ -304,12 +304,6 @@ class BigQueryAdapter(BaseAdapter):
         return '`{}`'.format(identifier)
 
     @classmethod
-    def unquote(cls, identifier: str) -> str:
-        if identifier.startswith('`') and identifier.endswith('`'):
-            return identifier[1:-1]
-        return identifier
-
-    @classmethod
     def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         return "string"
 
