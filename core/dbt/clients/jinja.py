@@ -105,6 +105,22 @@ class NativeSandboxEnvironment(MacroFuzzEnvironment):
 class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
     environment_class = NativeSandboxEnvironment
 
+    def render(self, *args, **kwargs):
+        """Render the template to produce a native Python type. If the
+        result is a single node, its value is returned. Otherwise, the
+        nodes are concatenated as strings. If the result can be parsed
+        with :func:`ast.literal_eval`, the parsed value is returned.
+        Otherwise, the string is returned.
+        """
+        vars = dict(*args, **kwargs)
+        try:
+            return jinja2.nativetypes.native_concat(
+                self.root_render_func(self.new_context(vars)),
+                preserve_quotes=True
+            )
+        except Exception:
+            return self.environment.handle_exception()
+
 
 NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
 
@@ -490,14 +506,11 @@ def add_rendered_test_kwargs(
             if re.match(looks_like_func, value) is not None:
                 # curly braces to make rendering happy
                 value = f'{{{{ {value} }}}}'
-            new_value = get_rendered(
+
+            value = get_rendered(
                 value, context, node, capture_macros=capture_macros,
                 native=True
             )
-            # this is an ugly way of checking if the value was a quoted str
-            # (we don't want to unquote column names!)
-            if not (len(value) >= 2 and new_value == value[1:-1]):
-                value = new_value
 
         return value
 
