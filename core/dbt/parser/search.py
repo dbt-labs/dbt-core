@@ -116,7 +116,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
 
         except CompilationException as exc:
             if exc.node is None:
-                exc.node = source_file
+                exc.add_node(source_file)
             raise
 
     def __iter__(self) -> Iterator[BlockSearchResult]:

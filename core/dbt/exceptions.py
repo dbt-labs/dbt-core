@@ -53,6 +53,12 @@ class RuntimeException(RuntimeError, Exception):
         self.node = node
         self.msg = msg
 
+    def add_node(self, node=None):
+        if node is not None and node is not self.node:
+            if self.node is not None:
+                self.stack.append(self.node)
+            self.node = node
+
     @property
     def type(self):
         return 'Runtime'
@@ -849,8 +855,7 @@ def wrapper(model):
             try:
                 return func(*args, **kwargs)
             except RuntimeException as exc:
-                if exc.node is None:
-                    exc.node = model
+                exc.add_node(model)
                 raise exc
         return inner
     return wrap

@@ -176,7 +176,7 @@ class BaseRunner(metaclass=abc.ABCMeta):
 
     def _handle_catchable_exception(self, e, ctx):
         if e.node is None:
-            e.node = ctx.node
+            e.add_node(ctx.node)
 
         logger.debug(str(e), exc_info=True)
         return str(e)
