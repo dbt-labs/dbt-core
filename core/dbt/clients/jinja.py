@@ -624,10 +624,7 @@ def add_rendered_test_kwargs(
                 # curly braces to make rendering happy
                 value = f"{{{{ {value} }}}}"
 
-            value = get_rendered(
-                value, context, node, capture_macros=capture_macros,
-                native=True
-            )
+            value = get_rendered(value, context, node, capture_macros=capture_macros, native=True)
 
         return value
 
