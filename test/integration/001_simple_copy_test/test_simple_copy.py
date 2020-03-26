@@ -1,7 +1,6 @@
 import io
 import json
 import os
-from unittest import mock
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
@@ -23,7 +22,9 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return self.seed_quote_cfg_with({})
+        return self.seed_quote_cfg_with({
+            'profile': '{{ "tes" ~ "t" }}'
+        })
 
     def seed_quote_cfg_with(self, extra):
         cfg = {

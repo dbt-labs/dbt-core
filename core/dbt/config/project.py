@@ -1,5 +1,5 @@
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 from typing import List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable
 import hashlib
@@ -204,9 +204,18 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
 @dataclass
 class PartialProject:
-    profile_name: Optional[str]
-    project_name: Optional[str]
-    project_root: str
+    profile_name: Optional[str] = field(metadata=dict(
+        description='The unrendered profile name in the project, if set'
+    ))
+    project_name: Optional[str] = field(metadata=dict(
+        description=(
+            'The name of the project. This should always be set and will not '
+            'be rendered'
+        )
+    ))
+    project_root: str = field(
+        metadata=dict(description='The root directory of the project'),
+    )
     project_dict: Dict[str, Any]
 
     def render(self, renderer):
@@ -217,6 +226,11 @@ class PartialProject:
             packages_dict,
             renderer,
         )
+
+    def render_profile_name(self, renderer) -> Optional[str]:
+        if self.profile_name is None:
+            return None
+        return renderer.render_value(self.profile_name)
 
 
 @dataclass

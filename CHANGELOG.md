@@ -1,5 +1,8 @@
 ## dbt 0.16.1 (Relase date TBD)
 
+### Fixes
+- dbt now renders the project name in the "base" context, in particular giving it access to `var` and `env_var` ([#2230](https://github.com/fishtown-analytics/dbt/issues/2230), [#2251](https://github.com/fishtown-analytics/dbt/pull/2251))
+
 ### Under the hood
 - Pin google libraries to higher minimum values, add more dependencies as explicit ([#2233](https://github.com/fishtown-analytics/dbt/issues/2233), [#2249](https://github.com/fishtown-analytics/dbt/pull/2249))
 
