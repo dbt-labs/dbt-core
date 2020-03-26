@@ -1,3 +1,11 @@
+## dbt 0.16.1 (Relase date TBD)
+
+### Under the hood
+- Pin google libraries to higher minimum values, add more dependencies as explicit ([#2233](https://github.com/fishtown-analytics/dbt/issues/2233), [#2249](https://github.com/fishtown-analytics/dbt/pull/2249))
+
+
+## dbt 0.16.0 (March 23, 2020)
+
 ## dbt 0.16.0rc4 (March 20, 2020)
 
 ### Fixes
