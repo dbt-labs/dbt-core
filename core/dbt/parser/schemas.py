@@ -530,6 +530,7 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
 
         for data in self.get_key_dicts():
             try:
+                data = self.project.credentials.translate_aliases(data)
                 data = self._renderer.render_schema_source(data)
                 source = UnparsedSourceDefinition.from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
