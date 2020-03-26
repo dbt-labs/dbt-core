@@ -72,7 +72,7 @@ BLOCK_START_PATTERN = regex(
 
 RAW_BLOCK_PATTERN = regex(
     "".join(
-    r'(?:.*?)',
+        (
             r"(?:\s*\{\%\-|\{\%)\s*raw\s*(?:\-\%\}\s*|\%\})",
             r"(?:.*?)",
             r"(?:\s*\{\%\-|\{\%)\s*endraw\s*(?:\-\%\}\s*|\%\})",
