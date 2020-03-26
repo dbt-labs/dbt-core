@@ -182,7 +182,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
 
 
 class HasUserAgent:
-    PAT = re.compile(r'dbt-\d+\.\d+\.\d+[a-zA-Z]+\d+')
+    PAT = re.compile(r'dbt-\d+\.\d+\.\d+((a|b|rc)\d+)?')
 
     def __eq__(self, other):
         compare = getattr(other, 'user_agent', '')
