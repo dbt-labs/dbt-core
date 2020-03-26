@@ -231,17 +231,18 @@ class RenderComponents:
 
 @dataclass
 class PartialProject(RenderComponents):
-    profile_name: Optional[str] = field(metadata=dict(
-        description='The unrendered profile name in the project, if set'
-    ))
-    project_name: Optional[str] = field(metadata=dict(
-        description=(
-            'The name of the project. This should always be set and will not '
-            'be rendered'
+    profile_name: Optional[str] = field(
+        metadata=dict(description="The unrendered profile name in the project, if set")
+    )
+    project_name: Optional[str] = field(
+        metadata=dict(
+            description=(
+                "The name of the project. This should always be set and will not " "be rendered"
+            )
         )
-    ))
+    )
     project_root: str = field(
-        metadata=dict(description='The root directory of the project'),
+        metadata=dict(description="The root directory of the project"),
     )
     verify_version: bool = field(
         metadata=dict(description=(
