@@ -819,7 +819,8 @@ def warn_or_raise(exc, log_fmt=None):
 def warn(msg, node=None):
     # there's no reason to expose log_fmt to macros - it's only useful for
     # handling colors
-    return warn_or_error(msg, node=node)
+    warn_or_error(msg, node=node)
+    return ""
 
 
 # Update this when a new function should be added to the
