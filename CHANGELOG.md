@@ -6,6 +6,7 @@
 - Support adapter-specific aliases (like `project` and `dataset` on BigQuery) in source definitions. ([#2133](https://github.com/fishtown-analytics/dbt/issues/2133), [#2244](https://github.com/fishtown-analytics/dbt/pull/2244))
 - Users can now use jinja as arguments to tests. Test arguments are rendered in the native context and injected into the test execution context directly. ([#2149](https://github.com/fishtown-analytics/dbt/issues/2149), [#2220](https://github.com/fishtown-analytics/dbt/pull/2220))
 - Added support for `db_groups` and `autocreate` flags in Redshift configurations.  ([#1995](https://github.com/fishtown-analytics/dbt/issues/1995, [#2262]https://github.com/fishtown-analytics/dbt/pull/2262))
+- Users can supply paths as arguments to `--models` and `--select`, either explicitily by prefixing with `path:` or implicitly with no prefix. ([#454](https://github.com/fishtown-analytics/dbt/issues/454), [#2258](https://github.com/fishtown-analytics/dbt/pull/2258))
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
