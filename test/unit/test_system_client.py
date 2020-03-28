@@ -2,7 +2,7 @@ import os
 import shutil
 import stat
 import unittest
-from tempfile import mkdtemp
+from tempfile import mkdtemp, NamedTemporaryFile
 
 from dbt.exceptions import ExecutableError, WorkingDirectoryError
 import dbt.clients.system
@@ -48,6 +48,44 @@ class SystemClient(unittest.TestCase):
         self.assertTrue(written)
         self.assertEqual(self.get_profile_text(), 'NEW_TEXT')
 
+class TestFindMatching(unittest.TestCase):
+
+    def setUp(self):
+        self.base_dir = '/tmp'
+        self.tempdir = mkdtemp(dir=self.base_dir)
+
+    def test_find_matching_lowercase_file_pattern(self):
+        with NamedTemporaryFile(prefix='sql-files', suffix='.sql', dir=self.tempdir) as named_file:
+            file_path = os.path.dirname(named_file.name)
+            relative_path = os.path.basename(file_path)
+            out = dbt.clients.system.find_matching(
+                self.base_dir, [relative_path], '*.sql'
+            )
+            expected_output = [{
+                'searched_path': relative_path,
+                'absolute_path': named_file.name,
+                'relative_path': os.path.basename(named_file.name)
+            }]
+            self.assertEqual(out, expected_output)
+
+    def test_find_matching_uppercase_file_pattern(self):
+        with NamedTemporaryFile(prefix='sql-files', suffix='.SQL', dir=self.tempdir) as named_file:
+            file_path = os.path.dirname(named_file.name)
+            relative_path = os.path.basename(file_path)
+            out = dbt.clients.system.find_matching(
+                self.base_dir, [relative_path], '*.sql'
+            )
+            expected_output = [{
+                'searched_path': relative_path,
+                'absolute_path': named_file.name,
+                'relative_path': os.path.basename(named_file.name)
+            }]
+            self.assertEqual(out, expected_output)
+
+    def test_find_matching_file_pattern_not_found(self):
+        with NamedTemporaryFile(prefix='sql-files', suffix='.SQLT', dir=self.tempdir) as named_file:
+            out = dbt.clients.system.find_matching(self.tempdir, [''], '*.sql')
+            self.assertEqual(out, [])
 
 class TestRunCmd(unittest.TestCase):
     """Test `run_cmd`.

@@ -3,6 +3,7 @@ import fnmatch
 import json
 import os
 import os.path
+import re
 import shutil
 import subprocess
 import sys
@@ -40,20 +41,20 @@ def find_matching(
     """
     matching = []
     root_path = os.path.normpath(root_path)
+    regex = fnmatch.translate(file_pattern)
+    reobj = re.compile(regex, re.IGNORECASE)
 
     for relative_path_to_search in relative_paths_to_search:
         absolute_path_to_search = os.path.join(
             root_path, relative_path_to_search)
         walk_results = os.walk(absolute_path_to_search)
-
         for current_path, subdirectories, local_files in walk_results:
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
                 relative_path = os.path.relpath(
                     absolute_path, absolute_path_to_search
                 )
-
-                if fnmatch.fnmatch(local_file, file_pattern):
+                if reobj.match(local_file):
                     matching.append({
                         'searched_path': relative_path_to_search,
                         'absolute_path': absolute_path,
