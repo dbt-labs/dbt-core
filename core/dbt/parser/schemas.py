@@ -31,6 +31,7 @@ from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException, CompilationException
 )
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
