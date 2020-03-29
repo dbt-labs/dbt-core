@@ -31,6 +31,7 @@ from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException, CompilationException
 )
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
@@ -130,6 +131,21 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return NodeType.Test
 
     def get_paths(self):
+        # TODO: In order to support this, make FilesystemSearcher accept a list
+        # of file patterns. eg: ['.yml', '.yaml']
+        yaml_files = FilesystemSearcher(
+            self.project, self.project.all_source_paths, '.yaml'
+        )
+        if yaml_files:
+            logger.warning(
+                f'We have decided that dbt release July 1, 2020 onwards,'
+                f' will start parsing core config files with `.yaml`'
+                f' extension. That means that we will continue to support'
+                f' existing `.yml` extension along with `.yaml` extension.'
+                f' You should make sure these `.yaml` files are of correct'
+                f' schema or you can choose to remove this files from the'
+                f' project.'
+            )
         return FilesystemSearcher(
             self.project, self.project.all_source_paths, '.yml'
         )
