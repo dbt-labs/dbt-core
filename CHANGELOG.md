@@ -10,11 +10,12 @@
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
 - Added timeout to registry download call ([#2195](https://github.com/fishtown-analytics/dbt/issues/2195), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
 - When a macro is called with invalid arguments, include the calling model in the output ([#2073](https://github.com/fishtown-analytics/dbt/issues/2073), [#2238](https://github.com/fishtown-analytics/dbt/pull/2238))
+- When a warn exception is not in a jinja do block, return an empty string instead of None ([#2222](https://github.com/fishtown-analytics/dbt/issues/2222), [#2259](https://github.com/fishtown-analytics/dbt/pull/2259))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
  - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
-
+ - [@jeremyyeo](https://github.com/jeremyyeo) [#2259](https://github.com/fishtown-analytics/dbt/pull/2259)
 
 ## dbt 0.16.0 (March 23, 2020)
 
