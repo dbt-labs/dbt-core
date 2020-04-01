@@ -111,9 +111,7 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(DbtProjectErrorException(exc=exc))
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-                args=args,
-                result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
+            raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
         except dbt.exceptions.DbtProfileError as exc:
             fire_event(DbtProfileError())
             fire_event(DbtProfileErrorException(exc=exc))
@@ -130,9 +128,7 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(ProfileHelpMessage())
 
             tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
-                args=args,
-                result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
+            raise dbt.exceptions.RuntimeException("Could not run dbt") from exc
         return cls(args, config)
 
     @abstractmethod
