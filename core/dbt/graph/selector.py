@@ -253,10 +253,12 @@ class PathSelector(ManifestSelector):
         search = chain(self.parsed_nodes(included_nodes),
                        self.source_nodes(included_nodes))
         for node, real_node in search:
-            if (
-                Path(real_node.root_path) == root and
-                Path(real_node.original_file_path) in paths
-            ):
+            if Path(real_node.root_path) != root:
+                continue
+            ofp = Path(real_node.original_file_path)
+            if ofp in paths:
+                yield node
+            elif any(parent in paths for parent in ofp.parents):
                 yield node
 
 
