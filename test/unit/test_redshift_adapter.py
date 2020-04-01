@@ -96,6 +96,8 @@ class TestRedshiftAdapter(unittest.TestCase):
                     'schema': 'public',
                     'method': 'iam',
                     'cluster_id': 'my_redshift',
+                    'db_groups': ["my_dbgroup"],
+                    'autocreate': True,
                 }
             },
             'target': 'test'
