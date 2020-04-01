@@ -1,5 +1,8 @@
 ## dbt 0.16.1 (Relase date TBD)
 
+### Features
+- Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138) [#2199](https://github.com/fishtown-analytics/dbt/issues/2199))
+
 ### Fixes
 - Fix an issue with raw blocks where multiple raw blocks in the same file resulted in an error ([#2241](https://github.com/fishtown-analytics/dbt/issues/2241), [#2252](https://github.com/fishtown-analytics/dbt/pull/2252))
 - Fix a redshift-only issue that caused an error when `dbt seed` found a seed with an entirely empty column that was set to a `varchar` data type. ([#2250](https://github.com/fishtown-analytics/dbt/issues/2250), [#2254](https://github.com/fishtown-analytics/dbt/pull/2254))
@@ -7,6 +10,8 @@
 ### Under the hood
 - Pin google libraries to higher minimum values, add more dependencies as explicit ([#2233](https://github.com/fishtown-analytics/dbt/issues/2233), [#2249](https://github.com/fishtown-analytics/dbt/pull/2249))
 
+Contributors:
+ - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
 
 ## dbt 0.16.0 (March 23, 2020)
 
@@ -20,6 +25,9 @@
 
 ### Fixes
 - If database quoting is enabled, do not attempt to create schemas that already exist ([#2186](https://github.com/fishtown-analytics/dbt/issues/2186), [#2187](https://github.com/fishtown-analytics/dbt/pull/2187))
+
+### Features
+- Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138))
 
 ## dbt 0.16.0rc2 (March 4, 2020)
 

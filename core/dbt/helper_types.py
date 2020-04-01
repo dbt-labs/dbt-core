@@ -1,11 +1,12 @@
 # never name this package "types", or mypy will crash in ugly ways
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import NewType, Dict
+from typing import NewType
 
 from hologram import (
     FieldEncoder, JsonSchemaMixin, JsonDict, ValidationError
 )
-
+from hologram.helpers import StrEnum
 
 Port = NewType('Port', int)
 
@@ -37,41 +38,20 @@ class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):
         return {'type': 'number'}
 
 
-class NoValue:
-    """Sometimes, you want a way to say none that isn't None"""
+class NVEnum(StrEnum):
+    novalue = 'novalue'
+
     def __eq__(self, other):
-        return isinstance(other, NoValue)
+        return isinstance(other, NVEnum)
 
 
-class NoValueEncoder(FieldEncoder):
-    # the FieldEncoder class specifies a narrow range that only includes value
-    # types (str, float, None) but we want to support something extra
-    def to_wire(self, value: NoValue) -> Dict[str, str]:  # type: ignore
-        return {'novalue': 'novalue'}
-
-    def to_python(self, value) -> NoValue:
-        if (
-            not isinstance(value, dict) or
-            'novalue' not in value or
-            value['novalue'] != 'novalue'
-        ):
-            raise ValidationError('Got invalid NoValue: {}'.format(value))
-        return NoValue()
-
-    @property
-    def json_schema(self):
-        return {
-            'type': 'object',
-            'properties': {
-                'novalue': {
-                    'enum': ['novalue'],
-                }
-            }
-        }
+@dataclass
+class NoValue(JsonSchemaMixin):
+    """Sometimes, you want a way to say none that isn't None"""
+    novalue: NVEnum = NVEnum.novalue
 
 
 JsonSchemaMixin.register_field_encoders({
     Port: PortEncoder(),
     timedelta: TimeDeltaFieldEncoder(),
-    NoValue: NoValueEncoder(),
 })
