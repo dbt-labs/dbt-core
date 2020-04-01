@@ -205,7 +205,7 @@ class HasCredentials(Protocol):
     threads: int
 
     def to_target_dict(self):
-        raise NotImplementedError('to_target_dict not implemented')
+        raise NotImplementedError("to_target_dict not implemented")
 
 
 DEFAULT_QUERY_COMMENT = '''

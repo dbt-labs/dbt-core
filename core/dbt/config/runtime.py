@@ -391,7 +391,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
 class UnsetCredentials(Credentials):
     def __init__(self):
-        super().__init__('', '')
+        super().__init__("", "")
 
     @property
     def type(self):
@@ -414,18 +414,16 @@ class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
         self.user_config = UserConfig()  # This will be read in _get_rendered_profile
-        self.profile_name = ''
-        self.target_name = ''
+        self.profile_name = ""
+        self.target_name = ""
         self.threads = -1
 
     def to_target_dict(self):
         return {}
 
     def __getattribute__(self, name):
-        if name in {'profile_name', 'target_name', 'threads'}:
-            raise RuntimeException(
-                f'Error: disallowed attribute "{name}" - no profile!'
-            )
+        if name in {"profile_name", "target_name", "threads"}:
+            raise RuntimeException(f'Error: disallowed attribute "{name}" - no profile!')
 
         return Profile.__getattribute__(self, name)
 
@@ -448,10 +446,8 @@ class UnsetProfileConfig(RuntimeConfig):
 
     def __getattribute__(self, name):
         # Override __getattribute__ to check that the attribute isn't 'banned'.
-        if name in {'profile_name', 'target_name'}:
-            raise RuntimeException(
-                f'Error: disallowed attribute "{name}" - no profile!'
-            )
+        if name in {"profile_name", "target_name"}:
+            raise RuntimeException(f'Error: disallowed attribute "{name}" - no profile!')
 
         # avoid every attribute access triggering infinite recursion
         return RuntimeConfig.__getattribute__(self, name)
@@ -467,7 +463,7 @@ class UnsetProfileConfig(RuntimeConfig):
         profile: Profile,
         args: Any,
         dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
-    ) -> 'RuntimeConfig':
+    ) -> "RuntimeConfig":
         """Instantiate a RuntimeConfig from its components.
 
         :param profile: Ignored.
@@ -475,7 +471,7 @@ class UnsetProfileConfig(RuntimeConfig):
         :param args: The parsed command-line arguments.
         :returns RuntimeConfig: The new configuration.
         """
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
 
         return cls(
             project_name=project.project_name,
@@ -512,10 +508,10 @@ class UnsetProfileConfig(RuntimeConfig):
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
             profile_env_vars=profile.profile_env_vars,
-            profile_name='',
-            target_name='',
+            profile_name="",
+            target_name="",
             user_config=UserConfig(),
-            threads=getattr(args, 'threads', 1),
+            threads=getattr(args, "threads", 1),
             credentials=UnsetCredentials(),
             args=args,
             cli_vars=cli_vars,

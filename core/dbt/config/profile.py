@@ -132,8 +132,16 @@ class Profile(HasCredentials):
         return result
 
     def to_target_dict(self) -> Dict[str, Any]:
-        target = dict(
-            self.credentials.connection_info(with_aliases=True)
+        target = dict(self.credentials.connection_info(with_aliases=True))
+        target.update(
+            {
+                "type": self.credentials.type,
+                "threads": self.threads,
+                "name": self.target_name,
+                "target_name": self.target_name,
+                "profile_name": self.profile_name,
+                "config": self.user_config.to_dict(omit_none=True),
+            }
         )
         target.update({
             'type': self.credentials.type,
