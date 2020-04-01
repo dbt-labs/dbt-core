@@ -21,6 +21,8 @@ jobs:
             $PYTHON_BIN -m pip install -r requirements.txt
             $PYTHON_BIN -m pip install -r dev_requirements.txt
             /bin/bash ./scripts/build-wheels.sh
+            $PYTHON_BIN ./scripts/collect-dbt-contexts.py > ./dist/context_metadata.json
+            $PYTHON_BIN ./scripts/collect-artifact-schema.py > ./dist/artifact_schemas.json
           environment:
             PYTHON_ENV: /home/tox/build_venv/
       - store_artifacts:
