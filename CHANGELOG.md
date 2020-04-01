@@ -5,6 +5,7 @@
 - Added a `get-manifest` API call. ([#2168](https://github.com/fishtown-analytics/dbt/issues/2168), [#2232](https://github.com/fishtown-analytics/dbt/pull/2232))
 - Support adapter-specific aliases (like `project` and `dataset` on BigQuery) in source definitions. ([#2133](https://github.com/fishtown-analytics/dbt/issues/2133), [#2244](https://github.com/fishtown-analytics/dbt/pull/2244))
 - Users can now use jinja as arguments to tests. Test arguments are rendered in the native context and injected into the test execution context directly. ([#2149](https://github.com/fishtown-analytics/dbt/issues/2149), [#2220](https://github.com/fishtown-analytics/dbt/pull/2220))
+- Added support for `db_groups` and `autocreate` flags in Redshift configurations.  ([#1995](https://github.com/fishtown-analytics/dbt/issues/1995, [#2262]https://github.com/fishtown-analytics/dbt/pull/2262))
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
@@ -15,6 +16,7 @@
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
  - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
+ - [@kyleabeauchamp](https://github.com/kyleabeauchamp) [#2262](https://github.com/fishtown-analytics/dbt/pull/2262)
  - [@jeremyyeo](https://github.com/jeremyyeo) [#2259](https://github.com/fishtown-analytics/dbt/pull/2259)
 
 ## dbt 0.16.0 (March 23, 2020)

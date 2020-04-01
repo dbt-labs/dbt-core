@@ -14,7 +14,7 @@ from hologram import FieldEncoder, JsonSchemaMixin
 from hologram.helpers import StrEnum
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 
 drop_lock: Lock = dbt.flags.MP_CONTEXT.Lock()
 
@@ -47,6 +47,8 @@ class RedshiftCredentials(PostgresCredentials):
     iam_duration_seconds: int = 900
     search_path: Optional[str] = None
     keepalives_idle: int = 240
+    autocreate: bool = False
+    db_groups: List[str] = field(default_factory=list)
 
     @property
     def type(self):
@@ -85,7 +87,7 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
     @classmethod
     def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,
-                                  duration_s):
+                                  duration_s, autocreate, db_groups):
         """Fetches temporary login credentials from AWS. The specified user
         must already exist in the database, or else an error will occur"""
         boto_client = boto3.client('redshift')
@@ -96,7 +98,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
                 DbName=db_name,
                 ClusterIdentifier=cluster_id,
                 DurationSeconds=duration_s,
-                AutoCreate=False)
+                AutoCreate=autocreate,
+                DbGroups=db_groups,)
 
         except boto_client.exceptions.ClientError as e:
             raise dbt.exceptions.FailedToConnectException(
@@ -121,6 +124,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             credentials.database,
             credentials.cluster_id,
             iam_duration_s,
+            credentials.autocreate,
+            credentials.db_groups,
         )
 
         # replace username and password with temporary redshift credentials
