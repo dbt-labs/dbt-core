@@ -126,23 +126,22 @@ NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
 
 
 class TemplateCache:
-
     def __init__(self):
-        self.file_cache = {}
+        self.file_cache: Dict[str, jinja2.Template] = {}
 
-    def get_node_template(self, node):
-        key = (node.package_name, node.original_file_path)
+    def get_node_template(self, node) -> jinja2.Template:
+        key = node.macro_sql
 
         if key in self.file_cache:
             return self.file_cache[key]
 
         template = get_template(
-            string=node.raw_sql,
+            string=node.macro_sql,
             ctx={},
             node=node,
         )
-        self.file_cache[key] = template
 
+        self.file_cache[key] = template
         return template
 
     def clear(self):

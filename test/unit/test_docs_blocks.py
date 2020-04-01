@@ -135,16 +135,13 @@ class DocumentationParserTest(unittest.TestCase):
         for result in results:
             self.assertIsInstance(result, ParsedDocumentation)
             self.assertEqual(result.package_name, 'some_package')
-            self.assertNotEqual(result.file_contents, TEST_DOCUMENTATION_FILE)
             self.assertEqual(result.original_file_path, self.testfile_path)
             self.assertEqual(result.root_path, self.subdir_path)
             self.assertEqual(result.resource_type, NodeType.Documentation)
             self.assertEqual(result.path, 'test_file.md')
 
         self.assertEqual(results[0].name, 'snowplow_sessions')
-        self.assertEqual(results[0].file_contents, SNOWPLOW_SESSIONS_BLOCK)
         self.assertEqual(results[1].name, 'snowplow_sessions__session_id')
-        self.assertEqual(results[1].file_contents, SNOWPLOW_SESSIONS_SESSION_ID_BLOCK)
 
     def test_load_file_extras(self):
         TEST_DOCUMENTATION_FILE + '{% model foo %}select 1 as id{% endmodel %}'

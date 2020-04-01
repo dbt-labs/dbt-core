@@ -698,7 +698,6 @@ class Manifest:
             disabled=self.disabled,
             child_map=forward_edges,
             parent_map=backward_edges,
-            files=self.files,
         )
 
     @classmethod
@@ -835,5 +834,3 @@ class WritableManifest(JsonSchemaMixin, Writable):
     parent_map: Optional[NodeEdgeMap]
     child_map: Optional[NodeEdgeMap]
     metadata: ManifestMetadata
-    # map of original_file_path to all unique IDs provided by that file
-    files: Mapping[str, SourceFile]
