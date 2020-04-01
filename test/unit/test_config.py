@@ -14,12 +14,12 @@ import dbt.exceptions
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
 from dbt.context.base import generate_base_context
+from dbt.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
-from .utils import normalize
-
+from .utils import normalize, config_from_parts_or_dicts
 
 INITIAL_ROOT = os.getcwd()
 
@@ -844,6 +844,45 @@ class TestProject(BaseConfigTest):
                 self.default_project_data, None
             )
 
+    def test_query_comment_disabled(self):
+        self.default_project_data.update({
+            'query-comment': None,
+        })
+        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        self.assertEqual(project.query_comment.comment, '')
+        self.assertEqual(project.query_comment.append, False)
+
+        self.default_project_data.update({
+            'query-comment': '',
+        })
+        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        self.assertEqual(project.query_comment.comment, '')
+        self.assertEqual(project.query_comment.append, False)
+
+    def test_default_query_comment(self):
+        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        self.assertEqual(project.query_comment, QueryComment())
+
+    def test_default_query_comment_append(self):
+        self.default_project_data.update({
+            'query-comment': {
+                'append': True
+            },
+        })
+        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        self.assertEqual(project.query_comment.comment, DEFAULT_QUERY_COMMENT)
+        self.assertEqual(project.query_comment.append, True)
+
+    def test_custom_query_comment_append(self):
+        self.default_project_data.update({
+            'query-comment': {
+                'comment': 'run by user test',
+                'append': True
+            },
+        })
+        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        self.assertEqual(project.query_comment.comment, 'run by user test')
+        self.assertEqual(project.query_comment.append, True)
 
 class TestProjectWithConfigs(BaseConfigTest):
     def setUp(self):

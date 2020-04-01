@@ -9,6 +9,7 @@ from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.contracts.connection import QueryComment
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
@@ -202,6 +203,21 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
     return project_dict
 
 
+def _query_comment_from_cfg(
+        cfg_query_comment: Union[QueryComment, NoValue, str]
+) -> QueryComment:
+    if not cfg_query_comment:
+        return QueryComment(comment='')
+
+    if isinstance(cfg_query_comment, str):
+        return QueryComment(comment=cfg_query_comment)
+
+    if isinstance(cfg_query_comment, NoValue):
+        return QueryComment()
+
+    return cfg_query_comment
+
+
 @dataclass
 class PartialProject:
     profile_name: Optional[str] = field(metadata=dict(
@@ -258,7 +274,7 @@ class Project:
     snapshots: Dict[str, Any]
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
-    query_comment: Optional[Union[str, NoValue]]
+    query_comment: QueryComment
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -370,7 +386,8 @@ class Project:
         dbt_raw_version: Union[List[str], str] = '>=0.0.0'
         if cfg.require_dbt_version is not None:
             dbt_raw_version = cfg.require_dbt_version
-        query_comment = cfg.query_comment
+
+        query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         try:
             dbt_version = _parse_versions(dbt_raw_version)
@@ -456,10 +473,11 @@ class Project:
                 v.to_version_string() for v in self.dbt_version
             ],
         })
+        if self.query_comment:
+            result['query-comment'] = self.query_comment.to_dict()
+
         if with_packages:
             result.update(self.packages.to_dict())
-        if self.query_comment != NoValue():
-            result['query-comment'] = self.query_comment
 
         return result
 

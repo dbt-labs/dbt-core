@@ -35,7 +35,9 @@ class RedshiftAdapter(PostgresAdapter):
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):
         column = agate_table.columns[col_idx]
-        lens = (len(d.encode("utf-8")) for d in column.values_without_nulls())
+        # `lens` must be a list, so this can't be a generator expression,
+        # because max() raises ane exception if its argument has no members.
+        lens = [len(d.encode("utf-8")) for d in column.values_without_nulls()]
         max_len = max(lens) if lens else 64
         return "varchar({})".format(max_len)
 
