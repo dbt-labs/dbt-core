@@ -7,6 +7,7 @@
 - dbt now renders the project name in the "base" context, in particular giving it access to `var` and `env_var` ([#2230](https://github.com/fishtown-analytics/dbt/issues/2230), [#2251](https://github.com/fishtown-analytics/dbt/pull/2251))
 - Fix an issue with raw blocks where multiple raw blocks in the same file resulted in an error ([#2241](https://github.com/fishtown-analytics/dbt/issues/2241), [#2252](https://github.com/fishtown-analytics/dbt/pull/2252))
 - Fix a redshift-only issue that caused an error when `dbt seed` found a seed with an entirely empty column that was set to a `varchar` data type. ([#2250](https://github.com/fishtown-analytics/dbt/issues/2250), [#2254](https://github.com/fishtown-analytics/dbt/pull/2254))
+- Fix a bug where third party plugins that used the default `list_schemas` and `information_schema_name` macros with database quoting enabled double-quoted the database name in their queries ([#2267](https://github.com/fishtown-analytics/dbt/issues/2267), [#2281](https://github.com/fishtown-analytics/dbt/pull/2281))
 
 ### Under the hood
 - Pin google libraries to higher minimum values, add more dependencies as explicit ([#2233](https://github.com/fishtown-analytics/dbt/issues/2233), [#2249](https://github.com/fishtown-analytics/dbt/pull/2249))
