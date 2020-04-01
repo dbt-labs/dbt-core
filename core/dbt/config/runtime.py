@@ -150,8 +150,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # build the profile using the base renderer and the one fact we know
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
         renderer = ConfigRenderer(generate_base_context(cli_vars=cli_vars))
+        profile_name = partial.render_profile_name(renderer)
         profile = Profile.render_from_args(
-            args, renderer, partial.profile_name
+            args, renderer, profile_name
         )
 
         # get a new renderer using our target information and render the
