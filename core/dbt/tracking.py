@@ -154,10 +154,8 @@ def get_run_type(args):
 
 
 def get_invocation_context(user, config, args):
-    # put this in here to avoid an import cycle
-    from dbt.adapters.factory import get_adapter
     try:
-        adapter_type = get_adapter(config).type()
+        adapter_type = config.credentials.type
     except Exception:
         adapter_type = None
 
