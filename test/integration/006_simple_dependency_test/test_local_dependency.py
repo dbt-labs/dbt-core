@@ -2,6 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import json
 import shutil
+import yaml
 from unittest import mock
 
 import dbt.semver
@@ -56,14 +57,17 @@ class TestSimpleDependency(BaseDependencyTest):
         self.run_dbt(['deps'])
         self.run_dbt(['seed'])
         results = self.run_dbt(['run'])
-        self.assertEqual(len(results),  3)
+        self.assertEqual(len(results),  5)
         self.assertEqual({r.node.schema for r in results},
                          {self.base_schema(), self.configured_schema()})
-        self.assertEqual(
-            len([r.node for r in results
-                 if r.node.schema == self.base_schema()]),
-            2
-        )
+
+        base_schema_nodes = [
+            r.node for r in results
+            if r.node.schema == self.base_schema()
+        ]
+        self.assertEqual(len(base_schema_nodes), 4)
+        self.assertTablesEqual('source_override_model', 'seed', self.base_schema(), self.base_schema())
+        self.assertTablesEqual('dep_source_model', 'seed', self.base_schema(), self.base_schema())
 
 
 class TestMissingDependency(DBTIntegrationTest):
@@ -86,13 +90,24 @@ class TestMissingDependency(DBTIntegrationTest):
 
 
 class TestSimpleDependencyWithSchema(TestSimpleDependency):
+    def run_dbt(self, cmd, *args, **kwargs):
+        # we can't add this to the config because Sources don't respect dbt_project.yml
+        vars_arg = yaml.safe_dump({
+            'schema_override': self.base_schema(),
+        })
+        cmd.extend(['--vars', vars_arg])
+        return super().run_dbt(cmd, *args, **kwargs)
+
     @property
     def project_config(self):
         return {
             'macro-paths': ['schema_override_macros'],
             'models': {
                 'schema': 'dbt_test',
-            }
+            },
+            'seeds': {
+                'schema': 'dbt_test',
+            },
         }
 
     def base_schema(self):
@@ -122,7 +137,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         self.run_dbt(['deps'])
         self.run_dbt(['seed', '--no-version-check'])
         results = self.run_dbt(['run', '--no-version-check'])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 5)
 
 
 class TestSimpleDependencyHooks(DBTIntegrationTest):
