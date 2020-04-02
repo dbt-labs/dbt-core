@@ -2,7 +2,7 @@ import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
-from dbt.config import PoisonedProfileConfig, ConfigRenderer
+from dbt.config import UnsetProfileConfig, ConfigRenderer
 from dbt.context.target import generate_target_context
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
@@ -14,9 +14,9 @@ from dbt.task.base import BaseTask
 
 
 class DepsTask(BaseTask):
-    ConfigType = PoisonedProfileConfig
+    ConfigType = UnsetProfileConfig
 
-    def __init__(self, args, config: PoisonedProfileConfig):
+    def __init__(self, args, config: UnsetProfileConfig):
         super().__init__(args=args, config=config)
 
     def track_package_install(

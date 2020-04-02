@@ -175,7 +175,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         )
 
 
-class PoisonedCredentials(Credentials):
+class UnsetCredentials(Credentials):
     def __init__(self):
         super().__init__('', '')
 
@@ -190,21 +190,21 @@ class PoisonedCredentials(Credentials):
         return ()
 
 
-class PoisonedConfig(UserConfig):
+class UnsetConfig(UserConfig):
     def __getattribute__(self, name):
         if name in {f.name for f in fields(UserConfig)}:
             raise AttributeError(
-                f"'PoisonedConfig' object has no attribute {name}"
+                f"'UnsetConfig' object has no attribute {name}"
             )
 
     def to_dict(self):
         return {}
 
 
-class PoisonedProfile(Profile):
+class UnsetProfile(Profile):
     def __init__(self):
-        self.credentials = PoisonedCredentials()
-        self.config = PoisonedConfig()
+        self.credentials = UnsetCredentials()
+        self.config = UnsetConfig()
         self.profile_name = ''
         self.target_name = ''
         self.threads = -1
@@ -222,7 +222,7 @@ class PoisonedProfile(Profile):
 
 
 @dataclass
-class PoisonedProfileConfig(RuntimeConfig):
+class UnsetProfileConfig(RuntimeConfig):
     """This class acts a lot _like_ a RuntimeConfig, except if your profile is
     missing, any access to profile members results in an exception.
     """
@@ -288,9 +288,9 @@ class PoisonedProfileConfig(RuntimeConfig):
             query_comment=project.query_comment,
             profile_name='',
             target_name='',
-            config=PoisonedConfig(),
+            config=UnsetConfig(),
             threads=getattr(args, 'threads', 1),
-            credentials=PoisonedCredentials(),
+            credentials=UnsetCredentials(),
             args=args,
             cli_vars=cli_vars,
         )
@@ -328,7 +328,7 @@ class PoisonedProfileConfig(RuntimeConfig):
                 profile_name
             )
             # return the poisoned form
-            profile = PoisonedProfile()
+            profile = UnsetProfile()
             # disable anonymous usage statistics
             tracking.do_not_track()
 
