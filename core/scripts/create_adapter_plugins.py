@@ -231,7 +231,7 @@ def parse_args(argv=None):
     parser.add_argument('adapter')
     parser.add_argument('--title-case', '-t', default=None)
     parser.add_argument('--dependency', action='append')
-    parser.add_argument('--dbt-core-version', default='0.16.1a1')
+    parser.add_argument('--dbt-core-version', default='0.16.1rc1')
     parser.add_argument('--email')
     parser.add_argument('--author')
     parser.add_argument('--url')
