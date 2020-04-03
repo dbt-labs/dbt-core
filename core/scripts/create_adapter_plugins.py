@@ -216,11 +216,7 @@ class Builder:
                 "title_adapter": self.args.title_case,
                 "adapter": self.adapter,
             }
-        kwargs.update({
-            'upper_adapter': self.adapter.upper(),
-            'title_adapter': self.args.title_case,
-            'adapter': self.adapter,
-        })
+        )
 
         return kwargs
 
