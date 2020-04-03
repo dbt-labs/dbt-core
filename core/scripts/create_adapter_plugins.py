@@ -159,9 +159,9 @@ class Builder:
         self.adapter = self.args.adapter
         self.dest = self.args.root / self.adapter
         # self.dbt_dir = self.dest / 'dbt'
-        self.dbt_dir = Path('dbt')
-        self.adapters = self.dbt_dir / 'adapters' / self.adapter
-        self.include = self.dbt_dir / 'include' / self.adapter
+        self.dbt_dir = Path("dbt")
+        self.adapters = self.dbt_dir / "adapters" / self.adapter
+        self.include = self.dbt_dir / "include" / self.adapter
         if self.dest.exists():
             raise Exception("path exists")
 
@@ -173,8 +173,8 @@ class Builder:
 
     def include_paths(self):
         return [
-            self.include / 'macros' / '*.sql',
-            self.include / 'dbt_project.yml',
+            self.include / "macros" / "*.sql",
+            self.include / "dbt_project.yml",
         ]
 
     def dest_path(self, *paths):
@@ -183,15 +183,7 @@ class Builder:
     def write_setup(self):
         self.dest.mkdir(parents=True, exist_ok=True)
 
-        dbt_core_str = 'dbt-core=={}'.format(self.args.dbt_core_version)
-
-        # 12-space indent, then single-quoted with a trailing comma. The path
-        # should not be the actual path from the root but from the 'dbt' dir
-        # (because this is in the 'dbt' package)
-        package_data = '\n'.join(
-            "{}'{!s}',".format(12*' ', p.relative_to(self.dbt_dir))
-            for p in self.include_paths()
-        )
+        dbt_core_str = "dbt-core=={}".format(self.args.dbt_core_version)
 
         setup_py_contents = SETUP_PY_TEMPLATE.format(
             adapter=self.adapter,
@@ -202,7 +194,7 @@ class Builder:
             dbt_core_str=dbt_core_str,
             dependencies=self.args.dependency,
         )
-        self.dest_path('setup.py').write_text(setup_py_contents)
+        self.dest_path("setup.py").write_text(setup_py_contents)
         self.dest_path("MANIFEST.in").write_text(MANIFEST_IN_TEMPLATE)
 
     def _make_adapter_kwargs(self):
@@ -239,22 +231,21 @@ class Builder:
         kwargs = self._make_adapter_kwargs()
 
         init_text = ADAPTER_INIT_TEMPLATE.format(
-            adapter=self.adapter,
-            title_adapter=self.args.title_case
+            adapter=self.adapter, title_adapter=self.args.title_case
         )
         version_text = f"{self.args.package_version}"
         connections_text = ADAPTER_CONNECTIONS_TEMPLATE.format(**kwargs)
         impl_text = ADAPTER_IMPL_TEMPLATE.format(**kwargs)
 
-        (adapters_dest / '__init__.py').write_text(init_text)
+        (adapters_dest / "__init__.py").write_text(init_text)
         (adapters_dest / "__version__.py").write_text(version_text)
-        (adapters_dest / 'connections.py').write_text(connections_text)
-        (adapters_dest / 'impl.py').write_text(impl_text)
+        (adapters_dest / "connections.py").write_text(connections_text)
+        (adapters_dest / "impl.py").write_text(impl_text)
 
     def write_include(self):
         include_dest = self.dest_path(self.include)
         include_dest.mkdir(parents=True, exist_ok=True)
-        macros_dest = include_dest / 'macros'
+        macros_dest = include_dest / "macros"
         macros_dest.mkdir(exist_ok=True)
 
         dbt_project_text = PROJECT_TEMPLATE.format(
@@ -268,11 +259,11 @@ class Builder:
             adapter=self.adapter
         )
 
-        (include_dest / '__init__.py').write_text(INCLUDE_INIT_TEXT)
-        (include_dest / 'dbt_project.yml').write_text(dbt_project_text)
+        (include_dest / "__init__.py").write_text(INCLUDE_INIT_TEXT)
+        (include_dest / "dbt_project.yml").write_text(dbt_project_text)
         (include_dest / "sample_profiles.yml").write_text(sample_profiles_text)
         # make sure something satisfies the 'include/macros/*.sql' in setup.py
-        (macros_dest / 'catalog.sql').write_text(catalog_macro_text)
+        (macros_dest / "catalog.sql").write_text(catalog_macro_text)
 
     def write_test_spec(self):
         test_dest = self.dest_path("test")
@@ -286,7 +277,7 @@ def parse_args(argv=None):
     if argv is None:
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser()
-    parser.add_argument('root', type=Path)
+    parser.add_argument("root", type=Path)
     parser.add_argument("adapter")
     parser.add_argument("--title-case", "-t", default=None)
     parser.add_argument("--dependency", action="append")
@@ -297,9 +288,7 @@ def parse_args(argv=None):
     parser.add_argument("--sql", action="store_true")
     parser.add_argument('--package-version', default='1.0.1')
     parser.add_argument("--project-version", default="1.0")
-    parser.add_argument(
-        '--no-dependency', action='store_false', dest='set_dependency'
-    )
+    parser.add_argument("--no-dependency", action="store_false", dest="set_dependency")
     parsed = parser.parse_args()
 
     if parsed.title_case is None:
@@ -312,13 +301,11 @@ def parse_args(argv=None):
         if parsed.dependency:
             # ['a', 'b'] => "'a',\n        'b'"; ['a'] -> "'a',"
             
-            parsed.dependency = prefix + prefix.join(
-                "'{}',".format(d) for d in parsed.dependency
-            )
+            parsed.dependency = prefix + prefix.join("'{}',".format(d) for d in parsed.dependency)
         else:
-            parsed.dependency = prefix + '<INSERT DEPENDENCIES HERE>'
+            parsed.dependency = prefix + "<INSERT DEPENDENCIES HERE>"
     else:
-        parsed.dependency = ''
+        parsed.dependency = ""
 
     if parsed.email is not None:
         parsed.email = "'{}'".format(parsed.email)
