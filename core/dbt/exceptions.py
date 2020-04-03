@@ -815,8 +815,7 @@ def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
     duped_name = node_1.name
     if node_1.package_name != node_2.package_name:
         extra = ' ("{}" and "{}" are both in the "{}" namespace)'.format(
-            ' ("{}" and "{}" are both in the "{}" namespace)'
-            .format(node_1.package_name, node_2.package_name, namespace)
+            node_1.package_name, node_2.package_name, namespace
         )
     else:
         extra = ""
