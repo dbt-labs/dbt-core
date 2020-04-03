@@ -1,5 +1,7 @@
+import os
 from enum import Enum
 from itertools import chain
+from pathlib import Path
 from typing import Set, Iterable, Union, List, Container, Tuple, Optional
 
 import networkx as nx  # type: ignore
@@ -16,13 +18,24 @@ SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
 
 
+def _probably_path(value: str):
+    """Decide if value is probably a path. Windows has two path separators, so
+    we should check both sep ('\\') and altsep ('/') there.
+    """
+    if os.path.sep in value:
+        return True
+    elif os.path.altsep is not None and os.path.altsep in value:
+        return True
+    else:
+        return False
+
+
 class SelectionCriteria:
     def __init__(self, node_spec: str):
         self.raw = node_spec
         self.select_children = False
         self.select_parents = False
         self.select_childrens_parents = False
-        self.selector_type = SELECTOR_FILTERS.FQN
 
         if node_spec.startswith(SELECTOR_CHILDREN_AND_ANCESTORS):
             self.select_childrens_parents = True
@@ -48,12 +61,19 @@ class SelectionCriteria:
             self.selector_type = SELECTOR_FILTERS(selector_type)
         else:
             self.selector_value = node_spec
+            # if the selector type has an OS path separator in it, it can't
+            # really be a valid file name, so assume it's a path.
+            if _probably_path(node_spec):
+                self.selector_type = SELECTOR_FILTERS.PATH
+            else:
+                self.selector_type = SELECTOR_FILTERS.FQN
 
 
 class SELECTOR_FILTERS(str, Enum):
     FQN = 'fqn'
     TAG = 'tag'
     SOURCE = 'source'
+    PATH = 'path'
 
     def __str__(self):
         return self._value_
@@ -219,6 +239,29 @@ class SourceSelector(ManifestSelector):
                 yield node
 
 
+class PathSelector(ManifestSelector):
+    FILTER = SELECTOR_FILTERS.PATH
+
+    def search(self, included_nodes, selector):
+        """Yield all nodes in the graph that match the given path.
+
+        :param str selector: The path selector
+        """
+        # use '.' and not 'root' for easy comparison
+        root = Path.cwd()
+        paths = set(p.relative_to(root) for p in root.glob(selector))
+        search = chain(self.parsed_nodes(included_nodes),
+                       self.source_nodes(included_nodes))
+        for node, real_node in search:
+            if Path(real_node.root_path) != root:
+                continue
+            ofp = Path(real_node.original_file_path)
+            if ofp in paths:
+                yield node
+            elif any(parent in paths for parent in ofp.parents):
+                yield node
+
+
 class InvalidSelectorError(Exception):
     pass
 
@@ -231,7 +274,12 @@ class MultiSelector:
     selector types, including the glob operator, but does not handle any graph
     related behavior.
     """
-    SELECTORS = [QualifiedNameSelector, TagSelector, SourceSelector]
+    SELECTORS = [
+        QualifiedNameSelector,
+        TagSelector,
+        SourceSelector,
+        PathSelector,
+    ]
 
     def __init__(self, manifest):
         self.manifest = manifest
