@@ -10,6 +10,7 @@
 - Fix a bug where third party plugins that used the default `list_schemas` and `information_schema_name` macros with database quoting enabled double-quoted the database name in their queries ([#2267](https://github.com/fishtown-analytics/dbt/issues/2267), [#2281](https://github.com/fishtown-analytics/dbt/pull/2281))
 - The BigQuery "partitions" config value can now be used in `dbt_project.yml` ([#2256](https://github.com/fishtown-analytics/dbt/issues/2256), [#2280](https://github.com/fishtown-analytics/dbt/pull/2280))
 - dbt deps once again does not require a profile, but if profile-specific fields are accessed users will get an error ([#2231](https://github.com/fishtown-analytics/dbt/issues/2231), [#2290](https://github.com/fishtown-analytics/dbt/pull/2290))
+- The create_adapter_plugin.py script has been updated to support 0.16.X adapters ([#2145](https://github.com/fishtown-analytics/dbt/issues/2145), [#2294](https://github.com/fishtown-analytics/dbt/pull/2294))
 
 ### Under the hood
 - Pin google libraries to higher minimum values, add more dependencies as explicit ([#2233](https://github.com/fishtown-analytics/dbt/issues/2233), [#2249](https://github.com/fishtown-analytics/dbt/pull/2249))
