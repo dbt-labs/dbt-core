@@ -187,3 +187,24 @@ class TestAdapterConversions(TestCase):
             column_types = [self._get_tester_for(typ) for typ in column_types]
         table = agate.Table(rows, column_names=column_names, column_types=column_types)
         return table
+
+
+def MockMacro(package, name='my_macro', kwargs={}):
+    from dbt.contracts.graph.parsed import ParsedMacro
+    from dbt.node_types import NodeType
+
+    mock_kwargs = dict(
+        resource_type=NodeType.Macro,
+        package_name=package,
+        unique_id=f'macro.{package}.{name}',
+        original_file_path='/dev/null',
+    )
+
+    mock_kwargs.update(kwargs)
+
+    macro = mock.MagicMock(
+        spec=ParsedMacro,
+        **mock_kwargs
+    )
+    macro.name = name
+    return macro
