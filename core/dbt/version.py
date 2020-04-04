@@ -80,7 +80,7 @@ def get_version_information():
 
     if latest is None:
         return (
-                "Make sure that the following URL is accessible:\n{}\n\n{}"
+            "{}The latest version of dbt could not be determined!\n"
             "Make sure that the following URL is accessible:\n{}\n\n{}".format(
                 version_msg, PYPI_VERSION_URL, plugin_version_msg
             )
@@ -91,13 +91,17 @@ def get_version_information():
 
     elif installed > latest:
         return "{}Your version of dbt is ahead of the latest " "release!\n\n{}".format(
-                "release!\n\n{}".format(version_msg, plugin_version_msg))
+            version_msg, plugin_version_msg
+        )
 
     else:
         return (
             "{}Your version of dbt is out of date! "
-                "https://docs.getdbt.com/docs/installation\n\n{}"
-                .format(version_msg, plugin_version_msg))
+            "You can find instructions for upgrading here:\n"
+            "https://docs.getdbt.com/docs/installation\n\n{}".format(
+                version_msg, plugin_version_msg
+            )
+        )
 
 
 def _get_adapter_plugin_names() -> Iterator[str]:
@@ -118,12 +122,10 @@ def _get_adapter_plugin_names() -> Iterator[str]:
 
 def _get_dbt_plugins_info():
     for plugin_name in _get_adapter_plugin_names():
-        if plugin_name == 'core':
+        if plugin_name == "core":
             continue
         try:
-            mod = importlib.import_module(
-                f'dbt.adapters.{plugin_name}.__version__'
-            )
+            mod = importlib.import_module(f"dbt.adapters.{plugin_name}.__version__")
         except ImportError:
             # not an adapter
             continue
