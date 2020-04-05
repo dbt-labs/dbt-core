@@ -47,7 +47,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.exceptions import (
     warn_invalid_patch,
-    raise_invalid_schema_yml_version, ValidationException,
+    validator_error_message,
     JSONValidationException,
     raise_invalid_schema_yml_version,
     ValidationException,
