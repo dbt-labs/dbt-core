@@ -44,6 +44,10 @@ defined in your profiles.yml file. You can find profiles.yml here:
 {profiles_file}/profiles.yml
 """.format(profiles_file=PROFILES_DIR)
 
+EMPTY_PROFILE_MESSAGE = """
+dbt cannot run because profiles.yml is empty for this dbt project.
+"""
+
 
 def read_profile(profiles_dir: str) -> Dict[str, Any]:
     path = os.path.join(profiles_dir, 'profiles.yml')
@@ -52,7 +56,10 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
     if os.path.isfile(path):
         try:
             contents = load_file_contents(path, strip=False)
-            return load_yaml_text(contents)
+            yaml_content = load_yaml_text(contents)
+            if not yaml_content:
+                raise DbtProfileError(EMPTY_PROFILE_MESSAGE)
+            return yaml_content
         except ValidationException as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
             raise ValidationException(msg) from e

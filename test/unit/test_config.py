@@ -211,6 +211,10 @@ class BaseFileTest(BaseConfigTest):
         with open(self.profile_path('profiles.yml'), 'w') as fp:
             yaml.dump(profile_data, fp)
 
+    def write_empty_profile(self):
+        with open(self.profile_path('profiles.yml'), 'w') as fp:
+            yaml.dump('', fp)
+
 
 class TestProfile(BaseConfigTest):
     def setUp(self):
@@ -529,6 +533,12 @@ class TestProfileFile(BaseFileTest):
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             self.from_args(project_profile_name=None)
         self.assertIn('no profile was specified', str(exc.exception))
+
+    def test_empty_profile(self):
+        self.write_empty_profile()
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+            self.from_args()
+        self.assertIn('profiles.yml is empty', str(exc.exception))
 
 
 class TestProject(BaseConfigTest):
