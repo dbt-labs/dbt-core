@@ -138,11 +138,13 @@ class TestRunCmd(unittest.TestCase):
 class TestFindMatching(unittest.TestCase):
 
     def setUp(self):
-        self.base_dir = '/tmp'
+        self.base_dir = mkdtemp()
         self.tempdir = mkdtemp(dir=self.base_dir)
 
     def test_find_matching_lowercase_file_pattern(self):
-        with NamedTemporaryFile(prefix='sql-files', suffix='.sql', dir=self.tempdir) as named_file:
+        with NamedTemporaryFile(
+            prefix='sql-files', suffix='.sql', dir=self.tempdir
+        ) as named_file:
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
             out = dbt.clients.system.find_matching(
@@ -170,6 +172,14 @@ class TestFindMatching(unittest.TestCase):
             self.assertEqual(out, expected_output)
 
     def test_find_matching_file_pattern_not_found(self):
-        with NamedTemporaryFile(prefix='sql-files', suffix='.SQLT', dir=self.tempdir) as named_file:
+        with NamedTemporaryFile(
+            prefix='sql-files', suffix='.SQLT', dir=self.tempdir
+        ):
             out = dbt.clients.system.find_matching(self.tempdir, [''], '*.sql')
             self.assertEqual(out, [])
+
+    def tearDown(self):
+        try:
+            shutil.rmtree(self.base_dir)
+        except:
+            pass

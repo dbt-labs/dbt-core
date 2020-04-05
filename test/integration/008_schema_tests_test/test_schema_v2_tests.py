@@ -361,3 +361,43 @@ class TestVarsSchemaTests(DBTIntegrationTest):
         results = self.run_dbt(['test', '--vars', '{myvar: foo}'])
         self.assertEqual(len(results), 1)
         self.run_dbt(['test'], expect_pass=False)
+
+
+class TestSchemaCaseInsensitive(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "case-sensitive-models"
+
+    @use_profile('postgres')
+    def test_postgres_schema_lowercase_sql(self):
+        results = self.run_dbt(strict=False)
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt(['test', '-m', 'lowercase'], strict=False)
+        self.assertEqual(len(results), 1)
+
+    @use_profile('postgres')
+    def test_postgres_schema_uppercase_sql(self):
+        results = self.run_dbt(strict=False)
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt(['test', '-m', 'uppercase'], strict=False)
+        self.assertEqual(len(results), 1)
+
+
+class TestSchemaYAMLExtension(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "case-sensitive-models"
+
+    @use_profile('postgres')
+    def test_postgres_yaml_extension(self):
+        with self.assertRaises(Exception) as exc:
+            self.run_dbt(["run"])
+        self.assertIn('yaml', str(exc.exception))
