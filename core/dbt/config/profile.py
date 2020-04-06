@@ -57,12 +57,8 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
             contents = load_file_contents(path, strip=False)
             yaml_content = load_yaml_text(contents)
             if not yaml_content:
-                msg = f'The profiles.yml file at {path} is empty'
-                raise DbtProfileError(
-                    INVALID_PROFILE_MESSAGE.format(
-                        error_string=msg
-                    )
-                )
+                msg = f"The profiles.yml file at {path} is empty"
+                raise DbtProfileError(INVALID_PROFILE_MESSAGE.format(error_string=msg))
             return yaml_content
         except ValidationException as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
@@ -392,8 +388,8 @@ class Profile(HasCredentials):
         # don't render keys, so we can pluck that out
         raw_profile = raw_profiles[profile_name]
         if not raw_profile:
-            msg = (
-                f'Profile {profile_name} in profiles.yml is empty'
+            msg = f"Profile {profile_name} in profiles.yml is empty"
+            raise DbtProfileError(INVALID_PROFILE_MESSAGE.format(error_string=msg))
             )
             raise DbtProfileError(
                 INVALID_PROFILE_MESSAGE.format(
