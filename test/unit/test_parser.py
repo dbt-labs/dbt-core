@@ -24,7 +24,7 @@ from dbt.contracts.graph.manifest import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
-    NodeConfig, DependsOn, ColumnInfo, ParsedTestNode, TestConfig,
+    NodeConfig, DependsOn, ColumnInfo, ParsedDataTestNode, TestConfig,
     ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
     ParsedAnalysisNode, ParsedDocumentation
 )
@@ -53,7 +53,6 @@ class BaseParserTest(unittest.TestCase):
             sql = f'{{% macro {name}(value, node) %}} {{% if value %}} {{{{ value }}}} {{% else %}} {{{{ {source} }}}} {{% endif %}} {{% endmacro %}}'
             name_sql[name] = sql
 
-        all_sql = '\n'.join(name_sql.values())
         for name, sql in name_sql.items():
             pm = ParsedMacro(
                 name=name,
@@ -63,7 +62,6 @@ class BaseParserTest(unittest.TestCase):
                 original_file_path=normalize('macros/macro.sql'),
                 root_path=get_abs_os_path('./dbt_modules/root'),
                 path=normalize('macros/macro.sql'),
-                raw_sql=all_sql,
                 macro_sql=sql,
             )
             yield pm
@@ -364,6 +362,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[0].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
                 'values': ['red', 'blue', 'green'],
             }
         )
@@ -385,6 +384,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[1].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
                 'arg': 100,
             },
         )
@@ -403,6 +403,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[2].test_metadata.kwargs,
             {
                 'column_name': 'color',
+                'model': "{{ ref('my_model') }}",
             },
         )
 
@@ -623,7 +624,6 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize('macros/macro.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             path=normalize('macros/macro.sql'),
-            raw_sql=raw_sql,
             macro_sql=raw_sql,
         )
         self.assertEqual(macro, expected)
@@ -645,7 +645,6 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize('macros/macro.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             path=normalize('macros/macro.sql'),
-            raw_sql=raw_sql,
             macro_sql='{% macro bar(c, d) %}c + d{% endmacro %}',
         )
         expected_foo = ParsedMacro(
@@ -656,7 +655,6 @@ class MacroParserTest(BaseParserTest):
             original_file_path=normalize('macros/macro.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             path=normalize('macros/macro.sql'),
-            raw_sql=raw_sql,
             macro_sql='{% macro foo(a, b) %}a ~ b{% endmacro %}',
         )
         self.assertEqual(macros, [expected_bar, expected_foo])
@@ -687,7 +685,7 @@ class DataTestParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_results_length(self.parser.results, nodes=1)
         node = list(self.parser.results.nodes.values())[0]
-        expected = ParsedTestNode(
+        expected = ParsedDataTestNode(
             alias='test_1',
             name='test_1',
             database='test',

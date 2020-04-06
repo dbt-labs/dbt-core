@@ -57,6 +57,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
                     'block_contents': item().strip(),
                 }
             )
+            merged.pop('file_contents', None)
             yield ParsedDocumentation.from_dict(merged)
 
     def parse_block(self, block: FullBlock) -> Iterable[ParsedDocumentation]:
@@ -71,7 +72,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         try:
             template = get_template(block.contents, {})
         except CompilationException as e:
-            e.node = base_node
+            e.add_node(base_node)
             raise
         all_docs = list(self._parse_template_docs(template, base_node))
         if len(all_docs) != 1:

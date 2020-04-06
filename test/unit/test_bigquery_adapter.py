@@ -1,3 +1,5 @@
+import agate
+import decimal
 import re
 import unittest
 from contextlib import contextmanager
@@ -12,6 +14,7 @@ from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
+from dbt.clients import agate_helper
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -446,3 +449,27 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
                 }
             }
         )
+
+
+class TestBigQueryFilterCatalog(unittest.TestCase):
+    def test__catalog_filter_table(self):
+        manifest = MagicMock()
+        manifest.get_used_schemas.return_value = [['a', 'B'], ['a', '1234']]
+        column_names = ['table_name', 'table_database', 'table_schema', 'something']
+        rows = [
+            ['foo', 'a', 'b', '1234'],  # include
+            ['foo', 'a', '1234', '1234'],  # include, w/ table schema as str
+            ['foo', 'c', 'B', '1234'],  # skip
+            ['1234', 'A', 'B', '1234'],  # include, w/ table name as str
+        ]
+        table = agate.Table(
+            rows, column_names, agate_helper.DEFAULT_TYPE_TESTER
+        )
+
+        result = BigQueryAdapter._catalog_filter_table(table, manifest)
+        assert len(result) == 3
+        for row in result.rows:
+            assert isinstance(row['table_schema'], str)
+            assert isinstance(row['table_database'], str)
+            assert isinstance(row['table_name'], str)
+            assert isinstance(row['something'], decimal.Decimal)

@@ -7,10 +7,21 @@ from dbt.contracts.graph.manifest import (
     SourceFile, RemoteFile, FileHash, MacroKey
 )
 from dbt.contracts.graph.parsed import (
-    ParsedNode, HasUniqueID, ParsedMacro, ParsedDocumentation, ParsedNodePatch,
-    ParsedSourceDefinition, ParsedAnalysisNode, ParsedHookNode, ParsedRPCNode,
-    ParsedModelNode, ParsedSeedNode, ParsedTestNode, ParsedSnapshotNode,
+    HasUniqueID,
+    ParsedAnalysisNode,
+    ParsedDataTestNode,
+    ParsedDocumentation,
+    ParsedHookNode,
+    ParsedMacro,
     ParsedMacroPatch,
+    ParsedModelNode,
+    ParsedNode,
+    ParsedNodePatch,
+    ParsedRPCNode,
+    ParsedSeedNode,
+    ParsedSchemaTestNode,
+    ParsedSnapshotNode,
+    ParsedSourceDefinition,
 )
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
@@ -36,12 +47,13 @@ def _check_duplicates(
 
 ManifestNodes = Union[
     ParsedAnalysisNode,
+    ParsedDataTestNode,
     ParsedHookNode,
     ParsedModelNode,
-    ParsedSeedNode,
-    ParsedTestNode,
-    ParsedSnapshotNode,
     ParsedRPCNode,
+    ParsedSchemaTestNode,
+    ParsedSeedNode,
+    ParsedSnapshotNode,
 ]
 
 

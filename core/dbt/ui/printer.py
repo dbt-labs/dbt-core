@@ -348,11 +348,11 @@ def print_skip_caused_by_error(
 
 
 def print_end_of_run_summary(
-    num_errors: int, num_warnings: int, early_exit: bool = False
+    num_errors: int, num_warnings: int, keyboard_interrupt: bool = False
 ) -> None:
     error_plural = dbt.utils.pluralize(num_errors, 'error')
     warn_plural = dbt.utils.pluralize(num_warnings, 'warning')
-    if early_exit:
+    if keyboard_interrupt:
         message = yellow('Exited because of keyboard interrupt.')
     elif num_errors > 0:
         message = red("Completed with {} and {}:".format(
@@ -367,11 +367,13 @@ def print_end_of_run_summary(
     logger.info('{}'.format(message))
 
 
-def print_run_end_messages(results, early_exit: bool = False) -> None:
+def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     errors = [r for r in results if r.error is not None or r.fail]
     warnings = [r for r in results if r.warn]
     with DbtStatusMessage(), InvocationProcessor():
-        print_end_of_run_summary(len(errors), len(warnings), early_exit)
+        print_end_of_run_summary(len(errors),
+                                 len(warnings),
+                                 keyboard_interrupt)
 
         for error in errors:
             print_run_result_error(error, is_warning=False)

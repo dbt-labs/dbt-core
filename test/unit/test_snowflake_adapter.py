@@ -43,7 +43,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
             'query-comment': 'dbt',
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
-        self.assertEqual(self.config.query_comment, 'dbt')
+        self.assertEqual(self.config.query_comment.comment, 'dbt')
+        self.assertEqual(self.config.query_comment.append, False)
 
         self.handle = mock.MagicMock(
             spec=snowflake_connector.SnowflakeConnection)

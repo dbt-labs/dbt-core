@@ -11,4 +11,4 @@ select
     current_date as updated_at,
     dupe
 
-from {{ ref('data_seed') }}
+from {{ source('raw', 'seed') }}

@@ -1,6 +1,7 @@
 import codecs
 import linecache
 import os
+import re
 import tempfile
 import threading
 from contextlib import contextmanager
@@ -10,15 +11,19 @@ from typing import (
 
 import jinja2
 import jinja2.ext
+import jinja2.nativetypes  # type: ignore
 import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
 from dbt.utils import (
-    get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name
+    get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name,
+    deep_map
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
+from dbt.contracts.graph.compiled import CompiledSchemaTestNode
+from dbt.contracts.graph.parsed import ParsedSchemaTestNode
 from dbt.exceptions import (
     InternalException, raise_compiler_error, CompilationException,
     invalid_materialization_argument, MacroReturn
@@ -93,24 +98,50 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         return super()._compile(source, filename)  # type: ignore
 
 
+class NativeSandboxEnvironment(MacroFuzzEnvironment):
+    code_generator_class = jinja2.nativetypes.NativeCodeGenerator
+
+
+class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
+    environment_class = NativeSandboxEnvironment
+
+    def render(self, *args, **kwargs):
+        """Render the template to produce a native Python type. If the
+        result is a single node, its value is returned. Otherwise, the
+        nodes are concatenated as strings. If the result can be parsed
+        with :func:`ast.literal_eval`, the parsed value is returned.
+        Otherwise, the string is returned.
+        """
+        vars = dict(*args, **kwargs)
+        try:
+            return jinja2.nativetypes.native_concat(
+                self.root_render_func(self.new_context(vars)),
+                preserve_quotes=True
+            )
+        except Exception:
+            return self.environment.handle_exception()
+
+
+NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
+
+
 class TemplateCache:
-
     def __init__(self):
-        self.file_cache = {}
+        self.file_cache: Dict[str, jinja2.Template] = {}
 
-    def get_node_template(self, node):
-        key = (node.package_name, node.original_file_path)
+    def get_node_template(self, node) -> jinja2.Template:
+        key = node.macro_sql
 
         if key in self.file_cache:
             return self.file_cache[key]
 
         template = get_template(
-            string=node.raw_sql,
+            string=node.macro_sql,
             ctx={},
             node=node,
         )
-        self.file_cache[key] = template
 
+        self.file_cache[key] = template
         return template
 
     def clear(self):
@@ -311,37 +342,17 @@ def _is_dunder_name(name):
     return name.startswith('__') and name.endswith('__')
 
 
-def create_macro_capture_env(node):
-
-    class ParserMacroCapture(jinja2.Undefined):
-        """
-        This class sets up the parser to capture macros.
-        """
+def create_undefined(node=None):
+    class Undefined(jinja2.Undefined):
         def __init__(self, hint=None, obj=None, name=None, exc=None):
             super().__init__(hint=hint, name=name)
             self.node = node
             self.name = name
-            self.package_name = node.package_name
+            self.hint = hint
             # jinja uses these for safety, so we have to override them.
             # see https://github.com/pallets/jinja/blob/master/jinja2/sandbox.py#L332-L339 # noqa
             self.unsafe_callable = False
             self.alters_data = False
-
-        def __deepcopy__(self, memo):
-            path = os.path.join(self.node.root_path,
-                                self.node.original_file_path)
-
-            logger.debug(
-                'dbt encountered an undefined variable, "{}" in node {}.{} '
-                '(source path: {})'
-                .format(self.name, self.node.package_name,
-                        self.node.name, path))
-
-            # match jinja's message
-            raise_compiler_error(
-                "{!r} is undefined".format(self.name),
-                node=self.node
-            )
 
         def __getitem__(self, name):
             # Propagate the undefined value if a caller accesses this as if it
@@ -355,29 +366,41 @@ def create_macro_capture_env(node):
                     .format(type(self).__name__, name)
                 )
 
-            self.package_name = self.name
             self.name = name
 
-            return self
+            return self.__class__(hint=self.hint, name=self.name)
 
         def __call__(self, *args, **kwargs):
             return self
 
-    return ParserMacroCapture
+        def __reduce__(self):
+            raise_compiler_error(f'{self.name} is undefined', node=node)
+
+    return Undefined
 
 
-def get_environment(node=None, capture_macros=False):
+def get_environment(
+    node=None,
+    capture_macros: bool = False,
+    native: bool = False,
+) -> jinja2.Environment:
     args: Dict[str, List[Union[str, Type[jinja2.ext.Extension]]]] = {
         'extensions': ['jinja2.ext.do']
     }
 
     if capture_macros:
-        args['undefined'] = create_macro_capture_env(node)
+        args['undefined'] = create_undefined(node)
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
 
-    return MacroFuzzEnvironment(**args)
+    env_cls: Type[jinja2.Environment]
+    if native:
+        env_cls = NativeSandboxEnvironment
+    else:
+        env_cls = MacroFuzzEnvironment
+
+    return env_cls(**args)
 
 
 @contextmanager
@@ -389,6 +412,9 @@ def catch_jinja(node=None) -> Iterator[None]:
         raise CompilationException(str(e), node) from e
     except jinja2.exceptions.UndefinedError as e:
         raise CompilationException(str(e), node) from e
+    except CompilationException as exc:
+        exc.add_node(node)
+        raise
 
 
 def parse(string):
@@ -396,21 +422,39 @@ def parse(string):
         return get_environment().parse(str(string))
 
 
-def get_template(string, ctx, node=None, capture_macros=False):
+def get_template(
+    string: str,
+    ctx: Dict[str, Any],
+    node=None,
+    capture_macros: bool = False,
+    native: bool = False,
+):
     with catch_jinja(node):
-        env = get_environment(node, capture_macros)
+        env = get_environment(node, capture_macros, native=native)
 
         template_source = str(string)
         return env.from_string(template_source, globals=ctx)
 
 
-def render_template(template, ctx, node=None):
+def render_template(template, ctx: Dict[str, Any], node=None) -> str:
     with catch_jinja(node):
         return template.render(ctx)
 
 
-def get_rendered(string, ctx, node=None, capture_macros=False):
-    template = get_template(string, ctx, node, capture_macros=capture_macros)
+def get_rendered(
+    string: str,
+    ctx: Dict[str, Any],
+    node=None,
+    capture_macros: bool = False,
+    native: bool = False,
+) -> str:
+    template = get_template(
+        string,
+        ctx,
+        node,
+        capture_macros=capture_macros,
+        native=native,
+    )
 
     return render_template(template, ctx, node)
 
@@ -442,3 +486,35 @@ def extract_toplevel_blocks(
         allowed_blocks=allowed_blocks,
         collect_raw_data=collect_raw_data
     )
+
+
+SCHEMA_TEST_KWARGS_NAME = '_dbt_schema_test_kwargs'
+
+
+def add_rendered_test_kwargs(
+    context: Dict[str, Any],
+    node: Union[ParsedSchemaTestNode, CompiledSchemaTestNode],
+    capture_macros: bool = False,
+) -> None:
+    """Render each of the test kwargs in the given context using the native
+    renderer, then insert that value into the given context as the special test
+    keyword arguments member.
+    """
+    looks_like_func = r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$'
+
+    # we never care about the keypath
+    def _convert_function(value: Any, _: Any) -> Any:
+        if isinstance(value, str):
+            if re.match(looks_like_func, value) is not None:
+                # curly braces to make rendering happy
+                value = f'{{{{ {value} }}}}'
+
+            value = get_rendered(
+                value, context, node, capture_macros=capture_macros,
+                native=True
+            )
+
+        return value
+
+    kwargs = deep_map(_convert_function, node.test_metadata.kwargs)
+    context[SCHEMA_TEST_KWARGS_NAME] = kwargs

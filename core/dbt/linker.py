@@ -48,6 +48,8 @@ class GraphQueue:
         self._scores = self._calculate_scores()
         # populate the initial queue
         self._find_new_additions()
+        # awaits after task end
+        self.some_task_done = threading.Condition(self.lock)
 
     def _include_in_cost(self, node_id):
         node = self.manifest.expect(node_id)
@@ -153,6 +155,7 @@ class GraphQueue:
             self.graph.remove_node(node_id)
             self._find_new_additions()
             self.inner.task_done()
+            self.some_task_done.notify_all()
 
     def _mark_in_progress(self, node_id):
         """Mark the node as 'in progress'.
@@ -170,6 +173,11 @@ class GraphQueue:
         Make sure not to call this before the queue reports that it is empty.
         """
         self.inner.join()
+
+    def wait_until_something_was_done(self):
+        with self.lock:
+            self.some_task_done.wait()
+            return self.inner.unfinished_tasks
 
 
 class Linker:

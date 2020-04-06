@@ -2,11 +2,27 @@ import pickle
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import (
-    ParsedModelNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
-    TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All,
-    CheckSnapshotConfig, SnapshotStrategy, IntermediateSnapshotNode,
-    ParsedNodePatch, ParsedMacro, Docs, MacroDependsOn, ParsedSourceDefinition,
-    ParsedDocumentation, ParsedHookNode
+    ParsedModelNode,
+    DependsOn,
+    NodeConfig,
+    ColumnInfo,
+    Hook,
+    ParsedSchemaTestNode,
+    TestConfig,
+    ParsedSnapshotNode,
+    TimestampSnapshotConfig,
+    All,
+    CheckSnapshotConfig,
+    SnapshotStrategy,
+    IntermediateSnapshotNode,
+    ParsedNodePatch,
+    ParsedMacro,
+    Docs,
+    MacroDependsOn,
+    ParsedSourceDefinition,
+    ParsedDocumentation,
+    ParsedHookNode,
+    TestMetadata,
 )
 from dbt.contracts.graph.unparsed import Quoting
 
@@ -535,8 +551,8 @@ class TestParsedHookNode(ContractTestCase):
         self.assert_fails_validation(bad_index)
 
 
-class TestParsedTestNode(ContractTestCase):
-    ContractType = ParsedTestNode
+class TestParsedSchemaTestNode(ContractTestCase):
+    ContractType = ParsedSchemaTestNode
 
     def _minimum(self):
         return {
@@ -553,6 +569,10 @@ class TestParsedTestNode(ContractTestCase):
             'schema': 'test_schema',
             'alias': 'bar',
             'meta': {},
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
 
     def _complex(self):
@@ -598,6 +618,10 @@ class TestParsedTestNode(ContractTestCase):
                 },
             },
             'column_name': 'id',
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
 
     def test_ok(self):
@@ -634,6 +658,10 @@ class TestParsedTestNode(ContractTestCase):
             },
             'docs': {'show': True},
             'columns': {},
+            'test_metadata': {
+                'name': 'foo',
+                'kwargs': {},
+            },
         }
         node = self.ContractType(
             package_name='test',
@@ -655,6 +683,7 @@ class TestParsedTestNode(ContractTestCase):
             tags=[],
             meta={},
             config=TestConfig(),
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -699,6 +728,7 @@ class TestParsedTestNode(ContractTestCase):
             columns={'a': ColumnInfo('a', 'a text field',{})},
             column_name='id',
             docs=Docs(show=False),
+            test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         )
         self.assert_symmetric(node, node_dict)
         self.assertFalse(node.empty)
@@ -1162,7 +1192,6 @@ class TestParsedMacro(ContractTestCase):
             'path': '/root/path.sql',
             'original_file_path': '/root/path.sql',
             'package_name': 'test',
-            'raw_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'macro_sql': '{% macro foo() %}select 1 as id{% endmacro %}',
             'root_path': '/root/',
             'resource_type': 'macro',
@@ -1182,7 +1211,6 @@ class TestParsedMacro(ContractTestCase):
             original_file_path='/root/path.sql',
             package_name='test',
             macro_sql='{% macro foo() %}select 1 as id{% endmacro %}',
-            raw_sql='{% macro foo() %}select 1 as id{% endmacro %}',
             root_path='/root/',
             resource_type=NodeType.Macro,
             unique_id='macro.test.foo',
@@ -1213,7 +1241,6 @@ class TestParsedDocumentation(ContractTestCase):
     def _ok_dict(self):
         return {
             'block_contents': 'some doc contents',
-            'file_contents': '{% doc foo %}some doc contents{% enddoc %}',
             'name': 'foo',
             'original_file_path': '/root/docs/doc.md',
             'package_name': 'test',
@@ -1229,7 +1256,6 @@ class TestParsedDocumentation(ContractTestCase):
             root_path='/root',
             path='/root/docs',
             original_file_path='/root/docs/doc.md',
-            file_contents='{% doc foo %}some doc contents{% enddoc %}',
             name='foo',
             unique_id='test.foo',
             block_contents='some doc contents'

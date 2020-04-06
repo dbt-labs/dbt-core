@@ -53,6 +53,12 @@ class RuntimeException(RuntimeError, Exception):
         self.node = node
         self.msg = msg
 
+    def add_node(self, node=None):
+        if node is not None and node is not self.node:
+            if self.node is not None:
+                self.stack.append(self.node)
+            self.node = node
+
     @property
     def type(self):
         return 'Runtime'
@@ -279,6 +285,19 @@ class DbtConfigError(RuntimeException):
         self.project = project
         super().__init__(message)
         self.result_type = result_type
+
+
+class FailFastException(RuntimeException):
+    CODE = 10013
+    MESSAGE = 'FailFast Error'
+
+    def __init__(self, message, result=None, node=None):
+        super().__init__(msg=message, node=node)
+        self.result = result
+
+    @property
+    def type(self):
+        return 'FailFast'
 
 
 class DbtProjectError(DbtConfigError):
@@ -800,7 +819,8 @@ def warn_or_raise(exc, log_fmt=None):
 def warn(msg, node=None):
     # there's no reason to expose log_fmt to macros - it's only useful for
     # handling colors
-    return warn_or_error(msg, node=node)
+    warn_or_error(msg, node=node)
+    return ""
 
 
 # Update this when a new function should be added to the
@@ -836,8 +856,7 @@ def wrapper(model):
             try:
                 return func(*args, **kwargs)
             except RuntimeException as exc:
-                if exc.node is None:
-                    exc.node = model
+                exc.add_node(model)
                 raise exc
         return inner
     return wrap

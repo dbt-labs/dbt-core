@@ -49,3 +49,12 @@ models:
     - was_materialized:
         name: fUnKyCaSe
         type: view
+
+
+sources:
+  - name: raw
+    project: "{{ target.database }}"
+    dataset: "{{ target.schema }}"
+    tables:
+      - name: seed
+        identifier: data_seed
