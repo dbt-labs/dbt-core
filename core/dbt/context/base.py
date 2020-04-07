@@ -157,9 +157,7 @@ class Var:
     def get_missing_var(self, var_name):
         dct = {k: self._merged[k] for k in self._merged}
         pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
-        msg = self.UndefinedVarError.format(
-            var_name, self.node_name, pretty_vars
-        )
+        msg = self.UndefinedVarError.format(var_name, self.node_name, pretty_vars)
         raise_compiler_error(msg, self._node)
 
     def has_var(self, var_name: str):
