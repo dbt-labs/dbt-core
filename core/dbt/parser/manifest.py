@@ -954,9 +954,7 @@ def _check_resource_uniqueness(
         alias_resources[full_node_name] = node
 
 
-def _warn_for_unused_resource_config_paths(
-    manifest: Manifest, config: RuntimeConfig
-) -> None:
+def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeConfig) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
     disabled_fqns: PathSet = frozenset(
         tuple(n.fqn) for n in list(chain.from_iterable(manifest.disabled.values()))

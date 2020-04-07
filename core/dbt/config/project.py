@@ -165,7 +165,7 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
 
 def _query_comment_from_cfg(
-        cfg_query_comment: Union[QueryComment, NoValue, str, None]
+    cfg_query_comment: Union[QueryComment, NoValue, str, None]
 ) -> QueryComment:
     if not cfg_query_comment:
         return QueryComment(comment='')
@@ -606,7 +606,7 @@ class Project:
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "config-version": self.config_version,
-            'config-version': self.config_version,
+            }
         )
         if self.query_comment:
             result["query-comment"] = self.query_comment.to_dict(omit_none=True)

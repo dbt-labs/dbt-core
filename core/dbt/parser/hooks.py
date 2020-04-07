@@ -102,7 +102,7 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
     ) -> ParsedHookNode:
 
         return super()._create_parsetime_node(
-            block=block, path=path, config=config, fqn=fqn,
+            block=block,
             index=block.index, name=name,
             tags=[str(block.hook_type)]
         )

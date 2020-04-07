@@ -141,7 +141,7 @@ class Var:
         self,
         context: Mapping[str, Any],
         cli_vars: Mapping[str, Any],
-        node: Optional[CompiledResource] = None
+        node: Optional[CompiledResource] = None,
     ) -> None:
         self._context: Mapping[str, Any] = context
         self._cli_vars: Mapping[str, Any] = cli_vars
@@ -156,7 +156,7 @@ class Var:
         if self._node is not None:
             return self._node.name
         else:
-            return '<Configuration>'
+            return "<Configuration>"
 
     def get_missing_var(self, var_name):
         dct = {k: self._merged[k] for k in self._merged}

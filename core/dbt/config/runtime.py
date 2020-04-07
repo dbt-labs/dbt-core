@@ -27,7 +27,7 @@ from dbt.exceptions import (
     DbtProjectError,
     validator_error_message,
     warn_or_error,
-    raise_compiler_error
+    raise_compiler_error,
 )
 
 from dbt.dataclass_schema import ValidationError
@@ -278,9 +278,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         a configured path in the resource.
         """
         return {
-            'models': self._get_config_paths(self.models),
-            'seeds': self._get_config_paths(self.seeds),
-            'snapshots': self._get_config_paths(self.snapshots),
+            "models": self._get_config_paths(self.models),
+            "seeds": self._get_config_paths(self.seeds),
+            "snapshots": self._get_config_paths(self.snapshots),
             'sources': self._get_config_paths(self.sources),
             "tests": self._get_config_paths(self.tests),
         }
@@ -303,9 +303,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
             for config_path in config_paths:
                 if not _is_config_used(config_path, fqns):
-                    unused_resource_config_paths.append(
-                        (resource_type,) + config_path
-                    )
+                    unused_resource_config_paths.append((resource_type,) + config_path)
         return unused_resource_config_paths
 
     def warn_for_unused_resource_config_paths(
@@ -324,7 +322,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         warn_or_error(msg, log_fmt=warning_tag("{}"))
 
-    def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
+    def load_dependencies(self) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:
             all_projects = {self.project_name: self}
             internal_packages = get_include_paths(self.credentials.type)
@@ -346,10 +344,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             for project_name, project in self.load_projects(project_paths):
                 if project_name in all_projects:
                     raise_compiler_error(
-                        f'dbt found more than one package with the name '
+                        f"dbt found more than one package with the name "
                         f'"{project_name}" included in this project. Package '
-                        f'names must be unique in a project. Please rename '
-                        f'one of these packages.'
+                        f"names must be unique in a project. Please rename "
+                        f"one of these packages."
                     )
                 all_projects[project_name] = project
             self.dependencies = all_projects
@@ -359,9 +357,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         self.dependencies = None
 
     # Called by 'load_dependencies' in this class
-    def load_projects(
-        self, paths: Iterable[Path]
-    ) -> Iterator[Tuple[str, 'RuntimeConfig']]:
+    def load_projects(self, paths: Iterable[Path]) -> Iterator[Tuple[str, "RuntimeConfig"]]:
         for path in paths:
             try:
                 project = self.new_project(str(path))
@@ -379,7 +375,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         if root.exists():
             for path in root.iterdir():
-                if path.is_dir() and not path.name.startswith('__'):
+                if path.is_dir() and not path.name.startswith("__"):
                     yield path
 
 
@@ -558,6 +554,6 @@ There are {} unused configuration paths:
 def _is_config_used(path, fqns):
     if fqns:
         for fqn in fqns:
-            if len(path) <= len(fqn) and fqn[:len(path)] == path:
+            if len(path) <= len(fqn) and fqn[: len(path)] == path:
                 return True
     return False

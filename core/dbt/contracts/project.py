@@ -215,7 +215,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     vars: Optional[Dict[str, Any]] = field(
         default=None,
         metadata=dict(
-            description='map project names to their vars override dicts',
+            description="map project names to their vars override dicts",
         ),
     )
     packages: List[PackageSpec] = field(default_factory=list)

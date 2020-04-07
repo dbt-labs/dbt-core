@@ -222,7 +222,7 @@ class ConfiguredParser(
             'alias': name,
             'schema': self.default_schema,
             'database': self.default_database,
-            'fqn': fqn,
+            "fqn": fqn,
             'name': name,
             'root_path': self.project.project_root,
             'resource_type': self.resource_type,
