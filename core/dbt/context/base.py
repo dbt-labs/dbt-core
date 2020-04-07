@@ -7,9 +7,9 @@ from typing import (
 from dbt import flags
 from dbt import tracking
 from dbt.clients.jinja import undefined_error, get_rendered
+from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import raise_compiler_error, MacroReturn
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import merge
 from dbt.version import __version__ as dbt_version
 
 import yaml
@@ -98,40 +98,39 @@ class Var:
                         "supplied to {} = {}"
     _VAR_NOTSET = object()
 
-    def __init__(self, model, context, overrides):
-        self.model = model
-        self.context = context
+    def __init__(
+        self,
+        context: Dict[str, Any],
+        cli_vars: Dict[str, Any],
+        node: Optional[CompiledResource] = None
+    ) -> None:
+        self.context: Dict[str, Any] = context
+        self.cli_vars: Dict[str, Any] = cli_vars
+        self.node: Optional[CompiledResource] = node
+        self.merged: Dict[str, Any] = self._generate_merged()
 
-        # These are hard-overrides (eg. CLI vars) that should take
-        # precedence over context-based var definitions
-        self.overrides = overrides
+    def _generate_merged(self) -> Dict[str, Any]:
+        return self.cli_vars
 
-        if model is None:
-            # during config parsing we have no model and no local vars
-            self.model_name = '<Configuration>'
-            local_vars = {}
+    @property
+    def node_name(self):
+        if self.node is not None:
+            return self.node.name
         else:
-            self.model_name = model.name
-            local_vars = model.local_vars()
-
-        self.local_vars = merge(local_vars, overrides)
-
-    def pretty_dict(self, data):
-        return json.dumps(data, sort_keys=True, indent=4)
+            return '<Configuration>'
 
     def get_missing_var(self, var_name):
-        pretty_vars = self.pretty_dict(self.local_vars)
+        pretty_vars = json.dumps(self.merged, sort_keys=True, indent=4)
         msg = self.UndefinedVarError.format(
-            var_name, self.model_name, pretty_vars
+            var_name, self.node_name, pretty_vars
         )
-        raise_compiler_error(msg, self.model)
+        raise_compiler_error(msg, self.node)
 
-    def assert_var_defined(self, var_name, default):
-        if var_name not in self.local_vars and default is self._VAR_NOTSET:
-            return self.get_missing_var(var_name)
+    def has_var(self, var_name: str):
+        return var_name in self.merged
 
     def get_rendered_var(self, var_name):
-        raw = self.local_vars[var_name]
+        raw = self.merged[var_name]
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(raw, str):
             return raw
@@ -139,7 +138,7 @@ class Var:
         return get_rendered(raw, self.context)
 
     def __call__(self, var_name, default=_VAR_NOTSET):
-        if var_name in self.local_vars:
+        if self.has_var(var_name):
             return self.get_rendered_var(var_name)
         elif default is not self._VAR_NOTSET:
             return default
@@ -255,7 +254,7 @@ class BaseContext(metaclass=ContextMeta):
             from events
             where event_type = '{{ var("event_type", "activation") }}'
         """
-        return Var(None, self._ctx, self.cli_vars)
+        return Var(self._ctx, self.cli_vars)
 
     @contextmember
     @staticmethod

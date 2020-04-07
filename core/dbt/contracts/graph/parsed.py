@@ -527,10 +527,11 @@ class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
 
 @dataclass
 class ParsedSourceDefinition(
-        UnparsedBaseNode,
-        HasUniqueID,
-        HasRelationMetadata,
-        HasFqn):
+    UnparsedBaseNode,
+    HasUniqueID,
+    HasRelationMetadata,
+    HasFqn
+):
     name: str
     source_name: str
     source_description: str

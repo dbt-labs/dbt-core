@@ -12,7 +12,6 @@ from dbt.linker import Linker
 
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
-import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.config

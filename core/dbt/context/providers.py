@@ -1,7 +1,7 @@
 import abc
 import os
 from typing import (
-    Callable, Any, Dict, Optional, Union, List, TypeVar, Type
+    Callable, Any, Dict, Optional, Union, List, TypeVar, Type, Iterable
 )
 from typing_extensions import Protocol
 
@@ -10,17 +10,17 @@ from dbt.adapters.base.column import Column
 from dbt.adapters.factory import get_adapter
 from dbt.clients import agate_helper
 from dbt.clients.jinja import get_rendered
-from dbt.config import RuntimeConfig
+from dbt.config import RuntimeConfig, Project
 from dbt.context.base import (
     contextmember, contextproperty, Var
 )
 from dbt.context.configured import ManifestContext, MacroNamespace
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
-    NonSourceNode, CompiledSeedNode
+    NonSourceNode, CompiledSeedNode, CompiledResource, CompiledNode
 )
 from dbt.contracts.graph.parsed import (
-    ParsedMacro, ParsedSourceDefinition, ParsedSeedNode
+    ParsedMacro, ParsedSourceDefinition, ParsedSeedNode, ParsedNode
 )
 from dbt.exceptions import (
     InternalException,
@@ -157,15 +157,6 @@ class BaseSourceResolver(BaseResolver):
 class Config(Protocol):
     def __init__(self, model, source_config):
         ...
-
-
-class Provider(Protocol):
-    execute: bool
-    Config: Type[Config]
-    DatabaseWrapper: Type[BaseDatabaseWrapper]
-    Var: Type[Var]
-    ref: Type[BaseRefResolver]
-    source: Type[BaseSourceResolver]
 
 
 # `config` implementations
@@ -400,17 +391,67 @@ class RuntimeSourceResolver(BaseSourceResolver):
 
 
 # `var` implementations.
-class ParseVar(Var):
+class ConfiguredVar(Var):
+    def __init__(
+        self,
+        context: Dict[str, Any],
+        config: RuntimeConfig,
+        node: CompiledResource,
+    ) -> None:
+        self.node: CompiledResource
+        self.config: RuntimeConfig = config
+        super().__init__(context, config.cli_vars, node=node)
+
+    def packages_for_node(self) -> Iterable[Project]:
+        dependencies = self.config.load_dependencies()
+        package_name = self.node.package_name
+
+        if package_name != self.config.project_name:
+            if package_name not in dependencies:
+                # I don't think this is actually reachable
+                raise_compiler_error(
+                    f'Node package named {package_name} not found!',
+                    self.node
+                )
+            yield dependencies[package_name]
+        yield self.config
+
+    def _generate_merged(self) -> Dict[str, Any]:
+        cli_vars = self.config.cli_vars
+
+        # once sources have FQNs, add ParsedSourceDefinition
+        if not isinstance(self.node, (CompiledNode, ParsedNode)):
+            return cli_vars
+
+        adapter_type = self.config.credentials.type
+
+        merged = {}
+        for project in self.packages_for_node():
+            merged.update(project.vars.vars_for(self.node, adapter_type))
+        merged.update(self.cli_vars)
+        return merged
+
+
+class ParseVar(ConfiguredVar):
     def get_missing_var(self, var_name):
         # in the parser, just always return None.
         return None
 
 
-class RuntimeVar(Var):
+class RuntimeVar(ConfiguredVar):
     pass
 
 
 # Providers
+class Provider(Protocol):
+    execute: bool
+    Config: Type[Config]
+    DatabaseWrapper: Type[BaseDatabaseWrapper]
+    Var: Type[ConfiguredVar]
+    ref: Type[BaseRefResolver]
+    source: Type[BaseSourceResolver]
+
+
 class ParseProvider(Provider):
     execute = False
     Config = ParseConfigObject
@@ -438,11 +479,20 @@ T = TypeVar('T')
 
 # Base context collection, used for parsing configs.
 class ProviderContext(ManifestContext):
-    def __init__(self, model, config, manifest, provider, source_config):
+    def __init__(
+        self,
+        model,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        provider: Provider,
+        source_config: Optional[SourceConfig],
+    ) -> None:
         if provider is None:
             raise InternalException(
                 f"Invalid provider given to context: {provider}"
             )
+        # mypy appeasement - we know it'll be a RuntimeConfig
+        self.config: RuntimeConfig
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
         self.model: Union[ParsedMacro, NonSourceNode] = model
@@ -758,9 +808,11 @@ class ProviderContext(ManifestContext):
         return self.config.credentials.schema
 
     @contextproperty
-    def var(self) -> Var:
+    def var(self) -> ConfiguredVar:
         return self.provider.Var(
-            self.model, context=self._ctx, overrides=self.config.cli_vars
+            context=self._ctx,
+            config=self.config,
+            node=self.model,
         )
 
     @contextproperty('adapter')

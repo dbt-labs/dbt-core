@@ -241,6 +241,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             block=block,
             path=compiled_path,
             config=config,
+            fqn=fqn,
             tags=tags,
             name=builder.fqn_name,
             raw_sql=builder.build_raw_sql(),

@@ -2,10 +2,10 @@ from .utils import ContractTestCase
 
 from hologram import ValidationError
 
-from dbt.contracts.project import Project
+from dbt.contracts.project import ProjectV1
 
-class TestProject(ContractTestCase):
-    ContractType = Project
+class TestProjectV1(ContractTestCase):
+    ContractType = ProjectV1
 
     def test_minimal(self):
         dct = {
@@ -14,7 +14,7 @@ class TestProject(ContractTestCase):
             'profile': 'test',
             'project-root': '/usr/src/app',
         }
-        project = Project(
+        project = ProjectV1(
             name='test',
             version='1.0',
             profile='test',
@@ -30,4 +30,4 @@ class TestProject(ContractTestCase):
             'project-root': '/usr/src/app',
         }
         with self.assertRaises(ValidationError):
-            Project.from_dict(dct)
+            ProjectV1.from_dict(dct)

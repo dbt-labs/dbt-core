@@ -202,6 +202,7 @@ class ConfiguredParser(
         block: ConfiguredBlockType,
         path: str,
         config: SourceConfig,
+        fqn: List[str],
         name=None,
         **kwargs,
     ) -> IntermediateNode:
@@ -215,7 +216,7 @@ class ConfiguredParser(
             'alias': name,
             'schema': self.default_schema,
             'database': self.default_database,
-            'fqn': config.fqn,
+            'fqn': fqn,
             'name': name,
             'root_path': self.project.project_root,
             'resource_type': self.resource_type,
@@ -348,7 +349,8 @@ class ConfiguredParser(
         node = self._create_parsetime_node(
             block=block,
             path=compiled_path,
-            config=config
+            config=config,
+            fqn=fqn,
         )
         self.render_update(node, config)
         result = self.transform(node)

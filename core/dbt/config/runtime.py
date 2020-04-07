@@ -1,7 +1,11 @@
 from copy import deepcopy
 from dataclasses import dataclass, fields
+import itertools
 import os
-from typing import Dict, Any, Type
+from pathlib import Path
+from typing import (
+    Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, Type
+)
 
 from .profile import Profile
 from .project import Project
@@ -12,11 +16,21 @@ from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
-from dbt.contracts.project import Configuration, UserConfig
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.exceptions import DbtProjectError, RuntimeException, DbtProfileError
-from dbt.exceptions import validator_error_message
+from dbt.ui import printer
 from dbt.utils import parse_cli_vars
+
+from dbt.contracts.project import Configuration, UserConfig
+from dbt.exceptions import (
+    RuntimeException,
+    DbtProfileError,
+    DbtProjectError,
+    validator_error_message,
+    warn_or_error,
+    raise_compiler_error
+)
+from dbt.include.global_project import PACKAGES
+from dbt.source_config import ConfigUpdater
 
 from hologram import ValidationError
 
@@ -24,7 +38,9 @@ from hologram import ValidationError
 @dataclass
 class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     args: Any
+    profile_name: str
     cli_vars: Dict[str, Any]
+    dependencies: Optional[Mapping[str, Project]] = None
 
     def __post_init__(self):
         self.validate()
@@ -72,6 +88,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dbt_version=project.dbt_version,
             packages=project.packages,
             query_comment=project.query_comment,
+            sources=project.sources,
+            vars=project.vars,
+            config_version=project.config_version,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             config=profile.config,
@@ -173,6 +192,107 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             project_id=self.hashed_name(),
             adapter_type=self.credentials.type
         )
+
+    def _get_config_paths(self, config, path=(), paths=None):
+        if paths is None:
+            paths = set()
+
+        keys = ConfigUpdater(self.credentials.type).ConfigKeys
+
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if key in keys:
+                    if path not in paths:
+                        paths.add(path)
+                else:
+                    self._get_config_paths(value, path + (key,), paths)
+            else:
+                if path not in paths:
+                    paths.add(path)
+
+        return frozenset(paths)
+
+    def get_resource_config_paths(self):
+        """Return a dictionary with 'seeds' and 'models' keys whose values are
+        lists of lists of strings, where each inner list of strings represents
+        a configured path in the resource.
+        """
+        return {
+            'models': self._get_config_paths(self.models),
+            'seeds': self._get_config_paths(self.seeds),
+            'snapshots': self._get_config_paths(self.snapshots),
+        }
+
+    def get_unused_resource_config_paths(self, resource_fqns, disabled):
+        """Return a list of lists of strings, where each inner list of strings
+        represents a type + FQN path of a resource configuration that is not
+        used.
+        """
+        disabled_fqns = frozenset(tuple(fqn) for fqn in disabled)
+        resource_config_paths = self.get_resource_config_paths()
+        unused_resource_config_paths = []
+        for resource_type, config_paths in resource_config_paths.items():
+            used_fqns = resource_fqns.get(resource_type, frozenset())
+            fqns = used_fqns | disabled_fqns
+
+            for config_path in config_paths:
+                if not _is_config_used(config_path, fqns):
+                    unused_resource_config_paths.append(
+                        (resource_type,) + config_path
+                    )
+        return unused_resource_config_paths
+
+    def warn_for_unused_resource_config_paths(self, resource_fqns, disabled):
+        unused = self.get_unused_resource_config_paths(resource_fqns, disabled)
+        if len(unused) == 0:
+            return
+
+        msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
+            len(unused),
+            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
+        )
+        warn_or_error(msg, log_fmt=printer.yellow('{}'))
+
+    def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
+        if self.dependencies is None:
+            all_projects = {self.project_name: self}
+            project_paths = itertools.chain(
+                map(Path, PACKAGES.values()),
+                self._get_project_directories()
+            )
+            for project_name, project in self.load_projects(project_paths):
+                if project_name in all_projects:
+                    raise_compiler_error(
+                        f'dbt found more than one package with the name '
+                        f'"{project_name}" included in this project. Package '
+                        f'names must be unique in a project. Please rename '
+                        f'one of these packages.'
+                    )
+                all_projects[project_name] = project
+            self.dependencies = all_projects
+        return self.dependencies
+
+    def load_projects(
+        self, paths: Iterable[Path]
+    ) -> Iterator[Tuple[str, 'RuntimeConfig']]:
+        for path in paths:
+            try:
+                project = self.new_project(str(path))
+            except DbtProjectError as e:
+                raise DbtProjectError(
+                    'Failed to read package at {}: {}'
+                    .format(path, e)
+                ) from e
+            else:
+                yield project.project_name, project
+
+    def _get_project_directories(self) -> Iterator[Path]:
+        root = Path(self.project_root) / self.modules_path
+
+        if root.exists():
+            for path in root.iterdir():
+                if path.is_dir() and not path.name.startswith('__'):
+                    yield path
 
 
 class UnsetCredentials(Credentials):
@@ -286,6 +406,9 @@ class UnsetProfileConfig(RuntimeConfig):
             dbt_version=project.dbt_version,
             packages=project.packages,
             query_comment=project.query_comment,
+            sources=project.sources,
+            vars=project.vars,
+            config_version=project.config_version,
             profile_name='',
             target_name='',
             config=UnsetConfig(),
@@ -343,3 +466,18 @@ class UnsetProfileConfig(RuntimeConfig):
             profile=profile,
             args=args,
         )
+
+
+UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
+WARNING: Configuration paths exist in your dbt_project.yml file which do not \
+apply to any resources.
+There are {} unused configuration paths:\n{}
+"""
+
+
+def _is_config_used(path, fqns):
+    if fqns:
+        for fqn in fqns:
+            if len(path) <= len(fqn) and fqn[:len(path)] == path:
+                return True
+    return False

@@ -138,7 +138,7 @@ BANNED_PROJECT_NAMES = {
 
 
 @dataclass
-class Project(HyphenatedJsonSchemaMixin, Replaceable):
+class ProjectV1(HyphenatedJsonSchemaMixin, Replaceable):
     name: Name
     version: Union[SemverString, float]
     project_root: Optional[str] = None
@@ -163,9 +163,10 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     snapshots: Dict[str, Any] = field(default_factory=dict)
     packages: List[PackageSpec] = field(default_factory=list)
     query_comment: Optional[Union[QueryComment, NoValue, str]] = NoValue()
+    config_version: int = 1
 
     @classmethod
-    def from_dict(cls, data, validate=True):
+    def from_dict(cls, data, validate=True) -> 'ProjectV1':
         result = super().from_dict(data, validate=validate)
         if result.name in BANNED_PROJECT_NAMES:
             raise ValidationError(
@@ -173,6 +174,68 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
                 .format(result.name)
             )
         return result
+
+
+@dataclass
+class ProjectV2(HyphenatedJsonSchemaMixin, Replaceable):
+    name: Name
+    version: Union[SemverString, float]
+    config_version: int
+    project_root: Optional[str] = None
+    source_paths: Optional[List[str]] = None
+    macro_paths: Optional[List[str]] = None
+    data_paths: Optional[List[str]] = None
+    test_paths: Optional[List[str]] = None
+    analysis_paths: Optional[List[str]] = None
+    docs_paths: Optional[List[str]] = None
+    target_path: Optional[str] = None
+    snapshot_paths: Optional[List[str]] = None
+    clean_targets: Optional[List[str]] = None
+    profile: Optional[str] = None
+    log_path: Optional[str] = None
+    modules_path: Optional[str] = None
+    quoting: Optional[Quoting] = None
+    on_run_start: Optional[List[str]] = field(default_factory=list_str)
+    on_run_end: Optional[List[str]] = field(default_factory=list_str)
+    require_dbt_version: Optional[Union[List[str], str]] = None
+    models: Dict[str, Any] = field(default_factory=dict)
+    seeds: Dict[str, Any] = field(default_factory=dict)
+    snapshots: Dict[str, Any] = field(default_factory=dict)
+    analyses: Dict[str, Any] = field(default_factory=dict)
+    sources: Dict[str, Any] = field(default_factory=dict)
+    vars: Dict[str, Dict[str, Any]] = field(
+        default_factory=dict,
+        metadata=dict(
+            description='map project names to their vars override dicts',
+        ),
+    )
+    packages: List[PackageSpec] = field(default_factory=list)
+    query_comment: Optional[Union[QueryComment, NoValue, str]] = NoValue()
+
+    @classmethod
+    def from_dict(cls, data, validate=True) -> 'ProjectV2':
+        result = super().from_dict(data, validate=validate)
+        if result.name in BANNED_PROJECT_NAMES:
+            raise ValidationError(
+                f'Invalid project name: {result.name} is a reserved word'
+            )
+
+        return result
+
+
+def parse_project_config(
+    data: Dict[str, Any], validate=True
+) -> Union[ProjectV1, ProjectV2]:
+    config_version = data.get('config-version', 1)
+    if config_version == 1:
+        return ProjectV1.from_dict(data, validate=validate)
+    elif config_version == 2:
+        return ProjectV2.from_dict(data, validate=validate)
+    else:
+        raise ValidationError(
+            f'Got an unexpected config-version={config_version}, expected '
+            f'1 or 2'
+        )
 
 
 @dataclass
@@ -214,7 +277,7 @@ class ConfiguredQuoting(Quoting, Replaceable):
 
 
 @dataclass
-class Configuration(Project, ProfileConfig):
+class Configuration(ProjectV2, ProfileConfig):
     cli_vars: Dict[str, Any] = field(
         default_factory=dict,
         metadata={'preserve_underscore': True},
@@ -224,4 +287,4 @@ class Configuration(Project, ProfileConfig):
 
 @dataclass
 class ProjectList(JsonSchemaMixin):
-    projects: Dict[str, Project]
+    projects: Dict[str, Union[ProjectV2, ProjectV1]]

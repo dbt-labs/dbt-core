@@ -2,6 +2,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable
+from typing_extensions import Protocol
+
 import hashlib
 import os
 
@@ -14,17 +16,17 @@ from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import validator_error_message
-from dbt.exceptions import warn_or_error
 from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
-from dbt.ui import printer
 from dbt.utils import deep_map
-from dbt.source_config import SourceConfig
+from dbt.source_config import ConfigUpdater, IsFQNResource
 
 from dbt.contracts.project import (
-    Project as ProjectContract,
+    ProjectV1 as ProjectV1Contract,
+    ProjectV2 as ProjectV2Contract,
+    parse_project_config,
     SemverString,
 )
 from dbt.contracts.project import PackageConfig
@@ -32,13 +34,6 @@ from dbt.contracts.project import PackageConfig
 from hologram import ValidationError
 
 from .renderer import ConfigRenderer
-
-
-UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
-WARNING: Configuration paths exist in your dbt_project.yml file which do not \
-apply to any resources.
-There are {} unused configuration paths:\n{}
-"""
 
 
 INVALID_VERSION_ERROR = """\
@@ -92,32 +87,6 @@ def _list_if_none_or_string(value):
 def _load_yaml(path):
     contents = load_file_contents(path)
     return load_yaml_text(contents)
-
-
-def _get_config_paths(config, path=(), paths=None):
-    if paths is None:
-        paths = set()
-
-    for key, value in config.items():
-        if isinstance(value, dict):
-            if key in SourceConfig.ConfigKeys:
-                if path not in paths:
-                    paths.add(path)
-            else:
-                _get_config_paths(value, path + (key,), paths)
-        else:
-            if path not in paths:
-                paths.add(path)
-
-    return frozenset(paths)
-
-
-def _is_config_used(path, fqns):
-    if fqns:
-        for fqn in fqns:
-            if len(path) <= len(fqn) and fqn[:len(path)] == path:
-                return True
-    return False
 
 
 def package_data_from_root(project_root):
@@ -204,7 +173,7 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
 
 
 def _query_comment_from_cfg(
-        cfg_query_comment: Union[QueryComment, NoValue, str]
+        cfg_query_comment: Union[QueryComment, NoValue, str, None]
 ) -> QueryComment:
     if not cfg_query_comment:
         return QueryComment(comment='')
@@ -249,12 +218,71 @@ class PartialProject:
         return renderer.render_value(self.profile_name)
 
 
+class VarProvider(Protocol):
+    """Var providers are tied to a particular Project."""
+    def vars_for(
+        self, node: IsFQNResource, adapter_type: str
+    ) -> Dict[str, Any]:
+        raise NotImplementedError(
+            f'vars_for not implemented for {type(self)}!'
+        )
+
+    def to_dict(self):
+        raise NotImplementedError(
+            f'to_dict not implemented for {type(self)}!'
+        )
+
+
+class V1VarProvider(VarProvider):
+    def __init__(
+        self,
+        models: Dict[str, Any],
+        seeds: Dict[str, Any],
+        snapshots: Dict[str, Any],
+    ) -> None:
+        self.models = models
+        self.seeds = seeds
+        self.snapshots = snapshots
+        self.sources: Dict[str, Any] = {}
+
+    def vars_for(
+        self, node: IsFQNResource, adapter_type: str
+    ) -> Dict[str, Any]:
+        updater = ConfigUpdater(adapter_type)
+        return updater.get_project_config(node, self).get('vars', {})
+
+    def to_dict(self):
+        raise ValidationError(
+            'to_dict was called on a v1 vars, but it should only be called '
+            'on v2 vars'
+        )
+
+
+class V2VarProvider(VarProvider):
+    def __init__(
+        self,
+        vars: Dict[str, Dict[str, Any]]
+    ) -> None:
+        self.vars = vars
+
+    def vars_for(
+        self, node: IsFQNResource, adapter_type: str
+    ) -> Dict[str, Any]:
+        # in v2, vars are only scoped to the project.
+        updater = ConfigUpdater(adapter_type)
+        node_project = self.vars.get(node.package_name, {})
+        return updater.get_project_vars(node_project)
+
+    def to_dict(self):
+        return self.vars
+
+
 @dataclass
 class Project:
     project_name: str
     version: Union[SemverString, float]
     project_root: str
-    profile_name: str
+    profile_name: Optional[str]
     source_paths: List[str]
     macro_paths: List[str]
     data_paths: List[str]
@@ -272,9 +300,12 @@ class Project:
     on_run_end: List[str]
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]
+    sources: Dict[str, Any]
+    vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
     query_comment: QueryComment
+    config_version: int
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -333,7 +364,7 @@ class Project:
                 project=project_dict
             )
         try:
-            cfg = ProjectContract.from_dict(project_dict)
+            cfg = parse_project_config(project_dict)
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
@@ -375,9 +406,33 @@ class Project:
         if cfg.quoting is not None:
             quoting = cfg.quoting.to_dict()
 
-        models: Dict[str, Any] = cfg.models
-        seeds: Dict[str, Any] = cfg.seeds
-        snapshots: Dict[str, Any] = cfg.snapshots
+        models: Dict[str, Any]
+        seeds: Dict[str, Any]
+        snapshots: Dict[str, Any]
+        sources: Dict[str, Any]
+        vars_value: VarProvider
+
+        if cfg.config_version == 1:
+            assert isinstance(cfg, ProjectV1Contract)
+            # extract everything named 'vars'
+            models = cfg.models
+            seeds = cfg.seeds
+            snapshots = cfg.snapshots
+            sources = {}
+            vars_value = V1VarProvider(
+                models=models, seeds=seeds, snapshots=snapshots
+            )
+        elif cfg.config_version == 2:
+            assert isinstance(cfg, ProjectV2Contract)
+            models = cfg.models
+            seeds = cfg.seeds
+            snapshots = cfg.snapshots
+            sources = cfg.sources
+            vars_value = V2VarProvider(cfg.vars)
+        else:
+            raise ValidationError(
+                f'Got unsupported config_version={cfg.config_version}'
+            )
 
         on_run_start: List[str] = value_or(cfg.on_run_start, [])
         on_run_end: List[str] = value_or(cfg.on_run_end, [])
@@ -424,6 +479,9 @@ class Project:
             dbt_version=dbt_version,
             packages=packages,
             query_comment=query_comment,
+            sources=sources,
+            vars=vars_value,
+            config_version=cfg.config_version,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -472,6 +530,7 @@ class Project:
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
+            'config-version': self.config_version,
         })
         if self.query_comment:
             result['query-comment'] = self.query_comment.to_dict()
@@ -479,11 +538,17 @@ class Project:
         if with_packages:
             result.update(self.packages.to_dict())
 
+        if self.config_version == 2:
+            result.update({
+                'sources': self.sources,
+                'vars': self.vars.to_dict()
+            })
+
         return result
 
     def validate(self):
         try:
-            ProjectContract.from_dict(self.to_project_config())
+            ProjectV2Contract.from_dict(self.to_project_config())
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
@@ -526,47 +591,6 @@ class Project:
 
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
-
-    def get_resource_config_paths(self):
-        """Return a dictionary with 'seeds' and 'models' keys whose values are
-        lists of lists of strings, where each inner list of strings represents
-        a configured path in the resource.
-        """
-        return {
-            'models': _get_config_paths(self.models),
-            'seeds': _get_config_paths(self.seeds),
-            'snapshots': _get_config_paths(self.snapshots),
-        }
-
-    def get_unused_resource_config_paths(self, resource_fqns, disabled):
-        """Return a list of lists of strings, where each inner list of strings
-        represents a type + FQN path of a resource configuration that is not
-        used.
-        """
-        disabled_fqns = frozenset(tuple(fqn) for fqn in disabled)
-        resource_config_paths = self.get_resource_config_paths()
-        unused_resource_config_paths = []
-        for resource_type, config_paths in resource_config_paths.items():
-            used_fqns = resource_fqns.get(resource_type, frozenset())
-            fqns = used_fqns | disabled_fqns
-
-            for config_path in config_paths:
-                if not _is_config_used(config_path, fqns):
-                    unused_resource_config_paths.append(
-                        (resource_type,) + config_path
-                    )
-        return unused_resource_config_paths
-
-    def warn_for_unused_resource_config_paths(self, resource_fqns, disabled):
-        unused = self.get_unused_resource_config_paths(resource_fqns, disabled)
-        if len(unused) == 0:
-            return
-
-        msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
-            len(unused),
-            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
-        )
-        warn_or_error(msg, log_fmt=printer.yellow('{}'))
 
     def validate_version(self):
         """Ensure this package works with the installed version of dbt."""
