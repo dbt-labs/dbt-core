@@ -1244,9 +1244,7 @@ def generate_parser_model_context(
     # The __init__ method of ModelContext also initializes
     # a ManifestContext object which creates a MacroNamespaceBuilder
     # which adds every macro in the Manifest.
-    ctx = ModelContext(
-        model, config, manifest, ParseProvider(), context_config
-    )
+    ctx = ModelContext(model, config, manifest, ParseProvider(), context_config)
     # The 'to_dict' method in ManifestContext moves all of the macro names
     # in the macro 'namespace' up to top level keys
     return ctx.to_dict()
