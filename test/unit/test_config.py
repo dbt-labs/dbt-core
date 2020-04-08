@@ -170,7 +170,7 @@ class BaseConfigTest(unittest.TestCase):
             'env_value_pass': 'env-postgres-pass',
             'env_value_dbname': 'env-postgres-dbname',
             'env_value_schema': 'env-postgres-schema',
-            'env_value_project': 'blah',
+            'env_value_profile': 'default',
         }
 
 
@@ -1012,7 +1012,8 @@ class TestVariableProjectFile(BaseFileTest):
     def setUp(self):
         super().setUp()
         self.default_project_data['version'] = "{{ var('cli_version') }}"
-        self.default_project_data['name'] = "{{ env_var('env_value_project') }}"
+        self.default_project_data['name'] = "blah"
+        self.default_project_data['profile'] = "{{ env_var('env_value_profile') }}"
         self.write_project(self.default_project_data)
         # and after the fact, add the project root
         self.default_project_data['project-root'] = self.project_dir
@@ -1027,6 +1028,7 @@ class TestVariableProjectFile(BaseFileTest):
 
         self.assertEqual(project.version, "0.1.2")
         self.assertEqual(project.project_name, 'blah')
+        self.assertEqual(project.profile_name, 'default')
 
 
 class TestRuntimeConfig(BaseConfigTest):
@@ -1187,26 +1189,27 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
         super().setUp()
         self.default_project_data.update({
             'version': "{{ var('cli_version') }}",
-            'name': "{{ env_var('env_value_project') }}",
+            'name': "blah",
+            'profile': "{{ env_var('env_value_profile') }}",
             'on-run-end': [
-                "{{ env_var('env_value_project') }}",
+                "{{ env_var('env_value_profile') }}",
             ],
             'models': {
                 'foo': {
-                    'post-hook': "{{ env_var('env_value_target') }}",
+                    'post-hook': "{{ env_var('env_value_profile') }}",
                 },
                 'bar': {
                     # just gibberish, make sure it gets interpreted
-                    'materialized': "{{ env_var('env_value_project') }}",
+                    'materialized': "{{ env_var('env_value_profile') }}",
                 }
             },
             'seeds': {
                 'foo': {
-                    'post-hook': "{{ env_var('env_value_target') }}",
+                    'post-hook': "{{ env_var('env_value_profile') }}",
                 },
                 'bar': {
                     # just gibberish, make sure it gets interpreted
-                    'materialized': "{{ env_var('env_value_project') }}",
+                    'materialized': "{{ env_var('env_value_profile') }}",
                 }
             },
         })
@@ -1223,11 +1226,12 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
 
         self.assertEqual(config.version, "0.1.2")
         self.assertEqual(config.project_name, 'blah')
+        self.assertEqual(config.profile_name, 'default')
         self.assertEqual(config.credentials.host, 'cli-postgres-host')
         self.assertEqual(config.credentials.user, 'env-postgres-user')
         # make sure hooks are not interpreted
-        self.assertEqual(config.on_run_end, ["{{ env_var('env_value_project') }}"])
-        self.assertEqual(config.models['foo']['post-hook'], "{{ env_var('env_value_target') }}")
-        self.assertEqual(config.models['bar']['materialized'], 'blah')
-        self.assertEqual(config.seeds['foo']['post-hook'], "{{ env_var('env_value_target') }}")
-        self.assertEqual(config.seeds['bar']['materialized'], 'blah')
+        self.assertEqual(config.on_run_end, ["{{ env_var('env_value_profile') }}"])
+        self.assertEqual(config.models['foo']['post-hook'], "{{ env_var('env_value_profile') }}")
+        self.assertEqual(config.models['bar']['materialized'], 'default')  # rendered!
+        self.assertEqual(config.seeds['foo']['post-hook'], "{{ env_var('env_value_profile') }}")
+        self.assertEqual(config.seeds['bar']['materialized'], 'default')  # rendered!

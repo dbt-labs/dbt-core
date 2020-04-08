@@ -2,7 +2,7 @@ import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
-from dbt.config import RuntimeConfig, ConfigRenderer
+from dbt.config import UnsetProfileConfig, ConfigRenderer
 from dbt.context.target import generate_target_context
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
@@ -10,11 +10,13 @@ from dbt.deps.resolver import resolve_packages
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.clients import system
 
-from dbt.task.base import ConfiguredTask
+from dbt.task.base import BaseTask
 
 
-class DepsTask(ConfiguredTask):
-    def __init__(self, args, config: RuntimeConfig):
+class DepsTask(BaseTask):
+    ConfigType = UnsetProfileConfig
+
+    def __init__(self, args, config: UnsetProfileConfig):
         super().__init__(args=args, config=config)
 
     def track_package_install(

@@ -18,7 +18,7 @@ from dbt.clients import agate_helper
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts, inject_adapter
+from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
 
 
 def _bq_conn():
@@ -182,7 +182,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
 
 
 class HasUserAgent:
-    PAT = re.compile(r'dbt-\d+\.\d+\.\d+[a-zA-Z]+\d+')
+    PAT = re.compile(r'dbt-\d+\.\d+\.\d+((a|b|rc)\d+)?')
 
     def __eq__(self, other):
         compare = getattr(other, 'user_agent', '')
@@ -473,3 +473,73 @@ class TestBigQueryFilterCatalog(unittest.TestCase):
             assert isinstance(row['table_database'], str)
             assert isinstance(row['table_name'], str)
             assert isinstance(row['something'], decimal.Decimal)
+
+
+class TestBigQueryAdapterConversions(TestAdapterConversions):
+    def test_convert_text_type(self):
+        rows = [
+            ['', 'a1', 'stringval1'],
+            ['', 'a2', 'stringvalasdfasdfasdfa'],
+            ['', 'a3', 'stringval3'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Text)
+        expected = ['string', 'string', 'string']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_text_type(agate_table, col_idx) == expect
+
+    def test_convert_number_type(self):
+        rows = [
+            ['', '23.98', '-1'],
+            ['', '12.78', '-2'],
+            ['', '79.41', '-3'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Number)
+        expected = ['int64', 'float64', 'int64']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_number_type(agate_table, col_idx) == expect
+
+    def test_convert_boolean_type(self):
+        rows = [
+            ['', 'false', 'true'],
+            ['', 'false', 'false'],
+            ['', 'false', 'true'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Boolean)
+        expected = ['bool', 'bool', 'bool']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_boolean_type(agate_table, col_idx) == expect
+
+    def test_convert_datetime_type(self):
+        rows = [
+            ['', '20190101T01:01:01Z', '2019-01-01 01:01:01'],
+            ['', '20190102T01:01:01Z', '2019-01-01 01:01:01'],
+            ['', '20190103T01:01:01Z', '2019-01-01 01:01:01'],
+        ]
+        agate_table = self._make_table_of(rows, [agate.DateTime, agate_helper.ISODateTime, agate.DateTime])
+        expected = ['datetime', 'datetime', 'datetime']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_datetime_type(agate_table, col_idx) == expect
+
+    def test_convert_date_type(self):
+        rows = [
+            ['', '2019-01-01', '2019-01-04'],
+            ['', '2019-01-02', '2019-01-04'],
+            ['', '2019-01-03', '2019-01-04'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Date)
+        expected = ['date', 'date', 'date']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_date_type(agate_table, col_idx) == expect
+
+    def test_convert_time_type(self):
+        # dbt's default type testers actually don't have a TimeDelta at all.
+        agate.TimeDelta
+        rows = [
+            ['', '120s', '10s'],
+            ['', '3m', '11s'],
+            ['', '1h', '12s'],
+        ]
+        agate_table = self._make_table_of(rows, agate.TimeDelta)
+        expected = ['time', 'time', 'time']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_time_type(agate_table, col_idx) == expect

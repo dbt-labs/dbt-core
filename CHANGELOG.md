@@ -5,7 +5,7 @@
 - Added a `get-manifest` API call. ([#2168](https://github.com/fishtown-analytics/dbt/issues/2168), [#2232](https://github.com/fishtown-analytics/dbt/pull/2232))
 - Support adapter-specific aliases (like `project` and `dataset` on BigQuery) in source definitions. ([#2133](https://github.com/fishtown-analytics/dbt/issues/2133), [#2244](https://github.com/fishtown-analytics/dbt/pull/2244))
 - Users can now use jinja as arguments to tests. Test arguments are rendered in the native context and injected into the test execution context directly. ([#2149](https://github.com/fishtown-analytics/dbt/issues/2149), [#2220](https://github.com/fishtown-analytics/dbt/pull/2220))
-- Added support for `db_groups` and `autocreate` flags in Redshift configurations.  ([#1995](https://github.com/fishtown-analytics/dbt/issues/1995, [#2262]https://github.com/fishtown-analytics/dbt/pull/2262))
+- Added support for `db_groups` and `autocreate` flags in Redshift configurations.  ([#1995](https://github.com/fishtown-analytics/dbt/issues/1995), [#2262](https://github.com/fishtown-analytics/dbt/pull/2262))
 - Users can supply paths as arguments to `--models` and `--select`, either explicitily by prefixing with `path:` or implicitly with no prefix. ([#454](https://github.com/fishtown-analytics/dbt/issues/454), [#2258](https://github.com/fishtown-analytics/dbt/pull/2258))
 
 ### Fixes
@@ -24,6 +24,27 @@ Contributors:
  - [@jeremyyeo](https://github.com/jeremyyeo) [#2259](https://github.com/fishtown-analytics/dbt/pull/2259)
  - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297)
 
+## dbt 0.16.1 (Relase date TBD)
+
+### Features
+- Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138) [#2199](https://github.com/fishtown-analytics/dbt/issues/2199))
+
+### Fixes
+- dbt now renders the project name in the "base" context, in particular giving it access to `var` and `env_var` ([#2230](https://github.com/fishtown-analytics/dbt/issues/2230), [#2251](https://github.com/fishtown-analytics/dbt/pull/2251))
+- Fix an issue with raw blocks where multiple raw blocks in the same file resulted in an error ([#2241](https://github.com/fishtown-analytics/dbt/issues/2241), [#2252](https://github.com/fishtown-analytics/dbt/pull/2252))
+- Fix a redshift-only issue that caused an error when `dbt seed` found a seed with an entirely empty column that was set to a `varchar` data type. ([#2250](https://github.com/fishtown-analytics/dbt/issues/2250), [#2254](https://github.com/fishtown-analytics/dbt/pull/2254))
+- Fix a bug where third party plugins that used the default `list_schemas` and `information_schema_name` macros with database quoting enabled double-quoted the database name in their queries ([#2267](https://github.com/fishtown-analytics/dbt/issues/2267), [#2281](https://github.com/fishtown-analytics/dbt/pull/2281))
+- The BigQuery "partitions" config value can now be used in `dbt_project.yml` ([#2256](https://github.com/fishtown-analytics/dbt/issues/2256), [#2280](https://github.com/fishtown-analytics/dbt/pull/2280))
+- dbt deps once again does not require a profile, but if profile-specific fields are accessed users will get an error ([#2231](https://github.com/fishtown-analytics/dbt/issues/2231), [#2290](https://github.com/fishtown-analytics/dbt/pull/2290))
+- Macro name collisions between dbt and plugins now raise an appropriate exception, instead of an AttributeError ([#2288](https://github.com/fishtown-analytics/dbt/issues/2288), [#2293](https://github.com/fishtown-analytics/dbt/pull/2293))
+- The create_adapter_plugin.py script has been updated to support 0.16.X adapters ([#2145](https://github.com/fishtown-analytics/dbt/issues/2145), [#2294](https://github.com/fishtown-analytics/dbt/pull/2294))
+
+### Under the hood
+- Pin google libraries to higher minimum values, add more dependencies as explicit ([#2233](https://github.com/fishtown-analytics/dbt/issues/2233), [#2249](https://github.com/fishtown-analytics/dbt/pull/2249))
+
+Contributors:
+ - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
+
 ## dbt 0.16.0 (March 23, 2020)
 
 ## dbt 0.16.0rc4 (March 20, 2020)
@@ -36,6 +57,9 @@ Contributors:
 
 ### Fixes
 - If database quoting is enabled, do not attempt to create schemas that already exist ([#2186](https://github.com/fishtown-analytics/dbt/issues/2186), [#2187](https://github.com/fishtown-analytics/dbt/pull/2187))
+
+### Features
+- Support for appending query comments to SQL queries. ([#2138](https://github.com/fishtown-analytics/dbt/issues/2138))
 
 ## dbt 0.16.0rc2 (March 4, 2020)
 

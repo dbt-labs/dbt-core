@@ -111,6 +111,20 @@ class Profile(HasCredentials):
             result['credentials'] = self.credentials.to_dict()
         return result
 
+    def to_target_dict(self) -> Dict[str, Any]:
+        target = dict(
+            self.credentials.connection_info(with_aliases=True)
+        )
+        target.update({
+            'type': self.credentials.type,
+            'threads': self.threads,
+            'name': self.target_name,
+            'target_name': self.target_name,
+            'profile_name': self.profile_name,
+            'config': self.config.to_dict(),
+        })
+        return target
+
     def __eq__(self, other: object) -> bool:
         if not (isinstance(other, self.__class__) and
                 isinstance(self, other.__class__)):
