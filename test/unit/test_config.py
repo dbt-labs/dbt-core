@@ -157,7 +157,8 @@ class BaseConfigTest(unittest.TestCase):
                     }
                 },
                 'target': 'other-postgres',
-            }
+            },
+            'empty_profile_data': {}
         }
         self.args = Args(profiles_dir=self.profiles_dir, cli_vars='{}',
                          version_check=True, project_dir=self.project_dir)
@@ -210,6 +211,10 @@ class BaseFileTest(BaseConfigTest):
             profile_data = self.profile_data
         with open(self.profile_path('profiles.yml'), 'w') as fp:
             yaml.dump(profile_data, fp)
+
+    def write_empty_profile(self):
+        with open(self.profile_path('profiles.yml'), 'w') as fp:
+            yaml.dump('', fp)
 
 
 class TestProfile(BaseConfigTest):
@@ -529,6 +534,23 @@ class TestProfileFile(BaseFileTest):
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             self.from_args(project_profile_name=None)
         self.assertIn('no profile was specified', str(exc.exception))
+
+    def test_empty_profile(self):
+        self.write_empty_profile()
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+            self.from_args()
+        self.assertIn('profiles.yml is empty', str(exc.exception))
+
+    def test_profile_with_empty_profile_data(self):
+        renderer = empty_renderer()
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+            dbt.config.Profile.from_raw_profiles(
+                self.default_profile_data, 'empty_profile_data', renderer
+            )
+        self.assertIn(
+            'Profile empty_profile_data in profiles.yml is empty',
+            str(exc.exception)
+        )
 
 
 class TestProject(BaseConfigTest):
