@@ -3,10 +3,7 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import (
-    Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet,
-    Type
-)
+from typing import Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet, Type
 
 from .profile import Profile
 from .project import Project
