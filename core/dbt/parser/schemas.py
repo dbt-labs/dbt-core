@@ -12,6 +12,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig, ConfigRenderer
+from dbt.context.context_config import LegacyContextConfig
 from dbt.context.docs import generate_parser_docs
 from dbt.context.target import generate_target_context
 from dbt.contracts.graph.manifest import SourceFile
@@ -39,7 +40,6 @@ from dbt.parser.schema_test_builders import (
     TestBuilder, SourceTarget, Target, SchemaTestBlock, TargetBlock, YamlBlock,
     TestBlock,
 )
-from dbt.source_config import SourceConfig
 from dbt.utils import (
     get_pseudo_test_path, coerce_dict_str
 )
@@ -253,10 +253,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return node
 
     def render_with_context(
-        self, node: ParsedSchemaTestNode, config: SourceConfig,
+        self, node: ParsedSchemaTestNode, config: LegacyContextConfig,
     ) -> None:
-        """Given the parsed node and a SourceConfig to use during parsing,
-        collect all the refs that might be squirreled away in the test
+        """Given the parsed node and a LegacyContextConfig to use during
+        parsing, collect all the refs that might be squirreled away in the test
         arguments. This includes the implicit "model" argument.
         """
         # make a base context that doesn't have the magic kwargs field

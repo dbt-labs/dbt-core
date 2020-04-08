@@ -2,13 +2,13 @@ import os
 from unittest import TestCase, mock
 
 import dbt.flags
+from dbt.context.context_config import LegacyContextConfig
 from dbt.node_types import NodeType
-from dbt.source_config import SourceConfig
 
 from .utils import config_from_parts_or_dicts
 
 
-class SourceConfigTest(TestCase):
+class LegacyContextConfigTest(TestCase):
     def setUp(self):
         dbt.flags.STRICT_MODE = True
         dbt.flags.WARN_ERROR = True
@@ -65,9 +65,11 @@ class SourceConfigTest(TestCase):
     def tearDown(self):
         self.patcher.stop()
 
-    def test__source_config_single_call(self):
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
+    def test__context_config_single_call(self):
+        cfg = LegacyContextConfig(
+            self.root_project_config, self.root_project_config,
+            ['root', 'x'], NodeType.Model
+        )
         cfg.update_in_model_config({
             'materialized': 'something',
             'sort': 'my sort key',
@@ -88,8 +90,8 @@ class SourceConfigTest(TestCase):
         }
         self.assertEqual(cfg.config, expect)
 
-    def test__source_config_multiple_calls(self):
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+    def test__context_config_multiple_calls(self):
+        cfg = LegacyContextConfig(self.root_project_config, self.root_project_config,
                            ['root', 'x'], NodeType.Model)
         cfg.update_in_model_config({
             'materialized': 'something',
@@ -120,9 +122,9 @@ class SourceConfigTest(TestCase):
         }
         self.assertEqual(cfg.config, expect)
 
-    def test__source_config_merge(self):
+    def test__context_config_merge(self):
         self.root_project_config.models = {'sort': ['a', 'b']}
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+        cfg = LegacyContextConfig(self.root_project_config, self.root_project_config,
                            ['root', 'x'], NodeType.Model)
         cfg.update_in_model_config({
             'materialized': 'something',
@@ -142,17 +144,17 @@ class SourceConfigTest(TestCase):
         }
         self.assertEqual(cfg.config, expect)
 
-    def test_source_config_all_keys_accounted_for(self):
-        used_keys = frozenset(SourceConfig.AppendListFields) | \
-                    frozenset(SourceConfig.ExtendDictFields) | \
-                    frozenset(SourceConfig.ClobberFields)
+    def test_context_config_all_keys_accounted_for(self):
+        used_keys = frozenset(LegacyContextConfig.AppendListFields) | \
+                    frozenset(LegacyContextConfig.ExtendDictFields) | \
+                    frozenset(LegacyContextConfig.ClobberFields)
 
-        self.assertEqual(used_keys, frozenset(SourceConfig.ConfigKeys))
+        self.assertEqual(used_keys, frozenset(LegacyContextConfig.ConfigKeys))
 
-    def test__source_config_wrong_type(self):
+    def test__context_config_wrong_type(self):
         # ExtendDict fields should handle non-dict inputs gracefully
         self.root_project_config.models = {'persist_docs': False}
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+        cfg = LegacyContextConfig(self.root_project_config, self.root_project_config,
                            ['root', 'x'], NodeType.Model)
 
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:

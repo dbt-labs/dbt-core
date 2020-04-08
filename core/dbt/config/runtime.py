@@ -1,10 +1,11 @@
-from copy import deepcopy
-from dataclasses import dataclass, fields
 import itertools
 import os
+from copy import deepcopy
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import (
-    Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, Type
+    Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet,
+    Type
 )
 
 from .profile import Profile
@@ -12,6 +13,7 @@ from .project import Project
 from .renderer import ConfigRenderer
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name
+from dbt.helper_types import FQNPath, PathSet
 from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
@@ -30,7 +32,7 @@ from dbt.exceptions import (
     raise_compiler_error
 )
 from dbt.include.global_project import PACKAGES
-from dbt.source_config import ConfigUpdater
+from dbt.legacy_config_updater import ConfigUpdater
 
 from hologram import ValidationError
 
@@ -193,7 +195,12 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             adapter_type=self.credentials.type
         )
 
-    def _get_config_paths(self, config, path=(), paths=None):
+    def _get_config_paths(
+        self,
+        config: Dict[str, Any],
+        path: FQNPath = (),
+        paths: Optional[MutableSet[FQNPath]] = None,
+    ) -> PathSet:
         if paths is None:
             paths = set()
 
@@ -212,7 +219,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
         return frozenset(paths)
 
-    def get_resource_config_paths(self):
+    def get_resource_config_paths(self) -> Dict[str, PathSet]:
         """Return a dictionary with 'seeds' and 'models' keys whose values are
         lists of lists of strings, where each inner list of strings represents
         a configured path in the resource.
@@ -223,7 +230,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             'snapshots': self._get_config_paths(self.snapshots),
         }
 
-    def get_unused_resource_config_paths(self, resource_fqns, disabled):
+    def get_unused_resource_config_paths(
+        self,
+        resource_fqns: Mapping[str, PathSet],
+        disabled: PathSet,
+    ) -> List[FQNPath]:
         """Return a list of lists of strings, where each inner list of strings
         represents a type + FQN path of a resource configuration that is not
         used.
@@ -242,7 +253,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                     )
         return unused_resource_config_paths
 
-    def warn_for_unused_resource_config_paths(self, resource_fqns, disabled):
+    def warn_for_unused_resource_config_paths(
+        self,
+        resource_fqns: Mapping[str, PathSet],
+        disabled: PathSet,
+    ) -> None:
         unused = self.get_unused_resource_config_paths(resource_fqns, disabled)
         if len(unused) == 0:
             return

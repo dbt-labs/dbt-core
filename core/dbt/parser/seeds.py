@@ -1,7 +1,7 @@
+from dbt.context.context_config import LegacyContextConfig
 from dbt.contracts.graph.manifest import SourceFile, FilePath
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.node_types import NodeType
-from dbt.source_config import SourceConfig
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
 
@@ -24,7 +24,7 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
         return block.path.relative_path
 
     def render_with_context(
-        self, parsed_node: ParsedSeedNode, config: SourceConfig
+        self, parsed_node: ParsedSeedNode, config: LegacyContextConfig
     ) -> None:
         """Seeds don't need to do any rendering."""
 

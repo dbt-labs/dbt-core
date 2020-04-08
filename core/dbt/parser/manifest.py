@@ -3,10 +3,11 @@ import pickle
 from datetime import datetime
 from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union
 
-from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
 
+from dbt.helper_types import PathSet
+from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered
@@ -378,8 +379,8 @@ def _check_resource_uniqueness(manifest: Manifest) -> None:
 def _warn_for_unused_resource_config_paths(
     manifest: Manifest, config: RuntimeConfig
 ) -> None:
-    resource_fqns = manifest.get_resource_fqns()
-    disabled_fqns = [n.fqn for n in manifest.disabled]
+    resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
+    disabled_fqns: PathSet = frozenset(tuple(n.fqn) for n in manifest.disabled)
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 

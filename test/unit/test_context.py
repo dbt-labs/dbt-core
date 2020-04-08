@@ -373,7 +373,7 @@ def test_model_parse_context(config, manifest, get_adapter):
         model=mock_model(),
         config=config,
         manifest=manifest,
-        source_config=mock.MagicMock(),
+        context_config=mock.MagicMock(),
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 

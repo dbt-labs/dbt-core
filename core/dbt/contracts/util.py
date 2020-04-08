@@ -5,7 +5,7 @@ from dbt.clients.system import write_json
 
 
 def list_str() -> List[str]:
-    """Mypy gets upset about¸stuff like:
+    """Mypy gets upset about stuff like:
 
     from dataclasses import dataclass, field
     from typing import Optional, List

@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Iterable, Iterator, Union, List, Tuple
 
+from dbt.context.context_config import LegacyContextConfig
 from dbt.contracts.graph.manifest import FilePath
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType, RunHookType
-from dbt.source_config import SourceConfig
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.utils import get_pseudo_hook_path
@@ -89,7 +89,7 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         self,
         block: HookBlock,
         path: str,
-        config: SourceConfig,
+        config: LegacyContextConfig,
         fqn: List[str],
         name=None,
         **kwargs,

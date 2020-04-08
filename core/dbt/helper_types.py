@@ -1,7 +1,7 @@
 # never name this package "types", or mypy will crash in ugly ways
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import NewType
+from typing import NewType, Tuple, AbstractSet
 
 from hologram import (
     FieldEncoder, JsonSchemaMixin, JsonDict, ValidationError
@@ -55,3 +55,7 @@ JsonSchemaMixin.register_field_encoders({
     Port: PortEncoder(),
     timedelta: TimeDeltaFieldEncoder(),
 })
+
+
+FQNPath = Tuple[str, ...]
+PathSet = AbstractSet[FQNPath]

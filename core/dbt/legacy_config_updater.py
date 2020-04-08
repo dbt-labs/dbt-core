@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+# TODO: rename this module.
 from typing import Dict, Any, Mapping, List
 from typing_extensions import Protocol
 
@@ -13,6 +13,7 @@ class HasConfigFields(Protocol):
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]
     models: Dict[str, Any]
+    sources: Dict[str, Any]
 
 
 class IsFQNResource(Protocol):
@@ -34,17 +35,24 @@ class ConfigUpdater:
     AppendListFields = {'pre-hook', 'post-hook', 'tags'}
     ExtendDictFields = {'vars', 'column_types', 'quoting', 'persist_docs'}
     DefaultClobberFields = {
-        'alias',
-        'schema',
         'enabled',
         'materialized',
-        'unique_key',
-        'database',
-        'severity',
+
+        # these 2 are additional - not defined in the NodeConfig object
         'sql_header',
         'incremental_strategy',
 
+        # these 3 are "special" - not defined in NodeConfig, instead set by
+        # update_parsed_node_name in parsing
+        'alias',
+        'schema',
+        'database',
+
+        # tests
+        'severity',
+
         # snapshots
+        'unique_key',
         'target_database',
         'target_schema',
         'strategy',
@@ -142,6 +150,8 @@ class ConfigUpdater:
             model_configs = project.seeds
         elif model.resource_type == NodeType.Snapshot:
             model_configs = project.snapshots
+        elif model.resource_type == NodeType.Source:
+            model_configs = project.sources
         else:
             model_configs = project.models
 
@@ -200,84 +210,3 @@ class ConfigUpdater:
 
             merged_config.update(intermediary_merged)
         return merged_config
-
-
-@dataclass
-class ModelParts:
-    fqn: List[str]
-    resource_type: NodeType
-
-
-class SourceConfig:
-    def __init__(self, active_project, own_project, fqn, node_type):
-        self._config = None
-        # active_project is a RuntimeConfig, not a Project
-        self.active_project = active_project
-        self.own_project = own_project
-
-        # TODO: have this __init__ just take a `IsFQNResource` parameter?
-        self.model = ModelParts(fqn=fqn, resource_type=node_type)
-
-        self.updater = ConfigUpdater(active_project.credentials.type)
-
-        # the config options defined within the model
-        self.in_model_config: Dict[str, Any] = {}
-
-    def get_default(self) -> Dict[str, Any]:
-        defaults = {"enabled": True, "materialized": "view"}
-
-        if self.model.resource_type == NodeType.Seed:
-            defaults['materialized'] = 'seed'
-        elif self.model.resource_type == NodeType.Snapshot:
-            defaults['materialized'] = 'snapshot'
-
-        if self.model.resource_type == NodeType.Test:
-            defaults['severity'] = 'ERROR'
-
-        return defaults
-
-    # this is re-evaluated every time `config` is called.
-    # we can cache it, but that complicates things.
-    # TODO : see how this fares performance-wise
-    @property
-    def config(self):
-        """
-        Config resolution order:
-
-         if this is a dependency model:
-           - own project config
-           - in-model config
-           - active project config
-         if this is a top-level model:
-           - active project config
-           - in-model config
-        """
-
-        defaults = self.get_default()
-        active_config = self.load_config_from_active_project()
-
-        if self.active_project.project_name == self.own_project.project_name:
-            cfg = self.updater.merge(
-                defaults, active_config, self.in_model_config
-            )
-        else:
-            own_config = self.load_config_from_own_project()
-
-            cfg = self.updater.merge(
-                defaults, own_config, self.in_model_config, active_config
-            )
-
-        return cfg
-
-    def _translate_adapter_aliases(self, config):
-        return self.active_project.credentials.translate_aliases(config)
-
-    def update_in_model_config(self, config) -> None:
-        config = self._translate_adapter_aliases(config)
-        self.updater.update_into(self.in_model_config, config)
-
-    def load_config_from_own_project(self) -> Dict[str, Any]:
-        return self.updater.get_project_config(self.model, self.own_project)
-
-    def load_config_from_active_project(self) -> Dict[str, Any]:
-        return self.updater.get_project_config(self.model, self.active_project)

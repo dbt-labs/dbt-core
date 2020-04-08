@@ -21,7 +21,7 @@ from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import deep_map
-from dbt.source_config import ConfigUpdater, IsFQNResource
+from dbt.legacy_config_updater import ConfigUpdater, IsFQNResource
 
 from dbt.contracts.project import (
     ProjectV1 as ProjectV1Contract,

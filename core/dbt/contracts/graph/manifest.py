@@ -23,6 +23,7 @@ from dbt.exceptions import (
     raise_duplicate_resource_name, InternalException, raise_compiler_error,
     warn_or_error
 )
+from dbt.helper_types import PathSet
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -593,7 +594,7 @@ class Manifest:
         ))
         return candidates.last()
 
-    def get_resource_fqns(self) -> Dict[str, Set[Tuple[str, ...]]]:
+    def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
         for unique_id, node in self.nodes.items():
             if node.resource_type == NodeType.Source:

@@ -15,6 +15,7 @@ from dbt.context.base import (
     contextmember, contextproperty, Var
 )
 from dbt.context.configured import ManifestContext, MacroNamespace
+from dbt.context.context_config import LegacyContextConfig
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
     NonSourceNode, CompiledSeedNode, CompiledResource, CompiledNode
@@ -35,7 +36,6 @@ from dbt.exceptions import (
 )
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
-from dbt.source_config import SourceConfig
 
 from dbt.utils import (
     add_ephemeral_model_prefix, merge, AttrDict
@@ -155,15 +155,15 @@ class BaseSourceResolver(BaseResolver):
 
 
 class Config(Protocol):
-    def __init__(self, model, source_config):
+    def __init__(self, model, context_config):
         ...
 
 
 # `config` implementations
 class ParseConfigObject(Config):
-    def __init__(self, model, source_config):
+    def __init__(self, model, context_config):
         self.model = model
-        self.source_config = source_config
+        self.context_config = context_config
 
     def _transform_config(self, config):
         for oldkey in ('pre_hook', 'post_hook'):
@@ -190,7 +190,7 @@ class ParseConfigObject(Config):
 
         opts = self._transform_config(opts)
 
-        self.source_config.update_in_model_config(opts)
+        self.context_config.update_in_model_config(opts)
         return ''
 
     def set(self, name, value):
@@ -204,7 +204,7 @@ class ParseConfigObject(Config):
 
 
 class RuntimeConfigObject(Config):
-    def __init__(self, model, source_config=None):
+    def __init__(self, model, context_config=None):
         self.model = model
         # we never use or get a source config, only the parser cares
 
@@ -485,7 +485,7 @@ class ProviderContext(ManifestContext):
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
-        source_config: Optional[SourceConfig],
+        context_config: Optional[LegacyContextConfig],
     ) -> None:
         if provider is None:
             raise InternalException(
@@ -496,7 +496,7 @@ class ProviderContext(ManifestContext):
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
         self.model: Union[ParsedMacro, NonSourceNode] = model
-        self.source_config = source_config
+        self.context_config = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
@@ -698,7 +698,7 @@ class ProviderContext(ManifestContext):
               {%- set unique_key = config.require('unique_key') -%}
               ...
         """  # noqa
-        return self.provider.Config(self.model, self.source_config)
+        return self.provider.Config(self.model, self.context_config)
 
     @contextproperty
     def execute(self) -> bool:
@@ -1068,10 +1068,10 @@ def generate_parser_model(
     model: NonSourceNode,
     config: RuntimeConfig,
     manifest: Manifest,
-    source_config: SourceConfig,
+    context_config: LegacyContextConfig,
 ) -> Dict[str, Any]:
     ctx = ModelContext(
-        model, config, manifest, ParseProvider(), source_config
+        model, config, manifest, ParseProvider(), context_config
     )
     return ctx.to_dict()
 
