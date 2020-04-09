@@ -4,8 +4,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import (
-    Optional, Tuple, Callable, Iterable, FrozenSet, Type, Dict, Any, List,
-    Mapping, Iterator, Union, Set
+    Optional, Tuple, Callable, Iterable, Type, Dict, Any, List, Mapping,
+    Iterator, Union, Set
 )
 
 import agate

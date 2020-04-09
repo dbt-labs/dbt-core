@@ -6,7 +6,7 @@ import dbt.exceptions
 
 from dbt.utils import deep_merge
 from dbt.node_types import NodeType
-from dbt.adapters.factory import get_adapter_class_by_name
+from dbt.adapters.factory import get_config_class_by_name
 
 
 class HasConfigFields(Protocol):
@@ -75,10 +75,10 @@ class ConfigUpdater:
         )
 
     def __init__(self, adapter_type: str):
-        adapter_class = get_adapter_class_by_name(adapter_type)
+        config_class = get_config_class_by_name(adapter_type)
         self.AdapterSpecificConfigs = {
             target_name for _, target_name in
-            adapter_class.AdapterSpecificConfigs._get_fields()
+            config_class._get_fields()
         }
 
     def update_config_keys_into(

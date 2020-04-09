@@ -11,7 +11,6 @@ from typing import (
 )
 
 from hologram import JsonSchemaMixin
-from hologram.helpers import StrEnum
 
 from dbt.clients.system import write_file
 import dbt.flags

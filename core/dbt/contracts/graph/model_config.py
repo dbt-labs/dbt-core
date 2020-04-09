@@ -8,7 +8,6 @@ from typing import (
 from hologram import JsonSchemaMixin
 from hologram.helpers import StrEnum, register_pattern
 
-from dbt.adapters.factory import get_adapter_class_by_name  # circular import?
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
 from dbt.exceptions import CompilationException, InternalException
 from dbt.contracts.util import Replaceable, list_str
@@ -176,7 +175,7 @@ class BaseConfig(
 
     @classmethod
     def _extract_dict(
-        cls: Type[T], src: Dict[str, Any], data: Dict[str, Any]
+        cls, src: Dict[str, Any], data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Find all the items in data that match a target_field on this class,
         and merge them with the data found in `src` for target_field, using the
@@ -215,10 +214,11 @@ class BaseConfig(
         """Given a dict of keys, update the current config from them, validate
         it, and return a new config with the updated values
         """
+        # sadly, this is a circular import
+        from dbt.adapters.factory import get_config_class_by_name
         dct = self.to_dict(omit_none=False, validate=False)
 
-        adapter_cls = get_adapter_class_by_name(adapter_type)
-        adapter_config_cls = adapter_cls.AdapterSpecificConfigs
+        adapter_config_cls = get_config_class_by_name(adapter_type)
 
         self_merged = self._extract_dict(dct, data)
         dct.update(self_merged)
