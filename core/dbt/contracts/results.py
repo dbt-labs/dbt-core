@@ -69,6 +69,10 @@ class PartialResult(JsonSchemaMixin, Writable):
 class WritableRunModelResult(PartialResult):
     skip: bool = False
 
+    @property
+    def skipped(self):
+        return self.skip
+
 
 @dataclass
 class RunModelResult(WritableRunModelResult):
