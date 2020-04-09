@@ -317,6 +317,7 @@ class BaseConfig(
         """
         # sadly, this is a circular import
         from dbt.adapters.factory import get_config_class_by_name
+
         dct = self.to_dict(omit_none=False)
 
         adapter_config_cls = get_config_class_by_name(adapter_type)

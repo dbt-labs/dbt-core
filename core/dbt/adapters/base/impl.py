@@ -4,8 +4,18 @@ from contextlib import contextmanager
 from datetime import datetime
 from itertools import chain
 from typing import (
-    Optional, Tuple, Callable, Iterable, Type, Dict, Any, List, Mapping,
-    Iterator, Union, Set
+    Optional,
+    Tuple,
+    Callable,
+    Iterable,
+    Type,
+    Dict,
+    Any,
+    List,
+    Mapping,
+    Iterator,
+    Union,
+    Set,
 )
 
 import agate

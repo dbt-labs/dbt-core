@@ -49,9 +49,7 @@ class AdapterContainer:
         adapter = self.get_adapter_class_by_name(name)
         return adapter.Relation
 
-    def get_config_class_by_name(
-        self, name: str
-    ) -> Type[AdapterConfig]:
+    def get_config_class_by_name(self, name: str) -> Type[AdapterConfig]:
         adapter = self.get_adapter_class_by_name(name)
         return adapter.AdapterSpecificConfigs
 
