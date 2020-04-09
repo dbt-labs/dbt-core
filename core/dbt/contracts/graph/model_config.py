@@ -29,9 +29,7 @@ def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
     try:
         return cls(value)
     except ValueError as exc:
-        raise InternalException(
-            f'Invalid {cls} value: {value}'
-        ) from exc
+        raise InternalException(f"Invalid {cls} value: {value}") from exc
 
 
 def _set_meta_value(
@@ -139,25 +137,21 @@ def _merge_field_value(
         return _listify(self_value) + _listify(other_value)
     elif merge_behavior == MergeBehavior.Update:
         if not isinstance(self_value, dict):
-            raise InternalException(f'expected dict, got {self_value}')
+            raise InternalException(f"expected dict, got {self_value}")
         if not isinstance(other_value, dict):
-            raise InternalException(f'expected dict, got {other_value}')
+            raise InternalException(f"expected dict, got {other_value}")
         value = self_value.copy()
         value.update(other_value)
         return value
     else:
-        raise InternalException(
-            f'Got an invalid merge_behavior: {merge_behavior}'
-        )
+        raise InternalException(f"Got an invalid merge_behavior: {merge_behavior}")
 
 
 def insensitive_patterns(*patterns: str):
     lowercased = []
     for pattern in patterns:
-        lowercased.append(
-            ''.join('[{}{}]'.format(s.upper(), s.lower()) for s in pattern)
-        )
-    return '^({})$'.format('|'.join(lowercased))
+        lowercased.append("".join("[{}{}]".format(s.upper(), s.lower()) for s in pattern))
+    return "^({})$".format("|".join(lowercased))
 
 
 class Severity(str):
@@ -174,7 +168,7 @@ class Hook(dbtClassMixin, Replaceable):
     index: Optional[int] = None
 
 
-T = TypeVar('T', bound='BaseConfig')
+T = TypeVar("T", bound="BaseConfig")
 
 
 @dataclass
@@ -383,7 +377,7 @@ class NodeAndTestConfig(BaseConfig):
 class NodeConfig(NodeAndTestConfig):
     # Note: if any new fields are added with MergeBehavior, also update the
     # 'mergebehavior' dictionary
-    materialized: str = 'view'
+    materialized: str = "view"
     persist_docs: Dict[str, Any] = field(default_factory=dict)
     post_hook: List[Hook] = field(
         default_factory=list,
@@ -437,7 +431,7 @@ class NodeConfig(NodeAndTestConfig):
     # this is still used by jsonschema validation
     @classmethod
     def field_mapping(cls):
-        return {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
+        return {"post_hook": "post-hook", "pre_hook": "pre-hook"}
 
 
 @dataclass
