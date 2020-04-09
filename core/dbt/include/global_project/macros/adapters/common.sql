@@ -189,7 +189,7 @@
 
 {% macro default__information_schema_name(database) -%}
   {%- if database -%}
-    {{ adapter.quote_as_configured(database, 'database') }}.INFORMATION_SCHEMA
+    {{ database }}.INFORMATION_SCHEMA
   {%- else -%}
     INFORMATION_SCHEMA
   {%- endif -%}

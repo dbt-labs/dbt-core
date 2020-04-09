@@ -64,6 +64,25 @@ TEST_DOCUMENTATION_FILE = r'''
 )
 
 
+MULTIPLE_RAW_BLOCKS = r'''
+{% docs some_doc %}
+{% raw %}
+    ```
+    {% docs %}some doc{% enddocs %}
+    ```
+{% endraw %}
+{% enddocs %}
+
+{% docs other_doc %}
+{% raw %}
+    ```
+    {% docs %}other doc{% enddocs %}
+    ```
+{% endraw %}
+{% enddocs %}
+'''
+
+
 class DocumentationParserTest(unittest.TestCase):
     def setUp(self):
         if os.name == 'nt':
@@ -161,3 +180,28 @@ class DocumentationParserTest(unittest.TestCase):
             self.assertIsInstance(result, ParsedDocumentation)
         self.assertEqual(results[0].name, 'snowplow_sessions')
         self.assertEqual(results[1].name, 'snowplow_sessions__session_id')
+
+    def test_multiple_raw_blocks(self):
+        parser = docs.DocumentationParser(
+            results=ParseResult.rpc(),
+            root_project=self.root_project_config,
+            project=self.subdir_project_config,
+            macro_manifest=Manifest.from_macros())
+
+        file_block = self._build_file(MULTIPLE_RAW_BLOCKS, 'test_file.md')
+
+        parser.parse_file(file_block)
+        results = sorted(parser.results.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(results), 2)
+        for result in results:
+            self.assertIsInstance(result, ParsedDocumentation)
+            self.assertEqual(result.package_name, 'some_package')
+            self.assertEqual(result.original_file_path, self.testfile_path)
+            self.assertEqual(result.root_path, self.subdir_path)
+            self.assertEqual(result.resource_type, NodeType.Documentation)
+            self.assertEqual(result.path, 'test_file.md')
+
+        self.assertEqual(results[0].name, 'other_doc')
+        self.assertEqual(results[0].block_contents, '```\n    {% docs %}other doc{% enddocs %}\n    ```')
+        self.assertEqual(results[1].name, 'some_doc')
+        self.assertEqual(results[1].block_contents, '```\n    {% docs %}some doc{% enddocs %}\n    ```', )

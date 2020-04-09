@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.exceptions import CompilationException
 
@@ -28,9 +30,12 @@ class TestSimpleDependency(DBTIntegrationTest):
             ]
         }
 
+    def run_deps(self):
+        return self.run_dbt(["deps"])
+
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
-        self.run_dbt(["deps"])
+        self.run_deps()
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  4)
 
@@ -42,7 +47,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
         self.run_sql_file("update.sql")
 
-        self.run_dbt(["deps"])
+        self.run_deps()
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  4)
 
@@ -52,7 +57,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_simple_dependency_with_models(self):
-        self.run_dbt(["deps"])
+        self.run_deps()
         results = self.run_dbt(["run", '--models', 'view_model+'])
         self.assertEqual(len(results),  2)
 
@@ -220,3 +225,13 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         models = self.get_models_in_schema()
 
         self.assertFalse('empty' in models.keys())
+
+
+class TestSimpleDependencyNoProfile(TestSimpleDependency):
+    def run_deps(self):
+        tmpdir = tempfile.mkdtemp()
+        try:
+            result = self.run_dbt(["deps", "--profiles-dir", tmpdir])
+        finally:
+            shutil.rmtree(tmpdir)
+        return result

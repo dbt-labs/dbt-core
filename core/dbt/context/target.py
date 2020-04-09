@@ -74,19 +74,7 @@ class TargetContext(BaseContext):
             |----------|-----------|------------------------------------------|
 
         """
-        target = dict(
-            self.config.credentials.connection_info(with_aliases=True)
-        )
-        target.update({
-            'type': self.config.credentials.type,
-            'threads': self.config.threads,
-            'name': self.config.target_name,
-            # not specified, but present for compatibility
-            'target_name': self.config.target_name,
-            'profile_name': self.config.profile_name,
-            'config': self.config.config.to_dict(),
-        })
-        return target
+        return self.config.to_target_dict()
 
 
 def generate_target_context(

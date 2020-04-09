@@ -171,6 +171,9 @@ class HasCredentials(Protocol):
     target_name: str
     threads: int
 
+    def to_target_dict(self):
+        raise NotImplementedError('to_target_dict not implemented')
+
 
 DEFAULT_QUERY_COMMENT = '''
 {%- set comment_dict = {} -%}

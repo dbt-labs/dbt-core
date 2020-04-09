@@ -47,6 +47,9 @@ class ConfigRenderer:
         :param key str: The key to convert on.
         :return Any: The rendered entry.
         """
+        # the project name is never rendered
+        if keypath == ('name',):
+            return value
         # query comments and hooks should be treated as raw sql, they'll get
         # rendered later.
         # Same goes for 'vars' declarations inside 'models'/'seeds'

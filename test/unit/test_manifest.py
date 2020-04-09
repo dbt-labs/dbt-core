@@ -16,13 +16,14 @@ from dbt.contracts.graph.parsed import (
     DependsOn,
     NodeConfig,
     ParsedSeedNode,
-    ParsedMacro,
     ParsedSourceDefinition,
     ParsedDocumentation,
 )
 from dbt.contracts.graph.compiled import CompiledModelNode
 from dbt.node_types import NodeType
 import freezegun
+
+from .utils import MockMacro
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
@@ -629,19 +630,6 @@ class MixedManifestTest(unittest.TestCase):
 
 
 # Tests of the manifest search code (find_X_by_Y)
-
-def MockMacro(package, name='my_macro', kwargs={}):
-    macro = mock.MagicMock(
-        __class__=ParsedMacro,
-        resource_type=NodeType.Macro,
-        package_name=package,
-        unique_id=f'macro.{package}.{name}',
-        **kwargs
-    )
-    macro.name = name
-    return macro
-
-
 def MockMaterialization(package, name='my_materialization', adapter_type=None, kwargs={}):
     if adapter_type is None:
         adapter_type = 'default'
