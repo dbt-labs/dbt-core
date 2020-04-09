@@ -76,7 +76,10 @@ class ConfigUpdater:
 
     def __init__(self, adapter_type: str):
         adapter_class = get_adapter_class_by_name(adapter_type)
-        self.AdapterSpecificConfigs = adapter_class.AdapterSpecificConfigs
+        self.AdapterSpecificConfigs = {
+            target_name for _, target_name in
+            adapter_class.AdapterSpecificConfigs._get_fields()
+        }
 
     def update_config_keys_into(
         self, mutable_config: Dict[str, Any], new_configs: Mapping[str, Any]

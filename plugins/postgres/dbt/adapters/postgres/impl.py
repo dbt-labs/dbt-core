@@ -1,4 +1,6 @@
+from typing import Optional
 from dbt.adapters.base.meta import available
+from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres import PostgresColumn
@@ -9,11 +11,15 @@ import dbt.exceptions
 GET_RELATIONS_MACRO_NAME = 'postgres_get_relations'
 
 
+class PostgresConfig(AdapterConfig):
+    unlogged: Optional[bool] = None
+
+
 class PostgresAdapter(SQLAdapter):
     ConnectionManager = PostgresConnectionManager
     Column = PostgresColumn
 
-    AdapterSpecificConfigs = frozenset({'unlogged'})
+    AdapterSpecificConfigs = PostgresConfig
 
     @classmethod
     def date_function(cls):

@@ -1,14 +1,23 @@
+from typing import Optional
+from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.redshift import RedshiftConnectionManager
 from dbt.adapters.redshift import RedshiftColumn
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
+class RedshiftConfig(AdapterConfig):
+    sort_type: Optional[str] = None
+    dist: Optional[str] = None
+    sort: Optional[str] = None
+    bind: Optional[bool] = None
+
+
 class RedshiftAdapter(PostgresAdapter):
     ConnectionManager = RedshiftConnectionManager
     Column = RedshiftColumn
 
-    AdapterSpecificConfigs = frozenset({"sort_type", "dist", "sort", "bind"})
+    AdapterSpecificConfigs = RedshiftConfig
 
     @classmethod
     def date_function(cls):

@@ -61,7 +61,7 @@
   {%- set raw_cluster_by = config.get('cluster_by', none) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set raw_kms_key_name = config.get('kms_key_name', none) -%}
-  {%- set raw_labels = config.get('labels', []) -%}
+  {%- set raw_labels = config.get('labels', {}) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
 
   {%- set partition_config = adapter.parse_partition_by(raw_partition_by) -%}

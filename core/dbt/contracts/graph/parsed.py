@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass, field
 from typing import (
     Optional,
     Union,
@@ -8,111 +8,37 @@ from typing import (
     Any,
     Type,
     Tuple,
-    NewType,
-    MutableMapping,
 )
 
 from hologram import JsonSchemaMixin
-from hologram.helpers import (
-    StrEnum, register_pattern
-)
+from hologram.helpers import StrEnum
 
 from dbt.clients.system import write_file
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
-    AdditionalPropertiesAllowed, HasYamlMetadata, MacroArgument
+    HasYamlMetadata, MacroArgument
 )
-from dbt.contracts.util import Replaceable, list_str
+from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
 
-class SnapshotStrategy(StrEnum):
-    Timestamp = 'timestamp'
-    Check = 'check'
+from .model_config import (
+    NodeConfig,
+    SeedConfig,
+    TestConfig,
+    CheckSnapshotConfig,
+    TimestampSnapshotConfig,
+    GenericSnapshotConfig,
 
+    # utility types
+    SnapshotStrategy,
+)
 
-class All(StrEnum):
-    All = 'all'
-
-
-@dataclass
-class Hook(JsonSchemaMixin, Replaceable):
-    sql: str
-    transaction: bool = True
-    index: Optional[int] = None
-
-
-def insensitive_patterns(*patterns: str):
-    lowercased = []
-    for pattern in patterns:
-        lowercased.append(
-            ''.join('[{}{}]'.format(s.upper(), s.lower()) for s in pattern)
-        )
-    return '^({})$'.format('|'.join(lowercased))
-
-
-Severity = NewType('Severity', str)
-register_pattern(Severity, insensitive_patterns('warn', 'error'))
-
-
-@dataclass
-class NodeConfig(
-    AdditionalPropertiesAllowed, Replaceable, MutableMapping[str, Any]
-):
-    enabled: bool = True
-    materialized: str = 'view'
-    persist_docs: Dict[str, Any] = field(default_factory=dict)
-    post_hook: List[Hook] = field(default_factory=list)
-    pre_hook: List[Hook] = field(default_factory=list)
-    vars: Dict[str, Any] = field(default_factory=dict)
-    quoting: Dict[str, Any] = field(default_factory=dict)
-    column_types: Dict[str, Any] = field(default_factory=dict)
-    tags: Union[List[str], str] = field(default_factory=list_str)
-
-    @classmethod
-    def field_mapping(cls):
-        return {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
-
-    # Implement MutableMapping so this config will behave as some macros expect
-    # during parsing (notably, syntax like `{{ node.config['schema'] }}`)
-
-    def __getitem__(self, key):
-        """Handle parse-time use of `config` as a dictionary, making the extra
-        values available during parsing.
-        """
-        if hasattr(self, key):
-            return getattr(self, key)
-        else:
-            return self._extra[key]
-
-    def __setitem__(self, key, value):
-        if hasattr(self, key):
-            setattr(self, key, value)
-        else:
-            self._extra[key] = value
-
-    def __delitem__(self, key):
-        if hasattr(self, key):
-            msg = (
-                'Error, tried to delete config key "{}": Cannot delete '
-                'built-in keys'
-            ).format(key)
-            raise dbt.exceptions.CompilationException(msg)
-        else:
-            del self._extra[key]
-
-    def __iter__(self):
-        for fld, _ in self._get_fields():
-            yield fld.name
-
-        for key in self._extra:
-            yield key
-
-    def __len__(self):
-        return len(self._get_fields()) + len(self._extra)
+# FIXME: exports
+from .model_config import Hook  # noqa
 
 
 @dataclass
@@ -266,8 +192,8 @@ class ParsedRPCNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
-class SeedConfig(NodeConfig):
-    quote_columns: Optional[bool] = None
+# class SeedConfig(NodeConfig):
+#     quote_columns: Optional[bool] = None
 
 
 @dataclass
@@ -281,9 +207,9 @@ class ParsedSeedNode(ParsedNode):
         return False
 
 
-@dataclass
-class TestConfig(NodeConfig):
-    severity: Severity = Severity('error')
+# @dataclass
+# class TestConfig(NodeConfig):
+#     severity: Severity = Severity('error')
 
 
 @dataclass
@@ -309,98 +235,6 @@ class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
-
-
-@dataclass(init=False)
-class _SnapshotConfig(NodeConfig):
-    unique_key: str = field(init=False, metadata=dict(init_required=True))
-    target_schema: str = field(init=False, metadata=dict(init_required=True))
-    target_database: Optional[str] = None
-
-    def __init__(
-        self,
-        unique_key: str,
-        target_schema: str,
-        target_database: Optional[str] = None,
-        **kwargs
-    ) -> None:
-        self.unique_key = unique_key
-        self.target_schema = target_schema
-        self.target_database = target_database
-        super().__init__(**kwargs)
-
-    # type hacks...
-    @classmethod
-    def _get_fields(cls) -> List[Tuple[Field, str]]:  # type: ignore
-        fields: List[Tuple[Field, str]] = []
-        for old_field, name in super()._get_fields():
-            new_field = old_field
-            # tell hologram we're really an initvar
-            if old_field.metadata and old_field.metadata.get('init_required'):
-                new_field = field(init=True, metadata=old_field.metadata)
-                new_field.name = old_field.name
-                new_field.type = old_field.type
-                new_field._field_type = old_field._field_type  # type: ignore
-            fields.append((new_field, name))
-        return fields
-
-
-@dataclass(init=False)
-class GenericSnapshotConfig(_SnapshotConfig):
-    strategy: str = field(init=False, metadata=dict(init_required=True))
-
-    def __init__(self, strategy: str, **kwargs) -> None:
-        self.strategy = strategy
-        super().__init__(**kwargs)
-
-
-@dataclass(init=False)
-class TimestampSnapshotConfig(_SnapshotConfig):
-    strategy: str = field(
-        init=False,
-        metadata=dict(
-            restrict=[str(SnapshotStrategy.Timestamp)],
-            init_required=True,
-        ),
-    )
-    updated_at: str = field(init=False, metadata=dict(init_required=True))
-
-    def __init__(
-        self, strategy: str, updated_at: str, **kwargs
-    ) -> None:
-        self.strategy = strategy
-        self.updated_at = updated_at
-        super().__init__(**kwargs)
-
-
-@dataclass(init=False)
-class CheckSnapshotConfig(_SnapshotConfig):
-    strategy: str = field(
-        init=False,
-        metadata=dict(
-            restrict=[str(SnapshotStrategy.Check)],
-            init_required=True,
-        ),
-    )
-    # TODO: is there a way to get this to accept tuples of strings? Adding
-    # `Tuple[str, ...]` to the list of types results in this:
-    # ['email'] is valid under each of {'type': 'array', 'items':
-    # {'type': 'string'}}, {'type': 'array', 'items': {'type': 'string'}}
-    # but without it, parsing gets upset about values like `('email',)`
-    # maybe hologram itself should support this behavior? It's not like tuples
-    # are meaningful in json
-    check_cols: Union[All, List[str]] = field(
-        init=False,
-        metadata=dict(init_required=True),
-    )
-
-    def __init__(
-        self, strategy: str, check_cols: Union[All, List[str]],
-        **kwargs
-    ) -> None:
-        self.strategy = strategy
-        self.check_cols = check_cols
-        super().__init__(**kwargs)
 
 
 @dataclass

@@ -1,7 +1,8 @@
-from typing import Mapping, Any, Optional, List
+from typing import Mapping, Any, Optional, List, Union
 
 import agate
 
+from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.sql.impl import (
     LIST_SCHEMAS_MACRO_NAME,
@@ -15,15 +16,21 @@ from dbt.exceptions import RuntimeException, DatabaseException
 from dbt.utils import filter_null_values
 
 
+class SnowflakeConfig(AdapterConfig):
+    transient: Optional[bool] = None
+    cluster_by: Optional[Union[str, List[str]]] = None
+    automatic_clustering: Optional[bool] = None
+    secure: Optional[bool] = None
+    copy_grants: Optional[bool] = None
+    snowflake_warehouse: Optional[str] = None
+
+
 class SnowflakeAdapter(SQLAdapter):
     Relation = SnowflakeRelation
     Column = SnowflakeColumn
     ConnectionManager = SnowflakeConnectionManager
 
-    AdapterSpecificConfigs = frozenset(
-        {"transient", "cluster_by", "automatic_clustering", "secure",
-         "copy_grants", "snowflake_warehouse"}
-    )
+    AdapterSpecificConfigs = SnowflakeConfig
 
     @classmethod
     def date_function(cls):
