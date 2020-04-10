@@ -292,9 +292,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
             )
         return result
 
-    def update_from(
-        self: T, data: Dict[str, Any], adapter_type: str, validate: bool = True
-    ) -> T:
+    def update_from(self: T, data: Dict[str, Any], adapter_type: str, validate: bool = True) -> T:
         """Given a dict of keys, update the current config from them, validate
         it, and return a new config with the updated values
         """
