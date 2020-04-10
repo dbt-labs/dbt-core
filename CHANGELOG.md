@@ -14,6 +14,7 @@
 - When a macro is called with invalid arguments, include the calling model in the output ([#2073](https://github.com/fishtown-analytics/dbt/issues/2073), [#2238](https://github.com/fishtown-analytics/dbt/pull/2238))
 - When a warn exception is not in a jinja do block, return an empty string instead of None ([#2222](https://github.com/fishtown-analytics/dbt/issues/2222), [#2259](https://github.com/fishtown-analytics/dbt/pull/2259))
 - Add dbt plugin versions to --version([#2272](https://github.com/fishtown-analytics/dbt/issues/2272), [#2279](https://github.com/fishtown-analytics/dbt/pull/2279))
+- When a Redshift table is defined as "auto", don't provide diststyle ([#2246](https://github.com/fishtown-analytics/dbt/issues/2246), [#2298](https://github.com/fishtown-analytics/dbt/pull/2298))
 - Made file names lookups case-insensitve (.sql, .SQL, .yml, .YML) and if .yaml files are found, raise a warning indicating dbt will parse these files in future releases. ([#1681](https://github.com/fishtown-analytics/dbt/issues/1681), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263))
 - Return error message when profile is empty in profiles.yml. ([#2292](https://github.com/fishtown-analytics/dbt/issues/2292), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
 
@@ -22,7 +23,8 @@ Contributors:
  - [@ilkinulas](https://github.com/ilkinulas) [#2199](https://github.com/fishtown-analytics/dbt/pull/2199)
  - [@kyleabeauchamp](https://github.com/kyleabeauchamp) [#2262](https://github.com/fishtown-analytics/dbt/pull/2262)
  - [@jeremyyeo](https://github.com/jeremyyeo) [#2259](https://github.com/fishtown-analytics/dbt/pull/2259)
- - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297)
+ - [@rodrigodelmonte](https://github.com/rodrigodelmonte) [#2298](https://github.com/fishtown-analytics/dbt/pull/2298)
+ - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
 
 ## dbt 0.16.1 (Relase date TBD)
 
