@@ -6,8 +6,6 @@ from typing import (
     List,
     Dict,
     Any,
-    Type,
-    Tuple,
 )
 
 from hologram import JsonSchemaMixin
@@ -28,16 +26,16 @@ from .model_config import (
     NodeConfig,
     SeedConfig,
     TestConfig,
-    CheckSnapshotConfig,
-    TimestampSnapshotConfig,
-    GenericSnapshotConfig,
-
-    # utility types
-    SnapshotStrategy,
+    SourceConfig,
+    EmptySnapshotConfig,
+    SnapshotVariants,
 )
-
-# FIXME: exports
-from .model_config import Hook  # noqa
+# import these 3 so the SnapshotVariants forward ref works.
+from .model_config import (  # noqa
+    TimestampSnapshotConfig,
+    CheckSnapshotConfig,
+    GenericSnapshotConfig,
+)
 
 
 @dataclass
@@ -191,10 +189,6 @@ class ParsedRPCNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
-# class SeedConfig(NodeConfig):
-#     quote_columns: Optional[bool] = None
-
-
 @dataclass
 class ParsedSeedNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
@@ -204,11 +198,6 @@ class ParsedSeedNode(ParsedNode):
     def empty(self):
         """ Seeds are never empty"""
         return False
-
-
-# @dataclass
-# class TestConfig(NodeConfig):
-#     severity: Severity = Severity('error')
 
 
 @dataclass
@@ -245,59 +234,13 @@ class IntermediateSnapshotNode(ParsedNode):
     # uses a regular node config, which the snapshot parser will then convert
     # into a full ParsedSnapshotNode after rendering.
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
-
-
-def _create_if_else_chain(
-    key: str,
-    criteria: List[Tuple[str, Type[JsonSchemaMixin]]],
-    default: Type[JsonSchemaMixin]
-) -> Dict[str, Any]:
-    """Mutate a given schema key that contains a 'oneOf' to instead be an
-    'if-then-else' chain. This results is much better/more consistent errors
-    from jsonschema.
-    """
-    schema: Dict[str, Any] = {}
-    result: Dict[str, Any] = {}
-    criteria = criteria[:]
-    while criteria:
-        if_clause, then_clause = criteria.pop()
-        schema['if'] = {'properties': {
-            key: {'enum': [if_clause]}
-        }}
-        schema['then'] = then_clause.json_schema()
-        schema['else'] = {}
-        schema = schema['else']
-    schema.update(default.json_schema())
-    return result
+    config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
 
 @dataclass
 class ParsedSnapshotNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
-    config: Union[
-        CheckSnapshotConfig,
-        TimestampSnapshotConfig,
-        GenericSnapshotConfig,
-    ]
-
-    @classmethod
-    def json_schema(cls, embeddable: bool = False) -> Dict[str, Any]:
-        schema = super().json_schema(embeddable)
-
-        # mess with config
-        configs: List[Tuple[str, Type[JsonSchemaMixin]]] = [
-            (str(SnapshotStrategy.Check), CheckSnapshotConfig),
-            (str(SnapshotStrategy.Timestamp), TimestampSnapshotConfig),
-        ]
-
-        if embeddable:
-            dest = schema[cls.__name__]['properties']
-        else:
-            dest = schema['properties']
-        dest['config'] = _create_if_else_chain(
-            'strategy', configs, GenericSnapshotConfig
-        )
-        return schema
+    config: SnapshotVariants
 
 
 @dataclass
@@ -380,6 +323,7 @@ class ParsedSourceDefinition(
     meta: Dict[str, Any] = field(default_factory=dict)
     source_meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    config: SourceConfig = field(default_factory=SourceConfig)
 
     @property
     def is_refable(self):
