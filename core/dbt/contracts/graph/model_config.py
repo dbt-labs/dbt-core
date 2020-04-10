@@ -427,7 +427,7 @@ class NodeConfig(NodeAndTestConfig):
 
 @dataclass
 class SeedConfig(NodeConfig):
-    materialized: str = 'seed'
+    materialized: str = "seed"
     quote_columns: Optional[bool] = None
 
 
@@ -439,7 +439,7 @@ class TestConfig(NodeAndTestConfig):
         metadata=CompareBehavior.Exclude.meta(),
     )
     materialized: str = 'test'
-    severity: Severity = Severity('ERROR')
+    severity: Severity = Severity("ERROR")
     store_failures: Optional[bool] = None
     where: Optional[str] = None
     limit: Optional[int] = None
@@ -474,7 +474,7 @@ class TestConfig(NodeAndTestConfig):
 
 @dataclass
 class EmptySnapshotConfig(NodeConfig):
-    materialized: str = 'snapshot'
+    materialized: str = "snapshot"
     unique_key: Optional[str] = None  # override NodeConfig unique_key definition
 
 
@@ -537,9 +537,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
 # base resource types are like resource types, except nothing has mandatory
 # configs.
 BASE_RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = RESOURCE_TYPES.copy()
-BASE_RESOURCE_TYPES.update({
-    NodeType.Snapshot: EmptySnapshotConfig
-})
+BASE_RESOURCE_TYPES.update({NodeType.Snapshot: EmptySnapshotConfig})
 
 
 def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:
