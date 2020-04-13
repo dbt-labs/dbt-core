@@ -395,15 +395,6 @@ class RuntimeSourceResolver(BaseSourceResolver):
         return self.Relation.create_from_source(target_source)
 
 
-class ConfiguredVar(Var):
-    def __init__(
-        self,
-        context: Dict[str, Any],
-        config: RuntimeConfig,
-        resource: IsFQNResource,
-    )
-
-
 # `var` implementations.
 class ModelConfiguredVar(Var):
     def __init__(

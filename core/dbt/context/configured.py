@@ -1,7 +1,6 @@
-from typing import Any, Dict, Iterable, Union, Optional, List
+from typing import Any, Dict, Iterable, Union, Optional
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
-from dbt.config import RuntimeConfig
 from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedMacro
@@ -30,30 +29,32 @@ class ConfiguredVar(Var):
     def __init__(
         self,
         context: Dict[str, Any],
-        config: RuntimeConfig,
+        config: AdapterRequiredConfig,
         project_name: str,
     ):
-        super().__init__(context, config)
+        super().__init__(context, config.cli_vars)
+        self.config = config
         self.project_name = project_name
 
     def __call__(self, var_name, default=Var._VAR_NOTSET):
         my_config = self.config.load_dependencies()[self.project_name]
-        if self.config.current_version == 1 or my_config.current_version == 1:
-            # fall back to v1 behavior
-            return super().__call__(var_name, default)
 
         # cli vars > active project > local project
         if var_name in self.config.cli_vars:
             return self.config.cli_vars[var_name]
 
-        active_vars = self.config.vars.to_dict()
-        if var_name in active_vars:
-            return active_vars[var_name]
+        if self.config.config_version == 2 and my_config.config_version == 2:
 
-        if self.config.project_name != my_config.project_name:
-            config_vars = my_config.vars.to_dict()
-            if var_name in config_vars:
-                return config_vars[var_name]
+            active_vars = self.config.vars.to_dict()
+            active_vars = active_vars.get(self.project_name, {})
+            if var_name in active_vars:
+                return active_vars[var_name]
+
+            if self.config.project_name != my_config.project_name:
+                config_vars = my_config.vars.to_dict()
+                config_vars = config_vars.get(self.project_name, {})
+                if var_name in config_vars:
+                    return config_vars[var_name]
 
         if default is not Var._VAR_NOTSET:
             return default
@@ -64,12 +65,12 @@ class ConfiguredVar(Var):
 class SchemaYamlContext(ConfiguredContext):
     def __init__(self, config, project_name: str):
         super().__init__(config)
-        self.project_name = project_name
+        self._project_name = project_name
 
     @contextproperty
     def var(self) -> ConfiguredVar:
         return ConfiguredVar(
-            self._ctx, self.config, self.project_name
+            self._ctx, self.config, self._project_name
         )
 
 

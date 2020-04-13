@@ -11,7 +11,6 @@ from hologram import ValidationError
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.config import RuntimeConfig
 from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfigType,
@@ -119,9 +118,19 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         self, results, project, root_project, macro_manifest,
     ) -> None:
         super().__init__(results, project, root_project, macro_manifest)
-        ctx = generate_target_context(
-            self.root_project, self.root_project.cli_vars
+        all_v_2 = (
+            self.root_project.config_version == 2 and
+            self.project.config_version == 2
         )
+        if all_v_2:
+            ctx = generate_schema_yml(
+                self.root_project, self.project.project_name
+            )
+        else:
+            ctx = generate_target_context(
+                self.root_project, self.root_project.cli_vars
+            )
+
         self.raw_renderer = SchemaYamlRenderer(ctx)
 
     @classmethod
@@ -511,20 +520,6 @@ class YamlParser(Generic[Target, Parsed]):
 class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        all_v_2 = (
-            self.root_project.config_version == 2 and
-            self.project.config_version == 2
-        )
-        if all_v_2:
-            ctx = generate_schema_yml(
-                self.root_project, self.project.project_name
-            )
-        else:
-            ctx = generate_target_context(
-                self.root_project, self.root_project.cli_vars
-            )
-
-        self._renderer = SchemaYamlRenderer(ctx)
         self.config_generator = ContextConfigGenerator(self.project)
 
     def get_block(self, node: SourceTarget) -> TestBlock:

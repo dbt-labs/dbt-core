@@ -12,10 +12,10 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedMacro
 
 from dbt.context.base import contextmember
-from dbt.context.configured import ConfiguredContext
+from dbt.context.configured import SchemaYamlContext
 
 
-class DocsRuntimeContext(ConfiguredContext):
+class DocsRuntimeContext(SchemaYamlContext):
     def __init__(
         self,
         config: RuntimeConfig,
@@ -23,10 +23,9 @@ class DocsRuntimeContext(ConfiguredContext):
         manifest: Manifest,
         current_project: str,
     ) -> None:
-        super().__init__(config)
+        super().__init__(config, current_project)
         self.node = node
         self.manifest = manifest
-        self.current_project = current_project
 
     @contextmember
     def doc(self, *args: str) -> str:
@@ -61,7 +60,7 @@ class DocsRuntimeContext(ConfiguredContext):
         target_doc = self.manifest.resolve_doc(
             doc_name,
             doc_package_name,
-            self.current_project,
+            self._project_name,
             self.node.package_name,
         )
 

@@ -132,6 +132,7 @@ class ParsedNodeMandatory(
     Replaceable
 ):
     alias: str
+    config: NodeConfig = field(default_factory=NodeConfig)
 
     @property
     def identifier(self):
@@ -140,7 +141,6 @@ class ParsedNodeMandatory(
 
 @dataclass
 class ParsedNodeDefaults(ParsedNodeMandatory):
-    config: NodeConfig = field(default_factory=NodeConfig)
     tags: List[str] = field(default_factory=list)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[Any]] = field(default_factory=list)
