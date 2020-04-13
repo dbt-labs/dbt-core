@@ -150,3 +150,38 @@
     alter table {{ relation }} alter {{ adapter.quote(column_name) }} set data type {{ new_column_type }};
   {% endcall %}
 {% endmacro %}
+
+{% macro snowflake__alter_relation_comment(relation, relation_comment) -%}
+  
+  {% call statement('alter_relation_comment') %}
+
+    alter table {{ relation }} alter COMMENT '{{ relation_comment }}'
+
+  {% endcall %}
+{% endmacro %}
+
+
+{% macro snowflake__alter_column_comment(relation, column_dict) -%}
+
+  {% call statement('alter_column_comment') %}
+
+      alter table {{ relation }} alter 
+
+      {% for column_name in column_dict %}
+        
+        {{ log("Andrew Inner Loop: "  ~adapter.quote(column_name)) }}
+
+        {% if loop.index == 1 %}
+          {{ column_name }} COMMENT '{{ column_dict[column_name]['description'] }}'
+        {% else %}
+           , {{ column_name }} COMMENT '{{ column_dict[column_name]['description'] }}'
+        {% endif %}
+
+      {% endfor %}
+
+  {% endcall %}
+{% endmacro %}
+
+
+
+

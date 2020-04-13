@@ -131,6 +131,27 @@
   {{ return(adapter_macro('alter_column_type', relation, column_name, new_column_type)) }}
 {% endmacro %}
 
+
+
+{% macro alter_column_comment(relation, column_dict) -%}
+  {{ return(adapter_macro('alter_column_comment', relation, column_dict)) }}
+{% endmacro %}
+
+{% macro default__alter_column_comment(relation, column_name, new_column_type) -%}
+  {{ log("This is not consistently implemented yet") }}
+{% endmacro %}
+
+{% macro alter_relation_comment(relation, relation_comment) -%}
+  {{ return(adapter_macro('alter_relation_comment', relation, relation_comment)) }}
+{% endmacro %}
+
+{% macro default__alter_relation_comment(relation, relation_comment) -%}
+  {{ log("This is not consistently implemented yet") }}
+{% endmacro %}
+
+
+
+
 {% macro default__alter_column_type(relation, column_name, new_column_type) -%}
   {#
     1. Create a new column (w/ temp name and correct type)

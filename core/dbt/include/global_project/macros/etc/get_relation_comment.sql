@@ -26,3 +26,19 @@
   {% endif %}
 
 {% endmacro %}
+
+
+{% macro get_relation_column_comments(persist_docs, model) %}
+
+  {%- if persist_docs is not mapping -%}
+    {{ exceptions.raise_compiler_error("Invalid value provided for 'persist_docs'. Expected dict but got value: " ~ raw_persist_docs) }}
+  {% endif %}
+
+  {% if persist_docs.get('columns', false) %}
+    {{ return(model.columns) }}
+  {%- else -%}
+    {{ return(none) }}
+  {% endif %}
+
+{% endmacro %}
+
