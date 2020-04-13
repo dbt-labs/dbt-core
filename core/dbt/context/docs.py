@@ -15,24 +15,6 @@ from dbt.context.base import contextmember
 from dbt.context.configured import ConfiguredContext
 
 
-class DocsParseContext(ConfiguredContext):
-    def __init__(
-        self,
-        config: RuntimeConfig,
-        node: Any,
-    ) -> None:
-        super().__init__(config)
-        self.node = node
-
-    @contextmember
-    def doc(self, *args: str) -> str:
-        # when you call doc(), this is what happens at parse time
-        if len(args) != 1 and len(args) != 2:
-            doc_invalid_args(self.node, args)
-        # At parse time, nothing should care about what doc() returns
-        return ''
-
-
 class DocsRuntimeContext(ConfiguredContext):
     def __init__(
         self,
@@ -87,14 +69,6 @@ class DocsRuntimeContext(ConfiguredContext):
             doc_target_not_found(self.node, doc_name, doc_package_name)
 
         return target_doc.block_contents
-
-
-def generate_parser_docs(
-    config: RuntimeConfig,
-    unparsed: Any,
-) -> Dict[str, Any]:
-    ctx = DocsParseContext(config, unparsed)
-    return ctx.to_dict()
 
 
 def generate_runtime_docs(
