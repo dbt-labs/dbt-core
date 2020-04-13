@@ -17,6 +17,7 @@ from dbt.context.context_config import (
     ContextConfigType,
     ContextConfigGenerator,
 )
+from dbt.context.configured import generate_schema_yml
 from dbt.context.target import generate_target_context
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.parsed import (
@@ -510,11 +511,20 @@ class YamlParser(Generic[Target, Parsed]):
 class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._renderer = SchemaYamlRenderer(
-            generate_target_context(
+        all_v_2 = (
+            self.root_project.config_version == 2 and
+            self.project.config_version == 2
+        )
+        if all_v_2:
+            ctx = generate_schema_yml(
+                self.root_project, self.project.project_name
+            )
+        else:
+            ctx = generate_target_context(
                 self.root_project, self.root_project.cli_vars
             )
-        )
+
+        self._renderer = SchemaYamlRenderer(ctx)
         self.config_generator = ContextConfigGenerator(self.project)
 
     def get_block(self, node: SourceTarget) -> TestBlock:

@@ -1,13 +1,14 @@
-from typing import Any, Dict, Iterable, Union, Optional
+from typing import Any, Dict, Iterable, Union, Optional, List
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
+from dbt.config import RuntimeConfig
 from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.include.global_project import PACKAGES
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
-from dbt.context.base import contextproperty
+from dbt.context.base import contextproperty, Var
 from dbt.context.target import TargetContext
 from dbt.exceptions import raise_duplicate_macro_name
 
@@ -23,6 +24,53 @@ class ConfiguredContext(TargetContext):
     @contextproperty
     def project_name(self) -> str:
         return self.config.project_name
+
+
+class ConfiguredVar(Var):
+    def __init__(
+        self,
+        context: Dict[str, Any],
+        config: RuntimeConfig,
+        project_name: str,
+    ):
+        super().__init__(context, config)
+        self.project_name = project_name
+
+    def __call__(self, var_name, default=Var._VAR_NOTSET):
+        my_config = self.config.load_dependencies()[self.project_name]
+        if self.config.current_version == 1 or my_config.current_version == 1:
+            # fall back to v1 behavior
+            return super().__call__(var_name, default)
+
+        # cli vars > active project > local project
+        if var_name in self.config.cli_vars:
+            return self.config.cli_vars[var_name]
+
+        active_vars = self.config.vars.to_dict()
+        if var_name in active_vars:
+            return active_vars[var_name]
+
+        if self.config.project_name != my_config.project_name:
+            config_vars = my_config.vars.to_dict()
+            if var_name in config_vars:
+                return config_vars[var_name]
+
+        if default is not Var._VAR_NOTSET:
+            return default
+
+        return self.get_missing_var(var_name)
+
+
+class SchemaYamlContext(ConfiguredContext):
+    def __init__(self, config, project_name: str):
+        super().__init__(config)
+        self.project_name = project_name
+
+    @contextproperty
+    def var(self) -> ConfiguredVar:
+        return ConfiguredVar(
+            self._ctx, self.config, self.project_name
+        )
 
 
 FlatNamespace = Dict[str, MacroGenerator]
@@ -133,4 +181,11 @@ def generate_query_header_context(
     config: AdapterRequiredConfig, manifest: Manifest
 ):
     ctx = QueryHeaderContext(config, manifest)
+    return ctx.to_dict()
+
+
+def generate_schema_yml(
+    config: AdapterRequiredConfig, project_name: str
+) -> Dict[str, Any]:
+    ctx = SchemaYamlContext(config, project_name)
     return ctx.to_dict()
