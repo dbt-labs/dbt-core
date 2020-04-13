@@ -80,9 +80,7 @@ class SchemaYamlContext(ConfiguredContext):
 
     @contextproperty
     def var(self) -> ConfiguredVar:
-        return ConfiguredVar(
-            self._ctx, self.config, self._project_name
-        )
+        return ConfiguredVar(self._ctx, self.config, self._project_name)
 
     @contextmember
     def env_var(self, var: str, default: Optional[str] = None) -> str:
