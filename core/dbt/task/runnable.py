@@ -397,7 +397,7 @@ class GraphRunnableTask(ManifestTask):
         pass
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        with adapter.connection_named('master'):
+        with adapter.connection_named("master"):
             self.populate_adapter_cache(adapter)
 
     def after_run(self, adapter, results):
