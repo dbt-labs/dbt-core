@@ -138,7 +138,8 @@
 {% endmacro %}
 
 {% macro default__alter_column_comment(relation, column_name, new_column_type) -%}
-  {{ log("This is not consistently implemented yet") }}
+  {{ exceptions.raise_not_implemented(
+    'alter_column_comment macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
 {% macro alter_relation_comment(relation, relation_comment) -%}
@@ -146,7 +147,8 @@
 {% endmacro %}
 
 {% macro default__alter_relation_comment(relation, relation_comment) -%}
-  {{ log("This is not consistently implemented yet") }}
+  {{ exceptions.raise_not_implemented(
+    'alter_relation_comment macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
 

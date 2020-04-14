@@ -34,7 +34,7 @@
     {{ exceptions.raise_compiler_error("Invalid value provided for 'persist_docs'. Expected dict but got value: " ~ raw_persist_docs) }}
   {% endif %}
 
-  {% if persist_docs.get('columns', false) %}
+  {% if persist_docs.get('columns', false) and model.columns|length != 0 %}
     {{ return(model.columns) }}
   {%- else -%}
     {{ return(none) }}

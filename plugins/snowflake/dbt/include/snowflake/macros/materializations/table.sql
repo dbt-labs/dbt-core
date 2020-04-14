@@ -25,15 +25,6 @@
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-  -- add in table comments
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
-
-  {%- set table_comment = get_relation_comment(raw_persist_docs, model) -%}
-  {%- set column_comment = get_relation_column_comments(raw_persist_docs, model) -%}
-
-  {{ alter_relation_comment(target_relation, table_comment) }}
-  {{ alter_column_comment(target_relation, column_comment) }}
-
   -- `COMMIT` happens here
   {{ adapter.commit() }}
 
