@@ -425,6 +425,18 @@ def render_template(template, ctx: Dict[str, Any], node=None) -> str:
         return template.render(ctx)
 
 
+def _requote_result(raw_value, rendered):
+    double_quoted = raw_value.startswith('"') and raw_value.endswith('"')
+    single_quoted = raw_value.startswith("'") and raw_value.endswith("'")
+    if double_quoted:
+        quote_char = '"'
+    elif single_quoted:
+        quote_char = "'"
+    else:
+        quote_char = ''
+    return f'{quote_char}{rendered}{quote_char}'
+
+
 def get_rendered(
     string: str,
     ctx: Dict[str, Any],
@@ -440,7 +452,11 @@ def get_rendered(
         native=native,
     )
 
-    return render_template(template, ctx, node)
+    result = render_template(template, ctx, node)
+
+    if native and isinstance(result, str):
+        result = _requote_result(string, result)
+    return result
 
 
 def undefined_error(msg) -> NoReturn:
