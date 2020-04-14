@@ -68,6 +68,7 @@
   {%- endif %} view {{ relation }} {% if copy_grants -%} copy grants {%- endif %} as (
     {{ sql }}
   );
+<<<<<<< HEAD
 
 <<<<<<< HEAD
   {% if relation_comment is not none -%}
@@ -76,6 +77,8 @@
 
 =======
 >>>>>>> ff65dbdd... adding in Drews feedback
+=======
+>>>>>>> 4a84a256... fixing spacing
 {% endmacro %}
 
 {% macro snowflake__get_columns_in_relation(relation) -%}
@@ -184,9 +187,9 @@
 
 
 {% macro snowflake__alter_column_comment(relation, column_dict) -%}
-    alter {{ relation.type }} {{ relation }} alter 
+    alter {{ relation.type }} {{ relation }} alter
     {% for column_name in column_dict %}
-        {{ column_name }} COMMENT $${{ column_dict[column_name]['description'] | replace('$', '[$]') }}$$ {{ ',' if not loop.last else ';' }} 
+        {{ column_name }} COMMENT $${{ column_dict[column_name]['description'] | replace('$', '[$]') }}$$ {{ ',' if not loop.last else ';' }}
     {% endfor %}
 {% endmacro %}
 
