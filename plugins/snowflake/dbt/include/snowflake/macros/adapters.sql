@@ -57,6 +57,10 @@
   {%- set sql_header = config.get('sql_header', none) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set relation_comment = get_relation_comment(raw_persist_docs, model) -%}
+<<<<<<< HEAD
+=======
+  {%- set column_comment = get_relation_column_comments(raw_persist_docs, model) -%}
+>>>>>>> ff65dbdd... adding in Drews feedback
 
   {{ sql_header if sql_header is not none }}
   create or replace {% if secure -%}
@@ -65,10 +69,13 @@
     {{ sql }}
   );
 
+<<<<<<< HEAD
   {% if relation_comment is not none -%}
     {{ alter_relation_comment(relation, relation_comment) }}
   {%- endif -%}
 
+=======
+>>>>>>> ff65dbdd... adding in Drews feedback
 {% endmacro %}
 
 {% macro snowflake__get_columns_in_relation(relation) -%}
