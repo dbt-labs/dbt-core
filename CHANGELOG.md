@@ -17,6 +17,7 @@
 - When a Redshift table is defined as "auto", don't provide diststyle ([#2246](https://github.com/fishtown-analytics/dbt/issues/2246), [#2298](https://github.com/fishtown-analytics/dbt/pull/2298))
 - Made file names lookups case-insensitve (.sql, .SQL, .yml, .YML) and if .yaml files are found, raise a warning indicating dbt will parse these files in future releases. ([#1681](https://github.com/fishtown-analytics/dbt/issues/1681), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263))
 - Return error message when profile is empty in profiles.yml. ([#2292](https://github.com/fishtown-analytics/dbt/issues/2292), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
+- Fix skipped node count in stdout at the end of a run ([#2095](https://github.com/fishtown-analytics/dbt/issues/2095), [#2310](https://github.com/fishtown-analytics/dbt/pull/2310))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
