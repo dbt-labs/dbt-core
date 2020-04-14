@@ -534,8 +534,8 @@ def _requote_result(raw_value: str, rendered: str) -> str:
     elif single_quoted:
         quote_char = "'"
     else:
-        quote_char = ''
-    return f'{quote_char}{rendered}{quote_char}'
+        quote_char = ""
+    return f"{quote_char}{rendered}{quote_char}"
 
 
 # performance note: Local benmcharking (so take it with a big grain of salt!)
