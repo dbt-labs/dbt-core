@@ -65,7 +65,6 @@
   {%- endif %} view {{ relation }} {% if copy_grants -%} copy grants {%- endif %} as (
     {{ sql }}
   );
-
 {% endmacro %}
 
 {% macro snowflake__get_columns_in_relation(relation) -%}
