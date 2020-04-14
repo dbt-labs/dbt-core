@@ -340,11 +340,16 @@ class GraphRunnableTask(ManifestTask):
         for dep_node_id in self.linker.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
+    def populate_adapter_cache(self, adapter):
+        adapter.set_relations_cache(self.manifest)
+
     def before_hooks(self, adapter):
         pass
 
     def before_run(self, adapter, selected_uids):
-        pass
+        with adapter.connection_named('master'):
+            self.create_schemas(adapter, selected_uids)
+            self.populate_adapter_cache(adapter)
 
     def after_run(self, adapter, results):
         pass

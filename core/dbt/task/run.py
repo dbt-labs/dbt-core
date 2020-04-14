@@ -88,9 +88,6 @@ class RunTask(CompileTask):
     def raise_on_first_error(self):
         return False
 
-    def populate_adapter_cache(self, adapter):
-        adapter.set_relations_cache(self.manifest)
-
     def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
         compiled = compile_node(adapter, self.config, hook, self.manifest,
                                 extra_context)
@@ -195,9 +192,8 @@ class RunTask(CompileTask):
             .format(stat_line=stat_line, execution=execution))
 
     def before_run(self, adapter, selected_uids):
+        super().before_run(adapter, selected_uids)
         with adapter.connection_named('master'):
-            self.create_schemas(adapter, selected_uids)
-            self.populate_adapter_cache(adapter)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):
