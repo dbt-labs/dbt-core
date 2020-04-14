@@ -99,22 +99,22 @@
 
 
 {% macro snowflake__list_relations_without_caching(information_schema, schema) %}
-  {% call statement('list_relations_without_caching', fetch_result=True) -%}
-    select
-      table_catalog as database,
-      table_name as name,
-      table_schema as schema,
-      case when table_type = 'BASE TABLE' then 'table'
-           when table_type = 'VIEW' then 'view'
-           when table_type = 'MATERIALIZED VIEW' then 'materializedview'
-           when table_type = 'EXTERNAL TABLE' then 'external'
-           else table_type
-      end as table_type
-    from {{ information_schema }}.tables
-    where table_schema ilike '{{ schema }}'
-      and table_catalog ilike '{{ information_schema.database.lower() }}'
-  {% endcall %}
-  {{ return(load_result('list_relations_without_caching').table) }}
+  {%- set db_name = adapter.quote_as_configured(information_schema.database, 'database') -%}
+  {%- set schema_name = adapter.quote_as_configured(schema, 'schema') -%}
+  {%- set sql -%}
+    show terse objects in {{ db_name }}.{{ schema_name }}
+  {%- endset -%}
+
+  {%- set result = run_query(sql) -%}
+  {% set maximum = 10000 %}
+  {% if (result | length) >= maximum %}
+    {% set msg %}
+      Too many schemas in schema {{ database }}.{{ schema }}! dbt can only get
+      information about schemas with fewer than {{ maximum }} objects.
+    {% endset %}
+    {% do exceptions.raise_compiler_error(msg) %}
+  {% endif %}
+  {%- do return(result) -%}
 {% endmacro %}
 
 
