@@ -120,12 +120,10 @@ class Column:
         return "<Column {} ({})>".format(self.name, self.data_type)
 
     @classmethod
-    def from_description(cls, name: str, raw_data_type: str) -> 'Column':
-        match = re.match(r'([^(]+)(\([^)]+\))?', raw_data_type)
+    def from_description(cls, name: str, raw_data_type: str) -> "Column":
+        match = re.match(r"([^(]+)(\([^)]+\))?", raw_data_type)
         if match is None:
-            raise RuntimeException(
-                f'Could not interpret data type "{raw_data_type}"'
-            )
+            raise RuntimeException(f'Could not interpret data type "{raw_data_type}"')
         data_type, size_info = match.groups()
         char_size = None
         numeric_precision = None
@@ -133,7 +131,7 @@ class Column:
         if size_info is not None:
             # strip out the parentheses
             size_info = size_info[1:-1]
-            parts = size_info.split(',')
+            parts = size_info.split(",")
             if len(parts) == 1:
                 try:
                     char_size = int(parts[0])
@@ -158,6 +156,4 @@ class Column:
                         f'could not convert "{parts[1]}" to an integer'
                     )
 
-        return cls(
-            name, data_type, char_size, numeric_precision, numeric_scale
-        )
+        return cls(name, data_type, char_size, numeric_precision, numeric_scale)
