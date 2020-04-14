@@ -105,22 +105,6 @@ class NativeSandboxEnvironment(MacroFuzzEnvironment):
 class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
     environment_class = NativeSandboxEnvironment
 
-    def render(self, *args, **kwargs):
-        """Render the template to produce a native Python type. If the
-        result is a single node, its value is returned. Otherwise, the
-        nodes are concatenated as strings. If the result can be parsed
-        with :func:`ast.literal_eval`, the parsed value is returned.
-        Otherwise, the string is returned.
-        """
-        vars = dict(*args, **kwargs)
-        try:
-            return jinja2.nativetypes.native_concat(
-                self.root_render_func(self.new_context(vars)),
-                preserve_quotes=True
-            )
-        except Exception:
-            return self.environment.handle_exception()
-
 
 NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
 
@@ -441,6 +425,18 @@ def render_template(template, ctx: Dict[str, Any], node=None) -> str:
         return template.render(ctx)
 
 
+def _requote_result(raw_value, rendered):
+    double_quoted = raw_value.startswith('"') and raw_value.endswith('"')
+    single_quoted = raw_value.startswith("'") and raw_value.endswith("'")
+    if double_quoted:
+        quote_char = '"'
+    elif single_quoted:
+        quote_char = "'"
+    else:
+        quote_char = ''
+    return f'{quote_char}{rendered}{quote_char}'
+
+
 def get_rendered(
     string: str,
     ctx: Dict[str, Any],
@@ -456,7 +452,11 @@ def get_rendered(
         native=native,
     )
 
-    return render_template(template, ctx, node)
+    result = render_template(template, ctx, node)
+
+    if native and isinstance(result, str):
+        result = _requote_result(string, result)
+    return result
 
 
 def undefined_error(msg) -> NoReturn:

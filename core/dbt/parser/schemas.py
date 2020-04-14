@@ -196,21 +196,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         for test in column.tests:
             self.parse_test(block, test, column)
 
-    def _build_raw_test_keyword_args(
-        self, parsed_node: ParsedSchemaTestNode, builder: TestBuilder
-    ) -> Dict[str, Any]:
-        """Build up the test keyword arguments."""
-        kwargs = parsed_node.test_metadata.kwargs.copy()
-        if isinstance(builder.target, UnparsedNodeUpdate):
-            fmt = "{{{{ ref('{0.name}') }}}}"
-        elif isinstance(builder.target, SourceTarget):
-            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
-        else:
-            raise TypeError(f'invalid target type "{type(builder.target)}"')
-
-        kwargs['model'] = fmt.format(builder.target)
-        return kwargs
-
     def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the
