@@ -12,6 +12,7 @@ import dbt.flags as flags
 from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery.relation import BigQueryInformationSchema
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
@@ -312,6 +313,60 @@ class TestBigQueryRelation(unittest.TestCase):
         }
         with self.assertRaises(hologram.ValidationError):
             BigQueryRelation.from_dict(kwargs)
+
+
+class TestBigQueryInformationSchema(unittest.TestCase):
+    def setUp(self):
+        flags.STRICT_MODE = True
+
+    def test_replace(self):
+
+        kwargs = {
+            'type': None,
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'my_view'
+            },
+            # test for #2188
+            'quote_policy': {
+                'database': False
+            },
+            'include_policy': {
+                'database': True,
+                'schema': True,
+                'identifier': True,
+            }
+        }
+        relation = BigQueryRelation.from_dict(kwargs)
+        info_schema = relation.information_schema()
+
+        tables_schema = info_schema.replace(information_schema_view='__TABLES__')
+        assert tables_schema.information_schema_view == '__TABLES__'
+        assert tables_schema.include_policy.schema is True
+        assert tables_schema.include_policy.identifier is False
+        assert tables_schema.include_policy.database is True
+        assert tables_schema.quote_policy.schema is True
+        assert tables_schema.quote_policy.identifier is False
+        assert tables_schema.quote_policy.database is False
+
+        schemata_schema = info_schema.replace(information_schema_view='SCHEMATA')
+        assert schemata_schema.information_schema_view == 'SCHEMATA'
+        assert schemata_schema.include_policy.schema is False
+        assert schemata_schema.include_policy.identifier is True
+        assert schemata_schema.include_policy.database is True
+        assert schemata_schema.quote_policy.schema is True
+        assert schemata_schema.quote_policy.identifier is False
+        assert schemata_schema.quote_policy.database is False
+
+        other_schema = info_schema.replace(information_schema_view='SOMETHING_ELSE')
+        assert other_schema.information_schema_view == 'SOMETHING_ELSE'
+        assert other_schema.include_policy.schema is True
+        assert other_schema.include_policy.identifier is True
+        assert other_schema.include_policy.database is True
+        assert other_schema.quote_policy.schema is True
+        assert other_schema.quote_policy.identifier is False
+        assert other_schema.quote_policy.database is False
 
 
 class TestBigQueryConnectionManager(unittest.TestCase):
