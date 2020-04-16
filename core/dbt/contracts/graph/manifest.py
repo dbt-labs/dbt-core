@@ -140,8 +140,10 @@ class SourceFile(JsonSchemaMixin):
     sources: List[str] = field(default_factory=list)
     # any node patches in this file. The entries are names, not unique ids!
     patches: List[str] = field(default_factory=list)
-    # any macro patches in this file. The entries are pacakge, name pairs.
+    # any macro patches in this file. The entries are package, name pairs.
     macro_patches: List[MacroKey] = field(default_factory=list)
+    # any source patches in this file. The entries are package, name pairs
+    source_patches: List[Tuple[str, str]] = field(default_factory=list)
 
     @property
     def search_key(self) -> Optional[str]:

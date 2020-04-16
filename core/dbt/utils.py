@@ -412,10 +412,12 @@ class ForgivingJSONEncoder(JSONEncoder):
 
 
 def translate_aliases(
-    kwargs: Dict[str, Any], aliases: Dict[str, str]
+    kwargs: Dict[str, Any], aliases: Dict[str, str], recurse: bool = False,
 ) -> Dict[str, Any]:
     """Given a dict of keyword arguments and a dict mapping aliases to their
     canonical values, canonicalize the keys in the kwargs dict.
+
+    If recurse is True, perform this operation recursively.
 
     :return: A dict continaing all the values in kwargs referenced by their
         canonical key.
@@ -434,9 +436,12 @@ def translate_aliases(
                 'Got duplicate keys: ({}) all map to "{}"'
                 .format(key_names, canonical_key)
             )
-
+        if recurse:
+            if isinstance(value, dict):
+                value = translate_aliases(value, aliases, recurse)
+            elif isinstance(value, list):
+                value = [translate_aliases(v, aliases, recurse) for v in value]
         result[canonical_key] = value
-
     return result
 
 

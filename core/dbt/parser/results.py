@@ -23,11 +23,12 @@ from dbt.contracts.graph.parsed import (
     ParsedSnapshotNode,
     ParsedSourceDefinition,
 )
+from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
     raise_duplicate_macro_patch_name, CompilationException, InternalException,
-    raise_compiler_error,
+    raise_compiler_error, raise_duplicate_source_patch_name
 )
 from dbt.node_types import NodeType
 from dbt.ui import printer
@@ -72,6 +73,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     macros: MutableMapping[str, ParsedMacro] = dict_field()
     macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
+    source_patches: MutableMapping[str, SourcePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
     disabled: MutableMapping[str, List[CompileResultNode]] = dict_field()
     dbt_version: str = __version__
@@ -140,7 +142,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     def add_patch(
         self, source_file: SourceFile, patch: ParsedNodePatch
     ) -> None:
-        # matches can't be overwritten
+        # patches can't be overwritten
         if patch.name in self.patches:
             raise_duplicate_patch_name(patch, self.patches[patch.name])
         self.patches[patch.name] = patch
@@ -155,6 +157,16 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             raise_duplicate_macro_patch_name(patch, self.macro_patches[key])
         self.macro_patches[key] = patch
         self.get_file(source_file).macro_patches.append(key)
+
+    def add_source_patch(
+        self, source_file: SourceFile, patch: SourcePatch
+    ) -> None:
+        # source patches must be unique
+        key = (patch.overrides, patch.name)
+        if key in self.source_patches:
+            raise_duplicate_source_patch_name(patch, self.source_patches[key])
+        self.source_patches[key] = patch
+        self.get_file(source_file).source_patches.append(key)
 
     def _get_disabled(
         self,

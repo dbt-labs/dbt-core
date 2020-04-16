@@ -798,6 +798,17 @@ def raise_duplicate_macro_patch_name(patch_1, patch_2):
     )
 
 
+def raise_duplicate_source_patch_name(patch_1, patch_2):
+    name = f'{patch_1.source_name}.{patch_1.table_name}'
+    raise_compiler_error(
+        f'dbt found two schema.yml entries for the same resource named '
+        f'{name}. Resources and their associated columns may only be '
+        f'described a single time. To fix this, remove the resource entry '
+        f'for {name} in one of these files:\n  - '
+        f'{patch_1.original_file_path}\n  - {patch_2.original_file_path}'
+    )
+
+
 def raise_invalid_schema_yml_version(path, issue):
     raise_compiler_error(
         'The schema file at {} is invalid because {}. Please consult the '

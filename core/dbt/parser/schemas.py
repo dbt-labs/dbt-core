@@ -28,7 +28,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition, UnparsedNodeUpdate, UnparsedColumn,
-    UnparsedMacroUpdate, UnparsedAnalysisUpdate,
+    UnparsedMacroUpdate, UnparsedAnalysisUpdate, SourcePatch,
     UnparsedSourceTableDefinition, FreshnessThreshold,
 )
 from dbt.exceptions import (
@@ -529,12 +529,24 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         path = self.yaml.path.original_file_path
 
         for data in self.get_key_dicts():
+            data = self.project.credentials.translate_aliases(
+                data, recurse=True
+            )
+
+            is_override = 'overrides' in data
+            if is_override:
+                cls = SourcePatch
+            else:
+                cls = UnparsedSourceDefinition
+
             try:
-                data = self.project.credentials.translate_aliases(data)
-                source = UnparsedSourceDefinition.from_dict(data)
+                source = cls.from_dict()
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
                 raise CompilationException(msg) from exc
+
+            if is_override:
+                self.results.add_source_patch(source)
             else:
                 for table in source.tables:
                     yield SourceTarget(source, table)

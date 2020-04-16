@@ -243,9 +243,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold
     )
-    external: Optional[ExternalTable] = field(
-        default_factory=ExternalTable
-    )
+    external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
 
@@ -268,6 +266,50 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     @property
     def yaml_key(self) -> 'str':
         return 'sources'
+
+
+@dataclass
+class UnparsedSourceTablePatch(HasColumnDocs, HasTests):
+    loaded_at_field: Optional[str] = None
+    identifier: Optional[str] = None
+    quoting: Quoting = field(default_factory=Quoting)
+    freshness: Optional[FreshnessThreshold] = field(
+        default_factory=FreshnessThreshold
+    )
+    external: Optional[ExternalTable] = None
+    tags: Optional[List[str]] = None
+
+
+SourceTablePatch = Union[
+    UnparsedSourceTablePatch, UnparsedSourceTableDefinition
+]
+
+
+@dataclass
+class SourcePatch(JsonSchemaMixin, Replaceable):
+    name: str = field(
+        metadata=dict(description='The name of the source to override'),
+    )
+    overrides: str = field(
+        metadata=dict(description='The package of the source to override'),
+    )
+    description: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+    database: Optional[str] = None
+    schema: Optional[str] = None
+    loader: Optional[str] = None
+    quoting: Optional[Quoting] = None
+    freshness: Optional[Optional[FreshnessThreshold]] = field(
+        default_factory=FreshnessThreshold
+    )
+    loaded_at_field: Optional[str] = None
+    tables: Optional[List[SourceTablePatch]] = None
+    tags: Optional[List[str]] = None
+
+
+@dataclass
+class SourcesContainer(ExtensibleJsonSchemaMixin):
+    sources: List[Union[UnparsedSourceDefinition, SourcePatch]]
 
 
 @dataclass
