@@ -100,7 +100,7 @@ def get_hooks_by_tags(
 
 def get_hook(source, index):
     hook_dict = get_hook_dict(source)
-    hook_dict.setdefault('index', index)
+    hook_dict.setdefault("index", index)
     Hook.validate(hook_dict)
     return Hook.from_dict(hook_dict)
 
