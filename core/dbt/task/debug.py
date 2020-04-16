@@ -182,9 +182,11 @@ class DebugTask(BaseTask):
         project_profile: Optional[str] = None
         if os.path.exists(self.project_path):
             try:
-                project_profile = Project.partial_load(
+                partial = Project.partial_load(
                     os.path.dirname(self.project_path)
-                ).profile_name
+                )
+                renderer = ConfigRenderer(generate_base_context(self.cli_vars))
+                project_profile = partial.render_profile_name(renderer)
             except dbt.exceptions.DbtProjectError:
                 pass
 

@@ -1,5 +1,6 @@
 import json
 import os
+import io
 import random
 import shutil
 import tempfile
@@ -536,6 +537,22 @@ class DBTIntegrationTest(unittest.TestCase):
             "dbt exit state did not match expected")
 
         return res
+
+
+    def run_dbt_and_capture(self, *args, **kwargs):
+        try:
+            initial_stdout = log_manager.stdout
+            initial_stderr = log_manager.stderr
+            stringbuf = io.StringIO()
+            log_manager.set_output_stream(stringbuf)
+
+            res = self.run_dbt(*args, **kwargs)
+            stdout = stringbuf.getvalue()
+
+        finally:
+            log_manager.set_output_stream(initial_stdout, initial_stderr)
+
+        return res, stdout
 
     def run_dbt_and_check(self, args=None, strict=True, parser=False, profiles_dir=True):
         log_manager.reset_handlers()

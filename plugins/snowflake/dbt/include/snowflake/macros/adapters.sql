@@ -52,31 +52,25 @@
 {% endmacro %}
 
 {% macro snowflake__get_columns_in_relation(relation) -%}
-  {% call statement('get_columns_in_relation', fetch_result=True) %}
-      select
-          column_name,
-          data_type,
-          character_maximum_length,
-          numeric_precision,
-          numeric_scale
+  {%- set sql -%}
+    describe table {{ relation }}
+  {%- endset -%}
+  {%- set result = run_query(sql) -%}
 
-      from
-      {{ relation.information_schema('columns') }}
+  {% set maximum = 10000 %}
+  {% if (result | length) >= maximum %}
+    {% set msg %}
+      Too many columns in relation {{ relation }}! dbt can only get
+      information about relations with fewer than {{ maximum }} columns.
+    {% endset %}
+    {% do exceptions.raise_compiler_error(msg) %}
+  {% endif %}
 
-      where table_name ilike '{{ relation.identifier }}'
-        {% if relation.schema %}
-        and table_schema ilike '{{ relation.schema }}'
-        {% endif %}
-        {% if relation.database %}
-        and table_catalog ilike '{{ relation.database }}'
-        {% endif %}
-      order by ordinal_position
-
-  {% endcall %}
-
-  {% set table = load_result('get_columns_in_relation').table %}
-  {{ return(sql_convert_columns_in_relation(table)) }}
-
+  {% set columns = [] %}
+  {% for row in result %}
+    {% do columns.append(api.Column.from_description(row['name'], row['type'])) %}
+  {% endfor %}
+  {% do return(columns) %}
 {% endmacro %}
 
 {% macro snowflake__list_schemas(database) -%}
@@ -99,22 +93,22 @@
 
 
 {% macro snowflake__list_relations_without_caching(information_schema, schema) %}
-  {% call statement('list_relations_without_caching', fetch_result=True) -%}
-    select
-      table_catalog as database,
-      table_name as name,
-      table_schema as schema,
-      case when table_type = 'BASE TABLE' then 'table'
-           when table_type = 'VIEW' then 'view'
-           when table_type = 'MATERIALIZED VIEW' then 'materializedview'
-           when table_type = 'EXTERNAL TABLE' then 'external'
-           else table_type
-      end as table_type
-    from {{ information_schema }}.tables
-    where table_schema ilike '{{ schema }}'
-      and table_catalog ilike '{{ information_schema.database.lower() }}'
-  {% endcall %}
-  {{ return(load_result('list_relations_without_caching').table) }}
+  {%- set db_name = adapter.quote_as_configured(information_schema.database, 'database') -%}
+  {%- set schema_name = adapter.quote_as_configured(schema, 'schema') -%}
+  {%- set sql -%}
+    show terse objects in {{ db_name }}.{{ schema_name }}
+  {%- endset -%}
+
+  {%- set result = run_query(sql) -%}
+  {% set maximum = 10000 %}
+  {% if (result | length) >= maximum %}
+    {% set msg %}
+      Too many schemas in schema {{ database }}.{{ schema }}! dbt can only get
+      information about schemas with fewer than {{ maximum }} objects.
+    {% endset %}
+    {% do exceptions.raise_compiler_error(msg) %}
+  {% endif %}
+  {%- do return(result) -%}
 {% endmacro %}
 
 

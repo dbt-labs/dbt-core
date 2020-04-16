@@ -112,7 +112,6 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('BASE_USERS' in created_models)
         self.assertFalse('EMAILS' in created_models)
 
-
     @use_profile('postgres')
     def test__postgres__specific_model_and_parents(self):
         self.run_sql_file("seed.sql")
@@ -143,13 +142,12 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('BASE_USERS' in created_models)
         self.assertFalse('EMAILS' in created_models)
 
-
     @use_profile('postgres')
     def test__postgres__specific_model_with_exclusion(self):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(
-            ['run', '--models', '+users_rollup', '--exclude', 'users_rollup']
+            ['run', '--models', '+users_rollup', '--exclude', 'models/users_rollup.sql']
         )
         self.assertEqual(len(results),  1)
 
@@ -178,6 +176,17 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__locally_qualified_name(self):
         results = self.run_dbt(['run', '--models', 'test.subdir'])
+        self.assertEqual(len(results), 2)
+
+        created_models = self.get_models_in_schema()
+        self.assertNotIn('users_rollup', created_models)
+        self.assertNotIn('base_users', created_models)
+        self.assertNotIn('emails', created_models)
+        self.assertIn('subdir', created_models)
+        self.assertIn('nested_users', created_models)
+        self.assert_correct_schemas()
+
+        results = self.run_dbt(['run', '--models', 'models/test/subdir*'])
         self.assertEqual(len(results), 2)
 
         created_models = self.get_models_in_schema()
@@ -218,7 +227,7 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('snowflake')
     def test__snowflake__skip_intermediate(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', '@users'])
+        results = self.run_dbt(['run', '--models', '@models/users.sql'])
         # base_users, emails, users_rollup, users_rollup_dependency
         self.assertEqual(len(results), 4)
 

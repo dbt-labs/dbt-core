@@ -3,10 +3,12 @@
 Note that all imports should be inside the functions to avoid import/mocking
 issues.
 """
+import string
 import os
 from unittest import mock
 from unittest import TestCase
 
+import agate
 from hologram import ValidationError
 
 
@@ -161,3 +163,46 @@ def generate_name_macros(package):
             macro_sql=sql,
         )
         yield pm
+
+
+class TestAdapterConversions(TestCase):
+    def _get_tester_for(self, column_type):
+        from dbt.clients import agate_helper
+        if column_type is agate.TimeDelta:  # dbt never makes this!
+            return agate.TimeDelta()
+
+        for instance in agate_helper.DEFAULT_TYPE_TESTER._possible_types:
+            if type(instance) is column_type:
+                return instance
+
+        raise ValueError(f'no tester for {column_type}')
+
+    def _make_table_of(self, rows, column_types):
+        column_names = list(string.ascii_letters[:len(rows[0])])
+        if isinstance(column_types, type):
+            column_types = [self._get_tester_for(column_types) for _ in column_names]
+        else:
+            column_types = [self._get_tester_for(typ) for typ in column_types]
+        table = agate.Table(rows, column_names=column_names, column_types=column_types)
+        return table
+
+
+def MockMacro(package, name='my_macro', kwargs={}):
+    from dbt.contracts.graph.parsed import ParsedMacro
+    from dbt.node_types import NodeType
+
+    mock_kwargs = dict(
+        resource_type=NodeType.Macro,
+        package_name=package,
+        unique_id=f'macro.{package}.{name}',
+        original_file_path='/dev/null',
+    )
+
+    mock_kwargs.update(kwargs)
+
+    macro = mock.MagicMock(
+        spec=ParsedMacro,
+        **mock_kwargs
+    )
+    macro.name = name
+    return macro

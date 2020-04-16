@@ -29,7 +29,8 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
-    raise_invalid_schema_yml_version, ValidationException, CompilationException
+    raise_invalid_schema_yml_version, ValidationException,
+    CompilationException, warn_or_error
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
@@ -130,6 +131,20 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return NodeType.Test
 
     def get_paths(self):
+        # TODO: In order to support this, make FilesystemSearcher accept a list
+        # of file patterns. eg: ['.yml', '.yaml']
+        yaml_files = list(FilesystemSearcher(
+            self.project, self.project.all_source_paths, '.yaml'
+        ))
+        if yaml_files:
+            warn_or_error(
+                'A future version of dbt will parse files with both'
+                ' .yml and .yaml file extensions. dbt found'
+                f' {len(yaml_files)} files with .yaml extensions in'
+                ' your dbt project. To avoid errors when upgrading'
+                ' to a future release, either remove these files from'
+                ' your dbt project, or change their extensions.'
+            )
         return FilesystemSearcher(
             self.project, self.project.all_source_paths, '.yml'
         )
@@ -180,21 +195,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
 
         for test in column.tests:
             self.parse_test(block, test, column)
-
-    def _build_raw_test_keyword_args(
-        self, parsed_node: ParsedSchemaTestNode, builder: TestBuilder
-    ) -> Dict[str, Any]:
-        """Build up the test keyword arguments."""
-        kwargs = parsed_node.test_metadata.kwargs.copy()
-        if isinstance(builder.target, UnparsedNodeUpdate):
-            fmt = "{{{{ ref('{0.name}') }}}}"
-        elif isinstance(builder.target, SourceTarget):
-            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
-        else:
-            raise TypeError(f'invalid target type "{type(builder.target)}"')
-
-        kwargs['model'] = fmt.format(builder.target)
-        return kwargs
 
     def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that

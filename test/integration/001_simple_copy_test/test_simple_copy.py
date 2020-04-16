@@ -1,11 +1,8 @@
-import io
 import json
 import os
-from unittest import mock
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
-from dbt.logger import log_manager
 
 
 class BaseTestSimpleCopy(DBTIntegrationTest):
@@ -23,7 +20,9 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return self.seed_quote_cfg_with({})
+        return self.seed_quote_cfg_with({
+            'profile': '{{ "tes" ~ "t" }}'
+        })
 
     def seed_quote_cfg_with(self, extra):
         cfg = {
@@ -408,24 +407,14 @@ class TestQuotedDatabase(BaseTestSimpleCopy):
             "data-paths": [self.dir("seed-initial")],
         })
 
-    def setUp(self):
-        super().setUp()
-        self.initial_stdout = log_manager.stdout
-        self.initial_stderr = log_manager.stderr
-        self.stringbuf = io.StringIO()
-        log_manager.set_output_stream(self.stringbuf)
-
-    def tearDown(self):
-        log_manager.set_output_stream(self.initial_stdout, self.initial_stderr)
-        super().tearDown()
-
     def seed_get_json(self, expect_pass=True):
-        self.run_dbt(
+        results, output = self.run_dbt_and_capture(
             ['--debug', '--log-format=json', '--single-threaded', 'seed'],
             expect_pass=expect_pass
         )
+
         logs = []
-        for line in self.stringbuf.getvalue().split('\n'):
+        for line in output.split('\n'):
             try:
                 log = json.loads(line)
             except ValueError:
@@ -434,6 +423,7 @@ class TestQuotedDatabase(BaseTestSimpleCopy):
             if log['extra'].get('run_state') != 'internal':
                 continue
             logs.append(log)
+
         self.assertGreater(len(logs), 0)
         return logs
 

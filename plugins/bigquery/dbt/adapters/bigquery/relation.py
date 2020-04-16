@@ -65,7 +65,7 @@ class BigQueryInformationSchema(InformationSchema):
         if information_schema_view == '__TABLES__':
             identifier = False
 
-        return relation.quote_policy.replace(
+        return relation.include_policy.replace(
             schema=schema,
             identifier=identifier,
         )

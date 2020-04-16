@@ -69,6 +69,26 @@ class TestSimpleDependency(BaseDependencyTest):
         self.assertTablesEqual('source_override_model', 'seed', self.base_schema(), self.base_schema())
         self.assertTablesEqual('dep_source_model', 'seed', self.base_schema(), self.base_schema())
 
+    @use_profile('postgres')
+    def test_postgres_no_dependency_paths(self):
+        self.run_dbt(['deps'])
+        self.run_dbt(['seed'])
+        # this should work
+        local_path = os.path.join('local_models', 'my_model.sql')
+        results = self.run_dbt(
+            ['run', '--models',  f'+{local_path}']
+        )
+        # should run the dependency and my_model
+        self.assertEqual(len(results), 2)
+
+        # this should not work
+        dep_path = os.path.join('models', 'model_to_import.sql')
+        results = self.run_dbt(
+            ['run', '--models', f'+{dep_path}'],
+        )
+        # should not run the dependency, because it "doesn't exist".
+        self.assertEqual(len(results), 0)
+
 
 class TestMissingDependency(DBTIntegrationTest):
     @property
