@@ -523,11 +523,7 @@ class UnsetProfileConfig(RuntimeConfig):
         """
         project, profile = cls.collect_parts(args)
 
-        return cls.from_parts(
-            project=project,
-            profile=profile,
-            args=args
-        )
+        return cls.from_parts(project=project, profile=profile, args=args)
 
 
 UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
