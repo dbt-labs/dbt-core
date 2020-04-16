@@ -1,8 +1,6 @@
 import json
 import os
-from typing import (
-    Any, Dict, NoReturn, Optional, Mapping
-)
+from typing import Any, Dict, NoReturn, Optional, Mapping
 
 from dbt import flags
 from dbt import tracking
