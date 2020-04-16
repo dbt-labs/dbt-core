@@ -14,7 +14,7 @@
 - When a warn exception is not in a jinja do block, return an empty string instead of None ([#2222](https://github.com/fishtown-analytics/dbt/issues/2222), [#2259](https://github.com/fishtown-analytics/dbt/pull/2259))
 
 ### Under the hood
-- Added more tests for source inhertiance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
+- Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
