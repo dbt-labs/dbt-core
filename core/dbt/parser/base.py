@@ -162,13 +162,17 @@ class ConfiguredParser(
     def default_database(self):
         return self.root_project.credentials.database
 
+    def get_fqn_prefix(self, path: str) -> List[str]:
+        no_ext = os.path.splitext(path)[0]
+        fqn = [self.project.project_name]
+        fqn.extend(dbt.utils.split_path(no_ext)[:-1])
+        return fqn
+
     def get_fqn(self, path: str, name: str) -> List[str]:
         """Get the FQN for the node. This impacts node selection and config
         application.
         """
-        no_ext = os.path.splitext(path)[0]
-        fqn = [self.project.project_name]
-        fqn.extend(dbt.utils.split_path(no_ext)[:-1])
+        fqn = self.get_fqn_prefix(path)
         fqn.append(name)
         return fqn
 

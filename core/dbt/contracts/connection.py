@@ -3,7 +3,6 @@ import itertools
 from dataclasses import dataclass, field
 from typing import (
     Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
-    TypeVar
 )
 from typing_extensions import Protocol
 

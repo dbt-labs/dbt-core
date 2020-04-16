@@ -1,8 +1,6 @@
 from hologram.helpers import StrEnum
 import json
 
-from dbt.contracts.graph.parsed import Hook
-
 from typing import Union, Dict, Any
 
 
@@ -21,9 +19,3 @@ def get_hook_dict(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
         return json.loads(source)
     except ValueError:
         return {'sql': source}
-
-
-def get_hook(source, index):
-    hook_dict = get_hook_dict(source)
-    hook_dict.setdefault('index', index)
-    return Hook.from_dict(hook_dict)
