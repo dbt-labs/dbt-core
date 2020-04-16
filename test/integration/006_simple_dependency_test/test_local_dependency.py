@@ -35,6 +35,11 @@ class BaseDependencyTest(DBTIntegrationTest):
             ]
         }
 
+    def run_dbt(self, *args, **kwargs):
+        strict = kwargs.pop('strict', False)
+        kwargs['strict'] = strict
+        return super().run_dbt(*args, **kwargs)
+
 
 class TestSimpleDependency(BaseDependencyTest):
 
@@ -76,7 +81,7 @@ class TestSimpleDependency(BaseDependencyTest):
         # this should work
         local_path = os.path.join('local_models', 'my_model.sql')
         results = self.run_dbt(
-            ['run', '--models',  f'+{local_path}']
+            ['run', '--models',  f'+{local_path}'],
         )
         # should run the dependency and my_model
         self.assertEqual(len(results), 2)
@@ -103,7 +108,7 @@ class TestMissingDependency(DBTIntegrationTest):
     def test_postgres_missing_dependency(self):
         # dbt should raise a dbt exception, not raise a parse-time TypeError.
         with self.assertRaises(dbt.exceptions.Exception) as exc:
-            self.run_dbt(['compile'])
+            self.run_dbt(['compile'], strict=False)
         message = str(exc.exception)
         self.assertIn('no_such_dependency', message)
         self.assertIn('is undefined', message)
@@ -123,6 +128,11 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         return {
             'config-version': 2,
             'macro-paths': ['schema_override_macros'],
+            'models': {
+                'config': {
+                    'schema': 'dbt_test',
+                },
+            },
             'seeds': {
                 'config': {
                     'schema': 'dbt_test',
@@ -229,6 +239,11 @@ class TestSimpleDependencyDuplicateName(DBTIntegrationTest):
                 }
             ]
         }
+
+    def run_dbt(self, *args, **kwargs):
+        strict = kwargs.pop('strict', False)
+        kwargs['strict'] = strict
+        return super().run_dbt(*args, **kwargs)
 
     @use_profile('postgres')
     def test_postgres_local_dependency_same_name(self):

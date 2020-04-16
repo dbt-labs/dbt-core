@@ -6,6 +6,7 @@ from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union
 import dbt.exceptions
 import dbt.flags
 
+from dbt import deprecations
 from dbt.helper_types import PathSet
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
@@ -331,6 +332,9 @@ class ManifestLoader:
     ) -> Manifest:
         with PARSING_STATE:
             projects = root_config.load_dependencies()
+            for project in projects.values():
+                if project.config_version == 1:
+                    deprecations.warn('dbt-project-yaml-v1')
             loader = cls(root_config, projects, macro_hook)
             loader.load(internal_manifest=internal_manifest)
             loader.write_parse_results()

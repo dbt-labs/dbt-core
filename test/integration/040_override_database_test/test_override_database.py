@@ -109,17 +109,22 @@ class TestProjectModelOverride(BaseOverrideDatabase):
             func = lambda x: x
 
         self.use_default_project({
+            'config-version': 2,
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
             'models': {
-                'vars': {
-                    'alternate_db': self.alternative_database,
+                'config': {
+                    'database': self.alternative_database,
                 },
-                'database': self.alternative_database,
                 'test': {
                     'subfolder': {
-                        'database': self.default_database,
-                    },
-                },
-            }
+                        'config': {
+                            'database': self.default_database,
+                        }
+                    }
+                }
+            },
         })
         self.run_dbt_notstrict(['seed'])
 
@@ -149,7 +154,12 @@ class TestProjectSeedOverride(BaseOverrideDatabase):
             func = lambda x: x
 
         self.use_default_project({
-            'seeds': {'database': self.alternative_database}
+            'config-version': 2,
+            'seeds': {
+                'config': {
+                    'database': self.alternative_database
+                },
+            },
         })
         self.run_dbt_notstrict(['seed'])
 

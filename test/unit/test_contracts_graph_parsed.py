@@ -1323,7 +1323,6 @@ class TestParsedSourceDefinition(ContractTestCase):
             'tags': [],
             'config': {
                 'enabled': True,
-                'quoting': {},
             }
         }
         source_def = self.ContractType(

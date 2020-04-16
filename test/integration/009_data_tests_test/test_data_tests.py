@@ -11,6 +11,7 @@ class TestDataTests(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "test-paths": [self.test_path]
         }
 

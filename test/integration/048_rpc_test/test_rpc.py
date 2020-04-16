@@ -22,7 +22,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
     def __init__(self, port, profiles_dir, cli_vars=None):
         self.port = port
         handle_and_check_args = [
-            '--strict', 'rpc', '--log-cache-events',
+            'rpc', '--log-cache-events',
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]

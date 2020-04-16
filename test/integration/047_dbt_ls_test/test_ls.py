@@ -225,7 +225,6 @@ class TestStrictUndefined(DBTIntegrationTest):
             'json': {
                 'config': {
                     'enabled': True,
-                    'quoting': {},
                 },
                 'package_name': 'test',
                 'name': 'my_table',

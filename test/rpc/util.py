@@ -37,7 +37,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         self.criteria = criteria
         self.error = None
         handle_and_check_args = [
-            '--strict', 'rpc', '--log-cache-events',
+            'rpc', '--log-cache-events',
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]
@@ -473,6 +473,7 @@ class ProjectDefinition:
         seeds=None,
     ):
         self.project = {
+            'config-version': 2,
             'name': name,
             'version': version,
             'profile': profile,

@@ -17,12 +17,12 @@ class BaseTestDeprecations(DBTIntegrationTest):
     def dir(path):
         return path.lstrip("/")
 
+
+class TestDeprecations(BaseTestDeprecations):
     @property
     def models(self):
         return self.dir("models")
 
-
-class TestDeprecations(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_deprecations_fail(self):
         self.run_dbt(strict=True, expect_pass=False)
@@ -78,4 +78,30 @@ class TestModelsKeyMismatchDeprecation(BaseTestDeprecations):
         self.assertEqual(deprecations.active_deprecations, set())
         self.run_dbt(strict=False)
         expected = {'models-key-mismatch'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+
+class TestDbtProjectYamlV1Deprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return 'boring-models'
+
+    @property
+    def project_config(self):
+        # No config-version set!
+        return {}
+
+    @use_profile('postgres')
+    def test_postgres_project_deprecations_fail(self):
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(strict=True)
+
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        self.assertIn('dbt_project.yml has been upgraded to config version 2', exc_str)
+
+    @use_profile('postgres')
+    def test_postgres_project_deprecations(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(strict=False)
+        expected = {'dbt-project-yaml-v1'}
         self.assertEqual(expected, deprecations.active_deprecations)

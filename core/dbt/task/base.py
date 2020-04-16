@@ -2,6 +2,7 @@ import os
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union
 
+from dbt import deprecations
 from dbt.adapters.factory import register_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
@@ -132,6 +133,8 @@ class ConfiguredTask(BaseTask):
     ConfigType = RuntimeConfig
 
     def __init__(self, args, config):
+        if config.config_version == 1:
+            deprecations.warn('dbt-project-yaml-v1')
         super().__init__(args, config)
         register_adapter(self.config)
 

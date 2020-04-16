@@ -1525,7 +1525,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'config': {
                         'enabled': True,
-                        'quoting': {},
                     },
                     'quoting': {
                         'database': False,

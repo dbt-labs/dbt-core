@@ -274,10 +274,6 @@ class BaseConfig(
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
-    quoting: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
 
 
 @dataclass

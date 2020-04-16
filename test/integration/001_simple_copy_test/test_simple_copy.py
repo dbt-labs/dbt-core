@@ -397,7 +397,7 @@ class TestMixedCaseDatabase(BaseTestSimpleCopy):
 
     @property
     def project_config(self):
-        return {}
+        return {'config-version': 2}
 
     @use_profile('postgres')
     def test_postgres_run_mixed_case(self):

@@ -15,6 +15,11 @@ class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
     def models(self):
         return "models"
 
+    def run_dbt(self, *args, **kwargs):
+        strict = kwargs.pop('strict', False)
+        kwargs['strict'] = strict
+        return super().run_dbt(*args, **kwargs)
+
 class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
     @property
     def packages_config(self):
