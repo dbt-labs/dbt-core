@@ -314,9 +314,7 @@ class ConfiguredParser(
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
     def initial_config(self, fqn: List[str]) -> ContextConfig:
-        config_version = min(
-            [self.project.config_version, self.root_project.config_version]
-        )
+        config_version = min([self.project.config_version, self.root_project.config_version])
         if config_version == 2:
             return ContextConfig(
                 self.root_project,
