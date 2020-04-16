@@ -550,6 +550,7 @@ class TestArgs:
         self.which = which
         self.single_threaded = False
         self.profiles_dir = profiles_dir
+        self.project_dir = None
         self.profile = None
         self.target = None
         self.__dict__.update(kwargs)

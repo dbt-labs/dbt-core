@@ -11,7 +11,8 @@ from hologram import ValidationError
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.config import RuntimeConfig, ConfigRenderer
+from dbt.config import RuntimeConfig
+from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfigType,
     ContextConfigGenerator,
@@ -124,6 +125,15 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             any refs/descriptions, and return a parsed entity with the
             appropriate information.
     """
+    def __init__(
+        self, results, project, root_project, macro_manifest,
+    ) -> None:
+        super().__init__(results, project, root_project, macro_manifest)
+        ctx = generate_target_context(
+            self.root_project, self.root_project.cli_vars
+        )
+        self.raw_renderer = SchemaYamlRenderer(ctx)
+
     @classmethod
     def get_compiled_path(cls, block: FileBlock) -> str:
         # should this raise an error?
@@ -323,6 +333,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         # mark the file as seen, even if there are no macros in it
         self.results.get_file(block.file)
         if dct:
+            dct = self.raw_renderer.render_data(dct)
             yaml_block = YamlBlock.from_file_block(block, dct)
 
             self._parse_format_version(yaml_block)
@@ -520,7 +531,7 @@ class YamlParser(Generic[Target, Parsed]):
 class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._renderer = ConfigRenderer(
+        self._renderer = SchemaYamlRenderer(
             generate_target_context(
                 self.root_project, self.root_project.cli_vars
             )
@@ -536,7 +547,6 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         for data in self.get_key_dicts():
             try:
                 data = self.project.credentials.translate_aliases(data)
-                data = self._renderer.render_schema_source(data)
                 source = UnparsedSourceDefinition.from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
@@ -586,7 +596,9 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
 
-        fqn = [self.project.project_name, source.name, table.name]
+        # the FQN is project name / path elements... /source_name /table_name
+        fqn = self.schema_parser.get_fqn_prefix(block.path.relative_path)
+        fqn.extend([source.name, table.name])
 
         config = self.config_generator.calculate_node_config(
             config_calls=[],

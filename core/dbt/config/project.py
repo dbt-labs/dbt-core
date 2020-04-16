@@ -35,7 +35,7 @@ from dbt.contracts.project import PackageConfig
 
 from hologram import ValidationError
 
-from .renderer import ConfigRenderer
+from .renderer import DbtProjectYamlRenderer
 
 
 INVALID_VERSION_ERROR = """\
@@ -191,6 +191,9 @@ def _query_comment_from_cfg(
 
 @dataclass
 class PartialProject:
+    config_version: int = field(metadata=dict(
+        description='The version of the configuration file format'
+    ))
     profile_name: Optional[str] = field(metadata=dict(
         description='The unrendered profile name in the project, if set'
     ))
@@ -562,11 +565,12 @@ class Project:
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
-        renderer: ConfigRenderer,
+        renderer: DbtProjectYamlRenderer,
     ) -> 'Project':
-        rendered_project = renderer.render_project(project_dict)
+        rendered_project = renderer.render_data(project_dict)
         rendered_project['project-root'] = project_root
-        rendered_packages = renderer.render_packages_data(packages_dict)
+        package_renderer = renderer.get_package_renderer()
+        rendered_packages = package_renderer.render_data(packages_dict)
         return cls.from_project_config(rendered_project, rendered_packages)
 
     @classmethod
@@ -578,8 +582,10 @@ class Project:
 
         project_name = project_dict.get('name')
         profile_name = project_dict.get('profile')
+        config_version = project_dict.get('config-version', 1)
 
         return PartialProject(
+            config_version=config_version,
             profile_name=profile_name,
             project_name=project_name,
             project_root=project_root,
@@ -588,9 +594,10 @@ class Project:
 
     @classmethod
     def from_project_root(
-        cls, project_root: str, renderer: ConfigRenderer
+        cls, project_root: str, renderer: DbtProjectYamlRenderer
     ) -> 'Project':
         partial = cls.partial_load(project_root)
+        renderer.version = partial.config_version
         return partial.render(renderer)
 
     def hashed_name(self):

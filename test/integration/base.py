@@ -70,6 +70,7 @@ class TestArgs:
         self.which = 'run'
         self.single_threaded = False
         self.profiles_dir = None
+        self.project_dir = None
         self.__dict__.update(kwargs)
 
 

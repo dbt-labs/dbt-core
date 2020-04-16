@@ -597,7 +597,7 @@ def process_node(
 
 
 def load_internal_projects(config):
-    return dict(config.load_projects(internal_project_names()))
+    return dict(_load_projects(config, internal_project_names()))
 
 
 def load_internal_manifest(config: RuntimeConfig) -> Manifest:

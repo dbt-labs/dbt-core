@@ -2,4 +2,3 @@
 from .profile import Profile, PROFILES_DIR, read_user_config  # noqa
 from .project import Project  # noqa
 from .runtime import RuntimeConfig, UnsetProfileConfig  # noqa
-from .renderer import ConfigRenderer  # noqa

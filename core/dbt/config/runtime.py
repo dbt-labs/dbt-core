@@ -10,7 +10,7 @@ from typing import (
 
 from .profile import Profile
 from .project import Project
-from .renderer import ConfigRenderer
+from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name
 from dbt.helper_types import FQNPath, PathSet
@@ -42,7 +42,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     args: Any
     profile_name: str
     cli_vars: Dict[str, Any]
-    dependencies: Optional[Mapping[str, Project]] = None
+    dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None
 
     def __post_init__(self):
         self.validate()
@@ -53,7 +53,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         project: Project,
         profile: Profile,
         args: Any,
-        dependencies: Optional[Mapping[str, Project]] = None,
+        dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
     ) -> 'RuntimeConfig':
         """Instantiate a RuntimeConfig from its components.
 
@@ -121,7 +121,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         profile.validate()
 
         # load the new project and its packages. Don't pass cli variables.
-        renderer = ConfigRenderer(generate_target_context(profile, {}))
+        renderer = DbtProjectYamlRenderer(generate_target_context(profile, {}))
 
         project = Project.from_project_root(project_root, renderer)
 
@@ -162,6 +162,41 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             self.validate_version()
 
     @classmethod
+    def _get_rendered_profile(
+        cls,
+        args: Any,
+        profile_renderer: ProfileRenderer,
+        profile_name: Optional[str],
+    ) -> Profile:
+        return Profile.render_from_args(
+            args, profile_renderer, profile_name
+        )
+
+    @classmethod
+    def collect_parts(
+        cls: Type['RuntimeConfig'], args: Any
+    ) -> Tuple[Project, Profile]:
+        # profile_name from the project
+        project_root = args.project_dir if args.project_dir else os.getcwd()
+        partial = Project.partial_load(project_root)
+
+        # build the profile using the base renderer and the one fact we know
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
+        profile_renderer = ProfileRenderer(generate_base_context(cli_vars))
+        profile_name = partial.render_profile_name(profile_renderer)
+
+        profile = cls._get_rendered_profile(
+            args, profile_renderer, profile_name
+        )
+
+        # get a new renderer using our target information and render the
+        # project
+        ctx = generate_target_context(profile, cli_vars)
+        project_renderer = DbtProjectYamlRenderer(ctx, partial.config_version)
+        project = partial.render(project_renderer)
+        return (project, profile)
+
+    @classmethod
     def from_args(cls, args: Any) -> 'RuntimeConfig':
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
@@ -172,21 +207,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
-        # profile_name from the project
-        partial = Project.partial_load(os.getcwd())
-
-        # build the profile using the base renderer and the one fact we know
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
-        renderer = ConfigRenderer(generate_base_context(cli_vars=cli_vars))
-        profile_name = partial.render_profile_name(renderer)
-        profile = Profile.render_from_args(
-            args, renderer, profile_name
-        )
-
-        # get a new renderer using our target information and render the
-        # project
-        renderer = ConfigRenderer(generate_target_context(profile, cli_vars))
-        project = partial.render(renderer)
+        project, profile = cls.collect_parts(args)
 
         return cls.from_parts(
             project=project,
@@ -432,7 +453,7 @@ class UnsetProfileConfig(RuntimeConfig):
         project: Project,
         profile: Profile,
         args: Any,
-        dependencies: Optional[Mapping[str, Project]] = None,
+        dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
     ) -> 'RuntimeConfig':
         """Instantiate a RuntimeConfig from its components.
 
@@ -481,30 +502,16 @@ class UnsetProfileConfig(RuntimeConfig):
         )
 
     @classmethod
-    def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
-        """Given arguments, read in dbt_project.yml from the arg --project-dir
-        or current directory if not provided, read in packages.yml if it
-        exists, and use them to find the profile to load.
-
-        :param args: The arguments as parsed from the cli.
-        :raises DbtProjectError: If the project is invalid or missing.
-        :raises DbtProfileError: If the profile is invalid or missing.
-        :raises ValidationException: If the cli variables are invalid.
-        """
-        # profile_name from the project
-        project_root = args.project_dir if args.project_dir else os.getcwd()
-        partial = Project.partial_load(project_root)
-
-        # build the profile using the base renderer and the one fact we know
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
-        renderer = ConfigRenderer(generate_base_context(cli_vars=cli_vars))
-        profile_name = partial.render_profile_name(renderer)
-
+    def _get_rendered_profile(
+        cls,
+        args: Any,
+        profile_renderer: ProfileRenderer,
+        profile_name: Optional[str],
+    ) -> Profile:
         try:
             profile = Profile.render_from_args(
-                args, renderer, profile_name
+                args, profile_renderer, profile_name
             )
-            cls = RuntimeConfig  # we can return a real runtime config, do that
         except (DbtProjectError, DbtProfileError) as exc:
             logger.debug(
                 'Profile not loaded due to error: {}', exc, exc_info=True
@@ -517,16 +524,28 @@ class UnsetProfileConfig(RuntimeConfig):
             profile = UnsetProfile()
             # disable anonymous usage statistics
             tracking.do_not_track()
+        return profile
 
-        # get a new renderer using our target information and render the
-        # project
-        renderer = ConfigRenderer(generate_target_context(profile, cli_vars))
-        project = partial.render(renderer)
+    @classmethod
+    def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
+        """Given arguments, read in dbt_project.yml from the current directory,
+        read in packages.yml if it exists, and use them to find the profile to
+        load.
+
+        :param args: The arguments as parsed from the cli.
+        :raises DbtProjectError: If the project is invalid or missing.
+        :raises DbtProfileError: If the profile is invalid or missing.
+        :raises ValidationException: If the cli variables are invalid.
+        """
+        project, profile = cls.collect_parts(args)
+        if not isinstance(profile, UnsetProfile):
+            # if it's a real profile, return a real config
+            cls = RuntimeConfig
 
         return cls.from_parts(
             project=project,
             profile=profile,
-            args=args,
+            args=args
         )
 
 
