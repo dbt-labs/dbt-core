@@ -163,9 +163,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         return data
 
     @classmethod
-    def translate_aliases(
-        cls, kwargs: Dict[str, Any], recurse: bool = False
-    ) -> Dict[str, Any]:
+    def translate_aliases(cls, kwargs: Dict[str, Any], recurse: bool = False) -> Dict[str, Any]:
         return translate_aliases(kwargs, cls._ALIASES, recurse)
 
     def __post_serialize__(self, dct):

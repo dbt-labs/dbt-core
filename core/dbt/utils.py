@@ -396,7 +396,9 @@ class Translator:
 
 
 def translate_aliases(
-    kwargs: Dict[str, Any], aliases: Dict[str, str], recurse: bool = False,
+    kwargs: Dict[str, Any],
+    aliases: Dict[str, str],
+    recurse: bool = False,
 ) -> Dict[str, Any]:
     """Given a dict of keyword arguments and a dict mapping aliases to their
     canonical values, canonicalize the keys in the kwargs dict.

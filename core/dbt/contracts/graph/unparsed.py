@@ -298,9 +298,7 @@ class SourceTablePatch(dbtClassMixin):
     loaded_at_field: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
-    freshness: Optional[FreshnessThreshold] = field(
-        default_factory=FreshnessThreshold
-    )
+    freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: Optional[List[str]] = None
     tests: Optional[List[TestDef]] = None
@@ -322,10 +320,10 @@ class SourceTablePatch(dbtClassMixin):
 @dataclass
 class SourcePatch(dbtClassMixin, Replaceable):
     name: str = field(
-        metadata=dict(description='The name of the source to override'),
+        metadata=dict(description="The name of the source to override"),
     )
     overrides: str = field(
-        metadata=dict(description='The package of the source to override'),
+        metadata=dict(description="The package of the source to override"),
     )
     path: Path = field(
         metadata=dict(description='The path to the patch-defining yml file'),
@@ -336,9 +334,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
     schema: Optional[str] = None
     loader: Optional[str] = None
     quoting: Optional[Quoting] = None
-    freshness: Optional[Optional[FreshnessThreshold]] = field(
-        default_factory=FreshnessThreshold
-    )
+    freshness: Optional[Optional[FreshnessThreshold]] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
     tables: Optional[List[SourceTablePatch]] = None
     tags: Optional[List[str]] = None

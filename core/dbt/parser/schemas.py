@@ -697,11 +697,9 @@ class SourceParser(YamlDocsReader):
     def parse(self) -> List[TestBlock]:
         # get a verified list of dicts for the key handled by this parser
         for data in self.get_key_dicts():
-            data = self.project.credentials.translate_aliases(
-                data, recurse=True
-            )
+            data = self.project.credentials.translate_aliases(data, recurse=True)
 
-            is_override = 'overrides' in data
+            is_override = "overrides" in data
             if is_override:
                 data['path'] = self.yaml.path.original_file_path
                 patch = self._target_from_dict(SourcePatch, data)
