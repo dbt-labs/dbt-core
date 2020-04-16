@@ -83,8 +83,8 @@ class BaseContextConfigGenerator(Generic[T]):
         dependencies = self._active_project.load_dependencies()
         if project_name not in dependencies:
             raise InternalException(
-                f'Project name {project_name} not found in dependencies '
-                f'(found {list(dependencies)})'
+                f"Project name {project_name} not found in dependencies "
+                f"(found {list(dependencies)})"
             )
         return dependencies[project_name]
 
@@ -109,9 +109,7 @@ class BaseContextConfigGenerator(Generic[T]):
         return self._project_configs(self._active_project, fqn, resource_type)
 
     @abstractmethod
-    def _update_from_config(
-        self, result: T, partial: Dict[str, Any], validate: bool = False
-    ) -> T:
+    def _update_from_config(self, result: T, partial: Dict[str, Any], validate: bool = False) -> T:
         ...
 
     @abstractmethod

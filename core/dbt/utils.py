@@ -22,7 +22,7 @@ from dbt import flags
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
-    Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable, List, Iterator,
+    Tuple,
     Type,
     Any,
     Optional,
@@ -568,6 +568,7 @@ class MultiDict(Mapping[str, Any]):
     """Implement the mapping protocol using a list of mappings. The most
     recently added mapping "wins".
     """
+
     def __init__(self, sources: Optional[StringMapList] = None) -> None:
         super().__init__()
         self.sources: StringMapList

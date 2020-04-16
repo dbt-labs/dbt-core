@@ -1,7 +1,15 @@
 import abc
 import os
 from typing import (
-    Callable, Any, Dict, Optional, Union, List, TypeVar, Type, Iterable,
+    Callable,
+    Any,
+    Dict,
+    Optional,
+    Union,
+    List,
+    TypeVar,
+    Type,
+    Iterable,
     Mapping,
 )
 from typing_extensions import Protocol
@@ -309,9 +317,7 @@ class ParseConfigObject(Config):
         # it's ok to have a parse context with no context config, but you must
         # not call it!
         if self.context_config is None:
-            raise RuntimeException(
-                'At parse time, did not receive a context config'
-            )
+            raise RuntimeException("At parse time, did not receive a context config")
         self.context_config.add_config_call(opts)
         return ""
 
