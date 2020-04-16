@@ -26,10 +26,11 @@ class TestMacros(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "models": {
-                "vars": {
-                    "test": "DUMMY"
-                }
+            'config-version': 2,
+            'vars': {
+                'test': {
+                    'test': 'DUMMY',
+                },
             },
             "macro-paths": ["macros"],
         }
@@ -60,6 +61,7 @@ class TestInvalidMacros(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ["bad-macros"]
         }
 
@@ -99,6 +101,7 @@ class TestMisusedMacros(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ["macros"],
         }
 

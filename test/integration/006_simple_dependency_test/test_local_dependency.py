@@ -121,13 +121,13 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['schema_override_macros'],
-            'models': {
-                'schema': 'dbt_test',
-            },
             'seeds': {
-                'schema': 'dbt_test',
-            },
+                'config': {
+                    'schema': 'dbt_test',
+                },
+            }
         }
 
     def base_schema(self):
@@ -173,6 +173,7 @@ class TestSimpleDependencyHooks(DBTIntegrationTest):
     def project_config(self):
         # these hooks should run first, so nothing to drop
         return {
+            'config-version': 2,
             'on-run-start': [
                 "drop table if exists {{ var('test_create_table') }}",
                 "drop table if exists {{ var('test_create_second_table') }}",

@@ -16,10 +16,13 @@ class TestBasePrestoRun(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'macro-paths': ['macros'],
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             },
         }
 

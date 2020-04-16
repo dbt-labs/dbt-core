@@ -144,11 +144,14 @@ class HasRPCServer(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'macro-paths': ['macros'],
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                }
             },
         }
 

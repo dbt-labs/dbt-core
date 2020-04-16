@@ -181,7 +181,10 @@ class TestModelTestOverlap(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return {'test-paths': [self.models]}
+        return {
+            'config-version': 2,
+            'test-paths': [self.models],
+        }
 
     @use_profile('postgres')
     def test_postgres_duplicate_test_model_paths(self):

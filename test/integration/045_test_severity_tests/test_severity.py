@@ -12,10 +12,13 @@ class TestSeverity(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'test-paths': ['tests'],
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             },
         }
 

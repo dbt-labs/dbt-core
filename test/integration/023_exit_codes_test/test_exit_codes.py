@@ -16,6 +16,7 @@ class TestExitCodes(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "snapshot-paths": ['snapshots-good'],
         }
 
@@ -79,6 +80,7 @@ class TestExitCodesSnapshotFail(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "snapshot-paths": ['snapshots-bad'],
         }
 
@@ -156,10 +158,13 @@ class TestExitCodesSeed(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data-good'],
             'seeds': {
-                'quote_columns': False,
-            }
+                'config': {
+                    'quote_columns': False,
+                },
+            },
         }
 
     @use_profile('postgres')
@@ -181,10 +186,13 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data-bad'],
             'seeds': {
-                'quote_columns': False,
-            }
+                'config': {
+                    'quote_columns': False,
+                },
+            },
         }
 
     @use_profile('postgres')

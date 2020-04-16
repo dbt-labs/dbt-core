@@ -55,17 +55,18 @@ class BaseOverrideDatabase(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
-            'models': {
-                'vars': {
-                    'alternate_db': self.alternative_database,
-                },
+            'vars': {
+                'alternate_db': self.alternative_database,
             },
             'quoting': {
                 'database': True,
             },
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             }
         }
 

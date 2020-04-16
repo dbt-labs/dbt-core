@@ -15,17 +15,22 @@ class TestConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'models': {
                 'test': {
-                    # the model configs will override this
-                    'materialized': 'invalid',
-                    # the model configs will append to these
-                    'tags': ['tag_one'],
+                    'config': {
+                        # the model configs will override this
+                        'materialized': 'invalid',
+                        # the model configs will append to these
+                        'tags': ['tag_one'],
+                    }
                 },
             },
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             },
         }
 
@@ -75,10 +80,13 @@ class TestTargetConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             },
         }
 
@@ -98,14 +106,19 @@ class TestDisabledConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
                 'test': {
                     'seed': {
-                        'enabled': False,
-                    }
-                }
+                        'config': {
+                            'enabled': False,
+                        },
+                    },
+                },
             },
         }
 

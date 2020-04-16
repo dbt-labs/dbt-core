@@ -10,22 +10,29 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data-config'],
             'macro-paths': ['macros'],
             'seeds': {
                 'test': {
-                    'enabled': False,
+                    'config': {
+                        'enabled': False,
+                        'quote_columns': True,
+                    },
                     'seed_enabled': {
-                        'enabled': True,
-                        'column_types': self.seed_enabled_types()
+                        'config': {
+                            'enabled': True,
+                            'column_types': self.seed_enabled_types()
+                        },
                     },
                     'seed_tricky': {
-                        'enabled': True,
-                        'column_types': self.seed_tricky_types(),
-                    }
+                        'config': {
+                            'enabled': True,
+                            'column_types': self.seed_tricky_types(),
+                        },
+                    },
                 },
-                'quote_columns': True,
-            }
+            },
         }
 
 

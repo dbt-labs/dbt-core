@@ -1,5 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 
+
 class TestGraphSelection(DBTIntegrationTest):
 
     @property
@@ -13,14 +14,18 @@ class TestGraphSelection(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "models": {
                 "test": {
                     "users": {
-                        "tags": "specified_as_string"
+                        'config': {
+                            "tags": "specified_as_string"
+                        },
                     },
-
                     "users_rollup": {
-                        "tags": ["specified_in_project"]
+                        'config': {
+                            "tags": ["specified_in_project"],
+                        },
                     }
                 }
             }

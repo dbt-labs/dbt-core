@@ -1,19 +1,23 @@
 import pickle
 
 from dbt.node_types import NodeType
+from dbt.contracts.graph.model_config import (
+    All,
+    NodeConfig,
+    TestConfig,
+    TimestampSnapshotConfig,
+    CheckSnapshotConfig,
+    SourceConfig,
+    EmptySnapshotConfig,
+    SnapshotStrategy,
+    Hook,
+)
 from dbt.contracts.graph.parsed import (
     ParsedModelNode,
     DependsOn,
-    NodeConfig,
     ColumnInfo,
-    Hook,
     ParsedSchemaTestNode,
-    TestConfig,
     ParsedSnapshotNode,
-    TimestampSnapshotConfig,
-    All,
-    CheckSnapshotConfig,
-    SnapshotStrategy,
     IntermediateSnapshotNode,
     ParsedNodePatch,
     ParsedMacro,
@@ -654,7 +658,7 @@ class TestParsedSchemaTestNode(ContractTestCase):
                 'quoting': {},
                 'tags': [],
                 'vars': {},
-                'severity': 'error',
+                'severity': 'ERROR',
             },
             'docs': {'show': True},
             'columns': {},
@@ -752,7 +756,7 @@ class TestTimestampSnapshotConfig(ContractTestCase):
         return {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'snapshot',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -782,7 +786,7 @@ class TestTimestampSnapshotConfig(ContractTestCase):
         cfg_dict = {
             'column_types': {'a': 'text'},
             'enabled': True,
-            'materialized': 'table',
+            'materialized': 'snapshot',
             'persist_docs': {},
             'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}],
             'pre-hook': [],
@@ -798,7 +802,7 @@ class TestTimestampSnapshotConfig(ContractTestCase):
         }
         cfg = self.ContractType(
             column_types={'a': 'text'},
-            materialized='table',
+            materialized='snapshot',
             post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
             strategy=SnapshotStrategy.Timestamp,
             target_database='some_snapshot_db',
@@ -829,7 +833,7 @@ class TestCheckSnapshotConfig(ContractTestCase):
         return {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'snapshot',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -859,7 +863,7 @@ class TestCheckSnapshotConfig(ContractTestCase):
         cfg_dict = {
             'column_types': {'a': 'text'},
             'enabled': True,
-            'materialized': 'table',
+            'materialized': 'snapshot',
             'persist_docs': {},
             'post-hook': [{'sql': 'insert into blah(a, b) select "1", 1', 'transaction': True}],
             'pre-hook': [],
@@ -875,7 +879,7 @@ class TestCheckSnapshotConfig(ContractTestCase):
         }
         cfg = self.ContractType(
             column_types={'a': 'text'},
-            materialized='table',
+            materialized='snapshot',
             post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
             strategy=SnapshotStrategy.Check,
             check_cols=['a', 'b'],
@@ -928,7 +932,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             'config': {
                 'column_types': {},
                 'enabled': True,
-                'materialized': 'view',
+                'materialized': 'snapshot',
                 'persist_docs': {},
                 'post-hook': [],
                 'pre-hook': [],
@@ -976,10 +980,10 @@ class TestParsedSnapshotNode(ContractTestCase):
             ),
         )
 
-        cfg = NodeConfig()
+        cfg = EmptySnapshotConfig()
         cfg._extra.update({
-            'unique_key': 'id',
             'strategy': 'timestamp',
+            'unique_key': 'id',
             'updated_at': 'last_update',
             'target_database': 'some_snapshot_db',
             'target_schema': 'some_snapshot_schema',
@@ -1037,7 +1041,7 @@ class TestParsedSnapshotNode(ContractTestCase):
             'config': {
                 'column_types': {},
                 'enabled': True,
-                'materialized': 'view',
+                'materialized': 'snapshot',
                 'persist_docs': {},
                 'post-hook': [],
                 'pre-hook': [],
@@ -1081,7 +1085,7 @@ class TestParsedSnapshotNode(ContractTestCase):
                 target_schema='some_snapshot_schema',
             ),
         )
-        cfg = NodeConfig()
+        cfg = EmptySnapshotConfig()
         cfg._extra.update({
             'unique_key': 'id',
             'strategy': 'check',
@@ -1317,6 +1321,10 @@ class TestParsedSourceDefinition(ContractTestCase):
             'meta': {},
             'source_meta': {},
             'tags': [],
+            'config': {
+                'enabled': True,
+                'quoting': {},
+            }
         }
         source_def = self.ContractType(
             columns={},
@@ -1337,6 +1345,7 @@ class TestParsedSourceDefinition(ContractTestCase):
             source_name='my_source',
             unique_id='test.source.my_source.my_source_table',
             tags=[],
+            config=SourceConfig(),
         )
         self.assert_symmetric(source_def, source_def_dict)
         minimum = self._minimum_dict()

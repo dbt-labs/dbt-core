@@ -41,6 +41,7 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-pg'],
             'macro-paths': ['macros'],
@@ -108,11 +109,14 @@ class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-checkall'],
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             }
         }
 
@@ -172,6 +176,7 @@ class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-pg-custom'],
@@ -202,6 +207,7 @@ class TestNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-pg-custom-namespaced'],
@@ -226,6 +232,7 @@ class TestInvalidNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-pg-custom-invalid'],
@@ -251,6 +258,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-select',
                                'test-snapshots-pg'],
@@ -303,15 +311,18 @@ class TestConfiguredSnapshotFileSelects(TestSimpleSnapshotFileSelects):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-select-noconfig'],
             "snapshots": {
                 "test": {
-                    "target_schema": self.unique_schema(),
-                    "unique_key": "id || '-' || first_name",
-                    'strategy': 'timestamp',
-                    'updated_at': 'updated_at',
-                }
+                    "config": {
+                        "target_schema": self.unique_schema(),
+                        "unique_key": "id || '-' || first_name",
+                        'strategy': 'timestamp',
+                        'updated_at': 'updated_at',
+                    },
+                },
             },
             'macro-paths': ['macros'],
         }
@@ -329,6 +340,7 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "snapshot-paths": ['test-snapshots-bq'],
             'macro-paths': ['macros'],
         }
@@ -413,6 +425,7 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
         else:
             paths = ['test-snapshots-bq']
         return {
+            'config-version': 2,
             'snapshot-paths': paths,
             'macro-paths': ['macros'],
         }
@@ -468,6 +481,7 @@ class TestCrossSchemaSnapshotFiles(DBTIntegrationTest):
     def project_config(self):
         paths = ['test-snapshots-pg']
         return {
+            'config-version': 2,
             'snapshot-paths': paths,
             'macro-paths': ['macros'],
         }
@@ -501,6 +515,7 @@ class TestBadSnapshot(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "snapshot-paths": ['test-snapshots-invalid'],
             'macro-paths': ['macros'],
         }
@@ -530,6 +545,7 @@ class TestCheckCols(TestSimpleSnapshotFiles):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             "snapshot-paths": ['test-check-col-snapshots'],
             'macro-paths': ['macros'],
@@ -540,15 +556,18 @@ class TestConfiguredCheckCols(TestCheckCols):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             "snapshot-paths": ['test-check-col-snapshots-noconfig'],
             "snapshots": {
                 "test": {
-                    "target_schema": self.unique_schema(),
-                    "unique_key": "id || '-' || first_name",
-                    "strategy": "check",
-                    "check_cols": ["email"],
-                }
+                    "config": {
+                        "target_schema": self.unique_schema(),
+                        "unique_key": "id || '-' || first_name",
+                        "strategy": "check",
+                        "check_cols": ["email"],
+                    },
+                },
             },
             'macro-paths': ['macros'],
         }
@@ -569,6 +588,7 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             "snapshot-paths": ['test-check-col-snapshots-bq'],
             'macro-paths': ['macros'],
@@ -644,6 +664,7 @@ class TestLongText(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "snapshot-paths": ['test-snapshots-longtext'],
             'macro-paths': ['macros'],
         }

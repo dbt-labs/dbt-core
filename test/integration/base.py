@@ -524,7 +524,9 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def project_config(self):
-        return {}
+        return {
+            'config-version': 2,
+        }
 
     @property
     def profile_config(self):

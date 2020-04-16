@@ -30,6 +30,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['macros'],
             'data-paths': ['data'],
 
@@ -51,7 +52,9 @@ class TestPrePostRunHooks(DBTIntegrationTest):
                 "insert into {{ target.schema }}.db_schemas (db, schema) values {% for db, schema in database_schemas %}('{{ db }}', '{{ schema }}' ){% if not loop.last %},{% endif %}{% endfor %}",
             ],
             'seeds': {
-                'quote_columns': False,
+                'config': {
+                    'quote_columns': False,
+                },
             },
         }
 

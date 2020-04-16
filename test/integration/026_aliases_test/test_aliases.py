@@ -13,15 +13,20 @@ class TestAliases(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ['macros'],
             "models": {
                 "test": {
                     "alias_in_project": {
-                        "alias" : 'project_alias'
+                        'config': {
+                            "alias": 'project_alias',
+                        },
                     },
                     "alias_in_project_with_override": {
-                        "alias" : 'project_alias'
-                    }
+                        'config': {
+                            "alias": 'project_alias',
+                        },
+                    },
                 }
             }
         }
@@ -57,6 +62,7 @@ class TestAliasErrors(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ['macros'],
         }
 
@@ -79,6 +85,7 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ['macros'],
         }
 

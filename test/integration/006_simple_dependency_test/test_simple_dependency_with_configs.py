@@ -1,5 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 
+
 class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
 
     def setUp(self):
@@ -29,13 +30,11 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
     @property
     def project_config(self):
         return {
-            "models": {
-                "dbt_integration_project": {
-                    'vars': {
-                        'bool_config': True
-                    }
-                }
-
+            'config-version': 2,
+            'vars': {
+                'dbt_integration_project': {
+                    'bool_config': True
+                },
             },
         }
 
@@ -67,20 +66,16 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
     @property
     def project_config(self):
         return {
-            "models": {
+            'config-version': 2,
+            "vars": {
                 # project-level configs
                 "dbt_integration_project": {
-                    "vars": {
-                        "config_1": "abc",
-                        "config_2": "def",
-                        "bool_config": True
-
-                    }
-                }
-
+                    "config_1": "abc",
+                    "config_2": "def",
+                    "bool_config": True
+                },
             },
         }
-
 
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
@@ -92,7 +87,6 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
         self.assertTablesEqual("seed","table_model")
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
-
 
 
 class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDependencyWithConfigs):
@@ -110,7 +104,9 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
 
     @property
     def project_config(self):
+        # This feature doesn't exist in v2!
         return {
+            'config-version': 1,
             "models": {
                 "dbt_integration_project": {
                     "config": {
@@ -156,6 +152,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
     @property
     def project_config(self):
         return {
+            'config-version': 1,
             "models": {
                 "dbt_integration_project": {
                     # disable config model, but supply vars
@@ -180,7 +177,6 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
 
             },
         }
-
 
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):

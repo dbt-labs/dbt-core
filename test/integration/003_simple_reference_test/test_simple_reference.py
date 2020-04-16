@@ -17,11 +17,12 @@ class TestSimpleReference(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'models': {
-                'vars': {
+            'config-version': 2,
+            'vars': {
+                'test': {
                     'var_ref': '{{ ref("view_copy") }}',
-                }
-            }
+                },
+            },
         }
 
     def setUp(self):

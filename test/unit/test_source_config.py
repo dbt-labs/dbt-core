@@ -1,8 +1,10 @@
 import os
 from unittest import TestCase, mock
 
+from dbt.adapters import postgres  # we want this available!
 import dbt.flags
 from dbt.context.context_config import LegacyContextConfig
+from dbt.legacy_config_updater import ConfigUpdater
 from dbt.node_types import NodeType
 
 from .utils import config_from_parts_or_dicts
@@ -88,11 +90,13 @@ class LegacyContextConfigTest(TestCase):
             'tags': [],
             'vars': {'a': 1, 'b': 2},
         }
-        self.assertEqual(cfg.config, expect)
+        self.assertEqual(cfg.build_config_dict(), expect)
 
     def test__context_config_multiple_calls(self):
-        cfg = LegacyContextConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
+        cfg = LegacyContextConfig(
+            self.root_project_config, self.root_project_config,
+            ['root', 'x'], NodeType.Model
+        )
         cfg.update_in_model_config({
             'materialized': 'something',
             'sort': 'my sort key',
@@ -120,12 +124,14 @@ class LegacyContextConfigTest(TestCase):
             'tags': [],
             'vars': {'a': 4, 'b': 2, 'c': 3},
         }
-        self.assertEqual(cfg.config, expect)
+        self.assertEqual(cfg.build_config_dict(), expect)
 
     def test__context_config_merge(self):
         self.root_project_config.models = {'sort': ['a', 'b']}
-        cfg = LegacyContextConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
+        cfg = LegacyContextConfig(
+            self.root_project_config, self.root_project_config,
+            ['root', 'x'], NodeType.Model
+        )
         cfg.update_in_model_config({
             'materialized': 'something',
             'sort': ['d', 'e']
@@ -142,22 +148,30 @@ class LegacyContextConfigTest(TestCase):
             'tags': [],
             'vars': {},
         }
-        self.assertEqual(cfg.config, expect)
+        self.assertEqual(cfg.build_config_dict(), expect)
 
     def test_context_config_all_keys_accounted_for(self):
-        used_keys = frozenset(LegacyContextConfig.AppendListFields) | \
-                    frozenset(LegacyContextConfig.ExtendDictFields) | \
-                    frozenset(LegacyContextConfig.ClobberFields)
+        updater = ConfigUpdater('postgres')
+        used_keys = (
+            frozenset(updater.AppendListFields) |
+            frozenset(updater.ExtendDictFields) |
+            frozenset(updater.ClobberFields) |
+            frozenset({'unlogged'})
+        )
 
-        self.assertEqual(used_keys, frozenset(LegacyContextConfig.ConfigKeys))
+        self.assertEqual(used_keys, frozenset(updater.ConfigKeys))
 
     def test__context_config_wrong_type(self):
         # ExtendDict fields should handle non-dict inputs gracefully
         self.root_project_config.models = {'persist_docs': False}
-        cfg = LegacyContextConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
+        cfg = LegacyContextConfig(
+            self.root_project_config, self.root_project_config,
+            ['root', 'x'], NodeType.Model
+        )
+
+        model = mock.MagicMock(resource_type=NodeType.Model, fqn=['root', 'x'], project_name='root')
 
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            cfg.get_project_config(self.root_project_config)
+            cfg.updater.get_project_config(model, self.root_project_config)
 
         self.assertIn('must be a dict', str(exc.exception))
