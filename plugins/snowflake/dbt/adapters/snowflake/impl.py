@@ -3,7 +3,10 @@ from typing import Mapping, Any, Optional, List
 import agate
 
 from dbt.adapters.sql import SQLAdapter
-from dbt.adapters.sql.impl import LIST_SCHEMAS_MACRO_NAME
+from dbt.adapters.sql.impl import (
+    LIST_SCHEMAS_MACRO_NAME,
+    LIST_RELATIONS_MACRO_NAME,
+)
 from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
 from dbt.adapters.snowflake import SnowflakeColumn
@@ -99,3 +102,43 @@ class SnowflakeAdapter(SQLAdapter):
         # want is 'name'
 
         return [row['name'] for row in results]
+
+    def list_relations_without_caching(
+            self, information_schema, schema
+    ) -> List[SnowflakeRelation]:
+        kwargs = {'information_schema': information_schema, 'schema': schema}
+        try:
+            results = self.execute_macro(
+                LIST_RELATIONS_MACRO_NAME,
+                kwargs=kwargs
+            )
+        except DatabaseException as exc:
+            # if the schema doesn't exist, we just want to return.
+            # Alternatively, we could query the list of schemas before we start
+            # and skip listing the missing ones, which sounds expensive.
+            if 'Object does not exist' in str(exc):
+                return []
+            raise
+
+        relations = []
+        quote_policy = {
+            'database': True,
+            'schema': True,
+            'identifier': True
+        }
+
+        columns = ['database_name', 'schema_name', 'name', 'kind']
+        for _database, _schema, _identifier, _type in results.select(columns):
+            try:
+                _type = self.Relation.get_relation_type(_type.lower())
+            except ValueError:
+                _type = self.Relation.External
+            relations.append(self.Relation.create(
+                database=_database,
+                schema=_schema,
+                identifier=_identifier,
+                quote_policy=quote_policy,
+                type=_type
+            ))
+
+        return relations
