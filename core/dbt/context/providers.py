@@ -1,7 +1,8 @@
 import abc
 import os
 from typing import (
-    Callable, Any, Dict, Optional, Union, List, TypeVar, Type, Iterable
+    Callable, Any, Dict, Optional, Union, List, TypeVar, Type, Iterable,
+    Mapping,
 )
 from typing_extensions import Protocol
 
@@ -15,7 +16,7 @@ from dbt.context.base import (
     contextmember, contextproperty, Var
 )
 from dbt.context.configured import ManifestContext, MacroNamespace
-from dbt.context.context_config import LegacyContextConfig
+from dbt.context.context_config import ContextConfigType
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
     NonSourceNode, CompiledSeedNode, CompiledResource, CompiledNode
@@ -26,6 +27,7 @@ from dbt.contracts.graph.parsed import (
 from dbt.exceptions import (
     InternalException,
     ValidationException,
+    RuntimeException,
     missing_config,
     raise_compiler_error,
     ref_invalid_args,
@@ -38,7 +40,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
 from dbt.utils import (
-    add_ephemeral_model_prefix, merge, AttrDict
+    add_ephemeral_model_prefix, merge, AttrDict, MultiDict
 )
 
 import agate
@@ -155,13 +157,13 @@ class BaseSourceResolver(BaseResolver):
 
 
 class Config(Protocol):
-    def __init__(self, model, context_config):
+    def __init__(self, model, context_config: Optional[ContextConfigType]):
         ...
 
 
 # `config` implementations
 class ParseConfigObject(Config):
-    def __init__(self, model, context_config):
+    def __init__(self, model, context_config: Optional[ContextConfigType]):
         self.model = model
         self.context_config = context_config
 
@@ -190,6 +192,12 @@ class ParseConfigObject(Config):
 
         opts = self._transform_config(opts)
 
+        # it's ok to have a parse context with no context config, but you must
+        # not call it!
+        if self.context_config is None:
+            raise RuntimeException(
+                'At parse time, did not receive a context config'
+            )
         self.context_config.update_in_model_config(opts)
         return ''
 
@@ -204,9 +212,11 @@ class ParseConfigObject(Config):
 
 
 class RuntimeConfigObject(Config):
-    def __init__(self, model, context_config=None):
+    def __init__(
+        self, model, context_config: Optional[ContextConfigType] = None
+    ):
         self.model = model
-        # we never use or get a source config, only the parser cares
+        # we never use or get a config, only the parser cares
 
     def __call__(self, *args, **kwargs):
         return ''
@@ -218,16 +228,10 @@ class RuntimeConfigObject(Config):
         validator(value)
 
     def _lookup(self, name, default=_MISSING):
-        config = self.model.config
-
-        if hasattr(config, name):
-            return getattr(config, name)
-        elif name in config.extra:
-            return config.extra[name]
-        elif default is not _MISSING:
-            return default
-        else:
+        result = self.model.config.get(name, default)
+        if result is _MISSING:
             missing_config(self.model, name)
+        return result
 
     def require(self, name, validator=None):
         to_return = self._lookup(name)
@@ -416,7 +420,7 @@ class ConfiguredVar(Var):
             yield dependencies[package_name]
         yield self.config
 
-    def _generate_merged(self) -> Dict[str, Any]:
+    def _generate_merged(self) -> Mapping[str, Any]:
         cli_vars = self.config.cli_vars
 
         # once sources have FQNs, add ParsedSourceDefinition
@@ -425,10 +429,10 @@ class ConfiguredVar(Var):
 
         adapter_type = self.config.credentials.type
 
-        merged = {}
+        merged = MultiDict()
         for project in self.packages_for_node():
-            merged.update(project.vars.vars_for(self.node, adapter_type))
-        merged.update(self.cli_vars)
+            merged.add(project.vars.vars_for(self.node, adapter_type))
+        merged.add(self.cli_vars)
         return merged
 
 
@@ -485,7 +489,7 @@ class ProviderContext(ManifestContext):
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
-        context_config: Optional[LegacyContextConfig],
+        context_config: Optional[ContextConfigType],
     ) -> None:
         if provider is None:
             raise InternalException(
@@ -496,7 +500,7 @@ class ProviderContext(ManifestContext):
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
         self.model: Union[ParsedMacro, NonSourceNode] = model
-        self.context_config = context_config
+        self.context_config: Optional[ContextConfigType] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
@@ -1068,7 +1072,7 @@ def generate_parser_model(
     model: NonSourceNode,
     config: RuntimeConfig,
     manifest: Manifest,
-    context_config: LegacyContextConfig,
+    context_config: ContextConfigType,
 ) -> Dict[str, Any]:
     ctx = ModelContext(
         model, config, manifest, ParseProvider(), context_config

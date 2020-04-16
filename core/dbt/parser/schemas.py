@@ -12,7 +12,10 @@ from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig, ConfigRenderer
-from dbt.context.context_config import LegacyContextConfig
+from dbt.context.context_config import (
+    ContextConfigType,
+    ContextConfigGenerator,
+)
 from dbt.context.docs import generate_parser_docs
 from dbt.context.target import generate_target_context
 from dbt.contracts.graph.manifest import SourceFile
@@ -253,9 +256,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return node
 
     def render_with_context(
-        self, node: ParsedSchemaTestNode, config: LegacyContextConfig,
+        self, node: ParsedSchemaTestNode, config: ContextConfigType,
     ) -> None:
-        """Given the parsed node and a LegacyContextConfig to use during
+        """Given the parsed node and a ContextConfigType to use during
         parsing, collect all the refs that might be squirreled away in the test
         arguments. This includes the implicit "model" argument.
         """
@@ -522,6 +525,7 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
                 self.root_project, self.root_project.cli_vars
             )
         )
+        self.config_generator = ContextConfigGenerator(self.project)
 
     def get_block(self, node: SourceTarget) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
@@ -582,6 +586,16 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
 
+        fqn = [self.project.project_name, source.name, table.name]
+
+        config = self.config_generator.calculate_node_config(
+            config_calls=[],
+            fqn=fqn,
+            resource_type=NodeType.Source,
+            project_name=self.project.project_name,
+            base=False,
+        )
+
         result = ParsedSourceDefinition(
             package_name=self.project.project_name,
             database=(source.database or self.default_database),
@@ -604,8 +618,9 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
             freshness=freshness,
             quoting=quoting,
             resource_type=NodeType.Source,
-            fqn=[self.project.project_name, source.name, table.name],
+            fqn=fqn,
             tags=tags,
+            config=config,
         )
         self.results.add_source(self.yaml.file, result)
 

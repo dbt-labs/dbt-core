@@ -1,7 +1,7 @@
 import json
 import os
 from typing import (
-    Any, Dict, NoReturn, Optional
+    Any, Dict, NoReturn, Optional, Mapping
 )
 
 from dbt import flags
@@ -100,16 +100,16 @@ class Var:
 
     def __init__(
         self,
-        context: Dict[str, Any],
-        cli_vars: Dict[str, Any],
+        context: Mapping[str, Any],
+        cli_vars: Mapping[str, Any],
         node: Optional[CompiledResource] = None
     ) -> None:
-        self.context: Dict[str, Any] = context
-        self.cli_vars: Dict[str, Any] = cli_vars
+        self.context: Mapping[str, Any] = context
+        self.cli_vars: Mapping[str, Any] = cli_vars
         self.node: Optional[CompiledResource] = node
-        self.merged: Dict[str, Any] = self._generate_merged()
+        self.merged: Mapping[str, Any] = self._generate_merged()
 
-    def _generate_merged(self) -> Dict[str, Any]:
+    def _generate_merged(self) -> Mapping[str, Any]:
         return self.cli_vars
 
     @property
@@ -120,7 +120,8 @@ class Var:
             return '<Configuration>'
 
     def get_missing_var(self, var_name):
-        pretty_vars = json.dumps(self.merged, sort_keys=True, indent=4)
+        dct = {k: self.merged[k] for k in self.merged}
+        pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
         msg = self.UndefinedVarError.format(
             var_name, self.node_name, pretty_vars
         )

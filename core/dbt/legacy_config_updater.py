@@ -4,7 +4,7 @@ from typing_extensions import Protocol
 
 import dbt.exceptions
 
-from dbt.utils import deep_merge
+from dbt.utils import deep_merge, fqn_search
 from dbt.node_types import NodeType
 from dbt.adapters.factory import get_config_class_by_name
 
@@ -164,11 +164,10 @@ class ConfigUpdater:
         # mutates config
         self.update_config_keys_into(config, model_configs)
 
-        fqn = model.fqn[:]
-        for level in fqn:
-            level_config = model_configs.get(level, None)
-            if level_config is None:
-                break
+        for level_config in fqn_search(model_configs, model.fqn):
+            relevant_configs = self.update_config_keys_into(
+                config, level_config
+            )
 
             # mutates config
             relevant_configs = self.update_config_keys_into(
@@ -184,7 +183,6 @@ class ConfigUpdater:
             }
 
             config.update(clobber_configs)
-            model_configs = model_configs[level]
 
         return config
 

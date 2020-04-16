@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Mapping, Any, Optional, List, Union
 
 import agate
@@ -16,6 +17,7 @@ from dbt.exceptions import RuntimeException, DatabaseException
 from dbt.utils import filter_null_values
 
 
+@dataclass
 class SnowflakeConfig(AdapterConfig):
     transient: Optional[bool] = None
     cluster_by: Optional[Union[str, List[str]]] = None

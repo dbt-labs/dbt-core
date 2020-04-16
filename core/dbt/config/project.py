@@ -1,7 +1,9 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable
+from typing import (
+    List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable, Mapping
+)
 from typing_extensions import Protocol
 
 import hashlib
@@ -20,7 +22,7 @@ from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
-from dbt.utils import deep_map
+from dbt.utils import deep_map, MultiDict
 from dbt.legacy_config_updater import ConfigUpdater, IsFQNResource
 
 from dbt.contracts.project import (
@@ -222,7 +224,7 @@ class VarProvider(Protocol):
     """Var providers are tied to a particular Project."""
     def vars_for(
         self, node: IsFQNResource, adapter_type: str
-    ) -> Dict[str, Any]:
+    ) -> Mapping[str, Any]:
         raise NotImplementedError(
             f'vars_for not implemented for {type(self)}!'
         )
@@ -247,7 +249,7 @@ class V1VarProvider(VarProvider):
 
     def vars_for(
         self, node: IsFQNResource, adapter_type: str
-    ) -> Dict[str, Any]:
+    ) -> Mapping[str, Any]:
         updater = ConfigUpdater(adapter_type)
         return updater.get_project_config(node, self).get('vars', {})
 
@@ -267,11 +269,13 @@ class V2VarProvider(VarProvider):
 
     def vars_for(
         self, node: IsFQNResource, adapter_type: str
-    ) -> Dict[str, Any]:
-        # in v2, vars are only scoped to the project.
-        updater = ConfigUpdater(adapter_type)
-        node_project = self.vars.get(node.package_name, {})
-        return updater.get_project_vars(node_project)
+    ) -> Mapping[str, Any]:
+        # in v2, vars are only either project or globally scoped
+
+        merged = MultiDict([self.vars])
+        if node.package_name in self.vars:
+            merged.add(self.vars.get(node.package_name, {}))
+        return merged
 
     def to_dict(self):
         return self.vars
@@ -613,3 +617,53 @@ class Project:
                 ]
             )
             raise DbtProjectError(msg)
+
+    def as_v1(self):
+        if self.config_version == 1:
+            return self
+
+        dct = self.to_project_config()
+
+        mutated = deepcopy(dct)
+        # remove sources, it doesn't exist
+        mutated.pop('sources', None)
+
+        common_config_keys = ['models', 'seeds', 'snapshots']
+
+        if 'vars' in dct and isinstance(dct['vars'], dict):
+            # stuff any 'vars' entries into the old-style
+            # models/seeds/snapshots dicts
+            for project_name, items in dct['vars'].items():
+                for cfgkey in ['models', 'seeds', 'snapshots']:
+                    if project_name not in mutated[cfgkey]:
+                        mutated[cfgkey][project_name] = {}
+                    project_type_cfg = mutated[cfgkey][project_name]
+                    if 'vars' not in project_type_cfg:
+                        project_type_cfg['vars'] = {}
+                    mutated[cfgkey][project_name]['vars'].update(items)
+            # remove this from the v1 form
+            mutated.pop('vars')
+        # ok, now we want to look through all the existing cfgkeys and mirror
+        # it, except anything under 'config' gets included directly.
+        for cfgkey in common_config_keys:
+            if cfgkey not in dct:
+                continue
+
+            mutated[cfgkey] = _flatten_config(dct[cfgkey])
+        mutated['config-version'] = 1
+        project = Project.from_project_config(mutated)
+        project.packages = self.packages
+        return project
+
+
+def _flatten_config(dct: Dict[str, Any]):
+    result = {}
+    for key, value in dct.items():
+        if isinstance(value, dict):
+            if key == 'config':
+                result.update(value)
+            else:
+                result[key] = _flatten_config(value)
+        else:
+            result[key] = value
+    return result

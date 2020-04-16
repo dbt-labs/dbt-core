@@ -11,7 +11,8 @@ import os
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
-    Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable
+    Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable, List, Iterator,
+    Mapping, Iterable, AbstractSet, Set
 )
 
 import dbt.exceptions
@@ -245,10 +246,6 @@ class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__dict__ = self
-
-
-def is_enabled(node):
-    return node.config.enabled
 
 
 def get_pseudo_test_path(node_name, source_path, test_type):
@@ -539,3 +536,70 @@ def executor(config: HasThreadingConfig) -> concurrent.futures.Executor:
         return concurrent.futures.ThreadPoolExecutor(
             max_workers=config.threads
         )
+
+
+def fqn_search(
+    root: Dict[str, Any], fqn: List[str]
+) -> Iterator[Any]:
+    """Iterate into a nested dictionary, looking for keys in the fqn as levels.
+    Yield level name, level config pairs.
+    """
+    yield root
+
+    for level in fqn:
+        level_config = root.get(level, None)
+        if level_config is None:
+            break
+        yield copy.deepcopy(level_config)
+        root = level_config
+
+
+StringMap = Mapping[str, Any]
+StringMapList = List[StringMap]
+StringMapIter = Iterable[StringMap]
+
+
+class MultiDict(Mapping[str, Any]):
+    """Implement the mapping protocol using a list of mappings. The most
+    recently added mapping "wins".
+    """
+    def __init__(self, sources: Optional[StringMapList] = None) -> None:
+        super().__init__()
+        self.sources: StringMapList
+
+        if sources is None:
+            self.sources = []
+        else:
+            self.sources = sources
+
+    def add_from(self, sources: Iterable[Mapping[str, Any]]):
+        self.sources.extend(sources)
+
+    def add(self, source: Mapping[str, Any]):
+        self.sources.append(source)
+
+    def _keyset(self) -> AbstractSet[str]:
+        # return the set of keys
+        keys: Set[str] = set()
+        for entry in self._itersource():
+            keys.update(entry)
+        return keys
+
+    def _itersource(self) -> Iterable[Mapping[str, Any]]:
+        return reversed(self.sources)
+
+    def __iter__(self) -> Iterator[str]:
+        # we need to avoid duplicate keys
+        return iter(self._keyset())
+
+    def __len__(self):
+        return len(self._keyset())
+
+    def __getitem__(self, name: str) -> Any:
+        for entry in self._itersource():
+            if name in entry:
+                return entry[name]
+        raise KeyError(name)
+
+    def __contains__(self, name) -> bool:
+        return any((name in entry for entry in self._itersource()))

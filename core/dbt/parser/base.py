@@ -15,7 +15,9 @@ from dbt import hooks
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
-from dbt.context.context_config import LegacyContextConfig
+from dbt.context.context_config import (
+    LegacyContextConfig, ContextConfig, ContextConfigType
+)
 from dbt.contracts.graph.manifest import (
     Manifest, SourceFile, FilePath, FileHash
 )
@@ -201,7 +203,7 @@ class ConfiguredParser(
         self,
         block: ConfiguredBlockType,
         path: str,
-        config: LegacyContextConfig,
+        config: ContextConfigType,
         fqn: List[str],
         name=None,
         **kwargs,
@@ -243,16 +245,16 @@ class ConfiguredParser(
             raise CompilationException(msg, node=node)
 
     def _context_for(
-        self, parsed_node: IntermediateNode, config: LegacyContextConfig
+        self, parsed_node: IntermediateNode, config: ContextConfigType
     ) -> Dict[str, Any]:
         return generate_parser_model(
             parsed_node, self.root_project, self.macro_manifest, config
         )
 
     def render_with_context(
-        self, parsed_node: IntermediateNode, config: LegacyContextConfig
+        self, parsed_node: IntermediateNode, config: ContextConfigType
     ) -> None:
-        """Given the parsed node and a LegacyContextConfig to use during parsing,
+        """Given the parsed node and a ContextConfigType to use during parsing,
         render the node's sql wtih macro capture enabled.
 
         Note: this mutates the config object when config() calls are rendered.
@@ -284,9 +286,9 @@ class ConfiguredParser(
         self._update_node_alias(parsed_node, config_dict)
 
     def update_parsed_node(
-        self, parsed_node: IntermediateNode, config: LegacyContextConfig
+        self, parsed_node: IntermediateNode, config: ContextConfigType
     ) -> None:
-        """Given the LegacyContextConfig used for parsing and the parsed node,
+        """Given the ContextConfigType used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
@@ -314,18 +316,41 @@ class ConfiguredParser(
         for hook in hooks:
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
-    def initial_config(self, fqn: List[str]) -> LegacyContextConfig:
-        return LegacyContextConfig(
-            self.root_project, self.project, fqn, self.resource_type
+    def initial_config(self, fqn: List[str]) -> ContextConfigType:
+        config_version = min(
+            [self.project.config_version, self.root_project.config_version]
         )
+        # it would be nice to assert that if the main config is v2, the
+        # dependencies are all v2. or vice-versa.
+        if config_version == 1:
+            return LegacyContextConfig(
+                self.root_project.as_v1(),
+                self.project.as_v1(),
+                fqn,
+                self.resource_type,
+            )
+        elif config_version == 2:
+            return ContextConfig(
+                self.root_project,
+                fqn,
+                self.resource_type,
+                self.project.project_name,
+            )
+        else:
+            raise InternalException(
+                f'Got an unexpected project version={config_version}, '
+                f'expected 1 or 2'
+            )
 
-    def config_dict(self, config: LegacyContextConfig) -> Dict[str, Any]:
-        config_dict = config.build_config_dict()
+    def config_dict(
+        self, config: ContextConfigType,
+    ) -> Dict[str, Any]:
+        config_dict = config.build_config_dict(base=True)
         self._mangle_hooks(config_dict)
         return config_dict
 
     def render_update(
-        self, node: IntermediateNode, config: LegacyContextConfig
+        self, node: IntermediateNode, config: ContextConfigType
     ) -> None:
         try:
             self.render_with_context(node, config)
@@ -345,7 +370,7 @@ class ConfiguredParser(
         compiled_path: str = self.get_compiled_path(block)
         fqn = self.get_fqn(compiled_path, block.name)
 
-        config: LegacyContextConfig = self.initial_config(fqn)
+        config: ContextConfigType = self.initial_config(fqn)
 
         node = self._create_parsetime_node(
             block=block,

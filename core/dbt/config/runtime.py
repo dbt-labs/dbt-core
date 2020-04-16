@@ -49,7 +49,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
 
     @classmethod
     def from_parts(
-        cls, project: Project, profile: Profile, args: Any,
+        cls,
+        project: Project,
+        profile: Profile,
+        args: Any,
+        dependencies: Optional[Mapping[str, Project]] = None,
     ) -> 'RuntimeConfig':
         """Instantiate a RuntimeConfig from its components.
 
@@ -100,6 +104,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             credentials=profile.credentials,
             args=args,
             cli_vars=cli_vars,
+            dependencies=dependencies,
         )
 
     def new_project(self, project_root: str) -> 'RuntimeConfig':
@@ -195,6 +200,42 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             adapter_type=self.credentials.type
         )
 
+    def _get_v2_config_paths(
+        self,
+        config,
+        path: FQNPath,
+        paths: MutableSet[FQNPath],
+    ) -> PathSet:
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if key == 'config':
+                    paths.add(path)
+                else:
+                    self._get_v2_config_paths(value, path + (key,), paths)
+
+        return frozenset(paths)
+
+    def _get_v1_config_paths(
+        self,
+        config: Dict[str, Any],
+        path: FQNPath,
+        paths: MutableSet[FQNPath],
+    ) -> PathSet:
+        keys = ConfigUpdater(self.credentials.type).ConfigKeys
+
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if key in keys:
+                    if path not in paths:
+                        paths.add(path)
+                else:
+                    self._get_v1_config_paths(value, path + (key,), paths)
+            else:
+                if path not in paths:
+                    paths.add(path)
+
+        return frozenset(paths)
+
     def _get_config_paths(
         self,
         config: Dict[str, Any],
@@ -204,20 +245,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         if paths is None:
             paths = set()
 
-        keys = ConfigUpdater(self.credentials.type).ConfigKeys
-
-        for key, value in config.items():
-            if isinstance(value, dict):
-                if key in keys:
-                    if path not in paths:
-                        paths.add(path)
-                else:
-                    self._get_config_paths(value, path + (key,), paths)
-            else:
-                if path not in paths:
-                    paths.add(path)
-
-        return frozenset(paths)
+        if self.config_version == 2:
+            return self._get_v2_config_paths(config, path, paths)
+        else:
+            return self._get_v1_config_paths(config, path, paths)
 
     def get_resource_config_paths(self) -> Dict[str, PathSet]:
         """Return a dictionary with 'seeds' and 'models' keys whose values are
@@ -309,6 +340,17 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 if path.is_dir() and not path.name.startswith('__'):
                     yield path
 
+    def as_v1(self):
+        if self.config_version == 1:
+            return self
+
+        return self.from_parts(
+            project=Project.as_v1(self),
+            profile=self,
+            args=self.args,
+            dependencies=self.dependencies,
+        )
+
 
 class UnsetCredentials(Credentials):
     def __init__(self):
@@ -386,7 +428,11 @@ class UnsetProfileConfig(RuntimeConfig):
 
     @classmethod
     def from_parts(
-        cls, project: Project, profile: Any, args: Any,
+        cls,
+        project: Project,
+        profile: Profile,
+        args: Any,
+        dependencies: Optional[Mapping[str, Project]] = None,
     ) -> 'RuntimeConfig':
         """Instantiate a RuntimeConfig from its components.
 
@@ -431,6 +477,7 @@ class UnsetProfileConfig(RuntimeConfig):
             credentials=UnsetCredentials(),
             args=args,
             cli_vars=cli_vars,
+            dependencies=dependencies,
         )
 
     @classmethod

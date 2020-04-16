@@ -203,7 +203,7 @@ class ProjectV2(HyphenatedJsonSchemaMixin, Replaceable):
     snapshots: Dict[str, Any] = field(default_factory=dict)
     analyses: Dict[str, Any] = field(default_factory=dict)
     sources: Dict[str, Any] = field(default_factory=dict)
-    vars: Dict[str, Dict[str, Any]] = field(
+    vars: Dict[str, Any] = field(
         default_factory=dict,
         metadata=dict(
             description='map project names to their vars override dicts',

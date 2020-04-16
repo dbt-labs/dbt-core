@@ -810,7 +810,7 @@ class Manifest:
                 target_table_name,
                 candidate
             )
-            if target_source is not None:
+            if target_source is not None and target_source.config.enabled:
                 return target_source
 
         return None

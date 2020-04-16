@@ -49,22 +49,16 @@ class PartitionConfig(JsonSchemaMixin):
             return column
 
     @classmethod
-    def _parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
-        if isinstance(raw_partition_by, dict):
-            try:
-                return cls.from_dict(raw_partition_by)
-            except ValidationError as exc:
-                msg = dbt.exceptions.validator_error_message(exc)
-                dbt.exceptions.raise_compiler_error(
-                    f'Could not parse partition config: {msg}'
-                )
-        else:
-            return None
-
-    @classmethod
     def parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
+        if raw_partition_by is None:
+            return None
         try:
-            return cls._parse(raw_partition_by)
+            return cls.from_dict(raw_partition_by)
+        except ValidationError as exc:
+            msg = dbt.exceptions.validator_error_message(exc)
+            dbt.exceptions.raise_compiler_error(
+                f'Could not parse partition config: {msg}'
+            )
         except TypeError:
             dbt.exceptions.raise_compiler_error(
                 f'Invalid partition_by config:\n'
@@ -83,6 +77,7 @@ def _stub_relation(*args, **kwargs):
     )
 
 
+@dataclass
 class BigqueryConfig(AdapterConfig):
     cluster_by: Optional[Union[List[str], str]] = None
     partition_by: Optional[Dict[str, Any]] = None

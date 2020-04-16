@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Optional
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig
@@ -11,6 +12,7 @@ import dbt.exceptions
 GET_RELATIONS_MACRO_NAME = 'postgres_get_relations'
 
 
+@dataclass
 class PostgresConfig(AdapterConfig):
     unlogged: Optional[bool] = None
 

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Optional
 from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.postgres import PostgresAdapter
@@ -6,6 +7,7 @@ from dbt.adapters.redshift import RedshiftColumn
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
+@dataclass
 class RedshiftConfig(AdapterConfig):
     sort_type: Optional[str] = None
     dist: Optional[str] = None

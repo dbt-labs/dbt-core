@@ -1,9 +1,13 @@
+from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import List, Iterator, Dict, Any, TypeVar, Union
 
+from dbt.config import RuntimeConfig, Project
+from dbt.contracts.graph.model_config import BaseConfig, get_config_for
+from dbt.exceptions import InternalException
 from dbt.legacy_config_updater import ConfigUpdater, IsFQNResource
 from dbt.node_types import NodeType
-from dbt.config import RuntimeConfig, Project
+from dbt.utils import fqn_search
 
 
 @dataclass
@@ -49,7 +53,7 @@ class LegacyContextConfig:
 
         return defaults
 
-    def build_config_dict(self) -> Dict[str, Any]:
+    def build_config_dict(self, base: bool = False) -> Dict[str, Any]:
         defaults = self.get_default()
         active_config = self.load_config_from_active_project()
 
@@ -78,3 +82,113 @@ class LegacyContextConfig:
 
     def load_config_from_active_project(self) -> Dict[str, Any]:
         return self.updater.get_project_config(self.model, self.active_project)
+
+
+T = TypeVar('T', bound=BaseConfig)
+
+
+class ContextConfigGenerator:
+    def __init__(self, active_project: RuntimeConfig):
+        self.active_project = active_project
+
+    def get_node_project(self, project_name: str):
+        if project_name == self.active_project.project_name:
+            return self.active_project
+        dependencies = self.active_project.load_dependencies()
+        if project_name not in dependencies:
+            raise InternalException(
+                f'Project name {project_name} not found in dependencies '
+                f'(found {list(dependencies)})'
+            )
+        return dependencies[project_name]
+
+    def project_configs(
+        self, project: Project, fqn: List[str], resource_type: NodeType
+    ) -> Iterator[Dict[str, Any]]:
+        if resource_type == NodeType.Seed:
+            model_configs = project.seeds
+        elif resource_type == NodeType.Snapshot:
+            model_configs = project.snapshots
+        elif resource_type == NodeType.Source:
+            model_configs = project.sources
+        else:
+            model_configs = project.models
+        for level_config in fqn_search(model_configs, fqn):
+            if 'config' not in level_config:
+                continue
+
+            level_value = level_config['config']
+            if isinstance(level_value, dict):
+                yield deepcopy(level_value)
+
+    def active_project_configs(
+        self, fqn: List[str], resource_type: NodeType
+    ) -> Iterator[Dict[str, Any]]:
+        return self.project_configs(self.active_project, fqn, resource_type)
+
+    def _update_from_config(
+        self, result: T, partial: Dict[str, Any], validate: bool = False
+    ) -> T:
+        return result.update_from(
+            partial,
+            self.active_project.credentials.type,
+            validate=validate
+        )
+
+    # TODO: is fqn[0] always the project name?
+    def calculate_node_config(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> BaseConfig:
+        own_config = self.get_node_project(project_name)
+        # defaults, own_config, config calls, active_config (if != own_config)
+        config_cls = get_config_for(resource_type, base=base)
+        # Calculate the defaults. We don't want to validate the defaults,
+        # because it might be invalid in the case of required config members
+        # (such as on snapshots!)
+        result = config_cls.from_dict({}, validate=False)
+        for fqn_config in self.project_configs(own_config, fqn, resource_type):
+            result = self._update_from_config(result, fqn_config)
+        for config_call in config_calls:
+            result = self._update_from_config(result, config_call)
+
+        if own_config.project_name != self.active_project.project_name:
+            for fqn_config in self.active_project_configs(fqn, resource_type):
+                result = self._update_from_config(result, fqn_config)
+
+        # this is mostly impactful in the snapshot config case
+        return result.finalize_and_validate()
+
+
+class ContextConfig:
+    def __init__(
+        self,
+        active_project: RuntimeConfig,
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+    ) -> None:
+        self.config_calls: List[Dict[str, Any]] = []
+        self.cfg_source = ContextConfigGenerator(active_project)
+        self.fqn = fqn
+        self.resource_type = resource_type
+        self.project_name = project_name
+
+    def update_in_model_config(self, opts: Dict[str, Any]) -> None:
+        self.config_calls.append(opts)
+
+    def build_config_dict(self, base: bool = False) -> Dict[str, Any]:
+        return self.cfg_source.calculate_node_config(
+            config_calls=self.config_calls,
+            fqn=self.fqn,
+            resource_type=self.resource_type,
+            project_name=self.project_name,
+            base=base,
+        ).to_dict()
+
+
+ContextConfigType = Union[LegacyContextConfig, ContextConfig]
