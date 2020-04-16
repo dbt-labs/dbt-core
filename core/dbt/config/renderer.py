@@ -18,7 +18,7 @@ class BaseRenderer:
 
     @property
     def name(self):
-        return 'Rendering'
+        return "Rendering"
 
     def should_render_keypath(self, keypath: Keypath) -> bool:
         return True
@@ -29,9 +29,7 @@ class BaseRenderer:
 
         return self.render_value(value, keypath)
 
-    def render_value(
-        self, value: Any, keypath: Optional[Keypath] = None
-    ) -> Any:
+    def render_value(self, value: Any, keypath: Optional[Keypath] = None) -> Any:
         # keypath is ignored.
         # if it wasn't read as a string, ignore it
         if not isinstance(value, str):
@@ -43,15 +41,12 @@ class BaseRenderer:
             msg = f"Could not render {value}: {exc.msg}"
             raise CompilationException(msg) from exc
 
-    def render_data(
-        self, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def render_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             return deep_map_render(self.render_entry, data)
         except RecursionException:
             raise DbtProjectError(
-                f'Cycle detected: {self.name} input has a reference to itself',
-                project=data
+                f"Cycle detected: {self.name} input has a reference to itself", project=data
             )
 
 
@@ -118,7 +113,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
 
     @property
     def name(self):
-        'Project config'
+        "Project config"
 
     def get_package_renderer(self) -> BaseRenderer:
         return PackageRenderer(self.context)
@@ -155,11 +150,11 @@ class DbtProjectYamlRenderer(BaseRenderer):
 
         first = keypath[0]
         # run hooks are not rendered
-        if first in {'on-run-start', 'on-run-end', 'query-comment'}:
+        if first in {"on-run-start", "on-run-end", "query-comment"}:
             return False
 
         # don't render vars blocks until runtime
-        if first == 'vars':
+        if first == "vars":
             return False
 
         if first in {'seeds', 'models', 'snapshots', 'tests'}:

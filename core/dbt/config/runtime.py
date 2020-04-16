@@ -49,7 +49,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     args: Any
     profile_name: str
     cli_vars: Dict[str, Any]
-    dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None
+    dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None
 
     def __post_init__(self):
         self.validate()
@@ -61,7 +61,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         project: Project,
         profile: Profile,
         args: Any,
-        dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
+        dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None,
     ) -> "RuntimeConfig":
         """Instantiate a RuntimeConfig from its components.
 
@@ -187,14 +187,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         profile_name: Optional[str],
     ) -> Profile:
 
-        return Profile.render_from_args(
-            args, profile_renderer, profile_name
-        )
+        return Profile.render_from_args(args, profile_renderer, profile_name)
 
     @classmethod
-    def collect_parts(
-        cls: Type['RuntimeConfig'], args: Any
-    ) -> Tuple[Project, Profile]:
+    def collect_parts(cls: Type["RuntimeConfig"], args: Any) -> Tuple[Project, Profile]:
         # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
         version_check = bool(flags.VERSION_CHECK)
@@ -206,12 +202,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # build the profile using the base renderer and the one fact we know
         # Note: only the named profile section is rendered. The rest of the
         # profile is ignored.
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, "vars", "{}"))
         profile_renderer = ProfileRenderer(cli_vars)
         profile_name = partial.render_profile_name(profile_renderer)
-        profile = cls._get_rendered_profile(
-            args, profile_renderer, profile_name
-        )
+        profile = cls._get_rendered_profile(args, profile_renderer, profile_name)
         # Save env_vars encountered in rendering for partial parsing
         profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
 
@@ -462,7 +456,7 @@ class UnsetProfileConfig(RuntimeConfig):
         project: Project,
         profile: Profile,
         args: Any,
-        dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
+        dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None,
     ) -> "RuntimeConfig":
         """Instantiate a RuntimeConfig from its components.
 
@@ -534,7 +528,7 @@ class UnsetProfileConfig(RuntimeConfig):
         return profile
 
     @classmethod
-    def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
+    def from_args(cls: Type[RuntimeConfig], args: Any) -> "RuntimeConfig":
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.
