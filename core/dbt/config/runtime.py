@@ -307,7 +307,8 @@ class UnsetProfileConfig(RuntimeConfig):
         :raises ValidationException: If the cli variables are invalid.
         """
         # profile_name from the project
-        partial = Project.partial_load(os.getcwd())
+        project_root = args.project_dir if args.project_dir else os.getcwd()
+        partial = Project.partial_load(project_root)
 
         # build the profile using the base renderer and the one fact we know
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
