@@ -1,6 +1,6 @@
 import builtins
 import functools
-from typing import NoReturn, Optional
+from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -825,10 +825,43 @@ def raise_unrecognized_credentials_type(typename, supported_types):
     )
 
 
+def raise_invalid_patch(
+    node, patch_section: str, patch_path: str,
+) -> NoReturn:
+    from dbt.ui.printer import line_wrap_message
+    msg = line_wrap_message(
+        f'''\
+        '{node.name}' is a {node.resource_type} node, but it is
+        specified in the {patch_section} section of
+        {patch_path}.
+
+
+
+        To fix this error, place the `{node.name}`
+        specification under the {node.resource_type.pluralize()} key instead.
+        '''
+    )
+    raise_compiler_error(msg, node)
+
+
 def raise_not_implemented(msg):
     raise NotImplementedException(
         "ERROR: {}"
         .format(msg))
+
+
+def raise_duplicate_alias(
+    kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
+) -> NoReturn:
+    # dupe found: go through the dict so we can have a nice-ish error
+    key_names = ', '.join(
+        "{}".format(k) for k in kwargs if
+        aliases.get(k) == canonical_key
+    )
+
+    raise AliasException(
+        f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"'
+    )
 
 
 def warn_or_error(msg, node=None, log_fmt=None):

@@ -21,13 +21,12 @@ from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, InternalException, raise_compiler_error,
-    warn_or_error
+    warn_or_error, raise_invalid_patch
 )
 from dbt.helper_types import PathSet
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-from dbt.ui import printer
 from dbt import deprecations
 from dbt import tracking
 import dbt.utils
@@ -229,7 +228,7 @@ def _sort_values(dct):
     return {k: sorted(v) for k, v in dct.items()}
 
 
-def build_edges(nodes):
+def build_edges(nodes: List[NonSourceNode]):
     """Build the forward and backward edges on the given list of ParsedNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
@@ -405,11 +404,31 @@ MaybeNonSource = Optional[Union[
 ]]
 
 
+T = TypeVar('T', bound=CompileResultNode)
+
+
+def _update_into(dest: MutableMapping[str, T], new_item: T):
+    unique_id = new_item.unique_id
+    if unique_id not in dest:
+        raise dbt.exceptions.RuntimeException(
+            f'got an update_{new_item.resource_type} call with an '
+            f'unrecognized {new_item.resource_type}: {new_item.unique_id}'
+        )
+    existing = dest[unique_id]
+    if new_item.original_file_path != existing.original_file_path:
+        raise dbt.exceptions.RuntimeException(
+            f'cannot update a {new_item.resource_type} to have a new file '
+            f'path!'
+        )
+    dest[unique_id] = new_item
+
+
 @dataclass
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
-    nodes: MutableMapping[str, CompileResultNode]
+    nodes: MutableMapping[str, NonSourceNode]
+    sources: MutableMapping[str, ParsedSourceDefinition]
     macros: MutableMapping[str, ParsedMacro]
     docs: MutableMapping[str, ParsedDocumentation]
     generated_at: datetime
@@ -430,6 +449,7 @@ class Manifest:
             files = {}
         return cls(
             nodes={},
+            sources={},
             macros=macros,
             docs={},
             generated_at=datetime.utcnow(),
@@ -437,19 +457,11 @@ class Manifest:
             files=files,
         )
 
-    def update_node(self, new_node):
-        unique_id = new_node.unique_id
-        if unique_id not in self.nodes:
-            raise dbt.exceptions.RuntimeException(
-                'got an update_node call with an unrecognized node: {}'
-                .format(unique_id)
-            )
-        existing = self.nodes[unique_id]
-        if new_node.original_file_path != existing.original_file_path:
-            raise dbt.exceptions.RuntimeException(
-                'cannot update a node to have a new file path!'
-            )
-        self.nodes[unique_id] = new_node
+    def update_node(self, new_node: NonSourceNode):
+        _update_into(self.nodes, new_node)
+
+    def update_source(self, new_source: ParsedSourceDefinition):
+        _update_into(self.sources, new_source)
 
     def build_flat_graph(self):
         """This attribute is used in context.common by each node, so we want to
@@ -457,10 +469,15 @@ class Manifest:
         Make sure you don't call this until you're done with building your
         manifest!
         """
+        # TODO: we could supply sources in nodes here, for backwards
+        # compatibility
         self.flat_graph = {
             'nodes': {
                 k: v.to_dict(omit_none=False) for k, v in self.nodes.items()
             },
+            'sources': {
+                k: v.to_dict(omit_none=False) for k, v in self.sources.items()
+            }
         }
 
     def find_disabled_by_name(
@@ -491,8 +508,6 @@ class Manifest:
             name, package, [NodeType.Documentation]
         )
         result = searcher.search(self.docs.values())
-        if result is not None:
-            assert isinstance(result, ParsedDocumentation)
         return result
 
     def find_refable_by_name(
@@ -505,8 +520,6 @@ class Manifest:
             name, package, NodeType.refable()
         )
         result = searcher.search(self.nodes.values())
-        if result is not None:
-            assert not isinstance(result, ParsedSourceDefinition)
         return result
 
     def find_source_by_name(
@@ -518,9 +531,7 @@ class Manifest:
 
         name = f'{source_name}.{table_name}'
         searcher: NameSearcher = NameSearcher(name, package, [NodeType.Source])
-        result = searcher.search(self.nodes.values())
-        if result is not None:
-            assert isinstance(result, ParsedSourceDefinition)
+        result = searcher.search(self.sources.values())
         return result
 
     def _find_macros_by_name(
@@ -623,15 +634,15 @@ class Manifest:
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
-        for unique_id, node in self.nodes.items():
-            resource_type_plural = node.resource_type.pluralize()
+        all_resources = chain(self.nodes.values(), self.sources.values())
+        for resource in all_resources:
+            resource_type_plural = resource.resource_type.pluralize()
             if resource_type_plural not in resource_fqns:
                 resource_fqns[resource_type_plural] = set()
-            resource_fqns[resource_type_plural].add(tuple(node.fqn))
-
+            resource_fqns[resource_type_plural].add(tuple(resource.fqn))
         return resource_fqns
 
-    def add_nodes(self, new_nodes):
+    def add_nodes(self, new_nodes: Mapping[str, NonSourceNode]):
         """Add the given dict of new nodes to the manifest."""
         for unique_id, node in new_nodes.items():
             if unique_id in self.nodes:
@@ -668,10 +679,6 @@ class Manifest:
         # nodes looking for matching names. We could use a NameSearcher if we
         # were ok with doing an O(n*m) search (one nodes scan per patch)
         for node in self.nodes.values():
-            if node.resource_type == NodeType.Source:
-                continue
-            # appease mypy - we know this because of the check above
-            assert not isinstance(node, ParsedSourceDefinition)
             patch = patches.pop(node.name, None)
             if not patch:
                 continue
@@ -684,19 +691,9 @@ class Manifest:
                         patch=patch, node=node, expected_key=expected_key
                     )
                 else:
-                    msg = printer.line_wrap_message(
-                        f'''\
-                        '{node.name}' is a {node.resource_type} node, but it is
-                        specified in the {patch.yaml_key} section of
-                        {patch.original_file_path}.
-
-
-
-                        To fix this error, place the `{node.name}`
-                        specification under the {expected_key} key instead.
-                        '''
+                    raise_invalid_patch(
+                        node, patch.yaml_key, patch.original_file_path
                     )
-                    raise_compiler_error(msg)
 
             node.patch(patch)
 
@@ -712,17 +709,21 @@ class Manifest:
 
     def get_used_schemas(self, resource_types=None):
         return frozenset({
-            (node.database, node.schema)
-            for node in self.nodes.values()
+            (node.database, node.schema) for node in
+            chain(self.nodes.values(), self.sources.values())
             if not resource_types or node.resource_type in resource_types
         })
 
     def get_used_databases(self):
-        return frozenset(node.database for node in self.nodes.values())
+        return frozenset(
+            x.database for x in
+            chain(self.nodes.values(), self.sources.values())
+        )
 
     def deepcopy(self):
         return Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
+            sources={k: _deepcopy(v) for k, v in self.sources.items()},
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             generated_at=self.generated_at,
@@ -732,10 +733,12 @@ class Manifest:
         )
 
     def writable_manifest(self):
-        forward_edges, backward_edges = build_edges(self.nodes.values())
+        edge_members = list(chain(self.nodes.values(), self.sources.values()))
+        forward_edges, backward_edges = build_edges(edge_members)
 
         return WritableManifest(
             nodes=self.nodes,
+            sources=self.sources,
             macros=self.macros,
             docs=self.docs,
             generated_at=self.generated_at,
@@ -744,25 +747,6 @@ class Manifest:
             child_map=forward_edges,
             parent_map=backward_edges,
         )
-
-    @classmethod
-    def from_writable_manifest(cls, writable):
-        self = cls(
-            nodes=writable.nodes,
-            macros=writable.macros,
-            docs=writable.docs,
-            generated_at=writable.generated_at,
-            metadata=writable.metadata,
-            disabled=writable.disabled,
-            files=writable.files,
-        )
-        self.metadata = writable.metadata
-        return self
-
-    @classmethod
-    def from_dict(cls, data, validate=True):
-        writable = WritableManifest.from_dict(data=data, validate=validate)
-        return cls.from_writable_manifest(writable)
 
     def to_dict(self, omit_none=True, validate=False):
         return self.writable_manifest().to_dict(
@@ -773,12 +757,15 @@ class Manifest:
         self.writable_manifest().write(path)
 
     def expect(self, unique_id: str) -> CompileResultNode:
-        if unique_id not in self.nodes:
+        if unique_id in self.nodes:
+            return self.nodes[unique_id]
+        elif unique_id in self.sources:
+            return self.sources[unique_id]
+        else:
             # something terrible has happened
             raise dbt.exceptions.InternalException(
                 'Expected node {} not found in manifest'.format(unique_id)
             )
-        return self.nodes[unique_id]
 
     def resolve_ref(
         self,
@@ -881,10 +868,15 @@ class Manifest:
 
 @dataclass
 class WritableManifest(JsonSchemaMixin, Writable):
-    nodes: Mapping[str, CompileResultNode] = field(
+    nodes: Mapping[str, NonSourceNode] = field(
         metadata=dict(description=(
             'The nodes defined in the dbt project and its dependencies'
         )),
+    )
+    sources: Mapping[str, ParsedSourceDefinition] = field(
+        metadata=dict(description=(
+            'The sources defined in the dbt project and its dependencies',
+        ))
     )
     macros: Mapping[str, ParsedMacro] = field(
         metadata=dict(description=(

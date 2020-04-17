@@ -257,7 +257,7 @@ class SchemaParserSourceTest(SchemaParserTest):
             name='my_table',
             loader='',
             freshness=FreshnessThreshold(),
-            external=ExternalTable(),
+            external=None,
             source_description='',
             identifier='my_table',
             fqn=['snowplow', 'my_source', 'my_table'],
@@ -797,6 +797,8 @@ class ProcessingTest(BaseParserTest):
         nodes = {
             x_uid: self.x_node,
             y_uid: self.y_node,
+        }
+        sources = {
             src_uid: self.src_node,
         }
         docs = {
@@ -809,7 +811,7 @@ class ProcessingTest(BaseParserTest):
             )
         }
         self.manifest = Manifest(
-            nodes=nodes, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
+            nodes=nodes, sources=sources, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
         )
 
     def test_process_docs(self):

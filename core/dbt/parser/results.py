@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TypeVar, MutableMapping, Mapping, Union, List
+from typing import TypeVar, MutableMapping, Mapping, Union, List, Tuple
 
 from hologram import JsonSchemaMixin
 
@@ -73,7 +73,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     macros: MutableMapping[str, ParsedMacro] = dict_field()
     macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
-    source_patches: MutableMapping[str, SourcePatch] = dict_field()
+    source_patches: MutableMapping[Tuple[str, str], SourcePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
     disabled: MutableMapping[str, List[CompileResultNode]] = dict_field()
     dbt_version: str = __version__
@@ -87,12 +87,12 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         return self.files[key]
 
     def add_source(
-        self, source_file: SourceFile, node: ParsedSourceDefinition
+        self, source_file: SourceFile, source: ParsedSourceDefinition
     ):
-        # nodes can't be overwritten!
-        _check_duplicates(node, self.sources)
-        self.sources[node.unique_id] = node
-        self.get_file(source_file).sources.append(node.unique_id)
+        # sources can't be overwritten!
+        _check_duplicates(source, self.sources)
+        self.sources[source.unique_id] = source
+        self.get_file(source_file).sources.append(source.unique_id)
 
     def add_node(self, source_file: SourceFile, node: ManifestNodes):
         # nodes can't be overwritten!

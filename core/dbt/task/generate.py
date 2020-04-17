@@ -1,6 +1,7 @@
 import os
 import shutil
 from datetime import datetime
+from itertools import chain
 from typing import Dict, List, Any, Optional
 
 from hologram import ValidationError
@@ -164,7 +165,8 @@ def get_unique_id_mapping(manifest: Manifest) -> Dict[CatalogKey, List[str]]:
     # A single relation could have multiple unique IDs pointing to it if a
     # source were also a node.
     ident_map: Dict[CatalogKey, List[str]] = {}
-    for unique_id, node in manifest.nodes.items():
+    nodes_and_sources = chain(manifest.nodes.items(), manifest.sources.items())
+    for unique_id, node in nodes_and_sources:
         key = mapping_key(node)
 
         if key not in ident_map:

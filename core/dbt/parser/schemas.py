@@ -6,7 +6,7 @@ from typing import (
     Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 )
 
-from hologram import ValidationError
+from hologram import ValidationError, JsonSchemaMixin
 
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
@@ -517,6 +517,9 @@ class YamlParser(Generic[Target, Parsed]):
         raise NotImplementedError('parse_patch is abstract')
 
 
+T = TypeVar('T', bound=JsonSchemaMixin)
+
+
 class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -525,29 +528,27 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def get_block(self, node: SourceTarget) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
 
-    def get_unparsed_target(self) -> Iterable[SourceTarget]:
+    def _target_from_dict(self, cls: Type[T], data: Dict[str, Any]) -> T:
         path = self.yaml.path.original_file_path
+        try:
+            return cls.from_dict(data)
+        except (ValidationError, JSONValidationException) as exc:
+            msg = error_context(path, self.key, data, exc)
+            raise CompilationException(msg) from exc
 
+    def get_unparsed_target(self) -> Iterable[SourceTarget]:
         for data in self.get_key_dicts():
             data = self.project.credentials.translate_aliases(
                 data, recurse=True
             )
 
             is_override = 'overrides' in data
+            cls: Union[Type[SourcePatch], Type[UnparsedSourceDefinition]]
             if is_override:
-                cls = SourcePatch
+                patch = self._target_from_dict(SourcePatch, data)
+                self.results.add_source_patch(patch)
             else:
-                cls = UnparsedSourceDefinition
-
-            try:
-                source = cls.from_dict()
-            except (ValidationError, JSONValidationException) as exc:
-                msg = error_context(path, self.key, data, exc)
-                raise CompilationException(msg) from exc
-
-            if is_override:
-                self.results.add_source_patch(source)
-            else:
+                source = self._target_from_dict(UnparsedSourceDefinition, data)
                 for table in source.tables:
                     yield SourceTarget(source, table)
 

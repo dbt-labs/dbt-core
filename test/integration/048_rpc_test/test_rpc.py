@@ -894,12 +894,14 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertIn('results', result)
         self.assertHasTestResults(result['results'], 4)
 
-    def assertManifestExists(self, length):
+    def assertManifestExists(self, nodes_length, sources_length):
         self.assertTrue(os.path.exists('target/manifest.json'))
         with open('target/manifest.json') as fp:
             manifest = json.load(fp)
         self.assertIn('nodes', manifest)
-        self.assertEqual(len(manifest['nodes']), length)
+        self.assertEqual(len(manifest['nodes']), nodes_length)
+        self.assertIn('sources', manifest)
+        self.assertEqual(len(manifest['sources']), sources_length)
 
     def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
@@ -929,7 +931,7 @@ class TestRPCServerProjects(HasRPCServer):
         }
         self.assertHasDocsGenerated(result, expected)
         self.assertCatalogExists()
-        self.assertManifestExists(17)
+        self.assertManifestExists(12, 5)
 
     @use_profile('postgres')
     def test_docs_generate_postgres(self):
