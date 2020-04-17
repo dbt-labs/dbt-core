@@ -23,7 +23,20 @@ from enum import Enum
 from typing_extensions import Protocol
 from typing import (
     Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable, List, Iterator,
-    Mapping, Iterable, AbstractSet, Set, Sequence
+    Type,
+    Any,
+    Optional,
+    TypeVar,
+    Dict,
+    Union,
+    Callable,
+    List,
+    Iterator,
+    Mapping,
+    Iterable,
+    AbstractSet,
+    Set,
+    Sequence,
 )
 
 import dbt.exceptions
@@ -350,17 +363,13 @@ class Translator:
         self.aliases = aliases
         self.recursive = recursive
 
-    def translate_mapping(
-        self, kwargs: Mapping[str, Any]
-    ) -> Dict[str, Any]:
+    def translate_mapping(self, kwargs: Mapping[str, Any]) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
 
         for key, value in kwargs.items():
             canonical_key = self.aliases.get(key, key)
             if canonical_key in result:
-                dbt.exceptions.raise_duplicate_alias(
-                    kwargs, self.aliases, canonical_key
-                )
+                dbt.exceptions.raise_duplicate_alias(kwargs, self.aliases, canonical_key)
             result[canonical_key] = self.translate_value(value)
         return result
 
@@ -379,9 +388,9 @@ class Translator:
         try:
             return self.translate_mapping(value)
         except RuntimeError as exc:
-            if 'maximum recursion depth exceeded' in str(exc):
+            if "maximum recursion depth exceeded" in str(exc):
                 raise dbt.exceptions.RecursionException(
-                    'Cycle detected in a value passed to translate!'
+                    "Cycle detected in a value passed to translate!"
                 )
             raise
 

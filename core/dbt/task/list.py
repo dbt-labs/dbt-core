@@ -90,7 +90,7 @@ class ListTask(GraphRunnableTask):
             else:
                 raise RuntimeException(
                     f'Got an unexpected result from node selection: "{node}"'
-                    f'Expected a source or a node!'
+                    f"Expected a source or a node!"
                 )
 
     def generate_selectors(self):

@@ -451,14 +451,13 @@ def _update_into(dest: MutableMapping[str, T], new_item: T):
     unique_id = new_item.unique_id
     if unique_id not in dest:
         raise dbt.exceptions.RuntimeException(
-            f'got an update_{new_item.resource_type} call with an '
-            f'unrecognized {new_item.resource_type}: {new_item.unique_id}'
+            f"got an update_{new_item.resource_type} call with an "
+            f"unrecognized {new_item.resource_type}: {new_item.unique_id}"
         )
     existing = dest[unique_id]
     if new_item.original_file_path != existing.original_file_path:
         raise dbt.exceptions.RuntimeException(
-            f'cannot update a {new_item.resource_type} to have a new file '
-            f'path!'
+            f"cannot update a {new_item.resource_type} to have a new file " f"path!"
         )
     dest[unique_id] = new_item
 
@@ -737,8 +736,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     def get_used_databases(self):
         return frozenset(
-            x.database for x in
-            chain(self.nodes.values(), self.sources.values())
+            {
+                (node.database, node.schema)
+                for node in chain(self.nodes.values(), self.sources.values())
+                if not resource_types or node.resource_type in resource_types
+            }
         )
 
     def deepcopy(self):

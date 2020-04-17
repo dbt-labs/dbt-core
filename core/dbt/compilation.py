@@ -396,10 +396,7 @@ class Compiler:
             if dependency in manifest.nodes:
                 linker.dependency(node.unique_id, (manifest.nodes[dependency].unique_id))
             elif dependency in manifest.sources:
-                linker.dependency(
-                    node.unique_id,
-                    (manifest.sources[dependency].unique_id)
-                )
+                linker.dependency(node.unique_id, (manifest.sources[dependency].unique_id))
             else:
                 dependency_not_found(node, dependency)
 

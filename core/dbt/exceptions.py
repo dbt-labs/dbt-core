@@ -1000,13 +1000,13 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 def warn_invalid_patch(patch, resource_type):
     msg = line_wrap_message(
-        f'''\
+        f"""\
         '{patch.name}' is a {resource_type} node, but it is
         specified in the {patch.yaml_key} section of
         {patch.original_file_path}.
         To fix this error, place the `{patch.name}`
         specification under the {resource_type.pluralize()} key instead.
-        '''
+        """
     )
     warn_or_error(msg, log_fmt=warning_tag('{}'))
 
@@ -1021,14 +1021,9 @@ def raise_duplicate_alias(
     kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
 ) -> NoReturn:
     # dupe found: go through the dict so we can have a nice-ish error
-    key_names = ', '.join(
-        "{}".format(k) for k in kwargs if
-        aliases.get(k) == canonical_key
-    )
+    key_names = ", ".join("{}".format(k) for k in kwargs if aliases.get(k) == canonical_key)
 
-    raise AliasException(
-        f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"'
-    )
+    raise AliasException(f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"')
 
 
 def warn_or_error(msg, node=None, log_fmt=None):
