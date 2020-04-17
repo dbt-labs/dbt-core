@@ -724,13 +724,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return resource_fqns
 
     def get_used_schemas(self, resource_types=None):
-        return frozenset({
-            (node.database, node.schema) for node in
-            chain(self.nodes.values(), self.sources.values())
-            if not resource_types or node.resource_type in resource_types
-        })
-
-    def get_used_databases(self):
         return frozenset(
             {
                 (node.database, node.schema)
