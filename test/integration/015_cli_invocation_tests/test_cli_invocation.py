@@ -1,6 +1,7 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import shutil
+import tempfile
 import yaml
 
 
@@ -111,3 +112,31 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
         # make sure the test runs against `custom_schema`
         for test_result in res:
             self.assertTrue(self.custom_schema, test_result.node.injected_sql)
+
+
+class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
+
+    @property
+    def schema(self):
+        return "test_cli_invocation_015"
+
+    @property
+    def models(self):
+        return "models"
+
+    @use_profile('postgres')
+    def test_postgres_dbt_commands_with_cwd_as_project_dir(self):
+        self._run_simple_dbt_commands(os.getcwd())
+
+    @use_profile('postgres')
+    def test_postgres_dbt_commands_with_randomdir_as_project_dir(self):
+        workdir = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chdir(tmpdir)
+            self._run_simple_dbt_commands(workdir)
+
+    def _run_simple_dbt_commands(self, project_dir):
+        self.run_dbt(['deps', '--project-dir', project_dir])
+        self.run_dbt(['seed', '--project-dir', project_dir])
+        self.run_dbt(['run', '--project-dir', project_dir])
+        self.run_dbt(['test', '--project-dir', project_dir])
