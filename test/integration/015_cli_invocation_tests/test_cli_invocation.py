@@ -134,6 +134,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             self._run_simple_dbt_commands(workdir)
+            os.chdir(workdir)
 
     def _run_simple_dbt_commands(self, project_dir):
         self.run_dbt(['deps', '--project-dir', project_dir])
