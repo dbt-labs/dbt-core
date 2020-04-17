@@ -297,9 +297,9 @@ class UnsetProfileConfig(RuntimeConfig):
 
     @classmethod
     def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
-        """Given arguments, read in dbt_project.yml from the current directory,
-        read in packages.yml if it exists, and use them to find the profile to
-        load.
+        """Given arguments, read in dbt_project.yml from the arg --project-dir
+        or current directory if not provided, read in packages.yml if it
+        exists, and use them to find the profile to load.
 
         :param args: The arguments as parsed from the cli.
         :raises DbtProjectError: If the project is invalid or missing.
@@ -307,7 +307,8 @@ class UnsetProfileConfig(RuntimeConfig):
         :raises ValidationException: If the cli variables are invalid.
         """
         # profile_name from the project
-        partial = Project.partial_load(os.getcwd())
+        project_root = args.project_dir if args.project_dir else os.getcwd()
+        partial = Project.partial_load(project_root)
 
         # build the profile using the base renderer and the one fact we know
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
