@@ -297,9 +297,9 @@ class UnsetProfileConfig(RuntimeConfig):
 
     @classmethod
     def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
-        """Given arguments, read in dbt_project.yml from the current directory,
-        read in packages.yml if it exists, and use them to find the profile to
-        load.
+        """Given arguments, read in dbt_project.yml from the arg --project-dir
+        or current directory if not provided, read in packages.yml if it exists,
+        and use them to find the profile to load.
 
         :param args: The arguments as parsed from the cli.
         :raises DbtProjectError: If the project is invalid or missing.
