@@ -296,7 +296,7 @@ class ModelMetadata(NodeMetadata):
             ("original_file_path", "node_path"),
             ("name", "node_name"),
             ("resource_type", "resource_type"),
-            ('depends_on_nodes', 'depends_on'),
+            ("depends_on_nodes", "depends_on"),
         ]
 
     def process_config(self, record):
