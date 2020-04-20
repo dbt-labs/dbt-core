@@ -111,11 +111,9 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'master',
-                    'warn-unpinned': False,
-                },
-            ],
+                    'local': 'local_dependency'
+                }
+            ]
         }
 
     @use_profile("postgres")
@@ -148,11 +146,9 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'master',
-                    'warn-unpinned': False,
-                },
-            ],
+                    'local': 'local_dependency'
+                }
+            ]
         }
 
     @use_profile("postgres")

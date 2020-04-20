@@ -228,12 +228,10 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         paths: MutableSet[FQNPath],
     ) -> PathSet:
         for key, value in config.items():
-            if isinstance(value, dict):
-                if key == 'config':
-                    paths.add(path)
-                else:
-                    self._get_v2_config_paths(value, path + (key,), paths)
-
+            if isinstance(value, dict) and not key.startswith('+'):
+                self._get_v2_config_paths(value, path + (key,), paths)
+            else:
+                paths.add(path)
         return frozenset(paths)
 
     def _get_v1_config_paths(

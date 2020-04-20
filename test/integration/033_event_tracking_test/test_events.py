@@ -189,9 +189,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             "data-paths": [self.dir("data")],
             "test-paths": [self.dir("test")],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         }
 

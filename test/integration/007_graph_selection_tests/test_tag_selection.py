@@ -18,14 +18,10 @@ class TestGraphSelection(DBTIntegrationTest):
             "models": {
                 "test": {
                     "users": {
-                        'config': {
-                            "tags": "specified_as_string"
-                        },
+                        "tags": "specified_as_string"
                     },
                     "users_rollup": {
-                        'config': {
-                            "tags": ["specified_in_project"],
-                        },
+                        "tags": ["specified_in_project"],
                     }
                 }
             }

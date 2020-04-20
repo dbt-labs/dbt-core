@@ -24,9 +24,7 @@ class TestSimpleSeed(DBTIntegrationTest):
             'config-version': 2,
             "data-paths": ['data'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         }
 
@@ -73,10 +71,8 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
             'config-version': 2,
             "data-paths": ['data'],
             'seeds': {
-                'config': {
-                    "schema": "custom_schema",
-                    'quote_columns': False,
-                },
+                "schema": "custom_schema",
+                'quote_columns': False,
             },
         }
 
@@ -126,19 +122,13 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
             'seeds': {
                 "test": {
                     "seed_enabled": {
-                        'config': {
-                            "enabled": True
-                        },
+                        "enabled": True
                     },
                     "seed_disabled": {
-                        'config': {
-                            "enabled": False
-                        },
+                        "enabled": False
                     }
                 },
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 
@@ -185,9 +175,7 @@ class TestSeedParsing(DBTIntegrationTest):
             'config-version': 2,
             "data-paths": ['data-bad'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 
@@ -220,9 +208,7 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
             'config-version': 2,
             "data-paths": ['data-bom'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 
@@ -254,9 +240,7 @@ class TestSimpleSeedWithUnicode(DBTIntegrationTest):
             'config-version': 2,
             "data-paths": ['data-unicode'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         }
 

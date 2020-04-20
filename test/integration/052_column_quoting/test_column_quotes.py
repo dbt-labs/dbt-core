@@ -62,9 +62,7 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
         return {
             'config-version': 2,
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                }
+                'quote_columns': False,
             },
         }
 
@@ -99,9 +97,7 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
         return {
             'config-version': 2,
             'seeds': {
-                'config': {
-                    'quote_columns': True,
-                }
+                'quote_columns': True,
             },
         }
 

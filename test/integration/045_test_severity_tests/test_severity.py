@@ -16,9 +16,7 @@ class TestSeverity(DBTIntegrationTest):
             'data-paths': ['data'],
             'test-paths': ['tests'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 

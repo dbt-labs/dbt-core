@@ -20,9 +20,7 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
             'data-paths': ['data'],
             'macro-paths': ['macros'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 

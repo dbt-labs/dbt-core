@@ -29,9 +29,7 @@ class TestStrictUndefined(DBTIntegrationTest):
             'data-paths': [self.dir('data')],
             'test-paths': [self.dir('tests')],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 

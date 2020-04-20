@@ -15,21 +15,15 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
             'macro-paths': ['macros'],
             'seeds': {
                 'test': {
-                    'config': {
-                        'enabled': False,
-                        'quote_columns': True,
-                    },
+                    'enabled': False,
+                    'quote_columns': True,
                     'seed_enabled': {
-                        'config': {
-                            'enabled': True,
-                            'column_types': self.seed_enabled_types()
-                        },
+                        'enabled': True,
+                        '+column_types': self.seed_enabled_types()
                     },
                     'seed_tricky': {
-                        'config': {
-                            'enabled': True,
-                            'column_types': self.seed_tricky_types(),
-                        },
+                        'enabled': True,
+                        '+column_types': self.seed_tricky_types(),
                     },
                 },
             },

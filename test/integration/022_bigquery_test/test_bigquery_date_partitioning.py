@@ -24,13 +24,12 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
         models:
             test:
                 partitioned_noconfig:
-                    config:
-                        materialized: table
-                        partitions:
-                            - 20180101
-                            - 20180102
-                            - 20180103
-                        verbose: true
+                    materialized: table
+                    partitions:
+                        - 20180101
+                        - 20180102
+                        - 20180103
+                    verbose: true
         '''))
 
     @use_profile('bigquery')

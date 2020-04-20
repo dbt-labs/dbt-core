@@ -651,7 +651,7 @@ class Project:
             # remove this from the v1 form
             mutated.pop('vars')
         # ok, now we want to look through all the existing cfgkeys and mirror
-        # it, except anything under 'config' gets included directly.
+        # it, except expand the '+' prefix.
         for cfgkey in common_config_keys:
             if cfgkey not in dct:
                 continue
@@ -666,11 +666,10 @@ class Project:
 def _flatten_config(dct: Dict[str, Any]):
     result = {}
     for key, value in dct.items():
-        if isinstance(value, dict):
-            if key == 'config':
-                result.update(value)
-            else:
-                result[key] = _flatten_config(value)
+        if isinstance(value, dict) and not key.startswith('+'):
+            result[key] = _flatten_config(value)
         else:
+            if key.startswith('+'):
+                key = key[1:]
             result[key] = value
     return result

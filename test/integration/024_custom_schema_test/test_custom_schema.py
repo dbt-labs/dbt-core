@@ -62,9 +62,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
         return {
             'config-version': 2,
             "models": {
-                'config': {
-                    "schema": "dbt_test"
-                },
+                "schema": "dbt_test"
             },
         }
 
@@ -100,9 +98,7 @@ class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
         return {
             'config-version': 2,
             "models": {
-                'config': {
-                    "schema": "dbt_test"
-                },
+                "schema": "dbt_test"
             }
         }
 
@@ -159,9 +155,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
             'config-version': 2,
             'macro-paths': ['custom-macros'],
             'models': {
-                'config': {
-                    'schema': 'dbt_test',
-                },
+                'schema': 'dbt_test',
             }
         }
 
@@ -190,9 +184,7 @@ class TestCustomSchemaWithCustomMacroConfigs(TestCustomSchemaWithCustomMacro):
             'config-version': 2,
             'macro-paths': ['custom-macros-configs'],
             'models': {
-                'config': {
-                    'schema': 'dbt_test'
-                },
+                'schema': 'dbt_test'
             },
         }
 

@@ -25,9 +25,7 @@ class BaseSourcesTest(DBTIntegrationTest):
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'seeds': {
-                'config': {
-                    'quote_columns': True,
-                },
+                'quote_columns': True,
             },
         }
 

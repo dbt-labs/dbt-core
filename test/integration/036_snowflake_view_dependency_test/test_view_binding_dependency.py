@@ -16,9 +16,7 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': ['data'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
             'quoting': {
                 'schema': False,

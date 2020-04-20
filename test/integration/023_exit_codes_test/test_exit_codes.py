@@ -161,9 +161,7 @@ class TestExitCodesSeed(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': ['data-good'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 
@@ -189,9 +187,7 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': ['data-bad'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 

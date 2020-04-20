@@ -129,14 +129,10 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
             'config-version': 2,
             'macro-paths': ['schema_override_macros'],
             'models': {
-                'config': {
-                    'schema': 'dbt_test',
-                },
+                'schema': 'dbt_test',
             },
             'seeds': {
-                'config': {
-                    'schema': 'dbt_test',
-                },
+                'schema': 'dbt_test',
             }
         }
 

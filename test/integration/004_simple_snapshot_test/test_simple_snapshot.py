@@ -114,9 +114,7 @@ class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
             'macro-paths': ['custom-snapshot-macros', 'macros'],
             'snapshot-paths': ['test-snapshots-checkall'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         }
 
@@ -316,12 +314,10 @@ class TestConfiguredSnapshotFileSelects(TestSimpleSnapshotFileSelects):
             "snapshot-paths": ['test-snapshots-select-noconfig'],
             "snapshots": {
                 "test": {
-                    "config": {
-                        "target_schema": self.unique_schema(),
-                        "unique_key": "id || '-' || first_name",
-                        'strategy': 'timestamp',
-                        'updated_at': 'updated_at',
-                    },
+                    "target_schema": self.unique_schema(),
+                    "unique_key": "id || '-' || first_name",
+                    'strategy': 'timestamp',
+                    'updated_at': 'updated_at',
                 },
             },
             'macro-paths': ['macros'],
@@ -561,12 +557,10 @@ class TestConfiguredCheckCols(TestCheckCols):
             "snapshot-paths": ['test-check-col-snapshots-noconfig'],
             "snapshots": {
                 "test": {
-                    "config": {
-                        "target_schema": self.unique_schema(),
-                        "unique_key": "id || '-' || first_name",
-                        "strategy": "check",
-                        "check_cols": ["email"],
-                    },
+                    "target_schema": self.unique_schema(),
+                    "unique_key": "id || '-' || first_name",
+                    "strategy": "check",
+                    "check_cols": ["email"],
                 },
             },
             'macro-paths': ['macros'],

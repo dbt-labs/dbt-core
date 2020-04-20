@@ -149,9 +149,7 @@ class HasRPCServer(DBTIntegrationTest):
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'macro-paths': ['macros'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                }
+                'quote_columns': False,
             },
         }
 

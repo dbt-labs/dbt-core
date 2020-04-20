@@ -137,9 +137,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'alternate_db': alternate_db,
             },
             'seeds': {
-                'config': {
-                    'quote_columns': True,
-                },
+                'quote_columns': True,
             },
         }
         if extra:

@@ -540,15 +540,15 @@ def executor(config: HasThreadingConfig) -> concurrent.futures.Executor:
 
 def fqn_search(
     root: Dict[str, Any], fqn: List[str]
-) -> Iterator[Any]:
+) -> Iterator[Dict[str, Any]]:
     """Iterate into a nested dictionary, looking for keys in the fqn as levels.
-    Yield level name, level config pairs.
+    Yield the level config.
     """
     yield root
 
     for level in fqn:
         level_config = root.get(level, None)
-        if level_config is None:
+        if not isinstance(level_config, dict):
             break
         yield copy.deepcopy(level_config)
         root = level_config

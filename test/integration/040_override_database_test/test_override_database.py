@@ -64,9 +64,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
                 'database': True,
             },
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         }
 
@@ -114,14 +112,10 @@ class TestProjectModelOverride(BaseOverrideDatabase):
                 'alternate_db': self.alternative_database,
             },
             'models': {
-                'config': {
-                    'database': self.alternative_database,
-                },
+                'database': self.alternative_database,
                 'test': {
                     'subfolder': {
-                        'config': {
-                            'database': self.default_database,
-                        }
+                        'database': self.default_database,
                     }
                 }
             },
@@ -156,9 +150,7 @@ class TestProjectSeedOverride(BaseOverrideDatabase):
         self.use_default_project({
             'config-version': 2,
             'seeds': {
-                'config': {
-                    'database': self.alternative_database
-                },
+                'database': self.alternative_database
             },
         })
         self.run_dbt_notstrict(['seed'])

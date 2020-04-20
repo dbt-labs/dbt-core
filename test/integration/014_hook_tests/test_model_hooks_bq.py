@@ -73,10 +73,8 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
             'macro-paths': ['macros'],
             'models': {
                 'test': {
-                    'config': {
-                        'pre-hook': [MODEL_PRE_HOOK],
-                        'post-hook':[MODEL_POST_HOOK],
-                    },
+                    'pre-hook': [MODEL_PRE_HOOK],
+                    'post-hook':[MODEL_POST_HOOK],
                 }
             }
         }
@@ -131,12 +129,10 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
             'data-paths': ['data'],
             'models': {},
             'seeds': {
-                'config': {
-                    'post-hook': [
-                        'insert into {{ this }} (a, b, c) VALUES (10, 11, 12)',
-                    ],
-                    'quote_columns': False,
-                },
+                'post-hook': [
+                    'insert into {{ this }} (a, b, c) VALUES (10, 11, 12)',
+                ],
+                'quote_columns': False,
             },
         }
 

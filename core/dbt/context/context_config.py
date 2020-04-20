@@ -114,12 +114,14 @@ class ContextConfigGenerator:
         else:
             model_configs = project.models
         for level_config in fqn_search(model_configs, fqn):
-            if 'config' not in level_config:
-                continue
+            result = {}
+            for key, value in level_config.items():
+                if key.startswith('+'):
+                    result[key[1:]] = deepcopy(value)
+                elif not isinstance(value, dict):
+                    result[key] = deepcopy(value)
 
-            level_value = level_config['config']
-            if isinstance(level_value, dict):
-                yield deepcopy(level_value)
+            yield result
 
     def active_project_configs(
         self, fqn: List[str], resource_type: NodeType

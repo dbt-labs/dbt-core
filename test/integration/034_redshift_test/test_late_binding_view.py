@@ -22,9 +22,7 @@ class TestLateBindingView(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': [self.dir('seed')],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                }
+                'quote_columns': False,
             }
         }
 

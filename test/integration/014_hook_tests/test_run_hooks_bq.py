@@ -50,9 +50,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
                 "drop table {{ target.schema }}.end_hook_order_test",
             ],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 

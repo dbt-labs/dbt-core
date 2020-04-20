@@ -28,9 +28,7 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
         cfg = {
             'config-version': 2,
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         }
         cfg.update(extra)
@@ -112,9 +110,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         self.use_default_project({
             "data-paths": [self.dir("seed-initial")],
             "seeds": {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             }
         })
         results = self.run_dbt(["seed"])
@@ -328,9 +324,7 @@ class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):
         # Setting the incremental_strategy should make this succeed
         self.use_default_project({
             "models": {
-                'config': {
-                    "incremental_strategy": "delete+insert"
-                },
+                "incremental_strategy": "delete+insert"
             },
             "data-paths": [self.dir("snowflake-seed-update")],
         })

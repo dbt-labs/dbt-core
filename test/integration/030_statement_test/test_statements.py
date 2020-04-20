@@ -20,9 +20,7 @@ class TestStatements(DBTIntegrationTest):
         return {
             'config-version': 2,
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                }
+                'quote_columns': False,
             }
         }
 
@@ -79,9 +77,7 @@ class TestStatementsBigquery(DBTIntegrationTest):
         return {
             'config-version': 2,
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                }
+                'quote_columns': False,
             }
         }
 

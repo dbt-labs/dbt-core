@@ -19,18 +19,14 @@ class TestConfigs(DBTIntegrationTest):
             'data-paths': ['data'],
             'models': {
                 'test': {
-                    'config': {
-                        # the model configs will override this
-                        'materialized': 'invalid',
-                        # the model configs will append to these
-                        'tags': ['tag_one'],
-                    }
+                    # the model configs will override this
+                    'materialized': 'invalid',
+                    # the model configs will append to these
+                    'tags': ['tag_one'],
                 },
             },
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 
@@ -84,9 +80,7 @@ class TestTargetConfigs(DBTIntegrationTest):
             'data-paths': ['data'],
             'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
             },
         }
 
@@ -109,14 +103,10 @@ class TestDisabledConfigs(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': ['data'],
             'seeds': {
-                'config': {
-                    'quote_columns': False,
-                },
+                'quote_columns': False,
                 'test': {
                     'seed': {
-                        'config': {
-                            'enabled': False,
-                        },
+                        'enabled': False,
                     },
                 },
             },

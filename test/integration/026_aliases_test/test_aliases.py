@@ -18,14 +18,10 @@ class TestAliases(DBTIntegrationTest):
             "models": {
                 "test": {
                     "alias_in_project": {
-                        'config': {
-                            "alias": 'project_alias',
-                        },
+                        "alias": 'project_alias',
                     },
                     "alias_in_project_with_override": {
-                        'config': {
-                            "alias": 'project_alias',
-                        },
+                        "alias": 'project_alias',
                     },
                 }
             }
