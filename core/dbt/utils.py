@@ -530,9 +530,7 @@ def executor(config: HasThreadingConfig) -> ConnectingExecutor:
         return MultiThreadedExecutor(max_workers=config.threads)
 
 
-def fqn_search(
-    root: Dict[str, Any], fqn: List[str]
-) -> Iterator[Dict[str, Any]]:
+def fqn_search(root: Dict[str, Any], fqn: List[str]) -> Iterator[Dict[str, Any]]:
     """Iterate into a nested dictionary, looking for keys in the fqn as levels.
     Yield the level config.
     """
