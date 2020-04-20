@@ -96,7 +96,7 @@ class BaseContextConfigGenerator(Generic[T]):
         for level_config in fqn_search(model_configs, fqn):
             result = {}
             for key, value in level_config.items():
-                if key.startswith('+'):
+                if key.startswith("+"):
                     result[key[1:].strip()] = deepcopy(value)
                 elif not isinstance(value, dict):
                     result[key] = deepcopy(value)
