@@ -231,7 +231,8 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         full_path = os.path.join(
-            target_path, subdirectory, self.package_name, self.path
+            target_path, subdirectory, self.package_name,
+            self.original_file_path
         )
 
         write_file(full_path, payload)
