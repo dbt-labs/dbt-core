@@ -229,12 +229,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     ) -> PathSet:
         for key, value in config.items():
             if isinstance(value, dict) and not key.startswith('+'):
-                if key == 'vars':
-                    warn_or_error(
-                        f'Found a "vars" dictionary in a config block for a '
-                        f'dbt_project.yml file with config-version 2 '
-                        f'({self.project_root}/dbt_project.yml)'
-                    )
                 self._get_v2_config_paths(value, path + (key,), paths)
             else:
                 paths.add(path)

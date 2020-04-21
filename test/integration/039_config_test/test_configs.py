@@ -123,39 +123,6 @@ class TestDisabledConfigs(DBTIntegrationTest):
         self.run_dbt(['--partial-parse', 'seed'])
 
 
-class TestConfigWithVars(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "config_039"
-
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            'data-paths': ['data'],
-            'seeds': {
-                'quote_columns': False,
-                'test': {
-                    'vars': {
-                        'something': 100,
-                    },
-                },
-            },
-        }
-
-    @property
-    def models(self):
-        return "empty-models"
-
-    @use_profile('postgres')
-    def test_postgres_embedded_config_with_vars(self):
-        with self.assertRaises(CompilationException) as exc:
-            self.run_dbt(['seed'])
-
-        self.assertIn('Found a "vars" dictionary in a config block', str(exc.exception))
-        self.run_dbt(['seed'], strict=False)
-
-
 class TestUnusedModelConfigs(DBTIntegrationTest):
     @property
     def schema(self):
