@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
-from typing import TypeVar, MutableMapping, Mapping, Union, List, Tuple
+from typing import TypeVar, MutableMapping, Mapping, Union, List
 
 from hologram import JsonSchemaMixin
 
 from dbt.contracts.graph.manifest import (
-    SourceFile, RemoteFile, FileHash, MacroKey
+    SourceFile, RemoteFile, FileHash, MacroKey, SourceKey
 )
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.parsed import (
@@ -21,7 +21,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSeedNode,
     ParsedSchemaTestNode,
     ParsedSnapshotNode,
-    ParsedSourceDefinition,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.util import Writable, Replaceable
@@ -68,12 +68,12 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     profile_hash: FileHash
     project_hashes: MutableMapping[str, FileHash]
     nodes: MutableMapping[str, ManifestNodes] = dict_field()
-    sources: MutableMapping[str, ParsedSourceDefinition] = dict_field()
+    sources: MutableMapping[str, UnpatchedSourceDefinition] = dict_field()
     docs: MutableMapping[str, ParsedDocumentation] = dict_field()
     macros: MutableMapping[str, ParsedMacro] = dict_field()
     macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
-    source_patches: MutableMapping[Tuple[str, str], SourcePatch] = dict_field()
+    source_patches: MutableMapping[SourceKey, SourcePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
     disabled: MutableMapping[str, List[CompileResultNode]] = dict_field()
     dbt_version: str = __version__
@@ -87,24 +87,30 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         return self.files[key]
 
     def add_source(
-        self, source_file: SourceFile, source: ParsedSourceDefinition
+        self, source_file: SourceFile, source: UnpatchedSourceDefinition
     ):
         # sources can't be overwritten!
         _check_duplicates(source, self.sources)
         self.sources[source.unique_id] = source
         self.get_file(source_file).sources.append(source.unique_id)
 
-    def add_node(self, source_file: SourceFile, node: ManifestNodes):
+    def add_node_nofile(self, node: ManifestNodes):
         # nodes can't be overwritten!
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
+
+    def add_node(self, source_file: SourceFile, node: ManifestNodes):
+        self.add_node_nofile(node)
         self.get_file(source_file).nodes.append(node.unique_id)
 
-    def add_disabled(self, source_file: SourceFile, node: CompileResultNode):
+    def add_disabled_nofile(self, node: CompileResultNode):
         if node.unique_id in self.disabled:
             self.disabled[node.unique_id].append(node)
         else:
             self.disabled[node.unique_id] = [node]
+
+    def add_disabled(self, source_file: SourceFile, node: CompileResultNode):
+        self.add_disabled_nofile(node)
         self.get_file(source_file).nodes.append(node.unique_id)
 
     def add_macro(self, source_file: SourceFile, macro: ParsedMacro):

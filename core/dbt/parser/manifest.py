@@ -20,7 +20,7 @@ from dbt.context.docs import generate_runtime_docs
 from dbt.contracts.graph.compiled import NonSourceNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
 from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo
+    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo,
 )
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
@@ -34,6 +34,7 @@ from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
+from dbt.parser.sources import patch_sources
 from dbt.version import __version__
 
 
@@ -66,7 +67,7 @@ def make_parse_result(
     """Make a ParseResult from the project configuration and the profile."""
     # if any of these change, we need to reject the parser
     vars_hash = FileHash.from_contents(
-        '\0'.join([
+        '\x00'.join([
             getattr(config.args, 'vars', '{}') or '{}',
             getattr(config.args, 'profile', '') or '',
             getattr(config.args, 'target', '') or '',
@@ -305,6 +306,10 @@ class ManifestLoader:
         process_docs(manifest, self.root_project)
 
     def create_manifest(self) -> Manifest:
+        # before we do anything else, patch the sources. This mutates
+        # results.disabled, so it needs to come before the final 'disabled'
+        # list is created
+        sources = patch_sources(self.results, self.root_project)
         disabled = []
         for value in self.results.disabled.values():
             disabled.extend(value)
@@ -312,9 +317,10 @@ class ManifestLoader:
         nodes: MutableMapping[str, NonSourceNode] = {
             k: v for k, v in self.results.nodes.items()
         }
+
         manifest = Manifest(
             nodes=nodes,
-            sources=self.results.sources,
+            sources=sources,
             macros=self.results.macros,
             docs=self.results.docs,
             generated_at=datetime.utcnow(),

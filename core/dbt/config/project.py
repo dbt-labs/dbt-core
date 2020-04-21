@@ -645,6 +645,9 @@ class Project:
             # stuff any 'vars' entries into the old-style
             # models/seeds/snapshots dicts
             for project_name, items in dct['vars'].items():
+                if not isinstance(items, dict):
+                    # can't translate top-level vars
+                    continue
                 for cfgkey in ['models', 'seeds', 'snapshots']:
                     if project_name not in mutated[cfgkey]:
                         mutated[cfgkey][project_name] = {}

@@ -13,11 +13,11 @@ from uuid import UUID
 
 from hologram import JsonSchemaMixin
 
+from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
 from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
     ParsedSourceDefinition
 )
-from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, InternalException, raise_compiler_error,
@@ -33,6 +33,7 @@ import dbt.utils
 
 NodeEdgeMap = Dict[str, List[str]]
 MacroKey = Tuple[str, str]
+SourceKey = Tuple[str, str]
 
 
 @dataclass
@@ -142,7 +143,7 @@ class SourceFile(JsonSchemaMixin):
     # any macro patches in this file. The entries are package, name pairs.
     macro_patches: List[MacroKey] = field(default_factory=list)
     # any source patches in this file. The entries are package, name pairs
-    source_patches: List[Tuple[str, str]] = field(default_factory=list)
+    source_patches: List[SourceKey] = field(default_factory=list)
 
     @property
     def search_key(self) -> Optional[str]:

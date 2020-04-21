@@ -6,6 +6,9 @@ from typing import (
     List,
     Dict,
     Any,
+    Sequence,
+    Tuple,
+    Iterator,
 )
 
 from hologram import JsonSchemaMixin
@@ -15,7 +18,8 @@ import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
-    HasYamlMetadata, MacroArgument
+    HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition, UnparsedColumn, TestDef
 )
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -299,6 +303,58 @@ class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
     @property
     def search_name(self):
         return self.name
+
+
+def normalize_test(testdef: TestDef) -> Dict[str, Any]:
+    if isinstance(testdef, str):
+        return {testdef: {}}
+    else:
+        return testdef
+
+
+@dataclass
+class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
+    source: UnparsedSourceDefinition
+    table: UnparsedSourceTableDefinition
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+
+    @property
+    def name(self) -> str:
+        return '{0.name}_{1.name}'.format(self.source, self.table)
+
+    @property
+    def quote_columns(self) -> Optional[bool]:
+        result = None
+        if self.source.quoting.column is not None:
+            result = self.source.quoting.column
+        if self.table.quoting.column is not None:
+            result = self.table.quoting.column
+        return result
+
+    @property
+    def columns(self) -> Sequence[UnparsedColumn]:
+        if self.table.columns is None:
+            return []
+        else:
+            return self.table.columns
+
+    def get_tests(
+        self
+    ) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
+        for test in self.tests:
+            yield normalize_test(test), None
+
+        for column in self.columns:
+            if column.tests is not None:
+                for test in column.tests:
+                    yield normalize_test(test), column
+
+    @property
+    def tests(self) -> List[TestDef]:
+        if self.table.tests is None:
+            return []
+        else:
+            return self.table.tests
 
 
 @dataclass
