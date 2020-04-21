@@ -556,13 +556,7 @@ def check_format_version(file_path, yaml_dct) -> None:
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
-    'Parsed',
-    UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch
-)
-NodeTarget = TypeVar(
-    'NodeTarget',
-    UnparsedNodeUpdate, UnparsedAnalysisUpdate
-)
+NodeTarget = TypeVar("NodeTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate)
 NonSourceTarget = TypeVar(
     "NonSourceTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedMacroUpdate
 )
