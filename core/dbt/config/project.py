@@ -435,7 +435,11 @@ class Project:
             seeds = cfg.seeds
             snapshots = cfg.snapshots
             sources = cfg.sources
-            vars_value = V2VarProvider(cfg.vars)
+            if cfg.vars is None:
+                vars_dict: Dict[str, Any] = {}
+            else:
+                vars_dict = cfg.vars
+            vars_value = V2VarProvider(vars_dict)
         else:
             raise ValidationError(
                 f'Got unsupported config_version={cfg.config_version}'

@@ -25,7 +25,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
         self.assertIn('enabled', str(exc.exception))
 
 
-class TestInvalidModelReference(DBTIntegrationTest):
+class TestDisabledModelReference(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
@@ -39,6 +39,23 @@ class TestInvalidModelReference(DBTIntegrationTest):
     @property
     def models(self):
         return "models-3"
+
+    @use_profile('postgres')
+    def test_postgres_view_with_incremental_attributes(self):
+        with self.assertRaises(RuntimeError) as exc:
+            self.run_dbt()
+
+        self.assertIn('which is disabled', str(exc.exception))
+
+
+class TestMissingModelReference(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "invalid_models_011"
+
+    @property
+    def models(self):
+        return "models-not-found"
 
     @use_profile('postgres')
     def test_postgres_view_with_incremental_attributes(self):
@@ -73,9 +90,61 @@ class TestInvalidMacroCall(DBTIntegrationTest):
         with self.assertRaises(Exception) as exc:
             self.run_dbt(['compile'])
 
-
         macro_path = os.path.join('bad-macros', 'macros.sql')
         model_path = os.path.join('models-4', 'bad_macro.sql')
 
         self.assertIn(f'> in macro some_macro ({macro_path})', str(exc.exception))
         self.assertIn(f'> called by model bad_macro ({model_path})', str(exc.exception))
+
+
+class TestInvalidDisabledSource(DBTIntegrationTest):
+    def setUp(self):
+        super().setUp()
+        self.run_sql_file("seed.sql")
+
+    @property
+    def schema(self):
+        return "invalid_models_011"
+
+    @property
+    def models(self):
+        return 'sources-disabled'
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'sources': {
+                'test': {
+                    'enabled': False,
+                }
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_source_disabled(self):
+        with self.assertRaises(RuntimeError) as exc:
+            self.run_dbt()
+
+        self.assertIn('which is disabled', str(exc.exception))
+
+
+class TestInvalidMissingSource(DBTIntegrationTest):
+    def setUp(self):
+        super().setUp()
+        self.run_sql_file("seed.sql")
+
+    @property
+    def schema(self):
+        return "invalid_models_011"
+
+    @property
+    def models(self):
+        return 'sources-missing'
+
+    @use_profile('postgres')
+    def test_postgres_source_missing(self):
+        with self.assertRaises(RuntimeError) as exc:
+            self.run_dbt()
+
+        self.assertIn('which was not found', str(exc.exception))

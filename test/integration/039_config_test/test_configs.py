@@ -2,6 +2,7 @@ import os
 import shutil
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.exceptions import CompilationException
 
 
 class TestConfigs(DBTIntegrationTest):
@@ -120,3 +121,77 @@ class TestDisabledConfigs(DBTIntegrationTest):
     def test_postgres_disable_seed_partial_parse(self):
         self.run_dbt(['--partial-parse', 'seed'])
         self.run_dbt(['--partial-parse', 'seed'])
+
+
+class TestConfigWithVars(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'data-paths': ['data'],
+            'seeds': {
+                'quote_columns': False,
+                'test': {
+                    'vars': {
+                        'something': 100,
+                    },
+                },
+            },
+        }
+
+    @property
+    def models(self):
+        return "empty-models"
+
+    @use_profile('postgres')
+    def test_postgres_embedded_config_with_vars(self):
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['seed'])
+
+        self.assertIn('Found a "vars" dictionary in a config block', str(exc.exception))
+        self.run_dbt(['seed'], strict=False)
+
+
+class TestUnusedModelConfigs(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'data-paths': ['data'],
+            'models': {
+                'test': {
+                    'enabled': True,
+                }
+            },
+            'seeds': {
+                'quote_columns': False,
+            },
+            'sources': {
+                'test': {
+                    'enabled': True,
+                }
+            }
+        }
+
+    @property
+    def models(self):
+        return "empty-models"
+
+    @use_profile('postgres')
+    def test_postgres_warn_unused_configuration_paths(self):
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['seed'])
+
+        self.assertIn('Configuration paths exist', str(exc.exception))
+        self.assertIn('- sources.test', str(exc.exception))
+        self.assertIn('- models.test', str(exc.exception))
+
+        self.run_dbt(['seed'], strict=False)

@@ -14,8 +14,8 @@ from uuid import UUID
 from hologram import JsonSchemaMixin
 
 from dbt.contracts.graph.parsed import (
-    ParsedNode, ParsedMacro, ParsedDocumentation, ParsedNodePatch,
-    ParsedMacroPatch, ParsedSourceDefinition
+    ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
+    ParsedSourceDefinition
 )
 from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
 from dbt.contracts.util import Writable, Replaceable
@@ -383,9 +383,24 @@ class NameSearcher(Generic[N]):
         return None
 
 
+D = TypeVar('D')
+
+
 @dataclass
-class Disabled:
-    target: ParsedNode
+class Disabled(Generic[D]):
+    target: D
+
+
+MaybeParsedSource = Optional[Union[
+    ParsedSourceDefinition,
+    Disabled[ParsedSourceDefinition],
+]]
+
+
+MaybeNonSource = Optional[Union[
+    NonSourceNode,
+    Disabled[NonSourceNode]
+]]
 
 
 @dataclass
@@ -396,7 +411,7 @@ class Manifest:
     macros: MutableMapping[str, ParsedMacro]
     docs: MutableMapping[str, ParsedDocumentation]
     generated_at: datetime
-    disabled: List[ParsedNode]
+    disabled: List[CompileResultNode]
     files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
@@ -448,13 +463,23 @@ class Manifest:
 
     def find_disabled_by_name(
         self, name: str, package: Optional[str] = None
-    ) -> Optional[ParsedNode]:
+    ) -> Optional[NonSourceNode]:
         searcher: NameSearcher = NameSearcher(
             name, package, NodeType.refable()
         )
         result = searcher.search(self.disabled)
+        return result
+
+    def find_disabled_source_by_name(
+        self, source_name: str, table_name: str, package: Optional[str] = None
+    ) -> Optional[ParsedSourceDefinition]:
+        search_name = f'{source_name}.{table_name}'
+        searcher: NameSearcher = NameSearcher(
+            search_name, package, [NodeType.Source]
+        )
+        result = searcher.search(self.disabled)
         if result is not None:
-            assert isinstance(result, ParsedNode)
+            assert isinstance(result, ParsedSourceDefinition)
         return result
 
     def find_docs_by_name(
@@ -597,9 +622,7 @@ class Manifest:
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
         for unique_id, node in self.nodes.items():
-            if node.resource_type == NodeType.Source:
-                continue  # sources have no FQNs and can't be configured
-            resource_type_plural = node.resource_type + 's'
+            resource_type_plural = node.resource_type.pluralize()
             if resource_type_plural not in resource_fqns:
                 resource_fqns[resource_type_plural] = set()
             resource_fqns[resource_type_plural].add(tuple(node.fqn))
@@ -761,14 +784,14 @@ class Manifest:
         target_model_package: Optional[str],
         current_project: str,
         node_package: str,
-    ) -> Optional[Union[NonSourceNode, Disabled]]:
+    ) -> MaybeNonSource:
         if target_model_package is not None:
             return self.find_refable_by_name(
                 target_model_name,
                 target_model_package)
 
-        target_model = None
-        disabled_target = None
+        target_model: Optional[NonSourceNode] = None
+        disabled_target: Optional[NonSourceNode] = None
 
         # first pass: look for models in the current_project
         # second pass: look for models in the node's package
@@ -801,9 +824,12 @@ class Manifest:
         target_table_name: str,
         current_project: str,
         node_package: str
-    ) -> Optional[ParsedSourceDefinition]:
+    ) -> MaybeParsedSource:
         candidate_targets = [current_project, node_package, None]
-        target_source = None
+
+        target_source: Optional[ParsedSourceDefinition] = None
+        disabled_target: Optional[ParsedSourceDefinition] = None
+
         for candidate in candidate_targets:
             target_source = self.find_source_by_name(
                 target_source_name,
@@ -813,6 +839,13 @@ class Manifest:
             if target_source is not None and target_source.config.enabled:
                 return target_source
 
+            if disabled_target is None:
+                disabled_target = self.find_disabled_source_by_name(
+                    target_source_name, target_table_name, candidate
+                )
+
+        if disabled_target is not None:
+            return Disabled(disabled_target)
         return None
 
     def resolve_doc(
@@ -861,7 +894,7 @@ class WritableManifest(JsonSchemaMixin, Writable):
             'The docs defined in the dbt project and its dependencies'
         ))
     )
-    disabled: Optional[List[ParsedNode]] = field(metadata=dict(
+    disabled: Optional[List[CompileResultNode]] = field(metadata=dict(
         description='A list of the disabled nodes in the target'
     ))
     generated_at: datetime = field(metadata=dict(

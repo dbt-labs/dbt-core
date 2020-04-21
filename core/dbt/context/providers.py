@@ -315,6 +315,7 @@ class RuntimeRefResolver(BaseRefResolver):
                 self.model,
                 target_name,
                 target_package,
+                disabled=isinstance(target_model, Disabled),
             )
         self.validate(target_model, target_name, target_package)
         return self.create_relation(target_model, target_name)
@@ -385,7 +386,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
             self.model.package_name,
         )
 
-        if target_source is None:
+        if target_source is None or isinstance(target_source, Disabled):
             source_target_not_found(
                 self.model,
                 source_name,

@@ -99,6 +99,8 @@ class DbtProjectYamlDeprecation(DBTDeprecation):
     has been upgraded to config version 2. A future version of dbt will remove
     support for the existing ("version 1") format.
 
+    dbt found a version 1 dbt_project.yml in the project "{project_name}"
+
     Documentation for dbt_project.yml version 2 can be found here:
 
         DOCS LINK GOES HERE

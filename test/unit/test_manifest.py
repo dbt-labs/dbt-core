@@ -342,7 +342,7 @@ class ManifestTest(unittest.TestCase):
             database='dbt',
             schema='analytics',
             alias='seed',
-            resource_type='seed',
+            resource_type=NodeType.Seed,
             unique_id='seed.root.seed',
             fqn=['root', 'seed'],
             package_name='root',

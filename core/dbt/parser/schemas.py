@@ -634,7 +634,15 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
             tags=tags,
             config=config,
         )
-        self.results.add_source(self.yaml.file, result)
+        self.add_result_source(block, result)
+
+    def add_result_source(
+        self, block: FileBlock, source: ParsedSourceDefinition
+    ):
+        if source.config.enabled:
+            self.results.add_source(block.file, source)
+        else:
+            self.results.add_disabled(block.file, source)
 
 
 class NonSourceParser(

@@ -334,7 +334,10 @@ class ManifestLoader:
             projects = root_config.load_dependencies()
             for project in projects.values():
                 if project.config_version == 1:
-                    deprecations.warn('dbt-project-yaml-v1')
+                    deprecations.warn(
+                        'dbt-project-yaml-v1',
+                        project_name=project.project_name,
+                    )
             loader = cls(root_config, projects, macro_hook)
             loader.load(internal_manifest=internal_manifest)
             loader.write_parse_results()
@@ -545,7 +548,7 @@ def process_refs(manifest: Manifest, current_project: str):
 def _process_sources_for_node(
     manifest: Manifest, current_project: str, node: NonSourceNode
 ):
-    target_source = None
+    target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
     for source_name, table_name in node.sources:
         target_source = manifest.resolve_source(
             source_name,
@@ -554,13 +557,15 @@ def _process_sources_for_node(
             node.package_name,
         )
 
-        if target_source is None:
+        if target_source is None or isinstance(target_source, Disabled):
             # this folows the same pattern as refs
             node.config.enabled = False
             dbt.utils.invalid_source_fail_unless_test(
                 node,
                 source_name,
-                table_name)
+                table_name,
+                disabled=(isinstance(target_source, Disabled))
+            )
             continue
         target_source_id = target_source.unique_id
         node.depends_on.nodes.append(target_source_id)

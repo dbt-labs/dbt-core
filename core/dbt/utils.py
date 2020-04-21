@@ -308,44 +308,44 @@ class memoized:
         return functools.partial(self.__call__, obj)
 
 
-def invalid_ref_test_message(node, target_model_name, target_model_package,
-                             disabled):
-    if disabled:
-        msg = dbt.exceptions.get_target_disabled_msg(
-            node, target_model_name, target_model_package
-        )
-    else:
-        msg = dbt.exceptions.get_target_not_found_msg(
-            node, target_model_name, target_model_package
-        )
-    return 'WARNING: {}'.format(msg)
-
-
 def invalid_ref_fail_unless_test(node, target_model_name,
                                  target_model_package, disabled):
     if node.resource_type == NodeType.Test:
-        msg = invalid_ref_test_message(node, target_model_name,
-                                       target_model_package, disabled)
+        msg = dbt.exceptions.get_target_not_found_or_disabled_msg(
+            node, target_model_name, target_model_package, disabled
+        )
         if disabled:
-            logger.debug(msg)
+            logger.debug(f'WARNING: {msg}')
         else:
-            dbt.exceptions.warn_or_error(msg)
+            dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
 
     else:
         dbt.exceptions.ref_target_not_found(
             node,
             target_model_name,
-            target_model_package)
+            target_model_package,
+            disabled=disabled,
+        )
 
 
-def invalid_source_fail_unless_test(node, target_name, target_table_name):
+def invalid_source_fail_unless_test(
+    node, target_name, target_table_name, disabled
+):
     if node.resource_type == NodeType.Test:
-        msg = dbt.exceptions.source_disabled_message(node, target_name,
-                                                     target_table_name)
-        dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
+        msg = dbt.exceptions.get_source_not_found_or_disabled_msg(
+            node, target_name, target_table_name, disabled
+        )
+        if disabled:
+            logger.debug(f'WARNING: {msg}')
+        else:
+            dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
     else:
-        dbt.exceptions.source_target_not_found(node, target_name,
-                                               target_table_name)
+        dbt.exceptions.source_target_not_found(
+            node,
+            target_name,
+            target_table_name,
+            disabled=disabled
+        )
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:

@@ -83,7 +83,6 @@ class BigqueryConfig(AdapterConfig):
     partition_by: Optional[Dict[str, Any]] = None
     kms_key_name: Optional[str] = None
     labels: Optional[Dict[str, str]] = None
-    # TODO: should this accept `str` and `int`, too?
     partitions: Optional[List[str]] = None
 
 

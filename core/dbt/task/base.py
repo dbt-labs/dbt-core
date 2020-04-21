@@ -134,7 +134,10 @@ class ConfiguredTask(BaseTask):
 
     def __init__(self, args, config):
         if config.config_version == 1:
-            deprecations.warn('dbt-project-yaml-v1')
+            deprecations.warn(
+                'dbt-project-yaml-v1',
+                project_name=config.project_name,
+            )
         super().__init__(args, config)
         register_adapter(self.config)
 

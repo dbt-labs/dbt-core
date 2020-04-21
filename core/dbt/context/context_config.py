@@ -137,7 +137,6 @@ class ContextConfigGenerator:
             validate=validate
         )
 
-    # TODO: is fqn[0] always the project name?
     def calculate_node_config(
         self,
         config_calls: List[Dict[str, Any]],
