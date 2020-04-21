@@ -1216,10 +1216,7 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             # this folows the same pattern as refs
             node.config.enabled = False
             invalid_source_fail_unless_test(
-                node,
-                source_name,
-                table_name,
-                disabled=(isinstance(target_source, Disabled))
+                node, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )
             continue
         target_source_id = target_source.unique_id
