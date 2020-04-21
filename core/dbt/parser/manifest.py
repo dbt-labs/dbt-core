@@ -332,12 +332,15 @@ class ManifestLoader:
     ) -> Manifest:
         with PARSING_STATE:
             projects = root_config.load_dependencies()
+            v1_configs = []
             for project in projects.values():
                 if project.config_version == 1:
-                    deprecations.warn(
-                        'dbt-project-yaml-v1',
-                        project_name=project.project_name,
-                    )
+                    v1_configs.append(f'\n\n     - {project.project_name}')
+            if v1_configs:
+                deprecations.warn(
+                    'dbt-project-yaml-v1',
+                    project_names=''.join(v1_configs)
+                )
             loader = cls(root_config, projects, macro_hook)
             loader.load(internal_manifest=internal_manifest)
             loader.write_parse_results()

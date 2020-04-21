@@ -95,15 +95,16 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
 class DbtProjectYamlDeprecation(DBTDeprecation):
     _name = 'dbt-project-yaml-v1'
     _description = '''\
-    The existing dbt_project.yml format has been deprecated. dbt_project.yml
-    has been upgraded to config version 2. A future version of dbt will remove
-    support for the existing ("version 1") format.
+    dbt v0.17.0 introduces a new config format for the dbt_project.yml file.
+    Support for the existing version 1 format will be removed in a future
+    release of dbt. The following packages are currently configured with
+    config version 1:{project_names}
 
-    dbt found a version 1 dbt_project.yml in the project "{project_name}"
 
-    Documentation for dbt_project.yml version 2 can be found here:
 
-        DOCS LINK GOES HERE
+    For upgrading instructions, consult the documentation:
+
+      https://docs.getdbt.com/docs/guides/migration-guide/upgrading-to-0-17-0
     '''
 
 

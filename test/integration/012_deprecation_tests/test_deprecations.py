@@ -97,7 +97,7 @@ class TestDbtProjectYamlV1Deprecation(BaseTestDeprecations):
             self.run_dbt(strict=True)
 
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
-        self.assertIn('dbt_project.yml has been upgraded to config version 2', exc_str)
+        self.assertIn('Support for the existing version 1 format will be removed', exc_str)
 
     @use_profile('postgres')
     def test_postgres_project_deprecations(self):
