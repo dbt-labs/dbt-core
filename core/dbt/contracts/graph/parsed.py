@@ -22,7 +22,7 @@ from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedDocumentation,
-    HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
+    Quoting,
     Docs,
     UnparsedBaseNode,
     FreshnessThreshold,
@@ -576,7 +576,7 @@ def normalize_test(testdef: TestDef) -> Dict[str, Any]:
 class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
     source: UnparsedSourceDefinition
     table: UnparsedSourceTableDefinition
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
     patch_path: Optional[Path] = None
 
     def get_full_source_name(self):
@@ -605,9 +605,7 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
         else:
             return self.table.columns
 
-    def get_tests(
-        self
-    ) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
+    def get_tests(self) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
         for test in self.tests:
             yield normalize_test(test), None
 

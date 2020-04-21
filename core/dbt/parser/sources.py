@@ -195,7 +195,7 @@ class SourcePatcher:
     # This code uses the SchemaParser because it shares the '_parse_generic_test'
     # code. It might be nice to separate out the generic test code
     # and make it common to the schema parser and source patcher.
-    def get_schema_parser_for(self, package_name: str) -> 'SchemaParser':
+    def get_schema_parser_for(self, package_name: str) -> "SchemaParser":
         if package_name in self.schema_parsers:
             schema_parser = self.schema_parsers[package_name]
         else:

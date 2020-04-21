@@ -59,7 +59,11 @@ from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.parser.generic_test_builders import (
     TestBuilder,
-    TestBlock, Testable
+    GenericTestBlock,
+    TargetBlock,
+    YamlBlock,
+    TestBlock,
+    Testable,
 )
 from dbt.ui import warning_tag
 from dbt.utils import get_pseudo_test_path, coerce_dict_str
@@ -130,7 +134,7 @@ class ParserRef:
         meta: Dict[str, Any],
     ):
         tags: List[str] = []
-        tags.extend(getattr(column, 'tags', ()))
+        tags.extend(getattr(column, "tags", ()))
         quote: Optional[bool]
         if isinstance(column, UnparsedColumn):
             quote = column.quote
@@ -147,9 +151,7 @@ class ParserRef:
         )
 
     @classmethod
-    def from_target(
-        cls, target: Union[HasColumnDocs, HasColumnTests]
-    ) -> 'ParserRef':
+    def from_target(cls, target: Union[HasColumnDocs, HasColumnTests]) -> "ParserRef":
         refs = cls()
         for column in target.columns:
             description = column.description
@@ -245,22 +247,22 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
 
         dct = {
-            'alias': name,
-            'schema': self.default_schema,
-            'database': self.default_database,
-            'fqn': fqn,
-            'name': name,
-            'root_path': self.project.project_root,
-            'resource_type': self.resource_type,
-            'tags': tags,
-            'path': path,
-            'original_file_path': target.original_file_path,
-            'package_name': self.project.project_name,
-            'raw_sql': raw_sql,
+            "alias": name,
+            "schema": self.default_schema,
+            "database": self.default_database,
+            "fqn": fqn,
+            "name": name,
+            "root_path": self.project.project_root,
+            "resource_type": self.resource_type,
+            "tags": tags,
+            "path": path,
+            "original_file_path": target.original_file_path,
+            "package_name": self.project.project_name,
+            "raw_sql": raw_sql,
             'unique_id': self.generate_unique_id(name, test_hash),
-            'config': self.config_dict(config),
-            'test_metadata': test_metadata,
-            'column_name': column_name,
+            "config": self.config_dict(config),
+            "test_metadata": test_metadata,
+            "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
         }
@@ -302,10 +304,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
         except ParsingException as exc:
             context = _trimmed(str(target))
-            msg = (
-                'Invalid test config given in {}:'
-                '\n\t{}\n\t@: {}'
-                .format(target.original_file_path, exc.msg, context)
+            msg = "Invalid test config given in {}:" "\n\t{}\n\t@: {}".format(
+                target.original_file_path, exc.msg, context
             )
             raise ParsingException(msg) from exc
         original_name = os.path.basename(target.original_file_path)
@@ -672,7 +672,7 @@ class YamlReader(metaclass=ABCMeta):
 class YamlDocsReader(YamlReader):
     @abstractmethod
     def parse(self) -> List[TestBlock]:
-        raise NotImplementedError('parse is abstract')
+        raise NotImplementedError("parse is abstract")
 
 
 T = TypeVar("T", bound=dbtClassMixin)
@@ -720,10 +720,9 @@ class SourceParser(YamlDocsReader):
         original_file_path = self.yaml.path.original_file_path
         fqn_path = self.yaml.path.relative_path
         for table in source.tables:
-            unique_id = '.'.join([
-                NodeType.Source, self.project.project_name,
-                source.name, table.name
-            ])
+            unique_id = ".".join(
+                [NodeType.Source, self.project.project_name, source.name, table.name]
+            )
 
             # the FQN is project name / path elements /source_name /table_name
             fqn = self.schema_parser.get_fqn_prefix(fqn_path)
@@ -752,13 +751,11 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
 
     @abstractmethod
     def get_block(self, node: NonSourceTarget) -> TargetBlock:
-        raise NotImplementedError('get_block is abstract')
+        raise NotImplementedError("get_block is abstract")
 
     @abstractmethod
-    def parse_patch(
-        self, block: TargetBlock[NonSourceTarget], refs: ParserRef
-    ) -> None:
-        raise NotImplementedError('parse_patch is abstract')
+    def parse_patch(self, block: TargetBlock[NonSourceTarget], refs: ParserRef) -> None:
+        raise NotImplementedError("parse_patch is abstract")
 
     def parse(self) -> List[TestBlock]:
         node: NonSourceTarget

@@ -308,13 +308,13 @@ class SourceTablePatch(dbtClassMixin):
 
     def to_patch_dict(self) -> Dict[str, Any]:
         dct = self.to_dict(omit_none=True)
-        remove_keys = ('name')
+        remove_keys = "name"
         for key in remove_keys:
             if key in dct:
                 del dct[key]
 
         if self.freshness is None:
-            dct['freshness'] = None
+            dct["freshness"] = None
 
         return dct
 
@@ -349,7 +349,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
                 del dct[key]
 
         if self.freshness is None:
-            dct['freshness'] = None
+            dct["freshness"] = None
 
         return dct
 

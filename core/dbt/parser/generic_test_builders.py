@@ -3,7 +3,13 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import (
-    Generic, TypeVar, Dict, Any, Tuple, Optional, List,
+    Generic,
+    TypeVar,
+    Dict,
+    Any,
+    Tuple,
+    Optional,
+    List,
 )
 
 from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
@@ -70,9 +76,7 @@ class YamlBlock(FileBlock):
         )
 
 
-Testable = TypeVar(
-    'Testable', UnparsedNodeUpdate, UnpatchedSourceDefinition
-)
+Testable = TypeVar("Testable", UnparsedNodeUpdate, UnpatchedSourceDefinition)
 
 ColumnTarget = TypeVar(
     'ColumnTarget',
