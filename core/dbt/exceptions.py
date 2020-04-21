@@ -580,8 +580,12 @@ def doc_target_not_found(
 
 
 def _get_target_failure_msg(
-    model, target_name: str, target_model_package: Optional[str],
-    include_path: bool, reason: str, target_kind: str
+    model,
+    target_name: str,
+    target_model_package: Optional[str],
+    include_path: bool,
+    reason: str,
+    target_kind: str,
 ) -> str:
     target_package_string = ''
     if target_model_package is not None:
@@ -603,18 +607,24 @@ def _get_target_failure_msg(
 
 
 def get_target_not_found_or_disabled_msg(
-    model, target_model_name: str, target_model_package: Optional[str],
+    model,
+    target_model_name: str,
+    target_model_package: Optional[str],
     disabled: Optional[bool] = None,
 ) -> str:
     if disabled is None:
-        reason = 'was not found or is disabled'
+        reason = "was not found or is disabled"
     elif disabled is True:
-        reason = 'is disabled'
+        reason = "is disabled"
     else:
-        reason = 'was not found'
+        reason = "was not found"
     return _get_target_failure_msg(
-        model, target_model_name, target_model_package, include_path=True,
-        reason=reason, target_kind='node'
+        model,
+        target_model_name,
+        target_model_package,
+        include_path=True,
+        reason=reason,
+        target_kind="node",
     )
 
 
@@ -636,28 +646,22 @@ def get_source_not_found_or_disabled_msg(
     target_table_name: str,
     disabled: Optional[bool] = None,
 ) -> str:
-    full_name = f'{target_name}.{target_table_name}'
+    full_name = f"{target_name}.{target_table_name}"
     if disabled is None:
-        reason = 'was not found or is disabled'
+        reason = "was not found or is disabled"
     elif disabled is True:
-        reason = 'is disabled'
+        reason = "is disabled"
     else:
-        reason = 'was not found'
+        reason = "was not found"
     return _get_target_failure_msg(
-        model, full_name, None, include_path=True,
-        reason=reason, target_kind='source'
+        model, full_name, None, include_path=True, reason=reason, target_kind="source"
     )
 
 
 def source_target_not_found(
-    model,
-    target_name: str,
-    target_table_name: str,
-    disabled: Optional[bool] = None
+    model, target_name: str, target_table_name: str, disabled: Optional[bool] = None
 ) -> NoReturn:
-    msg = get_source_not_found_or_disabled_msg(
-        model, target_name, target_table_name, disabled
-    )
+    msg = get_source_not_found_or_disabled_msg(model, target_name, target_table_name, disabled)
     raise_compiler_error(msg, model)
 
 

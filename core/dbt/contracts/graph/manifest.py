@@ -417,7 +417,7 @@ class Searchable(Protocol):
         raise NotImplementedError("search_name not implemented")
 
 
-D = TypeVar('D')
+D = TypeVar("D")
 
 
 @dataclass
@@ -428,10 +428,12 @@ class Disabled(Generic[D]):
 MaybeDocumentation = Optional[ParsedDocumentation]
 
 
-MaybeParsedSource = Optional[Union[
-    ParsedSourceDefinition,
-    Disabled[ParsedSourceDefinition],
-]]
+MaybeParsedSource = Optional[
+    Union[
+        ParsedSourceDefinition,
+        Disabled[ParsedSourceDefinition],
+    ]
+]
 
 
 MaybeNonSource = Optional[Union[
