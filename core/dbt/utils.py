@@ -572,10 +572,10 @@ class MultiDict(Mapping[str, Any]):
         else:
             self.sources = sources
 
-    def add_from(self, sources: Iterable[Mapping[str, Any]]):
+    def add_from(self, sources: StringMapIter):
         self.sources.extend(sources)
 
-    def add(self, source: Mapping[str, Any]):
+    def add(self, source: StringMap):
         self.sources.append(source)
 
     def _keyset(self) -> AbstractSet[str]:
@@ -585,7 +585,7 @@ class MultiDict(Mapping[str, Any]):
             keys.update(entry)
         return keys
 
-    def _itersource(self) -> Iterable[Mapping[str, Any]]:
+    def _itersource(self) -> StringMapIter:
         return reversed(self.sources)
 
     def __iter__(self) -> Iterator[str]:
