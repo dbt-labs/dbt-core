@@ -6,6 +6,7 @@ from hologram import JsonSchemaMixin
 from dbt.contracts.graph.manifest import (
     SourceFile, RemoteFile, FileHash, MacroKey
 )
+from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.parsed import (
     HasUniqueID,
     ParsedAnalysisNode,
@@ -15,7 +16,6 @@ from dbt.contracts.graph.parsed import (
     ParsedMacro,
     ParsedMacroPatch,
     ParsedModelNode,
-    ParsedNode,
     ParsedNodePatch,
     ParsedRPCNode,
     ParsedSeedNode,
@@ -73,7 +73,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
-    disabled: MutableMapping[str, List[ParsedNode]] = dict_field()
+    disabled: MutableMapping[str, List[CompileResultNode]] = dict_field()
     dbt_version: str = __version__
 
     def get_file(self, source_file: SourceFile) -> SourceFile:
@@ -98,7 +98,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.nodes[node.unique_id] = node
         self.get_file(source_file).nodes.append(node.unique_id)
 
-    def add_disabled(self, source_file: SourceFile, node: ParsedNode):
+    def add_disabled(self, source_file: SourceFile, node: CompileResultNode):
         if node.unique_id in self.disabled:
             self.disabled[node.unique_id].append(node)
         else:
@@ -160,7 +160,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self,
         unique_id: str,
         match_file: SourceFile,
-    ) -> List[ParsedNode]:
+    ) -> List[CompileResultNode]:
         if unique_id not in self.disabled:
             raise InternalException(
                 'called _get_disabled with id={}, but it does not exist'

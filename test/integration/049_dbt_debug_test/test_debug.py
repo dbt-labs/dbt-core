@@ -77,7 +77,10 @@ class TestDebug(DBTIntegrationTest):
 class TestDebugProfileVariable(TestDebug):
     @property
     def project_config(self):
-        return {'profile': '{{ "te" ~ "st" }}'}
+        return {
+            'config-version': 2,
+            'profile': '{{ "te" ~ "st" }}'
+        }
 
 
 class TestDebugInvalidProject(DBTIntegrationTest):

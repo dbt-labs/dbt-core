@@ -22,6 +22,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'analysis-paths': [self.dir('analyses')],
             'snapshot-paths': [self.dir('snapshots')],
             'macro-paths': [self.dir('macros')],
@@ -220,6 +221,9 @@ class TestStrictUndefined(DBTIntegrationTest):
             'name': 'my_source.my_table',
             'selector': 'source:test.my_source.my_table',
             'json': {
+                'config': {
+                    'enabled': True,
+                },
                 'package_name': 'test',
                 'name': 'my_table',
                 'source_name': 'my_source',

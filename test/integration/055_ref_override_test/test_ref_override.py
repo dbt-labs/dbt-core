@@ -9,11 +9,12 @@ class TestRefOverride(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             "macro-paths": ["macros"],
             'seeds': {
-                'quote_columns': False
-            }
+                'quote_columns': False,
+            },
         }
 
     @property

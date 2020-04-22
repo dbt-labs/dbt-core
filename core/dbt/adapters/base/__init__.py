@@ -10,5 +10,5 @@ from dbt.adapters.base.relation import (  # noqa
     SchemaSearchMap,
 )
 from dbt.adapters.base.column import Column  # noqa
-from dbt.adapters.base.impl import BaseAdapter  # noqa
+from dbt.adapters.base.impl import AdapterConfig, BaseAdapter  # noqa
 from dbt.adapters.base.plugin import AdapterPlugin  # noqa

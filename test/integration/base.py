@@ -70,6 +70,7 @@ class TestArgs:
         self.which = 'run'
         self.single_threaded = False
         self.profiles_dir = None
+        self.project_dir = None
         self.__dict__.update(kwargs)
 
 
@@ -523,7 +524,9 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def project_config(self):
-        return {}
+        return {
+            'config-version': 2,
+        }
 
     @property
     def profile_config(self):

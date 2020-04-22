@@ -447,19 +447,11 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
     def test_parse_partition_by(self):
         adapter = self.get_adapter('oauth')
 
-        self.assertEqual(
-            adapter.parse_partition_by("date(ts)").to_dict(), {
-                "field": "ts",
-                "data_type": "timestamp"
-            }
-        )
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by("date(ts)")
 
-        self.assertEqual(
-            adapter.parse_partition_by("ts").to_dict(), {
-                "field": "ts",
-                "data_type": "date"
-            }
-        )
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by("ts")
 
         self.assertEqual(
             adapter.parse_partition_by({

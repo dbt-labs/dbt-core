@@ -1,22 +1,38 @@
+import itertools
+import os
 from copy import deepcopy
 from dataclasses import dataclass, fields
-import os
-from typing import Dict, Any, Type
+from pathlib import Path
+from typing import (
+    Dict, Any, Optional, Mapping, Iterator, Iterable, Tuple, List, MutableSet,
+    Type
+)
 
 from .profile import Profile
 from .project import Project
-from .renderer import ConfigRenderer
+from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name
+from dbt.helper_types import FQNPath, PathSet
 from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
-from dbt.contracts.project import Configuration, UserConfig
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.exceptions import DbtProjectError, RuntimeException, DbtProfileError
-from dbt.exceptions import validator_error_message
+from dbt.ui import printer
 from dbt.utils import parse_cli_vars
+
+from dbt.contracts.project import Configuration, UserConfig
+from dbt.exceptions import (
+    RuntimeException,
+    DbtProfileError,
+    DbtProjectError,
+    validator_error_message,
+    warn_or_error,
+    raise_compiler_error
+)
+from dbt.include.global_project import PACKAGES
+from dbt.legacy_config_updater import ConfigUpdater
 
 from hologram import ValidationError
 
@@ -24,14 +40,20 @@ from hologram import ValidationError
 @dataclass
 class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     args: Any
+    profile_name: str
     cli_vars: Dict[str, Any]
+    dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None
 
     def __post_init__(self):
         self.validate()
 
     @classmethod
     def from_parts(
-        cls, project: Project, profile: Profile, args: Any,
+        cls,
+        project: Project,
+        profile: Profile,
+        args: Any,
+        dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
     ) -> 'RuntimeConfig':
         """Instantiate a RuntimeConfig from its components.
 
@@ -72,6 +94,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dbt_version=project.dbt_version,
             packages=project.packages,
             query_comment=project.query_comment,
+            sources=project.sources,
+            vars=project.vars,
+            config_version=project.config_version,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             config=profile.config,
@@ -79,6 +104,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             credentials=profile.credentials,
             args=args,
             cli_vars=cli_vars,
+            dependencies=dependencies,
         )
 
     def new_project(self, project_root: str) -> 'RuntimeConfig':
@@ -95,7 +121,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         profile.validate()
 
         # load the new project and its packages. Don't pass cli variables.
-        renderer = ConfigRenderer(generate_target_context(profile, {}))
+        renderer = DbtProjectYamlRenderer(generate_target_context(profile, {}))
 
         project = Project.from_project_root(project_root, renderer)
 
@@ -136,6 +162,41 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             self.validate_version()
 
     @classmethod
+    def _get_rendered_profile(
+        cls,
+        args: Any,
+        profile_renderer: ProfileRenderer,
+        profile_name: Optional[str],
+    ) -> Profile:
+        return Profile.render_from_args(
+            args, profile_renderer, profile_name
+        )
+
+    @classmethod
+    def collect_parts(
+        cls: Type['RuntimeConfig'], args: Any
+    ) -> Tuple[Project, Profile]:
+        # profile_name from the project
+        project_root = args.project_dir if args.project_dir else os.getcwd()
+        partial = Project.partial_load(project_root)
+
+        # build the profile using the base renderer and the one fact we know
+        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
+        profile_renderer = ProfileRenderer(generate_base_context(cli_vars))
+        profile_name = partial.render_profile_name(profile_renderer)
+
+        profile = cls._get_rendered_profile(
+            args, profile_renderer, profile_name
+        )
+
+        # get a new renderer using our target information and render the
+        # project
+        ctx = generate_target_context(profile, cli_vars)
+        project_renderer = DbtProjectYamlRenderer(ctx, partial.config_version)
+        project = partial.render(project_renderer)
+        return (project, profile)
+
+    @classmethod
     def from_args(cls, args: Any) -> 'RuntimeConfig':
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
@@ -146,21 +207,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
-        # profile_name from the project
-        partial = Project.partial_load(os.getcwd())
-
-        # build the profile using the base renderer and the one fact we know
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
-        renderer = ConfigRenderer(generate_base_context(cli_vars=cli_vars))
-        profile_name = partial.render_profile_name(renderer)
-        profile = Profile.render_from_args(
-            args, renderer, profile_name
-        )
-
-        # get a new renderer using our target information and render the
-        # project
-        renderer = ConfigRenderer(generate_target_context(profile, cli_vars))
-        project = partial.render(renderer)
+        project, profile = cls.collect_parts(args)
 
         return cls.from_parts(
             project=project,
@@ -172,6 +219,156 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         return ManifestMetadata(
             project_id=self.hashed_name(),
             adapter_type=self.credentials.type
+        )
+
+    def _get_v2_config_paths(
+        self,
+        config,
+        path: FQNPath,
+        paths: MutableSet[FQNPath],
+    ) -> PathSet:
+        for key, value in config.items():
+            if isinstance(value, dict) and not key.startswith('+'):
+                self._get_v2_config_paths(value, path + (key,), paths)
+            else:
+                paths.add(path)
+        return frozenset(paths)
+
+    def _get_v1_config_paths(
+        self,
+        config: Dict[str, Any],
+        path: FQNPath,
+        paths: MutableSet[FQNPath],
+    ) -> PathSet:
+        keys = ConfigUpdater(self.credentials.type).ConfigKeys
+
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if key in keys:
+                    if path not in paths:
+                        paths.add(path)
+                else:
+                    self._get_v1_config_paths(value, path + (key,), paths)
+            else:
+                if path not in paths:
+                    paths.add(path)
+
+        return frozenset(paths)
+
+    def _get_config_paths(
+        self,
+        config: Dict[str, Any],
+        path: FQNPath = (),
+        paths: Optional[MutableSet[FQNPath]] = None,
+    ) -> PathSet:
+        if paths is None:
+            paths = set()
+
+        if self.config_version == 2:
+            return self._get_v2_config_paths(config, path, paths)
+        else:
+            return self._get_v1_config_paths(config, path, paths)
+
+    def get_resource_config_paths(self) -> Dict[str, PathSet]:
+        """Return a dictionary with 'seeds' and 'models' keys whose values are
+        lists of lists of strings, where each inner list of strings represents
+        a configured path in the resource.
+        """
+        return {
+            'models': self._get_config_paths(self.models),
+            'seeds': self._get_config_paths(self.seeds),
+            'snapshots': self._get_config_paths(self.snapshots),
+            'sources': self._get_config_paths(self.sources),
+        }
+
+    def get_unused_resource_config_paths(
+        self,
+        resource_fqns: Mapping[str, PathSet],
+        disabled: PathSet,
+    ) -> List[FQNPath]:
+        """Return a list of lists of strings, where each inner list of strings
+        represents a type + FQN path of a resource configuration that is not
+        used.
+        """
+        disabled_fqns = frozenset(tuple(fqn) for fqn in disabled)
+        resource_config_paths = self.get_resource_config_paths()
+        unused_resource_config_paths = []
+        for resource_type, config_paths in resource_config_paths.items():
+            used_fqns = resource_fqns.get(resource_type, frozenset())
+            fqns = used_fqns | disabled_fqns
+
+            for config_path in config_paths:
+                if not _is_config_used(config_path, fqns):
+                    unused_resource_config_paths.append(
+                        (resource_type,) + config_path
+                    )
+        return unused_resource_config_paths
+
+    def warn_for_unused_resource_config_paths(
+        self,
+        resource_fqns: Mapping[str, PathSet],
+        disabled: PathSet,
+    ) -> None:
+        unused = self.get_unused_resource_config_paths(resource_fqns, disabled)
+        if len(unused) == 0:
+            return
+
+        msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
+            len(unused),
+            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
+        )
+        warn_or_error(msg, log_fmt=printer.yellow('{}'))
+
+    def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
+        if self.dependencies is None:
+            all_projects = {self.project_name: self}
+            project_paths = itertools.chain(
+                map(Path, PACKAGES.values()),
+                self._get_project_directories()
+            )
+            for project_name, project in self.load_projects(project_paths):
+                if project_name in all_projects:
+                    raise_compiler_error(
+                        f'dbt found more than one package with the name '
+                        f'"{project_name}" included in this project. Package '
+                        f'names must be unique in a project. Please rename '
+                        f'one of these packages.'
+                    )
+                all_projects[project_name] = project
+            self.dependencies = all_projects
+        return self.dependencies
+
+    def load_projects(
+        self, paths: Iterable[Path]
+    ) -> Iterator[Tuple[str, 'RuntimeConfig']]:
+        for path in paths:
+            try:
+                project = self.new_project(str(path))
+            except DbtProjectError as e:
+                raise DbtProjectError(
+                    'Failed to read package at {}: {}'
+                    .format(path, e)
+                ) from e
+            else:
+                yield project.project_name, project
+
+    def _get_project_directories(self) -> Iterator[Path]:
+        root = Path(self.project_root) / self.modules_path
+
+        if root.exists():
+            for path in root.iterdir():
+                if path.is_dir() and not path.name.startswith('__'):
+                    yield path
+
+    def as_v1(self):
+        if self.config_version == 1:
+            return self
+
+        return self.from_parts(
+            project=Project.as_v1(self),
+            profile=self,
+            args=self.args,
+            dependencies=self.dependencies,
         )
 
 
@@ -251,7 +448,11 @@ class UnsetProfileConfig(RuntimeConfig):
 
     @classmethod
     def from_parts(
-        cls, project: Project, profile: Any, args: Any,
+        cls,
+        project: Project,
+        profile: Profile,
+        args: Any,
+        dependencies: Optional[Mapping[str, 'RuntimeConfig']] = None,
     ) -> 'RuntimeConfig':
         """Instantiate a RuntimeConfig from its components.
 
@@ -286,6 +487,9 @@ class UnsetProfileConfig(RuntimeConfig):
             dbt_version=project.dbt_version,
             packages=project.packages,
             query_comment=project.query_comment,
+            sources=project.sources,
+            vars=project.vars,
+            config_version=project.config_version,
             profile_name='',
             target_name='',
             config=UnsetConfig(),
@@ -293,33 +497,20 @@ class UnsetProfileConfig(RuntimeConfig):
             credentials=UnsetCredentials(),
             args=args,
             cli_vars=cli_vars,
+            dependencies=dependencies,
         )
 
     @classmethod
-    def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
-        """Given arguments, read in dbt_project.yml from the arg --project-dir
-        or current directory if not provided, read in packages.yml if it
-        exists, and use them to find the profile to load.
-
-        :param args: The arguments as parsed from the cli.
-        :raises DbtProjectError: If the project is invalid or missing.
-        :raises DbtProfileError: If the profile is invalid or missing.
-        :raises ValidationException: If the cli variables are invalid.
-        """
-        # profile_name from the project
-        project_root = args.project_dir if args.project_dir else os.getcwd()
-        partial = Project.partial_load(project_root)
-
-        # build the profile using the base renderer and the one fact we know
-        cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
-        renderer = ConfigRenderer(generate_base_context(cli_vars=cli_vars))
-        profile_name = partial.render_profile_name(renderer)
-
+    def _get_rendered_profile(
+        cls,
+        args: Any,
+        profile_renderer: ProfileRenderer,
+        profile_name: Optional[str],
+    ) -> Profile:
         try:
             profile = Profile.render_from_args(
-                args, renderer, profile_name
+                args, profile_renderer, profile_name
             )
-            cls = RuntimeConfig  # we can return a real runtime config, do that
         except (DbtProjectError, DbtProfileError) as exc:
             logger.debug(
                 'Profile not loaded due to error: {}', exc, exc_info=True
@@ -332,14 +523,41 @@ class UnsetProfileConfig(RuntimeConfig):
             profile = UnsetProfile()
             # disable anonymous usage statistics
             tracking.do_not_track()
+        return profile
 
-        # get a new renderer using our target information and render the
-        # project
-        renderer = ConfigRenderer(generate_target_context(profile, cli_vars))
-        project = partial.render(renderer)
+    @classmethod
+    def from_args(cls: Type[RuntimeConfig], args: Any) -> 'RuntimeConfig':
+        """Given arguments, read in dbt_project.yml from the current directory,
+        read in packages.yml if it exists, and use them to find the profile to
+        load.
+
+        :param args: The arguments as parsed from the cli.
+        :raises DbtProjectError: If the project is invalid or missing.
+        :raises DbtProfileError: If the profile is invalid or missing.
+        :raises ValidationException: If the cli variables are invalid.
+        """
+        project, profile = cls.collect_parts(args)
+        if not isinstance(profile, UnsetProfile):
+            # if it's a real profile, return a real config
+            cls = RuntimeConfig
 
         return cls.from_parts(
             project=project,
             profile=profile,
-            args=args,
+            args=args
         )
+
+
+UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
+WARNING: Configuration paths exist in your dbt_project.yml file which do not \
+apply to any resources.
+There are {} unused configuration paths:\n{}
+"""
+
+
+def _is_config_used(path, fqns):
+    if fqns:
+        for fqn in fqns:
+            if len(path) <= len(fqn) and fqn[:len(path)] == path:
+                return True
+    return False

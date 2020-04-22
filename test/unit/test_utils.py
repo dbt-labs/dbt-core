@@ -140,7 +140,6 @@ class TestDeepMap(unittest.TestCase):
             dbt.utils.deep_map(lambda x, _: x, {'foo': object()})
 
 
-
 class TestBytesFormatting(unittest.TestCase):
 
     def test__simple_cases(self):
@@ -152,3 +151,42 @@ class TestBytesFormatting(unittest.TestCase):
         self.assertEqual(dbt.utils.format_bytes(1024**3*52.6), '52.6 GB')
         self.assertEqual(dbt.utils.format_bytes(1024**4*128), '128.0 TB')
         self.assertEqual(dbt.utils.format_bytes(1024**5+1), '> 1024 TB')
+
+
+class TestMultiDict(unittest.TestCase):
+    def test_one_member(self):
+        dct = {'a': 1, 'b': 2, 'c': 3}
+        md = dbt.utils.MultiDict([dct])
+        assert len(md) == 3
+        for key in 'abc':
+            assert key in md
+        assert md['a'] == 1
+        assert md['b'] == 2
+        assert md['c'] == 3
+
+    def test_two_members_no_overlap(self):
+        first = {'a': 1, 'b': 2, 'c': 3}
+        second = {'d': 1, 'e': 2, 'f': 3}
+        md = dbt.utils.MultiDict([first, second])
+        assert len(md) == 6
+        for key in 'abcdef':
+            assert key in md
+        assert md['a'] == 1
+        assert md['b'] == 2
+        assert md['c'] == 3
+        assert md['d'] == 1
+        assert md['e'] == 2
+        assert md['f'] == 3
+
+    def test_two_members_overlap(self):
+        first = {'a': 1, 'b': 2, 'c': 3}
+        second = {'c': 1, 'd': 2, 'e': 3}
+        md = dbt.utils.MultiDict([first, second])
+        assert len(md) == 5
+        for key in 'abcde':
+            assert key in md
+        assert md['a'] == 1
+        assert md['b'] == 2
+        assert md['c'] == 1
+        assert md['d'] == 2
+        assert md['e'] == 3

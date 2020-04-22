@@ -12,7 +12,10 @@ class TestContextVars(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return {'test-paths': ['tests']}
+        return {
+            'config-version': 2,
+            'test-paths': ['tests'],
+        }
 
     @use_profile('postgres')
     def test_json_data_tests_postgres(self):

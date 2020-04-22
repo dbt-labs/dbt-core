@@ -1,3 +1,4 @@
 name: view_adapter_override
 version: '1.0'
 macro-paths: ['macros']
+config-version: 2

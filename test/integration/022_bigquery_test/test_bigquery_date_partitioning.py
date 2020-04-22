@@ -1,4 +1,4 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile
 import textwrap
 import yaml
 
@@ -20,6 +20,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
     @property
     def project_config(self):
         return yaml.safe_load(textwrap.dedent('''\
+        config-version: 2
         models:
             test:
                 partitioned_noconfig:

@@ -111,11 +111,9 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'master',
-                    'warn-unpinned': False,
-                },
-            ],
+                    'local': 'local_dependency'
+                }
+            ]
         }
 
     @use_profile("postgres")
@@ -148,11 +146,9 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'master',
-                    'warn-unpinned': False,
-                },
-            ],
+                    'local': 'local_dependency'
+                }
+            ]
         }
 
     @use_profile("postgres")
@@ -181,7 +177,10 @@ class TestModelTestOverlap(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return {'test-paths': [self.models]}
+        return {
+            'config-version': 2,
+            'test-paths': [self.models],
+        }
 
     @use_profile('postgres')
     def test_postgres_duplicate_test_model_paths(self):

@@ -89,6 +89,7 @@ class TestOverrideAdapterLocal(BaseTestCustomMaterialization):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['override-view-adapter-macros']
         }
 
