@@ -1,0 +1,11 @@
+config-version: 2
+name: localdep
+
+version: '1.0'
+
+profile: 'default'
+
+seeds:
+  quote_columns: False
+
+data-paths: ['data']
