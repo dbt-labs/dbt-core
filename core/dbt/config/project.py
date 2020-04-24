@@ -575,7 +575,12 @@ class Project:
         rendered_project['project-root'] = project_root
         package_renderer = renderer.get_package_renderer()
         rendered_packages = package_renderer.render_data(packages_dict)
-        return cls.from_project_config(rendered_project, rendered_packages)
+        try:
+            return cls.from_project_config(rendered_project, rendered_packages)
+        except DbtProjectError as exc:
+            if exc.path is None:
+                exc.path = os.path.join(project_root, 'dbt_project.yml')
+            raise
 
     @classmethod
     def partial_load(

@@ -281,10 +281,20 @@ class DbtConfigError(RuntimeException):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
-    def __init__(self, message, project=None, result_type='invalid_project'):
+    def __init__(
+        self, message, project=None, result_type='invalid_project', path=None
+    ):
         self.project = project
         super().__init__(message)
         self.result_type = result_type
+        self.path = path
+
+    def __str__(self, prefix='! ') -> str:
+        msg = super().__str__(prefix)
+        if self.path is None:
+            return msg
+        else:
+            return f'{msg}\n\nError encountered in {self.path}'
 
 
 class FailFastException(RuntimeException):
