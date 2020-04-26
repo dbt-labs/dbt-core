@@ -159,6 +159,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         except snowflake.connector.errors.ProgrammingError as e:
             msg = str(e)
 
+            logger.debug('Snowflake query id: {}'.format(e.sfqid))
             logger.debug('Snowflake error: {}'.format(msg))
 
             if 'Empty SQL statement' in msg:
