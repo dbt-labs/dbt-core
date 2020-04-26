@@ -219,9 +219,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
-        full_path = os.path.join(
-            target_path, subdirectory, self.package_name, path
-        )
+        full_path = os.path.join(target_path, subdirectory, self.package_name, path)
 
         write_file(full_path, payload)
         return full_path
