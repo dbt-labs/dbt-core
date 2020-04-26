@@ -213,8 +213,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
-        if (os.path.basename(self.path) ==
-                os.path.basename(self.original_file_path)):
+        if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
             path = self.original_file_path
         else:
