@@ -34,7 +34,7 @@ class ServeTask(ConfiguredTask):
 
         if self.args.open_browser:
             try:
-                webbrowser.open_new_tab(f'http://127.0.0.1:{port}')
+                webbrowser.open_new_tab(f"http://127.0.0.1:{port}")
             except webbrowser.Error:
                 pass
 

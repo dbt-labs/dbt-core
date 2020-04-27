@@ -687,9 +687,9 @@ def _build_docs_serve_subparser(subparsers, base_subparser):
         """,
     )
     serve_sub.add_argument(
-        '--no-browser',
-        dest='open_browser',
-        action='store_false',
+        "--no-browser",
+        dest="open_browser",
+        action="store_false",
     )
     serve_sub.set_defaults(cls=serve_task.ServeTask, which="serve", rpc_method=None)
     return serve_sub
