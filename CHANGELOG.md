@@ -23,6 +23,7 @@
 - Fix skipped node count in stdout at the end of a run ([#2095](https://github.com/fishtown-analytics/dbt/issues/2095), [#2310](https://github.com/fishtown-analytics/dbt/pull/2310))
 - Fix an issue where BigQuery incorrectly used a relation's quote policy as the basis for the information schema's include policy, instead of the relation's include policy. ([#2188](https://github.com/fishtown-analytics/dbt/issues/2188), [#2325](https://github.com/fishtown-analytics/dbt/pull/2325))
 - Fix "dbt deps" command so it respects the "--project-dir" arg if specified. ([#2338](https://github.com/fishtown-analytics/dbt/issues/2338), [#2339](https://github.com/fishtown-analytics/dbt/issues/2339))
+- On `run_cli` API calls that are passed `--vars` differing from the server's `--vars`, the RPC server rebuilds the manifest for that call. ([#2265](https://github.com/fishtown-analytics/dbt/issues/2265), [#2363](https://github.com/fishtown-analytics/dbt/pull/2363))
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
