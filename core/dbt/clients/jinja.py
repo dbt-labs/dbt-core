@@ -173,9 +173,7 @@ class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
         vars = dict(*args, **kwargs)
 
         try:
-            return quoted_native_concat(
-                self.root_render_func(self.new_context(vars))
-            )
+            return quoted_native_concat(self.root_render_func(self.new_context(vars)))
         except Exception:
             return self.environment.handle_exception()
 
