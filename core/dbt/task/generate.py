@@ -180,7 +180,7 @@ def mapping_key(node: CompileResultNode) -> CatalogKey:
 
 
 def get_unique_id_mapping(
-    manifest: Manifest
+    manifest: Manifest,
 ) -> Tuple[Dict[CatalogKey, str], Dict[CatalogKey, Set[str]]]:
     # A single relation could have multiple unique IDs pointing to it if a
     # source were also a node.
