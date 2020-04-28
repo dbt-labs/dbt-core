@@ -69,13 +69,11 @@ class PathEncoder(FieldEncoder):
         try:
             return Path(value)
         except TypeError:
-            raise ValidationError(
-                'cannot encode {} into timedelta'.format(value)
-            ) from None
+            raise ValidationError("cannot encode {} into timedelta".format(value)) from None
 
     @property
     def json_schema(self) -> JsonDict:
-        return {'type': 'string'}
+        return {"type": "string"}
 
 
 class NVEnum(StrEnum):
@@ -95,7 +93,7 @@ class NoValue(dbtClassMixin):
 dbtClassMixin.register_field_encoders(
     Port: PortEncoder(),
     timedelta: TimeDeltaFieldEncoder(),
-    Path: PathEncoder(),
+        timedelta: TimeDeltaFieldEncoder(),
 })
 
 

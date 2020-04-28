@@ -320,7 +320,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
         metadata=dict(description="The package of the source to override"),
     )
     path: Path = field(
-        metadata=dict(description='The path to the patch-defining yml file'),
+        metadata=dict(description="The path to the patch-defining yml file"),
     )
     description: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
@@ -335,7 +335,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
 
     def to_patch_dict(self) -> Dict[str, Any]:
         dct = self.to_dict(omit_none=True)
-        remove_keys = ('name', 'overrides', 'tables', 'path')
+        remove_keys = ("name", "overrides", "tables", "path")
         for key in remove_keys:
             if key in dct:
                 del dct[key]

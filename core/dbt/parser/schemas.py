@@ -701,7 +701,7 @@ class SourceParser(YamlDocsReader):
 
             is_override = "overrides" in data
             if is_override:
-                data['path'] = self.yaml.path.original_file_path
+                data["path"] = self.yaml.path.original_file_path
                 patch = self._target_from_dict(SourcePatch, data)
                 assert isinstance(self.yaml.file, SchemaSourceFile)
                 source_file = self.yaml.file

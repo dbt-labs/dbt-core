@@ -930,13 +930,12 @@ def raise_patch_targets_not_found(patches):
 def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
     if path_1 == path_2:
         return (
-            f'remove one of the {type_name} entries for {name} in this file:\n'
-            f' - {path_1!s}\n'
+            f"remove one of the {type_name} entries for {name} in this file:\n" f" - {path_1!s}\n"
         )
     else:
         return (
-            f'remove the {type_name} entry for {name} in one of these files:\n'
-            f' - {path_1!s}\n{path_2!s}'
+            f"remove the {type_name} entry for {name} in one of these files:\n"
+            f" - {path_1!s}\n{path_2!s}"
         )
 
 
@@ -946,12 +945,12 @@ def raise_duplicate_patch_name(patch_1, existing_patch_path):
         patch_1.original_file_path,
         existing_patch_path,
         name,
-        'resource',
+        "resource",
     )
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same resource named '
         f'{name}. Resources and their associated columns may only be '
-        f'described a single time. To fix this, {fix}'
+        f"described a single time. To fix this, {fix}"
     )
 
 
@@ -967,22 +966,22 @@ def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same macro in package '
         f'{package_name} named {name}. Macros may only be described a single '
-        f'time. To fix this, {fix}'
+        f"time. To fix this, {fix}"
     )
 
 
 def raise_duplicate_source_patch_name(patch_1, patch_2):
-    name = f'{patch_1.overrides}.{patch_1.name}'
+    name = f"{patch_1.overrides}.{patch_1.name}"
     fix = _fix_dupe_msg(
         patch_1.path,
         patch_2.path,
         name,
-        'sources',
+        "sources",
     )
     raise_compiler_error(
-        f'dbt found two schema.yml entries for the same source named '
-        f'{patch_1.name} in package {patch_1.overrides}. Sources may only be '
-        f'overridden a single time. To fix this, {fix}'
+        f"dbt found two schema.yml entries for the same source named "
+        f"{patch_1.name} in package {patch_1.overrides}. Sources may only be "
+        f"overridden a single time. To fix this, {fix}"
     )
 
 

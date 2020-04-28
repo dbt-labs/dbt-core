@@ -117,9 +117,7 @@ class SourcePatcher:
 
         source = UnparsedSourceDefinition.from_dict(source_dct)
         table = UnparsedSourceTableDefinition.from_dict(table_dct)
-        return unpatched.replace(
-            source=source, table=table, patch_path=patch_path
-        )
+        return unpatched.replace(source=source, table=table, patch_path=patch_path)
 
     # This converts an UnpatchedSourceDefinition to a ParsedSourceDefinition
     def parse_source(self, target: UnpatchedSourceDefinition) -> ParsedSourceDefinition:
@@ -313,24 +311,18 @@ class SourcePatcher:
         unused_tables: Dict[SourceKey, Optional[Set[str]]],
     ) -> str:
         msg = [
-            'During parsing, dbt encountered source overrides that had no '
-            'target:',
+            "During parsing, dbt encountered source overrides that had no " "target:",
         ]
         for key, table_names in unused_tables.items():
             patch = self.manifest.source_patches[key]
-            patch_name = f'{patch.overrides}.{patch.name}'
+            patch_name = f"{patch.overrides}.{patch.name}"
             if table_names is None:
-                msg.append(
-                    f'  - Source {patch_name} (in {patch.path})'
-                )
+                msg.append(f"  - Source {patch_name} (in {patch.path})")
             else:
                 for table_name in sorted(table_names):
-                    msg.append(
-                        f'  - Source table {patch_name}.{table_name} '
-                        f'(in {patch.path})'
-                    )
-        msg.append('')
-        return '\n'.join(msg)
+                    msg.append(f"  - Source table {patch_name}.{table_name} " f"(in {patch.path})")
+        msg.append("")
+        return "\n".join(msg)
 
 
 def merge_freshness_time_thresholds(
