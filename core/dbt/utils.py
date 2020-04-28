@@ -11,7 +11,8 @@ import os
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
-    Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable
+    Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable, List, Iterator,
+    Mapping, Iterable, AbstractSet, Set
 )
 
 import dbt.exceptions
@@ -247,10 +248,6 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-def is_enabled(node):
-    return node.config.enabled
-
-
 def get_pseudo_test_path(node_name, source_path, test_type):
     "schema tests all come from schema.yml files. fake a source sql file"
     source_path_parts = split_path(source_path)
@@ -311,44 +308,44 @@ class memoized:
         return functools.partial(self.__call__, obj)
 
 
-def invalid_ref_test_message(node, target_model_name, target_model_package,
-                             disabled):
-    if disabled:
-        msg = dbt.exceptions.get_target_disabled_msg(
-            node, target_model_name, target_model_package
-        )
-    else:
-        msg = dbt.exceptions.get_target_not_found_msg(
-            node, target_model_name, target_model_package
-        )
-    return 'WARNING: {}'.format(msg)
-
-
 def invalid_ref_fail_unless_test(node, target_model_name,
                                  target_model_package, disabled):
     if node.resource_type == NodeType.Test:
-        msg = invalid_ref_test_message(node, target_model_name,
-                                       target_model_package, disabled)
+        msg = dbt.exceptions.get_target_not_found_or_disabled_msg(
+            node, target_model_name, target_model_package, disabled
+        )
         if disabled:
-            logger.debug(msg)
+            logger.debug(f'WARNING: {msg}')
         else:
-            dbt.exceptions.warn_or_error(msg)
+            dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
 
     else:
         dbt.exceptions.ref_target_not_found(
             node,
             target_model_name,
-            target_model_package)
+            target_model_package,
+            disabled=disabled,
+        )
 
 
-def invalid_source_fail_unless_test(node, target_name, target_table_name):
+def invalid_source_fail_unless_test(
+    node, target_name, target_table_name, disabled
+):
     if node.resource_type == NodeType.Test:
-        msg = dbt.exceptions.source_disabled_message(node, target_name,
-                                                     target_table_name)
-        dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
+        msg = dbt.exceptions.get_source_not_found_or_disabled_msg(
+            node, target_name, target_table_name, disabled
+        )
+        if disabled:
+            logger.debug(f'WARNING: {msg}')
+        else:
+            dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
     else:
-        dbt.exceptions.source_target_not_found(node, target_name,
-                                               target_table_name)
+        dbt.exceptions.source_target_not_found(
+            node,
+            target_name,
+            target_table_name,
+            disabled=disabled
+        )
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
@@ -539,3 +536,70 @@ def executor(config: HasThreadingConfig) -> concurrent.futures.Executor:
         return concurrent.futures.ThreadPoolExecutor(
             max_workers=config.threads
         )
+
+
+def fqn_search(
+    root: Dict[str, Any], fqn: List[str]
+) -> Iterator[Dict[str, Any]]:
+    """Iterate into a nested dictionary, looking for keys in the fqn as levels.
+    Yield the level config.
+    """
+    yield root
+
+    for level in fqn:
+        level_config = root.get(level, None)
+        if not isinstance(level_config, dict):
+            break
+        yield copy.deepcopy(level_config)
+        root = level_config
+
+
+StringMap = Mapping[str, Any]
+StringMapList = List[StringMap]
+StringMapIter = Iterable[StringMap]
+
+
+class MultiDict(Mapping[str, Any]):
+    """Implement the mapping protocol using a list of mappings. The most
+    recently added mapping "wins".
+    """
+    def __init__(self, sources: Optional[StringMapList] = None) -> None:
+        super().__init__()
+        self.sources: StringMapList
+
+        if sources is None:
+            self.sources = []
+        else:
+            self.sources = sources
+
+    def add_from(self, sources: StringMapIter):
+        self.sources.extend(sources)
+
+    def add(self, source: StringMap):
+        self.sources.append(source)
+
+    def _keyset(self) -> AbstractSet[str]:
+        # return the set of keys
+        keys: Set[str] = set()
+        for entry in self._itersource():
+            keys.update(entry)
+        return keys
+
+    def _itersource(self) -> StringMapIter:
+        return reversed(self.sources)
+
+    def __iter__(self) -> Iterator[str]:
+        # we need to avoid duplicate keys
+        return iter(self._keyset())
+
+    def __len__(self):
+        return len(self._keyset())
+
+    def __getitem__(self, name: str) -> Any:
+        for entry in self._itersource():
+            if name in entry:
+                return entry[name]
+        raise KeyError(name)
+
+    def __contains__(self, name) -> bool:
+        return any((name in entry for entry in self._itersource()))

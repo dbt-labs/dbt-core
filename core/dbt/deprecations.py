@@ -92,23 +92,19 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     '''
 
 
-class BigQueryPartitionByStringDeprecation(DBTDeprecation):
-    _name = 'bq-partition-by-string'
-
-    _description = '''
-    As of dbt v0.16.0, the `partition_by` config in BigQuery accepts a
-    dictionary containing `field` and `data_type`.
-
-
-    - Provided partition_by: {raw_partition_by}
-
-
-    - dbt inferred: {inferred_partition_by}
+class DbtProjectYamlDeprecation(DBTDeprecation):
+    _name = 'dbt-project-yaml-v1'
+    _description = '''\
+    dbt v0.17.0 introduces a new config format for the dbt_project.yml file.
+    Support for the existing version 1 format will be removed in a future
+    release of dbt. The following packages are currently configured with
+    config version 1:{project_names}
 
 
 
-    For more information, see:
-    https://docs.getdbt.com/docs/upgrading-to-0-16-0
+    For upgrading instructions, consult the documentation:
+
+      https://docs.getdbt.com/docs/guides/migration-guide/upgrading-to-0-17-0
     '''
 
 
@@ -154,7 +150,7 @@ deprecations_list: List[DBTDeprecation] = [
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),
     ModelsKeyNonModelDeprecation(),
-    BigQueryPartitionByStringDeprecation(),
+    DbtProjectYamlDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

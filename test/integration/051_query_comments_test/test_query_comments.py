@@ -21,7 +21,10 @@ class TestDefaultQueryComments(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return {'macro-paths': ['macros']}
+        return {
+            'config-version': 2,
+            'macro-paths': ['macros']
+        }
 
 
     @property

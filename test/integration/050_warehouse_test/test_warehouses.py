@@ -36,6 +36,7 @@ class TestConfigWarehouse(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'source-paths': ['project-config-models'],
             'models': {
                 'test': {

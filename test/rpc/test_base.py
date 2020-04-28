@@ -601,7 +601,7 @@ def test_rpc_seed_threads(
     project_root, profiles_root, postgres_profile, unique_schema
 ):
     project = ProjectDefinition(
-        project_data={'seeds': {'quote_columns': False}},
+        project_data={'seeds': {'config': {'quote_columns': False}}},
         seeds={'data.csv': 'a,b\n1,hello\n2,goodbye'},
     )
     querier_ctx = get_querier(
@@ -626,7 +626,7 @@ def test_rpc_seed_include_exclude(
     project_root, profiles_root, postgres_profile, unique_schema
 ):
     project = ProjectDefinition(
-        project_data={'seeds': {'quote_columns': False}},
+        project_data={'seeds': {'config': {'quote_columns': False}}},
         seeds={
             'data_1.csv': 'a,b\n1,hello\n2,goodbye',
             'data_2.csv': 'a,b\n1,data',
@@ -773,7 +773,7 @@ def test_source_freshness(
     error_me = start_time - timedelta(days=2)
     # this should trigger a 'warn'
     project = ProjectDefinition(
-        project_data={'seeds': {'quote_columns': False}},
+        project_data={'seeds': {'config': {'quote_columns': False}}},
         seeds={
             'source.csv': 'a,b\n1,{}\n'.format(error_me.strftime('%Y-%m-%d %H:%M:%S')),
             'other_source.csv': 'a,b\n1,{}\n'.format(error_me.strftime('%Y-%m-%d %H:%M:%S'))

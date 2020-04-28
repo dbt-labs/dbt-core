@@ -30,6 +30,12 @@ class TestSimpleDependency(DBTIntegrationTest):
             ]
         }
 
+    def run_dbt(self, cmd=None, *args, **kwargs):
+        if cmd and cmd[0] != 'deps':
+            strict = kwargs.pop('strict', False)
+            kwargs['strict'] = strict
+        return super().run_dbt(cmd, *args, **kwargs)
+
     def run_deps(self):
         return self.run_dbt(["deps"])
 
@@ -194,7 +200,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     def deps_run_assert_equality(self):
         self.run_dbt(["deps"])
-        results = self.run_dbt(["run"])
+        results = self.run_dbt(["run"], strict=False)
         self.assertEqual(len(results),  4)
 
         self.assertTablesEqual("seed","table_model")

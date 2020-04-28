@@ -21,6 +21,7 @@ class TestSimpleSeed(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             'seeds': {
                 'quote_columns': False,
@@ -67,11 +68,12 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data'],
             'seeds': {
                 "schema": "custom_schema",
                 'quote_columns': False,
-            }
+            },
         }
 
     @use_profile('postgres')
@@ -115,6 +117,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data-config'],
             'seeds': {
                 "test": {
@@ -126,7 +129,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
                     }
                 },
                 'quote_columns': False,
-            }
+            },
         }
 
     @use_profile('postgres')
@@ -169,10 +172,11 @@ class TestSeedParsing(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data-bad'],
             'seeds': {
                 'quote_columns': False,
-            }
+            },
         }
 
     @use_profile('postgres')
@@ -201,10 +205,11 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data-bom'],
             'seeds': {
                 'quote_columns': False,
-            }
+            },
         }
 
     @use_profile('postgres')
@@ -232,6 +237,7 @@ class TestSimpleSeedWithUnicode(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": ['data-unicode'],
             'seeds': {
                 'quote_columns': False,

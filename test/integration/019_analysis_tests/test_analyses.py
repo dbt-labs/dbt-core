@@ -18,6 +18,7 @@ class TestAnalyses(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            "config-version": 2,
             "analysis-paths": [self.analysis_path()]
         }
 

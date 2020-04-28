@@ -9,6 +9,7 @@ class TestBaseCaching(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'quoting': {
                 'identifier': False,
                 'schema': False,

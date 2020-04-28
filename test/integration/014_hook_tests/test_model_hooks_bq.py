@@ -69,12 +69,12 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['macros'],
             'models': {
                 'test': {
                     'pre-hook': [MODEL_PRE_HOOK],
-
-                    'post-hook':[MODEL_POST_HOOK]
+                    'post-hook':[MODEL_POST_HOOK],
                 }
             }
         }
@@ -125,6 +125,7 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'models': {},
             'seeds': {

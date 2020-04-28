@@ -2,7 +2,8 @@ import abc
 import itertools
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable)
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
+)
 from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin

@@ -1,13 +1,14 @@
-import itertools
 import os
 import pickle
 from datetime import datetime
 from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union
 
-from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
 
+from dbt import deprecations
+from dbt.helper_types import PathSet
+from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered
@@ -19,7 +20,6 @@ from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo
 )
-from dbt.exceptions import raise_compiler_error
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.data_test import DataTestParser
@@ -331,7 +331,16 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
     ) -> Manifest:
         with PARSING_STATE:
-            projects = load_all_projects(root_config)
+            projects = root_config.load_dependencies()
+            v1_configs = []
+            for project in projects.values():
+                if project.config_version == 1:
+                    v1_configs.append(f'\n\n     - {project.project_name}')
+            if v1_configs:
+                deprecations.warn(
+                    'dbt-project-yaml-v1',
+                    project_names=''.join(v1_configs)
+                )
             loader = cls(root_config, projects, macro_hook)
             loader.load(internal_manifest=internal_manifest)
             loader.write_parse_results()
@@ -348,13 +357,15 @@ class ManifestLoader:
             return loader.load_only_macros()
 
 
-def _check_resource_uniqueness(manifest):
+def _check_resource_uniqueness(manifest: Manifest) -> None:
     names_resources: Dict[str, CompileResultNode] = {}
     alias_resources: Dict[str, CompileResultNode] = {}
 
     for resource, node in manifest.nodes.items():
         if node.resource_type not in NodeType.refable():
             continue
+        # appease mypy - sources aren't refable!
+        assert not isinstance(node, ParsedSourceDefinition)
 
         name = node.name
         alias = "{}.{}".format(node.schema, node.alias)
@@ -375,13 +386,15 @@ def _check_resource_uniqueness(manifest):
         alias_resources[alias] = node
 
 
-def _warn_for_unused_resource_config_paths(manifest, config):
-    resource_fqns = manifest.get_resource_fqns()
-    disabled_fqns = [n.fqn for n in manifest.disabled]
+def _warn_for_unused_resource_config_paths(
+    manifest: Manifest, config: RuntimeConfig
+) -> None:
+    resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
+    disabled_fqns: PathSet = frozenset(tuple(n.fqn) for n in manifest.disabled)
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 
-def _check_manifest(manifest, config):
+def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest)
     _warn_for_unused_resource_config_paths(manifest, config)
 
@@ -401,25 +414,6 @@ def _load_projects(config, paths):
             )
         else:
             yield project.project_name, project
-
-
-def _project_directories(config):
-    root = os.path.join(config.project_root, config.modules_path)
-
-    dependencies = []
-    if os.path.exists(root):
-        dependencies = os.listdir(root)
-
-    for name in dependencies:
-        full_obj = os.path.join(root, name)
-
-        if not os.path.isdir(full_obj) or name.startswith('__'):
-            # exclude non-dirs and dirs that start with __
-            # the latter could be something like __pycache__
-            # for the global dbt modules dir
-            continue
-
-        yield full_obj
 
 
 def _get_node_column(node, column_name):
@@ -557,7 +551,7 @@ def process_refs(manifest: Manifest, current_project: str):
 def _process_sources_for_node(
     manifest: Manifest, current_project: str, node: NonSourceNode
 ):
-    target_source = None
+    target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
     for source_name, table_name in node.sources:
         target_source = manifest.resolve_source(
             source_name,
@@ -566,13 +560,15 @@ def _process_sources_for_node(
             node.package_name,
         )
 
-        if target_source is None:
+        if target_source is None or isinstance(target_source, Disabled):
             # this folows the same pattern as refs
             node.config.enabled = False
             dbt.utils.invalid_source_fail_unless_test(
                 node,
                 source_name,
-                table_name)
+                table_name,
+                disabled=(isinstance(target_source, Disabled))
+            )
             continue
         target_source_id = target_source.unique_id
         node.depends_on.nodes.append(target_source_id)
@@ -610,24 +606,6 @@ def process_node(
     _process_refs_for_node(manifest, config.project_name, node)
     ctx = generate_runtime_docs(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)
-
-
-def load_all_projects(config: RuntimeConfig) -> Mapping[str, Project]:
-    all_projects = {config.project_name: config}
-    project_paths = itertools.chain(
-        internal_project_names(),
-        _project_directories(config)
-    )
-    for project_name, project in _load_projects(config, project_paths):
-        if project_name in all_projects:
-            raise_compiler_error(
-                f'dbt found more than one package with the name '
-                f'"{project_name}" included in this project. Package names '
-                f'must be unique in a project. Please rename one of these '
-                f'packages.'
-            )
-        all_projects[project_name] = project
-    return all_projects
 
 
 def load_internal_projects(config):

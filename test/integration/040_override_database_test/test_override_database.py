@@ -55,11 +55,10 @@ class BaseOverrideDatabase(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
-            'models': {
-                'vars': {
-                    'alternate_db': self.alternative_database,
-                },
+            'vars': {
+                'alternate_db': self.alternative_database,
             },
             'quoting': {
                 'database': True,
@@ -108,17 +107,18 @@ class TestProjectModelOverride(BaseOverrideDatabase):
             func = lambda x: x
 
         self.use_default_project({
+            'config-version': 2,
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
             'models': {
-                'vars': {
-                    'alternate_db': self.alternative_database,
-                },
                 'database': self.alternative_database,
                 'test': {
                     'subfolder': {
                         'database': self.default_database,
-                    },
-                },
-            }
+                    }
+                }
+            },
         })
         self.run_dbt_notstrict(['seed'])
 
@@ -148,7 +148,10 @@ class TestProjectSeedOverride(BaseOverrideDatabase):
             func = lambda x: x
 
         self.use_default_project({
-            'seeds': {'database': self.alternative_database}
+            'config-version': 2,
+            'seeds': {
+                'database': self.alternative_database
+            },
         })
         self.run_dbt_notstrict(['seed'])
 

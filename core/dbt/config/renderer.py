@@ -1,137 +1,212 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, Optional, Union
 
 from dbt.clients.jinja import get_rendered
 
-from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
+from dbt.node_types import NodeType
 from dbt.utils import deep_map
 
 
-class ConfigRenderer:
-    """A renderer provides configuration rendering for a given set of cli
-    variables and a render type.
-    """
-    def __init__(self, context: Dict[str, Any]):
+Keypath = Tuple[Union[str, int], ...]
+
+
+class BaseRenderer:
+    def __init__(self, context: Dict[str, Any]) -> None:
         self.context = context
 
-    @staticmethod
-    def _is_deferred_render(keypath):
-        if not keypath:
-            return False
+    @property
+    def name(self):
+        return 'Rendering'
 
-        first = keypath[0]
-        # run hooks
-        if first in {'on-run-start', 'on-run-end', 'query-comment'}:
-            return True
-        # models have two things to avoid
-        if first in {'seeds', 'models', 'snapshots'}:
-            # model-level hooks
-            if 'pre-hook' in keypath or 'post-hook' in keypath:
-                return True
-            # model-level 'vars' declarations
-            if 'vars' in keypath:
-                return True
+    def should_render_keypath(self, keypath: Keypath) -> bool:
+        return True
 
-        return False
-
-    def _render_project_entry(self, value, keypath):
-        """Render an entry, in case it's jinja. This is meant to be passed to
-        deep_map.
-
-        If the parsed entry is a string and has the name 'port', this will
-        attempt to cast it to an int, and on failure will return the parsed
-        string.
-
-        :param value Any: The value to potentially render
-        :param key str: The key to convert on.
-        :return Any: The rendered entry.
-        """
-        # the project name is never rendered
-        if keypath == ('name',):
-            return value
-        # query comments and hooks should be treated as raw sql, they'll get
-        # rendered later.
-        # Same goes for 'vars' declarations inside 'models'/'seeds'
-        if self._is_deferred_render(keypath):
+    def render_entry(self, value: Any, keypath: Keypath) -> Any:
+        if not self.should_render_keypath(keypath):
             return value
 
-        return self.render_value(value)
+        return self.render_value(value, keypath)
 
-    def render_value(self, value, keypath=None):
+    def render_value(
+        self, value: Any, keypath: Optional[Keypath] = None
+    ) -> Any:
         # keypath is ignored.
         # if it wasn't read as a string, ignore it
         if not isinstance(value, str):
             return value
         return str(get_rendered(value, self.context))
 
-    def _render_profile_data(self, value, keypath):
-        result = self.render_value(value)
+    def render_data(
+        self, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        try:
+            return deep_map(self.render_entry, data)
+        except RecursionException:
+            raise DbtProjectError(
+                f'Cycle detected: {self.name} input has a reference to itself',
+                project=data
+            )
+
+
+class DbtProjectYamlRenderer(BaseRenderer):
+    def __init__(
+        self, context: Dict[str, Any], version: Optional[int] = None
+    ) -> None:
+        super().__init__(context)
+        self.version: Optional[int] = version
+
+    @property
+    def name(self):
+        'Project config'
+
+    def get_package_renderer(self) -> BaseRenderer:
+        return PackageRenderer(self.context)
+
+    def should_render_keypath_v1(self, keypath: Keypath) -> bool:
+        if not keypath:
+            return True
+
+        first = keypath[0]
+        # run hooks
+        if first in {'on-run-start', 'on-run-end', 'query-comment'}:
+            return False
+        # models have two things to avoid
+        if first in {'seeds', 'models', 'snapshots', 'seeds'}:
+            # model-level hooks
+            if 'pre-hook' in keypath or 'post-hook' in keypath:
+                return False
+            # model-level 'vars' declarations
+            if 'vars' in keypath:
+                return False
+
+        return True
+
+    def should_render_keypath_v2(self, keypath: Keypath) -> bool:
+        if not keypath:
+            return True
+
+        first = keypath[0]
+        # run hooks are not rendered
+        if first in {'on-run-start', 'on-run-end', 'query-comment'}:
+            return False
+
+        # don't render vars blocks until runtime
+        if first == 'vars':
+            return False
+
+        if first in {'seeds', 'models', 'snapshots', 'seeds'}:
+            # model-level hooks
+            if 'pre-hook' in keypath or 'post-hook' in keypath:
+                return False
+            # model-level 'vars' declarations
+            if 'vars' in keypath:
+                return False
+
+        return True
+
+    def should_render_keypath(self, keypath: Keypath) -> bool:
+        if self.version == 2:
+            return self.should_render_keypath_v2(keypath)
+        else:  # could be None
+            return self.should_render_keypath_v1(keypath)
+
+    def render_data(
+        self, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if self.version is None:
+            self.version = data.get('current-version')
+
+        try:
+            return deep_map(self.render_entry, data)
+        except RecursionException:
+            raise DbtProjectError(
+                f'Cycle detected: {self.name} input has a reference to itself',
+                project=data
+            )
+
+
+class ProfileRenderer(BaseRenderer):
+    @property
+    def name(self):
+        'Profile'
+
+    def render_entry(self, value, keypath):
+        result = super().render_entry(value, keypath)
+
         if len(keypath) == 1 and keypath[-1] == 'port':
             try:
-                result = int(result)
+                return int(result)
             except ValueError:
                 # let the validator or connection handle this
                 pass
         return result
 
-    @staticmethod
-    def _is_schema_test(keypath) -> bool:
-        # we got passed an UnparsedSourceDefinition
-        if len(keypath) > 2 and keypath[0] == 'tables':
-            if keypath[2] == 'tests':
-                return True
-            elif keypath[2] == 'columns':
-                if len(keypath) > 4 and keypath[4] == 'tests':
-                    return True
+
+class SchemaYamlRenderer(BaseRenderer):
+    DOCUMENTABLE_NODES = frozenset(
+        n.pluralize() for n in NodeType.documentable()
+    )
+
+    @property
+    def name(self):
+        return 'Rendering yaml'
+
+    def _is_norender_key(self, keypath: Keypath) -> bool:
+        """
+        models:
+            - name: blah
+            - description: blah
+              tests: ...
+            - columns:
+                - name:
+                - description: blah
+                  tests: ...
+
+        Return True if it's tests or description - those aren't rendered
+        """
+        if len(keypath) >= 2 and keypath[1] in ('tests', 'description'):
+            return True
+
+        if (
+            len(keypath) >= 4 and
+            keypath[1] == 'columns' and
+            keypath[3] in ('tests', 'description')
+        ):
+            return True
+
         return False
 
-    def _render_schema_source_data(self, value, keypath):
-        # things to not render:
-        # - descriptions
-        # - test arguments
-        if len(keypath) > 0 and keypath[-1] == 'description':
-            return value
-        elif self._is_schema_test(keypath):
-            return value
+    # don't render descriptions or test keyword arguments
+    def should_render_keypath(self, keypath: Keypath) -> bool:
+        if len(keypath) < 2:
+            return True
 
-        return self.render_value(value)
+        if keypath[0] not in self.DOCUMENTABLE_NODES:
+            return True
 
-    def render_project(self, as_parsed):
-        """Render the parsed data, returning a new dict (or whatever was read).
-        """
-        try:
-            return deep_map(self._render_project_entry, as_parsed)
-        except RecursionException:
-            raise DbtProjectError(
-                'Cycle detected: Project input has a reference to itself',
-                project=as_parsed
-            )
+        if len(keypath) < 3:
+            return True
 
-    def render_profile_data(self, as_parsed):
-        """Render the chosen profile entry, as it was parsed."""
-        try:
-            return deep_map(self._render_profile_data, as_parsed)
-        except RecursionException:
-            raise DbtProfileError(
-                'Cycle detected: Profile input has a reference to itself',
-                project=as_parsed
-            )
+        if keypath[0] == NodeType.Source.pluralize():
+            if keypath[2] == 'description':
+                return False
+            if keypath[2] == 'tables':
+                if self._is_norender_key(keypath[3:]):
+                    return False
+        elif keypath[0] == NodeType.Macro.pluralize():
+            if keypath[2] == 'arguments':
+                if self._is_norender_key(keypath[3:]):
+                    return False
+            elif self._is_norender_key(keypath[1:]):
+                return False
+        else:  # keypath[0] in self.DOCUMENTABLE_NODES:
+            if self._is_norender_key(keypath[1:]):
+                return False
+        return True
 
-    def render_schema_source(self, as_parsed):
-        try:
-            return deep_map(self._render_schema_source_data, as_parsed)
-        except RecursionException:
-            raise DbtProfileError(
-                'Cycle detected: schema.yml input has a reference to itself',
-                project=as_parsed
-            )
 
-    def render_packages_data(self, as_parsed):
-        try:
-            return deep_map(self.render_value, as_parsed)
-        except RecursionException:
-            raise DbtProfileError(
-                'Cycle detected: schema.yml input has a reference to itself',
-                project=as_parsed
-            )
+class PackageRenderer(BaseRenderer):
+    @property
+    def name(self):
+        return 'Packages config'

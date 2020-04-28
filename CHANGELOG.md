@@ -9,8 +9,9 @@
 - Users can supply paths as arguments to `--models` and `--select`, either explicitily by prefixing with `path:` or implicitly with no prefix. ([#454](https://github.com/fishtown-analytics/dbt/issues/454), [#2258](https://github.com/fishtown-analytics/dbt/pull/2258))
 - dbt now builds the relation cache for "dbt compile" and "dbt ls" as well as "dbt run" ([#1705](https://github.com/fishtown-analytics/dbt/issues/1705), [#2319](https://github.com/fishtown-analytics/dbt/pull/2319))
 - Snowflake now uses "show terse objects" to build the relations cache instead of selecting from the information schema ([#2174](https://github.com/fishtown-analytics/dbt/issues/2174), [#2322](https://github.com/fishtown-analytics/dbt/pull/2322))
--  Snowflake now uses "describe table" to get the columns in a relation ([#2260](https://github.com/fishtown-analytics/dbt/issues/2260), [#2324](https://github.com/fishtown-analytics/dbt/pull/2324))
--  Add a 'depends_on' attribute to the log record extra field ([#2316](https://github.com/fishtown-analytics/dbt/issues/2316), [#2341](https://github.com/fishtown-analytics/dbt/pull/2341))
+- Snowflake now uses "describe table" to get the columns in a relation ([#2260](https://github.com/fishtown-analytics/dbt/issues/2260), [#2324](https://github.com/fishtown-analytics/dbt/pull/2324))
+- Add a 'depends_on' attribute to the log record extra field ([#2316](https://github.com/fishtown-analytics/dbt/issues/2316), [#2341](https://github.com/fishtown-analytics/dbt/pull/2341))
+- Added a '--no-browser' argument to "dbt docs serve" so you can serve docs in an environment that only has a CLI browser which would otherwise deadlock dbt ([#2004](https://github.com/fishtown-analytics/dbt/issues/2004), [#2364](https://github.com/fishtown-analytics/dbt/pull/2364))
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
@@ -23,6 +24,8 @@
 - Return error message when profile is empty in profiles.yml. ([#2292](https://github.com/fishtown-analytics/dbt/issues/2292), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
 - Fix skipped node count in stdout at the end of a run ([#2095](https://github.com/fishtown-analytics/dbt/issues/2095), [#2310](https://github.com/fishtown-analytics/dbt/pull/2310))
 - Fix an issue where BigQuery incorrectly used a relation's quote policy as the basis for the information schema's include policy, instead of the relation's include policy. ([#2188](https://github.com/fishtown-analytics/dbt/issues/2188), [#2325](https://github.com/fishtown-analytics/dbt/pull/2325))
+- Fix "dbt deps" command so it respects the "--project-dir" arg if specified. ([#2338](https://github.com/fishtown-analytics/dbt/issues/2338), [#2339](https://github.com/fishtown-analytics/dbt/issues/2339))
+- Fix "Object of type Decimal is not JSON serializable" error when BigQuery queries returned numeric types in nested data structures ([#2336](https://github.com/fishtown-analytics/dbt/issues/2336), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
@@ -34,6 +37,7 @@ Contributors:
  - [@jeremyyeo](https://github.com/jeremyyeo) [#2259](https://github.com/fishtown-analytics/dbt/pull/2259)
  - [@rodrigodelmonte](https://github.com/rodrigodelmonte) [#2298](https://github.com/fishtown-analytics/dbt/pull/2298)
  - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
+ - [@nickwu241](https://github.com/nickwu241) [#2339](https://github.com/fishtown-analytics/dbt/issues/2339)
 
 ## dbt 0.16.1 (April 14, 2020)
 

@@ -15,6 +15,7 @@ class TestOverrideDatabase(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['custom-db-macros'],
         }
 

@@ -185,6 +185,7 @@ class TestEventTrackingSuccess(TestEventTracking):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "data-paths": [self.dir("data")],
             "test-paths": [self.dir("test")],
             'seeds': {
@@ -462,6 +463,7 @@ class TestEventTrackingCompilationError(TestEventTracking):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "source-paths": [self.dir("model-compilation-error")],
         }
 
@@ -565,6 +567,7 @@ class TestEventTrackingSnapshot(TestEventTracking):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "snapshot-paths": ['snapshots']
         }
 

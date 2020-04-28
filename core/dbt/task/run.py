@@ -16,7 +16,7 @@ from dbt.node_runners import ModelRunner
 
 import dbt.exceptions
 import dbt.flags
-from dbt.hooks import get_hook
+from dbt.hooks import get_hook_dict
 from dbt.ui.printer import \
     print_hook_start_line, \
     print_hook_end_line, \
@@ -26,6 +26,7 @@ from dbt.ui.printer import \
 
 from dbt.compilation import compile_node
 from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.task.compile import CompileTask
 
@@ -74,6 +75,12 @@ def get_hooks_by_tags(
         if len(set(node_tags) & match_tags):
             matched_nodes.append(node)
     return matched_nodes
+
+
+def get_hook(source, index):
+    hook_dict = get_hook_dict(source)
+    hook_dict.setdefault('index', index)
+    return Hook.from_dict(hook_dict)
 
 
 class RunTask(CompileTask):

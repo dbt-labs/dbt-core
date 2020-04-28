@@ -2,7 +2,8 @@ import dbt.utils
 import dbt.deprecations
 import dbt.exceptions
 
-from dbt.config import UnsetProfileConfig, ConfigRenderer
+from dbt.config import UnsetProfileConfig
+from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.context.target import generate_target_context
 from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
@@ -43,7 +44,7 @@ class DepsTask(BaseTask):
         with downloads_directory():
             final_deps = resolve_packages(packages, self.config)
 
-            renderer = ConfigRenderer(generate_target_context(
+            renderer = DbtProjectYamlRenderer(generate_target_context(
                 self.config, self.config.cli_vars
             ))
 

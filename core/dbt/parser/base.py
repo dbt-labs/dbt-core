@@ -15,6 +15,9 @@ from dbt import hooks
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
+from dbt.context.context_config import (
+    LegacyContextConfig, ContextConfig, ContextConfigType
+)
 from dbt.contracts.graph.manifest import (
     Manifest, SourceFile, FilePath, FileHash
 )
@@ -24,7 +27,6 @@ from dbt.exceptions import (
     CompilationException, validator_error_message, InternalException
 )
 from dbt.node_types import NodeType
-from dbt.source_config import SourceConfig
 from dbt.parser.results import ParseResult, ManifestNodes
 from dbt.parser.search import FileBlock
 
@@ -160,13 +162,17 @@ class ConfiguredParser(
     def default_database(self):
         return self.root_project.credentials.database
 
+    def get_fqn_prefix(self, path: str) -> List[str]:
+        no_ext = os.path.splitext(path)[0]
+        fqn = [self.project.project_name]
+        fqn.extend(dbt.utils.split_path(no_ext)[:-1])
+        return fqn
+
     def get_fqn(self, path: str, name: str) -> List[str]:
         """Get the FQN for the node. This impacts node selection and config
         application.
         """
-        no_ext = os.path.splitext(path)[0]
-        fqn = [self.project.project_name]
-        fqn.extend(dbt.utils.split_path(no_ext)[:-1])
+        fqn = self.get_fqn_prefix(path)
         fqn.append(name)
         return fqn
 
@@ -201,7 +207,8 @@ class ConfiguredParser(
         self,
         block: ConfiguredBlockType,
         path: str,
-        config: SourceConfig,
+        config: ContextConfigType,
+        fqn: List[str],
         name=None,
         **kwargs,
     ) -> IntermediateNode:
@@ -215,7 +222,7 @@ class ConfiguredParser(
             'alias': name,
             'schema': self.default_schema,
             'database': self.default_database,
-            'fqn': config.fqn,
+            'fqn': fqn,
             'name': name,
             'root_path': self.project.project_root,
             'resource_type': self.resource_type,
@@ -242,16 +249,16 @@ class ConfiguredParser(
             raise CompilationException(msg, node=node)
 
     def _context_for(
-        self, parsed_node: IntermediateNode, config: SourceConfig
+        self, parsed_node: IntermediateNode, config: ContextConfigType
     ) -> Dict[str, Any]:
         return generate_parser_model(
             parsed_node, self.root_project, self.macro_manifest, config
         )
 
     def render_with_context(
-        self, parsed_node: IntermediateNode, config: SourceConfig
+        self, parsed_node: IntermediateNode, config: ContextConfigType
     ) -> None:
-        """Given the parsed node and a SourceConfig to use during parsing,
+        """Given the parsed node and a ContextConfigType to use during parsing,
         render the node's sql wtih macro capture enabled.
 
         Note: this mutates the config object when config() calls are rendered.
@@ -283,13 +290,13 @@ class ConfiguredParser(
         self._update_node_alias(parsed_node, config_dict)
 
     def update_parsed_node(
-        self, parsed_node: IntermediateNode, config: SourceConfig
+        self, parsed_node: IntermediateNode, config: ContextConfigType
     ) -> None:
-        """Given the SourceConfig used for parsing and the parsed node,
+        """Given the ContextConfigType used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
-        config_dict = config.config
+        config_dict = config.build_config_dict()
 
         # Set tags on node provided in config blocks
         model_tags = config_dict.get('tags', [])
@@ -313,17 +320,41 @@ class ConfiguredParser(
         for hook in hooks:
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
-    def initial_config(self, fqn: List[str]) -> SourceConfig:
-        return SourceConfig(self.root_project, self.project, fqn,
-                            self.resource_type)
+    def initial_config(self, fqn: List[str]) -> ContextConfigType:
+        config_version = min(
+            [self.project.config_version, self.root_project.config_version]
+        )
+        # it would be nice to assert that if the main config is v2, the
+        # dependencies are all v2. or vice-versa.
+        if config_version == 1:
+            return LegacyContextConfig(
+                self.root_project.as_v1(),
+                self.project.as_v1(),
+                fqn,
+                self.resource_type,
+            )
+        elif config_version == 2:
+            return ContextConfig(
+                self.root_project,
+                fqn,
+                self.resource_type,
+                self.project.project_name,
+            )
+        else:
+            raise InternalException(
+                f'Got an unexpected project version={config_version}, '
+                f'expected 1 or 2'
+            )
 
-    def config_dict(self, config: SourceConfig) -> Dict[str, Any]:
-        config_dict = config.config
+    def config_dict(
+        self, config: ContextConfigType,
+    ) -> Dict[str, Any]:
+        config_dict = config.build_config_dict(base=True)
         self._mangle_hooks(config_dict)
         return config_dict
 
     def render_update(
-        self, node: IntermediateNode, config: SourceConfig
+        self, node: IntermediateNode, config: ContextConfigType
     ) -> None:
         try:
             self.render_with_context(node, config)
@@ -343,12 +374,13 @@ class ConfiguredParser(
         compiled_path: str = self.get_compiled_path(block)
         fqn = self.get_fqn(compiled_path, block.name)
 
-        config: SourceConfig = self.initial_config(fqn)
+        config: ContextConfigType = self.initial_config(fqn)
 
         node = self._create_parsetime_node(
             block=block,
             path=compiled_path,
-            config=config
+            config=config,
+            fqn=fqn,
         )
         self.render_update(node, config)
         result = self.transform(node)

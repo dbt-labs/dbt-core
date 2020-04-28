@@ -22,7 +22,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
     def __init__(self, port, profiles_dir, cli_vars=None):
         self.port = port
         handle_and_check_args = [
-            '--strict', 'rpc', '--log-cache-events',
+            'rpc', '--log-cache-events',
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]
@@ -144,6 +144,7 @@ class HasRPCServer(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'macro-paths': ['macros'],

@@ -17,12 +17,12 @@ class BaseTestDeprecations(DBTIntegrationTest):
     def dir(path):
         return path.lstrip("/")
 
+
+class TestDeprecations(BaseTestDeprecations):
     @property
     def models(self):
         return self.dir("models")
 
-
-class TestDeprecations(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_deprecations_fail(self):
         self.run_dbt(strict=True, expect_pass=False)
@@ -43,6 +43,7 @@ class TestMaterializationReturnDeprecation(BaseTestDeprecations):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': [self.dir('custom-materialization-macros')],
         }
 
@@ -77,22 +78,30 @@ class TestModelsKeyMismatchDeprecation(BaseTestDeprecations):
         self.assertEqual(deprecations.active_deprecations, set())
         self.run_dbt(strict=False)
         expected = {'models-key-mismatch'}
+        self.assertEqual(expected, deprecations.active_deprecations)
 
 
-class TestBQPartitionByDeprecation(BaseTestDeprecations):
+class TestDbtProjectYamlV1Deprecation(BaseTestDeprecations):
     @property
     def models(self):
-        return self.dir('bq-partitioned-models')
-    
-    @use_profile('bigquery')
-    def test_bigquery_partition_by_fail(self):
-        self.run_dbt(['seed'])
-        self.run_dbt(strict=True, expect_pass=False)
+        return 'boring-models'
 
-    @use_profile('bigquery')
-    def test_bigquery_partition_by(self):
-        self.run_dbt(['seed'])
+    @property
+    def project_config(self):
+        # No config-version set!
+        return {}
+
+    @use_profile('postgres')
+    def test_postgres_project_deprecations_fail(self):
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(strict=True)
+
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        self.assertIn('Support for the existing version 1 format will be removed', exc_str)
+
+    @use_profile('postgres')
+    def test_postgres_project_deprecations(self):
         self.assertEqual(deprecations.active_deprecations, set())
         self.run_dbt(strict=False)
-        expected = {'bq-partition-by-string'}
+        expected = {'dbt-project-yaml-v1'}
         self.assertEqual(expected, deprecations.active_deprecations)

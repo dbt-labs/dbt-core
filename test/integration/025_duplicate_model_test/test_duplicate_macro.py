@@ -16,6 +16,7 @@ class TestDuplicateMacroEnabledSameFile(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['macros-bad-same']
         }
 
@@ -40,6 +41,7 @@ class TestDuplicateMacroEnabledDifferentFiles(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['macros-bad-separate']
         }
 
