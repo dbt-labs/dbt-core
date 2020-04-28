@@ -57,13 +57,6 @@
   {%- set sql_header = config.get('sql_header', none) -%}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
   {%- set relation_comment = get_relation_comment(raw_persist_docs, model) -%}
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-  {%- set column_comment = get_relation_column_comments(raw_persist_docs, model) -%}
->>>>>>> ff65dbdd... adding in Drews feedback
-=======
->>>>>>> 7964d517... adding in support for views
 
   {{ sql_header if sql_header is not none }}
   create or replace {% if secure -%}
@@ -71,24 +64,11 @@
   {%- endif %} view {{ relation }} {% if copy_grants -%} copy grants {%- endif %} as (
     {{ sql }}
   );
-<<<<<<< HEAD
-<<<<<<< HEAD
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 7964d517... adding in support for views
   {% if relation_comment is not none -%}
     {{ alter_relation_comment(relation, relation_comment) }}
   {%- endif -%}
 
-<<<<<<< HEAD
-=======
->>>>>>> ff65dbdd... adding in Drews feedback
-=======
->>>>>>> 4a84a256... fixing spacing
-=======
->>>>>>> 7964d517... adding in support for views
 {% endmacro %}
 
 {% macro snowflake__get_columns_in_relation(relation) -%}
