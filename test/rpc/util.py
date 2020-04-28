@@ -616,3 +616,12 @@ def get_querier(
     )
     with schema_ctx, server_ctx as server:
         yield Querier(server)
+
+
+def assert_has_threads(results, num_threads):
+    assert 'logs' in results
+    c_logs = [l for l in results['logs'] if 'Concurrency' in l['message']]
+    assert len(c_logs) == 1, \
+        f'Got invalid number of concurrency logs ({len(c_logs)})'
+    assert 'message' in c_logs[0]
+    assert f'Concurrency: {num_threads} threads' in c_logs[0]['message']
