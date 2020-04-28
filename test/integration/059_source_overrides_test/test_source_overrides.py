@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.exceptions import CompilationException
@@ -78,7 +79,8 @@ class TestSourceOverrides(DBTIntegrationTest):
         # without running 'deps', our source overrides are invalid
         _, stdout = self.run_dbt_and_capture(['compile'], strict=False)
         self.assertIn('WARNING: During parsing, dbt encountered source overrides that had no target', stdout)
-        self.assertIn('Source localdep.my_source (in models/schema.yml)', stdout)
+        schema_path = os.path.join('models', 'schema.yml')
+        self.assertIn(f'Source localdep.my_source (in {schema_path})', stdout)
         self.run_dbt(['deps'])
         seed_results = self.run_dbt(['seed'])
         assert len(seed_results) == 5
@@ -183,5 +185,7 @@ class TestSourceDuplicateOverrides(DBTIntegrationTest):
 
         self.assertIn('dbt found two schema.yml entries for the same source named', str(exc.exception))
         self.assertIn('one of these files', str(exc.exception))
-        self.assertIn('dupe-models/schema1.yml', str(exc.exception))
-        self.assertIn('dupe-models/schema2.yml', str(exc.exception))
+        schema1_path = os.path.join('dupe-models', 'schema1.yml')
+        schema2_path = os.path.join('dupe-models', 'schema2.yml')
+        self.assertIn(schema1_path, str(exc.exception))
+        self.assertIn(schema2_path, str(exc.exception))
