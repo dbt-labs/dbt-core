@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.exceptions import CompilationException
 
 
 class TestSourceOverrides(DBTIntegrationTest):
@@ -74,6 +75,10 @@ class TestSourceOverrides(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_source_overrides(self):
+        # without running 'deps', our source overrides are invalid
+        _, stdout = self.run_dbt_and_capture(['compile'], strict=False)
+        self.assertIn('WARNING: During parsing, dbt encountered source overrides that had no target', stdout)
+        self.assertIn('Source localdep.my_source (in models/schema.yml)', stdout)
         self.run_dbt(['deps'])
         seed_results = self.run_dbt(['seed'])
         assert len(seed_results) == 5
@@ -125,3 +130,58 @@ class TestSourceOverrides(DBTIntegrationTest):
             ['source', 'snapshot-freshness'], expect_pass=False
         )
         self.assertEqual(len(results), 2)
+
+
+class TestSourceDuplicateOverrides(DBTIntegrationTest):
+    def setUp(self):
+        super().setUp()
+        self._id = 101
+
+    @property
+    def schema(self):
+        return "source_overrides_059"
+
+    @property
+    def models(self):
+        return 'dupe-models'
+
+    @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {'local': 'local_dependency'},
+            ],
+        }
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'seeds': {
+                'localdep': {
+                    'enabled': False,
+                    'keep': {
+                        'enabled': True,
+                    }
+                },
+                'quote_columns': False,
+            },
+            'sources': {
+                'localdep': {
+                    'my_other_source': {
+                        'enabled': False,
+                    }
+                }
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_source_duplicate_overrides(self):
+        self.run_dbt(['deps'])
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['compile'])
+
+        self.assertIn('dbt found two schema.yml entries for the same source named', str(exc.exception))
+        self.assertIn('one of these files', str(exc.exception))
+        self.assertIn('dupe-models/schema1.yml', str(exc.exception))
+        self.assertIn('dupe-models/schema2.yml', str(exc.exception))

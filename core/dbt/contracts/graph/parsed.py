@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import (
     Optional,
     Union,
@@ -317,6 +318,7 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
     source: UnparsedSourceDefinition
     table: UnparsedSourceTableDefinition
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+    patch_path: Optional[Path] = None
 
     @property
     def name(self) -> str:
@@ -380,6 +382,7 @@ class ParsedSourceDefinition(
     source_meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: SourceConfig = field(default_factory=SourceConfig)
+    patch_path: Optional[Path] = None
 
     @property
     def is_refable(self):

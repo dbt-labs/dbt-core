@@ -608,6 +608,7 @@ class SourceParser(YamlDocsReader):
 
             is_override = 'overrides' in data
             if is_override:
+                data['path'] = self.yaml.path.original_file_path
                 patch = self._target_from_dict(SourcePatch, data)
                 self.results.add_source_patch(self.yaml.file, patch)
             else:

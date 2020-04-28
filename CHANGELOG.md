@@ -2,6 +2,7 @@
 
 ### Breaking changes
 - Added a new dbt_project.yml version format. This emits a deprecation warning currently, but support for the existing version will be removed in a future dbt version ([#2300](https://github.com/fishtown-analytics/dbt/issues/2300), [#2312](https://github.com/fishtown-analytics/dbt/pull/2312))
+- The `graph` object available in some dbt contexts now has an additional member `sources` (along side the existing `nodes`). Sources have been removed from `nodes` and added to `sources` instead ([#2312](https://github.com/fishtown-analytics/dbt/pull/2312))
 
 ### Features
 - Added --fail-fast argument for dbt run and dbt test to fail on first test failure or runtime error. ([#1649](https://github.com/fishtown-analytics/dbt/issues/1649), [#2224](https://github.com/fishtown-analytics/dbt/pull/2224))

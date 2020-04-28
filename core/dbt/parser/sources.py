@@ -1,10 +1,12 @@
+from pathlib import Path
 from typing import (
     Iterable,
     Dict,
     Optional,
+    Set,
 )
 from dbt.config import RuntimeConfig
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition,
     ParsedSourceDefinition,
@@ -16,9 +18,11 @@ from dbt.contracts.graph.unparsed import (
     SourceTablePatch,
     UnparsedSourceTableDefinition,
 )
+from dbt.exceptions import warn_or_error
 
 from dbt.parser.schemas import SchemaParser, ParserRef
 from dbt.parser.results import ParseResult
+from dbt.ui import printer
 
 
 class SourcePatcher:
@@ -34,6 +38,8 @@ class SourcePatcher:
             files=self.results.files
         )
         self.schema_parsers: Dict[str, SchemaParser] = {}
+        self.patches_used: Dict[SourceKey, Set[str]] = {}
+        self.sources: Dict[str, ParsedSourceDefinition] = {}
 
     def patch_source(
         self,
@@ -43,19 +49,23 @@ class SourcePatcher:
 
         source_dct = unpatched.source.to_dict()
         table_dct = unpatched.table.to_dict()
+        patch_path: Optional[Path] = None
 
         source_table_patch: Optional[SourceTablePatch] = None
 
         if patch is not None:
             source_table_patch = patch.get_table_named(unpatched.table.name)
             source_dct.update(patch.to_patch_dict())
+            patch_path = patch.path
 
         if source_table_patch is not None:
             table_dct.update(source_table_patch.to_patch_dict())
 
         source = UnparsedSourceDefinition.from_dict(source_dct)
         table = UnparsedSourceTableDefinition.from_dict(table_dct)
-        return unpatched.replace(source=source, table=table)
+        return unpatched.replace(
+            source=source, table=table, patch_path=patch_path
+        )
 
     def parse_source_docs(self, block: UnpatchedSourceDefinition) -> ParserRef:
         refs = ParserRef()
@@ -89,14 +99,27 @@ class SourcePatcher:
                 column=column,
             )
 
-    def construct_sources(self) -> Dict[str, ParsedSourceDefinition]:
-        sources: Dict[str, ParsedSourceDefinition] = {}
+    def get_patch_for(
+        self,
+        unpatched: UnpatchedSourceDefinition,
+    ) -> Optional[SourcePatch]:
+        key = (unpatched.package_name, unpatched.source.name)
+        patch: Optional[SourcePatch] = self.results.source_patches.get(key)
+        if patch is None:
+            return None
+        if key not in self.patches_used:
+            # mark the key as used
+            self.patches_used[key] = set()
+        if patch.get_table_named(unpatched.table.name) is not None:
+            self.patches_used[key].add(unpatched.table.name)
+        return patch
 
+    def construct_sources(self) -> None:
         # given the UnpatchedSourceDefinition and SourcePatches, combine them
         # to make a beautiful baby ParsedSourceDefinition.
         for unique_id, unpatched in self.results.sources.items():
-            key = (unpatched.package_name, unpatched.source.name)
-            patch: Optional[SourcePatch] = self.results.source_patches.get(key)
+            patch = self.get_patch_for(unpatched)
+
             patched = self.patch_source(unpatched, patch)
             # now use the patched UnpatchedSourceDefinition to extract test
             # data.
@@ -109,10 +132,54 @@ class SourcePatcher:
             schema_parser = self.get_schema_parser_for(unpatched.package_name)
             parsed = schema_parser.parse_source(patched)
             if parsed.config.enabled:
-                sources[unique_id] = parsed
+                self.sources[unique_id] = parsed
             else:
                 self.results.add_disabled_nofile(parsed)
-        return sources
+
+        self.warn_unused()
+
+    def warn_unused(self) -> None:
+        unused_tables: Dict[SourceKey, Optional[Set[str]]] = {}
+        for patch in self.results.source_patches.values():
+            key = (patch.overrides, patch.name)
+            if key not in self.patches_used:
+                unused_tables[key] = None
+            elif patch.tables is not None:
+                table_patches = {t.name for t in patch.tables}
+                unused = table_patches - self.patches_used[key]
+                # don't add unused tables, the
+                if unused:
+                    # because patches are required to be unique, we can safely
+                    # write without looking
+                    unused_tables[key] = unused
+
+        if unused_tables:
+            msg = self.get_unused_msg(unused_tables)
+            warn_or_error(msg, log_fmt=printer.yellow('WARNING: {}'))
+
+    def get_unused_msg(
+        self,
+        unused_tables: Dict[SourceKey, Optional[Set[str]]],
+    ) -> str:
+        msg = [
+            'During parsing, dbt encountered source overrides that had no '
+            'target:',
+        ]
+        for key, table_names in unused_tables.items():
+            patch = self.results.source_patches[key]
+            patch_name = f'{patch.overrides}.{patch.name}'
+            if table_names is None:
+                msg.append(
+                    f'  - Source {patch_name} (in {patch.path})'
+                )
+            else:
+                for table_name in sorted(table_names):
+                    msg.append(
+                        f'  - Source table {patch_name}.{table_name} '
+                        f'(in {patch.path})'
+                    )
+        msg.append('')
+        return '\n'.join(msg)
 
 
 def patch_sources(
@@ -126,4 +193,5 @@ def patch_sources(
     manifest.sources.
     """
     patcher = SourcePatcher(results, root_project)
-    return patcher.construct_sources()
+    patcher.construct_sources()
+    return patcher.sources

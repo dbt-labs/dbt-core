@@ -470,8 +470,6 @@ class Manifest:
         Make sure you don't call this until you're done with building your
         manifest!
         """
-        # TODO: we could supply sources in nodes here, for backwards
-        # compatibility
         self.flat_graph = {
             'nodes': {
                 k: v.to_dict(omit_none=False) for k, v in self.nodes.items()

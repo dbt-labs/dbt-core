@@ -1,5 +1,7 @@
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable, Mergeable
+# trigger the PathEncoder
+import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException
 
 from hologram import JsonSchemaMixin
@@ -7,6 +9,7 @@ from hologram.helpers import StrEnum, ExtensibleJsonSchemaMixin
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, Sequence
 
 
@@ -319,6 +322,9 @@ class SourcePatch(JsonSchemaMixin, Replaceable):
     overrides: str = field(
         metadata=dict(description='The package of the source to override'),
     )
+    path: Path = field(
+        metadata=dict(description='The path to the patch-defining yml file'),
+    )
     description: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
     database: Optional[str] = None
@@ -334,7 +340,7 @@ class SourcePatch(JsonSchemaMixin, Replaceable):
 
     def to_patch_dict(self) -> Dict[str, Any]:
         dct = self.to_dict(omit_none=True)
-        remove_keys = ('name', 'overrides', 'tables')
+        remove_keys = ('name', 'overrides', 'tables', 'path')
         for key in remove_keys:
             if key in dct:
                 del dct[key]
@@ -350,11 +356,6 @@ class SourcePatch(JsonSchemaMixin, Replaceable):
                 if table.name == name:
                     return table
         return None
-
-
-@dataclass
-class SourcesContainer(ExtensibleJsonSchemaMixin):
-    sources: List[Union[UnparsedSourceDefinition, SourcePatch]]
 
 
 @dataclass
