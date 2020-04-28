@@ -20,10 +20,10 @@ class GenerateTest(unittest.TestCase):
 
     def map_uids(self, effects):
         results = {
-            generate.CatalogKey(db, sch, tbl): [uid]
+            generate.CatalogKey(db, sch, tbl): uid
             for db, sch, tbl, uid in effects
         }
-        self.mock_get_unique_id_mapping.return_value = results
+        self.mock_get_unique_id_mapping.return_value = results, {}
 
     def generate_catalog_dict(self, columns):
         nodes, sources = generate.Catalog(columns).make_unique_id_map(self.manifest)
