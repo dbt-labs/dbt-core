@@ -909,7 +909,10 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertTrue(dct['state'])
         self.assertIn('nodes', dct)
         nodes = dct['nodes']
-        self.assertEqual(set(nodes), expected)
+        self.assertEqual(set(nodes), expected['nodes'])
+        self.assertIn('sources', dct)
+        sources = dct['sources']
+        self.assertEqual(set(sources), expected['sources'])
 
     def assertCatalogExists(self):
         self.assertTrue(os.path.exists('target/catalog.json'))
@@ -918,16 +921,20 @@ class TestRPCServerProjects(HasRPCServer):
 
     def _correct_docs_generate_result(self, result):
         expected = {
-            'model.test.descendant_model',
-            'model.test.multi_source_model',
-            'model.test.nonsource_descendant',
-            'seed.test.expected_multi_source',
-            'seed.test.other_source_table',
-            'seed.test.other_table',
-            'seed.test.source',
-            'source.test.other_source.test_table',
-            'source.test.test_source.other_test_table',
-            'source.test.test_source.test_table',
+            'nodes': {
+                'model.test.descendant_model',
+                'model.test.multi_source_model',
+                'model.test.nonsource_descendant',
+                'seed.test.expected_multi_source',
+                'seed.test.other_source_table',
+                'seed.test.other_table',
+                'seed.test.source',
+            },
+            'sources': {
+                'source.test.other_source.test_table',
+                'source.test.test_source.other_test_table',
+                'source.test.test_source.test_table',
+            },
         }
         self.assertHasDocsGenerated(result, expected)
         self.assertCatalogExists()
