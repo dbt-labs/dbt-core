@@ -2551,7 +2551,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'warn': None,
                 'node': {
                     'alias': 'not_null_model_id',
-                    'build_path': Normalized('target/compiled/test/schema.yml/schema_test/not_null_model_id.sql'),
+                    'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/not_null_model_id.sql'),
                     'column_name': 'id',
                     'columns': {},
                     'compiled': True,
@@ -2614,7 +2614,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'warn': None,
                 'node': {
                     'alias': 'test_nothing_model_',
-                    'build_path': Normalized('target/compiled/test/schema.yml/schema_test/test_nothing_model_.sql'),
+                    'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/test_nothing_model_.sql'),
                     'column_name': None,
                     'columns': {},
                     'compiled': True,
