@@ -896,7 +896,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return {
             'nodes': {
                 'model.test.model': {
-                    'build_path': Normalized('target/compiled/models/test/models/model.sql'),
+                    'build_path': Normalized('target/compiled/test/models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_dir,
                     'resource_type': 'model',
