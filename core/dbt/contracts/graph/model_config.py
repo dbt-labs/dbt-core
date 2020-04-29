@@ -369,7 +369,7 @@ class SnapshotWrapper(JsonSchemaMixin):
     """This is a little wrapper to let us serialize/deserialize the
     SnapshotVariants union.
     """
-    config: SnapshotVariants
+    config: SnapshotVariants  # mypy: ignore
 
     @classmethod
     def validate(cls, data: Any):

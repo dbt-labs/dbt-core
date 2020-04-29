@@ -358,32 +358,35 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         return {
-            'model.test.model': {
-                'unique_id': 'model.test.model',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': model_database,
-                    'name': case('model'),
-                    'type': view_type,
-                    'comment': None,
-                    'owner': role,
+            'nodes': {
+                'model.test.model': {
+                    'unique_id': 'model.test.model',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': model_database,
+                        'name': case('model'),
+                        'type': view_type,
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': model_stats,
+                    'columns': expected_cols,
                 },
-                'stats': model_stats,
-                'columns': expected_cols,
-            },
-            'seed.test.seed': {
-                'unique_id': 'seed.test.seed',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': case('seed'),
-                    'type': table_type,
-                    'comment': None,
-                    'owner': role,
+                'seed.test.seed': {
+                    'unique_id': 'seed.test.seed',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': case('seed'),
+                        'type': table_type,
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': seed_stats,
+                    'columns': expected_cols,
                 },
-                'stats': seed_stats,
-                'columns': expected_cols,
             },
+            'sources': {}
         }
 
     def expected_postgres_catalog(self):
@@ -459,57 +462,61 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         return {
-            'seed.test.seed': {
-                'unique_id': 'seed.test.seed',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': 'seed',
-                    'type': 'BASE TABLE',
-                    'comment': None,
-                    'owner': role,
+            'nodes': {
+                'seed.test.seed': {
+                    'unique_id': 'seed.test.seed',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': 'seed',
+                        'type': 'BASE TABLE',
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': stats,
+                    'columns': seed_columns
                 },
-                'stats': stats,
-                'columns': seed_columns
+                'model.test.ephemeral_summary': {
+                    'unique_id': 'model.test.ephemeral_summary',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': model_database,
+                        'name': 'ephemeral_summary',
+                        'type': 'BASE TABLE',
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': stats,
+                    'columns': summary_columns,
+                },
+                'model.test.view_summary': {
+                    'unique_id': 'model.test.view_summary',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': model_database,
+                        'name': 'view_summary',
+                        'type': 'VIEW',
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': stats,
+                    'columns': summary_columns,
+                },
             },
-            'model.test.ephemeral_summary': {
-                'unique_id': 'model.test.ephemeral_summary',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': model_database,
-                    'name': 'ephemeral_summary',
-                    'type': 'BASE TABLE',
-                    'comment': None,
-                    'owner': role,
+            'sources': {
+                "source.test.my_source.my_table": {
+                    "unique_id": "source.test.my_source.my_table",
+                    "metadata": {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': 'seed',
+                        'type': 'BASE TABLE',
+                        'comment': None,
+                        'owner': role,
+                    },
+                    "stats": stats,
+                    'columns': seed_columns,
                 },
-                'stats': stats,
-                'columns': summary_columns,
-            },
-            'model.test.view_summary': {
-                'unique_id': 'model.test.view_summary',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': model_database,
-                    'name': 'view_summary',
-                    'type': 'VIEW',
-                    'comment': None,
-                    'owner': role,
-                },
-                'stats': stats,
-                'columns': summary_columns,
-            },
-            "source.test.my_source.my_table": {
-                "unique_id": "source.test.my_source.my_table",
-                "metadata": {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': 'seed',
-                    'type': 'BASE TABLE',
-                    'comment': None,
-                    'owner': role,
-                },
-                "stats": stats,
-                'columns': seed_columns,
             },
         }
 
@@ -628,71 +635,74 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
         return {
-            'model.test.clustered': {
-                'unique_id': 'model.test.clustered',
-                'metadata': {
-                    'comment': None,
-                    'name': 'clustered',
-                    'owner': None,
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'type': 'table'
+            'nodes': {
+                'model.test.clustered': {
+                    'unique_id': 'model.test.clustered',
+                    'metadata': {
+                        'comment': None,
+                        'name': 'clustered',
+                        'owner': None,
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'type': 'table'
+                    },
+                    'stats': clustering_stats,
+                    'columns': self._clustered_bigquery_columns('DATE'),
                 },
-                'stats': clustering_stats,
-                'columns': self._clustered_bigquery_columns('DATE'),
+                'model.test.multi_clustered': {
+                    'unique_id': 'model.test.multi_clustered',
+                    'metadata': {
+                        'comment': None,
+                        'name': 'multi_clustered',
+                        'owner': None,
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'type': 'table'
+                    },
+                    'stats': multi_clustering_stats,
+                    'columns': self._clustered_bigquery_columns('DATE'),
+                },
+                'seed.test.seed': {
+                    'unique_id': 'seed.test.seed',
+                    'metadata': {
+                        'comment': None,
+                        'name': 'seed',
+                        'owner': None,
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'type': 'table',
+                    },
+                    'stats': table_stats,
+                    'columns': self._clustered_bigquery_columns('DATETIME'),
+                },
+                'model.test.nested_view': {
+                    'unique_id': 'model.test.nested_view',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': 'nested_view',
+                        'type': 'view',
+                        'owner': role,
+                        'comment': None
+                    },
+                    'stats': self._bigquery_stats(False),
+                    'columns': nesting_columns,
+                },
+                'model.test.nested_table': {
+                    'unique_id': 'model.test.nested_table',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': 'nested_table',
+                        'type': 'table',
+                        'owner': role,
+                        'comment': None
+                    },
+                    'stats': table_stats,
+                    'columns': nesting_columns,
+                },
             },
-            'model.test.multi_clustered': {
-                'unique_id': 'model.test.multi_clustered',
-                'metadata': {
-                    'comment': None,
-                    'name': 'multi_clustered',
-                    'owner': None,
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'type': 'table'
-                },
-                'stats': multi_clustering_stats,
-                'columns': self._clustered_bigquery_columns('DATE'),
-            },
-            'seed.test.seed': {
-                'unique_id': 'seed.test.seed',
-                'metadata': {
-                    'comment': None,
-                    'name': 'seed',
-                    'owner': None,
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'type': 'table',
-                },
-                'stats': table_stats,
-                'columns': self._clustered_bigquery_columns('DATETIME'),
-            },
-            'model.test.nested_view': {
-                'unique_id': 'model.test.nested_view',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': 'nested_view',
-                    'type': 'view',
-                    'owner': role,
-                    'comment': None
-                },
-                'stats': self._bigquery_stats(False),
-                'columns': nesting_columns,
-            },
-            'model.test.nested_table': {
-                'unique_id': 'model.test.nested_table',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': 'nested_table',
-                    'type': 'table',
-                    'owner': role,
-                    'comment': None
-                },
-                'stats': table_stats,
-                'columns': nesting_columns,
-            }
+            'sources': {},
         }
 
     def expected_redshift_catalog(self):
@@ -710,95 +720,98 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         role = self.get_role()
         return {
-            'model.test.model': {
-                'unique_id': 'model.test.model',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': 'model',
-                    'type': 'LATE BINDING VIEW',
-                    'comment': None,
-                    'owner': role,
+            'nodes': {
+                'model.test.model': {
+                    'unique_id': 'model.test.model',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': 'model',
+                        'type': 'LATE BINDING VIEW',
+                        'comment': None,
+                        'owner': role,
+                    },
+                    # incremental views have no stats
+                    'stats': self._no_stats(),
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'index': 1,
+                            'type': 'integer',
+                            'comment': None,
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'index': 2,
+                            'type': 'character varying(5)',
+                            'comment': None,
+                        },
+                        'email': {
+                            'name': 'email',
+                            'index': 3,
+                            'type': 'character varying(23)',
+                            'comment': None,
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'index': 4,
+                            'type': 'character varying(14)',
+                            'comment': None,
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'index': 5,
+                            'type': 'timestamp without time zone',
+                            'comment': None,
+                        },
+                    },
                 },
-                # incremental views have no stats
-                'stats': self._no_stats(),
-                'columns': {
-                    'id': {
-                        'name': 'id',
-                        'index': 1,
-                        'type': 'integer',
+                'seed.test.seed': {
+                    'unique_id': 'seed.test.seed',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': 'seed',
+                        'type': 'BASE TABLE',
                         'comment': None,
+                        'owner': role,
                     },
-                    'first_name': {
-                        'name': 'first_name',
-                        'index': 2,
-                        'type': 'character varying(5)',
-                        'comment': None,
-                    },
-                    'email': {
-                        'name': 'email',
-                        'index': 3,
-                        'type': 'character varying(23)',
-                        'comment': None,
-                    },
-                    'ip_address': {
-                        'name': 'ip_address',
-                        'index': 4,
-                        'type': 'character varying(14)',
-                        'comment': None,
-                    },
-                    'updated_at': {
-                        'name': 'updated_at',
-                        'index': 5,
-                        'type': 'timestamp without time zone',
-                        'comment': None,
+                    'stats': self._redshift_stats(),
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'index': 1,
+                            'type': 'integer',
+                            'comment': None,
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'index': 2,
+                            'type': 'character varying',
+                            'comment': None,
+                        },
+                        'email': {
+                            'name': 'email',
+                            'index': 3,
+                            'type': 'character varying',
+                            'comment': None,
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'index': 4,
+                            'type': 'character varying',
+                            'comment': None,
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'index': 5,
+                            'type': 'timestamp without time zone',
+                            'comment': None,
+                        },
                     },
                 },
             },
-            'seed.test.seed': {
-                'unique_id': 'seed.test.seed',
-                'metadata': {
-                    'schema': my_schema_name,
-                    'database': self.default_database,
-                    'name': 'seed',
-                    'type': 'BASE TABLE',
-                    'comment': None,
-                    'owner': role,
-                },
-                'stats': self._redshift_stats(),
-                'columns': {
-                    'id': {
-                        'name': 'id',
-                        'index': 1,
-                        'type': 'integer',
-                        'comment': None,
-                    },
-                    'first_name': {
-                        'name': 'first_name',
-                        'index': 2,
-                        'type': 'character varying',
-                        'comment': None,
-                    },
-                    'email': {
-                        'name': 'email',
-                        'index': 3,
-                        'type': 'character varying',
-                        'comment': None,
-                    },
-                    'ip_address': {
-                        'name': 'ip_address',
-                        'index': 4,
-                        'type': 'character varying',
-                        'comment': None,
-                    },
-                    'updated_at': {
-                        'name': 'updated_at',
-                        'index': 5,
-                        'type': 'timestamp without time zone',
-                        'comment': None,
-                    },
-                },
-            },
+            'sources': {},
         }
 
     def verify_catalog(self, expected):
@@ -811,8 +824,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             catalog.pop('generated_at'),
             start=self.generate_start_time,
         )
-        actual = catalog['nodes']
-        self.assertEqual(expected, actual)
+        for key in 'nodes', 'sources':
+            self.assertEqual(catalog[key], expected[key])
 
     def verify_manifest_macros(self, manifest, expected=None):
         self.assertIn('macros', manifest)
@@ -1199,6 +1212,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                 },
             },
+            'sources': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': [],
@@ -1511,6 +1525,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': '',
                 },
+            },
+            'sources': {
                 'source.test.my_source.my_table': {
                     'columns': {
                         'id': {
@@ -1532,10 +1548,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'database': self.default_database,
                     'description': 'My table',
-                    'external': {
-                        'file_format': None, 'location': None, 'partitions': None,
-                        'row_format': None, 'tbl_properties': None
-                    },
+                    'external': None,
                     'freshness': {'error_after': None, 'warn_after': None, 'filter': None},
                     'identifier': 'seed',
                     'loaded_at_field': None,
@@ -1545,6 +1558,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': self.dir('ref_models/schema.yml'),
                     'package_name': 'test',
                     'path': self.dir('ref_models/schema.yml'),
+                    'patch_path': None,
                     'resource_type': 'source',
                     'root_path': self.test_root_dir,
                     'schema': my_schema_name,
@@ -1554,7 +1568,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': [],
                     'unique_id': 'source.test.my_source.my_table',
                     'fqn': ['test', 'my_source', 'my_table'],
-                }
+                },
             },
             'docs': {
                 'dbt.__overview__': ANY,
@@ -2061,6 +2075,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': '',
                 },
             },
+            'sources': {},
             'child_map': {
                 'model.test.clustered': [],
                 'model.test.multi_clustered': [],
@@ -2281,6 +2296,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': ANY,
                 },
             },
+            'sources': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': []
@@ -2309,7 +2325,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         manifest = _read_json('./target/manifest.json')
 
         manifest_keys = frozenset({
-            'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
+            'nodes', 'sources', 'macros', 'parent_map', 'child_map', 'generated_at',
             'docs', 'metadata', 'docs', 'disabled'
         })
 

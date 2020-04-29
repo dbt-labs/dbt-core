@@ -105,6 +105,7 @@ class CompilerTest(unittest.TestCase):
                     injected_sql=''
                 ),
             },
+            sources={},
             docs={},
             # '2018-02-14T09:15:13Z'
             generated_at=datetime(2018, 2, 14, 9, 15, 13),
@@ -184,6 +185,7 @@ class CompilerTest(unittest.TestCase):
                     compiled_sql=('select * from source_table')
                 ),
             },
+            sources={},
             docs={},
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],
@@ -269,6 +271,7 @@ class CompilerTest(unittest.TestCase):
                     compiled_sql='select * from source_table'
                 ),
             },
+            sources={},
             docs={},
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],
@@ -371,6 +374,7 @@ class CompilerTest(unittest.TestCase):
                     compiled_sql='select * from source_table'
                 ),
             },
+            sources={},
             docs={},
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],

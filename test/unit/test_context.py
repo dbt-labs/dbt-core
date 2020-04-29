@@ -403,11 +403,6 @@ def test_model_runtime_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_docs_parse_context(config):
-    ctx = docs.generate_parser_docs(config, mock_model())
-    assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
-
-
 def test_docs_runtime_context(config):
     ctx = docs.generate_runtime_docs(config, mock_model(), [], 'root')
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)

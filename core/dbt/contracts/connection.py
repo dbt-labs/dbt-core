@@ -136,8 +136,10 @@ class Credentials(
         return super().from_dict(data)
 
     @classmethod
-    def translate_aliases(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        return translate_aliases(kwargs, cls._ALIASES)
+    def translate_aliases(
+        cls, kwargs: Dict[str, Any], recurse: bool = False
+    ) -> Dict[str, Any]:
+        return translate_aliases(kwargs, cls._ALIASES, recurse)
 
     def to_dict(self, omit_none=True, validate=False, *, with_aliases=False):
         serialized = super().to_dict(omit_none=omit_none, validate=validate)

@@ -520,6 +520,7 @@ class PollCatalogCompleteResult(RemoteCatalogResults, PollResult):
     ) -> 'PollCatalogCompleteResult':
         return cls(
             nodes=base.nodes,
+            sources=base.sources,
             generated_at=base.generated_at,
             errors=base.errors,
             _compile_results=base._compile_results,

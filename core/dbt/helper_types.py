@@ -1,6 +1,7 @@
 # never name this package "types", or mypy will crash in ugly ways
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import NewType, Tuple, AbstractSet
 
 from hologram import (
@@ -38,6 +39,25 @@ class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):
         return {'type': 'number'}
 
 
+class PathEncoder(FieldEncoder):
+    def to_wire(self, value: Path) -> str:
+        return str(value)
+
+    def to_python(self, value) -> Path:
+        if isinstance(value, Path):
+            return value
+        try:
+            return Path(value)
+        except TypeError:
+            raise ValidationError(
+                'cannot encode {} into timedelta'.format(value)
+            ) from None
+
+    @property
+    def json_schema(self) -> JsonDict:
+        return {'type': 'string'}
+
+
 class NVEnum(StrEnum):
     novalue = 'novalue'
 
@@ -54,6 +74,7 @@ class NoValue(JsonSchemaMixin):
 JsonSchemaMixin.register_field_encoders({
     Port: PortEncoder(),
     timedelta: TimeDeltaFieldEncoder(),
+    Path: PathEncoder(),
 })
 
 

@@ -244,8 +244,8 @@ NonSourceCompiledNode = Union[
 NonSourceParsedNode = Union[
     ParsedAnalysisNode,
     ParsedDataTestNode,
-    ParsedModelNode,
     ParsedHookNode,
+    ParsedModelNode,
     ParsedRPCNode,
     ParsedSchemaTestNode,
     ParsedSeedNode,
@@ -253,7 +253,7 @@ NonSourceParsedNode = Union[
 ]
 
 
-# This is anything that can be in manifest.nodes and isn't a Source.
+# This is anything that can be in manifest.nodes.
 NonSourceNode = Union[
     NonSourceCompiledNode,
     NonSourceParsedNode,
