@@ -2,6 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import json
 import shutil
+import yaml
 from unittest import mock
 
 import dbt.semver
@@ -34,6 +35,11 @@ class BaseDependencyTest(DBTIntegrationTest):
             ]
         }
 
+    def run_dbt(self, *args, **kwargs):
+        strict = kwargs.pop('strict', False)
+        kwargs['strict'] = strict
+        return super().run_dbt(*args, **kwargs)
+
 
 class TestSimpleDependency(BaseDependencyTest):
 
@@ -56,14 +62,17 @@ class TestSimpleDependency(BaseDependencyTest):
         self.run_dbt(['deps'])
         self.run_dbt(['seed'])
         results = self.run_dbt(['run'])
-        self.assertEqual(len(results),  3)
+        self.assertEqual(len(results),  5)
         self.assertEqual({r.node.schema for r in results},
                          {self.base_schema(), self.configured_schema()})
-        self.assertEqual(
-            len([r.node for r in results
-                 if r.node.schema == self.base_schema()]),
-            2
-        )
+
+        base_schema_nodes = [
+            r.node for r in results
+            if r.node.schema == self.base_schema()
+        ]
+        self.assertEqual(len(base_schema_nodes), 4)
+        self.assertTablesEqual('source_override_model', 'seed', self.base_schema(), self.base_schema())
+        self.assertTablesEqual('dep_source_model', 'seed', self.base_schema(), self.base_schema())
 
     @use_profile('postgres')
     def test_postgres_no_dependency_paths(self):
@@ -72,7 +81,7 @@ class TestSimpleDependency(BaseDependencyTest):
         # this should work
         local_path = os.path.join('local_models', 'my_model.sql')
         results = self.run_dbt(
-            ['run', '--models',  f'+{local_path}']
+            ['run', '--models',  f'+{local_path}'],
         )
         # should run the dependency and my_model
         self.assertEqual(len(results), 2)
@@ -99,18 +108,30 @@ class TestMissingDependency(DBTIntegrationTest):
     def test_postgres_missing_dependency(self):
         # dbt should raise a dbt exception, not raise a parse-time TypeError.
         with self.assertRaises(dbt.exceptions.Exception) as exc:
-            self.run_dbt(['compile'])
+            self.run_dbt(['compile'], strict=False)
         message = str(exc.exception)
         self.assertIn('no_such_dependency', message)
         self.assertIn('is undefined', message)
 
 
 class TestSimpleDependencyWithSchema(TestSimpleDependency):
+    def run_dbt(self, cmd, *args, **kwargs):
+        # we can't add this to the config because Sources don't respect dbt_project.yml
+        vars_arg = yaml.safe_dump({
+            'schema_override': self.base_schema(),
+        })
+        cmd.extend(['--vars', vars_arg])
+        return super().run_dbt(cmd, *args, **kwargs)
+
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['schema_override_macros'],
             'models': {
+                'schema': 'dbt_test',
+            },
+            'seeds': {
                 'schema': 'dbt_test',
             }
         }
@@ -142,7 +163,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         self.run_dbt(['deps'])
         self.run_dbt(['seed', '--no-version-check'])
         results = self.run_dbt(['run', '--no-version-check'])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 5)
 
 
 class TestSimpleDependencyHooks(DBTIntegrationTest):
@@ -158,6 +179,7 @@ class TestSimpleDependencyHooks(DBTIntegrationTest):
     def project_config(self):
         # these hooks should run first, so nothing to drop
         return {
+            'config-version': 2,
             'on-run-start': [
                 "drop table if exists {{ var('test_create_table') }}",
                 "drop table if exists {{ var('test_create_second_table') }}",
@@ -213,6 +235,11 @@ class TestSimpleDependencyDuplicateName(DBTIntegrationTest):
                 }
             ]
         }
+
+    def run_dbt(self, *args, **kwargs):
+        strict = kwargs.pop('strict', False)
+        kwargs['strict'] = strict
+        return super().run_dbt(*args, **kwargs)
 
     @use_profile('postgres')
     def test_postgres_local_dependency_same_name(self):

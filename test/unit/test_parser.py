@@ -22,10 +22,12 @@ from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import (
     Manifest, FilePath, SourceFile, FileHash
 )
+from dbt.contracts.graph.model_config import (
+    NodeConfig, TestConfig, TimestampSnapshotConfig, SnapshotStrategy,
+)
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
-    NodeConfig, DependsOn, ColumnInfo, ParsedDataTestNode, TestConfig,
-    ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
+    DependsOn, ColumnInfo, ParsedDataTestNode, ParsedSnapshotNode,
     ParsedAnalysisNode, ParsedDocumentation
 )
 from dbt.contracts.graph.unparsed import (
@@ -116,6 +118,9 @@ class BaseParserTest(unittest.TestCase):
             'root': self.root_project_config,
             'snowplow': self.snowplow_project_config
         }
+
+        self.root_project_config.dependencies = self.all_projects
+        self.snowplow_project_config.dependencies = self.all_projects
         self.patcher = mock.patch('dbt.context.providers.get_adapter')
         self.factory = self.patcher.start()
 

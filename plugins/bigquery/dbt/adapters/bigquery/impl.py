@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Union
 from hologram import JsonSchemaMixin, ValidationError
 
 import dbt.deprecations
@@ -10,7 +10,7 @@ import dbt.clients.agate_helper
 import dbt.links
 
 from dbt.adapters.base import (
-    BaseAdapter, available, RelationType, SchemaSearchMap
+    BaseAdapter, available, RelationType, SchemaSearchMap, AdapterConfig
 )
 from dbt.adapters.bigquery.relation import (
     BigQueryRelation, BigQueryInformationSchema
@@ -30,15 +30,6 @@ import google.cloud.bigquery
 
 import time
 import agate
-import re
-
-
-BQ_INTEGER_RANGE_NOT_SUPPORTED = f"""
-BigQuery integer range partitioning is only supported by the
-`partition_by` config, which accepts a dictionary.
-
-See: {dbt.links.BigQueryNewPartitionBy}
-"""
 
 
 @dataclass
@@ -58,56 +49,16 @@ class PartitionConfig(JsonSchemaMixin):
             return column
 
     @classmethod
-    def _parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
-        if isinstance(raw_partition_by, dict):
-            try:
-                return cls.from_dict(raw_partition_by)
-            except ValidationError as exc:
-                msg = dbt.exceptions.validator_error_message(exc)
-                dbt.exceptions.raise_compiler_error(
-                    f'Could not parse partition config: {msg}'
-                )
-
-        elif isinstance(raw_partition_by, str):
-            raw_partition_by = raw_partition_by.strip()
-            if 'range_bucket' in raw_partition_by.lower():
-                dbt.exceptions.raise_compiler_error(
-                    BQ_INTEGER_RANGE_NOT_SUPPORTED
-                )
-
-            elif raw_partition_by.lower().startswith('date('):
-                matches = re.match(r'date\((.+)\)', raw_partition_by,
-                                   re.IGNORECASE)
-                if not matches:
-                    dbt.exceptions.raise_compiler_error(
-                        f"Specified partition_by '{raw_partition_by}' "
-                        "is not parseable")
-
-                partition_by = matches.group(1)
-                data_type = 'timestamp'
-
-            else:
-                partition_by = raw_partition_by
-                data_type = 'date'
-
-            inferred_partition_by = cls(
-                field=partition_by,
-                data_type=data_type
-            )
-
-            dbt.deprecations.warn(
-                'bq-partition-by-string',
-                raw_partition_by=raw_partition_by,
-                inferred_partition_by=inferred_partition_by.to_dict()
-            )
-            return inferred_partition_by
-        else:
-            return None
-
-    @classmethod
     def parse(cls, raw_partition_by) -> Optional['PartitionConfig']:
+        if raw_partition_by is None:
+            return None
         try:
-            return cls._parse(raw_partition_by)
+            return cls.from_dict(raw_partition_by)
+        except ValidationError as exc:
+            msg = dbt.exceptions.validator_error_message(exc)
+            dbt.exceptions.raise_compiler_error(
+                f'Could not parse partition config: {msg}'
+            )
         except TypeError:
             dbt.exceptions.raise_compiler_error(
                 f'Invalid partition_by config:\n'
@@ -126,6 +77,15 @@ def _stub_relation(*args, **kwargs):
     )
 
 
+@dataclass
+class BigqueryConfig(AdapterConfig):
+    cluster_by: Optional[Union[List[str], str]] = None
+    partition_by: Optional[Dict[str, Any]] = None
+    kms_key_name: Optional[str] = None
+    labels: Optional[Dict[str, str]] = None
+    partitions: Optional[List[str]] = None
+
+
 class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
@@ -138,8 +98,7 @@ class BigQueryAdapter(BaseAdapter):
     Column = BigQueryColumn
     ConnectionManager = BigQueryConnectionManager
 
-    AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by",
-                                        "kms_key_name", "labels"})
+    AdapterSpecificConfigs = BigqueryConfig
 
     ###
     # Implementations of abstract methods

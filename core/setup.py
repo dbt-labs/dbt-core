@@ -53,7 +53,7 @@ setup(
         'scripts/dbt',
     ],
     install_requires=[
-        'Jinja2>=2.11,<3',
+        'Jinja2==2.11.2',
         'PyYAML>=3.11',
         'sqlparse>=0.2.3,<0.4',
         'networkx>=2.3,<3',
@@ -87,4 +87,5 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
     ],
+    python_requires=">=3.6.2",
 )

@@ -121,6 +121,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'quoting': {
                 'identifier': False
             }
@@ -132,8 +133,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         project = {
             "data-paths": [self.dir("seed")],
             'macro-paths': [self.dir('macros')],
-            'models': {
-                'vars': {'alternate_db': alternate_db},
+            'vars': {
+                'alternate_db': alternate_db,
             },
             'seeds': {
                 'quote_columns': True,
@@ -878,15 +879,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         if model_database is None:
             model_database = self.alternative_database
 
-        config_vars = {'alternate_db': model_database}
-
         model_config = {
             'database': model_database,
             'enabled': True,
             'materialized': 'view',
             'pre-hook': [],
             'post-hook': [],
-            'vars': config_vars,
+            'vars': {},
             'column_types': {},
             'quoting': {},
             'tags': [],
@@ -1054,7 +1053,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
                     },
@@ -1107,7 +1106,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
                     },
@@ -1159,7 +1158,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
                     },
@@ -1235,7 +1234,6 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_postgres_references_manifest(self, model_database=None):
         if model_database is None:
             model_database = self.default_database
-        config_vars = {'alternate_db': model_database}
         my_schema_name = self.unique_schema()
         docs_path = self.dir('ref_models/docs.md')
 
@@ -1277,7 +1275,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                     },
                     'sources': [['my_source', 'my_table']],
@@ -1338,7 +1336,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                     },
                     'sources': [],
@@ -1401,7 +1399,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                     },
                     'database': self.default_database,
@@ -1522,6 +1520,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'meta': {},
                             'tags': [],
                         }
+                    },
+                    'config': {
+                        'enabled': True,
                     },
                     'quoting': {
                         'database': False,
@@ -1699,7 +1700,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         clustered_sql_path = self.dir('bq_models/clustered.sql')
         multi_clustered_sql_path = self.dir('bq_models/multi_clustered.sql')
         my_schema_name = self.unique_schema()
-        config_vars = {'alternate_db': self.alternative_database}
         return {
             'nodes': {
                 'model.test.clustered': {
@@ -1714,7 +1714,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                     },
                     'sources': [],
@@ -1794,7 +1794,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'pre-hook': [],
                         'quoting': {},
                         'tags': [],
-                        'vars': config_vars
+                        'vars': {},
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -1869,7 +1869,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars':  {},
                         'tags': [],
                     },
                     'sources': [],
@@ -1948,7 +1948,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                     },
                     'sources': [],
@@ -2117,7 +2117,6 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_redshift_incremental_view_manifest(self):
         model_sql_path = self.dir('rs_models/model.sql')
         my_schema_name = self.unique_schema()
-        config_vars = {'alternate_db': self.default_database}
 
         return {
             'nodes': {
@@ -2150,7 +2149,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'pre-hook': [],
                         'quoting': {},
                         'tags': [],
-                        'vars': config_vars,
+                        'vars': {},
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2343,8 +2342,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         if model_database is None:
             model_database = self.alternative_database
 
-        config_vars = {'alternate_db': model_database}
-
         model_config = {
             'database': model_database,
             'enabled': True,
@@ -2352,7 +2349,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'persist_docs': {},
             'pre-hook': [],
             'post-hook': [],
-            'vars': config_vars,
+            'vars': {},
             'column_types': {},
             'quoting': {},
             'tags': [],
@@ -2564,7 +2561,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
                     },
@@ -2627,7 +2624,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
                     },
@@ -2689,7 +2686,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': config_vars,
+                        'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
                     },
@@ -2736,7 +2733,6 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     def expected_postgres_references_run_results(self):
         my_schema_name = self.unique_schema()
-        config_vars = {'alternate_db': self.default_database}
         ephemeral_compiled_sql = (
             '\n\nselect first_name, count(*) as ct from '
             '__dbt__CTE__ephemeral_copy\ngroup by first_name\n'
@@ -2793,7 +2789,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'persist_docs': {},
                         'pre-hook': [],
                         'post-hook': [],
-                        'vars': config_vars,
+                        'vars': {},
                         'column_types': {},
                         'quoting': {},
                         'tags': [],
@@ -2873,7 +2869,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'persist_docs': {},
                         'pre-hook': [],
                         'post-hook': [],
-                        'vars': config_vars,
+                        'vars': {},
                         'column_types': {},
                         'quoting': {},
                         'tags': [],
@@ -3185,6 +3181,7 @@ class TestDocsGenerateOverride(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': [self.dir('fail_macros')],
         }
 

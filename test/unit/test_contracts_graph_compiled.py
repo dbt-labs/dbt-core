@@ -235,7 +235,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
                 'quoting': {},
                 'tags': [],
                 'vars': {},
-                'severity': 'error',
+                'severity': 'ERROR',
             },
             'docs': {'show': True},
             'columns': {},

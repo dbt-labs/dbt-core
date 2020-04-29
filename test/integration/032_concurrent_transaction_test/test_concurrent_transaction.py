@@ -32,6 +32,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ["macros"],
             "on-run-start": [
                 "{{ create_udfs() }}",

@@ -7,7 +7,7 @@ from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.connection import Credentials, AdapterRequiredConfig
 
-from dbt.adapters.base.impl import BaseAdapter
+from dbt.adapters.base.impl import BaseAdapter, AdapterConfig
 from dbt.adapters.base.plugin import AdapterPlugin
 
 
@@ -39,6 +39,12 @@ class AdpaterContainer:
     def get_relation_class_by_name(self, name: str) -> Type[BaseRelation]:
         adapter = self.get_adapter_class_by_name(name)
         return adapter.Relation
+
+    def get_config_class_by_name(
+        self, name: str
+    ) -> Type[AdapterConfig]:
+        adapter = self.get_adapter_class_by_name(name)
+        return adapter.AdapterSpecificConfigs
 
     def load_plugin(self, name: str) -> Type[Credentials]:
         # this doesn't need a lock: in the worst case we'll overwrite PACKAGES
@@ -135,6 +141,10 @@ def cleanup_connections():
 
 def get_adapter_class_by_name(name: str) -> Type[BaseAdapter]:
     return FACTORY.get_adapter_class_by_name(name)
+
+
+def get_config_class_by_name(name: str) -> Type[AdapterConfig]:
+    return FACTORY.get_config_class_by_name(name)
 
 
 def get_relation_class_by_name(name: str) -> Type[BaseRelation]:

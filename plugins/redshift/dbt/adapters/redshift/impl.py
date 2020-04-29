@@ -1,14 +1,25 @@
+from dataclasses import dataclass
+from typing import Optional
+from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.redshift import RedshiftConnectionManager
 from dbt.adapters.redshift import RedshiftColumn
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
+@dataclass
+class RedshiftConfig(AdapterConfig):
+    sort_type: Optional[str] = None
+    dist: Optional[str] = None
+    sort: Optional[str] = None
+    bind: Optional[bool] = None
+
+
 class RedshiftAdapter(PostgresAdapter):
     ConnectionManager = RedshiftConnectionManager
     Column = RedshiftColumn
 
-    AdapterSpecificConfigs = frozenset({"sort_type", "dist", "sort", "bind"})
+    AdapterSpecificConfigs = RedshiftConfig
 
     @classmethod
     def date_function(cls):
@@ -35,7 +46,9 @@ class RedshiftAdapter(PostgresAdapter):
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):
         column = agate_table.columns[col_idx]
-        lens = (len(d.encode("utf-8")) for d in column.values_without_nulls())
+        # `lens` must be a list, so this can't be a generator expression,
+        # because max() raises ane exception if its argument has no members.
+        lens = [len(d.encode("utf-8")) for d in column.values_without_nulls()]
         max_len = max(lens) if lens else 64
         return "varchar({})".format(max_len)
 

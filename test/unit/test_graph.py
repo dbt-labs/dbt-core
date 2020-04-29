@@ -24,19 +24,7 @@ except ImportError:
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
-from .utils import config_from_parts_or_dicts, generate_name_macros
-
-
-def MockMacro(package, name='my_macro', kwargs={}):
-    macro = MagicMock(
-        __class__=ParsedMacro,
-        resource_type=NodeType.Macro,
-        package_name=package,
-        unique_id=f'macro.{package}.{name}',
-        **kwargs
-    )
-    macro.name = name
-    return macro
+from .utils import config_from_parts_or_dicts, generate_name_macros, MockMacro
 
 
 class GraphTest(unittest.TestCase):

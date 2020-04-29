@@ -16,7 +16,7 @@ from dbt.node_runners import ModelRunner
 
 import dbt.exceptions
 import dbt.flags
-from dbt.hooks import get_hook
+from dbt.hooks import get_hook_dict
 from dbt.ui.printer import \
     print_hook_start_line, \
     print_hook_end_line, \
@@ -26,6 +26,7 @@ from dbt.ui.printer import \
 
 from dbt.compilation import compile_node
 from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.task.compile import CompileTask
 
@@ -76,6 +77,12 @@ def get_hooks_by_tags(
     return matched_nodes
 
 
+def get_hook(source, index):
+    hook_dict = get_hook_dict(source)
+    hook_dict.setdefault('index', index)
+    return Hook.from_dict(hook_dict)
+
+
 class RunTask(CompileTask):
     def __init__(self, args, config):
         super().__init__(args, config)
@@ -87,9 +94,6 @@ class RunTask(CompileTask):
 
     def raise_on_first_error(self):
         return False
-
-    def populate_adapter_cache(self, adapter):
-        adapter.set_relations_cache(self.manifest)
 
     def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
         compiled = compile_node(adapter, self.config, hook, self.manifest,
@@ -195,9 +199,8 @@ class RunTask(CompileTask):
             .format(stat_line=stat_line, execution=execution))
 
     def before_run(self, adapter, selected_uids):
+        super().before_run(adapter, selected_uids)
         with adapter.connection_named('master'):
-            self.create_schemas(adapter, selected_uids)
-            self.populate_adapter_cache(adapter)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):

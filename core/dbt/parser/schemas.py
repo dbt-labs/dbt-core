@@ -11,7 +11,12 @@ from hologram import ValidationError
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.config import RuntimeConfig, ConfigRenderer
+from dbt.config import RuntimeConfig
+from dbt.config.renderer import SchemaYamlRenderer
+from dbt.context.context_config import (
+    ContextConfigType,
+    ContextConfigGenerator,
+)
 from dbt.context.docs import generate_parser_docs
 from dbt.context.target import generate_target_context
 from dbt.contracts.graph.manifest import SourceFile
@@ -29,7 +34,8 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
-    raise_invalid_schema_yml_version, ValidationException, CompilationException
+    raise_invalid_schema_yml_version, ValidationException,
+    CompilationException, warn_or_error
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
@@ -38,7 +44,6 @@ from dbt.parser.schema_test_builders import (
     TestBuilder, SourceTarget, Target, SchemaTestBlock, TargetBlock, YamlBlock,
     TestBlock,
 )
-from dbt.source_config import SourceConfig
 from dbt.utils import (
     get_pseudo_test_path, coerce_dict_str
 )
@@ -120,6 +125,15 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             any refs/descriptions, and return a parsed entity with the
             appropriate information.
     """
+    def __init__(
+        self, results, project, root_project, macro_manifest,
+    ) -> None:
+        super().__init__(results, project, root_project, macro_manifest)
+        ctx = generate_target_context(
+            self.root_project, self.root_project.cli_vars
+        )
+        self.raw_renderer = SchemaYamlRenderer(ctx)
+
     @classmethod
     def get_compiled_path(cls, block: FileBlock) -> str:
         # should this raise an error?
@@ -130,6 +144,20 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return NodeType.Test
 
     def get_paths(self):
+        # TODO: In order to support this, make FilesystemSearcher accept a list
+        # of file patterns. eg: ['.yml', '.yaml']
+        yaml_files = list(FilesystemSearcher(
+            self.project, self.project.all_source_paths, '.yaml'
+        ))
+        if yaml_files:
+            warn_or_error(
+                'A future version of dbt will parse files with both'
+                ' .yml and .yaml file extensions. dbt found'
+                f' {len(yaml_files)} files with .yaml extensions in'
+                ' your dbt project. To avoid errors when upgrading'
+                ' to a future release, either remove these files from'
+                ' your dbt project, or change their extensions.'
+            )
         return FilesystemSearcher(
             self.project, self.project.all_source_paths, '.yml'
         )
@@ -181,21 +209,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         for test in column.tests:
             self.parse_test(block, test, column)
 
-    def _build_raw_test_keyword_args(
-        self, parsed_node: ParsedSchemaTestNode, builder: TestBuilder
-    ) -> Dict[str, Any]:
-        """Build up the test keyword arguments."""
-        kwargs = parsed_node.test_metadata.kwargs.copy()
-        if isinstance(builder.target, UnparsedNodeUpdate):
-            fmt = "{{{{ ref('{0.name}') }}}}"
-        elif isinstance(builder.target, SourceTarget):
-            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
-        else:
-            raise TypeError(f'invalid target type "{type(builder.target)}"')
-
-        kwargs['model'] = fmt.format(builder.target)
-        return kwargs
-
     def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the
@@ -241,6 +254,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             block=block,
             path=compiled_path,
             config=config,
+            fqn=fqn,
             tags=tags,
             name=builder.fqn_name,
             raw_sql=builder.build_raw_sql(),
@@ -252,10 +266,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return node
 
     def render_with_context(
-        self, node: ParsedSchemaTestNode, config: SourceConfig,
+        self, node: ParsedSchemaTestNode, config: ContextConfigType,
     ) -> None:
-        """Given the parsed node and a SourceConfig to use during parsing,
-        collect all the refs that might be squirreled away in the test
+        """Given the parsed node and a ContextConfigType to use during
+        parsing, collect all the refs that might be squirreled away in the test
         arguments. This includes the implicit "model" argument.
         """
         # make a base context that doesn't have the magic kwargs field
@@ -319,6 +333,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         # mark the file as seen, even if there are no macros in it
         self.results.get_file(block.file)
         if dct:
+            dct = self.raw_renderer.render_data(dct)
             yaml_block = YamlBlock.from_file_block(block, dct)
 
             self._parse_format_version(yaml_block)
@@ -516,11 +531,12 @@ class YamlParser(Generic[Target, Parsed]):
 class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._renderer = ConfigRenderer(
+        self._renderer = SchemaYamlRenderer(
             generate_target_context(
                 self.root_project, self.root_project.cli_vars
             )
         )
+        self.config_generator = ContextConfigGenerator(self.project)
 
     def get_block(self, node: SourceTarget) -> TestBlock:
         return TestBlock.from_yaml_block(self.yaml, node)
@@ -531,7 +547,6 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         for data in self.get_key_dicts():
             try:
                 data = self.project.credentials.translate_aliases(data)
-                data = self._renderer.render_schema_source(data)
                 source = UnparsedSourceDefinition.from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
@@ -581,6 +596,18 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
 
+        # the FQN is project name / path elements... /source_name /table_name
+        fqn = self.schema_parser.get_fqn_prefix(block.path.relative_path)
+        fqn.extend([source.name, table.name])
+
+        config = self.config_generator.calculate_node_config(
+            config_calls=[],
+            fqn=fqn,
+            resource_type=NodeType.Source,
+            project_name=self.project.project_name,
+            base=False,
+        )
+
         result = ParsedSourceDefinition(
             package_name=self.project.project_name,
             database=(source.database or self.default_database),
@@ -603,10 +630,19 @@ class SourceParser(YamlDocsReader[SourceTarget, ParsedSourceDefinition]):
             freshness=freshness,
             quoting=quoting,
             resource_type=NodeType.Source,
-            fqn=[self.project.project_name, source.name, table.name],
+            fqn=fqn,
             tags=tags,
+            config=config,
         )
-        self.results.add_source(self.yaml.file, result)
+        self.add_result_source(block, result)
+
+    def add_result_source(
+        self, block: FileBlock, source: ParsedSourceDefinition
+    ):
+        if source.config.enabled:
+            self.results.add_source(block.file, source)
+        else:
+            self.results.add_disabled(block.file, source)
 
 
 class NonSourceParser(

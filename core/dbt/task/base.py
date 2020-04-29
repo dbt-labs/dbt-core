@@ -64,7 +64,7 @@ class BaseTask(metaclass=ABCMeta):
             tracking.track_invalid_invocation(
                 args=args,
                 result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException('Could not run dbt')
+            raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
         except dbt.exceptions.DbtProfileError as exc:
             logger.error("Encountered an error while reading profiles:")
             logger.error("  ERROR {}".format(str(exc)))
@@ -84,7 +84,7 @@ class BaseTask(metaclass=ABCMeta):
             tracking.track_invalid_invocation(
                 args=args,
                 result_type=exc.result_type)
-            raise dbt.exceptions.RuntimeException('Could not run dbt')
+            raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
         return cls(args, config)
 
     @abstractmethod

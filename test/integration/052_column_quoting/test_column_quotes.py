@@ -24,7 +24,9 @@ class BaseColumnQuotingTest(DBTIntegrationTest):
 class TestColumnQuotingDefault(BaseColumnQuotingTest):
     @property
     def project_config(self):
-        return {}
+        return {
+            'config-version': 2
+        }
 
     @property
     def models(self):
@@ -58,6 +60,7 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'seeds': {
                 'quote_columns': False,
             },
@@ -92,6 +95,7 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'seeds': {
                 'quote_columns': True,
             },

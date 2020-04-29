@@ -1,5 +1,6 @@
 import hashlib
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import (
     Generic, TypeVar, Dict, Any, Tuple, Optional, List, Sequence
@@ -287,6 +288,7 @@ class TestBuilder(Generic[Testable]):
                     type(test_name), test_name
                 )
             )
+        test_args = deepcopy(test_args)
         if name is not None:
             test_args['column_name'] = name
         return test_name, test_args

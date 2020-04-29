@@ -2,7 +2,8 @@ import abc
 import itertools
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable)
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
+)
 from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin
@@ -170,6 +171,9 @@ class HasCredentials(Protocol):
     config: UserConfigContract
     target_name: str
     threads: int
+
+    def to_target_dict(self):
+        raise NotImplementedError('to_target_dict not implemented')
 
 
 DEFAULT_QUERY_COMMENT = '''

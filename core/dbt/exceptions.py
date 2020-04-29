@@ -462,8 +462,10 @@ def doc_target_not_found(
     raise_compiler_error(msg, model)
 
 
-def _get_target_failure_msg(model, target_model_name, target_model_package,
-                            include_path, reason):
+def _get_target_failure_msg(
+    model, target_name: str, target_model_package: Optional[str],
+    include_path: bool, reason: str, target_kind: str
+) -> str:
     target_package_string = ''
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
@@ -472,52 +474,73 @@ def _get_target_failure_msg(model, target_model_name, target_model_package,
     if include_path:
         source_path_string = ' ({})'.format(model.original_file_path)
 
-    return "{} '{}'{} depends on a node named '{}' {}which {}".format(
+    return "{} '{}'{} depends on a {} named '{}' {}which {}".format(
         model.resource_type.title(),
         model.unique_id,
         source_path_string,
-        target_model_name,
+        target_kind,
+        target_name,
         target_package_string,
         reason
     )
 
 
-def get_target_disabled_msg(model, target_model_name, target_model_package):
-    return _get_target_failure_msg(model, target_model_name,
-                                   target_model_package, include_path=True,
-                                   reason='is disabled')
+def get_target_not_found_or_disabled_msg(
+    model, target_model_name: str, target_model_package: Optional[str],
+    disabled: Optional[bool] = None,
+) -> str:
+    if disabled is None:
+        reason = 'was not found or is disabled'
+    elif disabled is True:
+        reason = 'is disabled'
+    else:
+        reason = 'was not found'
+    return _get_target_failure_msg(
+        model, target_model_name, target_model_package, include_path=True,
+        reason=reason, target_kind='node'
+    )
 
 
-def get_target_not_found_msg(model, target_model_name, target_model_package):
-    return _get_target_failure_msg(model, target_model_name,
-                                   target_model_package, include_path=True,
-                                   reason='was not found')
-
-
-def get_target_not_found_or_disabled_msg(model, target_model_name,
-                                         target_model_package):
-    return _get_target_failure_msg(model, target_model_name,
-                                   target_model_package, include_path=False,
-                                   reason='was not found or is disabled')
-
-
-def ref_target_not_found(model, target_model_name, target_model_package):
-    msg = get_target_not_found_or_disabled_msg(model, target_model_name,
-                                               target_model_package)
+def ref_target_not_found(
+    model,
+    target_model_name: str,
+    target_model_package: Optional[str],
+    disabled: Optional[bool] = None,
+) -> NoReturn:
+    msg = get_target_not_found_or_disabled_msg(
+        model, target_model_name, target_model_package, disabled
+    )
     raise_compiler_error(msg, model)
 
 
-def source_disabled_message(model, target_name, target_table_name):
-    return ("{} '{}' ({}) depends on source '{}.{}' which was not found"
-            .format(model.resource_type.title(),
-                    model.unique_id,
-                    model.original_file_path,
-                    target_name,
-                    target_table_name))
+def get_source_not_found_or_disabled_msg(
+    model,
+    target_name: str,
+    target_table_name: str,
+    disabled: Optional[bool] = None,
+) -> str:
+    full_name = f'{target_name}.{target_table_name}'
+    if disabled is None:
+        reason = 'was not found or is disabled'
+    elif disabled is True:
+        reason = 'is disabled'
+    else:
+        reason = 'was not found'
+    return _get_target_failure_msg(
+        model, full_name, None, include_path=True,
+        reason=reason, target_kind='source'
+    )
 
 
-def source_target_not_found(model, target_name, target_table_name) -> NoReturn:
-    msg = source_disabled_message(model, target_name, target_table_name)
+def source_target_not_found(
+    model,
+    target_name: str,
+    target_table_name: str,
+    disabled: Optional[bool] = None
+) -> NoReturn:
+    msg = get_source_not_found_or_disabled_msg(
+        model, target_name, target_table_name, disabled
+    )
     raise_compiler_error(msg, model)
 
 
@@ -663,10 +686,10 @@ def approximate_relation_match(target, relation):
 
 
 def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
-    duped_name = node_1.namespace
+    duped_name = node_1.name
     if node_1.package_name != node_2.package_name:
         extra = (
-            ' ({} and {} are both in the {} namespace)'
+            ' ("{}" and "{}" are both in the "{}" namespace)'
             .format(node_1.package_name, node_2.package_name, namespace)
         )
     else:

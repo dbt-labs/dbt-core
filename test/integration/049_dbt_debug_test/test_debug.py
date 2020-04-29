@@ -74,6 +74,15 @@ class TestDebug(DBTIntegrationTest):
         self.assertGotValue(re.compile(r'\s+Connection test'), 'ERROR')
 
 
+class TestDebugProfileVariable(TestDebug):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'profile': '{{ "te" ~ "st" }}'
+        }
+
+
 class TestDebugInvalidProject(DBTIntegrationTest):
     @property
     def schema(self):

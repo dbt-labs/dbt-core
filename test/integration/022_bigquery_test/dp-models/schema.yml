@@ -7,7 +7,7 @@ models:
     - not_null
     - unique
 - name: confirmation
-  columns:
+  columns: &conf_columns
   - name: cast(count_days as string)
     tests:
     - accepted_values:
@@ -28,3 +28,6 @@ models:
     - accepted_values:
         values:
         - 1
+
+- name: confirmation_noconfig
+  columns: *conf_columns

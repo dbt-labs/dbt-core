@@ -1,5 +1,4 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import yaml
 
 
 class TestCLIVarOverride(DBTIntegrationTest):
@@ -14,11 +13,10 @@ class TestCLIVarOverride(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "models": {
-                "vars": {
-                    "required": "present"
-                }
-            }
+            'config-version': 2,
+            'vars': {
+                'required': 'present',
+            },
         }
 
     @use_profile('postgres')
@@ -43,13 +41,12 @@ class TestCLIVarOverridePorject(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "models": {
-                "test": {
-                    "vars": {
-                        "required": "present"
-                    }
-                }
-            }
+            'config-version': 2,
+            'vars': {
+                'test': {
+                    'required': 'present',
+                },
+            },
         }
 
     @use_profile('postgres')

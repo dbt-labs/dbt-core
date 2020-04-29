@@ -4,6 +4,7 @@ import agate
 import datetime
 import isodate
 import json
+import dbt.utils
 from typing import Iterable, List, Dict, Union, Optional, Any
 
 from dbt.exceptions import RuntimeException
@@ -92,7 +93,7 @@ def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
         row = []
         for value in list(_row.values()):
             if isinstance(value, (dict, list, tuple)):
-                row.append(json.dumps(value))
+                row.append(json.dumps(value, cls=dbt.utils.JSONEncoder))
             else:
                 row.append(value)
         rows.append(row)

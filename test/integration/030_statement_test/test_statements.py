@@ -18,6 +18,7 @@ class TestStatements(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'seeds': {
                 'quote_columns': False,
             }
@@ -74,6 +75,7 @@ class TestStatementsBigquery(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'seeds': {
                 'quote_columns': False,
             }

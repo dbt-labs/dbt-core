@@ -16,7 +16,7 @@ from dbt.exceptions import validator_error_message
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import coerce_dict_str
 
-from .renderer import ConfigRenderer
+from .renderer import ProfileRenderer
 
 DEFAULT_THREADS = 1
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
@@ -52,7 +52,15 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
     if os.path.isfile(path):
         try:
             contents = load_file_contents(path, strip=False)
-            return load_yaml_text(contents)
+            yaml_content = load_yaml_text(contents)
+            if not yaml_content:
+                msg = f'The profiles.yml file at {path} is empty'
+                raise DbtProfileError(
+                    INVALID_PROFILE_MESSAGE.format(
+                        error_string=msg
+                    )
+                )
+            return yaml_content
         except ValidationException as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
             raise ValidationException(msg) from e
@@ -102,6 +110,20 @@ class Profile(HasCredentials):
             result['config'] = self.config.to_dict()
             result['credentials'] = self.credentials.to_dict()
         return result
+
+    def to_target_dict(self) -> Dict[str, Any]:
+        target = dict(
+            self.credentials.connection_info(with_aliases=True)
+        )
+        target.update({
+            'type': self.credentials.type,
+            'threads': self.threads,
+            'name': self.target_name,
+            'target_name': self.target_name,
+            'profile_name': self.profile_name,
+            'config': self.config.to_dict(),
+        })
+        return target
 
     def __eq__(self, other: object) -> bool:
         if not (isinstance(other, self.__class__) and
@@ -218,7 +240,7 @@ class Profile(HasCredentials):
         raw_profile: Dict[str, Any],
         profile_name: str,
         target_override: Optional[str],
-        renderer: ConfigRenderer,
+        renderer: ProfileRenderer,
     ) -> Tuple[str, Dict[str, Any]]:
         """This is a containment zone for the hateful way we're rendering
         profiles.
@@ -246,7 +268,7 @@ class Profile(HasCredentials):
             raw_profile, profile_name, target_name
         )
 
-        profile_data = renderer.render_profile_data(raw_profile_data)
+        profile_data = renderer.render_data(raw_profile_data)
         return target_name, profile_data
 
     @classmethod
@@ -254,7 +276,7 @@ class Profile(HasCredentials):
         cls,
         raw_profile: Dict[str, Any],
         profile_name: str,
-        renderer: ConfigRenderer,
+        renderer: ProfileRenderer,
         user_cfg: Optional[Dict[str, Any]] = None,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
@@ -280,7 +302,6 @@ class Profile(HasCredentials):
         # user_cfg is not rendered.
         if user_cfg is None:
             user_cfg = raw_profile.get('config')
-
         # TODO: should it be, and the values coerced to bool?
         target_name, profile_data = cls.render_profile(
             raw_profile, profile_name, target_override, renderer
@@ -309,7 +330,7 @@ class Profile(HasCredentials):
         cls,
         raw_profiles: Dict[str, Any],
         profile_name: str,
-        renderer: ConfigRenderer,
+        renderer: ProfileRenderer,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
     ) -> 'Profile':
@@ -335,7 +356,15 @@ class Profile(HasCredentials):
         # First, we've already got our final decision on profile name, and we
         # don't render keys, so we can pluck that out
         raw_profile = raw_profiles[profile_name]
-
+        if not raw_profile:
+            msg = (
+                f'Profile {profile_name} in profiles.yml is empty'
+            )
+            raise DbtProfileError(
+                INVALID_PROFILE_MESSAGE.format(
+                    error_string=msg
+                )
+            )
         user_cfg = raw_profiles.get('config')
 
         return cls.from_raw_profile_info(
@@ -351,7 +380,7 @@ class Profile(HasCredentials):
     def render_from_args(
         cls,
         args: Any,
-        renderer: ConfigRenderer,
+        renderer: ProfileRenderer,
         project_profile_name: Optional[str],
     ) -> 'Profile':
         """Given the raw profiles as read from disk and the name of the desired
@@ -373,7 +402,6 @@ class Profile(HasCredentials):
         raw_profiles = read_profile(args.profiles_dir)
         profile_name = cls.pick_profile_name(getattr(args, 'profile', None),
                                              project_profile_name)
-
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,
             profile_name=profile_name,

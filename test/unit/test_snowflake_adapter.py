@@ -1,3 +1,4 @@
+import agate
 import unittest
 from contextlib import contextmanager
 from unittest import mock
@@ -5,12 +6,14 @@ from unittest import mock
 import dbt.flags as flags
 
 from dbt.adapters.snowflake import SnowflakeAdapter
+from dbt.adapters.snowflake.column import SnowflakeColumn
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
+from dbt.clients import agate_helper
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.parser.results import ParseResult
 from snowflake import connector as snowflake_connector
 
-from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection
+from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions
 
 
 class TestSnowflakeAdapter(unittest.TestCase):
@@ -377,3 +380,142 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 warehouse='test_warehouse', private_key='test_key',
                 application='dbt')
         ])
+
+
+class TestSnowflakeAdapterConversions(TestAdapterConversions):
+    def test_convert_text_type(self):
+        rows = [
+            ['', 'a1', 'stringval1'],
+            ['', 'a2', 'stringvalasdfasdfasdfa'],
+            ['', 'a3', 'stringval3'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Text)
+        expected = ['text', 'text', 'text']
+        for col_idx, expect in enumerate(expected):
+            assert SnowflakeAdapter.convert_text_type(agate_table, col_idx) == expect
+
+    def test_convert_number_type(self):
+        rows = [
+            ['', '23.98', '-1'],
+            ['', '12.78', '-2'],
+            ['', '79.41', '-3'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Number)
+        expected = ['integer', 'float8', 'integer']
+        for col_idx, expect in enumerate(expected):
+            assert SnowflakeAdapter.convert_number_type(agate_table, col_idx) == expect
+
+    def test_convert_boolean_type(self):
+        rows = [
+            ['', 'false', 'true'],
+            ['', 'false', 'false'],
+            ['', 'false', 'true'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Boolean)
+        expected = ['boolean', 'boolean', 'boolean']
+        for col_idx, expect in enumerate(expected):
+            assert SnowflakeAdapter.convert_boolean_type(agate_table, col_idx) == expect
+
+    def test_convert_datetime_type(self):
+        rows = [
+            ['', '20190101T01:01:01Z', '2019-01-01 01:01:01'],
+            ['', '20190102T01:01:01Z', '2019-01-01 01:01:01'],
+            ['', '20190103T01:01:01Z', '2019-01-01 01:01:01'],
+        ]
+        agate_table = self._make_table_of(rows, [agate.DateTime, agate_helper.ISODateTime, agate.DateTime])
+        expected = ['timestamp without time zone', 'timestamp without time zone', 'timestamp without time zone']
+        for col_idx, expect in enumerate(expected):
+            assert SnowflakeAdapter.convert_datetime_type(agate_table, col_idx) == expect
+
+    def test_convert_date_type(self):
+        rows = [
+            ['', '2019-01-01', '2019-01-04'],
+            ['', '2019-01-02', '2019-01-04'],
+            ['', '2019-01-03', '2019-01-04'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Date)
+        expected = ['date', 'date', 'date']
+        for col_idx, expect in enumerate(expected):
+            assert SnowflakeAdapter.convert_date_type(agate_table, col_idx) == expect
+
+    def test_convert_time_type(self):
+        # dbt's default type testers actually don't have a TimeDelta at all.
+        agate.TimeDelta
+        rows = [
+            ['', '120s', '10s'],
+            ['', '3m', '11s'],
+            ['', '1h', '12s'],
+        ]
+        agate_table = self._make_table_of(rows, agate.TimeDelta)
+        expected = ['time', 'time', 'time']
+        for col_idx, expect in enumerate(expected):
+            assert SnowflakeAdapter.convert_time_type(agate_table, col_idx) == expect
+
+
+class TestSnowflakeColumn(unittest.TestCase):
+    def test_text_from_description(self):
+        col = SnowflakeColumn.from_description('my_col', 'TEXT')
+        assert col.column == 'my_col'
+        assert col.dtype == 'TEXT'
+        assert col.char_size is None
+        assert col.numeric_precision is None
+        assert col.numeric_scale is None
+        assert col.is_float() is False
+        assert col.is_number() is False
+        assert col.is_numeric() is False
+        assert col.is_string() is True
+        assert col.is_integer() is False
+        assert col.string_size() == 16777216
+
+        col = SnowflakeColumn.from_description('my_col', 'VARCHAR')
+        assert col.column == 'my_col'
+        assert col.dtype == 'VARCHAR'
+        assert col.char_size is None
+        assert col.numeric_precision is None
+        assert col.numeric_scale is None
+        assert col.is_float() is False
+        assert col.is_number() is False
+        assert col.is_numeric() is False
+        assert col.is_string() is True
+        assert col.is_integer() is False
+        assert col.string_size() == 16777216
+
+    def test_sized_varchar_from_description(self):
+        col = SnowflakeColumn.from_description('my_col', 'VARCHAR(256)')
+        assert col.column == 'my_col'
+        assert col.dtype == 'VARCHAR'
+        assert col.char_size == 256
+        assert col.numeric_precision is None
+        assert col.numeric_scale is None
+        assert col.is_float() is False
+        assert col.is_number() is False
+        assert col.is_numeric() is False
+        assert col.is_string() is True
+        assert col.is_integer() is False
+        assert col.string_size() == 256
+
+    def test_sized_decimal_from_description(self):
+        col = SnowflakeColumn.from_description('my_col', 'DECIMAL(1, 0)')
+        assert col.column == 'my_col'
+        assert col.dtype == 'DECIMAL'
+        assert col.char_size is None
+        assert col.numeric_precision == 1
+        assert col.numeric_scale == 0
+        assert col.is_float() is False
+        assert col.is_number() is True
+        assert col.is_numeric() is True
+        assert col.is_string() is False
+        assert col.is_integer() is False
+
+    def test_float_from_description(self):
+        col = SnowflakeColumn.from_description('my_col', 'FLOAT8')
+        assert col.column == 'my_col'
+        assert col.dtype == 'FLOAT8'
+        assert col.char_size is None
+        assert col.numeric_precision is None
+        assert col.numeric_scale is None
+        assert col.is_float() is True
+        assert col.is_number() is True
+        assert col.is_numeric() is False
+        assert col.is_string() is False
+        assert col.is_integer() is False
