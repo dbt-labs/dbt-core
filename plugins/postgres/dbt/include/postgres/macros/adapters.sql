@@ -12,7 +12,17 @@
   as (
     {{ sql }}
   );
+
+  {{ set_relation_comment(relation) }}
+  {{ set_column_comments(relation) }}
 {%- endmacro %}
+
+
+{% macro postgres__create_view_as(relation, sql) %}
+  {{ default__create_view_as(relation, sql) }}
+  {{ set_relation_comment(relation) }}
+  {{ set_column_comments(relation) }}
+{% endmacro %}
 
 {% macro postgres__create_schema(database_name, schema_name) -%}
   {% if database_name -%}
@@ -127,3 +137,34 @@
                                   })) -%}
 {% endmacro %}
 
+
+{#
+  By using dollar-quoting like this, users can embed anything they want into their comments
+  (including nested dollar-quoting), as long as they don't use this exact dollar-quoting
+  label. It would be nice to just pick a new one but eventually you do have to give up.
+#}
+{% macro postgres_escape_comment(comment) -%}
+  {% if comment is not string %}
+    {% do exceptions.raise_compiler_exception('cannot escape a non-string: ' ~ comment) %}
+  {% endif %}
+  {%- set magic = '$dbt_comment_literal_block$' -%}
+  {%- if magic in comment -%}
+    {%- do exceptions.raise_compiler_exception('The string ' ~ magic ~ ' is not allowed in comments.') -%}
+  {%- endif -%}
+  {{ magic }}{{ comment }}{{ magic }}
+{%- endmacro %}
+
+
+{% macro postgres__alter_relation_comment(relation, comment) %}
+  {% set escaped_comment = postgres_escape_comment(comment) %}
+  comment on {{ relation.type }} {{ relation }} is {{ escaped_comment }};
+{% endmacro %}
+
+
+{% macro postgres__alter_column_comment(relation, column_dict) %}
+  {% for column_name in column_dict %}
+    {% set comment = column_dict[column_name]['description'] %}
+    {% set escaped_comment = postgres_escape_comment(comment) %}
+    comment on column {{ relation }}.{{ column_name }} is {{ escaped_comment }};
+  {% endfor %}
+{% endmacro %}

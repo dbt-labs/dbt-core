@@ -708,7 +708,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_redshift_catalog(self):
         return self._expected_catalog(
             id_type='integer',
-            text_type='character varying',
+            text_type=AnyStringWith('character varying'),
             time_type='timestamp without time zone',
             view_type='VIEW',
             table_type='BASE TABLE',
@@ -787,19 +787,19 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'first_name': {
                             'name': 'first_name',
                             'index': 2,
-                            'type': 'character varying',
+                            'type': 'character varying(5)',
                             'comment': None,
                         },
                         'email': {
                             'name': 'email',
                             'index': 3,
-                            'type': 'character varying',
+                            'type': 'character varying(23)',
                             'comment': None,
                         },
                         'ip_address': {
                             'name': 'ip_address',
                             'index': 4,
-                            'type': 'character varying',
+                            'type': 'character varying(14)',
                             'comment': None,
                         },
                         'updated_at': {

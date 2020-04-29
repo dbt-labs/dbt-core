@@ -49,12 +49,16 @@
   as (
     {{ sql }}
   );
+
+  {{ set_relation_comment(relation) }}
+  {{ set_column_comments(relation) }}
 {%- endmacro %}
 
 
 {% macro redshift__create_view_as(relation, sql) -%}
+  {%- set binding = config.get('bind', default=True) -%}
 
-  {% set bind_qualifier = '' if config.get('bind', default=True) else 'with no schema binding' %}
+  {% set bind_qualifier = '' if binding else 'with no schema binding' %}
   {%- set sql_header = config.get('sql_header', none) -%}
 
   {{ sql_header if sql_header is not none }}
@@ -62,6 +66,15 @@
   create view {{ relation }} as (
     {{ sql }}
   ) {{ bind_qualifier }};
+
+  {#
+    For late-binding views, it's possible to set comments on the view (though they don't seem to end up anywhere).
+    Unfortunately, setting comments on columns just results in an error.
+  #}
+  {{ set_relation_comment(relation) }}
+  {% if binding %}
+    {{ set_column_comments(relation) }}
+  {% endif %}
 {% endmacro %}
 
 
@@ -188,3 +201,14 @@
 {% macro redshift__make_temp_relation(base_relation, suffix) %}
     {% do return(postgres__make_temp_relation(base_relation, suffix)) %}
 {% endmacro %}
+
+
+{% macro redshift__alter_relation_comment(relation, comment) %}
+  {% do return(postgres__alter_relation_comment(relation, comment)) %}
+{% endmacro %}
+
+
+{% macro redshift__alter_column_comment(relation, column_dict) %}
+  {% do return(postgres__alter_column_comment(relation, column_dict)) %}
+{% endmacro %}
+
