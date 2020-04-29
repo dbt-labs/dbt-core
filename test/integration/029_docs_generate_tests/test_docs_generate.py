@@ -2384,7 +2384,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'model',
                     'build_path': Normalized(
-                        'target/compiled/models/test/models/model.sql'
+                        'target/compiled/test/models/model.sql'
                     ),
                     'columns': {
                         'id': {
