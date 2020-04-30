@@ -48,22 +48,26 @@ class MacroParser(BaseParser[ParsedMacro]):
     def parse_unparsed_macros(
         self, base_node: UnparsedMacro
     ) -> Iterable[ParsedMacro]:
-        blocks: List[jinja.BlockTag] = [
-            t for t in
-            jinja.extract_toplevel_blocks(
-                base_node.raw_sql,
-                allowed_blocks={'macro', 'materialization'},
-                collect_raw_data=False,
-            )
-            if isinstance(t, jinja.BlockTag)
-        ]
+        try:
+            blocks: List[jinja.BlockTag] = [
+                t for t in
+                jinja.extract_toplevel_blocks(
+                    base_node.raw_sql,
+                    allowed_blocks={'macro', 'materialization'},
+                    collect_raw_data=False,
+                )
+                if isinstance(t, jinja.BlockTag)
+            ]
+        except CompilationException as exc:
+            exc.add_node(base_node)
+            raise
 
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
             except CompilationException as e:
                 e.add_node(base_node)
-                raise e
+                raise
 
             macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
 
