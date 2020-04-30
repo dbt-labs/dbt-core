@@ -253,22 +253,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
     def _bigquery_stats(self, is_table, partition=None, cluster=None):
-        stats = {
-            'has_stats': {
-                'id': 'has_stats',
-                'label': 'Has Stats?',
-                'value': True,
-                'description': 'Indicates whether there are statistics for this table',
-                'include': False,
-            },
-            'location': {
-                'id': 'location',
-                'label': 'Location',
-                'value': 'US',
-                'description': 'The geographic location of this table',
-                'include': True,
-            }
-        }
+        stats = {}
+
         if is_table:
             stats.update({
                 'num_bytes': {
@@ -308,6 +294,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'include': True
                 }
             })
+
+        has_stats = {
+            'id': 'has_stats',
+            'label': 'Has Stats?',
+            'value': bool(stats),
+            'description': 'Indicates whether there are statistics for this table',
+            'include': False,
+        }
+        stats['has_stats'] = has_stats
 
         return stats
 

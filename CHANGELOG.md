@@ -3,6 +3,7 @@
 ### Breaking changes
 - Added a new dbt_project.yml version format. This emits a deprecation warning currently, but support for the existing version will be removed in a future dbt version ([#2300](https://github.com/fishtown-analytics/dbt/issues/2300), [#2312](https://github.com/fishtown-analytics/dbt/pull/2312))
 - The `graph` object available in some dbt contexts now has an additional member `sources` (along side the existing `nodes`). Sources have been removed from `nodes` and added to `sources` instead ([#2312](https://github.com/fishtown-analytics/dbt/pull/2312))
+- The 'location' field has been removed from bigquery catalogs ([#2382](https://github.com/fishtown-analytics/dbt/pull/2382))
 
 ### Features
 - Added --fail-fast argument for dbt run and dbt test to fail on first test failure or runtime error. ([#1649](https://github.com/fishtown-analytics/dbt/issues/1649), [#2224](https://github.com/fishtown-analytics/dbt/pull/2224))
@@ -36,6 +37,7 @@
 - Fix "dbt deps" command so it respects the "--project-dir" arg if specified. ([#2338](https://github.com/fishtown-analytics/dbt/issues/2338), [#2339](https://github.com/fishtown-analytics/dbt/issues/2339))
 - On `run_cli` API calls that are passed `--vars` differing from the server's `--vars`, the RPC server rebuilds the manifest for that call. ([#2265](https://github.com/fishtown-analytics/dbt/issues/2265), [#2363](https://github.com/fishtown-analytics/dbt/pull/2363))
 - Fix "Object of type Decimal is not JSON serializable" error when BigQuery queries returned numeric types in nested data structures ([#2336](https://github.com/fishtown-analytics/dbt/issues/2336), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
+- No longer query the information_schema.schemata view on bigquery ([#2320](https://github.com/fishtown-analytics/dbt/issues/2320), [#2382](https://github.com/fishtown-analytics/dbt/pull/2382))
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
