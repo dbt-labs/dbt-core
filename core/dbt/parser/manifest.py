@@ -954,9 +954,7 @@ def _check_resource_uniqueness(
 
         existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
-            dbt.exceptions.raise_ambiguous_alias(
-                existing_alias, node, full_node_name
-            )
+            dbt.exceptions.raise_ambiguous_alias(existing_alias, node, full_node_name)
 
         names_resources[name] = node
         alias_resources[full_node_name] = node
