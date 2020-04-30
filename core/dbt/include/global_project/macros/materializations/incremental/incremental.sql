@@ -4,7 +4,7 @@
   {% set unique_key = config.get('unique_key') %}
   {% set full_refresh_mode = flags.FULL_REFRESH %}
 
-  {% set target_relation = this %}
+  {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
   {% set tmp_relation = make_temp_relation(this) %}
 

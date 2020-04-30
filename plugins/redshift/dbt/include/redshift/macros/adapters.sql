@@ -50,6 +50,7 @@
     {{ sql }}
   );
 
+  {% set relation = relation.incorporate(type='table') %}
   {{ set_relation_comment(relation) }}
   {{ set_column_comments(relation) }}
 {%- endmacro %}
@@ -71,6 +72,7 @@
     For late-binding views, it's possible to set comments on the view (though they don't seem to end up anywhere).
     Unfortunately, setting comments on columns just results in an error.
   #}
+  {% set relation = relation.incorporate(type='view') %}
   {{ set_relation_comment(relation) }}
   {% if binding %}
     {{ set_column_comments(relation) }}
