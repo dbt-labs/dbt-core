@@ -54,8 +54,8 @@ class MacroParser(BaseParser[ParsedMacro]):
     ) -> Iterable[ParsedMacro]:
         try:
             blocks: List[jinja.BlockTag] = [
-                t for t in
-                jinja.extract_toplevel_blocks(
+                t
+                for t in jinja.extract_toplevel_blocks(
                     base_node.raw_sql,
                     allowed_blocks={'macro', 'materialization', 'test'},
                     collect_raw_data=False,

@@ -103,10 +103,10 @@ class TagIterator:
         end_val: int = self.pos if end is None else end
         data = self.data[:end_val]
         # if not found, rfind returns -1, and -1+1=0, which is perfect!
-        last_line_start = data.rfind('\n') + 1
+        last_line_start = data.rfind("\n") + 1
         # it's easy to forget this, but line numbers are 1-indexed
-        line_number = data.count('\n') + 1
-        return f'{line_number}:{end_val - last_line_start}'
+        line_number = data.count("\n") + 1
+        return f"{line_number}:{end_val - last_line_start}"
 
     def advance(self, new_position):
         self.pos = new_position
@@ -324,28 +324,26 @@ class BlockIterator:
                     dbt.exceptions.raise_compiler_error((
                         'Got an unexpected control flow end tag, got {} but '
                         'never saw a preceeding {} (@ {})'
-                    ).format(
-                        tag.block_type_name,
-                        expected,
-                        self.tag_parser.linepos(tag.start)
-                    ))
+                            "never saw a preceeding {} (@ {})"
+                        ).format(tag.block_type_name, expected, self.tag_parser.linepos(tag.start))
+                    )
                 expected = _CONTROL_FLOW_TAGS[found]
                 if expected != tag.block_type_name:
                     dbt.exceptions.raise_compiler_error(
                         'Got an unexpected control flow end tag, got {} but '
                             "Got an unexpected control flow end tag, got {} but "
-                    ).format(
-                        tag.block_type_name,
-                        expected,
-                        self.tag_parser.linepos(tag.start)
-                    ))
+                            "expected {} next (@ {})"
+                        ).format(tag.block_type_name, expected, self.tag_parser.linepos(tag.start))
+                    )
 
             if tag.block_type_name in allowed_blocks:
                 if self.stack:
                     dbt.exceptions.raise_compiler_error(
                         (
                             "Got a block definition inside control flow at {}. "
-                    ).format(self.tag_parser.linepos(tag.start)))
+                            "All dbt block definitions must be at the top level"
+                        ).format(self.tag_parser.linepos(tag.start))
+                    )
                 if self.current is not None:
                     dbt.exceptions.raise_compiler_error(
                         duplicate_tags.format(outer=self.current, inner=tag)
