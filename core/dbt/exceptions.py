@@ -873,8 +873,8 @@ def raise_ambiguous_alias(node_1, node_2, duped_name=None):
     raise_compiler_error(
         'dbt found two resources with the database representation "{}".\ndbt '
         "cannot create two resources with identical database representations. "
-        'To fix this,\nchange the configuration of one of these resources:'
-        '\n- {} ({})\n- {} ({})'.format(
+        "To fix this,\nchange the configuration of one of these resources:"
+        "\n- {} ({})\n- {} ({})".format(
             duped_name,
             node_1.unique_id,
             node_1.original_file_path,
