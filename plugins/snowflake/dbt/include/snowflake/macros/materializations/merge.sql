@@ -7,8 +7,11 @@
     #}
 
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute='name')) -%}
+    {%- set sql_header = config.get('sql_header', none) -%}
 
     {%- if unique_key is none -%}
+
+        {{ sql_header if sql_header is not none }}
 
         insert into {{ target }} ({{ dest_cols_csv }})
         (
