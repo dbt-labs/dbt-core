@@ -12,7 +12,7 @@ from enum import Enum
 from typing_extensions import Protocol
 from typing import (
     Tuple, Type, Any, Optional, TypeVar, Dict, Union, Callable, List, Iterator,
-    Mapping, Iterable, AbstractSet, Set
+    Mapping, Iterable, AbstractSet, Set, Sequence
 )
 
 import dbt.exceptions
@@ -289,7 +289,7 @@ class memoized:
         self.cache = {}
 
     def __call__(self, *args):
-        if not isinstance(args, collections.Hashable):
+        if not isinstance(args, collections.abc.Hashable):
             # uncacheable. a list, for instance.
             # better to not cache than blow up.
             return self.func(*args)
@@ -411,33 +411,61 @@ class ForgivingJSONEncoder(JSONEncoder):
             return str(obj)
 
 
+class Translator:
+    def __init__(self, aliases: Mapping[str, str], recursive: bool = False):
+        self.aliases = aliases
+        self.recursive = recursive
+
+    def translate_mapping(
+        self, kwargs: Mapping[str, Any]
+    ) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+
+        for key, value in kwargs.items():
+            canonical_key = self.aliases.get(key, key)
+            if canonical_key in result:
+                dbt.exceptions.raise_duplicate_alias(
+                    kwargs, self.aliases, canonical_key
+                )
+            result[canonical_key] = self.translate_value(value)
+        return result
+
+    def translate_sequence(self, value: Sequence[Any]) -> List[Any]:
+        return [self.translate_value(v) for v in value]
+
+    def translate_value(self, value: Any) -> Any:
+        if self.recursive:
+            if isinstance(value, Mapping):
+                return self.translate_mapping(value)
+            elif isinstance(value, (list, tuple)):
+                return self.translate_sequence(value)
+        return value
+
+    def translate(self, value: Mapping[str, Any]) -> Dict[str, Any]:
+        try:
+            return self.translate_mapping(value)
+        except RuntimeError as exc:
+            if 'maximum recursion depth exceeded' in str(exc):
+                raise dbt.exceptions.RecursionException(
+                    'Cycle detected in a value passed to translate!'
+                )
+            raise
+
+
 def translate_aliases(
-    kwargs: Dict[str, Any], aliases: Dict[str, str]
+    kwargs: Dict[str, Any], aliases: Dict[str, str], recurse: bool = False,
 ) -> Dict[str, Any]:
     """Given a dict of keyword arguments and a dict mapping aliases to their
     canonical values, canonicalize the keys in the kwargs dict.
 
-    :return: A dict continaing all the values in kwargs referenced by their
+    If recurse is True, perform this operation recursively.
+
+    :return: A dict containing all the values in kwargs referenced by their
         canonical key.
     :raises: `AliasException`, if a canonical key is defined more than once.
     """
-    result: Dict[str, Any] = {}
-
-    for given_key, value in kwargs.items():
-        canonical_key = aliases.get(given_key, given_key)
-        if canonical_key in result:
-            # dupe found: go through the dict so we can have a nice-ish error
-            key_names = ', '.join("{}".format(k) for k in kwargs if
-                                  aliases.get(k) == canonical_key)
-
-            raise dbt.exceptions.AliasException(
-                'Got duplicate keys: ({}) all map to "{}"'
-                .format(key_names, canonical_key)
-            )
-
-        result[canonical_key] = value
-
-    return result
+    translator = Translator(aliases, recurse)
+    return translator.translate(kwargs)
 
 
 def _pluralize(string: Union[str, NodeType]) -> str:

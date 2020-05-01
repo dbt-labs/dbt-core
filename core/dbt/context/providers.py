@@ -396,7 +396,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
 
 
 # `var` implementations.
-class ConfiguredVar(Var):
+class ModelConfiguredVar(Var):
     def __init__(
         self,
         context: Dict[str, Any],
@@ -437,13 +437,13 @@ class ConfiguredVar(Var):
         return merged
 
 
-class ParseVar(ConfiguredVar):
+class ParseVar(ModelConfiguredVar):
     def get_missing_var(self, var_name):
         # in the parser, just always return None.
         return None
 
 
-class RuntimeVar(ConfiguredVar):
+class RuntimeVar(ModelConfiguredVar):
     pass
 
 
@@ -452,7 +452,7 @@ class Provider(Protocol):
     execute: bool
     Config: Type[Config]
     DatabaseWrapper: Type[BaseDatabaseWrapper]
-    Var: Type[ConfiguredVar]
+    Var: Type[ModelConfiguredVar]
     ref: Type[BaseRefResolver]
     source: Type[BaseSourceResolver]
 
@@ -813,7 +813,7 @@ class ProviderContext(ManifestContext):
         return self.config.credentials.schema
 
     @contextproperty
-    def var(self) -> ConfiguredVar:
+    def var(self) -> ModelConfiguredVar:
         return self.provider.Var(
             context=self._ctx,
             config=self.config,
@@ -917,8 +917,7 @@ class ProviderContext(ManifestContext):
 
         ## Accessing sources
 
-        To access the sources in your dbt project programatically, filter for
-        nodes where the `resource_type == 'source'`.
+        To access the sources in your dbt project programatically, use the "sources" attribute.
 
         Example usage:
 
@@ -929,7 +928,7 @@ class ProviderContext(ManifestContext):
               which begin with the string "event_"
             */
             {% set sources = [] -%}
-            {% for node in graph.nodes.values() | selectattr("resource_type", "equalto", "source") -%}
+            {% for node in graph.sources.values() -%}
               {%- if node.name.startswith('event_') and node.source_name == 'snowplow' -%}
                 {%- do sources.append(source(node.source_name, node.name)) -%}
               {%- endif -%}

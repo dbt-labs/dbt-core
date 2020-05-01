@@ -7,22 +7,7 @@
   {%- else -%}
 
   {%- set query -%}
-    with schemas as (
-
-        select
-          catalog_name as table_database,
-          schema_name as table_schema,
-          location
-
-        from {{ information_schema.replace(information_schema_view='SCHEMATA') }}
-        where (
-          {%- for schema in schemas -%}
-            upper(schema_name) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
-          {%- endfor -%}
-        )
-    ),
-
-    tables as (
+    with tables as (
         select
             project_id as table_database,
             dataset_id as table_schema,
@@ -43,7 +28,11 @@
             REGEXP_EXTRACT(table_id, '^.+([0-9]{8})$') as shard_name
 
         from {{ information_schema.replace(information_schema_view='__TABLES__') }}
-
+        where (
+          {%- for schema in schemas -%}
+            upper(dataset_id) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
+          {%- endfor -%}
+        )
     ),
 
     extracted as (
@@ -171,11 +160,6 @@
         coalesce(columns.column_type, '<unknown>') as column_type,
         columns.column_comment,
 
-        'Location' as `stats__location__label`,
-        location as `stats__location__value`,
-        'The geographic location of this table' as `stats__location__description`,
-        location is not null as `stats__location__include`,
-
         'Shard count' as `stats__date_shards__label`,
         table_shards.shard_count as `stats__date_shards__value`,
         'The number of date shards in this table' as `stats__date_shards__description`,
@@ -215,7 +199,6 @@
     -- sure that column metadata is picked up through the join. This will only
     -- return the column information for the "max" table in a date-sharded table set
     from unsharded_tables
-    left join schemas using(table_database, table_schema)
     left join columns using (relation_id)
     left join column_stats using (relation_id)
   {%- endset -%}

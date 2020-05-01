@@ -294,6 +294,7 @@ class CatalogTable(JsonSchemaMixin, Replaceable):
 @dataclass
 class CatalogResults(JsonSchemaMixin, Writable):
     nodes: Dict[str, CatalogTable]
+    sources: Dict[str, CatalogTable]
     generated_at: datetime
     errors: Optional[List[str]]
     _compile_results: Optional[Any] = None

@@ -1,7 +1,9 @@
 import os
 import pickle
 from datetime import datetime
-from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union
+from typing import (
+    Dict, Optional, Mapping, Callable, Any, List, Type, Union, MutableMapping
+)
 
 import dbt.exceptions
 import dbt.flags
@@ -15,10 +17,10 @@ from dbt.clients.jinja import get_rendered
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
-from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
+from dbt.contracts.graph.compiled import NonSourceNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
 from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo
+    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo,
 )
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
@@ -32,6 +34,7 @@ from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
+from dbt.parser.sources import patch_sources
 from dbt.version import __version__
 
 
@@ -64,7 +67,7 @@ def make_parse_result(
     """Make a ParseResult from the project configuration and the profile."""
     # if any of these change, we need to reject the parser
     vars_hash = FileHash.from_contents(
-        '\0'.join([
+        '\x00'.join([
             getattr(config.args, 'vars', '{}') or '{}',
             getattr(config.args, 'profile', '') or '',
             getattr(config.args, 'target', '') or '',
@@ -303,14 +306,21 @@ class ManifestLoader:
         process_docs(manifest, self.root_project)
 
     def create_manifest(self) -> Manifest:
-        nodes: Dict[str, CompileResultNode] = {}
-        nodes.update(self.results.nodes)
-        nodes.update(self.results.sources)
+        # before we do anything else, patch the sources. This mutates
+        # results.disabled, so it needs to come before the final 'disabled'
+        # list is created
+        sources = patch_sources(self.results, self.root_project)
         disabled = []
         for value in self.results.disabled.values():
             disabled.extend(value)
+
+        nodes: MutableMapping[str, NonSourceNode] = {
+            k: v for k, v in self.results.nodes.items()
+        }
+
         manifest = Manifest(
             nodes=nodes,
+            sources=sources,
             macros=self.results.macros,
             docs=self.results.docs,
             generated_at=datetime.utcnow(),
@@ -358,8 +368,8 @@ class ManifestLoader:
 
 
 def _check_resource_uniqueness(manifest: Manifest) -> None:
-    names_resources: Dict[str, CompileResultNode] = {}
-    alias_resources: Dict[str, CompileResultNode] = {}
+    names_resources: Dict[str, NonSourceNode] = {}
+    alias_resources: Dict[str, NonSourceNode] = {}
 
     for resource, node in manifest.nodes.items():
         if node.resource_type not in NodeType.refable():
@@ -478,12 +488,15 @@ def process_docs(manifest: Manifest, config: RuntimeConfig):
             manifest,
             config.project_name,
         )
-        if node.resource_type == NodeType.Source:
-            assert isinstance(node, ParsedSourceDefinition)  # appease mypy
-            _process_docs_for_source(ctx, node)
-        else:
-            assert not isinstance(node, ParsedSourceDefinition)
-            _process_docs_for_node(ctx, node)
+        _process_docs_for_node(ctx, node)
+    for source in manifest.sources.values():
+        ctx = generate_runtime_docs(
+            config,
+            source,
+            manifest,
+            config.project_name,
+        )
+        _process_docs_for_source(ctx, source)
     for macro in manifest.macros.values():
         ctx = generate_runtime_docs(
             config,
@@ -541,9 +554,6 @@ def _process_refs_for_node(
 
 def process_refs(manifest: Manifest, current_project: str):
     for node in manifest.nodes.values():
-        if node.resource_type == NodeType.Source:
-            continue
-        assert not isinstance(node, ParsedSourceDefinition)
         _process_refs_for_node(manifest, current_project, node)
     return manifest
 

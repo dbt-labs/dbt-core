@@ -575,7 +575,12 @@ class Project:
         rendered_project['project-root'] = project_root
         package_renderer = renderer.get_package_renderer()
         rendered_packages = package_renderer.render_data(packages_dict)
-        return cls.from_project_config(rendered_project, rendered_packages)
+        try:
+            return cls.from_project_config(rendered_project, rendered_packages)
+        except DbtProjectError as exc:
+            if exc.path is None:
+                exc.path = os.path.join(project_root, 'dbt_project.yml')
+            raise
 
     @classmethod
     def partial_load(
@@ -645,6 +650,9 @@ class Project:
             # stuff any 'vars' entries into the old-style
             # models/seeds/snapshots dicts
             for project_name, items in dct['vars'].items():
+                if not isinstance(items, dict):
+                    # can't translate top-level vars
+                    continue
                 for cfgkey in ['models', 'seeds', 'snapshots']:
                     if project_name not in mutated[cfgkey]:
                         mutated[cfgkey][project_name] = {}

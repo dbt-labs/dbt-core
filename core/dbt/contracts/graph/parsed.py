@@ -1,11 +1,15 @@
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import (
     Optional,
     Union,
     List,
     Dict,
     Any,
+    Sequence,
+    Tuple,
+    Iterator,
 )
 
 from hologram import JsonSchemaMixin
@@ -15,7 +19,8 @@ import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
-    HasYamlMetadata, MacroArgument
+    HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition, UnparsedColumn, TestDef
 )
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -132,6 +137,7 @@ class ParsedNodeMandatory(
     Replaceable
 ):
     alias: str
+    config: NodeConfig = field(default_factory=NodeConfig)
 
     @property
     def identifier(self):
@@ -140,7 +146,6 @@ class ParsedNodeMandatory(
 
 @dataclass
 class ParsedNodeDefaults(ParsedNodeMandatory):
-    config: NodeConfig = field(default_factory=NodeConfig)
     tags: List[str] = field(default_factory=list)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[Any]] = field(default_factory=list)
@@ -301,6 +306,59 @@ class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
         return self.name
 
 
+def normalize_test(testdef: TestDef) -> Dict[str, Any]:
+    if isinstance(testdef, str):
+        return {testdef: {}}
+    else:
+        return testdef
+
+
+@dataclass
+class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
+    source: UnparsedSourceDefinition
+    table: UnparsedSourceTableDefinition
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+    patch_path: Optional[Path] = None
+
+    @property
+    def name(self) -> str:
+        return '{0.name}_{1.name}'.format(self.source, self.table)
+
+    @property
+    def quote_columns(self) -> Optional[bool]:
+        result = None
+        if self.source.quoting.column is not None:
+            result = self.source.quoting.column
+        if self.table.quoting.column is not None:
+            result = self.table.quoting.column
+        return result
+
+    @property
+    def columns(self) -> Sequence[UnparsedColumn]:
+        if self.table.columns is None:
+            return []
+        else:
+            return self.table.columns
+
+    def get_tests(
+        self
+    ) -> Iterator[Tuple[Dict[str, Any], Optional[UnparsedColumn]]]:
+        for test in self.tests:
+            yield normalize_test(test), None
+
+        for column in self.columns:
+            if column.tests is not None:
+                for test in column.tests:
+                    yield normalize_test(test), column
+
+    @property
+    def tests(self) -> List[TestDef]:
+        if self.table.tests is None:
+            return []
+        else:
+            return self.table.tests
+
+
 @dataclass
 class ParsedSourceDefinition(
     UnparsedBaseNode,
@@ -324,6 +382,7 @@ class ParsedSourceDefinition(
     source_meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     config: SourceConfig = field(default_factory=SourceConfig)
+    patch_path: Optional[Path] = None
 
     @property
     def is_refable(self):

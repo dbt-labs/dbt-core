@@ -3,6 +3,7 @@ from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from itertools import chain
 from typing import (
     Optional, Tuple, Callable, Iterable, Type, Dict, Any, List, Mapping,
     Iterator, Union, Set
@@ -289,7 +290,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        for node in manifest.nodes.values():
+        nodes: Iterator[CompileResultNode] = chain(
+            manifest.nodes.values(),
+            manifest.sources.values(),
+        )
+        for node in nodes:
             if exec_only and node.resource_type not in NodeType.executable():
                 continue
             relation = self.Relation.create_from(self.config, node)

@@ -166,16 +166,16 @@ class ManifestSelector:
             yield unique_id, node
 
     def parsed_nodes(self, included_nodes):
-        return self._node_iterator(
-            included_nodes,
-            exclude=(NodeType.Source,),
-            include=None)
+        for unique_id, node in self.manifest.nodes.items():
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, node
 
     def source_nodes(self, included_nodes):
-        return self._node_iterator(
-            included_nodes,
-            exclude=None,
-            include=(NodeType.Source,))
+        for unique_id, source in self.manifest.sources.items():
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, source
 
     def search(self, included_nodes, selector):
         raise NotImplementedError('subclasses should implement this')
@@ -396,13 +396,20 @@ class NodeSelector(MultiSelector):
         return selected_nodes
 
     def _is_graph_member(self, node_name):
-        node = self.manifest.nodes[node_name]
-        if node.resource_type == NodeType.Source:
+        if node_name in self.manifest.sources:
             return True
+        node = self.manifest.nodes[node_name]
         return not node.empty and node.config.enabled
 
     def _is_match(self, node_name, resource_types, tags, required):
-        node = self.manifest.nodes[node_name]
+        if node_name in self.manifest.nodes:
+            node = self.manifest.nodes[node_name]
+        elif node_name in self.manifest.sources:
+            node = self.manifest.sources[node_name]
+        else:
+            raise dbt.exceptions.InternalException(
+                f'Node {node_name} not found in the manifest!'
+            )
         if node.resource_type not in resource_types:
             return False
         tags = set(tags)
