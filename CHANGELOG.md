@@ -23,6 +23,7 @@
 - Fix skipped node count in stdout at the end of a run ([#2095](https://github.com/fishtown-analytics/dbt/issues/2095), [#2310](https://github.com/fishtown-analytics/dbt/pull/2310))
 - Fix an issue where BigQuery incorrectly used a relation's quote policy as the basis for the information schema's include policy, instead of the relation's include policy. ([#2188](https://github.com/fishtown-analytics/dbt/issues/2188), [#2325](https://github.com/fishtown-analytics/dbt/pull/2325))
 - Fix "dbt deps" command so it respects the "--project-dir" arg if specified. ([#2338](https://github.com/fishtown-analytics/dbt/issues/2338), [#2339](https://github.com/fishtown-analytics/dbt/issues/2339))
+- Preserve original subdirectory structure in compiled files. ([#2173](https://github.com/fishtown-analytics/dbt/issues/2173), [#2349](https://github.com/fishtown-analytics/dbt/pull/2349))
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
@@ -35,6 +36,7 @@ Contributors:
  - [@rodrigodelmonte](https://github.com/rodrigodelmonte) [#2298](https://github.com/fishtown-analytics/dbt/pull/2298)
  - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
  - [@nickwu241](https://github.com/nickwu241) [#2339](https://github.com/fishtown-analytics/dbt/issues/2339)
+ - [@franloza](https://github.com/franloza) [#2349](https://github.com/fishtown-analytics/dbt/pull/2349)
 
 ## dbt 0.16.1 (April 14, 2020)
 
