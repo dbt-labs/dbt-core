@@ -1,0 +1,8 @@
+version: 2
+sources:
+  - name: raw
+    database: "{{ target.database }}"
+    schema: "{{ target.schema }}"
+    tables:
+      - name: 'seed'
+        identifier: "{{ var('seed_name', 'invalid') }}"

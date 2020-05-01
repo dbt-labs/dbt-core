@@ -4,7 +4,8 @@ from typing import Dict, List, NoReturn, Union, Type, Iterator, Set
 from dbt.exceptions import raise_dependency_error, InternalException
 
 from dbt.context.target import generate_target_context
-from dbt.config import Project, ConfigRenderer, RuntimeConfig
+from dbt.config import Project, RuntimeConfig
+from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
@@ -97,7 +98,9 @@ class PackageListing:
 
 
 def _check_for_duplicate_project_names(
-    final_deps: List[PinnedPackage], config: Project, renderer: ConfigRenderer
+    final_deps: List[PinnedPackage],
+    config: Project,
+    renderer: DbtProjectYamlRenderer,
 ):
     seen: Set[str] = set()
     for package in final_deps:
@@ -123,7 +126,8 @@ def resolve_packages(
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
 
-    renderer = ConfigRenderer(generate_target_context(config, config.cli_vars))
+    ctx = generate_target_context(config, config.cli_vars)
+    renderer = DbtProjectYamlRenderer(ctx, config.config_version)
 
     while pending:
         next_pending = PackageListing()

@@ -60,9 +60,10 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "models": {
                 "schema": "dbt_test"
-            }
+            },
         }
 
     @use_profile('postgres')
@@ -95,6 +96,7 @@ class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "models": {
                 "schema": "dbt_test"
             }
@@ -150,9 +152,10 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['custom-macros'],
             'models': {
-                'schema': 'dbt_test'
+                'schema': 'dbt_test',
             }
         }
 
@@ -178,10 +181,11 @@ class TestCustomSchemaWithCustomMacroConfigs(TestCustomSchemaWithCustomMacro):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['custom-macros-configs'],
             'models': {
                 'schema': 'dbt_test'
-            }
+            },
         }
 
     @use_profile('postgres')

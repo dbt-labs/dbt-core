@@ -1,6 +1,6 @@
 import builtins
 import functools
-from typing import NoReturn, Optional
+from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -281,10 +281,20 @@ class DbtConfigError(RuntimeException):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
-    def __init__(self, message, project=None, result_type='invalid_project'):
+    def __init__(
+        self, message, project=None, result_type='invalid_project', path=None
+    ):
         self.project = project
         super().__init__(message)
         self.result_type = result_type
+        self.path = path
+
+    def __str__(self, prefix='! ') -> str:
+        msg = super().__str__(prefix)
+        if self.path is None:
+            return msg
+        else:
+            return f'{msg}\n\nError encountered in {self.path}'
 
 
 class FailFastException(RuntimeException):
@@ -462,8 +472,10 @@ def doc_target_not_found(
     raise_compiler_error(msg, model)
 
 
-def _get_target_failure_msg(model, target_model_name, target_model_package,
-                            include_path, reason):
+def _get_target_failure_msg(
+    model, target_name: str, target_model_package: Optional[str],
+    include_path: bool, reason: str, target_kind: str
+) -> str:
     target_package_string = ''
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
@@ -472,52 +484,73 @@ def _get_target_failure_msg(model, target_model_name, target_model_package,
     if include_path:
         source_path_string = ' ({})'.format(model.original_file_path)
 
-    return "{} '{}'{} depends on a node named '{}' {}which {}".format(
+    return "{} '{}'{} depends on a {} named '{}' {}which {}".format(
         model.resource_type.title(),
         model.unique_id,
         source_path_string,
-        target_model_name,
+        target_kind,
+        target_name,
         target_package_string,
         reason
     )
 
 
-def get_target_disabled_msg(model, target_model_name, target_model_package):
-    return _get_target_failure_msg(model, target_model_name,
-                                   target_model_package, include_path=True,
-                                   reason='is disabled')
+def get_target_not_found_or_disabled_msg(
+    model, target_model_name: str, target_model_package: Optional[str],
+    disabled: Optional[bool] = None,
+) -> str:
+    if disabled is None:
+        reason = 'was not found or is disabled'
+    elif disabled is True:
+        reason = 'is disabled'
+    else:
+        reason = 'was not found'
+    return _get_target_failure_msg(
+        model, target_model_name, target_model_package, include_path=True,
+        reason=reason, target_kind='node'
+    )
 
 
-def get_target_not_found_msg(model, target_model_name, target_model_package):
-    return _get_target_failure_msg(model, target_model_name,
-                                   target_model_package, include_path=True,
-                                   reason='was not found')
-
-
-def get_target_not_found_or_disabled_msg(model, target_model_name,
-                                         target_model_package):
-    return _get_target_failure_msg(model, target_model_name,
-                                   target_model_package, include_path=False,
-                                   reason='was not found or is disabled')
-
-
-def ref_target_not_found(model, target_model_name, target_model_package):
-    msg = get_target_not_found_or_disabled_msg(model, target_model_name,
-                                               target_model_package)
+def ref_target_not_found(
+    model,
+    target_model_name: str,
+    target_model_package: Optional[str],
+    disabled: Optional[bool] = None,
+) -> NoReturn:
+    msg = get_target_not_found_or_disabled_msg(
+        model, target_model_name, target_model_package, disabled
+    )
     raise_compiler_error(msg, model)
 
 
-def source_disabled_message(model, target_name, target_table_name):
-    return ("{} '{}' ({}) depends on source '{}.{}' which was not found"
-            .format(model.resource_type.title(),
-                    model.unique_id,
-                    model.original_file_path,
-                    target_name,
-                    target_table_name))
+def get_source_not_found_or_disabled_msg(
+    model,
+    target_name: str,
+    target_table_name: str,
+    disabled: Optional[bool] = None,
+) -> str:
+    full_name = f'{target_name}.{target_table_name}'
+    if disabled is None:
+        reason = 'was not found or is disabled'
+    elif disabled is True:
+        reason = 'is disabled'
+    else:
+        reason = 'was not found'
+    return _get_target_failure_msg(
+        model, full_name, None, include_path=True,
+        reason=reason, target_kind='source'
+    )
 
 
-def source_target_not_found(model, target_name, target_table_name) -> NoReturn:
-    msg = source_disabled_message(model, target_name, target_table_name)
+def source_target_not_found(
+    model,
+    target_name: str,
+    target_table_name: str,
+    disabled: Optional[bool] = None
+) -> NoReturn:
+    msg = get_source_not_found_or_disabled_msg(
+        model, target_name, target_table_name, disabled
+    )
     raise_compiler_error(msg, model)
 
 
@@ -752,26 +785,62 @@ def raise_patch_targets_not_found(patches):
     )
 
 
+def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
+    if path_1 == path_2:
+        return (
+            f'remove one of the {type_name} entries for {name} in this file:\n'
+            f' - {path_1!s}\n'
+        )
+    else:
+        return (
+            f'remove the {type_name} entry for {name} in one of these files:\n'
+            f' - {path_1!s}\n{path_2!s}'
+        )
+
+
 def raise_duplicate_patch_name(patch_1, patch_2):
     name = patch_1.name
+    fix = _fix_dupe_msg(
+        patch_1.original_file_path,
+        patch_2.original_file_path,
+        name,
+        'resource',
+    )
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same resource named '
         f'{name}. Resources and their associated columns may only be '
-        f'described a single time. To fix this, remove the resource entry '
-        f'for {name} in one of these files:\n  - '
-        f'{patch_1.original_file_path}\n  - {patch_2.original_file_path}'
+        f'described a single time. To fix this, {fix}'
     )
 
 
 def raise_duplicate_macro_patch_name(patch_1, patch_2):
     package_name = patch_1.package_name
     name = patch_1.name
+    fix = _fix_dupe_msg(
+        patch_1.original_file_path,
+        patch_2.original_file_path,
+        name,
+        'macros'
+    )
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same macro in package '
         f'{package_name} named {name}. Macros may only be described a single '
-        f'time. To fix this, remove the macros entry for {name} in one '
-        f'of these files:'
-        f'\n  - {patch_1.original_file_path}\n  - {patch_2.original_file_path}'
+        f'time. To fix this, {fix}'
+    )
+
+
+def raise_duplicate_source_patch_name(patch_1, patch_2):
+    name = f'{patch_1.overrides}.{patch_1.name}'
+    fix = _fix_dupe_msg(
+        patch_1.path,
+        patch_2.path,
+        name,
+        'sources',
+    )
+    raise_compiler_error(
+        f'dbt found two schema.yml entries for the same source named '
+        f'{patch_1.name} in package {patch_1.overrides}. Sources may only be '
+        f'overridden a single time. To fix this, {fix}'
     )
 
 
@@ -791,10 +860,43 @@ def raise_unrecognized_credentials_type(typename, supported_types):
     )
 
 
+def raise_invalid_patch(
+    node, patch_section: str, patch_path: str,
+) -> NoReturn:
+    from dbt.ui.printer import line_wrap_message
+    msg = line_wrap_message(
+        f'''\
+        '{node.name}' is a {node.resource_type} node, but it is
+        specified in the {patch_section} section of
+        {patch_path}.
+
+
+
+        To fix this error, place the `{node.name}`
+        specification under the {node.resource_type.pluralize()} key instead.
+        '''
+    )
+    raise_compiler_error(msg, node)
+
+
 def raise_not_implemented(msg):
     raise NotImplementedException(
         "ERROR: {}"
         .format(msg))
+
+
+def raise_duplicate_alias(
+    kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
+) -> NoReturn:
+    # dupe found: go through the dict so we can have a nice-ish error
+    key_names = ', '.join(
+        "{}".format(k) for k in kwargs if
+        aliases.get(k) == canonical_key
+    )
+
+    raise AliasException(
+        f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"'
+    )
 
 
 def warn_or_error(msg, node=None, log_fmt=None):

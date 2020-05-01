@@ -26,6 +26,7 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
 
     def seed_quote_cfg_with(self, extra):
         cfg = {
+            'config-version': 2,
             'seeds': {
                 'quote_columns': False,
             }
@@ -322,7 +323,9 @@ class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):
 
         # Setting the incremental_strategy should make this succeed
         self.use_default_project({
-            "models": {"incremental_strategy": "delete+insert"},
+            "models": {
+                "incremental_strategy": "delete+insert"
+            },
             "data-paths": [self.dir("snowflake-seed-update")],
         })
 
@@ -388,7 +391,7 @@ class TestMixedCaseDatabase(BaseTestSimpleCopy):
 
     @property
     def project_config(self):
-        return {}
+        return {'config-version': 2}
 
     @use_profile('postgres')
     def test_postgres_run_mixed_case(self):

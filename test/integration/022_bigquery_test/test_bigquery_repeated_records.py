@@ -14,6 +14,7 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['macros'],
         }
 
@@ -26,8 +27,8 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
             cast('Stonebreaker' as string) as lname
           ) as user,
           [
-            struct(1 as val_1, 2 as val_2),
-            struct(3 as val_1, 4 as val_2)
+            struct(1 as val_1, cast(2.12 as numeric) as val_2),
+            struct(3 as val_1, cast(4.83 as numeric) as val_2)
           ] as val
 
         union all
@@ -38,8 +39,8 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
             cast('Brickmaker' as string) as lname
           ) as user,
           [
-            struct(7 as val_1, 8 as val_2),
-            struct(9 as val_1, 0 as val_2)
+            struct(7 as val_1, cast(8 as numeric) as val_2),
+            struct(9 as val_1, cast(null as numeric) as val_2)
           ] as val
         """
 
@@ -54,8 +55,8 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
                 '{"fname": "Johnny", "lname": "Brickmaker"}'
             ],
             "val": [
-                '[{"val_1": 1, "val_2": 2}, {"val_1": 3, "val_2": 4}]',
-                '[{"val_1": 7, "val_2": 8}, {"val_1": 9, "val_2": 0}]'
+                '[{"val_1": 1, "val_2": 2.12}, {"val_1": 3, "val_2": 4.83}]',
+                '[{"val_1": 7, "val_2": 8}, {"val_1": 9, "val_2": null}]'
             ]
         }
 

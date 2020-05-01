@@ -37,7 +37,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         self.criteria = criteria
         self.error = None
         handle_and_check_args = [
-            '--strict', 'rpc', '--log-cache-events',
+            'rpc', '--log-cache-events',
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]
@@ -473,6 +473,7 @@ class ProjectDefinition:
         seeds=None,
     ):
         self.project = {
+            'config-version': 2,
             'name': name,
             'version': version,
             'profile': profile,
@@ -550,6 +551,7 @@ class TestArgs:
         self.which = which
         self.single_threaded = False
         self.profiles_dir = profiles_dir
+        self.project_dir = None
         self.profile = None
         self.target = None
         self.__dict__.update(kwargs)
@@ -614,3 +616,12 @@ def get_querier(
     )
     with schema_ctx, server_ctx as server:
         yield Querier(server)
+
+
+def assert_has_threads(results, num_threads):
+    assert 'logs' in results
+    c_logs = [l for l in results['logs'] if 'Concurrency' in l['message']]
+    assert len(c_logs) == 1, \
+        f'Got invalid number of concurrency logs ({len(c_logs)})'
+    assert 'message' in c_logs[0]
+    assert f'Concurrency: {num_threads} threads' in c_logs[0]['message']

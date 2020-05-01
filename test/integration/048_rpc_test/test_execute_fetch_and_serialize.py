@@ -16,6 +16,7 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'macro-paths': ['macros'],
         }
 

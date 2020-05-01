@@ -2,6 +2,7 @@ import os
 import shutil
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.exceptions import CompilationException
 
 
 class TestConfigs(DBTIntegrationTest):
@@ -15,13 +16,16 @@ class TestConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'models': {
                 'test': {
-                    # the model configs will override this
-                    'materialized': 'invalid',
-                    # the model configs will append to these
-                    'tags': ['tag_one'],
+                    'tagged': {
+                        # the model configs will override this
+                        'materialized': 'invalid',
+                        # the model configs will append to these
+                        'tags': ['tag_one'],
+                    }
                 },
             },
             'seeds': {
@@ -75,6 +79,7 @@ class TestTargetConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
             'seeds': {
@@ -95,18 +100,114 @@ class TestDisabledConfigs(DBTIntegrationTest):
     def schema(self):
         return "config_039"
 
+    def postgres_profile(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'postgres',
+                        # make sure you can do this and get an int out
+                        'threads': "{{ 1 + 3 }}",
+                        'host': self.database_host,
+                        'port': "{{ 5400 + 32 }}",
+                        'user': 'root',
+                        'pass': 'password',
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                    'disabled': {
+                        'type': 'postgres',
+                        # make sure you can do this and get an int out
+                        'threads': "{{ 1 + 3 }}",
+                        'host': self.database_host,
+                        'port': "{{ 5400 + 32 }}",
+                        'user': 'root',
+                        'pass': 'password',
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                },
+                'target': 'default2'
+            }
+        }
+
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
+            'models': {
+                'test': {
+                    'enabled': "{{ target.name == 'default2' }}",
+                },
+            },
+            # set the `var` result in schema.yml to be 'seed', so that the
+            # `source` call can suceed.
+            'vars': {
+                'test': {
+                    'seed_name': 'seed',
+                }
+            },
             'seeds': {
                 'quote_columns': False,
                 'test': {
                     'seed': {
-                        'enabled': False,
-                    }
+                        'enabled': "{{ target.name == 'default2' }}",
+                    },
+                },
+            },
+        }
+
+    @property
+    def models(self):
+        return "models"
+
+    @use_profile('postgres')
+    def test_postgres_disable_seed_partial_parse(self):
+        self.run_dbt(['--partial-parse', 'seed', '--target', 'disabled'])
+        self.run_dbt(['--partial-parse', 'seed', '--target', 'disabled'])
+
+    @use_profile('postgres')
+    def test_postgres_conditional_model(self):
+        # no seeds/models - enabled should eval to False because of the target
+        results = self.run_dbt(['seed', '--target', 'disabled'], strict=False)
+        self.assertEqual(len(results), 0)
+        results = self.run_dbt(['run', '--target', 'disabled'], strict=False)
+        self.assertEqual(len(results), 0)
+
+        # has seeds/models - enabled should eval to True because of the target
+        results = self.run_dbt(['seed'])
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 2)
+
+
+class TestUnusedModelConfigs(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'data-paths': ['data'],
+            'models': {
+                'test': {
+                    'enabled': True,
                 }
             },
+            'seeds': {
+                'quote_columns': False,
+            },
+            'sources': {
+                'test': {
+                    'enabled': True,
+                }
+            }
         }
 
     @property
@@ -114,6 +215,12 @@ class TestDisabledConfigs(DBTIntegrationTest):
         return "empty-models"
 
     @use_profile('postgres')
-    def test_postgres_disable_seed_partial_parse(self):
-        self.run_dbt(['--partial-parse', 'seed'])
-        self.run_dbt(['--partial-parse', 'seed'])
+    def test_postgres_warn_unused_configuration_paths(self):
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['seed'])
+
+        self.assertIn('Configuration paths exist', str(exc.exception))
+        self.assertIn('- sources.test', str(exc.exception))
+        self.assertIn('- models.test', str(exc.exception))
+
+        self.run_dbt(['seed'], strict=False)

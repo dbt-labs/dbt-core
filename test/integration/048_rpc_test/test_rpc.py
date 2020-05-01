@@ -22,7 +22,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
     def __init__(self, port, profiles_dir, cli_vars=None):
         self.port = port
         handle_and_check_args = [
-            '--strict', 'rpc', '--log-cache-events',
+            'rpc', '--log-cache-events',
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]
@@ -144,6 +144,7 @@ class HasRPCServer(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'macro-paths': ['macros'],
@@ -893,12 +894,14 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertIn('results', result)
         self.assertHasTestResults(result['results'], 4)
 
-    def assertManifestExists(self, length):
+    def assertManifestExists(self, nodes_length, sources_length):
         self.assertTrue(os.path.exists('target/manifest.json'))
         with open('target/manifest.json') as fp:
             manifest = json.load(fp)
         self.assertIn('nodes', manifest)
-        self.assertEqual(len(manifest['nodes']), length)
+        self.assertEqual(len(manifest['nodes']), nodes_length)
+        self.assertIn('sources', manifest)
+        self.assertEqual(len(manifest['sources']), sources_length)
 
     def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
@@ -906,7 +909,10 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertTrue(dct['state'])
         self.assertIn('nodes', dct)
         nodes = dct['nodes']
-        self.assertEqual(set(nodes), expected)
+        self.assertEqual(set(nodes), expected['nodes'])
+        self.assertIn('sources', dct)
+        sources = dct['sources']
+        self.assertEqual(set(sources), expected['sources'])
 
     def assertCatalogExists(self):
         self.assertTrue(os.path.exists('target/catalog.json'))
@@ -915,20 +921,24 @@ class TestRPCServerProjects(HasRPCServer):
 
     def _correct_docs_generate_result(self, result):
         expected = {
-            'model.test.descendant_model',
-            'model.test.multi_source_model',
-            'model.test.nonsource_descendant',
-            'seed.test.expected_multi_source',
-            'seed.test.other_source_table',
-            'seed.test.other_table',
-            'seed.test.source',
-            'source.test.other_source.test_table',
-            'source.test.test_source.other_test_table',
-            'source.test.test_source.test_table',
+            'nodes': {
+                'model.test.descendant_model',
+                'model.test.multi_source_model',
+                'model.test.nonsource_descendant',
+                'seed.test.expected_multi_source',
+                'seed.test.other_source_table',
+                'seed.test.other_table',
+                'seed.test.source',
+            },
+            'sources': {
+                'source.test.other_source.test_table',
+                'source.test.test_source.other_test_table',
+                'source.test.test_source.test_table',
+            },
         }
         self.assertHasDocsGenerated(result, expected)
         self.assertCatalogExists()
-        self.assertManifestExists(17)
+        self.assertManifestExists(12, 5)
 
     @use_profile('postgres')
     def test_docs_generate_postgres(self):

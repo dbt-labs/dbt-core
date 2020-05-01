@@ -13,6 +13,7 @@ from dbt.rpc.method import (
     Result,
 )
 from dbt.exceptions import InternalException
+from dbt.perf_utils import get_full_manifest
 from dbt.utils import parse_cli_vars
 
 from .base import RPCTask
@@ -38,14 +39,6 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
 
     def set_config(self, config):
         super().set_config(config)
-
-        # read any cli vars we got and use it to update cli_vars
-        self.config.cli_vars.update(
-            parse_cli_vars(getattr(self.args, 'vars', '{}'))
-        )
-        # rewrite args.vars to reflect our merged vars
-        self.args.vars = yaml.safe_dump(self.config.cli_vars)
-        self.config.args = self.args
 
         if self.task_type is None:
             raise InternalException('task type not set for set_config')
@@ -96,6 +89,23 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
                 'CLI task is in a bad state: handle_request called with no '
                 'real_task set!'
             )
+
+        # It's important to update cli_vars here, because set_config()'s
+        # `self.config` is before the fork(), so it would alter the behavior of
+        # future calls.
+
+        # read any cli vars we got and use it to update cli_vars
+        self.config.cli_vars.update(
+            parse_cli_vars(getattr(self.args, 'vars', '{}'))
+        )
+        # If this changed the vars, rewrite args.vars to reflect our merged
+        # vars and reload the manifest.
+        dumped = yaml.safe_dump(self.config.cli_vars)
+        if dumped != self.args.vars:
+            self.real_task.args.vars = dumped
+            if isinstance(self.real_task, RemoteManifestMethod):
+                self.real_task.manifest = get_full_manifest(self.config)
+
         # we parsed args from the cli, so we're set on that front
         return self.real_task.handle_request()
 

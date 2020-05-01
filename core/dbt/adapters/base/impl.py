@@ -1,10 +1,12 @@
 import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
+from itertools import chain
 from typing import (
-    Optional, Tuple, Callable, Iterable, FrozenSet, Type, Dict, Any, List,
-    Mapping, Iterator, Union, Set
+    Optional, Tuple, Callable, Iterable, Type, Dict, Any, List, Mapping,
+    Iterator, Union, Set
 )
 
 import agate
@@ -23,6 +25,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
+from dbt.contracts.graph.model_config import BaseConfig
 from dbt.exceptions import warn_or_error
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -105,6 +108,11 @@ def _relation_name(rel: Optional[BaseRelation]) -> str:
         return str(rel)
 
 
+@dataclass
+class AdapterConfig(BaseConfig):
+    pass
+
+
 class BaseAdapter(metaclass=AdapterMeta):
     """The BaseAdapter provides an abstract base class for adapters.
 
@@ -147,7 +155,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
-    AdapterSpecificConfigs: FrozenSet[str] = frozenset()
+    AdapterSpecificConfigs: Type[AdapterConfig] = AdapterConfig
 
     def __init__(self, config):
         self.config = config
@@ -282,7 +290,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         lowercase strings.
         """
         info_schema_name_map = SchemaSearchMap()
-        for node in manifest.nodes.values():
+        nodes: Iterator[CompileResultNode] = chain(
+            manifest.nodes.values(),
+            manifest.sources.values(),
+        )
+        for node in nodes:
             if exec_only and node.resource_type not in NodeType.executable():
                 continue
             relation = self.Relation.create_from(self.config, node)

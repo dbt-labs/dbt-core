@@ -209,6 +209,7 @@ COMPILED_TYPES: Dict[Type[ParsedResource], Type[CompiledNode]] = {
 
 # for some types, the compiled type is the parsed type, so make this easy
 CompiledType = Union[Type[CompiledNode], Type[ParsedResource]]
+CompiledResource = Union[ParsedResource, CompiledNode]
 
 
 def compiled_type_for(parsed: ParsedNode) -> CompiledType:
@@ -243,8 +244,8 @@ NonSourceCompiledNode = Union[
 NonSourceParsedNode = Union[
     ParsedAnalysisNode,
     ParsedDataTestNode,
-    ParsedModelNode,
     ParsedHookNode,
+    ParsedModelNode,
     ParsedRPCNode,
     ParsedSchemaTestNode,
     ParsedSeedNode,
@@ -252,7 +253,7 @@ NonSourceParsedNode = Union[
 ]
 
 
-# This is anything that can be in manifest.nodes and isn't a Source.
+# This is anything that can be in manifest.nodes.
 NonSourceNode = Union[
     NonSourceCompiledNode,
     NonSourceParsedNode,

@@ -179,18 +179,41 @@ class ManifestTest(unittest.TestCase):
                 raw_sql='does not matter'
             ),
         }
+
+        self.sources = {
+            'source.root.my_source.my_table': ParsedSourceDefinition(
+                database='raw',
+                schema='analytics',
+                resource_type=NodeType.Source,
+                identifier='some_source',
+                name='my_table',
+                source_name='my_source',
+                source_description='My source description',
+                description='Table description',
+                loader='a_loader',
+                unique_id='source.test.my_source.my_table',
+                fqn=['test', 'my_source', 'my_table'],
+                package_name='root',
+                root_path='',
+                path='schema.yml',
+                original_file_path='schema.yml',
+            ),
+        }
         for node in self.nested_nodes.values():
             node.validate(node.to_dict())
+        for source in self.sources.values():
+            source.validate(source.to_dict())
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
-        manifest = Manifest(nodes={}, macros={}, docs={},
+        manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
                 'nodes': {},
+                'sources': {},
                 'macros': {},
                 'parent_map': {},
                 'child_map': {},
@@ -204,7 +227,7 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
+        manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         serialized = manifest.writable_manifest().to_dict()
@@ -269,14 +292,17 @@ class ManifestTest(unittest.TestCase):
 
     def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
+        sources = copy.copy(self.sources)
+        manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes']))
+        flat_sources = flat_graph['sources']
+        self.assertEqual(set(flat_graph), set(['nodes', 'sources']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
+        self.assertEqual(set(flat_sources), set(self.sources))
         for node in flat_nodes.values():
             self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
 
@@ -306,7 +332,7 @@ class ManifestTest(unittest.TestCase):
             project_id='098f6bcd4621d373cade4e832627b4f6',
             adapter_type='postgres',
         )
-        manifest = Manifest(nodes={}, macros={}, docs={},
+        manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             metadata=metadata, files={})
 
@@ -314,6 +340,7 @@ class ManifestTest(unittest.TestCase):
             manifest.writable_manifest().to_dict(),
             {
                 'nodes': {},
+                'sources': {},
                 'macros': {},
                 'parent_map': {},
                 'child_map': {},
@@ -330,7 +357,7 @@ class ManifestTest(unittest.TestCase):
         )
 
     def test_get_resource_fqns_empty(self):
-        manifest = Manifest(nodes={}, macros={}, docs={},
+        manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         self.assertEqual(manifest.get_resource_fqns(), {})
@@ -342,7 +369,7 @@ class ManifestTest(unittest.TestCase):
             database='dbt',
             schema='analytics',
             alias='seed',
-            resource_type='seed',
+            resource_type=NodeType.Seed,
             unique_id='seed.root.seed',
             fqn=['root', 'seed'],
             package_name='root',
@@ -356,7 +383,7 @@ class ManifestTest(unittest.TestCase):
             root_path='',
             raw_sql='-- csv --',
         )
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
+        manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         expect = {
@@ -368,7 +395,12 @@ class ManifestTest(unittest.TestCase):
                 ('root', 'sibling'),
                 ('root', 'multi'),
             ]),
-            'seeds': frozenset([('root', 'seed')]),
+            'seeds': frozenset([
+                ('root', 'seed')
+            ]),
+            'sources': frozenset([
+                ('test', 'my_source', 'my_table')
+            ])
         }
         resource_fqns = manifest.get_resource_fqns()
         self.assertEqual(resource_fqns, expect)
@@ -527,7 +559,7 @@ class MixedManifestTest(unittest.TestCase):
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
-        manifest = Manifest(nodes={}, macros={}, docs={},
+        manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         self.assertEqual(
@@ -535,6 +567,7 @@ class MixedManifestTest(unittest.TestCase):
             {
                 'nodes': {},
                 'macros': {},
+                'sources': {},
                 'parent_map': {},
                 'child_map': {},
                 'generated_at': '2018-02-14T09:15:13Z',
@@ -547,7 +580,7 @@ class MixedManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
+        manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         serialized = manifest.writable_manifest().to_dict()
@@ -611,13 +644,13 @@ class MixedManifestTest(unittest.TestCase):
 
     def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
+        manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes']))
+        self.assertEqual(set(flat_graph), set(['nodes', 'sources']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
         for node in flat_nodes.values():
@@ -720,13 +753,16 @@ class TestManifestSearch(unittest.TestCase):
         )
 
 
-def make_manifest(nodes=[], macros=[], docs=[]):
+def make_manifest(nodes=[], sources=[], macros=[], docs=[]):
     return Manifest(
         nodes={
             n.unique_id: n for n in nodes
         },
         macros={
             m.unique_id: m for m in macros
+        },
+        sources={
+            s.unique_id: s for s in sources
         },
         docs={
             d.unique_id: d for d in docs
@@ -982,19 +1018,20 @@ def test_find_materialization_by_name(macros, adapter_type, expected):
         assert result.package_name == expected_package
 
 
-FindNodeSpec = namedtuple('FindNodeSpec', 'nodes,package,expected')
+FindNodeSpec = namedtuple('FindNodeSpec', 'nodes,sources,package,expected')
 
 
 def _refable_parameter_sets():
     sets = [
         # empties
-        FindNodeSpec(nodes=[], package=None, expected=None),
-        FindNodeSpec(nodes=[], package='root', expected=None),
+        FindNodeSpec(nodes=[], sources=[], package=None, expected=None),
+        FindNodeSpec(nodes=[], sources=[], package='root', expected=None),
     ]
     sets.extend(
         # only one model, no package specified -> find it in any package
         FindNodeSpec(
             nodes=[MockNode(project, 'my_model')],
+            sources=[],
             package=None,
             expected=(project, 'my_model'),
         ) for project in ['root', 'dep']
@@ -1003,35 +1040,41 @@ def _refable_parameter_sets():
     sets.extend([
         FindNodeSpec(
             nodes=[MockNode('root', 'my_model')],
+            sources=[],
             package='root',
             expected=('root', 'my_model'),
         ),
         FindNodeSpec(
             nodes=[MockNode('dep', 'my_model')],
+            sources=[],
             package='root',
             expected=None,
         ),
 
         # a source with that name exists, but not a refable
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_model')],
+            nodes=[],
+            sources=[MockSource('root', 'my_source', 'my_model')],
             package=None,
             expected=None
         ),
 
         # a source with that name exists, and a refable
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_model'), MockNode('root', 'my_model')],
+            nodes=[MockNode('root', 'my_model')],
+            sources=[MockSource('root', 'my_source', 'my_model')],
             package=None,
             expected=('root', 'my_model'),
         ),
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_model'), MockNode('root', 'my_model')],
+            nodes=[MockNode('root', 'my_model')],
+            sources=[MockSource('root', 'my_source', 'my_model')],
             package='root',
             expected=('root', 'my_model'),
         ),
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_model'), MockNode('root', 'my_model')],
+            nodes=[MockNode('root', 'my_model')],
+            sources=[MockSource('root', 'my_source', 'my_model')],
             package='dep',
             expected=None,
         ),
@@ -1049,12 +1092,12 @@ def id_nodes(arg):
 
 
 @pytest.mark.parametrize(
-    'nodes,package,expected',
+    'nodes,sources,package,expected',
     _refable_parameter_sets(),
     ids=id_nodes,
 )
-def test_find_refable_by_name(nodes, package, expected):
-    manifest = make_manifest(nodes=nodes)
+def test_find_refable_by_name(nodes, sources, package, expected):
+    manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.find_refable_by_name(name='my_model', package=package)
     if expected is None:
         assert result is expected
@@ -1069,13 +1112,14 @@ def test_find_refable_by_name(nodes, package, expected):
 def _source_parameter_sets():
     sets = [
         # empties
-        FindNodeSpec(nodes=[], package=None, expected=None),
-        FindNodeSpec(nodes=[], package='root', expected=None),
+        FindNodeSpec(nodes=[], sources=[], package=None, expected=None),
+        FindNodeSpec(nodes=[], sources=[], package='root', expected=None),
     ]
     sets.extend(
         # models with the name, but not sources
         FindNodeSpec(
             nodes=[MockNode('root', name)],
+            sources=[],
             package=project,
             expected=None,
         )
@@ -1084,7 +1128,8 @@ def _source_parameter_sets():
     # exists in root alongside nodes with name parts
     sets.extend(
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_table'), MockNode('root', 'my_source'), MockNode('root', 'my_table')],
+            nodes=[MockNode('root', 'my_source'), MockNode('root', 'my_table')],
+            sources=[MockSource('root', 'my_source', 'my_table')],
             package=project,
             expected=('root', 'my_source', 'my_table'),
         )
@@ -1093,7 +1138,8 @@ def _source_parameter_sets():
     sets.extend(
         # wrong source name
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_other_source', 'my_table')],
+            nodes=[],
+            sources=[MockSource('root', 'my_other_source', 'my_table')],
             package=project,
             expected=None,
         )
@@ -1102,7 +1148,8 @@ def _source_parameter_sets():
     sets.extend(
         # wrong table name
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_other_table')],
+            nodes=[],
+            sources=[MockSource('root', 'my_source', 'my_other_table')],
             package=project,
             expected=None,
         )
@@ -1111,7 +1158,8 @@ def _source_parameter_sets():
     sets.append(
         # wrong project name (should not be found in 'root')
         FindNodeSpec(
-            nodes=[MockSource('other', 'my_source', 'my_table')],
+            nodes=[],
+            sources=[MockSource('other', 'my_source', 'my_table')],
             package='root',
             expected=None,
         )
@@ -1119,7 +1167,8 @@ def _source_parameter_sets():
     sets.extend(
         # exists in root check various projects (other project -> not found)
         FindNodeSpec(
-            nodes=[MockSource('root', 'my_source', 'my_table')],
+            nodes=[],
+            sources=[MockSource('root', 'my_source', 'my_table')],
             package=project,
             expected=('root', 'my_source', 'my_table'),
         )
@@ -1130,12 +1179,12 @@ def _source_parameter_sets():
 
 
 @pytest.mark.parametrize(
-    'nodes,package,expected',
+    'nodes,sources,package,expected',
     _source_parameter_sets(),
     ids=id_nodes,
 )
-def test_find_source_by_name(nodes, package, expected):
-    manifest = make_manifest(nodes=nodes)
+def test_find_source_by_name(nodes, sources, package, expected):
+    manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.find_source_by_name(source_name='my_source', table_name='my_table', package=package)
     if expected is None:
         assert result is expected

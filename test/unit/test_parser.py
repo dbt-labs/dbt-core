@@ -22,11 +22,13 @@ from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import (
     Manifest, FilePath, SourceFile, FileHash
 )
+from dbt.contracts.graph.model_config import (
+    NodeConfig, TestConfig, TimestampSnapshotConfig, SnapshotStrategy,
+)
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
-    NodeConfig, DependsOn, ColumnInfo, ParsedDataTestNode, TestConfig,
-    ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
-    ParsedAnalysisNode, ParsedDocumentation
+    DependsOn, ColumnInfo, ParsedDataTestNode, ParsedSnapshotNode,
+    ParsedAnalysisNode, ParsedDocumentation, UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import (
     FreshnessThreshold, ExternalTable, Docs
@@ -116,6 +118,9 @@ class BaseParserTest(unittest.TestCase):
             'root': self.root_project_config,
             'snowplow': self.snowplow_project_config
         }
+
+        self.root_project_config.dependencies = self.all_projects
+        self.snowplow_project_config.dependencies = self.all_projects
         self.patcher = mock.patch('dbt.context.providers.get_adapter')
         self.factory = self.patcher.start()
 
@@ -199,6 +204,21 @@ models:
 '''
 
 
+SINGLE_TABLE_SOURCE_PATCH = '''
+version: 2
+sources:
+  - name: my_source
+    overrides: snowplow
+    tables:
+      - name: my_table
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+'''
+
+
 class SchemaParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
@@ -229,74 +249,66 @@ class SchemaParserSourceTest(SchemaParserTest):
         macro_blocks = MacroPatchParser(self.parser, block, 'macros').parse()
         self.assertEqual(len(analysis_blocks), 0)
         self.assertEqual(len(model_blocks), 0)
-        self.assertEqual(len(source_blocks), 1)
+        self.assertEqual(len(source_blocks), 0)
         self.assertEqual(len(macro_blocks), 0)
         self.assertEqual(len(list(self.parser.results.patches)), 0)
         self.assertEqual(len(list(self.parser.results.nodes)), 0)
         results = list(self.parser.results.sources.values())
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].source_name, 'my_source')
-        self.assertEqual(results[0].name, 'my_table')
-        self.assertEqual(results[0].description, '')
-        self.assertEqual(len(results[0].columns), 0)
+        self.assertEqual(results[0].source.name, 'my_source')
+        self.assertEqual(results[0].table.name, 'my_table')
+        self.assertEqual(results[0].table.description, '')
+        self.assertEqual(len(results[0].table.columns), 0)
 
     def test__parse_basic_source(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE, 'test_one.yml')
         self.parser.parse_file(block)
         self.assert_has_results_length(self.parser.results, sources=1)
         src = list(self.parser.results.sources.values())[0]
-        expected = ParsedSourceDefinition(
-            package_name='snowplow',
-            source_name='my_source',
-            schema='my_source',
-            name='my_table',
-            loader='',
-            freshness=FreshnessThreshold(),
-            external=ExternalTable(),
-            source_description='',
-            identifier='my_table',
-            fqn=['snowplow', 'my_source', 'my_table'],
-            database='test',
-            unique_id='source.snowplow.my_source.my_table',
-            root_path=get_abs_os_path('./dbt_modules/snowplow'),
-            path=normalize('models/test_one.yml'),
-            original_file_path=normalize('models/test_one.yml'),
-            resource_type=NodeType.Source,
-        )
-        self.assertEqual(src, expected)
+        assert isinstance(src, UnpatchedSourceDefinition)
+        assert src.package_name == 'snowplow'
+        assert src.source.name == 'my_source'
+        assert src.table.name == 'my_table'
+        assert src.resource_type == NodeType.Source
+        assert src.fqn == ['snowplow', 'my_source', 'my_table']
 
     def test__read_basic_source_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
-        analysis_blocks = AnalysisPatchParser(self.parser, block, 'analyses').parse()
-        model_blocks = TestablePatchParser(self.parser, block, 'models').parse()
-        source_blocks = SourceParser(self.parser, block, 'sources').parse()
-        macro_blocks = MacroPatchParser(self.parser, block, 'macros').parse()
-        self.assertEqual(len(analysis_blocks), 0)
-        self.assertEqual(len(model_blocks), 0)
-        self.assertEqual(len(source_blocks), 1)
-        self.assertEqual(len(macro_blocks), 0)
+        analysis_tests = AnalysisPatchParser(self.parser, block, 'analyses').parse()
+        model_tests = TestablePatchParser(self.parser, block, 'models').parse()
+        source_tests = SourceParser(self.parser, block, 'sources').parse()
+        macro_tests = MacroPatchParser(self.parser, block, 'macros').parse()
+        self.assertEqual(len(analysis_tests), 0)
+        self.assertEqual(len(model_tests), 0)
+        self.assertEqual(len(source_tests), 0)
+        self.assertEqual(len(macro_tests), 0)
         self.assertEqual(len(list(self.parser.results.nodes)), 0)
         self.assertEqual(len(list(self.parser.results.patches)), 0)
+        self.assertEqual(len(list(self.parser.results.source_patches)), 0)
         results = list(self.parser.results.sources.values())
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].source_name, 'my_source')
-        self.assertEqual(results[0].name, 'my_table')
-        self.assertEqual(results[0].description, 'A description of my table')
-        self.assertEqual(len(results[0].columns), 1)
+        self.assertEqual(results[0].source.name, 'my_source')
+        self.assertEqual(results[0].table.name, 'my_table')
+        self.assertEqual(results[0].table.description, 'A description of my table')
+        self.assertEqual(len(results[0].table.columns), 1)
 
     def test__parse_basic_source_tests(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
         self.parser.parse_file(block)
-        self.assertEqual(len(self.parser.results.nodes), 2)
+        self.assertEqual(len(self.parser.results.nodes), 0)
         self.assertEqual(len(self.parser.results.sources), 1)
         self.assertEqual(len(self.parser.results.patches), 0)
         src = list(self.parser.results.sources.values())[0]
-        self.assertEqual(src.source_name, 'my_source')
-        self.assertEqual(src.schema, 'my_source')
-        self.assertEqual(src.name, 'my_table')
-        self.assertEqual(src.description, 'A description of my table')
+        self.assertEqual(src.source.name, 'my_source')
+        self.assertEqual(src.source.schema, None)
+        self.assertEqual(src.table.name, 'my_table')
+        self.assertEqual(src.table.description, 'A description of my table')
 
-        tests = sorted(self.parser.results.nodes.values(), key=lambda n: n.unique_id)
+        tests = [
+            self.parser.parse_source_test(src, test, col)
+            for test, col in src.get_tests()
+        ]
+        tests.sort(key=lambda n: n.unique_id)
 
         self.assertEqual(tests[0].config.severity, 'ERROR')
         self.assertEqual(tests[0].tags, ['schema'])
@@ -311,11 +323,36 @@ class SchemaParserSourceTest(SchemaParserTest):
 
         path = get_abs_os_path('./dbt_modules/snowplow/models/test_one.yml')
         self.assertIn(path, self.parser.results.files)
-        self.assertEqual(sorted(self.parser.results.files[path].nodes),
-                         [t.unique_id for t in tests])
+        self.assertEqual(self.parser.results.files[path].nodes, [])
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].sources,
                          ['source.snowplow.my_source.my_table'])
+        self.assertEqual(self.parser.results.files[path].source_patches, [])
+
+    def test__read_source_patch(self):
+        block = self.yaml_block_for(SINGLE_TABLE_SOURCE_PATCH, 'test_one.yml')
+        analysis_tests = AnalysisPatchParser(self.parser, block, 'analyses').parse()
+        model_tests = TestablePatchParser(self.parser, block, 'models').parse()
+        source_tests = SourceParser(self.parser, block, 'sources').parse()
+        macro_tests = MacroPatchParser(self.parser, block, 'macros').parse()
+        self.assertEqual(len(analysis_tests), 0)
+        self.assertEqual(len(model_tests), 0)
+        self.assertEqual(len(source_tests), 0)
+        self.assertEqual(len(macro_tests), 0)
+        self.assertEqual(len(list(self.parser.results.nodes)), 0)
+        self.assertEqual(len(list(self.parser.results.patches)), 0)
+        self.assertEqual(len(list(self.parser.results.sources)), 0)
+        results = list(self.parser.results.source_patches.values())
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, 'my_source')
+        self.assertEqual(results[0].overrides, 'snowplow')
+        self.assertIsNone(results[0].description)
+        self.assertEqual(len(results[0].tables), 1)
+        table = results[0].tables[0]
+        self.assertEqual(table.name, 'my_table')
+        self.assertIsNone(table.description)
+        self.assertEqual(len(table.columns), 1)
+        self.assertEqual(len(table.columns[0].tests), 2)
 
 
 class SchemaParserModelsTest(SchemaParserTest):
@@ -792,6 +829,8 @@ class ProcessingTest(BaseParserTest):
         nodes = {
             x_uid: self.x_node,
             y_uid: self.y_node,
+        }
+        sources = {
             src_uid: self.src_node,
         }
         docs = {
@@ -804,7 +843,7 @@ class ProcessingTest(BaseParserTest):
             )
         }
         self.manifest = Manifest(
-            nodes=nodes, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
+            nodes=nodes, sources=sources, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
         )
 
     def test_process_docs(self):

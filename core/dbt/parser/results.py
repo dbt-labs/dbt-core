@@ -4,8 +4,9 @@ from typing import TypeVar, MutableMapping, Mapping, Union, List
 from hologram import JsonSchemaMixin
 
 from dbt.contracts.graph.manifest import (
-    SourceFile, RemoteFile, FileHash, MacroKey
+    SourceFile, RemoteFile, FileHash, MacroKey, SourceKey
 )
+from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.parsed import (
     HasUniqueID,
     ParsedAnalysisNode,
@@ -15,19 +16,19 @@ from dbt.contracts.graph.parsed import (
     ParsedMacro,
     ParsedMacroPatch,
     ParsedModelNode,
-    ParsedNode,
     ParsedNodePatch,
     ParsedRPCNode,
     ParsedSeedNode,
     ParsedSchemaTestNode,
     ParsedSnapshotNode,
-    ParsedSourceDefinition,
+    UnpatchedSourceDefinition,
 )
+from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.util import Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
     raise_duplicate_macro_patch_name, CompilationException, InternalException,
-    raise_compiler_error,
+    raise_compiler_error, raise_duplicate_source_patch_name
 )
 from dbt.node_types import NodeType
 from dbt.ui import printer
@@ -67,13 +68,14 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     profile_hash: FileHash
     project_hashes: MutableMapping[str, FileHash]
     nodes: MutableMapping[str, ManifestNodes] = dict_field()
-    sources: MutableMapping[str, ParsedSourceDefinition] = dict_field()
+    sources: MutableMapping[str, UnpatchedSourceDefinition] = dict_field()
     docs: MutableMapping[str, ParsedDocumentation] = dict_field()
     macros: MutableMapping[str, ParsedMacro] = dict_field()
     macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
+    source_patches: MutableMapping[SourceKey, SourcePatch] = dict_field()
     files: MutableMapping[str, SourceFile] = dict_field()
-    disabled: MutableMapping[str, List[ParsedNode]] = dict_field()
+    disabled: MutableMapping[str, List[CompileResultNode]] = dict_field()
     dbt_version: str = __version__
 
     def get_file(self, source_file: SourceFile) -> SourceFile:
@@ -85,24 +87,30 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         return self.files[key]
 
     def add_source(
-        self, source_file: SourceFile, node: ParsedSourceDefinition
+        self, source_file: SourceFile, source: UnpatchedSourceDefinition
     ):
-        # nodes can't be overwritten!
-        _check_duplicates(node, self.sources)
-        self.sources[node.unique_id] = node
-        self.get_file(source_file).sources.append(node.unique_id)
+        # sources can't be overwritten!
+        _check_duplicates(source, self.sources)
+        self.sources[source.unique_id] = source
+        self.get_file(source_file).sources.append(source.unique_id)
 
-    def add_node(self, source_file: SourceFile, node: ManifestNodes):
+    def add_node_nofile(self, node: ManifestNodes):
         # nodes can't be overwritten!
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
+
+    def add_node(self, source_file: SourceFile, node: ManifestNodes):
+        self.add_node_nofile(node)
         self.get_file(source_file).nodes.append(node.unique_id)
 
-    def add_disabled(self, source_file: SourceFile, node: ParsedNode):
+    def add_disabled_nofile(self, node: CompileResultNode):
         if node.unique_id in self.disabled:
             self.disabled[node.unique_id].append(node)
         else:
             self.disabled[node.unique_id] = [node]
+
+    def add_disabled(self, source_file: SourceFile, node: CompileResultNode):
+        self.add_disabled_nofile(node)
         self.get_file(source_file).nodes.append(node.unique_id)
 
     def add_macro(self, source_file: SourceFile, macro: ParsedMacro):
@@ -140,7 +148,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     def add_patch(
         self, source_file: SourceFile, patch: ParsedNodePatch
     ) -> None:
-        # matches can't be overwritten
+        # patches can't be overwritten
         if patch.name in self.patches:
             raise_duplicate_patch_name(patch, self.patches[patch.name])
         self.patches[patch.name] = patch
@@ -156,11 +164,21 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
         self.macro_patches[key] = patch
         self.get_file(source_file).macro_patches.append(key)
 
+    def add_source_patch(
+        self, source_file: SourceFile, patch: SourcePatch
+    ) -> None:
+        # source patches must be unique
+        key = (patch.overrides, patch.name)
+        if key in self.source_patches:
+            raise_duplicate_source_patch_name(patch, self.source_patches[key])
+        self.source_patches[key] = patch
+        self.get_file(source_file).source_patches.append(key)
+
     def _get_disabled(
         self,
         unique_id: str,
         match_file: SourceFile,
-    ) -> List[ParsedNode]:
+    ) -> List[CompileResultNode]:
         if unique_id not in self.disabled:
             raise InternalException(
                 'called _get_disabled with id={}, but it does not exist'

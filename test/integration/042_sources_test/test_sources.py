@@ -21,6 +21,7 @@ class BaseSourcesTest(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'seeds': {

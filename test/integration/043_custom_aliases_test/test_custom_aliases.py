@@ -13,6 +13,7 @@ class TestAliases(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ['macros'],
         }
 
@@ -27,6 +28,7 @@ class TestAliasesWithConfig(TestAliases):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ['macros-configs'],
         }
 

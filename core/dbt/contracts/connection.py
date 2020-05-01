@@ -2,7 +2,8 @@ import abc
 import itertools
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable)
+    Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType, List, Callable,
+)
 from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin
@@ -135,8 +136,10 @@ class Credentials(
         return super().from_dict(data)
 
     @classmethod
-    def translate_aliases(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        return translate_aliases(kwargs, cls._ALIASES)
+    def translate_aliases(
+        cls, kwargs: Dict[str, Any], recurse: bool = False
+    ) -> Dict[str, Any]:
+        return translate_aliases(kwargs, cls._ALIASES, recurse)
 
     def to_dict(self, omit_none=True, validate=False, *, with_aliases=False):
         serialized = super().to_dict(omit_none=omit_none, validate=validate)
