@@ -107,7 +107,10 @@ class SQLConnectionManager(BaseConnectionManager):
             rows = cursor.fetchall()
             data = cls.process_results(column_names, rows)
 
-        return dbt.clients.agate_helper.table_from_data(data, column_names)
+        return dbt.clients.agate_helper.table_from_data_flat(
+            data,
+            column_names
+        )
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
