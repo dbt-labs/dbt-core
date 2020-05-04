@@ -1,5 +1,6 @@
 import unittest
 
+from dbt.clients.jinja import get_rendered
 from dbt.clients.jinja import get_template
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.exceptions import CompilationException
@@ -12,6 +13,36 @@ class TestJinja(unittest.TestCase):
         template = get_template(s, {})
         mod = template.make_module()
         self.assertEqual(mod.my_dict, {'a': 1})
+
+    def test_regular_render(self):
+        s = '{{ "some_value" }}'
+        value = get_rendered(s, {}, native=False)
+        assert value == 'some_value'
+        s = '{{ 1991 }}'
+        value = get_rendered(s, {}, native=False)
+        assert value == '1991'
+
+        s = '{{ "some_value" | as_text }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == 'some_value'
+        s = '{{ 1991 | as_text }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == '1991'
+
+    def test_native_render(self):
+        s = '{{ "some_value" }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == 'some_value'
+        s = '{{ 1991 }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == 1991
+
+        s = '{{ "some_value" | as_text }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == 'some_value'
+        s = '{{ 1991 | as_text }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == '1991'
 
 
 class TestBlockLexer(unittest.TestCase):
@@ -380,3 +411,5 @@ if_you_do_this_you_are_awful = '''
 hi
 {% endmaterialization %}
 '''
+
+
