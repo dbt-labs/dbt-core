@@ -9,6 +9,7 @@ import dbt.exceptions
 import dbt.flags
 
 from dbt import deprecations
+from dbt.adapters.factory import get_relation_class_by_name
 from dbt.helper_types import PathSet
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
@@ -367,7 +368,10 @@ class ManifestLoader:
             return loader.load_only_macros()
 
 
-def _check_resource_uniqueness(manifest: Manifest) -> None:
+def _check_resource_uniqueness(
+    manifest: Manifest,
+    config: RuntimeConfig,
+) -> None:
     names_resources: Dict[str, NonSourceNode] = {}
     alias_resources: Dict[str, NonSourceNode] = {}
 
@@ -378,7 +382,10 @@ def _check_resource_uniqueness(manifest: Manifest) -> None:
         assert not isinstance(node, ParsedSourceDefinition)
 
         name = node.name
-        alias = "{}.{}".format(node.schema, node.alias)
+        # the full node name is really defined by the adapter's relation
+        relation_cls = get_relation_class_by_name(config.credentials.type)
+        relation = relation_cls.create_from(config=config, node=node)
+        full_node_name = str(relation)
 
         existing_node = names_resources.get(name)
         if existing_node is not None:
@@ -386,14 +393,14 @@ def _check_resource_uniqueness(manifest: Manifest) -> None:
                 existing_node, node
             )
 
-        existing_alias = alias_resources.get(alias)
+        existing_alias = alias_resources.get(full_node_name)
         if existing_alias is not None:
             dbt.exceptions.raise_ambiguous_alias(
-                existing_alias, node
+                existing_alias, node, full_node_name
             )
 
         names_resources[name] = node
-        alias_resources[alias] = node
+        alias_resources[full_node_name] = node
 
 
 def _warn_for_unused_resource_config_paths(
@@ -405,7 +412,7 @@ def _warn_for_unused_resource_config_paths(
 
 
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
-    _check_resource_uniqueness(manifest)
+    _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
 
 
