@@ -429,14 +429,16 @@ def get_environment(
     args['extensions'].append(DocumentationExtension)
 
     env_cls: Type[jinja2.Environment]
+    text_filter: Type
     if native:
         env_cls = NativeSandboxEnvironment
+        text_filter = TextMarker
     else:
         env_cls = MacroFuzzEnvironment
+        text_filter = str
 
     env = env_cls(**args)
-    if native:
-        env.filters['as_text'] = TextMarker
+    env.filters['as_text'] = text_filter
 
     return env
 

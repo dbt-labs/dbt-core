@@ -22,6 +22,13 @@ class TestJinja(unittest.TestCase):
         value = get_rendered(s, {}, native=False)
         assert value == '1991'
 
+        s = '{{ "some_value" | as_text }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == 'some_value'
+        s = '{{ 1991 | as_text }}'
+        value = get_rendered(s, {}, native=True)
+        assert value == '1991'
+
     def test_native_render(self):
         s = '{{ "some_value" }}'
         value = get_rendered(s, {}, native=True)
