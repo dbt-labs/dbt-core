@@ -8,7 +8,7 @@ from ast import literal_eval
 from contextlib import contextmanager
 from itertools import chain, islice
 from typing import (
-    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn
+    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn, Tuple
 )
 
 import jinja2
@@ -104,6 +104,13 @@ class NativeSandboxEnvironment(MacroFuzzEnvironment):
     code_generator_class = jinja2.nativetypes.NativeCodeGenerator
 
 
+class TextMarker(str):
+    """A special native-env marker that indicates that a value is text and is
+    not to be evaluated. Use this to prevent your numbery-strings from becoming
+    numbers!
+    """
+
+
 def quoted_native_concat(nodes):
     """This is almost native_concat from the NativeTemplate, except in the
     special case of a single argument that is a quoted string and returns a
@@ -116,6 +123,8 @@ def quoted_native_concat(nodes):
 
     if len(head) == 1:
         raw = head[0]
+        if isinstance(raw, TextMarker):
+            return str(raw)
     else:
         raw = "".join([str(v) for v in chain(head, nodes)])
 
@@ -124,10 +133,7 @@ def quoted_native_concat(nodes):
     except (ValueError, SyntaxError, MemoryError):
         return raw
 
-    if len(head) == 1 and len(raw) > 2 and isinstance(result, str):
-        return _requote_result(raw, result)
-    else:
-        return result
+    return result
 
 
 class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
@@ -428,7 +434,11 @@ def get_environment(
     else:
         env_cls = MacroFuzzEnvironment
 
-    return env_cls(**args)
+    env = env_cls(**args)
+    if native:
+        env.filters['as_text'] = TextMarker
+
+    return env
 
 
 @contextmanager
@@ -541,9 +551,15 @@ def add_rendered_test_kwargs(
     """
     looks_like_func = r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$'
 
-    # we never care about the keypath
-    def _convert_function(value: Any, _: Any) -> Any:
+    def _convert_function(
+        value: Any, keypath: Tuple[Union[str, int], ...]
+    ) -> Any:
         if isinstance(value, str):
+            if keypath == ('column_name',):
+                # special case: Don't render column names as native, make them
+                # be strings
+                return value
+
             if re.match(looks_like_func, value) is not None:
                 # curly braces to make rendering happy
                 value = f'{{{{ {value} }}}}'

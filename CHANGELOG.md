@@ -23,6 +23,7 @@
 - schema.yml files are now fully rendered in a context that is aware of vars declared in from dbt_project.yml files ([#2269](https://github.com/fishtown-analytics/dbt/issues/2269), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Sources from dependencies can be overridden in schema.yml files ([#2287](https://github.com/fishtown-analytics/dbt/issues/2287), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Implement persist_docs for both `relation` and `comments` on postgres and redshift, and extract them when getting the catalog. ([#2333](https://github.com/fishtown-analytics/dbt/issues/2333), [#2378](https://github.com/fishtown-analytics/dbt/pull/2378))
+- Added a filter named `as_text` to the native environment rendering code that allows users to mark a value as always being a string ([#2384](https://github.com/fishtown-analytics/dbt/issues/2384), [#2395](https://github.com/fishtown-analytics/dbt/pull/2395))
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
