@@ -67,13 +67,12 @@
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = config['updated_at'] %}
 
-    (snapshotted_data.MetaDataLastUpdatedTime < source_data.MetaDataLastUpdatedTime)
-
     {#/*
-        The snapshot relation might not have an {{ updated_at }} value if the snapshot
-        strategy is changed (ie. from `check_cols` to `timestamp`). We should use a
-        dbt-created column for the comparison in the snapshot table instead of assuming
-        that the user-supplied {{ updated_at }} will be present in the historical data
+        The snapshot relation might not have an {{ updated_at }} value if the
+        snapshot strategy is changed from `check` to `timestamp`. We
+        should use a dbt-created column for the comparison in the snapshot
+        table instead of assuming that the user-supplied {{ updated_at }}
+        will be present in the historical data.
 
         See https://github.com/fishtown-analytics/dbt/issues/2350
     */ #}
