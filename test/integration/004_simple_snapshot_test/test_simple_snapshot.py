@@ -677,3 +677,72 @@ class TestLongText(DBTIntegrationTest):
         self.assertEqual(len(results), 2)
         got_names = set(r.get('longstring') for r in results)
         self.assertEqual(got_names, {'a' * 500, 'short'})
+
+
+class TestSlowQuery(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_snapshot_004"
+
+    @property
+    def models(self):
+        return "models-slow"
+
+    def run_snapshot(self):
+        return self.run_dbt(['snapshot'])
+
+    @property
+    def project_config(self):
+        return {
+            "config-version": 2,
+            "snapshot-paths": ['test-snapshots-slow'],
+            "test-paths": ["test-snapshots-slow-tests"],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__slow(self):
+        results = self.run_dbt(['snapshot'])
+        self.assertEqual(len(results), 1)
+
+        results = self.run_dbt(['snapshot'])
+        self.assertEqual(len(results), 1)
+
+        results = self.run_dbt(['test'])
+        self.assertEqual(len(results), 1)
+
+
+class TestChangingStrategy(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_snapshot_004"
+
+    @property
+    def models(self):
+        return "models-slow"
+
+    def run_snapshot(self):
+        return self.run_dbt(['snapshot'])
+
+    @property
+    def project_config(self):
+        return {
+            "config-version": 2,
+            "snapshot-paths": ['test-snapshots-changing-strategy'],
+            "test-paths": ["test-snapshots-changing-strategy-tests"],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__changing_strategy(self):
+        results = self.run_dbt(['snapshot', '--vars', '{strategy: check, step: 1}'])
+        self.assertEqual(len(results), 1)
+
+        results = self.run_dbt(['snapshot', '--vars', '{strategy: check, step: 2}'])
+        self.assertEqual(len(results), 1)
+
+        results = self.run_dbt(['snapshot', '--vars', '{strategy: timestamp, step: 3}'])
+        self.assertEqual(len(results), 1)
+
+        results = self.run_dbt(['test'])
+        self.assertEqual(len(results), 1)

@@ -27,12 +27,21 @@
 
 {%- endmacro -%}
 
+
+{%- macro bigquery_escape_comment(comment) -%}
+  {%- if comment is not string -%}
+    {%- do exceptions.raise_compiler_exception('cannot escape a non-string: ' ~ comment) -%}
+  {%- endif -%}
+  {%- do return((comment | tojson)[1:-1]) -%}
+{%- endmacro -%}
+
+
 {% macro bigquery_table_options(persist_docs, temporary, kms_key_name, labels) %}
   {% set opts = {} -%}
 
   {%- set description = get_relation_comment(persist_docs, model) -%}
   {%- if description is not none -%}
-    {%- do opts.update({'description': "'" ~ description ~ "'"}) -%}
+    {%- do opts.update({'description': "'" ~ bigquery_escape_comment(description) ~ "'"}) -%}
   {%- endif -%}
   {%- if temporary -%}
     {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
