@@ -171,7 +171,7 @@ Contributors:
 
 ### Features
 - Add column-level quoting control for tests ([#2106](https://github.com/fishtown-analytics/dbt/issues/2106), [#2047](https://github.com/fishtown-analytics/dbt/pull/2047))
-- Add the macros every node uses to its `depends_on.macros` list ([#2082](https://github.com/fishtown-analytics/dbt/issues/2082), [#2103](https://github.com/fishtown-analytics/dbt/pull/2103))
+- Add the macros every node uses to its `depends_on.macros` list ([#2082](https://github.com/fishtown-analytics/dbt/issues/2082), [#2103](https://github.com/fishtown-analytics/dbt/pull/2103))
 - Add `arguments` field to macros ([#2081](https://github.com/fishtown-analytics/dbt/issues/2081), [#2083](https://github.com/fishtown-analytics/dbt/issues/2083), [#2096](https://github.com/fishtown-analytics/dbt/pull/2096))
 - Batch the anonymous usage statistics requests to improve performance ([#2008](https://github.com/fishtown-analytics/dbt/issues/2008), [#2089](https://github.com/fishtown-analytics/dbt/pull/2089))
 - Add documentation for macros/analyses ([#1041](https://github.com/fishtown-analytics/dbt/issues/1041), [#2068](https://github.com/fishtown-analytics/dbt/pull/2068))
