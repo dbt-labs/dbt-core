@@ -415,7 +415,7 @@ def _build_compile_subparser(subparsers, base_subparser):
         'compile',
         parents=[base_subparser],
         help='''
-        Generates executable SQL from source model, test, and analysis files.
+        Generates executable SQL from source, model, test, and analysis files.
         Compiled SQL files are written to the target/ directory.
         '''
     )
