@@ -39,6 +39,7 @@
 - Fix "Object of type Decimal is not JSON serializable" error when BigQuery queries returned numeric types in nested data structures ([#2336](https://github.com/fishtown-analytics/dbt/issues/2336), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 - No longer query the information_schema.schemata view on bigquery ([#2320](https://github.com/fishtown-analytics/dbt/issues/2320), [#2382](https://github.com/fishtown-analytics/dbt/pull/2382))
 - Add support for `sql_header` config in incremental models ([#2136](https://github.com/fishtown-analytics/dbt/issues/2136), [#2200](https://github.com/fishtown-analytics/dbt/pull/2200))
+- Add missing comma to `dbt compile` help text  ([#2388](https://github.com/fishtown-analytics/dbt/issues/2388) [#2389](https://github.com/fishtown-analytics/dbt/pull/2389))
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
@@ -52,6 +53,7 @@ Contributors:
  - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
  - [@nickwu241](https://github.com/nickwu241) [#2339](https://github.com/fishtown-analytics/dbt/issues/2339)
  - [@Fokko](https://github.com/Fokko) [#2361](https://github.com/fishtown-analytics/dbt/pull/2361)
+ - [@sethwoodworth](https://github.com/sethwoodworth) [#2389](https://github.com/fishtown-analytics/dbt/pull/2389)
 
 ## dbt 0.16.1 (April 14, 2020)
 
