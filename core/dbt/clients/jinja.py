@@ -613,11 +613,9 @@ def add_rendered_test_kwargs(
     """
     looks_like_func = r"^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$"
 
-    def _convert_function(
-        value: Any, keypath: Tuple[Union[str, int], ...]
-    ) -> Any:
+    def _convert_function(value: Any, keypath: Tuple[Union[str, int], ...]) -> Any:
         if isinstance(value, str):
-            if keypath == ('column_name',):
+            if keypath == ("column_name",):
                 # special case: Don't render column names as native, make them
                 # be strings
                 return value
