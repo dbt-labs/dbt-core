@@ -78,6 +78,7 @@
   as (
     {{ sql }}
   );
+
 {% endmacro %}
 
 {% macro create_view_as(relation, sql) -%}
@@ -280,3 +281,41 @@
 {% macro set_sql_header(config) -%}
   {{ config.set('sql_header', caller()) }}
 {%- endmacro %}
+
+
+{%- macro set_relation_comment(relation) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+  {%- set comment = get_relation_comment(raw_persist_docs, model) -%}
+  {%- if comment is not none -%}
+    {{ alter_relation_comment(relation, comment) }}
+  {%- endif -%}
+{%- endmacro -%}
+
+
+{%- macro set_column_comments(relation) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+  {%- set column_dict = get_relation_column_comments(raw_persist_docs, model) -%}
+  {%- if column_dict is not none -%}
+    {{ alter_column_comment(relation, column_dict) }}
+  {%- endif -%}
+{%- endmacro -%}
+
+
+{# copy+pasted from the snowflake PR - delete these 4 on merge #}
+{% macro alter_column_comment(relation, column_dict) -%}
+  {{ return(adapter_macro('alter_column_comment', relation, column_dict)) }}
+{% endmacro %}
+
+{% macro default__alter_column_comment(relation, column_dict) -%}
+  {{ exceptions.raise_not_implemented(
+    'alter_column_comment macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+
+{% macro alter_relation_comment(relation, relation_comment) -%}
+  {{ return(adapter_macro('alter_relation_comment', relation, relation_comment)) }}
+{% endmacro %}
+
+{% macro default__alter_relation_comment(relation, relation_comment) -%}
+  {{ exceptions.raise_not_implemented(
+    'alter_relation_comment macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
