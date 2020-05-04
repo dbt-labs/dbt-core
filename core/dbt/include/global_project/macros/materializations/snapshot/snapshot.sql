@@ -182,9 +182,7 @@
   {% if not target_relation_exists %}
 
       {% set build_sql = build_snapshot_table(strategy, model['injected_sql']) %}
-      {% call statement('main') -%}
-          {{ create_table_as(False, target_relation, build_sql) }}
-      {% endcall %}
+      {% set final_sql = create_table_as(False, target_relation, build_sql) %}
 
   {% else %}
 
@@ -217,16 +215,18 @@
         {% do quoted_source_columns.append(adapter.quote(column.name)) %}
       {% endfor %}
 
-      {% call statement('main') %}
-          {{ snapshot_merge_sql(
-                target = target_relation,
-                source = staging_table,
-                insert_cols = quoted_source_columns
-             )
-          }}
-      {% endcall %}
+      {% set final_sql = snapshot_merge_sql(
+            target = target_relation,
+            source = staging_table,
+            insert_cols = quoted_source_columns
+         )
+      %}
 
   {% endif %}
+
+  {% call statement('main') %}
+      {{ final_sql }}
+  {% endcall %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
