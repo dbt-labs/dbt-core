@@ -42,6 +42,8 @@
 - Add support for `sql_header` config in incremental models ([#2136](https://github.com/fishtown-analytics/dbt/issues/2136), [#2200](https://github.com/fishtown-analytics/dbt/pull/2200))
 - The ambiguous alias check now examines the node's database value as well as the schema/identifier ([#2326](https://github.com/fishtown-analytics/dbt/issues/2326), [#2387](https://github.com/fishtown-analytics/dbt/pull/2387))
 - Postgres array types can now be returned via `run_query` macro calls ([#2337](https://github.com/fishtown-analytics/dbt/issues/2337), [#2376](https://github.com/fishtown-analytics/dbt/pull/2376))
+- Fix for non-atomic snapshot staging table creation ([#1884](https://github.com/fishtown-analytics/dbt/issues/1884), [#2390](https://github.com/fishtown-analytics/dbt/pull/2390))
+- Fix for snapshot errors when strategy changes from `check` to `timestamp` between runs ([#2350](https://github.com/fishtown-analytics/dbt/issues/2350), [#2391](https://github.com/fishtown-analytics/dbt/pull/2391))
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
