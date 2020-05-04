@@ -20,6 +20,9 @@ from dbt.version import __version__ as dbt_version
 from hologram.helpers import StrEnum
 
 
+BQ_QUERY_JOB_SPLIT = '-----Query Job SQL Follows-----'
+
+
 class Priority(StrEnum):
     Interactive = 'interactive'
     Batch = 'batch'
@@ -95,7 +98,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise RuntimeException(str(e))
+            exc_message = str(e)
+            # the google bigquery library likes to add the query log, which we
+            # don't want to log. Hopefully they never change this!
+            if BQ_QUERY_JOB_SPLIT in exc_message:
+                exc_message = exc_message.split(BQ_QUERY_JOB_SPLIT)[0].strip()
+            raise RuntimeException(exc_message)
 
     def cancel_open(self) -> None:
         pass
