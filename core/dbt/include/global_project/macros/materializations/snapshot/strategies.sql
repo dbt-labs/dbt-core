@@ -67,8 +67,17 @@
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = config['updated_at'] %}
 
+    {#/*
+        The snapshot relation might not have an {{ updated_at }} value if the
+        snapshot strategy is changed from `check` to `timestamp`. We
+        should use a dbt-created column for the comparison in the snapshot
+        table instead of assuming that the user-supplied {{ updated_at }}
+        will be present in the historical data.
+
+        See https://github.com/fishtown-analytics/dbt/issues/2350
+    */ #}
     {% set row_changed_expr -%}
-        ({{ snapshotted_rel }}.{{ updated_at }} < {{ current_rel }}.{{ updated_at }})
+        ({{ snapshotted_rel }}.dbt_valid_from < {{ current_rel }}.{{ updated_at }})
     {%- endset %}
 
     {% set scd_id_expr = snapshot_hash_arguments([primary_key, updated_at]) %}
@@ -126,7 +135,7 @@
         select {{ snapshot_get_time() }} as snapshot_start
     {%- endset %}
 
-    {# don't access the column by name, to avoid dealing with casing issues on snowflake #}
+    {#-- don't access the column by name, to avoid dealing with casing issues on snowflake #}
     {%- set now = run_query(select_current_time)[0][0] -%}
     {% if now is none or now is undefined -%}
         {%- do exceptions.raise_compiler_error('Could not get a snapshot start time from the database') -%}
