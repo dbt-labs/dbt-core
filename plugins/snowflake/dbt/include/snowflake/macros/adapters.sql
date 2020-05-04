@@ -41,6 +41,7 @@
     {%- endif -%}
     -- add in comments
 
+    {% set relation = relation.incorporate(type='table') %}
     {% if relation_comment is not none -%}
       {{ alter_relation_comment(relation, relation_comment) }}
     {%- endif -%}
@@ -65,6 +66,7 @@
     {{ sql }}
   );
 
+  {%- set relation = relation.incorporate(type='view') -%}
   {% if relation_comment is not none -%}
     {{ alter_relation_comment(relation, relation_comment) }}
   {%- endif -%}
