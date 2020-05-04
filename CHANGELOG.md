@@ -39,6 +39,7 @@
 - On `run_cli` API calls that are passed `--vars` differing from the server's `--vars`, the RPC server rebuilds the manifest for that call. ([#2265](https://github.com/fishtown-analytics/dbt/issues/2265), [#2363](https://github.com/fishtown-analytics/dbt/pull/2363))
 - Fix "Object of type Decimal is not JSON serializable" error when BigQuery queries returned numeric types in nested data structures ([#2336](https://github.com/fishtown-analytics/dbt/issues/2336), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 - No longer query the information_schema.schemata view on bigquery ([#2320](https://github.com/fishtown-analytics/dbt/issues/2320), [#2382](https://github.com/fishtown-analytics/dbt/pull/2382))
+- Preserve original subdirectory structure in compiled files. ([#2173](https://github.com/fishtown-analytics/dbt/issues/2173), [#2349](https://github.com/fishtown-analytics/dbt/pull/2349))
 - Add support for `sql_header` config in incremental models ([#2136](https://github.com/fishtown-analytics/dbt/issues/2136), [#2200](https://github.com/fishtown-analytics/dbt/pull/2200))
 - The ambiguous alias check now examines the node's database value as well as the schema/identifier ([#2326](https://github.com/fishtown-analytics/dbt/issues/2326), [#2387](https://github.com/fishtown-analytics/dbt/pull/2387))
 - Postgres array types can now be returned via `run_query` macro calls ([#2337](https://github.com/fishtown-analytics/dbt/issues/2337), [#2376](https://github.com/fishtown-analytics/dbt/pull/2376))
@@ -58,6 +59,7 @@ Contributors:
  - [@sumanau7](https://github.com/sumanau7) ([#2279](https://github.com/fishtown-analytics/dbt/pull/2279), [#2263](https://github.com/fishtown-analytics/dbt/pull/2263), [#2297](https://github.com/fishtown-analytics/dbt/pull/2297))
  - [@nickwu241](https://github.com/nickwu241) [#2339](https://github.com/fishtown-analytics/dbt/issues/2339)
  - [@Fokko](https://github.com/Fokko) [#2361](https://github.com/fishtown-analytics/dbt/pull/2361)
+ - [@franloza](https://github.com/franloza) [#2349](https://github.com/fishtown-analytics/dbt/pull/2349)
  - [@sethwoodworth](https://github.com/sethwoodworth) [#2389](https://github.com/fishtown-analytics/dbt/pull/2389)
 
 ## dbt 0.16.1 (April 14, 2020)

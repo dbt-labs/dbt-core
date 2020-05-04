@@ -158,8 +158,15 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     build_path: Optional[str] = None
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
+        if (os.path.basename(self.path) ==
+                os.path.basename(self.original_file_path)):
+            # One-to-one relationship of nodes to files.
+            path = self.original_file_path
+        else:
+            #  Many-to-one relationship of nodes to files.
+            path = os.path.join(self.original_file_path, self.path)
         full_path = os.path.join(
-            target_path, subdirectory, self.package_name, self.path
+            target_path, subdirectory, self.package_name, path
         )
 
         write_file(full_path, payload)
