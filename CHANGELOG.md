@@ -22,6 +22,7 @@
 - Sources (and therefore freshness tests) can be enabled and disabled via dbt_project.yml ([#2283](https://github.com/fishtown-analytics/dbt/issues/2283), [#2312](https://github.com/fishtown-analytics/dbt/pull/2312), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - schema.yml files are now fully rendered in a context that is aware of vars declared in from dbt_project.yml files ([#2269](https://github.com/fishtown-analytics/dbt/issues/2269), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Sources from dependencies can be overridden in schema.yml files ([#2287](https://github.com/fishtown-analytics/dbt/issues/2287), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
+- Implement persist_docs for both `relation` and `comments` on postgres and redshift, and extract them when getting the catalog. ([#2333](https://github.com/fishtown-analytics/dbt/issues/2333), [#2378](https://github.com/fishtown-analytics/dbt/pull/2378))
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
@@ -39,6 +40,8 @@
 - Fix "Object of type Decimal is not JSON serializable" error when BigQuery queries returned numeric types in nested data structures ([#2336](https://github.com/fishtown-analytics/dbt/issues/2336), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 - No longer query the information_schema.schemata view on bigquery ([#2320](https://github.com/fishtown-analytics/dbt/issues/2320), [#2382](https://github.com/fishtown-analytics/dbt/pull/2382))
 - Add support for `sql_header` config in incremental models ([#2136](https://github.com/fishtown-analytics/dbt/issues/2136), [#2200](https://github.com/fishtown-analytics/dbt/pull/2200))
+- The ambiguous alias check now examines the node's database value as well as the schema/identifier ([#2326](https://github.com/fishtown-analytics/dbt/issues/2326), [#2387](https://github.com/fishtown-analytics/dbt/pull/2387))
+- Postgres array types can now be returned via `run_query` macro calls ([#2337](https://github.com/fishtown-analytics/dbt/issues/2337), [#2376](https://github.com/fishtown-analytics/dbt/pull/2376))
 - Add missing comma to `dbt compile` help text  ([#2388](https://github.com/fishtown-analytics/dbt/issues/2388) [#2389](https://github.com/fishtown-analytics/dbt/pull/2389))
 
 ### Under the hood

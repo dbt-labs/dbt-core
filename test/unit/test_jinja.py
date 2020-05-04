@@ -313,13 +313,19 @@ class TestBlockLexer(unittest.TestCase):
         body = '{% snapshot foo %}select * from thing{% endsnapshot%}{% endif %}'
         with self.assertRaises(CompilationException) as err:
             extract_toplevel_blocks(body)
-        self.assertIn('Got an unexpected control flow end tag, got endif but never saw a preceeding if (@ 53)', str(err.exception))
+        self.assertIn('Got an unexpected control flow end tag, got endif but never saw a preceeding if (@ 1:53)', str(err.exception))
 
     def test_if_endfor(self):
         body = '{% if x %}...{% endfor %}{% endif %}'
         with self.assertRaises(CompilationException) as err:
             extract_toplevel_blocks(body)
-        self.assertIn('Got an unexpected control flow end tag, got endfor but expected endif next (@ 13)', str(err.exception))
+        self.assertIn('Got an unexpected control flow end tag, got endfor but expected endif next (@ 1:13)', str(err.exception))
+
+    def test_if_endfor_newlines(self):
+        body = '{% if x %}\n    ...\n    {% endfor %}\n{% endif %}'
+        with self.assertRaises(CompilationException) as err:
+            extract_toplevel_blocks(body)
+        self.assertIn('Got an unexpected control flow end tag, got endfor but expected endif next (@ 3:4)', str(err.exception))
 
 
 bar_block = '''{% mytype bar %}

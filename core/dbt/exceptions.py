@@ -741,14 +741,15 @@ def raise_duplicate_resource_name(node_1, node_2):
             node_2.unique_id, node_2.original_file_path))
 
 
-def raise_ambiguous_alias(node_1, node_2):
-    duped_name = "{}.{}".format(node_1.schema, node_1.alias)
+def raise_ambiguous_alias(node_1, node_2, duped_name=None):
+    if duped_name is None:
+        duped_name = f"{node_1.database}.{node_1.schema}.{node_1.alias}"
 
     raise_compiler_error(
         'dbt found two resources with the database representation "{}".\ndbt '
         'cannot create two resources with identical database representations. '
-        'To fix this,\nchange the "schema" or "alias" configuration of one of '
-        'these resources:\n- {} ({})\n- {} ({})'.format(
+        'To fix this,\nchange the configuration of one of these resources:'
+        '\n- {} ({})\n- {} ({})'.format(
             duped_name,
             node_1.unique_id, node_1.original_file_path,
             node_2.unique_id, node_2.original_file_path))
