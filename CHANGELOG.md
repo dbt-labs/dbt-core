@@ -24,6 +24,8 @@
 - Sources from dependencies can be overridden in schema.yml files ([#2287](https://github.com/fishtown-analytics/dbt/issues/2287), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Implement persist_docs for both `relation` and `comments` on postgres and redshift, and extract them when getting the catalog. ([#2333](https://github.com/fishtown-analytics/dbt/issues/2333), [#2378](https://github.com/fishtown-analytics/dbt/pull/2378))
 - Added a filter named `as_text` to the native environment rendering code that allows users to mark a value as always being a string ([#2384](https://github.com/fishtown-analytics/dbt/issues/2384), [#2395](https://github.com/fishtown-analytics/dbt/pull/2395))
+- Relation comments supported for Snowflake tables and views. Column comments supported for tables. ([#1722](https://github.com/fishtown-analytics/dbt/issues/1722), [#2321](https://github.com/fishtown-analytics/dbt/pull/2321))
+
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
@@ -63,6 +65,7 @@ Contributors:
  - [@Fokko](https://github.com/Fokko) [#2361](https://github.com/fishtown-analytics/dbt/pull/2361)
  - [@franloza](https://github.com/franloza) [#2349](https://github.com/fishtown-analytics/dbt/pull/2349)
  - [@sethwoodworth](https://github.com/sethwoodworth) [#2389](https://github.com/fishtown-analytics/dbt/pull/2389)
+ - [@snowflakeseitz](https://github.com/snowflakeseitz) [#2321](https://github.com/fishtown-analytics/dbt/pull/2321)
 
 ## dbt 0.16.1 (April 14, 2020)
 
