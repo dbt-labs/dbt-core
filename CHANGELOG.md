@@ -51,6 +51,7 @@
 
 ### Under the hood
 - Added more tests for source inheritance ([#2264](https://github.com/fishtown-analytics/dbt/issues/2264), [#2291](https://github.com/fishtown-analytics/dbt/pull/2291))
+- Update documentation website for 0.17.0 ([#2284](https://github.com/fishtown-analytics/dbt/issues/2284))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2224](https://github.com/fishtown-analytics/dbt/pull/2224), [#2228](https://github.com/fishtown-analytics/dbt/pull/2228))
