@@ -1,0 +1,21 @@
+models:
+  - name: view_test
+    description: >
+      View - "money" aka $$$$$
+    columns:
+      - name: column1
+        description: test 1 - abcd "" $$$ '' 
+
+  - name: incremental_test
+    description: >
+      Incremental - "money" aka $$$$$
+    columns:
+      - name: column1
+        description: test 1 - abcd "" $$$ '' 
+
+  - name: table_test
+    description: >
+      Table - "money" aka $$$$$
+    columns:
+      - name: column1
+        description: test 1 - abcd "" $$$ '' 
