@@ -151,6 +151,19 @@
     'alter_relation_comment macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
+{% macro persist_docs(relation, model, for_relation=true, for_columns=true) -%}
+  {{ return(adapter_macro('persist_docs', relation, model, for_relation, for_columns)) }}
+{% endmacro %}
+
+{% macro default__persist_docs(relation, model, for_relation, for_columns) -%}
+  {% if for_relation and config.persist_relation_docs() %}
+    {% do run_query(alter_relation_comment(relation, model.description)) %}
+  {% endif %}
+
+  {% if for_columns and config.persist_column_docs() %}
+    {% do run_query(alter_column_comment(relation, model.columns)) %}
+  {% endif %}
+{% endmacro %}
 
 
 
@@ -304,22 +317,3 @@
 {% macro set_sql_header(config) -%}
   {{ config.set('sql_header', caller()) }}
 {%- endmacro %}
-
-
-{%- macro set_relation_comment(relation) -%}
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
-  {%- set comment = get_relation_comment(raw_persist_docs, model) -%}
-  {%- if comment is not none -%}
-    {{ alter_relation_comment(relation, comment) }}
-  {%- endif -%}
-{%- endmacro -%}
-
-
-{%- macro set_column_comments(relation) -%}
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
-  {%- set column_dict = get_relation_column_comments(raw_persist_docs, model) -%}
-  {%- if column_dict is not none -%}
-    {{ alter_column_comment(relation, column_dict) }}
-  {%- endif -%}
-{%- endmacro -%}
-
