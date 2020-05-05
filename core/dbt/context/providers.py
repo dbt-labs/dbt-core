@@ -362,22 +362,24 @@ class RuntimeConfigObject(Config):
         return to_return
 
     def persist_relation_docs(self) -> bool:
-        persist_docs = self.get('persist_docs', default={})
+        persist_docs = self.get("persist_docs", default={})
         if not isinstance(persist_docs, dict):
             raise_compiler_error(
                 f"Invalid value provided for 'persist_docs'. Expected dict "
-                f"but received {type(persist_docs)}")
+                f"but received {type(persist_docs)}"
+            )
 
-        return persist_docs.get('relation', False)
+        return persist_docs.get("relation", False)
 
     def persist_column_docs(self) -> bool:
-        persist_docs = self.get('persist_docs', default={})
+        persist_docs = self.get("persist_docs", default={})
         if not isinstance(persist_docs, dict):
             raise_compiler_error(
                 f"Invalid value provided for 'persist_docs'. Expected dict "
-                f"but received {type(persist_docs)}")
+                f"but received {type(persist_docs)}"
+            )
 
-        return persist_docs.get('columns', False)
+        return persist_docs.get("columns", False)
 
 
 # `adapter` implementations
