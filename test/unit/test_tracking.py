@@ -44,7 +44,8 @@ class TestTracking(unittest.TestCase):
         assert isinstance(dbt.tracking.active_user.invocation_id, str)
         assert isinstance(dbt.tracking.active_user.run_started_at, datetime.datetime)
         assert dbt.tracking.active_user.invocation_id != invocation_id
-        assert dbt.tracking.active_user.run_started_at != run_started_at
+        # if you use `!=`, you might hit a race condition (especially on windows)
+        assert dbt.tracking.active_user.run_started_at is not run_started_at
 
     def test_tracking_never_ok(self):
         assert dbt.tracking.active_user is None
