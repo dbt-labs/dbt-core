@@ -1,4 +1,9 @@
-## dbt next (release TBD)
+## dbt 0.17.0 (Release TBD)
+
+### Fixes
+- When tracking is disabled due to errors, do not reset the invocation ID ([#2398](https://github.com/fishtown-analytics/dbt/issues/2398), [#2400](https://github.com/fishtown-analytics/dbt/pull/2400))
+
+## dbt 0.17.0b1 (May 5, 2020)
 
 ### Breaking changes
 - Added a new dbt_project.yml version format. This emits a deprecation warning currently, but support for the existing version will be removed in a future dbt version ([#2300](https://github.com/fishtown-analytics/dbt/issues/2300), [#2312](https://github.com/fishtown-analytics/dbt/pull/2312))
