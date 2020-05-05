@@ -44,7 +44,7 @@ class TimeoutEmitter(Emitter):
         # num_ok will always be 0, unsent will always be 1 entry long, because
         # the buffer is length 1, so not much to talk about
         logger.warning('Error sending message, disabling tracking')
-        do_not_track()
+        disable_tracking()
 
     def _log_request(self, request, payload):
         sp_logger.info(f"Sending {request} request to {self.endpoint}...")
@@ -111,6 +111,12 @@ class User:
         subject = Subject()
         subject.set_user_id(self.id)
         tracker.set_subject(subject)
+
+    def disable_tracking(self):
+        self.do_not_track = True
+        self.id = None
+        self.cookie_dir = None
+        tracker.set_subject(None)
 
     def set_cookie(self):
         # If the user points dbt to a profile directory which exists AND
@@ -362,6 +368,14 @@ def track_invalid_invocation(
 def flush():
     logger.debug("Flushing usage events")
     tracker.flush()
+
+
+def disable_tracking():
+    global active_user
+    if active_user is not None:
+        active_user.disable_tracking()
+    else:
+        active_user = User(None)
 
 
 def do_not_track():
