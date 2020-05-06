@@ -142,7 +142,7 @@
 
 
 {% macro bigquery__list_schemas(database) -%}
-  {{ return(adapter.list_schemas()) }}
+  {{ return(adapter.list_schemas(database)) }}
 {% endmacro %}
 
 
