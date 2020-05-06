@@ -3,6 +3,7 @@
 ### Fixes
 - When tracking is disabled due to errors, do not reset the invocation ID ([#2398](https://github.com/fishtown-analytics/dbt/issues/2398), [#2400](https://github.com/fishtown-analytics/dbt/pull/2400))
 - Fix for logic error in compilation errors for duplicate data test names ([#2406](https://github.com/fishtown-analytics/dbt/issues/2406), [#2407](https://github.com/fishtown-analytics/dbt/pull/2407))
+- Fix list_schemas macro failing for BigQuery ([#2406](https://github.com/fishtown-analytics/dbt/issues/2398), [#2413](https://github.com/fishtown-analytics/dbt/issues/2413))
 
 ## dbt 0.17.0b1 (May 5, 2020)
 
