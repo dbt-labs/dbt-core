@@ -184,7 +184,7 @@ class SQLAdapter(BaseAdapter):
         relation = relation.without_identifier()
         fire_event(SchemaCreation(relation=_make_key(relation)))
         kwargs = {
-            'relation': relation,
+            "relation": relation,
         }
         self.execute_macro(CREATE_SCHEMA_MACRO_NAME, kwargs=kwargs)
         self.commit_if_has_connection()
@@ -195,16 +195,17 @@ class SQLAdapter(BaseAdapter):
         relation = relation.without_identifier()
         fire_event(SchemaDrop(relation=_make_key(relation)))
         kwargs = {
-            'relation': relation,
+            "relation": relation,
         }
         self.execute_macro(DROP_SCHEMA_MACRO_NAME, kwargs=kwargs)
         # we can update the cache here
         self.cache.drop_schema(relation.database, relation.schema)
 
     def list_relations_without_caching(
-        self, schema_relation: BaseRelation,
+        self,
+        schema_relation: BaseRelation,
     ) -> List[BaseRelation]:
-        kwargs = {'schema_relation': schema_relation}
+        kwargs = {"schema_relation": schema_relation}
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
             kwargs=kwargs

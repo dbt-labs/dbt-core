@@ -154,7 +154,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def information_schema_only(self) -> "InformationSchema":
         return self.information_schema()
 
-    def without_identifier(self) -> 'BaseRelation':
+    def without_identifier(self) -> "BaseRelation":
         """Return a form of this relation that only has the database and schema
         set to included. To get the appropriately-quoted form the schema out of
         the result (for use as part of a query), use `.render()`. To get the
@@ -427,9 +427,7 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
             schema = relation.schema.lower()
         self[key].add(schema)
 
-    def search(
-        self
-    ) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
+    def search(self) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
         for information_schema_name, schemas in self.items():
             for schema in schemas:
                 yield information_schema_name, schema

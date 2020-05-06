@@ -659,7 +659,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
         relations = self.list_relations_without_caching(
-            schema_relation
+        fire_event(
+            ListRelations(
+                database=database, schema=schema, relations=[_make_key(x) for x in relations]
+            )
         )
 
         return relations
