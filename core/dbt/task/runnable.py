@@ -475,9 +475,7 @@ class GraphRunnableTask(ManifestTask):
         ]
         return len(failures) == 0
 
-    def get_model_schemas(
-        self, adapter, selected_uids: Iterable[str]
-    ) -> Set[BaseRelation]:
+    def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
             raise InternalException("manifest was None in get_model_schemas")
         result: Set[BaseRelation] = set()
