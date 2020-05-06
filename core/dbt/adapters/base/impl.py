@@ -506,9 +506,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
     @abc.abstractmethod
-    def list_relations_without_caching(
-        self, schema_relation: BaseRelation
-    ) -> List[BaseRelation]:
+    def list_relations_without_caching(self, schema_relation: BaseRelation) -> List[BaseRelation]:
         """List relations in the given schema, bypassing the cache.
 
         This is used as the underlying behavior to fill the cache.
