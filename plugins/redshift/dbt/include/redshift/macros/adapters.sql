@@ -66,13 +66,13 @@
 {% endmacro %}
 
 
-{% macro redshift__create_schema(database_name, schema_name) -%}
-  {{ postgres__create_schema(database_name, schema_name) }}
+{% macro redshift__create_schema(relation) -%}
+  {{ postgres__create_schema(relation) }}
 {% endmacro %}
 
 
-{% macro redshift__drop_schema(database_name, schema_name) -%}
-  {{ postgres__drop_schema(database_name, schema_name) }}
+{% macro redshift__drop_schema(relation) -%}
+  {{ postgres__drop_schema(relation) }}
 {% endmacro %}
 
 
@@ -153,8 +153,8 @@
 {% endmacro %}
 
 
-{% macro redshift__list_relations_without_caching(information_schema, schema) %}
-  {{ return(postgres__list_relations_without_caching(information_schema, schema)) }}
+{% macro redshift__list_relations_without_caching(schema_relation) %}
+  {{ return(postgres__list_relations_without_caching(schema_relation)) }}
 {% endmacro %}
 
 

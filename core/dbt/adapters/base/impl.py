@@ -278,9 +278,18 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             return True
 
-    def _get_cache_schemas(
-        self, manifest: Manifest, exec_only: bool = False
-    ) -> SchemaSearchMap:
+    def _get_cache_schemas(self, manifest: Manifest) -> Set[BaseRelation]:
+        """Get the set of schema relations that the cache logic needs to
+        populate. This means only executable nodes are included.
+        """
+        # the cache only cares about executable nodes
+        return {
+            self.Relation.create_from(self.config, node).without_identifier()
+            for node in manifest.nodes.values()
+            if node.resource_type in NodeType.executable()
+        }
+
+    def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
         """Get a mapping of each node's "information_schema" relations to a
         set of all schemas expected in that information_schema.
 
@@ -295,8 +304,6 @@ class BaseAdapter(metaclass=AdapterMeta):
             manifest.sources.values(),
         )
         for node in nodes:
-            if exec_only and node.resource_type not in NodeType.executable():
-                continue
             relation = self.Relation.create_from(self.config, node)
             info_schema_name_map.add(relation)
         # result is a map whose keys are information_schema Relations without
@@ -306,10 +313,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         return info_schema_name_map
 
     def _list_relations_get_connection(
-        self, db: BaseRelation, schema: str
+        self, schema_relation: BaseRelation
     ) -> List[BaseRelation]:
-        with self.connection_named(f'list_{db.database}_{schema}'):
-            return self.list_relations_without_caching(db, schema)
+        name = f'list_{schema_relation.database}_{schema_relation.schema}'
+        with self.connection_named(name):
+            return self.list_relations_without_caching(schema_relation)
 
     def _relations_cache_for_schemas(self, manifest: Manifest) -> None:
         """Populate the relations cache for the given schemas. Returns an
@@ -318,11 +326,11 @@ class BaseAdapter(metaclass=AdapterMeta):
         if not dbt.flags.USE_CACHE:
             return
 
-        schema_map = self._get_cache_schemas(manifest, exec_only=True)
+        cache_schemas = self._get_cache_schemas(manifest)
         with executor(self.config) as tpe:
             futures: List[Future[List[BaseRelation]]] = [
-                tpe.submit(self._list_relations_get_connection, db, schema)
-                for db, schema in schema_map.search()
+                tpe.submit(self._list_relations_get_connection, cache_schema)
+                for cache_schema in cache_schemas
             ]
             for future in as_completed(futures):
                 # if we can't read the relations we need to just raise anyway,
@@ -333,7 +341,14 @@ class BaseAdapter(metaclass=AdapterMeta):
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        self.cache.update_schemas(schema_map.schemas_searched())
+        cache_update: Set[Tuple[str, Optional[str]]] = set()
+        for relation in cache_schemas:
+            if relation.database is None:
+                raise InternalException(
+                    'Got a None database in a cached schema!'
+                )
+            cache_update.add((relation.database, relation.schema))
+        self.cache.update_schemas(cache_update)
 
     def set_relations_cache(
         self, manifest: Manifest, clear: bool = False
@@ -512,15 +527,14 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractmethod
     def list_relations_without_caching(
-        self, information_schema: BaseRelation, schema: str
+        self, schema_relation: BaseRelation
     ) -> List[BaseRelation]:
         """List relations in the given schema, bypassing the cache.
 
         This is used as the underlying behavior to fill the cache.
 
-        :param Relation information_schema: The information schema to list
-            relations from.
-        :param str schema: The name of the schema to list relations from.
+        :param schema_relation: A relation containing the database and schema
+            as appropraite for the underlying data warehouse
         :return: The relations in schema
         :rtype: List[self.Relation]
         """
@@ -636,17 +650,17 @@ class BaseAdapter(metaclass=AdapterMeta):
         if self._schema_is_cached(database, schema):
             return self.cache.get_relations(database, schema)
 
-        information_schema = self.Relation.create(
+        schema_relation = self.Relation.create(
             database=database,
             schema=schema,
             identifier='',
             quote_policy=self.config.quoting
-        ).information_schema()
+        ).without_identifier()
 
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
         relations = self.list_relations_without_caching(
-            information_schema, schema
+            schema_relation
         )
 
         logger.debug('with database={}, schema={}, relations={}'
@@ -727,7 +741,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     @abc.abstractmethod
     @available.parse_none
-    def create_schema(self, database: str, schema: str):
+    def create_schema(self, relation: BaseRelation):
         """Create the given schema if it does not exist."""
         raise NotImplementedException(
             '`create_schema` is not implemented for this adapter!'
@@ -735,7 +749,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractmethod
     @available.parse_none
-    def drop_schema(self, database: str, schema: str):
+    def drop_schema(self, relation: BaseRelation):
         """Drop the given schema (and everything in it) if it exists."""
         raise NotImplementedException(
             '`drop_schema` is not implemented for this adapter!'
@@ -1014,7 +1028,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def get_catalog(
         self, manifest: Manifest
     ) -> Tuple[agate.Table, List[Exception]]:
-        schema_map = self._get_cache_schemas(manifest)
+        schema_map = self._get_catalog_schemas(manifest)
 
         with executor(self.config) as tpe:
             futures: List[Future[agate.Table]] = [

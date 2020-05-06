@@ -466,7 +466,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _create_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery':
-            self.adapter.create_schema(database, schema)
+            relation = self.adapter.Relation.create(database=database, schema=schema)
+            self.adapter.create_schema(relation)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.CREATE_SCHEMA_STATEMENT.format(schema_fqn))
@@ -474,7 +475,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
-            self.adapter.drop_schema(database, schema)
+            relation = self.adapter.Relation.create(database=database, schema=schema)
+            self.adapter.drop_schema(relation)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.DROP_SCHEMA_STATEMENT.format(schema_fqn))

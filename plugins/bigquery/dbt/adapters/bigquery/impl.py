@@ -12,9 +12,7 @@ import dbt.links
 from dbt.adapters.base import (
     BaseAdapter, available, RelationType, SchemaSearchMap, AdapterConfig
 )
-from dbt.adapters.bigquery.relation import (
-    BigQueryRelation, BigQueryInformationSchema
-)
+from dbt.adapters.bigquery.relation import BigQueryRelation
 from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
@@ -215,13 +213,13 @@ class BigQueryAdapter(BaseAdapter):
         pass
 
     def list_relations_without_caching(
-        self, information_schema: BigQueryInformationSchema, schema: str
+        self, schema_relation: BigQueryRelation
     ) -> List[BigQueryRelation]:
         connection = self.connections.get_thread_connection()
         client = connection.handle
 
         bigquery_dataset = self.connections.dataset(
-            information_schema.database, information_schema.schema, connection
+            schema_relation.database, schema_relation.schema, connection
         )
 
         all_tables = client.list_tables(
@@ -261,11 +259,15 @@ class BigQueryAdapter(BaseAdapter):
             table = None
         return self._bq_table_to_relation(table)
 
-    def create_schema(self, database: str, schema: str) -> None:
+    def create_schema(self, relation: BigQueryRelation) -> None:
+        database = relation.database
+        schema = relation.schema
         logger.debug('Creating schema "{}.{}".', database, schema)
         self.connections.create_dataset(database, schema)
 
-    def drop_schema(self, database: str, schema: str) -> None:
+    def drop_schema(self, relation: BigQueryRelation) -> None:
+        database = relation.database
+        schema = relation.schema
         logger.debug('Dropping schema "{}.{}".', database, schema)
         self.connections.drop_dataset(database, schema)
         self.cache.drop_schema(database, schema)
@@ -632,10 +634,8 @@ class BigQueryAdapter(BaseAdapter):
         })
         return super()._catalog_filter_table(table, manifest)
 
-    def _get_cache_schemas(
-        self, manifest: Manifest, exec_only: bool = False
-    ) -> SchemaSearchMap:
-        candidates = super()._get_cache_schemas(manifest, exec_only)
+    def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
+        candidates = super()._get_catalog_schemas(manifest)
         db_schemas: Dict[str, Set[str]] = {}
         result = SchemaSearchMap()
 

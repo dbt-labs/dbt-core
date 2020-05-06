@@ -44,23 +44,23 @@
     {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
 {% endmacro %}
 
-{% macro create_schema(database_name, schema_name) -%}
-  {{ adapter_macro('create_schema', database_name, schema_name) }}
+{% macro create_schema(relation) -%}
+  {{ adapter_macro('create_schema', relation) }}
 {% endmacro %}
 
-{% macro default__create_schema(database_name, schema_name) -%}
+{% macro default__create_schema(relation) -%}
   {%- call statement('create_schema') -%}
-    create schema if not exists {{database_name}}.{{schema_name}}
+    create schema if not exists {{ relation.without_identifier() }}
   {% endcall %}
 {% endmacro %}
 
-{% macro drop_schema(database_name, schema_name) -%}
-  {{ adapter_macro('drop_schema', database_name, schema_name) }}
+{% macro drop_schema(relation) -%}
+  {{ adapter_macro('drop_schema', relation) }}
 {% endmacro %}
 
-{% macro default__drop_schema(database_name, schema_name) -%}
+{% macro default__drop_schema(relation) -%}
   {%- call statement('drop_schema') -%}
-    drop schema if exists {{database_name}}.{{schema_name}} cascade
+    drop schema if exists {{ relation.without_identifier() }} cascade
   {% endcall %}
 {% endmacro %}
 
@@ -262,12 +262,12 @@
 {% endmacro %}
 
 
-{% macro list_relations_without_caching(information_schema, schema) %}
-  {{ return(adapter_macro('list_relations_without_caching', information_schema, schema)) }}
+{% macro list_relations_without_caching(schema_relation) %}
+  {{ return(adapter_macro('list_relations_without_caching', schema_relation)) }}
 {% endmacro %}
 
 
-{% macro default__list_relations_without_caching(information_schema, schema) %}
+{% macro default__list_relations_without_caching(schema_relation) %}
   {{ exceptions.raise_not_implemented(
     'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}

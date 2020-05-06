@@ -92,18 +92,16 @@
 {% endmacro %}
 
 
-{% macro snowflake__list_relations_without_caching(information_schema, schema) %}
-  {%- set db_name = adapter.quote_as_configured(information_schema.database, 'database') -%}
-  {%- set schema_name = adapter.quote_as_configured(schema, 'schema') -%}
+{% macro snowflake__list_relations_without_caching(schema_relation) %}
   {%- set sql -%}
-    show terse objects in {{ db_name }}.{{ schema_name }}
+    show terse objects in {{ schema_relation }}
   {%- endset -%}
 
   {%- set result = run_query(sql) -%}
   {% set maximum = 10000 %}
   {% if (result | length) >= maximum %}
     {% set msg %}
-      Too many schemas in schema {{ database }}.{{ schema }}! dbt can only get
+      Too many schemas in schema  {{ schema_relation }}! dbt can only get
       information about schemas with fewer than {{ maximum }} objects.
     {% endset %}
     {% do exceptions.raise_compiler_error(msg) %}
