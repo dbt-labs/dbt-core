@@ -494,9 +494,7 @@ class GraphRunnableTask(ManifestTask):
         # we want the string form of the information schema database
         required_databases: Set[BaseRelation] = set()
         for required in required_schemas:
-            db_only = required.include(
-                database=True, schema=False, identifier=False
-            )
+            db_only = required.include(database=True, schema=False, identifier=False)
             required_databases.add(db_only)
 
         existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]]
