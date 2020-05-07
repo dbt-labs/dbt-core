@@ -210,6 +210,12 @@ class ParseConfigObject(Config):
     def get(self, name, validator=None, default=None):
         return ''
 
+    def persist_relation_docs(self) -> bool:
+        return False
+
+    def persist_column_docs(self) -> bool:
+        return False
+
 
 class RuntimeConfigObject(Config):
     def __init__(
@@ -248,6 +254,24 @@ class RuntimeConfigObject(Config):
             self._validate(validator, to_return)
 
         return to_return
+
+    def persist_relation_docs(self) -> bool:
+        persist_docs = self.get('persist_docs', default={})
+        if not isinstance(persist_docs, dict):
+            raise_compiler_error(
+                f"Invalid value provided for 'persist_docs'. Expected dict "
+                f"but received {type(persist_docs)}")
+
+        return persist_docs.get('relation', False)
+
+    def persist_column_docs(self) -> bool:
+        persist_docs = self.get('persist_docs', default={})
+        if not isinstance(persist_docs, dict):
+            raise_compiler_error(
+                f"Invalid value provided for 'persist_docs'. Expected dict "
+                f"but received {type(persist_docs)}")
+
+        return persist_docs.get('columns', False)
 
 
 # `adapter` implementations

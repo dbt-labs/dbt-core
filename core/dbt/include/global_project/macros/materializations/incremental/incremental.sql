@@ -38,6 +38,8 @@
       {{ build_sql }}
   {% endcall %}
 
+  {% do persist_docs(target_relation, model) %}
+
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   -- `COMMIT` happens here

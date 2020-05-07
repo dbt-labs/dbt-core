@@ -49,10 +49,6 @@
   as (
     {{ sql }}
   );
-
-  {% set relation = relation.incorporate(type='table') %}
-  {{ set_relation_comment(relation) }}
-  {{ set_column_comments(relation) }}
 {%- endmacro %}
 
 
@@ -67,16 +63,6 @@
   create view {{ relation }} as (
     {{ sql }}
   ) {{ bind_qualifier }};
-
-  {#
-    For late-binding views, it's possible to set comments on the view (though they don't seem to end up anywhere).
-    Unfortunately, setting comments on columns just results in an error.
-  #}
-  {% set relation = relation.incorporate(type='view') %}
-  {{ set_relation_comment(relation) }}
-  {% if binding %}
-    {{ set_column_comments(relation) }}
-  {% endif %}
 {% endmacro %}
 
 
@@ -202,6 +188,19 @@
 
 {% macro redshift__make_temp_relation(base_relation, suffix) %}
     {% do return(postgres__make_temp_relation(base_relation, suffix)) %}
+{% endmacro %}
+
+
+{% macro redshift__persist_docs(relation, model, for_relation, for_columns) -%}
+  {% if for_relation and config.persist_relation_docs() %}
+    {% do run_query(alter_relation_comment(relation, model.description)) %}
+  {% endif %}
+
+  {# Override: do not set column comments for LBVs #}
+  {% set is_lbv = config.get('materialized') == 'view' and config.get('bind') == false %}
+  {% if for_columns and config.persist_column_docs() and not is_lbv %}
+    {% do run_query(alter_column_comment(relation, model.columns)) %}
+  {% endif %}
 {% endmacro %}
 
 
