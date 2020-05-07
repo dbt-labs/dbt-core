@@ -28,8 +28,20 @@ import google.oauth2
 import google.cloud.exceptions
 import google.cloud.bigquery
 
+from google.cloud.bigquery import SchemaField
+
 import time
 import agate
+import json
+
+
+def sql_escape(string):
+    if not isinstance(string, str):
+        dbt.exceptions.raise_compiler_exception(
+            f'cannot escape a non-string: {string}'
+        )
+
+    return json.dumps(string)[1:-1]
 
 
 @dataclass
@@ -320,16 +332,14 @@ class BigQueryAdapter(BaseAdapter):
 
     def _agate_to_schema(
         self, agate_table: agate.Table, column_override: Dict[str, str]
-    ) -> List[google.cloud.bigquery.SchemaField]:
+    ) -> List[SchemaField]:
         """Convert agate.Table with column names to a list of bigquery schemas.
         """
         bq_schema = []
         for idx, col_name in enumerate(agate_table.column_names):
             inferred_type = self.convert_agate_type(agate_table, idx)
             type_ = column_override.get(col_name, inferred_type)
-            bq_schema.append(
-                google.cloud.bigquery.SchemaField(col_name, type_)
-            )
+            bq_schema.append(SchemaField(col_name, type_))
         return bq_schema
 
     def _materialize_as_view(self, model: Dict[str, Any]) -> str:
@@ -545,6 +555,33 @@ class BigQueryAdapter(BaseAdapter):
         """
         return PartitionConfig.parse(raw_partition_by)
 
+    def get_table_ref_from_relation(self, conn, relation):
+        return self.connections.table_ref(relation.database,
+                                          relation.schema,
+                                          relation.identifier,
+                                          conn)
+
+    @available.parse_none
+    def update_column_descriptions(self, relation, columns):
+        if len(columns) == 0:
+            return
+
+        conn = self.connections.get_thread_connection()
+        table_ref = self.get_table_ref_from_relation(conn, relation)
+        table = conn.handle.get_table(table_ref)
+
+        new_schema = []
+        for column in table.schema:
+            if column.name in columns:
+                column_config = columns[column.name]
+                column_dict = column.to_api_repr()
+                column_dict['description'] = column_config.get('description')
+                column = SchemaField.from_api_repr(column_dict)
+            new_schema.append(column)
+
+        new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
+        conn.handle.update_table(new_table, ['schema'])
+
     @available.parse_none
     def alter_table_add_columns(self, relation, columns):
 
@@ -614,3 +651,25 @@ class BigQueryAdapter(BaseAdapter):
                     .format(database, candidate.schema)
                 )
         return result
+
+    @available.parse(lambda *a, **k: {})
+    def get_table_options(
+        self, config: Dict[str, Any], node: Dict[str, Any], temporary: bool
+    ) -> Dict[str, Any]:
+        opts = {}
+        if temporary:
+            expiration = 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'
+            opts['expiration_timestamp'] = expiration
+
+        if config.persist_relation_docs() and 'description' in node:
+            description = sql_escape(node['description'])
+            opts['description'] = '"""{}"""'.format(description)
+
+        if config.get('kms_key_name') is not None:
+            opts['kms_key_name'] = "'{}'".format(config.get('kms_key_name'))
+
+        if config.get('labels'):
+            labels = config.get('labels', {})
+            opts['labels'] = list(labels.items())
+
+        return opts

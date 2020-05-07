@@ -122,3 +122,30 @@ class TestPersistDocsLateBinding(BasePersistDocsTest):
 
         view_node = catalog_data['nodes']['model.test.view_model']
         self._assert_has_view_comments(view_node, False, False)
+
+
+class TestPersistDocsSimple(BasePersistDocsTest):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'models': {
+                'test': {
+                    '+persist_docs': {
+                        "relation": True,
+                        "columns": True,
+                    },
+                    'view_model': {
+                        'bind': False,
+                    }
+                }
+            }
+        }
+
+    @use_profile('snowflake')
+    def test_snowflake_persist_docs(self):
+        self.run_dbt()
+
+    @use_profile('bigquery')
+    def test_bigquery_persist_docs(self):
+        self.run_dbt()

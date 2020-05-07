@@ -155,6 +155,10 @@
 
   {{ run_hooks(post_hooks) }}
 
+  {% set target_relation = this.incorporate(type='table') %}
+
+  {% do persist_docs(target_relation, model) %}
+
   {{ return({'relations': [target_relation]}) }}
 
 {%- endmaterialization %}

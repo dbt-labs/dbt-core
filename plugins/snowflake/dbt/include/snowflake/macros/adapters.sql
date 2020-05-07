@@ -3,9 +3,6 @@
   {%- set cluster_by_keys = config.get('cluster_by', default=none) -%}
   {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
   {%- set copy_grants = config.get('copy_grants', default=false) -%}
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
-  {%- set relation_comment = get_relation_comment(raw_persist_docs, model) -%}
-  {%- set column_comment = get_relation_column_comments(raw_persist_docs, model) -%}
 
   {%- if cluster_by_keys is not none and cluster_by_keys is string -%}
     {%- set cluster_by_keys = [cluster_by_keys] -%}
@@ -39,25 +36,12 @@
     {% if enable_automatic_clustering and cluster_by_string is not none and not temporary  -%}
       alter table {{relation}} resume recluster;
     {%- endif -%}
-    -- add in comments
-
-    {% set relation = relation.incorporate(type='table') %}
-    {% if relation_comment is not none -%}
-      {{ alter_relation_comment(relation, relation_comment) }}
-    {%- endif -%}
-
-    {% if column_comment is not none -%}
-      {{ alter_column_comment(relation, column_comment) }}
-    {%- endif -%}
-
 {% endmacro %}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
   {%- set secure = config.get('secure', default=false) -%}
   {%- set copy_grants = config.get('copy_grants', default=false) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
-  {%- set relation_comment = get_relation_comment(raw_persist_docs, model) -%}
 
   {{ sql_header if sql_header is not none }}
   create or replace {% if secure -%}
@@ -65,12 +49,6 @@
   {%- endif %} view {{ relation }} {% if copy_grants -%} copy grants {%- endif %} as (
     {{ sql }}
   );
-
-  {%- set relation = relation.incorporate(type='view') -%}
-  {% if relation_comment is not none -%}
-    {{ alter_relation_comment(relation, relation_comment) }}
-  {%- endif -%}
-
 {% endmacro %}
 
 {% macro snowflake__get_columns_in_relation(relation) -%}
@@ -184,7 +162,3 @@
         {{ column_name }} COMMENT $${{ column_dict[column_name]['description'] | replace('$', '[$]') }}$$ {{ ',' if not loop.last else ';' }}
     {% endfor %}
 {% endmacro %}
-
-
-
-
