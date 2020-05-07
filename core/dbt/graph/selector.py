@@ -412,16 +412,16 @@ class NodeSelector(MultiSelector):
 
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
         raw_exclude_specs = coalesce(raw_exclude_specs, [])
-        check_existance = True
+        check_existence = True
 
         if not raw_include_specs:
-            check_existance = False
+            check_existence = False
             raw_include_specs = ['fqn:*', 'source:*']
 
         selected_nodes = self.get_nodes_from_multiple_specs(
             graph,
             raw_include_specs,
-            check_existence=check_existance
+            check_existence=check_existence
         )
         selected_nodes = self.get_nodes_from_multiple_specs(
             graph,
