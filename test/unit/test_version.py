@@ -113,15 +113,55 @@ class VersionTest(unittest.TestCase):
             dbt.main.handle_and_check(['--version'])
         self.assertEqual(exc.exception.code, 0)
 
+    @patch('glob.glob', autospec=True)
     @patch('importlib.util.find_spec', autospec=True)
-    @patch('importlib.import_module', autospec=True)
-    def test_get_dbt_plugins_info_with_version_info(
-        self, mock_mod, mock_find_spec
-    ):
-        mock_submodule = unittest.mock.Mock()
+    def test_get_adapter_plugin_names(self, mock_find_spec, mock_glob):
+        mock_submodule = unittest.mock.MagicMock()
+        mock_find_spec.return_value = mock_submodule
+        mock_submodule.submodule_search_locations = ['/tmp/dbt/adapters']
+
+        def glob_side_effect(path: str) -> str:
+            return [
+                path.replace('*', 'postgres'),
+                path.replace('*', 'snowflake'),
+            ]
+        mock_glob.side_effect = glob_side_effect
+        self.assertEqual(
+            list(dbt.version._get_adapter_plugin_names()),
+            ['postgres', 'snowflake'],
+        )
+
+        mock_find_spec.assert_called_once_with('dbt.adapters')
+
+    @patch('glob.glob', autospec=True)
+    @patch('importlib.util.find_spec', autospec=True)
+    def test_get_adapter_plugin_names(self, mock_find_spec, mock_glob):
+        mock_submodule = unittest.mock.MagicMock()
         mock_find_spec.return_value = mock_submodule
         mock_submodule.submodule_search_locations = [
-            '/tmp/dbt/plugins/postgres/dbt', '/tmp/dbt/plugins/snowflake/dbt']
+            '/tmp/dbt/plugins/postgres/dbt/adapters/', '/tmp/dbt/plugins/snowflake/dbt/adapters/'
+        ]
+
+        def glob_side_effect(path: str) -> str:
+            assert 'postgres' in path or 'snowflake' in path
+            if 'postgres' in path:
+                return [path.replace('*', 'postgres')]
+            elif 'snowflake' in path:
+                return [path.replace('*', 'snowflake')]
+        mock_glob.side_effect = glob_side_effect
+        self.assertEqual(
+            list(dbt.version._get_adapter_plugin_names()),
+            ['postgres', 'snowflake'],
+        )
+
+        mock_find_spec.assert_called_once_with('dbt.adapters')
+
+    @patch('dbt.version._get_adapter_plugin_names', autospec=True)
+    @patch('importlib.import_module', autospec=True)
+    def test_get_dbt_plugins_info_with_version_info(
+        self, mock_mod, mock_get_plugin_names
+    ):
+        mock_get_plugin_names.return_value = ['postgres', 'snowflake']
         mod_version = unittest.mock.Mock()
         mock_mod.return_value = mod_version
         mod_version.version = '1.0'
@@ -129,7 +169,7 @@ class VersionTest(unittest.TestCase):
             list(dbt.version._get_dbt_plugins_info()),
             [('postgres', '1.0'), ('snowflake', '1.0')]
         )
-        mock_find_spec.assert_called_once_with('dbt')
+        mock_get_plugin_names.assert_called_once_with()
         mock_mod.assert_has_calls([
             unittest.mock.call('dbt.adapters.postgres.__version__'),
             unittest.mock.call('dbt.adapters.snowflake.__version__')
