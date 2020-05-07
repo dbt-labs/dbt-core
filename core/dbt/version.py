@@ -111,7 +111,7 @@ def _get_adapter_plugin_names() -> Iterator[str]:
     if spec is None or spec.submodule_search_locations is None:
         return
     for adapters_path in spec.submodule_search_locations:
-        version_glob = os.path.join(adapters_path, '*', '__version__.py')
+        version_glob = os.path.join(adapters_path, "*", "__version__.py")
         for version_path in glob.glob(version_glob):
             # the path is like .../dbt/adapters/{plugin_name}/__version__.py
             # except it could be \\ on windows!
