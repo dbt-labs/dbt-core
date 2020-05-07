@@ -1,6 +1,7 @@
 ## dbt 0.17.0 (Release TBD)
 
 ### Features
+- Added warning to nodes selector if nothing was matched ([#2115](https://github.com/fishtown-analytics/dbt/issues/2115), [#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
 - Suport column descriptions for BigQuery models ([#2335](https://github.com/fishtown-analytics/dbt/issues/2335), [#2402](https://github.com/fishtown-analytics/dbt/pull/2402))
 
 ### Fixes
@@ -10,6 +11,9 @@
 
 Contributors:
  - [@azhard](https://github.com/azhard) [#2413](https://github.com/fishtown-analytics/dbt/pull/2413)
+
+Contributors:
+- [@raalsky](https://github.com/Raalsky) ([#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
 
 ## dbt 0.17.0b1 (May 5, 2020)
 
