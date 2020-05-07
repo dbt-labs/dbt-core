@@ -105,7 +105,7 @@ def get_version_information():
 
 
 def _get_adapter_plugin_names() -> Iterator[str]:
-    spec = importlib.util.find_spec('dbt.adapters')
+    spec = importlib.util.find_spec("dbt.adapters")
     # If None, then nothing provides an importable 'dbt.adapters', so we will
     # not be reporting plugin versions today
     if spec is None or spec.submodule_search_locations is None:
