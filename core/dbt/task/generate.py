@@ -98,6 +98,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
         sources: Dict[str, CatalogTable] = {}
 
         node_map, source_map = get_unique_id_mapping(manifest)
+        table: CatalogTable
         for table in self.values():
             key = table.key()
             if key in node_map:

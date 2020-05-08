@@ -30,7 +30,7 @@ class TestExternalReference(DBTIntegrationTest):
         # otherwise postgres hangs forever.
         self._drop_schemas()
         with self.get_connection():
-            self.adapter.drop_schema(self.default_database, self.external_schema)
+            self._drop_schema_named(self.default_database, self.external_schema)
         super().tearDown()
 
     @use_profile('postgres')
@@ -56,7 +56,7 @@ class TestExternalDependency(DBTIntegrationTest):
         # otherwise postgres hangs forever.
         self._drop_schemas()
         with self.get_connection():
-            self.adapter.drop_schema(self.default_database, self.external_schema)
+            self._drop_schema_named(self.default_database, self.external_schema)
         super().tearDown()
 
     @use_profile('postgres')
