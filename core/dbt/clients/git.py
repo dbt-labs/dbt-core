@@ -6,8 +6,13 @@ from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.exceptions
 
 
-def clone(repo, cwd, dirname=None, remove_git_dir=False):
-    clone_cmd = ['git', 'clone', '--depth', '1', repo]
+def clone(repo, cwd, dirname=None, remove_git_dir=False, branch=None):
+    clone_cmd = ['git', 'clone', '--depth', '1']
+
+    if branch is not None:
+        clone_cmd.extend(['--branch', branch])
+
+    clone_cmd.append(repo)
 
     if dirname is not None:
         clone_cmd.append(dirname)

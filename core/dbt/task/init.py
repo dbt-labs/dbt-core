@@ -9,6 +9,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.task.base import BaseTask
 
 STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
+STARTER_BRANCH = 'dbt-yml-config-version-2'
 DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'
 SAMPLE_PROFILES_YML_FILE = 'https://docs.getdbt.com/docs/profile'  # noqa
 
@@ -62,8 +63,12 @@ default:
 class InitTask(BaseTask):
     def clone_starter_repo(self, project_name):
         dbt.clients.git.clone(
-            STARTER_REPO, '.', project_name,
-            remove_git_dir=True)
+            STARTER_REPO,
+            cwd='.',
+            dirname=project_name,
+            remove_git_dir=True,
+            branch=STARTER_BRANCH,
+        )
 
     def create_profiles_dir(self, profiles_dir):
         if not os.path.exists(profiles_dir):
