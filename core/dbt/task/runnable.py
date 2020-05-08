@@ -497,7 +497,7 @@ class GraphRunnableTask(ManifestTask):
                         'Got an information schema with no database!'
                     )
                 if info.schema is None:
-                    # we are not in teh business of creating null schemas, so
+                    # we are not in the business of creating null schemas, so
                     # skip this
                     continue
                 db: str = info.database
