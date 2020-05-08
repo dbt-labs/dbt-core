@@ -65,7 +65,7 @@
 
   create or replace view {{ relation }}
   {{ bigquery_table_options(config, model, temporary=false) }}
-  as {{ sql }}
+  as {{ sql }};
 
 {% endmacro %}
 
