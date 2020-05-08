@@ -41,7 +41,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
     has_revision = revision is not None
     is_commit = _is_commit(revision or "")
 
-    clone_cmd = ['git', 'clone', '--depth', '1']
+    clone_cmd = ["git", "clone", "--depth", "1"]
     if subdirectory:
         fire_event(GitSparseCheckoutSubdirectory(subdir=subdirectory))
         out, _ = run_cmd(cwd, ['git', '--version'], env={'LC_ALL': 'C'})
