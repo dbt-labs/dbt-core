@@ -2,6 +2,7 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import shutil
+import yaml
 
 
 class TestInit(DBTIntegrationTest):
@@ -29,13 +30,14 @@ class TestInit(DBTIntegrationTest):
         project_name = self.get_project_name()
         self.run_dbt(['init', project_name])
 
-        dir_exists = os.path.exists(project_name)
+        assert os.path.exists(project_name)
         project_file = os.path.join(project_name, 'dbt_project.yml')
-        project_file_exists = os.path.exists(project_file)
+        assert os.path.exists(project_file)
+        with open(project_file) as fp:
+            project_data = yaml.safe_load(fp.read())
+
+        assert 'config-version' in project_data
+        assert project_data['config-version'] == 2
 
         git_dir = os.path.join(project_name, '.git')
-        git_dir_exists = os.path.exists(git_dir)
-
-        self.assertTrue(dir_exists)
-        self.assertTrue(project_file_exists)
-        self.assertFalse(git_dir_exists)
+        assert not os.path.exists(git_dir)
