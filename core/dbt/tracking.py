@@ -352,7 +352,7 @@ def track_package_install(config, args, options):
 
     context = [
         SelfDescribingJson(INVOCATION_SPEC, invocation_data),
-        SelfDescribingJson(PACKAGE_INSTALL_SPEC, options)
+        SelfDescribingJson(PACKAGE_INSTALL_SPEC, options),
     ]
 
     track(

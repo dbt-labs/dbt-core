@@ -32,21 +32,17 @@ class DepsTask(BaseTask):
     def track_package_install(self, package_name: str, source_type: str, version: str) -> None:
         # Hub packages do not need to be hashed, as they are public
         # Use the string 'local' for local package versions
-        if source_type == 'local':
+        if source_type == "local":
             package_name = dbt.utils.md5(package_name)
-            version = 'local'
-        elif source_type != 'hub':
+            version = "local"
+        elif source_type != "hub":
             package_name = dbt.utils.md5(package_name)
             version = dbt.utils.md5(version)
 
         dbt.tracking.track_package_install(
             self.config,
             self.config.args,
-            {
-                "name": package_name,
-                "source": source_type,
-                "version": version
-            }
+            {"name": package_name, "source": source_type, "version": version},
         )
 
     def run(self):
