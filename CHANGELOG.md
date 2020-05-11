@@ -6,7 +6,7 @@
 ### Features
 - Added warning to nodes selector if nothing was matched ([#2115](https://github.com/fishtown-analytics/dbt/issues/2115), [#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
 - Suport column descriptions for BigQuery models ([#2335](https://github.com/fishtown-analytics/dbt/issues/2335), [#2402](https://github.com/fishtown-analytics/dbt/pull/2402))
-
+- Added BigQuery option maximum_bytes_billed to set an upper limit for query costs ([#2346](https://github.com/fishtown-analytics/dbt/issues/2346))
 
 ### Fixes
 - When tracking is disabled due to errors, do not reset the invocation ID ([#2398](https://github.com/fishtown-analytics/dbt/issues/2398), [#2400](https://github.com/fishtown-analytics/dbt/pull/2400))
