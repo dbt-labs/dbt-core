@@ -16,6 +16,8 @@ SELECTOR_CHILDREN = '+'
 SELECTOR_GLOB = '*'
 SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
+SPEC_DELIMITER = ' '
+INTERSECTION_DELIMITER = ','
 
 
 def _probably_path(value: str):
@@ -69,6 +71,10 @@ class SelectionCriteria:
                 self.selector_type = SELECTOR_FILTERS.FQN
 
 
+def split_intersection_blocks(spec):
+    return spec.split(INTERSECTION_DELIMITER)
+
+
 class SELECTOR_FILTERS(str, Enum):
     FQN = 'fqn'
     TAG = 'tag'
@@ -90,7 +96,7 @@ def alert_non_existence(raw_spec, nodes):
 def split_specs(node_specs: Iterable[str]):
     specs: Set[str] = set()
     for spec in node_specs:
-        parts = spec.split(" ")
+        parts = spec.split(SPEC_DELIMITER)
         specs.update(parts)
 
     return specs
@@ -388,6 +394,13 @@ class NodeSelector(MultiSelector):
 
         return collected
 
+    def get_nodes_from_intersection_spec(self, graph, raw_spec):
+        return set.intersection(
+            *[self.get_nodes_from_spec(graph, SelectionCriteria(
+                intersection_block_spec)) for intersection_block_spec in
+              split_intersection_blocks(raw_spec)]
+        )
+
     def get_nodes_from_multiple_specs(
             self,
             graph,
@@ -400,8 +413,7 @@ class NodeSelector(MultiSelector):
         operator = set.difference_update if exclude else set.update
 
         for raw_spec in split_specs(specs):
-            spec = SelectionCriteria(raw_spec)
-            nodes = self.get_nodes_from_spec(graph, spec)
+            nodes = self.get_nodes_from_intersection_spec(graph, raw_spec)
 
             if check_existence:
                 alert_non_existence(raw_spec, nodes)
