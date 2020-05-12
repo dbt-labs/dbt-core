@@ -42,7 +42,7 @@
   -- that's an error. If we were told to full refresh, drop it. This behavior differs
   -- for Snowflake and BigQuery, so multiple dispatch is used.
   {%- if old_relation is not none and old_relation.is_table -%}
-    {{ handle_existing_table(flags.FULL_REFRESH, old_relation) }}
+    {{ handle_existing_table(should_full_refresh(), old_relation) }}
   {%- endif -%}
 
   -- build model

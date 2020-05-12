@@ -321,6 +321,7 @@ class NodeConfig(BaseConfig):
         # TODO: hide this one?
         metadata=MergeBehavior.Append.meta(),
     )
+    full_refresh: Optional[bool] = None
 
     @classmethod
     def from_dict(cls, data, validate=True):

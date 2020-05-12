@@ -8,6 +8,6 @@
         {{ return(relation is not none
                   and relation.type == 'table'
                   and model.config.materialized == 'incremental'
-                  and not flags.FULL_REFRESH) }}
+                  and not should_full_refresh()) }}
     {% endif %}
 {% endmacro %}

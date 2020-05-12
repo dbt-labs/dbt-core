@@ -25,10 +25,13 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     def models(self):
         return "models"
 
+    def run_dbt_full_refresh(self):
+        return self.run_dbt(['run', '--full-refresh'])
+
     @use_profile('postgres')
     def test_postgres_full_refresh(self):
         # initial full-refresh should have no effect
-        results = self.run_dbt(['run', '--full-refresh'])
+        results = self.run_dbt_full_refresh()
         self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed", "view")
@@ -37,13 +40,13 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
         # adds one record to the incremental model. full-refresh should truncate then re-run
         self.run_sql_file("invalidate_incremental.sql")
-        results = self.run_dbt(['run', '--full-refresh'])
+        results = self.run_dbt_full_refresh()
         self.assertEqual(len(results), 3)
         self.assertTablesEqual("seed", "incremental")
 
         self.run_sql_file("update.sql")
 
-        results = self.run_dbt(['run', '--full-refresh'])
+        results = self.run_dbt_full_refresh()
         self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed", "view")
@@ -59,3 +62,14 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
         self.assertTableDoesNotExist('view__dbt_tmp')
         self.assertTablesEqual("seed", "view")
+
+
+class TestRuntimeMaterializationWithConfig(TestRuntimeMaterialization):
+    @property
+    def project_config(self):
+        result = super().project_config
+        result.update({'models': {'full_refresh': True}})
+        return result
+
+    def run_dbt_full_refresh(self):
+        return self.run_dbt(['run'])
