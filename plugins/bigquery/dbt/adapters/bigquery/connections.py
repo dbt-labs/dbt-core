@@ -218,7 +218,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
 
         maximum_bytes_billed = conn.credentials.maximum_bytes_billed
-        if maximum_bytes_billed is not None and maximum_bytes_billed!=0:
+        if maximum_bytes_billed is not None and maximum_bytes_billed != 0:
             job_params['maximum_bytes_billed'] = maximum_bytes_billed
 
         def fn():
