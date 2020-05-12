@@ -1,5 +1,7 @@
 ## dbt 0.17.0 (Release TBD)
 
+## dbt 0.17.0rc1 (May 12, 2020)
+
 ### Breaking changes
 - The `list_relations_without_caching`, `drop_schema`, and `create_schema` macros and methods now accept a single argument of a Relation object with no identifier field. ([#2411](https://github.com/fishtown-analytics/dbt/pull/2411))
 
