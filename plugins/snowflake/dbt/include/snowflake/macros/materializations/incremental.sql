@@ -27,7 +27,7 @@
 {% materialization incremental, adapter='snowflake' -%}
 
   {%- set unique_key = config.get('unique_key') -%}
-  {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
+  {%- set full_refresh_mode = (should_full_refresh()) -%}
 
   {% set target_relation = this %}
   {% set existing_relation = load_relation(this) %}

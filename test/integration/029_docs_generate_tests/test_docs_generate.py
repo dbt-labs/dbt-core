@@ -898,6 +898,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'quoting': {},
             'tags': [],
             'persist_docs': {},
+            'full_refresh': None,
         }
 
         return {
@@ -983,6 +984,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'quote_columns': True,
+                        'full_refresh': None,
                     },
                     'patch_path': seed_schema_yml_path,
                     'path': 'seed.csv',
@@ -1064,6 +1066,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1117,6 +1120,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1169,6 +1173,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1286,6 +1291,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [['my_source', 'my_table']],
                     'depends_on': {
@@ -1347,6 +1353,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1410,6 +1417,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'database': self.default_database,
                     'depends_on': {
@@ -1494,6 +1502,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'quote_columns': True,
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -1725,6 +1734,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -1804,6 +1814,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'vars': {},
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -1880,6 +1891,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars':  {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1959,6 +1971,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2020,6 +2033,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'quote_columns': True,
+                        'full_refresh': None,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2160,6 +2174,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'vars': {},
+                        'full_refresh': None,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2241,6 +2256,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'vars': {},
                         'quote_columns': True,
+                        'full_refresh': None,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2364,6 +2380,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'column_types': {},
             'quoting': {},
             'tags': [],
+            'full_refresh': None,
         }
         schema = self.unique_schema()
 
@@ -2523,6 +2540,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'quote_columns': True,
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -2575,6 +2593,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2638,6 +2657,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
+                        'full_refresh': None,
                     },
                     'database': self.default_database,
                     'depends_on': {
@@ -2700,6 +2720,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'severity': 'ERROR',
+                        'full_refresh': None,
                     },
                     'database': self.default_database,
                     'depends_on': {
@@ -2804,6 +2825,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'quoting': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2884,6 +2906,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'quoting': {},
                         'tags': [],
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2981,6 +3004,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'quote_columns': True,
+                        'full_refresh': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},

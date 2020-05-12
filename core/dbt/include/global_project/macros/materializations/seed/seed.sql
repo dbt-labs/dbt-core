@@ -104,7 +104,7 @@
 {% materialization seed, default %}
 
   {%- set identifier = model['alias'] -%}
-  {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
+  {%- set full_refresh_mode = (should_full_refresh()) -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
 

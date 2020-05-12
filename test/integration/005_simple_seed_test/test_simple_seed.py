@@ -7,7 +7,6 @@ class TestSimpleSeed(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-
         self.run_sql_file("seed.sql")
 
     @property
@@ -16,7 +15,7 @@ class TestSimpleSeed(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models"
+        return "models-downstream-seed"
 
     @property
     def project_config(self):
@@ -28,27 +27,61 @@ class TestSimpleSeed(DBTIntegrationTest):
             }
         }
 
+    def use_full_refresh_project(self, full_refresh: bool):
+        overrides = {
+            'seeds': {
+                'quote_columns': False,
+                'full_refresh': full_refresh,
+            }
+        }
+        self.use_default_project(overrides)
+
+    def _seed_and_run(self):
+        assert len(self.run_dbt(['seed'])) == 1
+        self.assertTablesEqual('seed_actual', 'seed_expected')
+
+        assert len(self.run_dbt(['run'])) == 1
+        self.assertTablesEqual('model', 'seed_expected')
+
+    def _after_seed_model_state(self, cmd, exists: bool):
+        assert len(self.run_dbt(cmd)) == 1
+        self.assertTablesEqual('seed_actual', 'seed_expected')
+        if exists:
+            self.assertTableDoesExist('model')
+        else:
+            self.assertTableDoesNotExist('model')
+
     @use_profile('postgres')
     def test_postgres_simple_seed(self):
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
-        self.assertTablesEqual("seed_actual","seed_expected")
+        self._seed_and_run()
 
         # this should truncate the seed_actual table, then re-insert.
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
-        self.assertTablesEqual("seed_actual","seed_expected")
+        self._after_seed_model_state(['seed'], exists=True)
 
     @use_profile('postgres')
-    def test_postgres_simple_seed_with_drop(self):
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
-        self.assertTablesEqual("seed_actual","seed_expected")
+    def test_postgres_simple_seed_full_refresh_flag(self):
+        self._seed_and_run()
 
-        # this should drop the seed table, then re-create
-        results = self.run_dbt(["seed", "--full-refresh"])
-        self.assertEqual(len(results),  1)
-        self.assertTablesEqual("seed_actual","seed_expected")
+        # this should drop the seed_actual table, then re-create it, so the
+        # model won't exist.
+        self._after_seed_model_state(['seed', '--full-refresh'], exists=False)
+
+    @use_profile('postgres')
+    def test_postgres_simple_seed_full_refresh_config(self):
+        self._seed_and_run()
+
+        # set the full_refresh config to False
+        self.use_full_refresh_project(False)
+
+        self._after_seed_model_state(['seed'], exists=True)
+        # make sure we ignore the full-refresh flag (the config is higher
+        # priority than the flag)
+        self._after_seed_model_state(['seed', '--full-refresh'], exists=True)
+
+        # this should drop the seed_actual table, then re-create it, so the
+        # model won't exist.
+        self.use_full_refresh_project(True)
+        self._after_seed_model_state(['seed'], exists=False)
 
 
 class TestSimpleSeedCustomSchema(DBTIntegrationTest):
@@ -88,7 +121,6 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected", table_a_schema=schema_name)
-
 
     @use_profile('postgres')
     def test_postgres_simple_seed_with_drop_and_schema(self):
