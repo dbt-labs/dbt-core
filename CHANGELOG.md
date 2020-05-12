@@ -17,6 +17,9 @@
 - Fix a bug where quoted uppercase schemas on snowflake were not processed properly during cache building. ([#2403](https://github.com/fishtown-analytics/dbt/issues/2403), [#2411](https://github.com/fishtown-analytics/dbt/pull/2411))
 - Fix for extra spacing and parentheses when creating views in BigQuery ([#2421](https://github.com/fishtown-analytics/dbt/issues/2421), [#2422](https://github.com/fishtown-analytics/dbt/issues/2422))
 
+### Docs
+- Do not render hidden models in the search bar  ([docs#89](https://github.com/fishtown-analytics/dbt-docs/issues/89, [docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
+
 ### Under the hood
 - Track distinct project hashes in anonymous usage metrics for package downloads ([#2351](https://github.com/fishtown-analytics/dbt/issues/2351), [#2429](https://github.com/fishtown-analytics/dbt/pull/2429))
 
@@ -24,6 +27,7 @@ Contributors:
  - [@azhard](https://github.com/azhard) ([#2413](https://github.com/fishtown-analytics/dbt/pull/2413), [#2422](https://github.com/fishtown-analytics/dbt/pull/2422)) 
  - [@mikaelene](https://github.com/mikaelene) [#2414](https://github.com/fishtown-analytics/dbt/pull/2414)
  - [@raalsky](https://github.com/Raalsky) ([#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
+ - [@alf-mindshift](https://github.com/alf-mindshift) ([docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
 
 ## dbt 0.17.0b1 (May 5, 2020)
 
