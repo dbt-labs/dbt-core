@@ -225,6 +225,19 @@ class TestEventTrackingSuccess(TestEventTracking):
     def test__postgres_event_tracking_deps(self):
         package_context = [
             {
+                'schema': 'iglu:com.dbt/invocation/jsonschema/1-0-1',
+                'data': {
+                    'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                    'user_id': ANY,
+                    'invocation_id': ANY,
+                    'version': ANY,
+                    'command': 'deps',
+                    'run_type': 'regular',
+                    'options': None,
+                    'adapter_type': 'postgres'
+                }
+            },
+            {
                 'schema': 'iglu:com.dbt/package_install/jsonschema/1-0-0',
                 'data': {
                     'name': 'c5552991412d1cd86e5c20a87f3518d5',

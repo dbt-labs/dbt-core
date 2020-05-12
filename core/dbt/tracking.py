@@ -299,10 +299,16 @@ def track_rpc_request(options):
     )
 
 
-def track_package_install(options):
-    context = [SelfDescribingJson(PACKAGE_INSTALL_SPEC, options)]
+def track_package_install(config, args, options):
     assert active_user is not None, \
         'Cannot track package installs when active user is None'
+
+    invocation_data = get_invocation_context(active_user, config, args)
+
+    context = [
+        SelfDescribingJson(INVOCATION_SPEC, invocation_data),
+        SelfDescribingJson(PACKAGE_INSTALL_SPEC, options)
+    ]
 
     track(
         active_user,
