@@ -15,11 +15,12 @@
 - When plugins are installed in the same folder as dbt core, report their versions. ([#2410](https://github.com/fishtown-analytics/dbt/issues/2410), [#2418](https://github.com/fishtown-analytics/dbt/pull/2418))
 - Fix for making schema tests work for community plugin [dbt-sqlserver](https://github.com/mikaelene/dbt-sqlserver) [#2414](https://github.com/fishtown-analytics/dbt/pull/2414)
 - Fix a bug where quoted uppercase schemas on snowflake were not processed properly during cache building. ([#2403](https://github.com/fishtown-analytics/dbt/issues/2403), [#2411](https://github.com/fishtown-analytics/dbt/pull/2411))
+- Fix for extra spacing and parentheses when creating views in BigQuery ([#2421](https://github.com/fishtown-analytics/dbt/issues/2421), [#2422](https://github.com/fishtown-analytics/dbt/issues/2422))
 
 Contributors:
- - [@azhard](https://github.com/azhard) [#2413](https://github.com/fishtown-analytics/dbt/pull/2413)
+ - [@azhard](https://github.com/azhard) ([#2413](https://github.com/fishtown-analytics/dbt/pull/2413), [#2422](https://github.com/fishtown-analytics/dbt/pull/2422)) 
  - [@mikaelene](https://github.com/mikaelene) [#2414](https://github.com/fishtown-analytics/dbt/pull/2414)
-- [@raalsky](https://github.com/Raalsky) ([#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
+ - [@raalsky](https://github.com/Raalsky) ([#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
 
 ## dbt 0.17.0b1 (May 5, 2020)
 
