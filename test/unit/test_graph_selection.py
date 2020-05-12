@@ -125,7 +125,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             set(['m.X.a', 'm.X.c', 'm.Y.f', 'm.X.g'])
         )
 
-    def test__select_intersection_same_model(self):
+    def test__select_same_model_intersection(self):
         self.run_specs_and_assert(
             self.package_graph,
             ['a,a'],
@@ -133,7 +133,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             set(['m.X.a'])
         )
 
-    def test__select_intersection_layer(self):
+    def test__select_layer_intersection(self):
         self.run_specs_and_assert(
             self.package_graph,
             ['+c,c+'],
@@ -149,7 +149,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             set()
         )
 
-    def test__select_intersection_tags(self):
+    def test__select_tags_intersection(self):
         self.run_specs_and_assert(
             self.package_graph,
             ['tag:abc,tag:bcef'],
@@ -173,7 +173,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             set(['m.X.a'])
         )
 
-    def test__select_intersection_with_exclude(self):
+    def test__select_intersection_with_exclusion(self):
         self.run_specs_and_assert(
             self.package_graph,
             ['tag:abc,tag:bcef'],
