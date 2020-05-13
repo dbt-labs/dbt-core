@@ -337,7 +337,7 @@ class RuntimeConfigObject(Config):
 
     def _lookup(self, name, default=_MISSING):
         # if this is a macro, there might be no `model.config`.
-        if not hasattr(self.model, 'config'):
+        if not hasattr(self.model, "config"):
             result = default
         else:
             result = self.model.config.get(name, default)
