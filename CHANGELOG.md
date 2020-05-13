@@ -5,6 +5,11 @@
 
 ## dbt 0.17.0 (Release TBD)
 
+
+### Fixes
+- When no columns are documented and persist_docs.columns is True, skip creating comments instead of failing with errors ([#2439](https://github.com/fishtown-analytics/dbt/issues/2439), [#2440](https://github.com/fishtown-analytics/dbt/pull/2440))
+
+
 ## dbt 0.17.0rc1 (May 12, 2020)
 
 ### Breaking changes

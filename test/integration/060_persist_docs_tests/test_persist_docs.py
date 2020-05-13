@@ -75,12 +75,15 @@ class TestPersistDocs(BasePersistDocsTest):
         with open('target/catalog.json') as fp:
             catalog_data = json.load(fp)
         assert 'nodes' in catalog_data
-        assert len(catalog_data['nodes']) == 2
+        assert len(catalog_data['nodes']) == 3
         table_node = catalog_data['nodes']['model.test.table_model']
         view_node = self._assert_has_table_comments(table_node)
 
         view_node = catalog_data['nodes']['model.test.view_model']
         self._assert_has_view_comments(view_node)
+
+        no_docs_node = catalog_data['nodes']['model.test.no_docs_model']
+        self._assert_has_view_comments(no_docs_node, False, False)
 
     @use_profile('postgres')
     def test_postgres_comments(self):
@@ -116,12 +119,15 @@ class TestPersistDocsLateBinding(BasePersistDocsTest):
         with open('target/catalog.json') as fp:
             catalog_data = json.load(fp)
         assert 'nodes' in catalog_data
-        assert len(catalog_data['nodes']) == 2
+        assert len(catalog_data['nodes']) == 3
         table_node = catalog_data['nodes']['model.test.table_model']
         view_node = self._assert_has_table_comments(table_node)
 
         view_node = catalog_data['nodes']['model.test.view_model']
         self._assert_has_view_comments(view_node, False, False)
+
+        no_docs_node = catalog_data['nodes']['model.test.no_docs_model']
+        self._assert_has_view_comments(no_docs_node, False, False)
 
 
 class TestPersistDocsSimple(BasePersistDocsTest):
@@ -135,9 +141,6 @@ class TestPersistDocsSimple(BasePersistDocsTest):
                         "relation": True,
                         "columns": True,
                     },
-                    'view_model': {
-                        'bind': False,
-                    }
                 }
             }
         }
