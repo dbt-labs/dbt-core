@@ -212,6 +212,7 @@ class BigQueryAdapter(BaseAdapter):
         # This is a no-op on BigQuery
         pass
 
+    @available.parse_list
     def list_relations_without_caching(
         self, schema_relation: BigQueryRelation
     ) -> List[BigQueryRelation]:

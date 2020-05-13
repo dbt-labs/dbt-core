@@ -234,7 +234,11 @@ class RuntimeConfigObject(Config):
         validator(value)
 
     def _lookup(self, name, default=_MISSING):
-        result = self.model.config.get(name, default)
+        # if this is a macro, there might be no `model.config`.
+        if not hasattr(self.model, 'config'):
+            result = default
+        else:
+            result = self.model.config.get(name, default)
         if result is _MISSING:
             missing_config(self.model, name)
         return result
