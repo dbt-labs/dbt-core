@@ -3,6 +3,7 @@
 
 ### Fixes
 - When no columns are documented and persist_docs.columns is True, skip creating comments instead of failing with errors ([#2439](https://github.com/fishtown-analytics/dbt/issues/2439), [#2440](https://github.com/fishtown-analytics/dbt/pull/2440))
+- Fixed an argument issue with the `create_schema` macro on bigquery ([#2445](https://github.com/fishtown-analytics/dbt/issues/2445), [#2448](https://github.com/fishtown-analytics/dbt/pull/2448))
 
 
 ## dbt 0.17.0rc1 (May 12, 2020)
@@ -25,7 +26,7 @@
 - Fix for extra spacing and parentheses when creating views in BigQuery ([#2421](https://github.com/fishtown-analytics/dbt/issues/2421), [#2422](https://github.com/fishtown-analytics/dbt/issues/2422))
 
 ### Docs
-- Do not render hidden models in the search bar  ([docs#89](https://github.com/fishtown-analytics/dbt-docs/issues/89, [docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
+- Do not render hidden models in the search bar ([docs#89](https://github.com/fishtown-analytics/dbt-docs/issues/89), [docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
 
 ### Under the hood
 - Track distinct project hashes in anonymous usage metrics for package downloads ([#2351](https://github.com/fishtown-analytics/dbt/issues/2351), [#2429](https://github.com/fishtown-analytics/dbt/pull/2429))
