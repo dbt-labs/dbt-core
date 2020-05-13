@@ -1,5 +1,7 @@
 ## dbt 0.17.0 (Release TBD)
 
+## dbt 0.17.0rc1 (May 12, 2020)
+
 ### Breaking changes
 - The `list_relations_without_caching`, `drop_schema`, and `create_schema` macros and methods now accept a single argument of a Relation object with no identifier field. ([#2411](https://github.com/fishtown-analytics/dbt/pull/2411))
 
@@ -17,6 +19,9 @@
 - Fix a bug where quoted uppercase schemas on snowflake were not processed properly during cache building. ([#2403](https://github.com/fishtown-analytics/dbt/issues/2403), [#2411](https://github.com/fishtown-analytics/dbt/pull/2411))
 - Fix for extra spacing and parentheses when creating views in BigQuery ([#2421](https://github.com/fishtown-analytics/dbt/issues/2421), [#2422](https://github.com/fishtown-analytics/dbt/issues/2422))
 
+### Docs
+- Do not render hidden models in the search bar  ([docs#89](https://github.com/fishtown-analytics/dbt-docs/issues/89, [docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
+
 ### Under the hood
 - Track distinct project hashes in anonymous usage metrics for package downloads ([#2351](https://github.com/fishtown-analytics/dbt/issues/2351), [#2429](https://github.com/fishtown-analytics/dbt/pull/2429))
 
@@ -25,6 +30,7 @@ Contributors:
  - [@mikaelene](https://github.com/mikaelene) [#2414](https://github.com/fishtown-analytics/dbt/pull/2414)
  - [@raalsky](https://github.com/Raalsky) ([#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
  - [@haukeduden](https://github.com/haukeduden) ([#2427](https://github.com/fishtown-analytics/dbt/pull/2427))
+ - [@alf-mindshift](https://github.com/alf-mindshift) ([docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
 
 ## dbt 0.17.0b1 (May 5, 2020)
 
