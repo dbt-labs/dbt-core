@@ -43,6 +43,7 @@ class BigQueryCredentials(Credentials):
     location: Optional[str] = None
     priority: Optional[Priority] = None
     retries: Optional[int] = 1
+    maximum_bytes_billed: Optional[int] = None
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
@@ -54,7 +55,7 @@ class BigQueryCredentials(Credentials):
 
     def _connection_keys(self):
         return ('method', 'database', 'schema', 'location', 'priority',
-                'timeout_seconds')
+                'timeout_seconds', 'maximum_bytes_billed')
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -215,6 +216,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
         else:
             job_params[
                 'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
+
+        maximum_bytes_billed = conn.credentials.maximum_bytes_billed
+        if maximum_bytes_billed is not None and maximum_bytes_billed != 0:
+            job_params['maximum_bytes_billed'] = maximum_bytes_billed
 
         def fn():
             return self._query_and_results(client, sql, conn, job_params)

@@ -13,7 +13,7 @@
 ### Features
 - Added warning to nodes selector if nothing was matched ([#2115](https://github.com/fishtown-analytics/dbt/issues/2115), [#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
 - Suport column descriptions for BigQuery models ([#2335](https://github.com/fishtown-analytics/dbt/issues/2335), [#2402](https://github.com/fishtown-analytics/dbt/pull/2402))
-
+- Added BigQuery option maximum_bytes_billed to set an upper limit for query costs ([#2346](https://github.com/fishtown-analytics/dbt/issues/2346), [#2427](https://github.com/fishtown-analytics/dbt/pull/2427))
 
 ### Fixes
 - When tracking is disabled due to errors, do not reset the invocation ID ([#2398](https://github.com/fishtown-analytics/dbt/issues/2398), [#2400](https://github.com/fishtown-analytics/dbt/pull/2400))
@@ -34,6 +34,7 @@ Contributors:
  - [@azhard](https://github.com/azhard) ([#2413](https://github.com/fishtown-analytics/dbt/pull/2413), [#2422](https://github.com/fishtown-analytics/dbt/pull/2422))
  - [@mikaelene](https://github.com/mikaelene) [#2414](https://github.com/fishtown-analytics/dbt/pull/2414)
  - [@raalsky](https://github.com/Raalsky) ([#2343](https://github.com/fishtown-analytics/dbt/pull/2343))
+ - [@haukeduden](https://github.com/haukeduden) ([#2427](https://github.com/fishtown-analytics/dbt/pull/2427))
  - [@alf-mindshift](https://github.com/alf-mindshift) ([docs#90](https://github.com/fishtown-analytics/dbt-docs/pull/90))
 
 ## dbt 0.17.0b1 (May 5, 2020)
