@@ -38,6 +38,6 @@ Note that you can also right-click on models to interactively filter and explore
 - [What is dbt](https://docs.getdbt.com/docs/overview)?
 - Read the [dbt viewpoint](https://docs.getdbt.com/docs/viewpoint)
 - [Installation](https://docs.getdbt.com/docs/installation)
-- Join the [chat](https://slack.getdbt.com/) on Slack for live questions and support.
+- Join the [chat](https://community.getdbt.com/) on Slack for live questions and support.
 
 {% enddocs %}
