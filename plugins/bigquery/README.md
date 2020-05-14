@@ -19,12 +19,12 @@ more information on using dbt with BigQuery, consult [the docs](https://docs.get
 
 ## Join thousands of analysts in the dbt community
 
--   Join the [chat](http://slack.getdbt.com/) on Slack.
+-   Join the [chat](http://community.getdbt.com/) on Slack.
 -   Find community posts on [dbt Discourse](https://discourse.getdbt.com).
 
 ## Reporting bugs and contributing code
 
--   Want to report a bug or request a feature? Let us know on [Slack](http://slack.getdbt.com/), or open [an issue](https://github.com/fishtown-analytics/dbt/issues/new).
+-   Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/fishtown-analytics/dbt/issues/new).
 -   Want to help us build dbt? Check out the [Contributing Getting Started Guide](/CONTRIBUTING.md)
 
 ## Code of Conduct

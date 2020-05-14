@@ -2,7 +2,7 @@
 
 ## About this document
 
-This document is a guide intended for folks interested in contributing to dbt. It is not intended as a guide for end users of dbt (though if it is helpful, that's great!) and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. This guide also documents the process by which community-contributed Pull Requests can be incorporated into this repository. This guide assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](slack.getdbt.com).
+This document is a guide intended for folks interested in contributing to dbt. It is not intended as a guide for end users of dbt (though if it is helpful, that's great!) and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. This guide also documents the process by which community-contributed Pull Requests can be incorporated into this repository. This guide assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](community.getdbt.com).
 
 ## Contributing a change
 
