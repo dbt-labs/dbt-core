@@ -88,8 +88,7 @@ class TestDbtProjectYamlV1Deprecation(BaseTestDeprecations):
 
     @property
     def project_config(self):
-        # No config-version set!
-        return {}
+        return {'config-version': 1}
 
     @use_profile('postgres')
     def test_postgres_project_deprecations_fail(self):

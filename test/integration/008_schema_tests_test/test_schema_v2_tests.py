@@ -140,6 +140,7 @@ class TestMalformedMacroTests(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ["macros-v2/malformed"],
         }
 
@@ -150,8 +151,8 @@ class TestMalformedMacroTests(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_malformed_macro_reports_error(self):
-        self.run_dbt(["deps"])
-        self.run_dbt()
+        self.run_dbt(['deps'])
+        self.run_dbt(strict=True)
         expected_failure = 'not_null'
 
         test_results = self.run_schema_validations()
@@ -182,6 +183,7 @@ class TestHooksInTests(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "on-run-start": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
             "on-run-end": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
         }
@@ -221,7 +223,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
                 },
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'warn-unpinned': False,
+                    'revision': 'dbt/0.17.0',
                 },
             ]
         }
@@ -232,6 +234,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
+            'config-version': 2,
             "macro-paths": ["macros-v2/macros"],
         }
 
@@ -248,7 +251,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_schema_tests(self):
         self.run_dbt(["deps"])
-        results = self.run_dbt()
+        results = self.run_dbt(strict=False)  # dbt-utils 0.13-support is config version 1
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()
@@ -351,6 +354,7 @@ class TestVarsSchemaTests(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'config-version': 2,
             "macro-paths": ["macros-v2/macros"],
         }
 

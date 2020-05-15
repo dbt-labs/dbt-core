@@ -178,7 +178,10 @@ class TestEventTrackingSuccess(TestEventTracking):
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False},
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'dbt/0.17.0',
+                },
             ],
         }
 
@@ -242,7 +245,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 'data': {
                     'name': 'c5552991412d1cd86e5c20a87f3518d5',
                     'source': 'git',
-                    'version': 'eb0a191797624dd3a48fa681d3061212'
+                    'version': '6deb95629194572d44ca26c4bc25b573'
                 }
             }
         ]
