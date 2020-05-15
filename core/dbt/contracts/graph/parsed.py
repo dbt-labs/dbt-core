@@ -567,7 +567,7 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
     patch_path: Optional[Path] = None
 
     def get_full_source_name(self):
-        return f'{self.source.name}_{self.table.name}'
+        return f"{self.source.name}_{self.table.name}"
 
     def get_source_representation(self):
         return f'source("{self.source.name}", "{self.table.name}")'
@@ -697,7 +697,7 @@ class ParsedSourceDefinition(NodeInfoMixin, ParsedSourceMandatory):
         )
 
     def get_full_source_name(self):
-        return f'{self.source_name}_{self.name}'
+        return f"{self.source_name}_{self.name}"
 
     def get_source_representation(self):
         return f'source("{self.source.name}", "{self.table.name}")'
