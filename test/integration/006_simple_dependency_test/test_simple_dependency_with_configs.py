@@ -15,10 +15,6 @@ class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
     def models(self):
         return "models"
 
-    def run_dbt(self, *args, **kwargs):
-        strict = kwargs.pop('strict', False)
-        kwargs['strict'] = strict
-        return super().run_dbt(*args, **kwargs)
 
 class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
     @property
@@ -27,7 +23,7 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
             "packages": [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'with-configs',
+                    'revision': 'with-configs-0.17.0',
                 },
             ]
         }
@@ -49,10 +45,10 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  5)
 
-        self.assertTablesEqual('seed_config_expected_1',"config")
-        self.assertTablesEqual("seed","table_model")
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual('seed_config_expected_1', "config")
+        self.assertTablesEqual("seed", "table_model")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
 
 class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConfigs):
@@ -63,7 +59,7 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
             "packages": [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'with-configs',
+                    'revision': 'with-configs-0.17.0',
                 },
             ]
         }
@@ -88,10 +84,10 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  5)
 
-        self.assertTablesEqual('seed_config_expected_2',"config")
-        self.assertTablesEqual("seed","table_model")
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual('seed_config_expected_2', "config")
+        self.assertTablesEqual("seed", "table_model")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
 
 class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDependencyWithConfigs):
@@ -102,7 +98,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
             "packages": [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'with-configs',
+                    'revision': 'with-configs-0.17.0',
                 },
             ]
         }
@@ -132,13 +128,13 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
         self.use_default_project()
 
         self.run_dbt(["deps"])
-        results = self.run_dbt(["run"])
+        results = self.run_dbt(["run"], strict=False)  # config is v1, can't use strict here
         self.assertEqual(len(results),  5)
 
-        self.assertTablesEqual('seed_config_expected_3',"config")
-        self.assertTablesEqual("seed","table_model")
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual('seed_config_expected_3', "config")
+        self.assertTablesEqual("seed", "table_model")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
 
 class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(BaseTestSimpleDependencyWithConfigs):
@@ -149,7 +145,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
             "packages": [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'with-configs',
+                    'revision': 'with-configs-0.17.0',
                 },
             ]
         }
@@ -186,12 +182,11 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
         self.run_dbt(["deps"])
-        results = self.run_dbt(["run"])
+        results = self.run_dbt(["run"], strict=False)  # config is v1, can't use strict here
         self.assertEqual(len(results),  3)
 
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
-
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
         created_models = self.get_models_in_schema()
 
