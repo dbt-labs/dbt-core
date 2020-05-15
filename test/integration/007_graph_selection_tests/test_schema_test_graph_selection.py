@@ -17,14 +17,17 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
     def packages_config(self):
         return {
             "packages": [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False}
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'dbt/0.17.0',
+                }
             ]
         }
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
         self.run_sql_file("seed.sql")
         self.run_dbt(["deps"])
-        results = self.run_dbt(['run', '--exclude', 'never_selected'], strict=False)
+        results = self.run_dbt(['run', '--exclude', 'never_selected'])
         self.assertEqual(len(results), 9)
 
         args = FakeArgs()

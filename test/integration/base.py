@@ -376,6 +376,7 @@ class DBTIntegrationTest(unittest.TestCase):
         base_project_config = {
             'name': 'test',
             'version': '1.0',
+            'config-version': 2,
             'test-paths': [],
             'source-paths': [self.models],
             'profile': 'test',

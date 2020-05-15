@@ -19,7 +19,10 @@ class TestMacros(DBTIntegrationTest):
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False}
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'dbt/0.17.0',
+                },
             ]
         }
 
@@ -38,7 +41,7 @@ class TestMacros(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_working_macros(self):
         self.run_dbt(["deps"])
-        results = self.run_dbt(["run"], strict=False)
+        results = self.run_dbt(["run"])
         self.assertEqual(len(results), 6)
 
         self.assertTablesEqual("expected_dep_macro", "dep_macro")
@@ -94,7 +97,10 @@ class TestMisusedMacros(DBTIntegrationTest):
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False}
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'dbt/0.17.0',
+                }
             ]
         }
 
