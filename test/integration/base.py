@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import dbt.main as dbt
 import dbt.flags as flags
+from dbt.deprecations import reset_deprecations
 from dbt.adapters.factory import get_adapter, reset_adapters, register_adapter
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
@@ -361,6 +362,7 @@ class DBTIntegrationTest(unittest.TestCase):
             raise
 
         self._created_schemas = set()
+        reset_deprecations()
         flags.reset()
         template_cache.clear()
 

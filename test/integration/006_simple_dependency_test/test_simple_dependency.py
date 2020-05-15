@@ -45,11 +45,11 @@ class TestSimpleDependency(DBTIntegrationTest):
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  4)
 
-        self.assertTablesEqual("seed","table_model")
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual("seed", "table_model")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
-        self.assertTablesEqual("seed_summary","view_summary")
+        self.assertTablesEqual("seed_summary", "view_summary")
 
         self.run_sql_file("update.sql")
 
@@ -57,9 +57,9 @@ class TestSimpleDependency(DBTIntegrationTest):
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  4)
 
-        self.assertTablesEqual("seed","table_model")
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual("seed", "table_model")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
     @use_profile('postgres')
     def test_postgres_simple_dependency_with_models(self):
@@ -67,8 +67,8 @@ class TestSimpleDependency(DBTIntegrationTest):
         results = self.run_dbt(["run", '--models', 'view_model+'])
         self.assertEqual(len(results),  2)
 
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed_summary","view_summary")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed_summary", "view_summary")
 
         created_models = self.get_models_in_schema()
 
@@ -105,9 +105,9 @@ class TestSimpleDependencyUnpinned(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
-        self.run_dbt(['deps'], strict=False)
         with self.assertRaises(CompilationException):
             self.run_dbt(["deps"])
+        self.run_dbt(['deps'], strict=False)
 
 
 class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
@@ -203,9 +203,9 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         results = self.run_dbt(["run"], strict=False)
         self.assertEqual(len(results),  4)
 
-        self.assertTablesEqual("seed","table_model")
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual("seed", "table_model")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
 
         created_models = self.get_models_in_schema()
 
