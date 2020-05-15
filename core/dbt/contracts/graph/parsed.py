@@ -327,9 +327,15 @@ class UnpatchedSourceDefinition(UnparsedBaseNode, HasUniqueID, HasFqn):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
     patch_path: Optional[Path] = None
 
+    def get_full_source_name(self):
+        return f'{self.source.name}_{self.table.name}'
+
+    def get_source_representation(self):
+        return f'source("{self.source.name}", "{self.table.name}")'
+
     @property
     def name(self) -> str:
-        return '{0.name}_{1.name}'.format(self.source, self.table)
+        return self.get_full_source_name()
 
     @property
     def quote_columns(self) -> Optional[bool]:
@@ -390,6 +396,12 @@ class ParsedSourceDefinition(
     tags: List[str] = field(default_factory=list)
     config: SourceConfig = field(default_factory=SourceConfig)
     patch_path: Optional[Path] = None
+
+    def get_full_source_name(self):
+        return f'{self.source_name}_{self.name}'
+
+    def get_source_representation(self):
+        return f'source("{self.source.name}", "{self.table.name}")'
 
     @property
     def is_refable(self):
