@@ -724,7 +724,8 @@ def raise_duplicate_resource_name(node_1, node_2):
     if node_1.resource_type in NodeType.refable():
         get_func = 'ref("{}")'.format(duped_name)
     elif node_1.resource_type == NodeType.Source:
-        get_func = 'source("{}", "{}")'.format(node_1.source_name, duped_name)
+        duped_name = node_1.get_full_source_name()
+        get_func = node_1.get_source_representation()
     elif node_1.resource_type == NodeType.Documentation:
         get_func = 'doc("{}")'.format(duped_name)
     elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
