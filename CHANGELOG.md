@@ -2,6 +2,12 @@
 
 ### Features
 - Added a `full_refresh` config item that overrides the behavior of the `--full-refresh` flag ([#1009](https://github.com/fishtown-analytics/dbt/issues/1009), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
+- Added a "docs" field to macros, with a "show" subfield to allow for hiding macros from the documentation site ([#2430](https://github.com/fishtown-analytics/dbt/issues/2430))
+
+### Under the hood
+
+Contributors
+ - [@alf-mindshift](https://github.com/alf-mindshift) ([#2431](https://github.com/fishtown-analytics/dbt/pull/2431)
 
 ## dbt 0.17.0 (Release TBD)
 

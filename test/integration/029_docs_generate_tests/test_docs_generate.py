@@ -843,7 +843,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'path', 'original_file_path', 'package_name',
                 'root_path', 'name', 'unique_id', 'tags', 'resource_type',
                 'depends_on', 'meta', 'description', 'patch_path', 'arguments',
-                'macro_sql',
+                'macro_sql', 'docs'
             }
         )
         # Don't compare the sql, just make sure it exists
@@ -869,6 +869,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'resource_type': 'macro',
                 'depends_on': {'macros': []},
                 'description': '',
+                'docs': {'show': True},
                 'patch_path': None,
                 'meta': {},
                 'arguments': [],
@@ -1689,6 +1690,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'test_nothing',
                     'depends_on': {'macros': []},
                     'description': 'My custom test that I wrote that does nothing',
+                    'docs': {'show': True},
                     'macro_sql': AnyStringWith('macro test_nothing'),
                     'original_file_path': self.dir('macros/dummy_test.sql'),
                     'path': self.dir('macros/dummy_test.sql'),
