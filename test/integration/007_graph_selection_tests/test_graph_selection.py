@@ -214,7 +214,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__more_childrens_parents(self):
         self.run_sql_file("seed.sql")
         results = self.run_dbt(['run', '--models', '@users'])
-        # base_users, emails, users_rollup, users_rollup_dependency, but not users (ephemeral)
+        # users, emails_alt, users_rollup, users_rollup_dependency, but not base_users (ephemeral)
         self.assertEqual(len(results), 4)
 
         created_models = self.get_models_in_schema()
@@ -244,3 +244,48 @@ class TestGraphSelection(DBTIntegrationTest):
             user_last_end <= dep_first_start,
             'dependency started before its transitive parent ({} > {})'.format(user_last_end, dep_first_start)
         )
+
+    @use_profile('postgres')
+    def test__postgres__concat(self):
+        self.run_sql_file("seed.sql")
+        results = self.run_dbt(['run', '--models', '@emails_alt', 'users_rollup'])
+        # users, emails_alt, users_rollup
+        self.assertEqual(len(results), 3)
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('users_rollup', created_models)
+        self.assertIn('users', created_models)
+        self.assertIn('emails_alt', created_models)
+        self.assertNotIn('subdir', created_models)
+        self.assertNotIn('nested_users', created_models)
+
+    @use_profile('postgres')
+    def test__postgres__concat_exclude(self):
+        self.run_sql_file("seed.sql")
+        results = self.run_dbt(['run', '--models', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt'])
+        # users, users_rollup
+        self.assertEqual(len(results), 2)
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('users', created_models)
+        self.assertIn('users_rollup', created_models)
+        self.assertNotIn('emails_alt', created_models)
+        self.assertNotIn('subdir', created_models)
+        self.assertNotIn('nested_users', created_models)
+
+    @use_profile('postgres')
+    def test__postgres__concat_exclude_concat(self):
+        self.run_sql_file("seed.sql")
+        results = self.run_dbt(
+            ['run', '--models', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt', 'users_rollup']
+        )
+        # users
+        self.assertEqual(len(results), 1)
+
+        created_models = self.get_models_in_schema()
+
+        self.assertIn('users', created_models)
+        self.assertNotIn('emails_alt', created_models)
+        self.assertNotIn('users_rollup', created_models)
+        self.assertNotIn('subdir', created_models)
+        self.assertNotIn('nested_users', created_models)

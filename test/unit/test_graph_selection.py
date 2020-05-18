@@ -40,11 +40,11 @@ class GraphSelectionTest(BaseGraphSelectionTest):
 
     def add_tags(self, nodes):
         nodes['m.X.a'].tags = ['abc']
-        nodes['m.Y.b'].tags = ['abc']
-        nodes['m.X.c'].tags = ['abc']
+        nodes['m.Y.b'].tags = ['abc', 'bcef']
+        nodes['m.X.c'].tags = ['abc', 'bcef']
         nodes['m.Y.d'].tags = []
-        nodes['m.X.e'].tags = ['efg']
-        nodes['m.Y.f'].tags = ['efg']
+        nodes['m.X.e'].tags = ['efg', 'bcef']
+        nodes['m.Y.f'].tags = ['efg', 'bcef']
         nodes['m.X.g'].tags = ['efg']
 
     def run_specs_and_assert(self, graph, include, exclude, expected):
@@ -55,7 +55,6 @@ class GraphSelectionTest(BaseGraphSelectionTest):
         )
 
         self.assertEqual(selected, expected)
-
 
     def test__single_node_selection_in_package(self):
         self.run_specs_and_assert(
@@ -124,6 +123,150 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             ['@X.c'],
             [],
             set(['m.X.a', 'm.X.c', 'm.Y.f', 'm.X.g'])
+        )
+
+    def test__select_concat(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc', 'tag:bcef'],
+            [],
+            set(['m.X.a', 'm.Y.b', 'm.X.c', 'm.X.e', 'm.Y.f'])
+        )
+
+    def test__select_concat_exclude(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc', 'tag:bcef'],
+            ['tag:efg'],
+            set(['m.X.a', 'm.Y.b', 'm.X.c'])
+        )
+
+    def test__select_concat_exclude_concat(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc', 'tag:bcef'],
+            ['tag:efg', 'a'],
+            set(['m.Y.b', 'm.X.c'])
+        )
+
+    def test__select_same_model_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['a,a'],
+            [],
+            set(['m.X.a'])
+        )
+
+    def test__select_layer_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['+c,c+'],
+            [],
+            set(['m.X.c'])
+        )
+
+    def test__select_intersection_lack(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['a,b'],
+            [],
+            set()
+        )
+
+    def test__select_tags_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc,tag:bcef'],
+            [],
+            set(['m.Y.b', 'm.X.c'])
+        )
+
+    def test__select_intersection_triple_descending(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['*,tag:abc,a'],
+            [],
+            set(['m.X.a'])
+        )
+
+    def test__select_intersection_triple_ascending(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['a,tag:abc,*'],
+            [],
+            set(['m.X.a'])
+        )
+
+    def test__select_intersection_with_exclusion(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc,tag:bcef'],
+            ['c'],
+            set(['m.Y.b'])
+        )
+
+    def test__select_intersection_exclude_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg'],
+            ['tag:bcef,@b'],
+            set(['m.Y.f'])
+        )
+
+    def test__select_intersection_exclude_intersection_lack(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg'],
+            ['tag:bcef,@a'],
+            set()
+        )
+
+    def test__select_intersection_exclude_triple_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['*,@a,+b'],
+            ['*,tag:abc,tag:bcef'],
+            set(['m.X.a'])
+        )
+
+    def test__select_concat_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg', '*,tag:abc'],
+            [],
+            set(['m.X.a', 'm.Y.b', 'm.X.c', 'm.X.e', 'm.Y.f'])
+        )
+
+    def test__select_concat_intersection_exclude(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg', '*,tag:abc'],
+            ['e'],
+            set(['m.X.a', 'm.Y.b', 'm.X.c', 'm.Y.f'])
+        )
+
+    def test__select_concat_intersection_exclude_concat(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg', '*,tag:abc'],
+            ['e', 'f'],
+            set(['m.X.a', 'm.Y.b', 'm.X.c'])
+        )
+
+    def test__select_concat_intersection_exclude_intersection(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg', '*,tag:abc'],
+            ['tag:abc,tag:bcef'],
+            set(['m.X.a', 'm.X.e', 'm.Y.f'])
+        )
+
+    def test__select_concat_intersection_exclude_intersection_concat(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:bcef,tag:efg', '*,tag:abc'],
+            ['tag:abc,tag:bcef', 'tag:abc,a'],
+            set(['m.X.e', 'm.Y.f'])
         )
 
     def parse_spec_and_assert(self, spec, parents, children, filter_type, filter_value, childrens_parents):
