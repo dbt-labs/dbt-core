@@ -905,7 +905,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': {
                     'build_path': Normalized('target/compiled/test/models/model.sql'),
                     'name': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'resource_type': 'model',
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
@@ -987,7 +987,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patch_path': seed_schema_yml_path,
                     'path': 'seed.csv',
                     'name': 'seed',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -1080,7 +1080,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': ['schema'],
@@ -1133,7 +1133,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': ['schema'],
@@ -1185,7 +1185,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': ['schema'],
@@ -1246,30 +1246,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         docs_path = self.dir('ref_models/docs.md')
 
-        ephemeral_summary = LineIndifferent(
-            '{% docs ephemeral_summary %}\nA summmary table of the ephemeral copy of the seed data\n{% enddocs %}'
-        )
-        source_info = LineIndifferent('{% docs source_info %}\nMy source\n{% enddocs %}')
-        summary_count = LineIndifferent(
-            '{% docs summary_count %}\nThe number of instances of the first name\n{% enddocs %}'
-        )
-        summary_first_name = LineIndifferent(
-            '{% docs summary_first_name %}\nThe first name being summarized\n{% enddocs %}'
-        )
-        table_info = LineIndifferent('{% docs table_info %}\nMy table\n{% enddocs %}')
-        view_summary = LineIndifferent(
-            '{% docs view_summary %}\nA view of the summary of the ephemeral copy of the seed data\n{% enddocs %}'
-        )
-        column_info = LineIndifferent(
-            '{% docs column_info %}\nAn ID field\n{% enddocs %}'
-        )
-        macro_info = LineIndifferent(
-            '{% docs macro_info %}\nMy custom test that I wrote that does nothing\n{% enddocs %}'
-        )
-        macro_arg_info = LineIndifferent(
-            '{% docs macro_arg_info %}\nThe model for my custom test\n{% enddocs %}'
-        )
-
         return {
             'nodes': {
                 'model.test.ephemeral_copy': {
@@ -1306,7 +1282,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     ),
                     'refs': [],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1369,7 +1345,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     ),
                     'refs': [['ephemeral_copy']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1431,7 +1407,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     ),
                     'refs': [['ephemeral_summary']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'sources': [],
                     'tags': [],
@@ -1508,7 +1484,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': '',
                     'refs': [],
                     'resource_type': 'seed',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1555,7 +1531,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self.dir('ref_models/schema.yml'),
                     'patch_path': None,
                     'resource_type': 'source',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'source_description': 'My source',
                     'source_name': 'my_source',
@@ -1573,7 +1549,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.column_info',
                 },
                 'test.ephemeral_summary': {
@@ -1584,7 +1560,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.ephemeral_summary',
                 },
                 'test.source_info': {
@@ -1593,7 +1569,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.source_info',
                 },
                 'test.summary_count': {
@@ -1602,7 +1578,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.summary_count',
                 },
                 'test.summary_first_name': {
@@ -1611,7 +1587,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.summary_first_name',
                 },
                 'test.table_info': {
@@ -1620,7 +1596,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.table_info',
                 },
                 'test.view_summary': {
@@ -1632,7 +1608,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.view_summary',
                 },
                 'test.macro_info': {
@@ -1641,7 +1617,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': self.dir('macros/macro.md'),
                     'package_name': 'test',
                     'path': 'macro.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.macro_info',
                 },
                 'test.macro_arg_info': {
@@ -1650,7 +1626,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': self.dir('macros/macro.md'),
                     'package_name': 'test',
                     'path': 'macro.md',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'unique_id': 'test.macro_arg_info',
                 },
             },
@@ -1691,7 +1667,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'macro',
                     'unique_id': 'macro.test.test_nothing',
                     'tags': [],
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'arguments': [
                         {
                             'name': 'model',
@@ -1737,7 +1713,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': LineIndifferent(_read_file(clustered_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1815,7 +1791,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': LineIndifferent(_read_file(multi_clustered_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1894,7 +1870,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': LineIndifferent(_read_file(nested_view_sql_path).rstrip('\r\n')),
                     'refs': [['nested_table']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1974,7 +1950,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': LineIndifferent(_read_file(nested_table_sql_path).rstrip('\r\n')),
                     'refs': [],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -1994,7 +1970,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
                     'name': 'seed',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -2133,7 +2109,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': {
                     'build_path': Normalized('target/compiled/test/rs_models/model.sql'),
                     'name': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'resource_type': 'model',
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
@@ -2215,7 +2191,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
                     'name': 'seed',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -2454,7 +2430,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': LineIndifferent(_read_file(model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': schema,
                     'database': model_database,
                     'tags': [],
@@ -2541,7 +2517,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': '',
                     'refs': [],
                     'resource_type': 'seed',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': schema,
                     'database': self.default_database,
                     'tags': [],
@@ -2596,7 +2572,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': schema,
                     'database': self.default_database,
                     'tags': ['schema'],
@@ -2659,7 +2635,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': schema,
                     'sources': [],
                     'tags': ['schema'],
@@ -2721,7 +2697,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': schema,
                     'sources': [],
                     'tags': ['schema'],
@@ -2834,7 +2810,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     ),
                     'refs': [['ephemeral_copy']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -2912,7 +2888,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     ),
                     'refs': [['ephemeral_summary']],
                     'resource_type': 'model',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
@@ -2999,7 +2975,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': '',
                     'refs': [],
                     'resource_type': 'seed',
-                    'root_path': self.test_root_dir,
+                    'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
