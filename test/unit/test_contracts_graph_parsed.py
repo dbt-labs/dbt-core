@@ -1204,6 +1204,7 @@ class TestParsedMacro(ContractTestCase):
             'depends_on': {'macros': []},
             'meta': {},
             'description': 'my macro description',
+            'docs': {'show': True},
             'arguments': [],
         }
 

@@ -287,6 +287,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     depends_on: MacroDependsOn = field(default_factory=MacroDependsOn)
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
+    docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
 
@@ -297,6 +298,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.patch_path: Optional[str] = patch.original_file_path
         self.description = patch.description
         self.meta = patch.meta
+        self.docs = patch.docs
         self.arguments = patch.arguments
         if dbt.flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
