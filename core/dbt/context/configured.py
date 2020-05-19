@@ -6,6 +6,8 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.include.global_project import PACKAGES
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.node_types import NodeType
+from dbt.utils import MultiDict
 
 from dbt.context.base import contextproperty, Var
 from dbt.context.target import TargetContext
@@ -23,6 +25,13 @@ class ConfiguredContext(TargetContext):
     @contextproperty
     def project_name(self) -> str:
         return self.config.project_name
+
+
+class FQNLookup:
+    def __init__(self, package_name: str):
+        self.package_name = package_name
+        self.fqn = [package_name]
+        self.resource_type = NodeType.Model
 
 
 class ConfiguredVar(Var):
@@ -44,17 +53,16 @@ class ConfiguredVar(Var):
             return self.config.cli_vars[var_name]
 
         if self.config.config_version == 2 and my_config.config_version == 2:
-
-            active_vars = self.config.vars.to_dict()
-            active_vars = active_vars.get(self.project_name, {})
-            if var_name in active_vars:
-                return active_vars[var_name]
+            adapter_type = self.config.credentials.type
+            lookup = FQNLookup(self.project_name)
+            active_vars = self.config.vars.vars_for(lookup, adapter_type)
+            all_vars = MultiDict([active_vars])
 
             if self.config.project_name != my_config.project_name:
-                config_vars = my_config.vars.to_dict()
-                config_vars = config_vars.get(self.project_name, {})
-                if var_name in config_vars:
-                    return config_vars[var_name]
+                all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
+
+            if var_name in all_vars:
+                return all_vars[var_name]
 
         if default is not Var._VAR_NOTSET:
             return default

@@ -360,12 +360,12 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 if path.is_dir() and not path.name.startswith('__'):
                     yield path
 
-    def as_v1(self):
+    def as_v1(self, all_projects: Iterable[str]):
         if self.config_version == 1:
             return self
 
         return self.from_parts(
-            project=Project.as_v1(self),
+            project=Project.as_v1(self, all_projects),
             profile=self,
             args=self.args,
             dependencies=self.dependencies,

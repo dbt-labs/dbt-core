@@ -9,7 +9,10 @@ from hologram import ValidationError
 
 from dbt.clients.jinja import MacroGenerator
 from dbt.clients.system import load_file_contents
-from dbt.context.providers import generate_parser_model, generate_parser_macro
+from dbt.context.providers import (
+    generate_parser_model,
+    generate_generate_component_name_macro,
+)
 import dbt.flags
 from dbt import hooks
 from dbt.adapters.factory import get_adapter
@@ -107,7 +110,9 @@ class RelationUpdate:
                 f'No macro with name generate_{component}_name found'
             )
 
-        root_context = generate_parser_macro(macro, config, manifest, None)
+        root_context = generate_generate_component_name_macro(
+            macro, config, manifest
+        )
         self.updater = MacroGenerator(macro, root_context)
         self.component = component
 
@@ -324,12 +329,12 @@ class ConfiguredParser(
         config_version = min(
             [self.project.config_version, self.root_project.config_version]
         )
-        # it would be nice to assert that if the main config is v2, the
-        # dependencies are all v2. or vice-versa.
+        # grab a list of the existing project names. This is for var conversion
+        all_projects = self.root_project.load_dependencies()
         if config_version == 1:
             return LegacyContextConfig(
-                self.root_project.as_v1(),
-                self.project.as_v1(),
+                self.root_project.as_v1(all_projects),
+                self.project.as_v1(all_projects),
                 fqn,
                 self.resource_type,
             )
