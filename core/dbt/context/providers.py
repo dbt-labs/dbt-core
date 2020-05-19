@@ -1255,9 +1255,7 @@ def generate_generate_name_macro_context(
     config: RuntimeConfig,
     manifest: Manifest,
 ) -> Dict[str, Any]:
-    ctx = MacroContext(
-        macro, config, manifest, GenerateNameProvider(), None
-    )
+    ctx = MacroContext(macro, config, manifest, GenerateNameProvider(), None)
     return ctx.to_dict()
 
 
