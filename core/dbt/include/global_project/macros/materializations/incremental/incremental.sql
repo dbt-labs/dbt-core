@@ -4,7 +4,7 @@
   {% set unique_key = config.get('unique_key') %}
   {% set full_refresh_mode = flags.FULL_REFRESH %}
 
-  {% set target_relation = this %}
+  {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
   {% set tmp_relation = make_temp_relation(this) %}
 
@@ -37,6 +37,8 @@
   {% call statement("main") %}
       {{ build_sql }}
   {% endcall %}
+
+  {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 

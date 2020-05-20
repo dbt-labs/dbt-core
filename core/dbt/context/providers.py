@@ -210,6 +210,12 @@ class ParseConfigObject(Config):
     def get(self, name, validator=None, default=None):
         return ''
 
+    def persist_relation_docs(self) -> bool:
+        return False
+
+    def persist_column_docs(self) -> bool:
+        return False
+
 
 class RuntimeConfigObject(Config):
     def __init__(
@@ -228,7 +234,11 @@ class RuntimeConfigObject(Config):
         validator(value)
 
     def _lookup(self, name, default=_MISSING):
-        result = self.model.config.get(name, default)
+        # if this is a macro, there might be no `model.config`.
+        if not hasattr(self.model, 'config'):
+            result = default
+        else:
+            result = self.model.config.get(name, default)
         if result is _MISSING:
             missing_config(self.model, name)
         return result
@@ -248,6 +258,24 @@ class RuntimeConfigObject(Config):
             self._validate(validator, to_return)
 
         return to_return
+
+    def persist_relation_docs(self) -> bool:
+        persist_docs = self.get('persist_docs', default={})
+        if not isinstance(persist_docs, dict):
+            raise_compiler_error(
+                f"Invalid value provided for 'persist_docs'. Expected dict "
+                f"but received {type(persist_docs)}")
+
+        return persist_docs.get('relation', False)
+
+    def persist_column_docs(self) -> bool:
+        persist_docs = self.get('persist_docs', default={})
+        if not isinstance(persist_docs, dict):
+            raise_compiler_error(
+                f"Invalid value provided for 'persist_docs'. Expected dict "
+                f"but received {type(persist_docs)}")
+
+        return persist_docs.get('columns', False)
 
 
 # `adapter` implementations
@@ -396,7 +424,7 @@ class RuntimeSourceResolver(BaseSourceResolver):
 
 
 # `var` implementations.
-class ConfiguredVar(Var):
+class ModelConfiguredVar(Var):
     def __init__(
         self,
         context: Dict[str, Any],
@@ -437,13 +465,13 @@ class ConfiguredVar(Var):
         return merged
 
 
-class ParseVar(ConfiguredVar):
+class ParseVar(ModelConfiguredVar):
     def get_missing_var(self, var_name):
         # in the parser, just always return None.
         return None
 
 
-class RuntimeVar(ConfiguredVar):
+class RuntimeVar(ModelConfiguredVar):
     pass
 
 
@@ -452,7 +480,7 @@ class Provider(Protocol):
     execute: bool
     Config: Type[Config]
     DatabaseWrapper: Type[BaseDatabaseWrapper]
-    Var: Type[ConfiguredVar]
+    Var: Type[ModelConfiguredVar]
     ref: Type[BaseRefResolver]
     source: Type[BaseSourceResolver]
 
@@ -813,7 +841,7 @@ class ProviderContext(ManifestContext):
         return self.config.credentials.schema
 
     @contextproperty
-    def var(self) -> ConfiguredVar:
+    def var(self) -> ModelConfiguredVar:
         return self.provider.Var(
             context=self._ctx,
             config=self.config,
@@ -917,8 +945,7 @@ class ProviderContext(ManifestContext):
 
         ## Accessing sources
 
-        To access the sources in your dbt project programatically, filter for
-        nodes where the `resource_type == 'source'`.
+        To access the sources in your dbt project programatically, use the "sources" attribute.
 
         Example usage:
 
@@ -929,7 +956,7 @@ class ProviderContext(ManifestContext):
               which begin with the string "event_"
             */
             {% set sources = [] -%}
-            {% for node in graph.nodes.values() | selectattr("resource_type", "equalto", "source") -%}
+            {% for node in graph.sources.values() -%}
               {%- if node.name.startswith('event_') and node.source_name == 'snowplow' -%}
                 {%- do sources.append(source(node.source_name, node.name)) -%}
               {%- endif -%}

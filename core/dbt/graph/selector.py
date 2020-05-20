@@ -9,7 +9,7 @@ import networkx as nx  # type: ignore
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import coalesce
 from dbt.node_types import NodeType
-import dbt.exceptions
+from dbt.exceptions import RuntimeException, InternalException, warn_or_error
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
@@ -50,7 +50,7 @@ class SelectionCriteria:
             node_spec = node_spec[:-1]
 
         if self.select_children and self.select_childrens_parents:
-            raise dbt.exceptions.RuntimeException(
+            raise RuntimeException(
                 'Invalid node spec {} - "@" prefix and "+" suffix are '
                 'incompatible'.format(self.raw)
             )
@@ -79,6 +79,14 @@ class SELECTOR_FILTERS(str, Enum):
         return self._value_
 
 
+def alert_non_existence(raw_spec, nodes):
+    if len(nodes) == 0:
+        warn_or_error(
+            f"The selector '{str(raw_spec)}' does not match any nodes and will"
+            f" be ignored"
+        )
+
+
 def split_specs(node_specs: Iterable[str]):
     specs: Set[str] = set()
     for spec in node_specs:
@@ -88,8 +96,8 @@ def split_specs(node_specs: Iterable[str]):
     return specs
 
 
-def get_package_names(graph):
-    return set([node.split(".")[1] for node in graph.nodes()])
+def get_package_names(nodes):
+    return set([node.split(".")[1] for node in nodes])
 
 
 def is_selected_node(real_node, node_selector):
@@ -166,16 +174,16 @@ class ManifestSelector:
             yield unique_id, node
 
     def parsed_nodes(self, included_nodes):
-        return self._node_iterator(
-            included_nodes,
-            exclude=(NodeType.Source,),
-            include=None)
+        for unique_id, node in self.manifest.nodes.items():
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, node
 
     def source_nodes(self, included_nodes):
-        return self._node_iterator(
-            included_nodes,
-            exclude=None,
-            include=(NodeType.Source,))
+        for unique_id, source in self.manifest.sources.items():
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, source
 
     def search(self, included_nodes, selector):
         raise NotImplementedError('subclasses should implement this')
@@ -190,7 +198,7 @@ class QualifiedNameSelector(ManifestSelector):
         :param str selector: The selector or node name
         """
         qualified_name = selector.split(".")
-        package_names = {node.split(".")[1] for node in included_nodes}
+        package_names = get_package_names(included_nodes)
         for node, real_node in self.parsed_nodes(included_nodes):
             if _node_is_match(qualified_name, package_names, real_node.fqn):
                 yield node
@@ -228,7 +236,7 @@ class SourceSelector(ManifestSelector):
                 '`${{source_name}}.${{target_name}}`, or '
                 '`${{package_name}}.${{source_name}}.${{target_name}}'
             ).format(selector)
-            raise dbt.exceptions.RuntimeException(msg)
+            raise RuntimeException(msg)
 
         for node, real_node in self.source_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
@@ -380,29 +388,65 @@ class NodeSelector(MultiSelector):
 
         return collected
 
+    def get_nodes_from_multiple_specs(
+            self,
+            graph,
+            specs,
+            nodes=None,
+            check_existence=False,
+            exclude=False
+    ):
+        selected_nodes: Set[str] = coalesce(nodes, set())
+        operator = set.difference_update if exclude else set.update
+
+        for raw_spec in split_specs(specs):
+            spec = SelectionCriteria(raw_spec)
+            nodes = self.get_nodes_from_spec(graph, spec)
+
+            if check_existence:
+                alert_non_existence(raw_spec, nodes)
+
+            operator(selected_nodes, nodes)
+
+        return selected_nodes
+
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
-        selected_nodes: Set[str] = set()
+        raw_exclude_specs = coalesce(raw_exclude_specs, [])
+        check_existence = True
 
-        for raw_spec in split_specs(raw_include_specs):
-            spec = SelectionCriteria(raw_spec)
-            included_nodes = self.get_nodes_from_spec(graph, spec)
-            selected_nodes.update(included_nodes)
+        if not raw_include_specs:
+            check_existence = False
+            raw_include_specs = ['fqn:*', 'source:*']
 
-        for raw_spec in split_specs(raw_exclude_specs):
-            spec = SelectionCriteria(raw_spec)
-            excluded_nodes = self.get_nodes_from_spec(graph, spec)
-            selected_nodes.difference_update(excluded_nodes)
+        selected_nodes = self.get_nodes_from_multiple_specs(
+            graph,
+            raw_include_specs,
+            check_existence=check_existence
+        )
+        selected_nodes = self.get_nodes_from_multiple_specs(
+            graph,
+            raw_exclude_specs,
+            nodes=selected_nodes,
+            exclude=True
+        )
 
         return selected_nodes
 
     def _is_graph_member(self, node_name):
-        node = self.manifest.nodes[node_name]
-        if node.resource_type == NodeType.Source:
+        if node_name in self.manifest.sources:
             return True
+        node = self.manifest.nodes[node_name]
         return not node.empty and node.config.enabled
 
     def _is_match(self, node_name, resource_types, tags, required):
-        node = self.manifest.nodes[node_name]
+        if node_name in self.manifest.nodes:
+            node = self.manifest.nodes[node_name]
+        elif node_name in self.manifest.sources:
+            node = self.manifest.sources[node_name]
+        else:
+            raise InternalException(
+                f'Node {node_name} not found in the manifest!'
+            )
         if node.resource_type not in resource_types:
             return False
         tags = set(tags)
@@ -415,8 +459,6 @@ class NodeSelector(MultiSelector):
         return True
 
     def get_selected(self, include, exclude, resource_types, tags, required):
-        include = coalesce(include, ['fqn:*', 'source:*'])
-        exclude = coalesce(exclude, [])
         tags = coalesce(tags, [])
 
         graph_members = {

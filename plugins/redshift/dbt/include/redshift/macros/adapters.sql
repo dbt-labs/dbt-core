@@ -53,8 +53,9 @@
 
 
 {% macro redshift__create_view_as(relation, sql) -%}
+  {%- set binding = config.get('bind', default=True) -%}
 
-  {% set bind_qualifier = '' if config.get('bind', default=True) else 'with no schema binding' %}
+  {% set bind_qualifier = '' if binding else 'with no schema binding' %}
   {%- set sql_header = config.get('sql_header', none) -%}
 
   {{ sql_header if sql_header is not none }}
@@ -65,13 +66,13 @@
 {% endmacro %}
 
 
-{% macro redshift__create_schema(database_name, schema_name) -%}
-  {{ postgres__create_schema(database_name, schema_name) }}
+{% macro redshift__create_schema(relation) -%}
+  {{ postgres__create_schema(relation) }}
 {% endmacro %}
 
 
-{% macro redshift__drop_schema(database_name, schema_name) -%}
-  {{ postgres__drop_schema(database_name, schema_name) }}
+{% macro redshift__drop_schema(relation) -%}
+  {{ postgres__drop_schema(relation) }}
 {% endmacro %}
 
 
@@ -152,8 +153,8 @@
 {% endmacro %}
 
 
-{% macro redshift__list_relations_without_caching(information_schema, schema) %}
-  {{ return(postgres__list_relations_without_caching(information_schema, schema)) }}
+{% macro redshift__list_relations_without_caching(schema_relation) %}
+  {{ return(postgres__list_relations_without_caching(schema_relation)) }}
 {% endmacro %}
 
 
@@ -188,3 +189,27 @@
 {% macro redshift__make_temp_relation(base_relation, suffix) %}
     {% do return(postgres__make_temp_relation(base_relation, suffix)) %}
 {% endmacro %}
+
+
+{% macro redshift__persist_docs(relation, model, for_relation, for_columns) -%}
+  {% if for_relation and config.persist_relation_docs() and model.description %}
+    {% do run_query(alter_relation_comment(relation, model.description)) %}
+  {% endif %}
+
+  {# Override: do not set column comments for LBVs #}
+  {% set is_lbv = config.get('materialized') == 'view' and config.get('bind') == false %}
+  {% if for_columns and config.persist_column_docs() and model.columns and not is_lbv %}
+    {% do run_query(alter_column_comment(relation, model.columns)) %}
+  {% endif %}
+{% endmacro %}
+
+
+{% macro redshift__alter_relation_comment(relation, comment) %}
+  {% do return(postgres__alter_relation_comment(relation, comment)) %}
+{% endmacro %}
+
+
+{% macro redshift__alter_column_comment(relation, column_dict) %}
+  {% do return(postgres__alter_column_comment(relation, column_dict)) %}
+{% endmacro %}
+

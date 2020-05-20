@@ -113,9 +113,9 @@ class SnowflakeAdapter(SQLAdapter):
         return [row['name'] for row in results]
 
     def list_relations_without_caching(
-            self, information_schema, schema
+            self, schema_relation: SnowflakeRelation
     ) -> List[SnowflakeRelation]:
-        kwargs = {'information_schema': information_schema, 'schema': schema}
+        kwargs = {'schema_relation': schema_relation}
         try:
             results = self.execute_macro(
                 LIST_RELATIONS_MACRO_NAME,

@@ -34,7 +34,7 @@
         )
       {%- endset -%}
       
-      {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate]) }}
+      {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate], include_sql_header=true) }}
   
   {% else %} {# dynamic #}
   
@@ -66,8 +66,12 @@
           from {{ tmp_relation }}
       );
       
+      {#
+        TODO: include_sql_header is a hack; consider a better approach that includes
+              the sql_header at the materialization-level instead
+      #}
       -- 3. run the merge statement
-      {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate]) }};
+      {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate], include_sql_header=false) }};
 
       -- 4. clean up the temp table
       drop table if exists {{ tmp_relation }}
@@ -150,6 +154,10 @@
   {% endcall %}
 
   {{ run_hooks(post_hooks) }}
+
+  {% set target_relation = this.incorporate(type='table') %}
+
+  {% do persist_docs(target_relation, model) %}
 
   {{ return({'relations': [target_relation]}) }}
 

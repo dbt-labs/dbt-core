@@ -173,7 +173,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
         self.invalid_spec('@source:a+')
 
     def test__package_name_getter(self):
-        found = graph_selector.get_package_names(self.package_graph)
+        found = graph_selector.get_package_names(self.package_graph.nodes())
 
         expected = set(['X', 'Y'])
         self.assertEqual(found, expected)

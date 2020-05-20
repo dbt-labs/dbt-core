@@ -44,23 +44,23 @@
     {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
 {% endmacro %}
 
-{% macro create_schema(database_name, schema_name) -%}
-  {{ adapter_macro('create_schema', database_name, schema_name) }}
+{% macro create_schema(relation) -%}
+  {{ adapter_macro('create_schema', relation) }}
 {% endmacro %}
 
-{% macro default__create_schema(database_name, schema_name) -%}
+{% macro default__create_schema(relation) -%}
   {%- call statement('create_schema') -%}
-    create schema if not exists {{database_name}}.{{schema_name}}
+    create schema if not exists {{ relation.without_identifier() }}
   {% endcall %}
 {% endmacro %}
 
-{% macro drop_schema(database_name, schema_name) -%}
-  {{ adapter_macro('drop_schema', database_name, schema_name) }}
+{% macro drop_schema(relation) -%}
+  {{ adapter_macro('drop_schema', relation) }}
 {% endmacro %}
 
-{% macro default__drop_schema(database_name, schema_name) -%}
+{% macro default__drop_schema(relation) -%}
   {%- call statement('drop_schema') -%}
-    drop schema if exists {{database_name}}.{{schema_name}} cascade
+    drop schema if exists {{ relation.without_identifier() }} cascade
   {% endcall %}
 {% endmacro %}
 
@@ -78,6 +78,7 @@
   as (
     {{ sql }}
   );
+
 {% endmacro %}
 
 {% macro create_view_as(relation, sql) -%}
@@ -129,6 +130,42 @@
 {% macro alter_column_type(relation, column_name, new_column_type) -%}
   {{ return(adapter_macro('alter_column_type', relation, column_name, new_column_type)) }}
 {% endmacro %}
+
+
+
+{% macro alter_column_comment(relation, column_dict) -%}
+  {{ return(adapter_macro('alter_column_comment', relation, column_dict)) }}
+{% endmacro %}
+
+{% macro default__alter_column_comment(relation, column_dict) -%}
+  {{ exceptions.raise_not_implemented(
+    'alter_column_comment macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+
+{% macro alter_relation_comment(relation, relation_comment) -%}
+  {{ return(adapter_macro('alter_relation_comment', relation, relation_comment)) }}
+{% endmacro %}
+
+{% macro default__alter_relation_comment(relation, relation_comment) -%}
+  {{ exceptions.raise_not_implemented(
+    'alter_relation_comment macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+
+{% macro persist_docs(relation, model, for_relation=true, for_columns=true) -%}
+  {{ return(adapter_macro('persist_docs', relation, model, for_relation, for_columns)) }}
+{% endmacro %}
+
+{% macro default__persist_docs(relation, model, for_relation, for_columns) -%}
+  {% if for_relation and config.persist_relation_docs() and model.description %}
+    {% do run_query(alter_relation_comment(relation, model.description)) %}
+  {% endif %}
+
+  {% if for_columns and config.persist_column_docs() and model.columns %}
+    {% do run_query(alter_column_comment(relation, model.columns)) %}
+  {% endif %}
+{% endmacro %}
+
+
 
 {% macro default__alter_column_type(relation, column_name, new_column_type) -%}
   {#
@@ -225,12 +262,12 @@
 {% endmacro %}
 
 
-{% macro list_relations_without_caching(information_schema, schema) %}
-  {{ return(adapter_macro('list_relations_without_caching', information_schema, schema)) }}
+{% macro list_relations_without_caching(schema_relation) %}
+  {{ return(adapter_macro('list_relations_without_caching', schema_relation)) }}
 {% endmacro %}
 
 
-{% macro default__list_relations_without_caching(information_schema, schema) %}
+{% macro default__list_relations_without_caching(schema_relation) %}
   {{ exceptions.raise_not_implemented(
     'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}

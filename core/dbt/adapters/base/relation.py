@@ -255,6 +255,16 @@ class BaseRelation(FakeAPIObject, Hashable):
     def information_schema_only(self) -> 'InformationSchema':
         return self.information_schema()
 
+    def without_identifier(self) -> 'BaseRelation':
+        """Return a form of this relation that only has the database and schema
+        set to included. To get the appropriately-quoted form the schema out of
+        the result (for use as part of a query), use `.render()`. To get the
+        raw database or schema name, use `.database` or `.schema`.
+
+        The hash of the returned object is the result of render().
+        """
+        return self.include(identifier=False).replace_path(identifier=None)
+
     def _render_iterator(
         self
     ) -> Iterator[Tuple[Optional[ComponentName], Optional[str]]]:
@@ -501,37 +511,24 @@ class InformationSchema(BaseRelation):
 
 class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
     """A utility class to keep track of what information_schema tables to
-    search for what schemas
+    search for what schemas. The schema values are all lowercased to avoid
+    duplication.
     """
-    def add(self, relation: BaseRelation, preserve_case=False):
+    def add(self, relation: BaseRelation):
         key = relation.information_schema_only()
         if key not in self:
             self[key] = set()
         schema: Optional[str] = None
         if relation.schema is not None:
-            if preserve_case:
-                schema = relation.schema
-            else:
-                schema = relation.schema.lower()
+            schema = relation.schema.lower()
         self[key].add(schema)
 
-    def search(self) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
+    def search(
+        self
+    ) -> Iterator[Tuple[InformationSchema, Optional[str]]]:
         for information_schema_name, schemas in self.items():
             for schema in schemas:
                 yield information_schema_name, schema
-
-    def schemas_searched(self) -> Set[Tuple[str, Optional[str]]]:
-        result: Set[Tuple[str, Optional[str]]] = set()
-        for information_schema_name, schemas in self.items():
-            if information_schema_name.database is None:
-                raise InternalException(
-                    'Got a None database in an information schema!'
-                )
-            result.update(
-                (information_schema_name.database, schema)
-                for schema in schemas
-            )
-        return result
 
     def flatten(self):
         new = self.__class__()

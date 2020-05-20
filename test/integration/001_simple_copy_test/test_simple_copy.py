@@ -290,11 +290,14 @@ class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):
         })
 
     @use_profile("snowflake")
-    def test__snowflake__seed__quoting_switch_schema(self):
+    def test__snowflake__seed__quoting_switch_schema_lower(self):
         self.use_default_project({
             "data-paths": [self.dir("snowflake-seed-initial")],
         })
 
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        # this is intentional - should not error!
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
 
@@ -303,6 +306,32 @@ class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):
             "quoting": {"identifier": False, "schema": False},
         })
         results = self.run_dbt(["seed"], expect_pass=False)
+
+
+class TestSnowflakeSimpleUppercasedSchemaQuoted(BaseTestSimpleCopy):
+    @property
+    def project_config(self):
+        return self.seed_quote_cfg_with({
+            'quoting': {'identifier': False, 'schema': True}
+        })
+
+    @use_profile("snowflake")
+    def test__snowflake__seed__quoting_switch_schema_upper(self):
+        self.use_default_project({
+            "data-paths": [self.dir("snowflake-seed-initial")],
+        })
+
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        # this is intentional - should not error!
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+
+        self.use_default_project({
+            "data-paths": [self.dir("snowflake-seed-update")],
+            "quoting": {"identifier": False, "schema": False},
+        })
+        results = self.run_dbt(["seed"])
 
 
 class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):

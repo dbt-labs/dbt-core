@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Set
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
@@ -40,11 +40,9 @@ class PostgresAdapter(SQLAdapter):
         # return an empty string on success so macros can call this
         return ''
 
-    def _link_cached_database_relations(self, schemas):
+    def _link_cached_database_relations(self, schemas: Set[str]):
         """
-
-        :param Set[str] schemas: The set of schemas that should have links
-            added.
+        :param schemas: The set of schemas that should have links added.
         """
         database = self.config.credentials.database
         table = self.execute_macro(GET_RELATIONS_MACRO_NAME)
@@ -66,9 +64,9 @@ class PostgresAdapter(SQLAdapter):
             if refed_schema.lower() in schemas:
                 self.cache.add_link(referenced, dependent)
 
-    def _get_cache_schemas(self, manifest, exec_only=False):
+    def _get_catalog_schemas(self, manifest):
         # postgres/redshift only allow one database (the main one)
-        schemas = super()._get_cache_schemas(manifest, exec_only=exec_only)
+        schemas = super()._get_catalog_schemas(manifest)
         try:
             return schemas.flatten()
         except dbt.exceptions.RuntimeException as exc:
@@ -79,13 +77,11 @@ class PostgresAdapter(SQLAdapter):
             )
 
     def _link_cached_relations(self, manifest):
-        schemas = set()
-        # only link executable nodes
-        info_schema_name_map = self._get_cache_schemas(manifest,
-                                                       exec_only=True)
-        for db, schema in info_schema_name_map.search():
-            self.verify_database(db.database)
-            schemas.add(schema)
+        schemas: Set[str] = set()
+        relations_schemas = self._get_cache_schemas(manifest)
+        for relation in relations_schemas:
+            self.verify_database(relation.database)
+            schemas.add(relation.schema.lower())
 
         self._link_cached_database_relations(schemas)
 

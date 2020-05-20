@@ -4,6 +4,7 @@ import random
 import shutil
 import signal
 import socket
+import sys
 import time
 from base64 import standard_b64encode as b64
 from datetime import datetime
@@ -725,9 +726,11 @@ class TestRPCServerCompileRun(HasRPCServer):
             'hi this is not sql',
             name='foo'
         ).json()
+        # neat mystery: Why is this "1" on macos and "2" on linux?
+        lineno = '1' if sys.platform == 'darwin' else '2'
         error_data = self.assertIsErrorWith(data, 10003, 'Database Error', {
             'type': 'DatabaseException',
-            'message': 'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 2: hi this is not sql\n          ^',
+            'message': f'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE {lineno}: hi this is not sql\n          ^',
             'compiled_sql': 'hi this is not sql',
             'raw_sql': 'hi this is not sql',
         })
@@ -764,6 +767,10 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertIn('message', error_data)
         self.assertEqual(error_data['message'], 'RPC timed out after 1.0s')
         self.assertIn('logs', error_data)
+        if sys.platform == 'darwin':
+            # because fork() without exec() is broken on macos, we use 'spawn'
+            # so on macos we don't get logs back because we didn't fork()
+            return
         self.assertTrue(len(error_data['logs']) > 0)
 
 
@@ -894,12 +901,14 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertIn('results', result)
         self.assertHasTestResults(result['results'], 4)
 
-    def assertManifestExists(self, length):
+    def assertManifestExists(self, nodes_length, sources_length):
         self.assertTrue(os.path.exists('target/manifest.json'))
         with open('target/manifest.json') as fp:
             manifest = json.load(fp)
         self.assertIn('nodes', manifest)
-        self.assertEqual(len(manifest['nodes']), length)
+        self.assertEqual(len(manifest['nodes']), nodes_length)
+        self.assertIn('sources', manifest)
+        self.assertEqual(len(manifest['sources']), sources_length)
 
     def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
@@ -907,7 +916,10 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertTrue(dct['state'])
         self.assertIn('nodes', dct)
         nodes = dct['nodes']
-        self.assertEqual(set(nodes), expected)
+        self.assertEqual(set(nodes), expected['nodes'])
+        self.assertIn('sources', dct)
+        sources = dct['sources']
+        self.assertEqual(set(sources), expected['sources'])
 
     def assertCatalogExists(self):
         self.assertTrue(os.path.exists('target/catalog.json'))
@@ -916,20 +928,24 @@ class TestRPCServerProjects(HasRPCServer):
 
     def _correct_docs_generate_result(self, result):
         expected = {
-            'model.test.descendant_model',
-            'model.test.multi_source_model',
-            'model.test.nonsource_descendant',
-            'seed.test.expected_multi_source',
-            'seed.test.other_source_table',
-            'seed.test.other_table',
-            'seed.test.source',
-            'source.test.other_source.test_table',
-            'source.test.test_source.other_test_table',
-            'source.test.test_source.test_table',
+            'nodes': {
+                'model.test.descendant_model',
+                'model.test.multi_source_model',
+                'model.test.nonsource_descendant',
+                'seed.test.expected_multi_source',
+                'seed.test.other_source_table',
+                'seed.test.other_table',
+                'seed.test.source',
+            },
+            'sources': {
+                'source.test.other_source.test_table',
+                'source.test.test_source.other_test_table',
+                'source.test.test_source.test_table',
+            },
         }
         self.assertHasDocsGenerated(result, expected)
         self.assertCatalogExists()
-        self.assertManifestExists(17)
+        self.assertManifestExists(12, 5)
 
     @use_profile('postgres')
     def test_docs_generate_postgres(self):

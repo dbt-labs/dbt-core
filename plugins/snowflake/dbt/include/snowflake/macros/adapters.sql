@@ -3,6 +3,7 @@
   {%- set cluster_by_keys = config.get('cluster_by', default=none) -%}
   {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
   {%- set copy_grants = config.get('copy_grants', default=false) -%}
+
   {%- if cluster_by_keys is not none and cluster_by_keys is string -%}
     {%- set cluster_by_keys = [cluster_by_keys] -%}
   {%- endif -%}
@@ -35,7 +36,6 @@
     {% if enable_automatic_clustering and cluster_by_string is not none and not temporary  -%}
       alter table {{relation}} resume recluster;
     {%- endif -%}
-
 {% endmacro %}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
@@ -92,18 +92,16 @@
 {% endmacro %}
 
 
-{% macro snowflake__list_relations_without_caching(information_schema, schema) %}
-  {%- set db_name = adapter.quote_as_configured(information_schema.database, 'database') -%}
-  {%- set schema_name = adapter.quote_as_configured(schema, 'schema') -%}
+{% macro snowflake__list_relations_without_caching(schema_relation) %}
   {%- set sql -%}
-    show terse objects in {{ db_name }}.{{ schema_name }}
+    show terse objects in {{ schema_relation }}
   {%- endset -%}
 
   {%- set result = run_query(sql) -%}
   {% set maximum = 10000 %}
   {% if (result | length) >= maximum %}
     {% set msg %}
-      Too many schemas in schema {{ database }}.{{ schema }}! dbt can only get
+      Too many schemas in schema  {{ schema_relation }}! dbt can only get
       information about schemas with fewer than {{ maximum }} objects.
     {% endset %}
     {% do exceptions.raise_compiler_error(msg) %}
@@ -149,4 +147,16 @@
   {% call statement('alter_column_type') %}
     alter table {{ relation }} alter {{ adapter.quote(column_name) }} set data type {{ new_column_type }};
   {% endcall %}
+{% endmacro %}
+
+{% macro snowflake__alter_relation_comment(relation, relation_comment) -%}
+  comment on {{ relation.type }} {{ relation }} IS $${{ relation_comment | replace('$', '[$]') }}$$;
+{% endmacro %}
+
+
+{% macro snowflake__alter_column_comment(relation, column_dict) -%}
+    alter {{ relation.type }} {{ relation }} alter
+    {% for column_name in column_dict %}
+        {{ column_name }} COMMENT $${{ column_dict[column_name]['description'] | replace('$', '[$]') }}$$ {{ ',' if not loop.last else ';' }}
+    {% endfor %}
 {% endmacro %}

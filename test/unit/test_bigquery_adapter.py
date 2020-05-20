@@ -58,6 +58,7 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
                     'threads': 1,
                     'location': 'Luna Station',
                     'priority': 'batch',
+                    'maximum_bytes_billed': 0,
                 },
             },
             'target': 'oauth',
@@ -147,6 +148,21 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         connection.handle
         mock_open_connection.assert_called_once()
 
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_maximum_bytes_billed(self, mock_open_connection):
+        adapter = self.get_adapter('loc')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+            self.assertEqual(connection.credentials.maximum_bytes_billed, 0)
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
     def test_cancel_open_connections_empty(self):
         adapter = self.get_adapter('oauth')
         self.assertEqual(adapter.cancel_open_connections(), None)
@@ -216,13 +232,15 @@ class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
         self.mock_connection_manager.get_bq_table.assert_called_once_with('db', 'schema', 'my_model')
 
     def test_create_schema(self):
-        self.adapter.create_schema('db', 'schema')
+        relation = BigQueryRelation.create(database='db', schema='schema')
+        self.adapter.create_schema(relation)
         self.mock_connection_manager.create_dataset.assert_called_once_with('db', 'schema')
 
     @patch.object(BigQueryAdapter, 'check_schema_exists')
     def test_drop_schema(self, mock_check_schema):
         mock_check_schema.return_value = True
-        self.adapter.drop_schema('db', 'schema')
+        relation = BigQueryRelation.create(database='db', schema='schema')
+        self.adapter.drop_schema(relation)
         self.mock_connection_manager.drop_dataset.assert_called_once_with('db', 'schema')
 
     def test_get_columns_in_relation(self):

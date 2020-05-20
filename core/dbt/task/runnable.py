@@ -6,8 +6,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable
 
 from dbt.task.base import ConfiguredTask
-from dbt.adapters.base import SchemaSearchMap
-from dbt.adapters.base.relation import InformationSchema
+from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
@@ -23,6 +22,7 @@ from dbt.compilation import compile_manifest
 
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.results import ExecutionResult
 from dbt.exceptions import (
     InternalException,
@@ -117,9 +117,17 @@ class GraphRunnableTask(ManifestTask):
                                                     selected_nodes)
 
         # we use this a couple times. order does not matter.
-        self._flattened_nodes = [
-            self.manifest.nodes[uid] for uid in selected_nodes
-        ]
+        self._flattened_nodes = []
+        for uid in selected_nodes:
+            if uid in self.manifest.nodes:
+                self._flattened_nodes.append(self.manifest.nodes[uid])
+            elif uid in self.manifest.sources:
+                self._flattened_nodes.append(self.manifest.sources[uid])
+            else:
+                raise InternalException(
+                    f'Node selection returned {uid}, expected a node or a '
+                    f'source'
+                )
 
         self.num_nodes = len([
             n for n in self._flattened_nodes
@@ -175,7 +183,7 @@ class GraphRunnableTask(ManifestTask):
 
         if (result.fail is not None or result.error is not None) and fail_fast:
             self._raise_next_tick = FailFastException(
-                message='Falling early due to test failure or runtime error',
+                message='Failing early due to test failure or runtime error',
                 result=result,
                 node=getattr(result, 'node', None)
             )
@@ -191,7 +199,7 @@ class GraphRunnableTask(ManifestTask):
         """If the caller has passed the magic 'single-threaded' flag, call the
         function directly instead of pool.apply_async. The single-threaded flag
          is intended for gathering more useful performance information about
-        what appens beneath `call_runner`, since python's default profiling
+        what happens beneath `call_runner`, since python's default profiling
         tools ignore child threads.
 
         This does still go through the callback path for result collection.
@@ -266,7 +274,10 @@ class GraphRunnableTask(ManifestTask):
         if self.manifest is None:
             raise InternalException('manifest was None in _handle_result')
 
-        self.manifest.update_node(node)
+        if isinstance(node, ParsedSourceDefinition):
+            self.manifest.update_source(node)
+        else:
+            self.manifest.update_node(node)
 
         if result.error is not None:
             if is_ephemeral:
@@ -419,48 +430,42 @@ class GraphRunnableTask(ManifestTask):
 
     def get_model_schemas(
         self, adapter, selected_uids: Iterable[str]
-    ) -> SchemaSearchMap:
+    ) -> Set[BaseRelation]:
         if self.manifest is None:
             raise InternalException('manifest was None in get_model_schemas')
-        search_map = SchemaSearchMap()
+        result: Set[BaseRelation] = set()
 
         for node in self.manifest.nodes.values():
             if node.unique_id not in selected_uids:
                 continue
             if node.is_refable and not node.is_ephemeral:
                 relation = adapter.Relation.create_from(self.config, node)
-                # we're going to be creating these schemas, so preserve the
-                # case.
-                search_map.add(relation, preserve_case=True)
+                result.add(relation.without_identifier())
 
-        return search_map
+        return result
 
     def create_schemas(self, adapter, selected_uids: Iterable[str]):
         required_schemas = self.get_model_schemas(adapter, selected_uids)
         # we want the string form of the information schema database
-        required_databases: List[str] = []
-        for info in required_schemas:
-            include_policy = info.include_policy.replace(
-                schema=False, identifier=False, database=True
+        required_databases: Set[BaseRelation] = set()
+        for required in required_schemas:
+            db_only = required.include(
+                database=True, schema=False, identifier=False
             )
-            db_only = info.replace(
-                include_policy=include_policy,
-                information_schema_view=None,
-            )
-            required_databases.append(db_only)
+            required_databases.add(db_only)
 
         existing_schemas_lowered: Set[Tuple[str, Optional[str]]] = set()
 
-        def list_schemas(info: InformationSchema) -> List[Tuple[str, str]]:
+        def list_schemas(db_only: BaseRelation) -> List[Tuple[str, str]]:
             # the database name should never be None here (or where are we
             # listing schemas from?)
-            if info.database is None:
+            if db_only.database is None:
                 raise InternalException(
-                    f'Got an invalid information schema of {info} (database '
-                    f'was None)'
+                    f'Got an invalid database-only portion of {db_only} '
+                    f'(database was None)'
                 )
-            database_name = info.database
-            database_quoted = str(info)
+            database_name: str = db_only.database
+            database_quoted = str(db_only)
             with adapter.connection_named(f'list_{database_name}'):
                 # we should never create a null schema, so just filter them out
                 return [
@@ -469,9 +474,11 @@ class GraphRunnableTask(ManifestTask):
                     if s is not None
                 ]
 
-        def create_schema(db: str, schema: str) -> None:
+        def create_schema(relation: BaseRelation) -> None:
+            db = relation.database
+            schema = relation.schema
             with adapter.connection_named(f'create_{db}_{schema}'):
-                adapter.create_schema(db, schema)
+                adapter.create_schema(relation)
 
         list_futures = []
         create_futures = []
@@ -484,21 +491,23 @@ class GraphRunnableTask(ManifestTask):
             for ls_future in as_completed(list_futures):
                 existing_schemas_lowered.update(ls_future.result())
 
-            for info, schema in required_schemas.search():
+            for info in required_schemas:
                 if info.database is None:
                     raise InternalException(
                         'Got an information schema with no database!'
                     )
+                if info.schema is None:
+                    # we are not in the business of creating null schemas, so
+                    # skip this
+                    continue
                 db: str = info.database
-                lower_schema: Optional[str] = None
-                if schema is not None:
-                    lower_schema = schema.lower()
+                schema: str = info.schema
 
-                db_schema = (db.lower(), lower_schema)
+                db_schema = (db.lower(), schema.lower())
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
                     create_futures.append(
-                        tpe.submit(create_schema, db, schema)
+                        tpe.submit(create_schema, info)
                     )
 
             for create_future in as_completed(create_futures):

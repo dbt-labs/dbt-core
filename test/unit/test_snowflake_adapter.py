@@ -82,10 +82,12 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.load_patch.stop()
 
     def test_quoting_on_drop_schema(self):
-        self.adapter.drop_schema(
+        relation = SnowflakeAdapter.Relation.create(
             database='test_database',
-            schema='test_schema'
+            schema='test_schema',
+            quote_policy=self.adapter.config.quoting
         )
+        self.adapter.drop_schema(relation)
 
         self.mock_execute.assert_has_calls([
             mock.call('/* dbt */\ndrop schema if exists test_database."test_schema" cascade', None)

@@ -1,5 +1,7 @@
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable, Mergeable
+# trigger the PathEncoder
+import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException
 
 from hologram import JsonSchemaMixin
@@ -7,6 +9,7 @@ from hologram.helpers import StrEnum, ExtensibleJsonSchemaMixin
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, Sequence
 
 
@@ -243,10 +246,14 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold
     )
-    external: Optional[ExternalTable] = field(
-        default_factory=ExternalTable
-    )
+    external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
+
+    def to_dict(self, omit_none=True, validate=False):
+        result = super().to_dict(omit_none=omit_none, validate=validate)
+        if omit_none and self.freshness is None:
+            result['freshness'] = None
+        return result
 
 
 @dataclass
@@ -268,6 +275,87 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     @property
     def yaml_key(self) -> 'str':
         return 'sources'
+
+    def to_dict(self, omit_none=True, validate=False):
+        result = super().to_dict(omit_none=omit_none, validate=validate)
+        if omit_none and self.freshness is None:
+            result['freshness'] = None
+        return result
+
+
+@dataclass
+class SourceTablePatch(JsonSchemaMixin):
+    name: str
+    description: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+    data_type: Optional[str] = None
+    docs: Optional[Docs] = None
+    loaded_at_field: Optional[str] = None
+    identifier: Optional[str] = None
+    quoting: Quoting = field(default_factory=Quoting)
+    freshness: Optional[FreshnessThreshold] = field(
+        default_factory=FreshnessThreshold
+    )
+    external: Optional[ExternalTable] = None
+    tags: Optional[List[str]] = None
+    tests: Optional[List[TestDef]] = None
+    columns: Optional[Sequence[UnparsedColumn]] = None
+
+    def to_patch_dict(self) -> Dict[str, Any]:
+        dct = self.to_dict(omit_none=True)
+        remove_keys = ('name')
+        for key in remove_keys:
+            if key in dct:
+                del dct[key]
+
+        if self.freshness is None:
+            dct['freshness'] = None
+
+        return dct
+
+
+@dataclass
+class SourcePatch(JsonSchemaMixin, Replaceable):
+    name: str = field(
+        metadata=dict(description='The name of the source to override'),
+    )
+    overrides: str = field(
+        metadata=dict(description='The package of the source to override'),
+    )
+    path: Path = field(
+        metadata=dict(description='The path to the patch-defining yml file'),
+    )
+    description: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+    database: Optional[str] = None
+    schema: Optional[str] = None
+    loader: Optional[str] = None
+    quoting: Optional[Quoting] = None
+    freshness: Optional[Optional[FreshnessThreshold]] = field(
+        default_factory=FreshnessThreshold
+    )
+    loaded_at_field: Optional[str] = None
+    tables: Optional[List[SourceTablePatch]] = None
+    tags: Optional[List[str]] = None
+
+    def to_patch_dict(self) -> Dict[str, Any]:
+        dct = self.to_dict(omit_none=True)
+        remove_keys = ('name', 'overrides', 'tables', 'path')
+        for key in remove_keys:
+            if key in dct:
+                del dct[key]
+
+        if self.freshness is None:
+            dct['freshness'] = None
+
+        return dct
+
+    def get_table_named(self, name: str) -> Optional[SourceTablePatch]:
+        if self.tables is not None:
+            for table in self.tables:
+                if table.name == name:
+                    return table
+        return None
 
 
 @dataclass

@@ -22,7 +22,7 @@ sources:
     tables:
       - name: test_table
         identifier: source
-        loaded_at_field: "{{ var('test_loaded_at') }}"
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
         freshness:
           error_after: {count: 18, period: hour}
         tags:
@@ -63,7 +63,7 @@ sources:
               - id_column
       - name: disabled_test_table
         freshness: null
-        loaded_at_field: "{{ var('test_loaded_at') }}"
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
   - name: other_source
     schema: "{{ var('test_run_schema') }}"
     quoting:

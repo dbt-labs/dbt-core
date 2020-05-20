@@ -6,6 +6,7 @@ from pathlib import Path
 PROJECT_TEMPLATE = '''
 name: dbt_{adapter}
 version: {version}
+config-version: 2
 
 macro-paths: ["macros"]
 '''

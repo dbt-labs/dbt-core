@@ -35,7 +35,7 @@ class BaseRenderer:
         # if it wasn't read as a string, ignore it
         if not isinstance(value, str):
             return value
-        return str(get_rendered(value, self.context))
+        return get_rendered(value, self.context, native=True)
 
     def render_data(
         self, data: Dict[str, Any]
@@ -130,17 +130,6 @@ class ProfileRenderer(BaseRenderer):
     @property
     def name(self):
         'Profile'
-
-    def render_entry(self, value, keypath):
-        result = super().render_entry(value, keypath)
-
-        if len(keypath) == 1 and keypath[-1] == 'port':
-            try:
-                return int(result)
-            except ValueError:
-                # let the validator or connection handle this
-                pass
-        return result
 
 
 class SchemaYamlRenderer(BaseRenderer):

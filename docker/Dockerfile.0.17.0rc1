@@ -1,0 +1,20 @@
+FROM python:3.8.1-slim-buster
+
+RUN apt-get update &&                 apt-get dist-upgrade -y &&                 apt-get install -y  --no-install-recommends                     git software-properties-common make build-essential                     ca-certificates libpq-dev &&                 apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY docker/requirements/requirements.0.17.0rc1.txt ./requirements.0.17.0rc1.txt
+COPY dist ./dist
+RUN pip install --upgrade pip setuptools
+RUN pip install --requirement ./requirements.0.17.0rc1.txt
+RUN pip install ./dist/dbt_bigquery-0.17.0rc1-py3-none-any.whl ./dist/dbt_redshift-0.17.0rc1-py3-none-any.whl ./dist/dbt-0.17.0rc1-py3-none-any.whl ./dist/dbt_postgres-0.17.0rc1-py3-none-any.whl ./dist/dbt_core-0.17.0rc1-py3-none-any.whl ./dist/dbt_snowflake-0.17.0rc1-py3-none-any.whl
+
+RUN useradd -mU dbt_user
+
+ENV PYTHONIOENCODING=utf-8
+ENV LANG C.UTF-8
+
+WORKDIR /usr/app
+VOLUME /usr/app
+
+USER dbt_user
+CMD ['dbt', 'run']

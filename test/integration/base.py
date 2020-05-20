@@ -3,6 +3,7 @@ import os
 import io
 import random
 import shutil
+import sys
 import tempfile
 import time
 import traceback
@@ -17,6 +18,7 @@ from unittest.mock import patch
 
 import dbt.main as dbt
 import dbt.flags as flags
+from dbt.deprecations import reset_deprecations
 from dbt.adapters.factory import get_adapter, reset_adapters, register_adapter
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
@@ -332,6 +334,13 @@ class DBTIntegrationTest(unittest.TestCase):
                 os.symlink(src, tst)
         os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
+    @property
+    def test_root_realpath(self):
+        if sys.platform == 'darwin':
+            return os.path.realpath(self.test_root_dir)
+        else:
+            return self.test_root_dir
+
     def setUp(self):
         self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
@@ -342,6 +351,7 @@ class DBTIntegrationTest(unittest.TestCase):
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
         self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
+
         os.chdir(self.test_root_dir)
         try:
             self._symlink_test_folders()
@@ -361,6 +371,7 @@ class DBTIntegrationTest(unittest.TestCase):
             raise
 
         self._created_schemas = set()
+        reset_deprecations()
         flags.reset()
         template_cache.clear()
 
@@ -374,6 +385,7 @@ class DBTIntegrationTest(unittest.TestCase):
         base_project_config = {
             'name': 'test',
             'version': '1.0',
+            'config-version': 2,
             'test-paths': [],
             'source-paths': [self.models],
             'profile': 'test',
@@ -466,7 +478,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _create_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery':
-            self.adapter.create_schema(database, schema)
+            relation = self.adapter.Relation.create(database=database, schema=schema)
+            self.adapter.create_schema(relation)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.CREATE_SCHEMA_STATEMENT.format(schema_fqn))
@@ -474,7 +487,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
-            self.adapter.drop_schema(database, schema)
+            relation = self.adapter.Relation.create(database=database, schema=schema)
+            self.adapter.drop_schema(relation)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.DROP_SCHEMA_STATEMENT.format(schema_fqn))

@@ -112,10 +112,11 @@ class RemoteDocsGenerateProjectTask(
         self.args.compile = params.compile
 
     def get_catalog_results(
-        self, nodes, generated_at, compile_results, errors
+        self, nodes, sources, generated_at, compile_results, errors
     ) -> RemoteCatalogResults:
         return RemoteCatalogResults(
             nodes=nodes,
+            sources=sources,
             generated_at=datetime.utcnow(),
             _compile_results=compile_results,
             errors=errors,

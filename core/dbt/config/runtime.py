@@ -522,7 +522,7 @@ class UnsetProfileConfig(RuntimeConfig):
             # return the poisoned form
             profile = UnsetProfile()
             # disable anonymous usage statistics
-            tracking.do_not_track()
+            tracking.disable_tracking()
         return profile
 
     @classmethod

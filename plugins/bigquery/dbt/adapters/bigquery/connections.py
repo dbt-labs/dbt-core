@@ -20,6 +20,9 @@ from dbt.version import __version__ as dbt_version
 from hologram.helpers import StrEnum
 
 
+BQ_QUERY_JOB_SPLIT = '-----Query Job SQL Follows-----'
+
+
 class Priority(StrEnum):
     Interactive = 'interactive'
     Batch = 'batch'
@@ -40,6 +43,7 @@ class BigQueryCredentials(Credentials):
     location: Optional[str] = None
     priority: Optional[Priority] = None
     retries: Optional[int] = 1
+    maximum_bytes_billed: Optional[int] = None
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
@@ -51,7 +55,7 @@ class BigQueryCredentials(Credentials):
 
     def _connection_keys(self):
         return ('method', 'database', 'schema', 'location', 'priority',
-                'timeout_seconds')
+                'timeout_seconds', 'maximum_bytes_billed')
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -95,7 +99,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise RuntimeException(str(e))
+            exc_message = str(e)
+            # the google bigquery library likes to add the query log, which we
+            # don't want to log. Hopefully they never change this!
+            if BQ_QUERY_JOB_SPLIT in exc_message:
+                exc_message = exc_message.split(BQ_QUERY_JOB_SPLIT)[0].strip()
+            raise RuntimeException(exc_message)
 
     def cancel_open(self) -> None:
         pass
@@ -207,6 +216,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
         else:
             job_params[
                 'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
+
+        maximum_bytes_billed = conn.credentials.maximum_bytes_billed
+        if maximum_bytes_billed is not None and maximum_bytes_billed != 0:
+            job_params['maximum_bytes_billed'] = maximum_bytes_billed
 
         def fn():
             return self._query_and_results(client, sql, conn, job_params)

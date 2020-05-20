@@ -1,7 +1,7 @@
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple, Set
 
 from hologram import ValidationError
 
@@ -93,20 +93,29 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
 
     def make_unique_id_map(
         self, manifest: Manifest
-    ) -> Dict[str, CatalogTable]:
+    ) -> Tuple[Dict[str, CatalogTable], Dict[str, CatalogTable]]:
         nodes: Dict[str, CatalogTable] = {}
+        sources: Dict[str, CatalogTable] = {}
 
-        manifest_mapping = get_unique_id_mapping(manifest)
+        node_map, source_map = get_unique_id_mapping(manifest)
+        table: CatalogTable
         for table in self.values():
-            unique_ids = manifest_mapping.get(table.key(), [])
+            key = table.key()
+            if key in node_map:
+                unique_id = node_map[key]
+                nodes[unique_id] = table.replace(unique_id=unique_id)
+
+            unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
-                if unique_id in nodes:
+                if unique_id in sources:
                     dbt.exceptions.raise_ambiguous_catalog_match(
-                        unique_id, nodes[unique_id].to_dict(), table.to_dict()
+                        unique_id,
+                        sources[unique_id].to_dict(),
+                        table.to_dict(),
                     )
                 else:
-                    nodes[unique_id] = table.replace(unique_id=unique_id)
-        return nodes
+                    sources[unique_id] = table.replace(unique_id=unique_id)
+        return nodes, sources
 
 
 def format_stats(stats: PrimitiveDict) -> StatsDict:
@@ -160,18 +169,23 @@ def mapping_key(node: CompileResultNode) -> CatalogKey:
     )
 
 
-def get_unique_id_mapping(manifest: Manifest) -> Dict[CatalogKey, List[str]]:
+def get_unique_id_mapping(
+    manifest: Manifest
+) -> Tuple[Dict[CatalogKey, str], Dict[CatalogKey, Set[str]]]:
     # A single relation could have multiple unique IDs pointing to it if a
     # source were also a node.
-    ident_map: Dict[CatalogKey, List[str]] = {}
+    node_map: Dict[CatalogKey, str] = {}
+    source_map: Dict[CatalogKey, Set[str]] = {}
     for unique_id, node in manifest.nodes.items():
         key = mapping_key(node)
+        node_map[key] = unique_id
 
-        if key not in ident_map:
-            ident_map[key] = []
-
-        ident_map[key].append(unique_id)
-    return ident_map
+    for unique_id, source in manifest.sources.items():
+        key = mapping_key(source)
+        if key not in source_map:
+            source_map[key] = set()
+        source_map[key].add(unique_id)
+    return node_map, source_map
 
 
 def _coerce_decimal(value):
@@ -198,6 +212,7 @@ class GenerateTask(CompileTask):
                 )
                 return CatalogResults(
                     nodes={},
+                    sources={},
                     generated_at=datetime.utcnow(),
                     errors=None,
                     _compile_results=compile_results
@@ -230,8 +245,10 @@ class GenerateTask(CompileTask):
         if exceptions:
             errors = [str(e) for e in exceptions]
 
+        nodes, sources = catalog.make_unique_id_map(self.manifest)
         results = self.get_catalog_results(
-            nodes=catalog.make_unique_id_map(self.manifest),
+            nodes=nodes,
+            sources=sources,
             generated_at=datetime.utcnow(),
             compile_results=compile_results,
             errors=errors,
@@ -257,12 +274,14 @@ class GenerateTask(CompileTask):
     def get_catalog_results(
         self,
         nodes: Dict[str, CatalogTable],
+        sources: Dict[str, CatalogTable],
         generated_at: datetime,
         compile_results: Optional[Any],
         errors: Optional[List[str]]
     ) -> CatalogResults:
         return CatalogResults(
             nodes=nodes,
+            sources=sources,
             generated_at=generated_at,
             _compile_results=compile_results,
             errors=errors,

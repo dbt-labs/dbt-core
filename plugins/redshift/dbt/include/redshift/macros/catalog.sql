@@ -23,6 +23,32 @@
         order by "column_index"
     ),
 
+    early_binding as (
+        select
+            '{{ database }}'::varchar as table_database,
+            sch.nspname as table_schema,
+            tbl.relname as table_name,
+            case tbl.relkind
+                when 'v' then 'VIEW'
+                else 'BASE TABLE'
+            end as table_type,
+            tbl_desc.description as table_comment,
+            col.attname as column_name,
+            col.attnum as column_index,
+            pg_catalog.format_type(col.atttypid, col.atttypmod) as column_type,
+            col_desc.description as column_comment
+
+        from pg_catalog.pg_namespace sch
+        join pg_catalog.pg_class tbl on tbl.relnamespace = sch.oid
+        join pg_catalog.pg_attribute col on col.attrelid = tbl.oid
+        left outer join pg_catalog.pg_description tbl_desc on (tbl_desc.objoid = tbl.oid and tbl_desc.objsubid = 0)
+        left outer join pg_catalog.pg_description col_desc on (col_desc.objoid = tbl.oid and col_desc.objsubid = col.attnum)
+        where upper(sch.nspname) = upper('{{ schema }}')
+            and tbl.relkind in ('r', 'v', 'f', 'p')
+            and col.attnum > 0
+            and not col.attisdropped
+    ),
+
     table_owners as (
 
         select
@@ -45,41 +71,10 @@
 
     ),
 
-    tables as (
-
-      select
-        table_catalog as table_database,
-        table_schema,
-        table_name,
-        table_type
-
-      from information_schema.tables
-
-    ),
-
-    table_columns as (
-
-        select
-            '{{ database }}'::varchar as table_database,
-            table_schema,
-            table_name,
-            null::varchar as table_comment,
-
-            column_name,
-            ordinal_position as column_index,
-            data_type as column_type,
-            null::varchar as column_comment
-
-
-        from information_schema."columns"
-
-    ),
-
     unioned as (
 
         select *
-        from tables
-        join table_columns using (table_database, table_schema, table_name)
+        from early_binding
 
         union all
 

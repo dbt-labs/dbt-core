@@ -1,4 +1,3 @@
-import itertools
 import os
 from collections import defaultdict
 from typing import List, Dict, Any
@@ -11,6 +10,7 @@ from dbt.node_types import NodeType
 from dbt.linker import Linker
 
 from dbt.context.providers import generate_runtime_model
+from dbt.contracts.graph.compiled import NonSourceNode
 from dbt.contracts.graph.manifest import Manifest
 import dbt.exceptions
 import dbt.flags
@@ -60,7 +60,7 @@ def print_compile_stats(stats):
     logger.info("Found {}".format(stat_line))
 
 
-def _node_enabled(node):
+def _node_enabled(node: NonSourceNode):
     # Disabled models are already excluded from the manifest
     if node.resource_type == NodeType.Test and not node.config.enabled:
         return False
@@ -68,14 +68,16 @@ def _node_enabled(node):
         return True
 
 
-def _generate_stats(manifest):
+def _generate_stats(manifest: Manifest):
     stats: Dict[NodeType, int] = defaultdict(int)
-    for node_name, node in itertools.chain(
-            manifest.nodes.items(),
-            manifest.macros.items()):
+    for node in manifest.nodes.values():
         if _node_enabled(node):
             stats[node.resource_type] += 1
 
+    for source in manifest.sources.values():
+        stats[source.resource_type] += 1
+    for macro in manifest.macros.values():
+        stats[macro.resource_type] += 1
     return stats
 
 
@@ -182,24 +184,34 @@ class Compiler:
 
         return injected_node
 
-    def write_graph_file(self, linker, manifest):
+    def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
         graph_path = os.path.join(self.config.target_path, filename)
         if dbt.flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
 
-    def link_node(self, linker, node, manifest):
+    def link_node(
+        self, linker: Linker, node: NonSourceNode, manifest: Manifest
+    ):
         linker.add_node(node.unique_id)
 
         for dependency in node.depends_on_nodes:
-            if manifest.nodes.get(dependency):
+            if dependency in manifest.nodes:
                 linker.dependency(
                     node.unique_id,
-                    (manifest.nodes.get(dependency).unique_id))
+                    (manifest.nodes[dependency].unique_id)
+                )
+            elif dependency in manifest.sources:
+                linker.dependency(
+                    node.unique_id,
+                    (manifest.sources[dependency].unique_id)
+                )
             else:
                 dbt.exceptions.dependency_not_found(node, dependency)
 
-    def link_graph(self, linker, manifest):
+    def link_graph(self, linker: Linker, manifest: Manifest):
+        for source in manifest.sources.values():
+            linker.add_node(source.unique_id)
         for node in manifest.nodes.values():
             self.link_node(linker, node, manifest)
 
@@ -208,7 +220,7 @@ class Compiler:
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
-    def compile(self, manifest, write=True):
+    def compile(self, manifest: Manifest, write=True):
         linker = Linker()
 
         self.link_graph(linker, manifest)

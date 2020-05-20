@@ -58,7 +58,15 @@ class ListTask(GraphRunnableTask):
                 'manifest is None in _iterate_selected_nodes'
             )
         for node in nodes:
-            yield self.manifest.nodes[node]
+            if node in self.manifest.nodes:
+                yield self.manifest.nodes[node]
+            elif node in self.manifest.sources:
+                yield self.manifest.sources[node]
+            else:
+                raise RuntimeException(
+                    f'Got an unexpected result from node selection: "{node}"'
+                    f'Expected a source or a node!'
+                )
 
     def generate_selectors(self):
         for node in self._iterate_selected_nodes():

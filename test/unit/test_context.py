@@ -145,11 +145,14 @@ class TestRuntimeWrapper(unittest.TestCase):
         found = self.wrapper.get_relation('database', 'schema', 'identifier')
 
         self.assertEqual(found, rel)
-        # it gets called with an information schema relation as the first arg,
-        # which is hard to mock.
-        self.responder.list_relations_without_caching.assert_called_once_with(
-            mock.ANY, 'schema'
-        )
+
+        self.responder.list_relations_without_caching.assert_called_once_with(mock.ANY)
+        # extract the argument
+        assert len(self.responder.list_relations_without_caching.mock_calls) == 1
+        assert len(self.responder.list_relations_without_caching.call_args[0]) == 1
+        arg = self.responder.list_relations_without_caching.call_args[0][0]
+        assert arg.database == 'database'
+        assert arg.schema == 'schema'
 
 
 def assert_has_keys(
@@ -401,11 +404,6 @@ def test_model_runtime_context(config, manifest, get_adapter):
         manifest=manifest,
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
-
-
-def test_docs_parse_context(config):
-    ctx = docs.generate_parser_docs(config, mock_model())
-    assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
 
 
 def test_docs_runtime_context(config):

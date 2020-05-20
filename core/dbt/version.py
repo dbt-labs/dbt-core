@@ -1,6 +1,9 @@
 import importlib
+import importlib.util
 import os
+import glob
 import json
+from typing import Iterator
 
 import requests
 
@@ -63,10 +66,24 @@ def get_version_information():
                 .format(version_msg, plugin_version_msg))
 
 
+def _get_adapter_plugin_names() -> Iterator[str]:
+    spec = importlib.util.find_spec('dbt.adapters')
+    # If None, then nothing provides an importable 'dbt.adapters', so we will
+    # not be reporting plugin versions today
+    if spec is None or spec.submodule_search_locations is None:
+        return
+    for adapters_path in spec.submodule_search_locations:
+        version_glob = os.path.join(adapters_path, '*', '__version__.py')
+        for version_path in glob.glob(version_glob):
+            # the path is like .../dbt/adapters/{plugin_name}/__version__.py
+            # except it could be \\ on windows!
+            plugin_root, _ = os.path.split(version_path)
+            _, plugin_name = os.path.split(plugin_root)
+            yield plugin_name
+
+
 def _get_dbt_plugins_info():
-    for path in importlib.util.find_spec('dbt').submodule_search_locations:
-        plugin_root, _ = os.path.split(path)
-        _, plugin_name = os.path.split(plugin_root)
+    for plugin_name in _get_adapter_plugin_names():
         if plugin_name == 'core':
             continue
         try:
@@ -79,5 +96,5 @@ def _get_dbt_plugins_info():
         yield plugin_name, mod.version
 
 
-__version__ = '0.17.0a1'
+__version__ = '0.17.0rc1'
 installed = get_installed_version()

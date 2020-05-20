@@ -4,9 +4,11 @@ import os
 import re
 import tempfile
 import threading
+from ast import literal_eval
 from contextlib import contextmanager
+from itertools import chain, islice
 from typing import (
-    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn
+    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn, Tuple
 )
 
 import jinja2
@@ -102,8 +104,56 @@ class NativeSandboxEnvironment(MacroFuzzEnvironment):
     code_generator_class = jinja2.nativetypes.NativeCodeGenerator
 
 
+class TextMarker(str):
+    """A special native-env marker that indicates that a value is text and is
+    not to be evaluated. Use this to prevent your numbery-strings from becoming
+    numbers!
+    """
+
+
+def quoted_native_concat(nodes):
+    """This is almost native_concat from the NativeTemplate, except in the
+    special case of a single argument that is a quoted string and returns a
+    string, the quotes are re-inserted.
+    """
+    head = list(islice(nodes, 2))
+
+    if not head:
+        return None
+
+    if len(head) == 1:
+        raw = head[0]
+        if isinstance(raw, TextMarker):
+            return str(raw)
+    else:
+        raw = "".join([str(v) for v in chain(head, nodes)])
+
+    try:
+        result = literal_eval(raw)
+    except (ValueError, SyntaxError, MemoryError):
+        return raw
+
+    return result
+
+
 class NativeSandboxTemplate(jinja2.nativetypes.NativeTemplate):  # mypy: ignore
     environment_class = NativeSandboxEnvironment
+
+    def render(self, *args, **kwargs):
+        """Render the template to produce a native Python type. If the
+        result is a single node, its value is returned. Otherwise, the
+        nodes are concatenated as strings. If the result can be parsed
+        with :func:`ast.literal_eval`, the parsed value is returned.
+        Otherwise, the string is returned.
+        """
+        vars = dict(*args, **kwargs)
+
+        try:
+            return quoted_native_concat(
+                self.root_render_func(self.new_context(vars))
+            )
+        except Exception:
+            return self.environment.handle_exception()
 
 
 NativeSandboxEnvironment.template_class = NativeSandboxTemplate  # type: ignore
@@ -379,12 +429,18 @@ def get_environment(
     args['extensions'].append(DocumentationExtension)
 
     env_cls: Type[jinja2.Environment]
+    text_filter: Type
     if native:
         env_cls = NativeSandboxEnvironment
+        text_filter = TextMarker
     else:
         env_cls = MacroFuzzEnvironment
+        text_filter = str
 
-    return env_cls(**args)
+    env = env_cls(**args)
+    env.filters['as_text'] = text_filter
+
+    return env
 
 
 @contextmanager
@@ -425,7 +481,7 @@ def render_template(template, ctx: Dict[str, Any], node=None) -> str:
         return template.render(ctx)
 
 
-def _requote_result(raw_value, rendered):
+def _requote_result(raw_value: str, rendered: str) -> str:
     double_quoted = raw_value.startswith('"') and raw_value.endswith('"')
     single_quoted = raw_value.startswith("'") and raw_value.endswith("'")
     if double_quoted:
@@ -451,12 +507,7 @@ def get_rendered(
         capture_macros=capture_macros,
         native=native,
     )
-
-    result = render_template(template, ctx, node)
-
-    if native and isinstance(result, str):
-        result = _requote_result(string, result)
-    return result
+    return render_template(template, ctx, node)
 
 
 def undefined_error(msg) -> NoReturn:
@@ -502,9 +553,15 @@ def add_rendered_test_kwargs(
     """
     looks_like_func = r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$'
 
-    # we never care about the keypath
-    def _convert_function(value: Any, _: Any) -> Any:
+    def _convert_function(
+        value: Any, keypath: Tuple[Union[str, int], ...]
+    ) -> Any:
         if isinstance(value, str):
+            if keypath == ('column_name',):
+                # special case: Don't render column names as native, make them
+                # be strings
+                return value
+
             if re.match(looks_like_func, value) is not None:
                 # curly braces to make rendering happy
                 value = f'{{{{ {value} }}}}'

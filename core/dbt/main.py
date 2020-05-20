@@ -415,7 +415,7 @@ def _build_compile_subparser(subparsers, base_subparser):
         'compile',
         parents=[base_subparser],
         help='''
-        Generates executable SQL from source model, test, and analysis files.
+        Generates executable SQL from source, model, test, and analysis files.
         Compiled SQL files are written to the target/ directory.
         '''
     )
@@ -535,6 +535,11 @@ def _build_docs_serve_subparser(subparsers, base_subparser):
         help='''
         Specify the port number for the docs server.
         '''
+    )
+    serve_sub.add_argument(
+        '--no-browser',
+        dest='open_browser',
+        action='store_false',
     )
     serve_sub.set_defaults(cls=serve_task.ServeTask, which='serve',
                            rpc_method=None)

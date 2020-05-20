@@ -209,7 +209,7 @@ class TestPostgresAdapter(unittest.TestCase):
             connect_timeout=10)
 
     @mock.patch.object(PostgresAdapter, 'execute_macro')
-    @mock.patch.object(PostgresAdapter, '_get_cache_schemas')
+    @mock.patch.object(PostgresAdapter, '_get_catalog_schemas')
     def test_get_catalog_various_schemas(self, mock_get_schemas, mock_execute):
         column_names = ['table_database', 'table_schema', 'table_name']
         rows = [
@@ -297,7 +297,11 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.load_patch.stop()
 
     def test_quoting_on_drop_schema(self):
-        self.adapter.drop_schema(database='postgres', schema='test_schema')
+        relation = self.adapter.Relation.create(
+            database='postgres', schema='test_schema',
+            quote_policy=self.adapter.config.quoting,
+        )
+        self.adapter.drop_schema(relation)
 
         self.mock_execute.assert_has_calls([
             mock.call('/* dbt */\ndrop schema if exists "test_schema" cascade', None)

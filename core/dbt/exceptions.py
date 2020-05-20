@@ -1,6 +1,6 @@
 import builtins
 import functools
-from typing import NoReturn, Optional
+from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -281,10 +281,20 @@ class DbtConfigError(RuntimeException):
     CODE = 10007
     MESSAGE = "DBT Configuration Error"
 
-    def __init__(self, message, project=None, result_type='invalid_project'):
+    def __init__(
+        self, message, project=None, result_type='invalid_project', path=None
+    ):
         self.project = project
         super().__init__(message)
         self.result_type = result_type
+        self.path = path
+
+    def __str__(self, prefix='! ') -> str:
+        msg = super().__str__(prefix)
+        if self.path is None:
+            return msg
+        else:
+            return f'{msg}\n\nError encountered in {self.path}'
 
 
 class FailFastException(RuntimeException):
@@ -714,11 +724,14 @@ def raise_duplicate_resource_name(node_1, node_2):
     if node_1.resource_type in NodeType.refable():
         get_func = 'ref("{}")'.format(duped_name)
     elif node_1.resource_type == NodeType.Source:
-        get_func = 'source("{}", "{}")'.format(node_1.source_name, duped_name)
+        duped_name = node_1.get_full_source_name()
+        get_func = node_1.get_source_representation()
     elif node_1.resource_type == NodeType.Documentation:
         get_func = 'doc("{}")'.format(duped_name)
     elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
         return
+    else:
+        get_func = '"{}"'.format(duped_name)
 
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
@@ -731,14 +744,15 @@ def raise_duplicate_resource_name(node_1, node_2):
             node_2.unique_id, node_2.original_file_path))
 
 
-def raise_ambiguous_alias(node_1, node_2):
-    duped_name = "{}.{}".format(node_1.schema, node_1.alias)
+def raise_ambiguous_alias(node_1, node_2, duped_name=None):
+    if duped_name is None:
+        duped_name = f"{node_1.database}.{node_1.schema}.{node_1.alias}"
 
     raise_compiler_error(
         'dbt found two resources with the database representation "{}".\ndbt '
         'cannot create two resources with identical database representations. '
-        'To fix this,\nchange the "schema" or "alias" configuration of one of '
-        'these resources:\n- {} ({})\n- {} ({})'.format(
+        'To fix this,\nchange the configuration of one of these resources:'
+        '\n- {} ({})\n- {} ({})'.format(
             duped_name,
             node_1.unique_id, node_1.original_file_path,
             node_2.unique_id, node_2.original_file_path))
@@ -775,26 +789,62 @@ def raise_patch_targets_not_found(patches):
     )
 
 
+def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
+    if path_1 == path_2:
+        return (
+            f'remove one of the {type_name} entries for {name} in this file:\n'
+            f' - {path_1!s}\n'
+        )
+    else:
+        return (
+            f'remove the {type_name} entry for {name} in one of these files:\n'
+            f' - {path_1!s}\n{path_2!s}'
+        )
+
+
 def raise_duplicate_patch_name(patch_1, patch_2):
     name = patch_1.name
+    fix = _fix_dupe_msg(
+        patch_1.original_file_path,
+        patch_2.original_file_path,
+        name,
+        'resource',
+    )
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same resource named '
         f'{name}. Resources and their associated columns may only be '
-        f'described a single time. To fix this, remove the resource entry '
-        f'for {name} in one of these files:\n  - '
-        f'{patch_1.original_file_path}\n  - {patch_2.original_file_path}'
+        f'described a single time. To fix this, {fix}'
     )
 
 
 def raise_duplicate_macro_patch_name(patch_1, patch_2):
     package_name = patch_1.package_name
     name = patch_1.name
+    fix = _fix_dupe_msg(
+        patch_1.original_file_path,
+        patch_2.original_file_path,
+        name,
+        'macros'
+    )
     raise_compiler_error(
         f'dbt found two schema.yml entries for the same macro in package '
         f'{package_name} named {name}. Macros may only be described a single '
-        f'time. To fix this, remove the macros entry for {name} in one '
-        f'of these files:'
-        f'\n  - {patch_1.original_file_path}\n  - {patch_2.original_file_path}'
+        f'time. To fix this, {fix}'
+    )
+
+
+def raise_duplicate_source_patch_name(patch_1, patch_2):
+    name = f'{patch_1.overrides}.{patch_1.name}'
+    fix = _fix_dupe_msg(
+        patch_1.path,
+        patch_2.path,
+        name,
+        'sources',
+    )
+    raise_compiler_error(
+        f'dbt found two schema.yml entries for the same source named '
+        f'{patch_1.name} in package {patch_1.overrides}. Sources may only be '
+        f'overridden a single time. To fix this, {fix}'
     )
 
 
@@ -814,10 +864,43 @@ def raise_unrecognized_credentials_type(typename, supported_types):
     )
 
 
+def raise_invalid_patch(
+    node, patch_section: str, patch_path: str,
+) -> NoReturn:
+    from dbt.ui.printer import line_wrap_message
+    msg = line_wrap_message(
+        f'''\
+        '{node.name}' is a {node.resource_type} node, but it is
+        specified in the {patch_section} section of
+        {patch_path}.
+
+
+
+        To fix this error, place the `{node.name}`
+        specification under the {node.resource_type.pluralize()} key instead.
+        '''
+    )
+    raise_compiler_error(msg, node)
+
+
 def raise_not_implemented(msg):
     raise NotImplementedException(
         "ERROR: {}"
         .format(msg))
+
+
+def raise_duplicate_alias(
+    kwargs: Mapping[str, Any], aliases: Mapping[str, str], canonical_key: str
+) -> NoReturn:
+    # dupe found: go through the dict so we can have a nice-ish error
+    key_names = ', '.join(
+        "{}".format(k) for k in kwargs if
+        aliases.get(k) == canonical_key
+    )
+
+    raise AliasException(
+        f'Got duplicate keys: ({key_names}) all map to "{canonical_key}"'
+    )
 
 
 def warn_or_error(msg, node=None, log_fmt=None):

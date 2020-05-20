@@ -605,12 +605,12 @@ class HomebrewBuilder:
 
     def build(self):
         self.create_versioned_formula_file()
-        self.run_tests(formula_path=self.versioned_formula_path)
+        # self.run_tests(formula_path=self.versioned_formula_path)
         self.commit_versioned_formula()
 
         if self.set_default:
             self.create_default_package()
-            self.run_tests(formula_path=self.default_formula_path, audit=False)
+            # self.run_tests(formula_path=self.default_formula_path, audit=False)
             self.commit_default_formula()
 
 
@@ -740,7 +740,7 @@ class DockerBuilder:
             VOLUME /usr/app
 
             USER dbt_user
-            CMD ['dbt', 'run']
+            ENTRYPOINT dbt
             '''
         )
 
