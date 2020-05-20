@@ -740,7 +740,7 @@ class DockerBuilder:
             VOLUME /usr/app
 
             USER dbt_user
-            CMD ['dbt', 'run']
+            ENTRYPOINT dbt
             '''
         )
 
