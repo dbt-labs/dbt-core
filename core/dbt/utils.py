@@ -36,21 +36,11 @@ class ExitCodes(int, Enum):
     UnhandledError = 2
 
 
-def to_bytes(s):
-    return s.encode('latin-1')
-
-
 def coalesce(*args):
     for arg in args:
         if arg is not None:
             return arg
     return None
-
-
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
 
 
 def get_profile_from_project(project):

@@ -452,7 +452,7 @@ class ModelConfiguredVar(Var):
 
     def _generate_merged(self) -> Mapping[str, Any]:
         search_node: IsFQNResource
-        if hasattr(self.node, 'fqn'):
+        if isinstance(self.node, IsFQNResource):
             search_node = self.node
         else:
             search_node = FQNLookup(self.node.package_name)
@@ -495,8 +495,13 @@ class ParseProvider(Provider):
     source = ParseSourceResolver
 
 
-class GenerateNameProvider(ParseProvider):
+class GenerateNameProvider(Provider):
+    execute = False
+    Config = RuntimeConfigObject
+    DatabaseWrapper = ParseDatabaseWrapper
     Var = RuntimeVar
+    ref = ParseRefResolver
+    source = ParseSourceResolver
 
 
 class RuntimeProvider(Provider):
