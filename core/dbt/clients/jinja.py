@@ -559,11 +559,7 @@ def get_rendered(
     # If this is desirable in the native env as well, we could handle the
     # native=True case by passing the input string to ast.literal_eval, like
     # the native renderer does.
-    if (
-        not native and
-        isinstance(string, str) and
-        _HAS_RENDER_CHARS_PAT.search(string) is None
-    ):
+    if not native and isinstance(string, str) and _HAS_RENDER_CHARS_PAT.search(string) is None:
         return string
     template = get_template(
         string,

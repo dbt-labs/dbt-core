@@ -12,7 +12,7 @@ from dbt.parser.search import (
 )
 
 
-SHOULD_PARSE_RE = re.compile(r'{[{%]')
+SHOULD_PARSE_RE = re.compile(r"{[{%]")
 
 
 class DocumentationParser(Parser[ParsedDocumentation]):
@@ -29,9 +29,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         # need to be part of the unique ID.
         return '{}.{}'.format(self.project.project_name, resource_name)
 
-    def parse_block(
-        self, block: BlockContents
-    ) -> Iterable[ParsedDocumentation]:
+    def parse_block(self, block: BlockContents) -> Iterable[ParsedDocumentation]:
         unique_id = self.generate_unique_id(block.name)
         contents = get_rendered(block.contents, {}).strip()
 
