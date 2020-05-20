@@ -176,6 +176,9 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 self.release()
                 raise DatabaseException(msg)
         except Exception as e:
+            if isinstance(e, snowflake.connector.errors.Error):
+                logger.debug('Snowflake query id: {}'.format(e.sfqid))
+
             logger.debug("Error running SQL: {}", sql)
             logger.debug("Rolling back transaction.")
             self.release()
