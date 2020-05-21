@@ -7,6 +7,7 @@ from typing import (
 from dbt import flags
 from dbt import tracking
 from dbt.clients.jinja import undefined_error, get_rendered
+from dbt.clients import yaml_helper
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import raise_compiler_error, MacroReturn
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -383,7 +384,7 @@ class BaseContext(metaclass=ContextMeta):
             -- ["good"]
         """
         try:
-            return yaml.safe_load(value)
+            return yaml_helper.safe_load(value)
         except (AttributeError, ValueError, yaml.YAMLError):
             return default
 
