@@ -7,6 +7,7 @@
 - dbt now logs using the adapter plugin's ideas about how relations should be displayed ([dbt-spark/#74](https://github.com/fishtown-analytics/dbt-spark/issues/74), [#2450](https://github.com/fishtown-analytics/dbt/pull/2450))
 - The create_adapter_plugin.py script creates a version 2 dbt_project.yml file ([#2451](https://github.com/fishtown-analytics/dbt/issues/2451), [#2455](https://github.com/fishtown-analytics/dbt/pull/2455))
 - Fixed dbt crashing with an AttributeError on duplicate sources ([#2463](https://github.com/fishtown-analytics/dbt/issues/2463), [#2464](https://github.com/fishtown-analytics/dbt/pull/2464))
+- Fixed a number of issues with globally-scoped vars ([#2473](https://github.com/fishtown-analytics/dbt/issues/2473), [#2472](https://github.com/fishtown-analytics/dbt/issues/2472), [#2469](https://github.com/fishtown-analytics/dbt/issues/2469), [#2477](https://github.com/fishtown-analytics/dbt/pull/2477))
 - Fixed DBT Docker entrypoint ([#2470](https://github.com/fishtown-analytics/dbt/issues/2470), [#2475](https://github.com/fishtown-analytics/dbt/pull/2475))
 - Fixed a performance regression that occurred even when a user was not using the relevant feature ([#2474](https://github.com/fishtown-analytics/dbt/issues/2474), [#2478](https://github.com/fishtown-analytics/dbt/pull/2478))
 

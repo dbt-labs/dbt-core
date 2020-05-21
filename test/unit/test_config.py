@@ -11,11 +11,13 @@ import yaml
 
 import dbt.config
 import dbt.exceptions
+from dbt.adapters.factory import load_plugin
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
 from dbt.context.base import generate_base_context
 from dbt.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
+from dbt.node_types import NodeType
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
@@ -1248,3 +1250,81 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.models['bar']['materialized'], 'default')  # rendered!
         self.assertEqual(config.seeds['foo']['post-hook'], "{{ env_var('env_value_profile') }}")
         self.assertEqual(config.seeds['bar']['materialized'], 'default')  # rendered!
+
+
+class TestV2V1Conversion(unittest.TestCase):
+    def setUp(self):
+        self.initial_src_vars = {
+            # globals
+            'foo': 123,
+            'bar': 'hello',
+            # project-scoped
+            'my_project': {
+                'bar': 'goodbye',
+                'baz': True,
+            },
+            'other_project': {
+                'foo': 456,
+            },
+        }
+        self.src_vars = deepcopy(self.initial_src_vars)
+        self.dst = {'vars': deepcopy(self.initial_src_vars)}
+
+        self.projects = ['my_project', 'other_project', 'third_project']
+        load_plugin('postgres')
+        self.local_var_search = mock.MagicMock(fqn=['my_project', 'my_model'], resource_type=NodeType.Model, package_name='my_project')
+        self.other_var_search = mock.MagicMock(fqn=['other_project', 'model'], resource_type=NodeType.Model, package_name='other_project')
+        self.third_var_search = mock.MagicMock(fqn=['third_project', 'third_model'], resource_type=NodeType.Model, package_name='third_project')
+
+    def test_v2_v1_dict(self):
+        dbt.config.project.v2_vars_to_v1(self.dst, self.src_vars, self.projects)
+        # make sure the input didn't get mutated. That would be bad!
+        assert self.src_vars == self.initial_src_vars
+        # conversion sould remove top-level 'vars'
+        assert 'vars' not in self.dst
+
+        # when we convert, all of models/seeds/snapshots will have the same vars
+        for key in ['models', 'seeds', 'snapshots']:
+            assert key in self.dst
+            for project in self.projects:
+                assert project in self.dst[key]
+                assert 'vars' in self.dst[key][project]
+                if project == 'my_project':
+                    assert self.dst[key][project]['vars'] == {
+                        'foo': 123,  # override
+                        'bar': 'goodbye',
+                        'baz': True,  # only in my-project
+                    }
+                elif project == 'other_project':
+                    assert self.dst[key][project]['vars'] == {
+                        'foo': 456,  # override
+                        'bar': 'hello',
+                    }
+                elif project == 'third_project':
+                    assert self.dst[key][project]['vars'] == {
+                        'foo': 123,
+                        'bar': 'hello',
+                    }
+                else:
+                    assert False, f'extra project: {project}'
+
+    def test_v2_v1_lookups(self):
+        dbt.config.project.v2_vars_to_v1(self.dst, self.src_vars, self.projects)
+
+        v1_vars = dbt.config.project.V1VarProvider(**self.dst)
+        v2_vars = dbt.config.project.V2VarProvider(self.initial_src_vars)
+
+        expected = [
+            (self.local_var_search, 'foo', 123),
+            (self.other_var_search, 'foo', 456),
+            (self.third_var_search, 'foo', 123),
+            (self.local_var_search, 'bar', 'goodbye'),
+            (self.other_var_search, 'bar', 'hello'),
+            (self.third_var_search, 'bar', 'hello'),
+            (self.local_var_search, 'baz', True),
+            (self.other_var_search, 'baz', None),
+            (self.third_var_search, 'baz', None),
+        ]
+        for node, key, expected_value in expected:
+            assert v1_vars.vars_for(node, 'postgres').get(key) == expected_value
+            assert v2_vars.vars_for(node, 'postgres').get(key) == expected_value

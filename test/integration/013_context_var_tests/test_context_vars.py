@@ -153,3 +153,92 @@ class TestEmitWarning(DBTIntegrationTest):
         with pytest.raises(dbt.exceptions.CompilationException):
             self.run_dbt(['run'], strict=True)
         self.run_dbt(['run'], strict=False, expect_pass=True)
+
+
+class TestVarDependencyInheritance(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "context_vars_013"
+
+    @property
+    def models(self):
+        return 'dependency-models'
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {'local': 'first_dependency'},
+                {'local': 'second_dependency_v1'},
+            ]
+        }
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'data-paths': ['dependency-data'],
+            'vars': {
+                'first_dep_override': 'dep_never_overridden',
+                'test': {
+                    'from_root_to_root': 'root_root_value',
+                },
+                'first_dep': {
+                    'from_root_to_first': 'root_first_value',
+                },
+                'second_dep': {
+                    'from_root_to_second': 'root_second_value',
+                },
+            },
+        }
+
+    @use_profile('postgres')
+    def test_postgres_var_mutual_overrides_v1_conversion(self):
+        self.run_dbt(['deps'], strict=False)
+        assert len(self.run_dbt(['seed'], strict=False)) == 3
+        assert len(self.run_dbt(['run'], strict=False)) == 3
+        self.assertTablesEqual('root_model_expected', 'model')
+        self.assertTablesEqual('first_dep_expected', 'first_dep_model')
+        self.assertTablesEqual('second_dep_expected', 'second_dep_model')
+
+
+class TestMissingVarGenerateNameMacro(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "context_vars_013"
+
+    @property
+    def models(self):
+        return 'trivial-models'
+
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': ['bad-generate-macros'],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_generate_schema_name_var(self):
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['compile'])
+
+        assert "Required var 'somevar' not found in config" in str(exc.exception)
+
+        # globally scoped
+        self.use_default_project({
+            'vars': {
+                'somevar': 1,
+            },
+            'macro-paths': ['bad-generate-macros'],
+        })
+        self.run_dbt(['compile'])
+        # locally scoped
+        self.use_default_project({
+            'vars': {
+                'test': {
+                    'somevar': 1,
+                },
+            },
+            'macro-paths': ['bad-generate-macros'],
+        })
+        self.run_dbt(['compile'])

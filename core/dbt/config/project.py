@@ -2,7 +2,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import (
-    List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable, Mapping
+    List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable, Mapping,
+    Iterable, Set
 )
 from typing_extensions import Protocol
 
@@ -274,10 +275,8 @@ class V2VarProvider(VarProvider):
         self, node: IsFQNResource, adapter_type: str
     ) -> Mapping[str, Any]:
         # in v2, vars are only either project or globally scoped
-
         merged = MultiDict([self.vars])
-        if node.package_name in self.vars:
-            merged.add(self.vars.get(node.package_name, {}))
+        merged.add(self.vars.get(node.package_name, {}))
         return merged
 
     def to_dict(self):
@@ -634,7 +633,7 @@ class Project:
             )
             raise DbtProjectError(msg)
 
-    def as_v1(self):
+    def as_v1(self, all_projects: Iterable[str]):
         if self.config_version == 1:
             return self
 
@@ -647,21 +646,7 @@ class Project:
         common_config_keys = ['models', 'seeds', 'snapshots']
 
         if 'vars' in dct and isinstance(dct['vars'], dict):
-            # stuff any 'vars' entries into the old-style
-            # models/seeds/snapshots dicts
-            for project_name, items in dct['vars'].items():
-                if not isinstance(items, dict):
-                    # can't translate top-level vars
-                    continue
-                for cfgkey in ['models', 'seeds', 'snapshots']:
-                    if project_name not in mutated[cfgkey]:
-                        mutated[cfgkey][project_name] = {}
-                    project_type_cfg = mutated[cfgkey][project_name]
-                    if 'vars' not in project_type_cfg:
-                        project_type_cfg['vars'] = {}
-                    mutated[cfgkey][project_name]['vars'].update(items)
-            # remove this from the v1 form
-            mutated.pop('vars')
+            v2_vars_to_v1(mutated, dct['vars'], set(all_projects))
         # ok, now we want to look through all the existing cfgkeys and mirror
         # it, except expand the '+' prefix.
         for cfgkey in common_config_keys:
@@ -673,6 +658,36 @@ class Project:
         project = Project.from_project_config(mutated)
         project.packages = self.packages
         return project
+
+
+def v2_vars_to_v1(
+    dst: Dict[str, Any], src_vars: Dict[str, Any], project_names: Set[str]
+) -> None:
+    # stuff any 'vars' entries into the old-style
+    # models/seeds/snapshots dicts
+    common_config_keys = ['models', 'seeds', 'snapshots']
+    for project_name in project_names:
+        for cfgkey in common_config_keys:
+            if cfgkey not in dst:
+                dst[cfgkey] = {}
+            if project_name not in dst[cfgkey]:
+                dst[cfgkey][project_name] = {}
+            project_type_cfg = dst[cfgkey][project_name]
+
+            if 'vars' not in project_type_cfg:
+                project_type_cfg['vars'] = {}
+            project_type_vars = project_type_cfg['vars']
+
+            project_type_vars.update({
+                k: v for k, v in src_vars.items()
+                if not isinstance(v, dict)
+            })
+
+            items = src_vars.get(project_name, None)
+            if isinstance(items, dict):
+                project_type_vars.update(items)
+    # remove this from the v1 form
+    dst.pop('vars')
 
 
 def _flatten_config(dct: Dict[str, Any]):
