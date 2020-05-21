@@ -95,7 +95,7 @@ class DocLookup(dbtClassMixin):
     ) -> ParsedDocumentation:
         if unique_id not in manifest.docs:
             raise dbt.exceptions.InternalException(
-                f'Doc {unique_id} found in cache but not found in manifest'
+                f"Doc {unique_id} found in cache but not found in manifest"
             )
         return manifest.docs[unique_id]
 
@@ -130,7 +130,7 @@ class SourceLookup(dbtClassMixin):
     ) -> ParsedSourceDefinition:
         if unique_id not in manifest.sources:
             raise dbt.exceptions.InternalException(
-                f'Source {unique_id} found in cache but not found in manifest'
+                f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
 
@@ -142,7 +142,7 @@ class RefableLookup(dbtClassMixin):
     # refables are actually unique, so the Dict[PackageName, UniqueID] will
     # only ever have exactly one value, but doing 3 dict lookups instead of 1
     # is not a big deal at all and retains consistency
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
@@ -170,7 +170,7 @@ class RefableLookup(dbtClassMixin):
     ) -> ManifestNode:
         if unique_id not in manifest.nodes:
             raise dbt.exceptions.InternalException(
-                f'Node {unique_id} found in cache but not found in manifest'
+                f"Node {unique_id} found in cache but not found in manifest"
             )
         return manifest.nodes[unique_id]
 
@@ -873,9 +873,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         node: Optional[ManifestNode] = None
         disabled: Optional[List[ManifestNode]] = None
 
-        candidates = _search_packages(
-            current_project, node_package, target_model_package
-        )
+        candidates = _search_packages(current_project, node_package, target_model_package)
         for pkg in candidates:
             node = self.ref_lookup.find(target_model_name, pkg, self)
 
@@ -933,9 +931,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         resolve_ref except the is_enabled checks are unnecessary as docs are
         always enabled.
         """
-        candidates = _search_packages(
-            current_project, node_package, package
-        )
+        candidates = _search_packages(current_project, node_package, package)
 
         for pkg in candidates:
             result = self.doc_lookup.find(name, pkg, self)

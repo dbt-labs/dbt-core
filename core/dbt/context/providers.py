@@ -215,14 +215,12 @@ class BaseRefResolver(BaseResolver):
     def validate_args(self, name: str, package: Optional[str]):
         if not isinstance(name, str):
             raise CompilationException(
-                f'The name argument to ref() must be a string, got '
-                f'{type(name)}'
+                f"The name argument to ref() must be a string, got " f"{type(name)}"
             )
 
         if package is not None and not isinstance(package, str):
             raise CompilationException(
-                f'The package argument to ref() must be a string or None, got '
-                f'{type(package)}'
+                f"The package argument to ref() must be a string or None, got " f"{type(package)}"
             )
 
     def __call__(self, *args: str) -> RelationProxy:
@@ -247,13 +245,13 @@ class BaseSourceResolver(BaseResolver):
     def validate_args(self, source_name: str, table_name: str):
         if not isinstance(source_name, str):
             raise CompilationException(
-                f'The source name (first) argument to source() must be a '
-                f'string, got {type(source_name)}'
+                f"The source name (first) argument to source() must be a "
+                f"string, got {type(source_name)}"
             )
         if not isinstance(table_name, str):
             raise CompilationException(
-                f'The table name (second) argument to source() must be a '
-                f'string, got {type(table_name)}'
+                f"The table name (second) argument to source() must be a "
+                f"string, got {type(table_name)}"
             )
 
     def __call__(self, *args: str) -> RelationProxy:
