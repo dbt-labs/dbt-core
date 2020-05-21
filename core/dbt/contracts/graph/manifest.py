@@ -1,3 +1,4 @@
+import abc
 import enum
 import hashlib
 import os
@@ -34,6 +35,138 @@ import dbt.utils
 NodeEdgeMap = Dict[str, List[str]]
 MacroKey = Tuple[str, str]
 SourceKey = Tuple[str, str]
+PackageName = str
+DocName = str
+RefName = str
+UniqueID = str
+
+
+K_T = TypeVar('K_T')
+V_T = TypeVar('V_T')
+
+
+class PackageAwareCache(Generic[K_T, V_T]):
+    def __init__(self, manifest: 'Manifest'):
+        self.storage: Dict[K_T, Dict[PackageName, UniqueID]] = {}
+        self._manifest = manifest
+        self.populate()
+
+    @abc.abstractmethod
+    def populate(self):
+        pass
+
+    @abc.abstractmethod
+    def perform_lookup(self, unique_id: UniqueID) -> V_T:
+        pass
+
+    def find_cached_value(
+        self, key: K_T, package: Optional[PackageName]
+    ) -> Optional[V_T]:
+        unique_id = self.find_unique_id_for_package(key, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id)
+        return None
+
+    def find_unique_id_for_package(
+        self, key: K_T, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
+        if key not in self.storage:
+            return None
+
+        pkg_dct: Mapping[PackageName, UniqueID] = self.storage[key]
+
+        if package is None:
+            if not pkg_dct:
+                return None
+            else:
+                return next(iter(pkg_dct.values()))
+        elif package in pkg_dct:
+            return pkg_dct[package]
+        else:
+            return None
+
+
+class DocCache(PackageAwareCache[DocName, ParsedDocumentation]):
+    def add_doc(self, doc: ParsedDocumentation):
+        if doc.name not in self.storage:
+            self.storage[doc.name] = {}
+        self.storage[doc.name][doc.package_name] = doc.unique_id
+
+    def populate(self):
+        for doc in self._manifest.docs.values():
+            self.add_doc(doc)
+
+    def perform_lookup(
+        self, unique_id: UniqueID
+    ) -> ParsedDocumentation:
+        if unique_id not in self._manifest.docs:
+            raise dbt.exceptions.InternalException(
+                f'Doc {unique_id} found in cache but not found in manifest'
+            )
+        return self._manifest.docs[unique_id]
+
+
+class SourceCache(PackageAwareCache[SourceKey, ParsedSourceDefinition]):
+    def add_source(self, source: ParsedSourceDefinition):
+        key = (source.source_name, source.name)
+        if key not in self.storage:
+            self.storage[key] = {}
+
+        self.storage[key][source.package_name] = source.unique_id
+
+    def populate(self):
+        for source in self._manifest.sources.values():
+            self.add_source(source)
+
+    def perform_lookup(
+        self, unique_id: UniqueID
+    ) -> ParsedSourceDefinition:
+        if unique_id not in self._manifest.sources:
+            raise dbt.exceptions.InternalException(
+                f'Source {unique_id} found in cache but not found in manifest'
+            )
+        return self._manifest.sources[unique_id]
+
+
+class RefableCache(PackageAwareCache[RefName, NonSourceNode]):
+    # refables are actually unique, so the Dict[PackageName, UniqueID] will
+    # only ever have exactly one value, but doing 3 dict lookups instead of 1
+    # is not a big deal at all and retains consistency
+    def __init__(self, manifest: 'Manifest'):
+        self._cached_types = set(NodeType.refable())
+        super().__init__(manifest)
+
+    def add_node(self, node: NonSourceNode):
+        if node.resource_type in self._cached_types:
+            if node.name not in self.storage:
+                self.storage[node.name] = {}
+            self.storage[node.name][node.package_name] = node.unique_id
+
+    def populate(self):
+        for node in self._manifest.nodes.values():
+            self.add_node(node)
+
+    def perform_lookup(
+        self, unique_id: UniqueID
+    ) -> NonSourceNode:
+        if unique_id not in self._manifest.nodes:
+            raise dbt.exceptions.InternalException(
+                f'Node {unique_id} found in cache but not found in manifest'
+            )
+        return self._manifest.nodes[unique_id]
+
+
+def _search_packages(
+    current_project: str,
+    node_package: str,
+    target_package: Optional[str] = None,
+) -> List[Optional[str]]:
+    if target_package is not None:
+        return [target_package]
+    elif current_project == node_package:
+        return [current_project, None]
+    else:
+        return [current_project, node_package, None]
 
 
 @dataclass
@@ -393,6 +526,9 @@ class Disabled(Generic[D]):
     target: D
 
 
+MaybeDocumentation = Optional[ParsedDocumentation]
+
+
 MaybeParsedSource = Optional[Union[
     ParsedSourceDefinition,
     Disabled[ParsedSourceDefinition],
@@ -437,6 +573,9 @@ class Manifest:
     files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
+    _docs_cache: Optional[DocCache] = None
+    _sources_cache: Optional[SourceCache] = None
+    _refs_cache: Optional[RefableCache] = None
 
     @classmethod
     def from_macros(
@@ -498,39 +637,6 @@ class Manifest:
         result = searcher.search(self.disabled)
         if result is not None:
             assert isinstance(result, ParsedSourceDefinition)
-        return result
-
-    def find_docs_by_name(
-        self, name: str, package: Optional[str] = None
-    ) -> Optional[ParsedDocumentation]:
-        searcher: NameSearcher = NameSearcher(
-            name, package, [NodeType.Documentation]
-        )
-        result = searcher.search(self.docs.values())
-        return result
-
-    def find_refable_by_name(
-        self, name: str, package: Optional[str]
-    ) -> Optional[NonSourceNode]:
-        """Find any valid target for "ref()" in the graph by its name and
-        package name, or None for any package.
-        """
-        searcher: NameSearcher = NameSearcher(
-            name, package, NodeType.refable()
-        )
-        result = searcher.search(self.nodes.values())
-        return result
-
-    def find_source_by_name(
-        self, source_name: str, table_name: str, package: Optional[str]
-    ) -> Optional[ParsedSourceDefinition]:
-        """Find any valid target for "source()" in the graph by its name and
-        package name, or None for any package.
-        """
-
-        name = f'{source_name}.{table_name}'
-        searcher: NameSearcher = NameSearcher(name, package, [NodeType.Source])
-        result = searcher.search(self.sources.values())
         return result
 
     def _find_macros_by_name(
@@ -647,6 +753,10 @@ class Manifest:
             if unique_id in self.nodes:
                 raise_duplicate_resource_name(node, self.nodes[unique_id])
             self.nodes[unique_id] = node
+            # fixup the cache if it exists.
+            if self._refs_cache is not None:
+                if node.resource_type in NodeType.refable():
+                    self._refs_cache.add_node(node)
 
     def patch_macros(
         self, patches: MutableMapping[MacroKey, ParsedMacroPatch]
@@ -766,6 +876,30 @@ class Manifest:
                 'Expected node {} not found in manifest'.format(unique_id)
             )
 
+    @property
+    def docs_cache(self) -> DocCache:
+        if self._docs_cache is not None:
+            return self._docs_cache
+        cache = DocCache(self)
+        self._docs_cache = cache
+        return cache
+
+    @property
+    def source_cache(self) -> SourceCache:
+        if self._sources_cache is not None:
+            return self._sources_cache
+        cache = SourceCache(self)
+        self._sources_cache = cache
+        return cache
+
+    @property
+    def refs_cache(self) -> RefableCache:
+        if self._refs_cache is not None:
+            return self._refs_cache
+        cache = RefableCache(self)
+        self._refs_cache = cache
+        return cache
+
     def resolve_ref(
         self,
         target_model_name: str,
@@ -773,37 +907,27 @@ class Manifest:
         current_project: str,
         node_package: str,
     ) -> MaybeNonSource:
-        if target_model_package is not None:
-            return self.find_refable_by_name(
-                target_model_name,
-                target_model_package)
 
-        target_model: Optional[NonSourceNode] = None
-        disabled_target: Optional[NonSourceNode] = None
+        node: Optional[NonSourceNode] = None
+        disabled: Optional[NonSourceNode] = None
 
-        # first pass: look for models in the current_project
-        # second pass: look for models in the node's package
-        # final pass: look for models in any package
-        if current_project == node_package:
-            candidates = [current_project, None]
-        else:
-            candidates = [current_project, node_package, None]
-        for candidate in candidates:
-            target_model = self.find_refable_by_name(
-                target_model_name,
-                candidate)
+        candidates = _search_packages(
+            current_project, node_package, target_model_package
+        )
+        for pkg in candidates:
+            node = self.refs_cache.find_cached_value(target_model_name, pkg)
 
-            if target_model is not None and target_model.config.enabled:
-                return target_model
+            if node is not None and node.config.enabled:
+                return node
 
             # it's possible that the node is disabled
-            if disabled_target is None:
-                disabled_target = self.find_disabled_by_name(
-                    target_model_name, candidate
+            if disabled is None:
+                disabled = self.find_disabled_by_name(
+                    target_model_name, pkg
                 )
 
-        if disabled_target is not None:
-            return Disabled(disabled_target)
+        if disabled is not None:
+            return Disabled(disabled)
         return None
 
     def resolve_source(
@@ -813,27 +937,24 @@ class Manifest:
         current_project: str,
         node_package: str
     ) -> MaybeParsedSource:
-        candidate_targets = [current_project, node_package, None]
+        key = (target_source_name, target_table_name)
+        candidates = _search_packages(current_project, node_package)
 
-        target_source: Optional[ParsedSourceDefinition] = None
-        disabled_target: Optional[ParsedSourceDefinition] = None
+        source: Optional[ParsedSourceDefinition] = None
+        disabled: Optional[ParsedSourceDefinition] = None
 
-        for candidate in candidate_targets:
-            target_source = self.find_source_by_name(
-                target_source_name,
-                target_table_name,
-                candidate
-            )
-            if target_source is not None and target_source.config.enabled:
-                return target_source
+        for pkg in candidates:
+            source = self.source_cache.find_cached_value(key, pkg)
+            if source is not None and source.config.enabled:
+                return source
 
-            if disabled_target is None:
-                disabled_target = self.find_disabled_source_by_name(
-                    target_source_name, target_table_name, candidate
+            if disabled is None:
+                disabled = self.find_disabled_source_by_name(
+                    target_source_name, target_table_name, pkg
                 )
 
-        if disabled_target is not None:
-            return Disabled(disabled_target)
+        if disabled is not None:
+            return Disabled(disabled)
         return None
 
     def resolve_doc(
@@ -847,22 +968,15 @@ class Manifest:
         resolve_ref except the is_enabled checks are unnecessary as docs are
         always enabled.
         """
-        if package is not None:
-            return self.find_docs_by_name(
-                name, package
-            )
+        candidates = _search_packages(
+            current_project, node_package, package
+        )
 
-        candidate_targets = [
-            current_project,
-            node_package,
-            None,
-        ]
-        target_doc = None
-        for candidate in candidate_targets:
-            target_doc = self.find_docs_by_name(name, candidate)
-            if target_doc is not None:
-                break
-        return target_doc
+        for pkg in candidates:
+            result = self.docs_cache.find_cached_value(name, pkg)
+            if result is not None:
+                return result
+        return None
 
 
 @dataclass
