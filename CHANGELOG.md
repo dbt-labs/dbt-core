@@ -67,13 +67,13 @@ Contributors:
 - Add a 'depends_on' attribute to the log record extra field ([#2316](https://github.com/fishtown-analytics/dbt/issues/2316), [#2341](https://github.com/fishtown-analytics/dbt/pull/2341))
 - Added a '--no-browser' argument to "dbt docs serve" so you can serve docs in an environment that only has a CLI browser which would otherwise deadlock dbt ([#2004](https://github.com/fishtown-analytics/dbt/issues/2004), [#2364](https://github.com/fishtown-analytics/dbt/pull/2364))
 -  Snowflake now uses "describe table" to get the columns in a relation ([#2260](https://github.com/fishtown-analytics/dbt/issues/2260), [#2324](https://github.com/fishtown-analytics/dbt/pull/2324))
+- Expose Snowflake query id in case of an exception raised by connector ([#2201](https://github.com/fishtown-analytics/dbt/issues/2201), [#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 - Sources (and therefore freshness tests) can be enabled and disabled via dbt_project.yml ([#2283](https://github.com/fishtown-analytics/dbt/issues/2283), [#2312](https://github.com/fishtown-analytics/dbt/pull/2312), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - schema.yml files are now fully rendered in a context that is aware of vars declared in from dbt_project.yml files ([#2269](https://github.com/fishtown-analytics/dbt/issues/2269), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Sources from dependencies can be overridden in schema.yml files ([#2287](https://github.com/fishtown-analytics/dbt/issues/2287), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Implement persist_docs for both `relation` and `comments` on postgres and redshift, and extract them when getting the catalog. ([#2333](https://github.com/fishtown-analytics/dbt/issues/2333), [#2378](https://github.com/fishtown-analytics/dbt/pull/2378))
 - Added a filter named `as_text` to the native environment rendering code that allows users to mark a value as always being a string ([#2384](https://github.com/fishtown-analytics/dbt/issues/2384), [#2395](https://github.com/fishtown-analytics/dbt/pull/2395))
 - Relation comments supported for Snowflake tables and views. Column comments supported for tables. ([#1722](https://github.com/fishtown-analytics/dbt/issues/1722), [#2321](https://github.com/fishtown-analytics/dbt/pull/2321))
-
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))
