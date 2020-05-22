@@ -25,6 +25,7 @@ from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedSourceDefinition, ParsedSeedNode
 )
 from dbt.exceptions import (
+    CompilationException,
     InternalException,
     ValidationException,
     RuntimeException,
@@ -130,6 +131,19 @@ class BaseRefResolver(BaseResolver):
         else:
             return [package, name]
 
+    def validate_args(self, name: str, package: Optional[str]):
+        if not isinstance(name, str):
+            raise CompilationException(
+                f'The name argument to ref() must be a string, got '
+                f'{type(name)}'
+            )
+
+        if package is not None and not isinstance(package, str):
+            raise CompilationException(
+                f'The package argument to ref() must be a string or None, got '
+                f'{type(package)}'
+            )
+
     def __call__(self, *args: str) -> RelationProxy:
         name: str
         package: Optional[str] = None
@@ -140,6 +154,7 @@ class BaseRefResolver(BaseResolver):
             package, name = args
         else:
             ref_invalid_args(self.model, args)
+        self.validate_args(name, package)
         return self.resolve(name, package)
 
 
@@ -148,12 +163,25 @@ class BaseSourceResolver(BaseResolver):
     def resolve(self, source_name: str, table_name: str):
         pass
 
+    def validate_args(self, source_name: str, table_name: str):
+        if not isinstance(source_name, str):
+            raise CompilationException(
+                f'The source name (first) argument to source() must be a '
+                f'string, got {type(source_name)}'
+            )
+        if not isinstance(table_name, str):
+            raise CompilationException(
+                f'The table name (second) argument to source() must be a '
+                f'string, got {type(table_name)}'
+            )
+
     def __call__(self, *args: str) -> RelationProxy:
         if len(args) != 2:
             raise_compiler_error(
                 f"source() takes exactly two arguments ({len(args)} given)",
                 self.model
             )
+        self.validate_args(args[0], args[1])
         return self.resolve(args[0], args[1])
 
 

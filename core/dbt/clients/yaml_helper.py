@@ -1,7 +1,16 @@
+from typing import Any
+
 import dbt.exceptions
 
 import yaml
 import yaml.scanner
+
+# the C version is faster, but it doesn't always exist
+YamlLoader: Any
+try:
+    from yaml import CSafeLoader as YamlLoader
+except ImportError:
+    from yaml import SafeLoader as YamlLoader
 
 
 YAML_ERROR_MESSAGE = """
@@ -44,9 +53,13 @@ def contextualized_yaml_error(raw_contents, error):
                                      raw_error=error)
 
 
+def safe_load(contents):
+    return yaml.load(contents, Loader=YamlLoader)
+
+
 def load_yaml_text(contents):
     try:
-        return yaml.safe_load(contents)
+        return safe_load(contents)
     except (yaml.scanner.ScannerError, yaml.YAMLError) as e:
         if hasattr(e, 'problem_mark'):
             error = contextualized_yaml_error(contents, e)

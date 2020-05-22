@@ -10,9 +10,12 @@
 - Fixed a number of issues with globally-scoped vars ([#2473](https://github.com/fishtown-analytics/dbt/issues/2473), [#2472](https://github.com/fishtown-analytics/dbt/issues/2472), [#2469](https://github.com/fishtown-analytics/dbt/issues/2469), [#2477](https://github.com/fishtown-analytics/dbt/pull/2477))
 - Fixed DBT Docker entrypoint ([#2470](https://github.com/fishtown-analytics/dbt/issues/2470), [#2475](https://github.com/fishtown-analytics/dbt/pull/2475))
 - Fixed a performance regression that occurred even when a user was not using the relevant feature ([#2474](https://github.com/fishtown-analytics/dbt/issues/2474), [#2478](https://github.com/fishtown-analytics/dbt/pull/2478))
+- Substantial performance improvements for parsing on large projects, especially projects with many docs definition. ([#2480](https://github.com/fishtown-analytics/dbt/issues/2480), [#2481](https://github.com/fishtown-analytics/dbt/pull/2481))
+- Expose Snowflake query id in case of an exception raised by connector ([#2201](https://github.com/fishtown-analytics/dbt/issues/2201), [#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 
 Contributors:
 - [@dmateusp](https://github.com/dmateusp) ([#2475](https://github.com/fishtown-analytics/dbt/pull/2475))
+- [@ChristianKohlberg](https://github.com/ChristianKohlberg) (#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 
 ## dbt 0.17.0rc1 (May 12, 2020)
 
@@ -67,7 +70,6 @@ Contributors:
 - Add a 'depends_on' attribute to the log record extra field ([#2316](https://github.com/fishtown-analytics/dbt/issues/2316), [#2341](https://github.com/fishtown-analytics/dbt/pull/2341))
 - Added a '--no-browser' argument to "dbt docs serve" so you can serve docs in an environment that only has a CLI browser which would otherwise deadlock dbt ([#2004](https://github.com/fishtown-analytics/dbt/issues/2004), [#2364](https://github.com/fishtown-analytics/dbt/pull/2364))
 -  Snowflake now uses "describe table" to get the columns in a relation ([#2260](https://github.com/fishtown-analytics/dbt/issues/2260), [#2324](https://github.com/fishtown-analytics/dbt/pull/2324))
-- Expose Snowflake query id in case of an exception raised by connector ([#2201](https://github.com/fishtown-analytics/dbt/issues/2201), [#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 - Sources (and therefore freshness tests) can be enabled and disabled via dbt_project.yml ([#2283](https://github.com/fishtown-analytics/dbt/issues/2283), [#2312](https://github.com/fishtown-analytics/dbt/pull/2312), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - schema.yml files are now fully rendered in a context that is aware of vars declared in from dbt_project.yml files ([#2269](https://github.com/fishtown-analytics/dbt/issues/2269), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))
 - Sources from dependencies can be overridden in schema.yml files ([#2287](https://github.com/fishtown-analytics/dbt/issues/2287), [#2357](https://github.com/fishtown-analytics/dbt/pull/2357))

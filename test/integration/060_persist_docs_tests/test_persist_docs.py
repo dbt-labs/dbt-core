@@ -1,4 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import os
 
 import json
 
@@ -19,7 +20,10 @@ class BasePersistDocsTest(DBTIntegrationTest):
             assert '\n' in comment
             assert 'Some $lbl$ labeled $lbl$ and $$ unlabeled $$ dollar-quoting' in comment
             assert '/* comment */' in comment
-            assert '--\n' in comment
+            if os.name == 'nt':
+                assert '--\r\n' in comment or '--\n' in comment
+            else:
+                assert '--\n' in comment
 
     def _assert_has_table_comments(self, table_node):
         table_comment = table_node['metadata']['comment']
