@@ -68,6 +68,22 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTrue('users' in created_models)
         self.assert_correct_schemas()
 
+    @use_profile('postgres')
+    def test__postgres__tags_and_children_limited(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--models', 'tag:base+2'])
+        self.assertEqual(len(results), 3)
+
+        created_models = self.get_models_in_schema()
+        self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
+        self.assertIn('emails_alt', created_models)
+        self.assertIn('users_rollup', created_models)
+        self.assertIn('users', created_models)
+        self.assertNotIn('users_rollup_dependency', created_models)
+        self.assert_correct_schemas()
+
     @use_profile('snowflake')
     def test__snowflake__specific_model(self):
         self.run_sql_file("seed.sql")
@@ -113,6 +129,22 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('EMAILS' in created_models)
 
     @use_profile('postgres')
+    def test__postgres__specific_model_and_children_limited(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--models', 'users+1'])
+        self.assertEqual(len(results), 3)
+
+        self.assertTablesEqual("seed", "users")
+        self.assertTablesEqual("summary_expected", "users_rollup")
+        created_models = self.get_models_in_schema()
+        self.assertIn('emails_alt', created_models)
+        self.assertNotIn('base_users', created_models)
+        self.assertNotIn('emails', created_models)
+        self.assertNotIn('users_rollup_dependency', created_models)
+        self.assert_correct_schemas()
+
+    @use_profile('postgres')
     def test__postgres__specific_model_and_parents(self):
         self.run_sql_file("seed.sql")
 
@@ -141,6 +173,20 @@ class TestGraphSelection(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertFalse('BASE_USERS' in created_models)
         self.assertFalse('EMAILS' in created_models)
+
+    @use_profile('postgres')
+    def test__postgres__specific_model_and_parents_limited(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--models', '1+users_rollup'])
+        self.assertEqual(len(results), 2)
+
+        self.assertTablesEqual("seed", "users")
+        self.assertTablesEqual("summary_expected", "users_rollup")
+        created_models = self.get_models_in_schema()
+        self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
+        self.assert_correct_schemas()
 
     @use_profile('postgres')
     def test__postgres__specific_model_with_exclusion(self):
