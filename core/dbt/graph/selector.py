@@ -1,4 +1,5 @@
 import os
+import re
 from enum import Enum
 from itertools import chain
 from pathlib import Path
@@ -11,8 +12,8 @@ from dbt.utils import coalesce
 from dbt.node_types import NodeType
 from dbt.exceptions import RuntimeException, InternalException, warn_or_error
 
-SELECTOR_PARENTS = '+'
-SELECTOR_CHILDREN = '+'
+SELECTOR_PARENTS = r'^(?P<depth>[0-9]*)\+(?P<node>.*)$'
+SELECTOR_CHILDREN = r'^(?P<node>.*)\+(?P<depth>[0-9]*)$'
 SELECTOR_GLOB = '*'
 SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
@@ -36,20 +37,30 @@ class SelectionCriteria:
     def __init__(self, node_spec: str):
         self.raw = node_spec
         self.select_children = False
+        self.select_children_max_depth = None
         self.select_parents = False
+        self.select_parents_max_depth = None
         self.select_childrens_parents = False
 
         if node_spec.startswith(SELECTOR_CHILDREN_AND_ANCESTORS):
             self.select_childrens_parents = True
             node_spec = node_spec[1:]
 
-        if node_spec.startswith(SELECTOR_PARENTS):
-            self.select_parents = True
-            node_spec = node_spec[1:]
+        print(f"'{node_spec}', '{type(node_spec)}'")
 
-        if node_spec.endswith(SELECTOR_CHILDREN):
+        matches = re.match(SELECTOR_PARENTS, node_spec)
+        print(matches.groups())
+        if matches:
+            print('DUPA')
+            self.select_parents = True
+            self.select_parents_max_depth = int(matches['depth']) if matches['depth'] else None
+            node_spec = matches['node']
+
+        matches = re.match(SELECTOR_CHILDREN, node_spec)
+        if matches:
             self.select_children = True
-            node_spec = node_spec[:-1]
+            self.select_children_max_depth = int(matches['depth']) if matches['depth'] else None
+            node_spec = matches['node']
 
         if self.select_children and self.select_childrens_parents:
             raise RuntimeException(
@@ -347,13 +358,15 @@ class Graph:
         if not graph.has_node(node):
             raise nx.NetworkXError("The node %s is not in the graph." % node)
         des = set(
-            n for n, d in nx.single_source_shortest_path_length(graph, source=node, cutoff=max_depth).items())
+            n for n, d in nx.single_source_shortest_path_length(G=graph, source=node, cutoff=max_depth).items())
         return des - {node}
 
     def select_children(self,
                         selected: Set[str],
                         max_depth: int = None) -> Set[str]:
+        print(f"Childrens with max depth: {max_depth}")
         descendants: Set[str] = set()
+        print(f"{selected}")
         for node in selected:
             descendants.update(
                 Graph.descendants(self.graph, node, max_depth=max_depth)
@@ -377,13 +390,16 @@ class Graph:
             """
         if not graph.has_node(node):
             raise nx.NetworkXError("The node %s is not in the graph." % node)
-        anc = set(
-            n for n, d in nx.single_source_shortest_path_length(graph, target=node, cutoff=max_depth).items())
+        with nx.utils.reversed(graph):
+            anc = set(
+                n for n, d in nx.single_source_shortest_path_length(graph, source=node, cutoff=max_depth).items())
         return anc - {node}
 
     def select_parents(self,
                        selected: Set[str],
                        max_depth: int = None) -> Set[str]:
+        print(f"Parents max depth: {max_depth}")
+        print(f"{selected}")
         ancestors: Set[str] = set()
         for node in selected:
             ancestors.update(
@@ -404,9 +420,10 @@ class Graph:
         if spec.select_childrens_parents:
             additional.update(self.select_childrens_parents(selected))
         if spec.select_parents:
-            additional.update(self.select_parents(selected))
+            print('D')
+            additional.update(self.select_parents(selected, max_depth=spec.select_parents_max_depth))
         if spec.select_children:
-            additional.update(self.select_children(selected))
+            additional.update(self.select_children(selected, max_depth=spec.select_children_max_depth))
         return additional
 
     def subgraph(self, nodes: Iterable[str]) -> 'Graph':
