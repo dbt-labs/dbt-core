@@ -329,16 +329,32 @@ class Graph:
         ancestors_for = self.select_children(selected) | selected
         return self.select_parents(ancestors_for) | ancestors_for
 
-    def select_children(self, selected: Set[str]) -> Set[str]:
+    @classmethod
+    def descendants(cls, graph, node, max_depth: int = -1):
+        return nx.descendants(graph, node)
+
+    def select_children(self,
+                        selected: Set[str],
+                        max_depth: int = -1) -> Set[str]:
         descendants: Set[str] = set()
         for node in selected:
-            descendants.update(nx.descendants(self.graph, node))
+            descendants.update(
+                Graph.descendants(self.graph, node, max_depth=max_depth)
+            )
         return descendants
 
-    def select_parents(self, selected: Set[str]) -> Set[str]:
+    @classmethod
+    def ancestors(cls, graph, node, max_depth: int = -1):
+        return nx.ancestors(graph, node)
+
+    def select_parents(self,
+                       selected: Set[str],
+                       max_depth: int = -1) -> Set[str]:
         ancestors: Set[str] = set()
         for node in selected:
-            ancestors.update(nx.ancestors(self.graph, node))
+            ancestors.update(
+                Graph.ancestors(self.graph, node, max_depth=max_depth)
+            )
         return ancestors
 
     def select_successors(self, selected: Set[str]) -> Set[str]:
