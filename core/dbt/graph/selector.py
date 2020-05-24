@@ -46,20 +46,18 @@ class SelectionCriteria:
             self.select_childrens_parents = True
             node_spec = node_spec[1:]
 
-        print(f"'{node_spec}', '{type(node_spec)}'")
-
         matches = re.match(SELECTOR_PARENTS, node_spec)
-        print(matches.groups())
         if matches:
-            print('DUPA')
             self.select_parents = True
-            self.select_parents_max_depth = int(matches['depth']) if matches['depth'] else None
+            if matches['depth']:
+                self.select_parents_max_depth = int(matches['depth'])
             node_spec = matches['node']
 
         matches = re.match(SELECTOR_CHILDREN, node_spec)
         if matches:
             self.select_children = True
-            self.select_children_max_depth = int(matches['depth']) if matches['depth'] else None
+            if matches['depth']:
+                self.select_children_max_depth = int(matches['depth'])
             node_spec = matches['node']
 
         if self.select_children and self.select_childrens_parents:
@@ -342,64 +340,44 @@ class Graph:
 
     @classmethod
     def descendants(cls, graph, node, max_depth: int = None):
-        """Returns all nodes reachable from `node` in `graph`.
-
-            Parameters
-            ----------
-            G : NetworkX DiGraph
-                A directed acyclic graph (DAG)
-            source : node in `G`
-
-            Returns
-            -------
-            set()
-                The descendants of `node` in `graph`
-            """
+        """Returns all nodes reachable from `node` in `graph`"""
         if not graph.has_node(node):
             raise nx.NetworkXError("The node %s is not in the graph." % node)
         des = set(
-            n for n, d in nx.single_source_shortest_path_length(G=graph, source=node, cutoff=max_depth).items())
+            n for n, d in
+            nx.single_source_shortest_path_length(G=graph,
+                                                  source=node,
+                                                  cutoff=max_depth).items()
+        )
         return des - {node}
+
+    @classmethod
+    def ancestors(cls, graph, node, max_depth: int = None):
+        """Returns all nodes having a path to `node` in `graph`"""
+        if not graph.has_node(node):
+            raise nx.NetworkXError("The node %s is not in the graph." % node)
+        with nx.utils.reversed(graph):
+            anc = set(
+                n for n, d in
+                nx.single_source_shortest_path_length(G=graph,
+                                                      source=node,
+                                                      cutoff=max_depth).items()
+            )
+        return anc - {node}
 
     def select_children(self,
                         selected: Set[str],
                         max_depth: int = None) -> Set[str]:
-        print(f"Childrens with max depth: {max_depth}")
         descendants: Set[str] = set()
-        print(f"{selected}")
         for node in selected:
             descendants.update(
                 Graph.descendants(self.graph, node, max_depth=max_depth)
             )
         return descendants
 
-    @classmethod
-    def ancestors(cls, graph, node, max_depth: int = None):
-        """Returns all nodes having a path to `node` in `graph`.
-
-            Parameters
-            ----------
-            graph : NetworkX DiGraph
-                A directed acyclic graph (DAG)
-            node : node in `graph`
-
-            Returns
-            -------
-            set()
-                The ancestors of `node` in `graph`
-            """
-        if not graph.has_node(node):
-            raise nx.NetworkXError("The node %s is not in the graph." % node)
-        with nx.utils.reversed(graph):
-            anc = set(
-                n for n, d in nx.single_source_shortest_path_length(graph, source=node, cutoff=max_depth).items())
-        return anc - {node}
-
     def select_parents(self,
                        selected: Set[str],
                        max_depth: int = None) -> Set[str]:
-        print(f"Parents max depth: {max_depth}")
-        print(f"{selected}")
         ancestors: Set[str] = set()
         for node in selected:
             ancestors.update(
@@ -420,10 +398,15 @@ class Graph:
         if spec.select_childrens_parents:
             additional.update(self.select_childrens_parents(selected))
         if spec.select_parents:
-            print('D')
-            additional.update(self.select_parents(selected, max_depth=spec.select_parents_max_depth))
+            additional.update(
+                self.select_parents(selected,
+                                    max_depth=spec.select_parents_max_depth)
+            )
         if spec.select_children:
-            additional.update(self.select_children(selected, max_depth=spec.select_children_max_depth))
+            additional.update(
+                self.select_children(selected,
+                                     max_depth=spec.select_children_max_depth)
+            )
         return additional
 
     def subgraph(self, nodes: Iterable[str]) -> 'Graph':
