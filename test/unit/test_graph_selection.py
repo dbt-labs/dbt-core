@@ -110,6 +110,34 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             ['b'],
             set(['m.X.a','m.X.c', 'm.Y.d','m.X.e','m.Y.f','m.X.g']))
 
+    def test__select_children(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['X.c+'],
+            [],
+            set(['m.X.c', 'm.Y.f', 'm.X.g']))
+
+    def test__select_children_limited(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['X.a+1'],
+            [],
+            set(['m.X.a', 'm.Y.b', 'm.X.c']))
+
+    def test__select_parents(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['+Y.f'],
+            [],
+            set(['m.X.c', 'm.Y.f', 'm.X.a']))
+
+    def test__select_parents_limited(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['1+Y.f'],
+            [],
+            set(['m.X.c', 'm.Y.f']))
+
     def test__select_children_except_tag(self):
         self.run_specs_and_assert(
             self.package_graph,
@@ -269,10 +297,12 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             set(['m.X.e', 'm.Y.f'])
         )
 
-    def parse_spec_and_assert(self, spec, parents, children, filter_type, filter_value, childrens_parents):
+    def parse_spec_and_assert(self, spec, parents, parents_max_depth, children, children_max_depth, filter_type, filter_value, childrens_parents):
         parsed = graph_selector.SelectionCriteria(spec)
         self.assertEqual(parsed.select_parents, parents)
+        self.assertEqual(parsed.select_parents_max_depth, parents_max_depth)
         self.assertEqual(parsed.select_children, children)
+        self.assertEqual(parsed.select_children_max_depth, children_max_depth)
         self.assertEqual(parsed.selector_type, filter_type)
         self.assertEqual(parsed.selector_value, filter_value)
         self.assertEqual(parsed.select_childrens_parents, childrens_parents)
@@ -282,37 +312,51 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             graph_selector.SelectionCriteria(spec)
 
     def test__spec_parsing(self):
-        self.parse_spec_and_assert('a', False, False, 'fqn', 'a', False)
-        self.parse_spec_and_assert('+a', True, False, 'fqn', 'a', False)
-        self.parse_spec_and_assert('a+', False, True, 'fqn', 'a', False)
-        self.parse_spec_and_assert('+a+', True, True, 'fqn', 'a', False)
-        self.parse_spec_and_assert('@a', False, False, 'fqn', 'a', True)
+        self.parse_spec_and_assert('a', False, None, False, None, 'fqn', 'a', False)
+        self.parse_spec_and_assert('+a', True, None, False, None, 'fqn', 'a', False)
+        self.parse_spec_and_assert('256+a', True, 256, False, None, 'fqn', 'a', False)
+        self.parse_spec_and_assert('a+', False, None, True, None, 'fqn', 'a', False)
+        self.parse_spec_and_assert('a+256', False, None, True, 256, 'fqn', 'a', False)
+        self.parse_spec_and_assert('+a+', True, None, True, None, 'fqn', 'a', False)
+        self.parse_spec_and_assert('16+a+32', True, 16, True, 32, 'fqn', 'a', False)
+        self.parse_spec_and_assert('@a', False, None, False, None, 'fqn', 'a', True)
         self.invalid_spec('@a+')
 
-        self.parse_spec_and_assert('a.b', False, False, 'fqn', 'a.b', False)
-        self.parse_spec_and_assert('+a.b', True, False, 'fqn', 'a.b', False)
-        self.parse_spec_and_assert('a.b+', False, True, 'fqn', 'a.b', False)
-        self.parse_spec_and_assert('+a.b+', True, True, 'fqn', 'a.b', False)
-        self.parse_spec_and_assert('@a.b', False, False, 'fqn', 'a.b', True)
+        self.parse_spec_and_assert('a.b', False, None, False, None, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('+a.b', True, None, False, None, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('256+a.b', True, 256, False, None, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('a.b+', False, None, True, None, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('a.b+256', False, None, True, 256, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('+a.b+', True, None, True, None, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('16+a.b+32', True, 16, True, 32, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('@a.b', False, None, False, None, 'fqn', 'a.b', True)
         self.invalid_spec('@a.b+')
 
-        self.parse_spec_and_assert('a.b.*', False, False, 'fqn', 'a.b.*', False)
-        self.parse_spec_and_assert('+a.b.*', True, False, 'fqn', 'a.b.*', False)
-        self.parse_spec_and_assert('a.b.*+', False, True, 'fqn', 'a.b.*', False)
-        self.parse_spec_and_assert('+a.b.*+', True, True, 'fqn', 'a.b.*', False)
-        self.parse_spec_and_assert('@a.b.*', False, False, 'fqn', 'a.b.*', True)
+        self.parse_spec_and_assert('a.b.*', False, None, False, None, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('+a.b.*', True, None, False, None, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('256+a.b.*', True, 256, False, None, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('a.b.*+', False, None, True, None, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('a.b.*+256', False, None, True, 256, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('+a.b.*+', True, None, True, None, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('16+a.b.*+32', True, 16, True, 32, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('@a.b.*', False, None, False, None, 'fqn', 'a.b.*', True)
         self.invalid_spec('@a.b*+')
 
-        self.parse_spec_and_assert('tag:a', False, False, 'tag', 'a', False)
-        self.parse_spec_and_assert('+tag:a', True, False, 'tag', 'a', False)
-        self.parse_spec_and_assert('tag:a+', False, True, 'tag', 'a', False)
-        self.parse_spec_and_assert('+tag:a+', True, True, 'tag', 'a', False)
-        self.parse_spec_and_assert('@tag:a', False, False, 'tag', 'a', True)
+        self.parse_spec_and_assert('tag:a', False, None, False, None, 'tag', 'a', False)
+        self.parse_spec_and_assert('+tag:a', True, None, False, None, 'tag', 'a', False)
+        self.parse_spec_and_assert('256+tag:a', True, 256, False, None, 'tag', 'a', False)
+        self.parse_spec_and_assert('tag:a+', False, None, True, None, 'tag', 'a', False)
+        self.parse_spec_and_assert('tag:a+256', False, None, True, 256, 'tag', 'a', False)
+        self.parse_spec_and_assert('+tag:a+', True, None, True, None, 'tag', 'a', False)
+        self.parse_spec_and_assert('16+tag:a+32', True, 16, True, 32, 'tag', 'a', False)
+        self.parse_spec_and_assert('@tag:a', False, None, False, None, 'tag', 'a', True)
         self.invalid_spec('@tag:a+')
 
-        self.parse_spec_and_assert('source:a', False, False, 'source', 'a', False)
-        self.parse_spec_and_assert('source:a+', False, True, 'source', 'a', False)
-        self.parse_spec_and_assert('@source:a', False, False, 'source', 'a', True)
+        self.parse_spec_and_assert('source:a', False, None, False, None, 'source', 'a', False)
+        self.parse_spec_and_assert('source:a+', False, None, True, None, 'source', 'a', False)
+        self.parse_spec_and_assert('source:a+1', False, None, True, 1, 'source', 'a', False)
+        self.parse_spec_and_assert('source:a+32', False, None, True, 32, 'source', 'a', False)
+        self.parse_spec_and_assert('@source:a', False, None, False, None, 'source', 'a', True)
         self.invalid_spec('@source:a+')
 
     def test__package_name_getter(self):
