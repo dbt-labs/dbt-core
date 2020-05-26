@@ -248,7 +248,7 @@ class StatsItem(JsonSchemaMixin):
     id: str
     label: str
     value: Primitive
-    description: str
+    description: Optional[str]
     include: bool
 
 
