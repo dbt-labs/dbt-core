@@ -338,20 +338,20 @@ class Graph:
         ancestors_for = self.select_children(selected) | selected
         return self.select_parents(ancestors_for) | ancestors_for
 
-    def descendants(self, node, max_depth: int = None):
+    def descendants(self, node, max_depth: Optional[int] = None) -> Set[str]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
-            raise nx.NetworkXError(f"The node {node} is not in the graph.")
+            raise InternalException(f'Node {node} not found in the graph!')
         des = nx.single_source_shortest_path_length(G=self.graph,
                                                     source=node,
                                                     cutoff=max_depth)\
             .keys()
         return des - {node}
 
-    def ancestors(self, node, max_depth: int = None):
+    def ancestors(self, node, max_depth: Optional[int] = None) -> Set[str]:
         """Returns all nodes having a path to `node` in `graph`"""
         if not self.graph.has_node(node):
-            raise nx.NetworkXError(f"The node {node} is not in the graph.")
+            raise InternalException(f'Node {node} not found in the graph!')
         with nx.utils.reversed(self.graph):
             anc = nx.single_source_shortest_path_length(G=self.graph,
                                                         source=node,
@@ -361,7 +361,7 @@ class Graph:
 
     def select_children(self,
                         selected: Set[str],
-                        max_depth: int = None) -> Set[str]:
+                        max_depth: Optional[int] = None) -> Set[str]:
         descendants: Set[str] = set()
         for node in selected:
             descendants.update(self.descendants(node, max_depth=max_depth))
@@ -369,7 +369,7 @@ class Graph:
 
     def select_parents(self,
                        selected: Set[str],
-                       max_depth: int = None) -> Set[str]:
+                       max_depth: Optional[int] = None) -> Set[str]:
         ancestors: Set[str] = set()
         for node in selected:
             ancestors.update(self.ancestors(node, max_depth=max_depth))
