@@ -176,9 +176,7 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
 
 def mapping_key(node: CompileResultNode) -> CatalogKey:
     dkey = dbt.utils.lowercase(node.database)
-    return CatalogKey(
-        dkey, node.schema.lower(), node.identifier.lower()
-    )
+    return CatalogKey(dkey, node.schema.lower(), node.identifier.lower())
 
 
 def get_unique_id_mapping(
