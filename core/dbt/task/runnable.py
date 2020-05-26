@@ -45,12 +45,6 @@ MANIFEST_FILE_NAME = 'manifest.json'
 RUNNING_STATE = DbtProcessState('running')
 
 
-def _lower(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return value
-    return value.lower()
-
-
 def write_manifest(config, manifest):
     if dbt.flags.WRITE_JSON:
         manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
@@ -453,28 +447,32 @@ class GraphRunnableTask(ManifestTask):
             )
             required_databases.add(db_only)
 
-        existing_schemas_lowered: Set[Tuple[str, Optional[str]]] = set()
+        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]]
+        existing_schemas_lowered = set()
 
-        def list_schemas(db_only: BaseRelation) -> List[Tuple[str, str]]:
-            # the database name should never be None here (or where are we
-            # listing schemas from?)
+        def list_schemas(
+            db_only: BaseRelation
+        ) -> List[Tuple[Optional[str], str]]:
+            # the database can be None on some warehouses that don't support it
+            database_quoted: Optional[str]
+            db_lowercase = dbt.utils.lowercase(db_only.database)
             if db_only.database is None:
-                raise InternalException(
-                    f'Got an invalid database-only portion of {db_only} '
-                    f'(database was None)'
-                )
-            database_name: str = db_only.database
-            database_quoted = str(db_only)
-            with adapter.connection_named(f'list_{database_name}'):
+                database_quoted = None
+                conn_name = 'list_schemas'
+            else:
+                database_quoted = str(db_only)
+                conn_name = f'list_{db_only.database}'
+
+            with adapter.connection_named(conn_name):
                 # we should never create a null schema, so just filter them out
                 return [
-                    (database_name.lower(), s.lower())
+                    (db_lowercase, s.lower())
                     for s in adapter.list_schemas(database_quoted)
                     if s is not None
                 ]
 
         def create_schema(relation: BaseRelation) -> None:
-            db = relation.database
+            db = relation.database or ''
             schema = relation.schema
             with adapter.connection_named(f'create_{db}_{schema}'):
                 adapter.create_schema(relation)
@@ -491,18 +489,15 @@ class GraphRunnableTask(ManifestTask):
                 existing_schemas_lowered.update(ls_future.result())
 
             for info in required_schemas:
-                if info.database is None:
-                    raise InternalException(
-                        'Got an information schema with no database!'
-                    )
                 if info.schema is None:
                     # we are not in the business of creating null schemas, so
                     # skip this
                     continue
-                db: str = info.database
+                db: Optional[str] = info.database
+                db_lower: Optional[str] = dbt.utils.lowercase(db)
                 schema: str = info.schema
 
-                db_schema = (db.lower(), schema.lower())
+                db_schema = (db_lower, schema.lower())
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
                     create_futures.append(

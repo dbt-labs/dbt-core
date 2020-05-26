@@ -13,6 +13,9 @@
 - Substantial performance improvements for parsing on large projects, especially projects with many docs definition. ([#2480](https://github.com/fishtown-analytics/dbt/issues/2480), [#2481](https://github.com/fishtown-analytics/dbt/pull/2481))
 - Expose Snowflake query id in case of an exception raised by connector ([#2201](https://github.com/fishtown-analytics/dbt/issues/2201), [#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 
+### Under the hood
+- Better support for optional database fields in adapters ([#2487](https://github.com/fishtown-analytics/dbt/issues/2487) [#2489](https://github.com/fishtown-analytics/dbt/pull/2489))
+
 Contributors:
 - [@dmateusp](https://github.com/dmateusp) ([#2475](https://github.com/fishtown-analytics/dbt/pull/2475))
 - [@ChristianKohlberg](https://github.com/ChristianKohlberg) (#2358](https://github.com/fishtown-analytics/dbt/pull/2358))

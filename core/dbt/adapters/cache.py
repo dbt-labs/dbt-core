@@ -4,25 +4,20 @@ from typing import List, Iterable, Optional, Dict, Set, Tuple, Any
 import threading
 
 from dbt.logger import CACHE_LOGGER as logger
+from dbt.utils import lowercase
 import dbt.exceptions
 
 _ReferenceKey = namedtuple('_ReferenceKey', 'database schema identifier')
-
-
-def _lower(value: Optional[str]) -> Optional[str]:
-    """Postgres schemas can be None so we can't just call lower()."""
-    if value is None:
-        return None
-    return value.lower()
 
 
 def _make_key(relation) -> _ReferenceKey:
     """Make _ReferenceKeys with lowercase values for the cache so we don't have
     to keep track of quoting
     """
-    return _ReferenceKey(_lower(relation.database),
-                         _lower(relation.schema),
-                         _lower(relation.identifier))
+    # databases and schemas can both be None
+    return _ReferenceKey(lowercase(relation.database),
+                         lowercase(relation.schema),
+                         lowercase(relation.identifier))
 
 
 def dot_separated(key: _ReferenceKey) -> str:
@@ -53,15 +48,15 @@ class _CachedRelation:
 
     @property
     def database(self) -> Optional[str]:
-        return _lower(self.inner.database)
+        return lowercase(self.inner.database)
 
     @property
     def schema(self) -> Optional[str]:
-        return _lower(self.inner.schema)
+        return lowercase(self.inner.schema)
 
     @property
     def identifier(self) -> Optional[str]:
-        return _lower(self.inner.identifier)
+        return lowercase(self.inner.identifier)
 
     def __copy__(self):
         new = self.__class__(self.inner)
@@ -190,7 +185,7 @@ class RelationsCache:
         :param database: The database name to add.
         :param schema: The schema name to add.
         """
-        self.schemas.add((_lower(database), _lower(schema)))
+        self.schemas.add((lowercase(database), lowercase(schema)))
 
     def drop_schema(
         self, database: Optional[str], schema: Optional[str],
@@ -199,7 +194,7 @@ class RelationsCache:
 
         Then remove all its contents (and their dependents, etc) as well.
         """
-        key = (_lower(database), _lower(schema))
+        key = (lowercase(database), lowercase(schema))
         if key not in self.schemas:
             return
 
@@ -217,7 +212,7 @@ class RelationsCache:
 
         :param schemas: An iterable of the schema names to add.
         """
-        self.schemas.update((_lower(d), s.lower()) for (d, s) in schemas)
+        self.schemas.update((lowercase(d), s.lower()) for (d, s) in schemas)
 
     def __contains__(self, schema_id: Tuple[Optional[str], str]):
         """A schema is 'in' the relations cache if it is in the set of cached
@@ -226,7 +221,7 @@ class RelationsCache:
         :param schema_id: The db name and schema name to look up.
         """
         db, schema = schema_id
-        return (_lower(db), schema.lower()) in self.schemas
+        return (lowercase(db), schema.lower()) in self.schemas
 
     def dump_graph(self):
         """Dump a key-only representation of the schema to a dictionary. Every
@@ -484,13 +479,13 @@ class RelationsCache:
         :return List[BaseRelation]: The list of relations with the given
             schema
         """
-        database = _lower(database)
-        schema = _lower(schema)
+        database = lowercase(database)
+        schema = lowercase(schema)
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if (_lower(r.schema) == schema and
-                    _lower(r.database) == database)
+                if (lowercase(r.schema) == schema and
+                    lowercase(r.database) == database)
             ]
 
         if None in results:
@@ -509,7 +504,7 @@ class RelationsCache:
         self, database: Optional[str], schema: Optional[str]
     ) -> List[_CachedRelation]:
         """Get the relations in a schema. Callers should hold the lock."""
-        key = (_lower(database), _lower(schema))
+        key = (lowercase(database), lowercase(schema))
 
         to_remove: List[_CachedRelation] = []
         for cachekey, relation in self.relations.items():
