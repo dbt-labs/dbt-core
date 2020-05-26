@@ -389,8 +389,7 @@ Primitive = Union[bool, str, float, None]
 PrimitiveDict = Dict[str, Primitive]
 
 CatalogKey = NamedTuple(
-    'CatalogKey',
-    [('database', Optional[str]), ('schema', str), ('name', str)]
+    "CatalogKey", [("database", Optional[str]), ("schema", str), ("name", str)]
 )
 
 
