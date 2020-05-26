@@ -176,10 +176,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     def render(self) -> str:
         # if there is nothing set, this will return the empty string.
-        return '.'.join(
-            part for _, part in self._render_iterator()
-            if part is not None
-        )
+        return ".".join(part for _, part in self._render_iterator() if part is not None)
 
     def quoted(self, identifier):
         return "{quote_char}{identifier}{quote_char}".format(

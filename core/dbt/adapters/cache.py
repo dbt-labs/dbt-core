@@ -467,8 +467,8 @@ class RelationsCache:
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if (lowercase(r.schema) == schema and
-                    lowercase(r.database) == database)
+                for r in self.relations.values()
+                if (lowercase(r.schema) == schema and lowercase(r.database) == database)
             ]
 
         if None in results:

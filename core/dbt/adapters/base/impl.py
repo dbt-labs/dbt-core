@@ -643,9 +643,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         self.expand_column_types(from_relation, to_relation)
 
-    def list_relations(
-        self, database: Optional[str], schema: str
-    ) -> List[BaseRelation]:
+    def list_relations(self, database: Optional[str], schema: str) -> List[BaseRelation]:
         if self._schema_is_cached(database, schema):
             return self.cache.get_relations(database, schema)
 

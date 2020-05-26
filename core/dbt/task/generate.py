@@ -60,7 +60,7 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             self.add_column(col)
 
     def get_table(self, data: PrimitiveDict) -> CatalogTable:
-        database = data.get('table_database')
+        database = data.get("table_database")
         if database is None:
             dkey: Optional[str] = None
         else:

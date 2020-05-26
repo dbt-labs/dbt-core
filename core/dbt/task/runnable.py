@@ -516,9 +516,7 @@ class GraphRunnableTask(ManifestTask):
         existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]]
         existing_schemas_lowered = set()
 
-        def list_schemas(
-            db_only: BaseRelation
-        ) -> List[Tuple[Optional[str], str]]:
+        def list_schemas(db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
             # the database can be None on some warehouses that don't support it
             database_quoted: Optional[str]
             db_lowercase = dbt.utils.lowercase(db_only.database)
@@ -535,7 +533,7 @@ class GraphRunnableTask(ManifestTask):
             ]
 
         def create_schema(relation: BaseRelation) -> None:
-            db = relation.database or ''
+            db = relation.database or ""
             schema = relation.schema
             with adapter.connection_named(f'create_{db}_{schema}'):
                 adapter.create_schema(relation)
