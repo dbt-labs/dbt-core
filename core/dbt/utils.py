@@ -490,6 +490,13 @@ def coerce_dict_str(value: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def lowercase(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    else:
+        return value.lower()
+
+
 # some types need to make constants available to the jinja context as
 # attributes, and regular properties only work with objects. maybe this should
 # be handled by the RelationProxy?

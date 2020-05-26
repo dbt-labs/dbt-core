@@ -62,9 +62,15 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             self.add_column(col)
 
     def get_table(self, data: PrimitiveDict) -> CatalogTable:
+        database = data.get('table_database')
+        if database is None:
+            dkey: Optional[str] = None
+        else:
+            dkey = str(database)
+
         try:
             key = CatalogKey(
-                str(data['table_database']),
+                dkey,
                 str(data['table_schema']),
                 str(data['table_name']),
             )
@@ -164,8 +170,9 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
 
 
 def mapping_key(node: CompileResultNode) -> CatalogKey:
+    dkey = dbt.utils.lowercase(node.database)
     return CatalogKey(
-        node.database.lower(), node.schema.lower(), node.identifier.lower()
+        dkey, node.schema.lower(), node.identifier.lower()
     )
 
 

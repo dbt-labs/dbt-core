@@ -120,7 +120,9 @@ class RelationUpdate:
         self, parsed_node: Any, config_dict: Dict[str, Any]
     ) -> None:
         override = config_dict.get(self.component)
-        new_value = self.updater(override, parsed_node).strip()
+        new_value = self.updater(override, parsed_node)
+        if isinstance(new_value, str):
+            new_value = new_value.strip()
         setattr(parsed_node, self.component, new_value)
 
 

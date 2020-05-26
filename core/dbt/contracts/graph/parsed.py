@@ -83,7 +83,7 @@ class DependsOn(MacroDependsOn):
 
 @dataclass
 class HasRelationMetadata(JsonSchemaMixin, Replaceable):
-    database: str
+    database: Optional[str]
     schema: str
 
 

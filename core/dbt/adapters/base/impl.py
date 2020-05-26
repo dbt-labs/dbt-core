@@ -264,7 +264,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Caching methods
     ###
-    def _schema_is_cached(self, database: str, schema: str) -> bool:
+    def _schema_is_cached(self, database: Optional[str], schema: str) -> bool:
         """Check if the schema is cached, and by default logs if it is not."""
 
         if dbt.flags.USE_CACHE is False:
@@ -341,12 +341,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        cache_update: Set[Tuple[str, Optional[str]]] = set()
+        cache_update: Set[Tuple[Optional[str], Optional[str]]] = set()
         for relation in cache_schemas:
-            if relation.database is None:
-                raise InternalException(
-                    'Got a None database in a cached schema!'
-                )
             cache_update.add((relation.database, relation.schema))
         self.cache.update_schemas(cache_update)
 
@@ -646,7 +642,9 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         self.expand_column_types(from_relation, to_relation)
 
-    def list_relations(self, database: str, schema: str) -> List[BaseRelation]:
+    def list_relations(
+        self, database: Optional[str], schema: str
+    ) -> List[BaseRelation]:
         if self._schema_is_cached(database, schema):
             return self.cache.get_relations(database, schema)
 

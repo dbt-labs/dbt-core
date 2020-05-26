@@ -6,7 +6,7 @@ import dbt.exceptions
 from collections.abc import Mapping, Hashable
 from dataclasses import dataclass, fields
 from typing import (
-    Optional, TypeVar, Generic, Any, Type, Dict, Union, List, Iterator, Tuple,
+    Optional, TypeVar, Generic, Any, Type, Dict, Union, Iterator, Tuple,
     Set
 )
 from typing_extensions import Protocol
@@ -278,16 +278,11 @@ class BaseRelation(FakeAPIObject, Hashable):
             yield key, path_part
 
     def render(self) -> str:
-        parts: List[str] = [
-            part for _, part in self._render_iterator() if part is not None
-        ]
-
-        if len(parts) == 0:
-            raise dbt.exceptions.RuntimeException(
-                "No path parts are included! Nothing to render."
-            )
-
-        return '.'.join(parts)
+        # if there is nothing set, this will return the empty string.
+        return '.'.join(
+            part for _, part in self._render_iterator()
+            if part is not None
+        )
 
     def quoted(self, identifier):
         return '{quote_char}{identifier}{quote_char}'.format(
