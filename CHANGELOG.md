@@ -1,5 +1,11 @@
 ## dbt 0.17.0 (Release TBD)
 
+### Under the hood
+- Lock protobufs to the last version that had fully functioning releases on all supported platforms ([#2490](https://github.com/fishtown-analytics/dbt/issues/2490), [#2491](https://github.com/fishtown-analytics/dbt/pull/2491))
+
+
+### dbt 0.17.0rc3 (May 27, 2020)
+
 
 ### Fixes
 - When no columns are documented and persist_docs.columns is True, skip creating comments instead of failing with errors ([#2439](https://github.com/fishtown-analytics/dbt/issues/2439), [#2440](https://github.com/fishtown-analytics/dbt/pull/2440))

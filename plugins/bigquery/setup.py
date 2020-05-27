@@ -40,6 +40,7 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
+        'protobuf>=3.6.0,<3.12',
         'google-cloud-core>=1.3.0,<1.4',
         'google-cloud-bigquery>=1.24.0,<1.25.0',
         'google-api-core>=1.16.0,<1.17.0',
