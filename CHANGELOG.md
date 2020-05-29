@@ -1,5 +1,9 @@
 ## dbt 0.17.0 (Release TBD)
 
+### Fixes
+- Added filename, project, and the value that failed to render to the exception raised when rendering fails. ([#2499](https://github.com/fishtown-analytics/dbt/issues/2499), [#2501](https://github.com/fishtown-analytics/dbt/pull/2501))
+
+
 ### Under the hood
 - Lock protobufs to the last version that had fully functioning releases on all supported platforms ([#2490](https://github.com/fishtown-analytics/dbt/issues/2490), [#2491](https://github.com/fishtown-analytics/dbt/pull/2491))
 

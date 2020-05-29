@@ -1,9 +1,10 @@
 from typing import Dict, Any, Tuple, Optional, Union
 
-from dbt.clients.jinja import get_rendered
+from dbt.clients.jinja import get_rendered, catch_jinja
 
-from dbt.exceptions import DbtProjectError
-from dbt.exceptions import RecursionException
+from dbt.exceptions import (
+    DbtProjectError, CompilationException, RecursionException
+)
 from dbt.node_types import NodeType
 from dbt.utils import deep_map
 
@@ -35,7 +36,12 @@ class BaseRenderer:
         # if it wasn't read as a string, ignore it
         if not isinstance(value, str):
             return value
-        return get_rendered(value, self.context, native=True)
+        try:
+            with catch_jinja():
+                return get_rendered(value, self.context, native=True)
+        except CompilationException as exc:
+            msg = f'Could not render {value}: {exc.msg}'
+            raise CompilationException(msg) from exc
 
     def render_data(
         self, data: Dict[str, Any]
