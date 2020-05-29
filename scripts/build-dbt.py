@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import urlopen
 
-from typing import Optional, Iterator, Tuple, List
+from typing import Optional, Iterator, Tuple, List, Iterable
 
 
 HOMEBREW_PYTHON = (3, 8)
@@ -347,16 +347,36 @@ class DistFolderEnv(PipInstaller):
         super().__init__(packages=self.wheels)
 
 
-class PoetVirtualenv(PipInstaller):
+class HomebrewVirtualenv(PipInstaller):
     def __init__(self, dbt_version: Version) -> None:
-        super().__init__([f'dbt=={dbt_version}', 'homebrew-pypi-poet'])
+        super().__init__([f'dbt=={dbt_version}'])
+
+
+@dataclass
+class HomebrewDependency:
+    name: str
+    url: str
+    sha256: str
+    version: str
+
+    def render(self, indent: int = 2) -> str:
+        result = textwrap.dedent(f'''\
+            resource "{self.name}" do  # {self.name}=={self.version}
+              url "{self.url}"
+              sha256 "{self.sha256}"
+            end
+        ''')
+        return textwrap.indent(result, ' '*indent)
+
+    def __str__(self) -> str:
+        return self.render(indent=0)
 
 
 @dataclass
 class HomebrewTemplate:
     url_data: str
     hash_data: str
-    dependencies: str
+    dependencies: List[HomebrewDependency]
 
 
 def _make_venv_at(root: Path, name: str, builder: venv.EnvBuilder):
@@ -383,8 +403,8 @@ class HomebrewBuilder:
         self.set_default = set_default
         self._template: Optional[HomebrewTemplate] = None
 
-    def make_venv(self) -> PoetVirtualenv:
-        env = PoetVirtualenv(self.version)
+    def make_venv(self) -> HomebrewVirtualenv:
+        env = HomebrewVirtualenv(self.version)
         max_attempts = 10
         for attempt in range(1, max_attempts+1):
             # after uploading to pypi, it can take a few minutes for installing
@@ -487,12 +507,16 @@ class HomebrewBuilder:
         else:
             formula_name = 'Dbt'
 
+        dependencies_str = '\n'.join(
+            d.render() for d in self.template.dependencies
+        )
+
         return fmt.format(
             formula_name=formula_name,
             version=self.version,
             url_data=self.template.url_data,
             hash_data=self.template.hash_data,
-            dependencies=self.template.dependencies,
+            dependencies=dependencies_str,
             trailer=trailer,
         )
 
@@ -501,15 +525,34 @@ class HomebrewBuilder:
         if self._template is None:
             self.make_venv()
             print('done setting up virtualenv')
-            poet = self.homebrew_venv_path / 'bin/poet'
 
-            # get the dbt package info
-            url_data, hash_data = self._get_pypi_dbt_info()
-
-            dependencies = self._get_recursive_dependencies(poet)
+            dependencies = []
+            dbt_package = None
+            for pkg in self._get_packages():
+                if pkg.name == 'dbt':
+                    if pkg.version != str(self.version):
+                        raise ValueError(
+                            f'Found an invalid dbt=={pkg.version}, '
+                            f'expected dbt=={self.version}'
+                        )
+                    dbt_package = pkg
+                else:
+                    # we can assume that anything starting with dbt- in a fresh
+                    # venv is a dbt package, I hope
+                    if pkg.name.startswith('dbt-'):
+                        if pkg.version != str(self.version):
+                            raise ValueError(
+                                f'Found an invalid {pkg.name}=={pkg.version}, '
+                                f'expected {pkg.name}=={self.version}'
+                            )
+                    dependencies.append(pkg)
+            if dbt_package is None:
+                raise RuntimeError(
+                    'never found dbt in "pip freeze -l" output'
+                )
             template = HomebrewTemplate(
-                url_data=url_data,
-                hash_data=hash_data,
+                url_data=dbt_package.url,
+                hash_data=dbt_package.sha256,
                 dependencies=dependencies,
             )
             self._template = template
@@ -517,8 +560,8 @@ class HomebrewBuilder:
             template = self._template
         return template
 
-    def _get_pypi_dbt_info(self) -> Tuple[str, str]:
-        fp = urlopen(f'https://pypi.org/pypi/dbt/{self.version}/json')
+    def _get_pypi_info(self, pkg: str, version: str) -> Tuple[str, str]:
+        fp = urlopen(f'https://pypi.org/pypi/{pkg}/{version}/json')
         try:
             data = json.load(fp)
         finally:
@@ -531,14 +574,28 @@ class HomebrewBuilder:
                 assert 'digests' in pkginfo
                 assert 'sha256' in pkginfo['digests']
                 url = pkginfo['url']
-                digest = pkginfo['digests']['sha256']
-                return url, digest
-        raise ValueError(f'Never got a valid sdist for dbt=={self.version}')
+                sha256 = pkginfo['digests']['sha256']
+                return url, sha256
+        raise ValueError(f'Never got a valid sdist for {pkg}=={version}')
 
-    def _get_recursive_dependencies(self, poet_exe: Path) -> str:
-        cmd = [str(poet_exe), '--resources', 'dbt']
+    def _get_packages(self) -> Iterator[HomebrewDependency]:
+        pip = self.homebrew_venv_path / 'bin/pip'
+        cmd = [pip, 'freeze', '-l']
         raw = collect_output(cmd).split('\n')
-        return '\n'.join(self._remove_dbt_resource(raw))
+        for line in raw:
+            if not line:
+                continue
+            parts = line.split('==')
+            if len(parts) != 2:
+                raise ValueError(
+                    f'Could not parse pip freeze output line: {line}'
+                )
+            name, version = parts
+            url, sha256 = self._get_pypi_info(name, version)
+            dep = HomebrewDependency(
+                name=name, url=url, sha256=sha256, version=version
+            )
+            yield dep
 
     def _remove_dbt_resource(self, lines: List[str]) -> Iterator[str]:
         # TODO: fork poet or extract the good bits to avoid this
@@ -871,6 +928,13 @@ def main():
     sanity_check()
     args = Arguments.parse()
     upgrade_to(args)
+
+
+@dataclass
+class HomebrewRequirement:
+    name: str
+    url: str
+    sha256: str
 
 
 if __name__ == '__main__':
