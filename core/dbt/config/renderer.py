@@ -5,9 +5,7 @@ from dbt.context.target import TargetContext
 from dbt.context.secret import SecretContext
 from dbt.context.base import BaseContext
 from dbt.contracts.connection import HasCredentials
-from dbt.exceptions import (
-    DbtProjectError, CompilationException, RecursionException
-)
+from dbt.exceptions import DbtProjectError, CompilationException, RecursionException
 from dbt.utils import deep_map_render
 
 
@@ -42,7 +40,7 @@ class BaseRenderer:
             with catch_jinja():
                 return get_rendered(value, self.context, native=True)
         except CompilationException as exc:
-            msg = f'Could not render {value}: {exc.msg}'
+            msg = f"Could not render {value}: {exc.msg}"
             raise CompilationException(msg) from exc
 
     def render_data(
