@@ -66,7 +66,6 @@ setup(
         'dataclasses==0.6;python_version<"3.7"',
         'hologram==0.0.7',
         'logbook>=1.5,<1.6',
-        'pytest-logbook>=1.2.0,<1.3',
         'typing-extensions>=3.7.4,<3.8',
         # the following are all to match snowflake-connector-python
         'requests>=2.18.0,<2.23.0',

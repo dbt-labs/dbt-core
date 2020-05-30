@@ -12,3 +12,4 @@ flaky>=3.5.3,<4
 mypy==0.761
 wheel
 twine
+pytest-logbook>=1.2.0,<1.3
