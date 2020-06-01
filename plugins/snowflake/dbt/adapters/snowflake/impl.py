@@ -112,6 +112,15 @@ class SnowflakeAdapter(SQLAdapter):
 
         return [row['name'] for row in results]
 
+    def get_columns_in_relation(self, relation):
+        try:
+            return super().get_columns_in_relation(relation)
+        except DatabaseException as exc:
+            if 'does not exist or not authorized' in str(exc):
+                return []
+            else:
+                raise
+
     def list_relations_without_caching(
             self, schema_relation: SnowflakeRelation
     ) -> List[SnowflakeRelation]:
