@@ -248,11 +248,12 @@ def parse_args(argv=None):
         parsed.title_case = parsed.adapter.title()
 
     if parsed.set_dependency:
+        
+        prefix = '\n        '
+        
         if parsed.dependency:
             # ['a', 'b'] => "'a',\n        'b'"; ['a'] -> "'a',"
-
-            prefix = '\n        '
-
+            
             parsed.dependency = prefix + prefix.join(
                 "'{}',".format(d) for d in parsed.dependency
             )
