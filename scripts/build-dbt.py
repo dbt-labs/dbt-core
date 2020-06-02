@@ -930,12 +930,5 @@ def main():
     upgrade_to(args)
 
 
-@dataclass
-class HomebrewRequirement:
-    name: str
-    url: str
-    sha256: str
-
-
 if __name__ == '__main__':
     main()
