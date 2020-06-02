@@ -1,5 +1,7 @@
 ## dbt 0.17.0 (Release TBD)
 
+## dbt 0.17.0rc4 (June 2, 2020)
+
 ### Fixes
 - On snowflake, get_columns_in_relation now returns an empty list again if the relation does not exist, instead of raising an exception. ([#2504](https://github.com/fishtown-analytics/dbt/issues/2504), [#2509](https://github.com/fishtown-analytics/dbt/pull/2509))
 - Added filename, project, and the value that failed to render to the exception raised when rendering fails. ([#2499](https://github.com/fishtown-analytics/dbt/issues/2499), [#2501](https://github.com/fishtown-analytics/dbt/pull/2501))
