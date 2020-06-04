@@ -139,11 +139,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 .format(conn.name)
             )
         else:
-            logger.debug(
-                'Opening a new connection, currently in state {}'
-                .format(conn.state)
-            )
-            conn.handle = LazyHandle(self.open)
+           conn.handle = LazyHandle(self.open)
 
         conn.name = conn_name
         return conn
