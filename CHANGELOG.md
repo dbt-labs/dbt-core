@@ -1,5 +1,11 @@
 ## dbt 0.17.0 (Release TBD)
 
+### Fixes
+- Removed `pytest-logbook` dependency from `dbt-core` ([#2505](https://github.com/fishtown-analytics/dbt/pull/2505))
+
+Contributors:
+ - [@aburgel](https://github.com/aburgel) ([#2505](https://github.com/fishtown-analytics/dbt/pull/2505))
+
 ## dbt 0.17.0rc4 (June 2, 2020)
 
 ### Fixes
