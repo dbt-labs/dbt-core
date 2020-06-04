@@ -139,7 +139,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 .format(conn.name)
             )
         else:
-           conn.handle = LazyHandle(self.open)
+            conn.handle = LazyHandle(self.open)
 
         conn.name = conn_name
         return conn
@@ -161,6 +161,11 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
+        logger.debug(
+            'Opening a new connection, currently in state {}'
+            .format(connection.state)
+        )
+
         raise dbt.exceptions.NotImplementedException(
             '`open` is not implemented for this adapter!'
         )
