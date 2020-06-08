@@ -26,7 +26,7 @@ import google.oauth2
 import google.cloud.exceptions
 import google.cloud.bigquery
 
-from google.cloud.bigquery import SchemaField
+from google.cloud.bigquery import AccessEntry, SchemaField
 
 import time
 import agate
@@ -94,6 +94,7 @@ class BigqueryConfig(AdapterConfig):
     kms_key_name: Optional[str] = None
     labels: Optional[Dict[str, str]] = None
     partitions: Optional[List[str]] = None
+    grant_access_to: Optional[List[str]] = None
 
 
 class BigQueryAdapter(BaseAdapter):
@@ -674,3 +675,32 @@ class BigQueryAdapter(BaseAdapter):
             opts['labels'] = list(labels.items())
 
         return opts
+
+    @available.parse_none
+    def grant_access_to(self, entity, entity_type, role, dataset_id):
+        """
+        Given an entity, grants it access to a permissioned dataset.
+        """
+        conn = self.connections.get_thread_connection()
+        client = conn.handle
+
+        dataset = client.get_dataset(
+            self.connections.dataset_from_id(dataset_id))
+
+        if entity_type == 'view':
+            entity = self.connections.table_ref(
+                entity.database,
+                entity.schema,
+                entity.identifier,
+                conn).to_api_repr()
+
+        access_entry = AccessEntry(role, entity_type, entity)
+        access_entries = dataset.access_entries
+
+        if access_entry in access_entries:
+            logger.debug(f"Access entry {access_entry} already in dataset")
+            return
+
+        access_entries.append(AccessEntry(role, entity_type, entity))
+        dataset.access_entries = access_entries
+        client.update_dataset(dataset, ['access_entries'])

@@ -123,3 +123,7 @@
 {% macro bigquery__alter_column_comment(relation, column_dict) -%}
   {% do adapter.update_column_descriptions(relation, column_dict) %}
 {% endmacro %}
+
+{% macro bigquery__grant_access_to(entity, entity_type, role, dataset_id) -%}
+  {% do adapter.grant_access_to(entity, entity_type, role, dataset_id) %}
+{% endmacro %}

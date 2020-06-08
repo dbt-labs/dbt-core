@@ -14,6 +14,12 @@
     {% set target_relation = this.incorporate(type='view') %}
     {% do persist_docs(target_relation, model) %}
 
+    {% if config.get('grant_access_to') %}
+      {% for dataset_id in config.get('grant_access_to') %}
+        {% do adapter.grant_access_to(this, 'view', None, dataset_id) %}
+      {% endfor %}
+    {% endif %}
+
     {% do return(to_return) %}
 
 {%- endmaterialization %}
