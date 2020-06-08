@@ -1,5 +1,8 @@
 ## dbt 0.18.0 (Release TBD)
 
+## dbt 0.18.0b1 (June 08, 2020)
+
+
 ### Features
 - Added a `full_refresh` config item that overrides the behavior of the `--full-refresh` flag ([#1009](https://github.com/fishtown-analytics/dbt/issues/1009), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 - Added a "docs" field to macros, with a "show" subfield to allow for hiding macros from the documentation site ([#2430](https://github.com/fishtown-analytics/dbt/issues/2430))
