@@ -27,6 +27,7 @@ from dbt.node_types import NodeType
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
+import dbt.utils
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -491,8 +492,7 @@ class FreshnessRunner(BaseRunner):
                           skip=False, failed=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
-        if status is not None:
-            status = status.lower()
+        status = dbt.utils.lowercase(status)
         return PartialResult(
             node=node,
             status=status,

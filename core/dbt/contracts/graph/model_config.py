@@ -267,8 +267,9 @@ class BaseConfig(
         return self.from_dict(dct, validate=validate)
 
     def finalize_and_validate(self: T) -> T:
-        self.to_dict(validate=True)
-        return self.replace()
+        # from_dict will validate for us
+        dct = self.to_dict(omit_none=False, validate=False)
+        return self.from_dict(dct)
 
 
 @dataclass

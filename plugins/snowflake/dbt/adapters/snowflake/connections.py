@@ -159,6 +159,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         except snowflake.connector.errors.ProgrammingError as e:
             msg = str(e)
 
+            logger.debug('Snowflake query id: {}'.format(e.sfqid))
             logger.debug('Snowflake error: {}'.format(msg))
 
             if 'Empty SQL statement' in msg:
@@ -175,6 +176,9 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 self.release()
                 raise DatabaseException(msg)
         except Exception as e:
+            if isinstance(e, snowflake.connector.errors.Error):
+                logger.debug('Snowflake query id: {}'.format(e.sfqid))
+
             logger.debug("Error running SQL: {}", sql)
             logger.debug("Rolling back transaction.")
             self.release()

@@ -10,6 +10,7 @@ from dbt.logger import (
     JsonOnly,
     GLOBAL_LOGGER as logger,
 )
+from dbt.utils import lowercase
 from hologram.helpers import StrEnum
 from hologram import JsonSchemaMixin
 
@@ -238,7 +239,7 @@ Primitive = Union[bool, str, float, None]
 
 CatalogKey = NamedTuple(
     'CatalogKey',
-    [('database', str), ('schema', str), ('name', str)]
+    [('database', Optional[str]), ('schema', str), ('name', str)]
 )
 
 
@@ -247,7 +248,7 @@ class StatsItem(JsonSchemaMixin):
     id: str
     label: str
     value: Primitive
-    description: str
+    description: Optional[str]
     include: bool
 
 
@@ -268,7 +269,7 @@ ColumnMap = Dict[str, ColumnMetadata]
 @dataclass
 class TableMetadata(JsonSchemaMixin):
     type: str
-    database: str
+    database: Optional[str]
     schema: str
     name: str
     comment: Optional[str]
@@ -285,7 +286,7 @@ class CatalogTable(JsonSchemaMixin, Replaceable):
 
     def key(self) -> CatalogKey:
         return CatalogKey(
-            self.metadata.database.lower(),
+            lowercase(self.metadata.database),
             self.metadata.schema.lower(),
             self.metadata.name.lower(),
         )

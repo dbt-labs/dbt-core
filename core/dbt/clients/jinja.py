@@ -493,6 +493,14 @@ def _requote_result(raw_value: str, rendered: str) -> str:
     return f'{quote_char}{rendered}{quote_char}'
 
 
+# performance note: Local benmcharking (so take it with a big grain of salt!)
+# on this indicates that it is is on average slightly slower than
+# checking two separate patterns, but the standard deviation is smaller with
+# one pattern. The time difference between the two was ~2 std deviations, which
+# is small enough that I've just chosen the more readable option.
+_HAS_RENDER_CHARS_PAT = re.compile(r'({[{%]|[}%]})')
+
+
 def get_rendered(
     string: str,
     ctx: Dict[str, Any],
@@ -500,6 +508,18 @@ def get_rendered(
     capture_macros: bool = False,
     native: bool = False,
 ) -> str:
+    # performance optimization: if there are no jinja control characters in the
+    # string, we can just return the input. Fall back to jinja if the type is
+    # not a string or if native rendering is enabled (so '1' -> 1, etc...)
+    # If this is desirable in the native env as well, we could handle the
+    # native=True case by passing the input string to ast.literal_eval, like
+    # the native renderer does.
+    if (
+        not native and
+        isinstance(string, str) and
+        _HAS_RENDER_CHARS_PAT.search(string) is None
+    ):
+        return string
     template = get_template(
         string,
         ctx,

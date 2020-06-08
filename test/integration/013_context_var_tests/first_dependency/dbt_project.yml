@@ -1,0 +1,27 @@
+
+name: 'first_dep'
+version: '1.0'
+config-version: 2
+
+profile: 'default'
+
+source-paths: ["models"]
+analysis-paths: ["analysis"]
+test-paths: ["tests"]
+data-paths: ["data"]
+macro-paths: ["macros"]
+
+require-dbt-version: '>=0.1.0'
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+    - "target"
+    - "dbt_modules"
+
+vars:
+  first_dep:
+    first_dep_global: 'first_dep_global_value_overridden'
+
+
+seeds:
+  quote_columns: False

@@ -28,10 +28,8 @@ class RunOperationTask(ManifestTask):
         return dbt.utils.parse_cli_vars(self.args.args)
 
     def compile_manifest(self) -> None:
-        # skip building a linker, but do make sure to build the flat graph
         if self.manifest is None:
             raise InternalException('manifest was None in compile_manifest')
-        self.manifest.build_flat_graph()
 
     def _run_unsafe(self) -> agate.Table:
         adapter = get_adapter(self.config)

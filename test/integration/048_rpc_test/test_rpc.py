@@ -4,6 +4,7 @@ import random
 import shutil
 import signal
 import socket
+import sys
 import time
 from base64 import standard_b64encode as b64
 from datetime import datetime
@@ -725,9 +726,11 @@ class TestRPCServerCompileRun(HasRPCServer):
             'hi this is not sql',
             name='foo'
         ).json()
+        # neat mystery: Why is this "1" on macos and "2" on linux?
+        lineno = '1' if sys.platform == 'darwin' else '2'
         error_data = self.assertIsErrorWith(data, 10003, 'Database Error', {
             'type': 'DatabaseException',
-            'message': 'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 2: hi this is not sql\n          ^',
+            'message': f'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE {lineno}: hi this is not sql\n          ^',
             'compiled_sql': 'hi this is not sql',
             'raw_sql': 'hi this is not sql',
         })
@@ -764,6 +767,10 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertIn('message', error_data)
         self.assertEqual(error_data['message'], 'RPC timed out after 1.0s')
         self.assertIn('logs', error_data)
+        if sys.platform == 'darwin':
+            # because fork() without exec() is broken on macos, we use 'spawn'
+            # so on macos we don't get logs back because we didn't fork()
+            return
         self.assertTrue(len(error_data['logs']) > 0)
 
 

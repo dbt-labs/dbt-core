@@ -4,7 +4,7 @@
 - Added a `full_refresh` config item that overrides the behavior of the `--full-refresh` flag ([#1009](https://github.com/fishtown-analytics/dbt/issues/1009), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 - Added a "docs" field to macros, with a "show" subfield to allow for hiding macros from the documentation site ([#2430](https://github.com/fishtown-analytics/dbt/issues/2430))
 - Added intersection syntax for model selector ([#2167](https://github.com/fishtown-analytics/dbt/issues/2167), [#2417](https://github.com/fishtown-analytics/dbt/pull/2417))
-- Extends model selection syntax with at most n-th parent/children `dbt run --models 3+m1+2` ([#2052](https://github.com/fishtown-analytics/dbt/issues/2052), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485)) 
+- Extends model selection syntax with at most n-th parent/children `dbt run --models 3+m1+2` ([#2052](https://github.com/fishtown-analytics/dbt/issues/2052), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
 
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
@@ -14,9 +14,28 @@ Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2417](https://github.com/fishtown-analytics/dbt/pull/2417), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
  - [@alf-mindshift](https://github.com/alf-mindshift) ([#2431](https://github.com/fishtown-analytics/dbt/pull/2431))
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
-- [@southpolemonkey](https://github.com/southpolemonkey)([#2511](https://github.com/fishtown-analytics/dbt/issues/2511)) 
+- [@southpolemonkey](https://github.com/southpolemonkey)([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
 
-## dbt 0.17.0 (Release TBD)
+## dbt 0.17.0 (June 08, 2020)
+
+### Fixes
+- Removed `pytest-logbook` dependency from `dbt-core` ([#2505](https://github.com/fishtown-analytics/dbt/pull/2505))
+
+Contributors:
+ - [@aburgel](https://github.com/aburgel) ([#2505](https://github.com/fishtown-analytics/dbt/pull/2505))
+
+## dbt 0.17.0rc4 (June 2, 2020)
+
+### Fixes
+- On snowflake, get_columns_in_relation now returns an empty list again if the relation does not exist, instead of raising an exception. ([#2504](https://github.com/fishtown-analytics/dbt/issues/2504), [#2509](https://github.com/fishtown-analytics/dbt/pull/2509))
+- Added filename, project, and the value that failed to render to the exception raised when rendering fails. ([#2499](https://github.com/fishtown-analytics/dbt/issues/2499), [#2501](https://github.com/fishtown-analytics/dbt/pull/2501))
+
+
+### Under the hood
+- Lock protobufs to the last version that had fully functioning releases on all supported platforms ([#2490](https://github.com/fishtown-analytics/dbt/issues/2490), [#2491](https://github.com/fishtown-analytics/dbt/pull/2491))
+
+
+### dbt 0.17.0rc3 (May 27, 2020)
 
 
 ### Fixes
@@ -24,7 +43,19 @@ Contributors:
 - Fixed an argument issue with the `create_schema` macro on bigquery ([#2445](https://github.com/fishtown-analytics/dbt/issues/2445), [#2448](https://github.com/fishtown-analytics/dbt/pull/2448))
 - dbt now logs using the adapter plugin's ideas about how relations should be displayed ([dbt-spark/#74](https://github.com/fishtown-analytics/dbt-spark/issues/74), [#2450](https://github.com/fishtown-analytics/dbt/pull/2450))
 - The create_adapter_plugin.py script creates a version 2 dbt_project.yml file ([#2451](https://github.com/fishtown-analytics/dbt/issues/2451), [#2455](https://github.com/fishtown-analytics/dbt/pull/2455))
+- Fixed dbt crashing with an AttributeError on duplicate sources ([#2463](https://github.com/fishtown-analytics/dbt/issues/2463), [#2464](https://github.com/fishtown-analytics/dbt/pull/2464))
+- Fixed a number of issues with globally-scoped vars ([#2473](https://github.com/fishtown-analytics/dbt/issues/2473), [#2472](https://github.com/fishtown-analytics/dbt/issues/2472), [#2469](https://github.com/fishtown-analytics/dbt/issues/2469), [#2477](https://github.com/fishtown-analytics/dbt/pull/2477))
+- Fixed DBT Docker entrypoint ([#2470](https://github.com/fishtown-analytics/dbt/issues/2470), [#2475](https://github.com/fishtown-analytics/dbt/pull/2475))
+- Fixed a performance regression that occurred even when a user was not using the relevant feature ([#2474](https://github.com/fishtown-analytics/dbt/issues/2474), [#2478](https://github.com/fishtown-analytics/dbt/pull/2478))
+- Substantial performance improvements for parsing on large projects, especially projects with many docs definition. ([#2480](https://github.com/fishtown-analytics/dbt/issues/2480), [#2481](https://github.com/fishtown-analytics/dbt/pull/2481))
+- Expose Snowflake query id in case of an exception raised by connector ([#2201](https://github.com/fishtown-analytics/dbt/issues/2201), [#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 
+### Under the hood
+- Better support for optional database fields in adapters ([#2487](https://github.com/fishtown-analytics/dbt/issues/2487) [#2489](https://github.com/fishtown-analytics/dbt/pull/2489))
+
+Contributors:
+- [@dmateusp](https://github.com/dmateusp) ([#2475](https://github.com/fishtown-analytics/dbt/pull/2475))
+- [@ChristianKohlberg](https://github.com/ChristianKohlberg) (#2358](https://github.com/fishtown-analytics/dbt/pull/2358))
 
 ## dbt 0.17.0rc1 (May 12, 2020)
 
@@ -85,7 +116,6 @@ Contributors:
 - Implement persist_docs for both `relation` and `comments` on postgres and redshift, and extract them when getting the catalog. ([#2333](https://github.com/fishtown-analytics/dbt/issues/2333), [#2378](https://github.com/fishtown-analytics/dbt/pull/2378))
 - Added a filter named `as_text` to the native environment rendering code that allows users to mark a value as always being a string ([#2384](https://github.com/fishtown-analytics/dbt/issues/2384), [#2395](https://github.com/fishtown-analytics/dbt/pull/2395))
 - Relation comments supported for Snowflake tables and views. Column comments supported for tables. ([#1722](https://github.com/fishtown-analytics/dbt/issues/1722), [#2321](https://github.com/fishtown-analytics/dbt/pull/2321))
-
 
 ### Fixes
 - When a jinja value is undefined, give a helpful error instead of failing with cryptic "cannot pickle ParserMacroCapture" errors ([#2110](https://github.com/fishtown-analytics/dbt/issues/2110), [#2184](https://github.com/fishtown-analytics/dbt/pull/2184))

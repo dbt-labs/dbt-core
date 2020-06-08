@@ -700,7 +700,7 @@ def MockNode(package, name, resource_type=NodeType.Model, kwargs={}):
         __class__=cls,
         resource_type=resource_type,
         package_name=package,
-        unique_id=f'macro.{package}.{name}',
+        unique_id=f'{str(resource_type)}.{package}.{name}',
         search_name=name,
         **kwargs
     )
@@ -1096,9 +1096,14 @@ def id_nodes(arg):
     _refable_parameter_sets(),
     ids=id_nodes,
 )
-def test_find_refable_by_name(nodes, sources, package, expected):
+def test_resolve_ref(nodes, sources, package, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
-    result = manifest.find_refable_by_name(name='my_model', package=package)
+    result = manifest.resolve_ref(
+        target_model_name='my_model',
+        target_model_package=package,
+        current_project='root',
+        node_package='root',
+    )
     if expected is None:
         assert result is expected
     else:
@@ -1112,7 +1117,7 @@ def test_find_refable_by_name(nodes, sources, package, expected):
 def _source_parameter_sets():
     sets = [
         # empties
-        FindNodeSpec(nodes=[], sources=[], package=None, expected=None),
+        FindNodeSpec(nodes=[], sources=[], package='dep', expected=None),
         FindNodeSpec(nodes=[], sources=[], package='root', expected=None),
     ]
     sets.extend(
@@ -1123,7 +1128,7 @@ def _source_parameter_sets():
             package=project,
             expected=None,
         )
-        for project in ('root', None) for name in ('my_source', 'my_table')
+        for project in ('root', 'dep') for name in ('my_source', 'my_table')
     )
     # exists in root alongside nodes with name parts
     sets.extend(
@@ -1133,7 +1138,7 @@ def _source_parameter_sets():
             package=project,
             expected=('root', 'my_source', 'my_table'),
         )
-        for project in ('root', None)
+        for project in ('root', 'dep')
     )
     sets.extend(
         # wrong source name
@@ -1143,7 +1148,7 @@ def _source_parameter_sets():
             package=project,
             expected=None,
         )
-        for project in ('root', None)
+        for project in ('root', 'dep')
     )
     sets.extend(
         # wrong table name
@@ -1153,15 +1158,15 @@ def _source_parameter_sets():
             package=project,
             expected=None,
         )
-        for project in ('root', None)
+        for project in ('root', 'dep')
     )
     sets.append(
-        # wrong project name (should not be found in 'root')
+        # should be found by the package=None search
         FindNodeSpec(
             nodes=[],
             sources=[MockSource('other', 'my_source', 'my_table')],
             package='root',
-            expected=None,
+            expected=('other', 'my_source', 'my_table'),
         )
     )
     sets.extend(
@@ -1172,7 +1177,7 @@ def _source_parameter_sets():
             package=project,
             expected=('root', 'my_source', 'my_table'),
         )
-        for project in ('root', None)
+        for project in ('root', 'dep')
     )
 
     return sets
@@ -1183,9 +1188,14 @@ def _source_parameter_sets():
     _source_parameter_sets(),
     ids=id_nodes,
 )
-def test_find_source_by_name(nodes, sources, package, expected):
+def test_resolve_source(nodes, sources, package, expected):
     manifest = make_manifest(nodes=nodes, sources=sources)
-    result = manifest.find_source_by_name(source_name='my_source', table_name='my_table', package=package)
+    result = manifest.resolve_source(
+        target_source_name='my_source',
+        target_table_name='my_table',
+        current_project=package,
+        node_package='dep',
+    )
     if expected is None:
         assert result is expected
     else:
@@ -1225,9 +1235,9 @@ def _docs_parameter_sets():
     _docs_parameter_sets(),
     ids=id_nodes,
 )
-def test_find_doc_by_name(docs, package, expected):
+def test_resolve_doc(docs, package, expected):
     manifest = make_manifest(docs=docs)
-    result = manifest.find_docs_by_name(name='my_doc', package=package)
+    result = manifest.resolve_doc(name='my_doc', package=package, current_project='root', node_package='root')
     if expected is None:
         assert result is expected
     else:

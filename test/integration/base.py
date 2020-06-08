@@ -3,6 +3,7 @@ import os
 import io
 import random
 import shutil
+import sys
 import tempfile
 import time
 import traceback
@@ -333,6 +334,13 @@ class DBTIntegrationTest(unittest.TestCase):
                 os.symlink(src, tst)
         os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
+    @property
+    def test_root_realpath(self):
+        if sys.platform == 'darwin':
+            return os.path.realpath(self.test_root_dir)
+        else:
+            return self.test_root_dir
+
     def setUp(self):
         self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
@@ -343,6 +351,7 @@ class DBTIntegrationTest(unittest.TestCase):
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
         self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
+
         os.chdir(self.test_root_dir)
         try:
             self._symlink_test_folders()

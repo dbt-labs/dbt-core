@@ -46,6 +46,8 @@ class SourcePatcher:
         unpatched: UnpatchedSourceDefinition,
         patch: Optional[SourcePatch],
     ) -> UnpatchedSourceDefinition:
+        if patch is None:
+            return unpatched
 
         source_dct = unpatched.source.to_dict()
         table_dct = unpatched.table.to_dict()

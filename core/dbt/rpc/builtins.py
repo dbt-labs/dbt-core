@@ -1,7 +1,7 @@
 import os
 import signal
 from datetime import datetime
-from typing import Type, Union, Any, List
+from typing import Type, Union, Any, List, Dict
 
 import dbt.exceptions
 from dbt.contracts.rpc import (
@@ -171,6 +171,10 @@ def poll_complete(
     return cls.from_result(result, tags, timing, logs)
 
 
+def _dict_logs(logs: List[LogMessage]) -> List[Dict[str, Any]]:
+    return [log.to_dict() for log in logs]
+
+
 class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
     METHOD_NAME = 'poll'
 
@@ -210,7 +214,7 @@ class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
                     f'At end of task {task_id}, error state but error is None'
                 )
                 raise RPCException.from_error(
-                    dbt_error(exc, logs=[l.to_dict() for l in task_logs])
+                    dbt_error(exc, logs=_dict_logs(task_logs))
                 )
             # the exception has logs already attached from the child, don't
             # overwrite those
@@ -223,7 +227,7 @@ class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
                     'None'
                 )
                 raise RPCException.from_error(
-                    dbt_error(exc, logs=[l.to_dict() for l in task_logs])
+                    dbt_error(exc, logs=_dict_logs(task_logs))
                 )
             return poll_complete(
                 timing=timing,
@@ -245,5 +249,5 @@ class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):
                 f'Got unknown value state={state} for task {task_id}'
             )
             raise RPCException.from_error(
-                dbt_error(exc, logs=[l.to_dict() for l in task_logs])
+                dbt_error(exc, logs=_dict_logs(task_logs))
             )

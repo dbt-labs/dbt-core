@@ -507,7 +507,14 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         # mark the file as seen, even if there are no macros in it
         self.results.get_file(block.file)
         if dct:
-            dct = self.raw_renderer.render_data(dct)
+            try:
+                dct = self.raw_renderer.render_data(dct)
+            except CompilationException as exc:
+                raise CompilationException(
+                    f'Failed to render {block.path.original_file_path} from '
+                    f'project {self.project.project_name}: {exc}'
+                ) from exc
+
             yaml_block = YamlBlock.from_file_block(block, dct)
 
             self._parse_format_version(yaml_block)

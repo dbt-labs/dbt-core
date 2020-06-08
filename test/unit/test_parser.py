@@ -28,13 +28,58 @@ from dbt.contracts.graph.model_config import (
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
     DependsOn, ColumnInfo, ParsedDataTestNode, ParsedSnapshotNode,
-    ParsedAnalysisNode, ParsedDocumentation, UnpatchedSourceDefinition
+    ParsedAnalysisNode, ParsedDocumentation, UnpatchedSourceDefinition,
+    ParsedSeedNode
 )
-from dbt.contracts.graph.unparsed import (
-    FreshnessThreshold, ExternalTable, Docs
-)
+from dbt.contracts.graph.unparsed import Docs
 
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros
+
+
+def MockSource(package, source_name, name, **kwargs):
+    src = mock.MagicMock(
+        __class__=ParsedSourceDefinition,
+        resource_type=NodeType.Source,
+        source_name=source_name,
+        package_name=package,
+        unique_id=f'source.{package}.{source_name}.{name}',
+        search_name=f'{source_name}.{name}',
+        **kwargs
+    )
+    src.name = name
+    return src
+
+
+def MockNode(package, name, resource_type=NodeType.Model, **kwargs):
+    if resource_type == NodeType.Model:
+        cls = ParsedModelNode
+    elif resource_type == NodeType.Seed:
+        cls = ParsedSeedNode
+    else:
+        raise ValueError(f'I do not know how to handle {resource_type}')
+    node = mock.MagicMock(
+        __class__=cls,
+        resource_type=resource_type,
+        package_name=package,
+        unique_id=f'{str(resource_type)}.{package}.{name}',
+        search_name=name,
+        **kwargs
+    )
+    node.name = name
+    return node
+
+
+def MockDocumentation(package, name, **kwargs):
+    doc = mock.MagicMock(
+        __class__=ParsedDocumentation,
+        resource_type=NodeType.Documentation,
+        package_name=package,
+        search_name=name,
+        unique_id=f'{package}.{name}',
+        **kwargs
+    )
+    doc.name = name
+    return doc
 
 
 def get_abs_os_path(unix_path):
@@ -791,56 +836,44 @@ class ProcessingTest(BaseParserTest):
         super().setUp()
         x_depends_on = mock.MagicMock()
         y_depends_on = mock.MagicMock()
-        x_uid = 'model.project.x'
-        y_uid = 'model.otherproject.y'
-        src_uid = 'source.thirdproject.src.tbl'
-        self.x_node = mock.MagicMock(
-            __class__=ParsedModelNode,
-            package_name='project',
-            search_name='x',
+        self.x_node = MockNode(
+            package='project',
+            name='x',
             config=mock.MagicMock(enabled=True),
             refs=[],
             sources=[['src', 'tbl']],
-            unique_id=x_uid,
-            resource_type=NodeType.Model,
             depends_on=x_depends_on,
             description='other_project: {{ doc("otherproject", "my_doc") }}',
         )
-        self.y_node = mock.MagicMock(
-            __class__=ParsedModelNode,
-            package_name='otherproject',
-            search_name='y',
+        self.y_node = MockNode(
+            package='otherproject',
+            name='y',
             config=mock.MagicMock(enabled=True),
             refs=[['x']],
             sources=[],
-            unique_id=y_uid,
-            resource_type=NodeType.Model,
             depends_on=y_depends_on,
             description='{{ doc("my_doc") }}',
         )
-        self.src_node = mock.MagicMock(
-            __class__=ParsedSourceDefinition,
-            package_name='project',
-            search_name='src.tbl',
+        self.src_node = MockSource(
+            package='thirdproject',
+            source_name='src',
+            name='tbl',
             config=mock.MagicMock(enabled=True),
-            resource_type=NodeType.Source,
-            unique_id=src_uid,
+        )
+        self.doc = MockDocumentation(
+            package='otherproject',
+            name='my_doc',
+            block_contents='some docs',
         )
         nodes = {
-            x_uid: self.x_node,
-            y_uid: self.y_node,
+            self.x_node.unique_id: self.x_node,
+            self.y_node.unique_id: self.y_node,
         }
         sources = {
-            src_uid: self.src_node,
+            self.src_node.unique_id: self.src_node,
         }
         docs = {
-            'otherproject.my_doc': mock.MagicMock(
-                __class__=ParsedDocumentation,
-                resource_type=NodeType.Documentation,
-                search_name='my_doc',
-                package_name='otherproject',
-                block_contents='some docs',
-            )
+            self.doc.unique_id: self.doc,
         }
         self.manifest = Manifest(
             nodes=nodes, sources=sources, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()

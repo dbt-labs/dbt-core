@@ -1,6 +1,6 @@
 # TODO: rename this module.
 from typing import Dict, Any, Mapping, List
-from typing_extensions import Protocol
+from typing_extensions import Protocol, runtime_checkable
 
 import dbt.exceptions
 
@@ -16,6 +16,7 @@ class HasConfigFields(Protocol):
     sources: Dict[str, Any]
 
 
+@runtime_checkable
 class IsFQNResource(Protocol):
     fqn: List[str]
     resource_type: NodeType

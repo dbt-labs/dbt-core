@@ -15,16 +15,17 @@ from dbt.config import RuntimeConfig, Project
 from dbt.context.base import (
     contextmember, contextproperty, Var
 )
-from dbt.context.configured import ManifestContext, MacroNamespace
+from dbt.context.configured import ManifestContext, MacroNamespace, FQNLookup
 from dbt.context.context_config import ContextConfigType
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
-    NonSourceNode, CompiledSeedNode, CompiledResource, CompiledNode
+    NonSourceNode, CompiledSeedNode, CompiledResource
 )
 from dbt.contracts.graph.parsed import (
-    ParsedMacro, ParsedSourceDefinition, ParsedSeedNode, ParsedNode
+    ParsedMacro, ParsedSourceDefinition, ParsedSeedNode
 )
 from dbt.exceptions import (
+    CompilationException,
     InternalException,
     ValidationException,
     RuntimeException,
@@ -36,6 +37,7 @@ from dbt.exceptions import (
     source_target_not_found,
     wrapped_exports,
 )
+from dbt.legacy_config_updater import IsFQNResource
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
@@ -129,6 +131,19 @@ class BaseRefResolver(BaseResolver):
         else:
             return [package, name]
 
+    def validate_args(self, name: str, package: Optional[str]):
+        if not isinstance(name, str):
+            raise CompilationException(
+                f'The name argument to ref() must be a string, got '
+                f'{type(name)}'
+            )
+
+        if package is not None and not isinstance(package, str):
+            raise CompilationException(
+                f'The package argument to ref() must be a string or None, got '
+                f'{type(package)}'
+            )
+
     def __call__(self, *args: str) -> RelationProxy:
         name: str
         package: Optional[str] = None
@@ -139,6 +154,7 @@ class BaseRefResolver(BaseResolver):
             package, name = args
         else:
             ref_invalid_args(self.model, args)
+        self.validate_args(name, package)
         return self.resolve(name, package)
 
 
@@ -147,12 +163,25 @@ class BaseSourceResolver(BaseResolver):
     def resolve(self, source_name: str, table_name: str):
         pass
 
+    def validate_args(self, source_name: str, table_name: str):
+        if not isinstance(source_name, str):
+            raise CompilationException(
+                f'The source name (first) argument to source() must be a '
+                f'string, got {type(source_name)}'
+            )
+        if not isinstance(table_name, str):
+            raise CompilationException(
+                f'The table name (second) argument to source() must be a '
+                f'string, got {type(table_name)}'
+            )
+
     def __call__(self, *args: str) -> RelationProxy:
         if len(args) != 2:
             raise_compiler_error(
                 f"source() takes exactly two arguments ({len(args)} given)",
                 self.model
             )
+        self.validate_args(args[0], args[1])
         return self.resolve(args[0], args[1])
 
 
@@ -450,17 +479,17 @@ class ModelConfiguredVar(Var):
         yield self.config
 
     def _generate_merged(self) -> Mapping[str, Any]:
-        cli_vars = self.config.cli_vars
-
-        # once sources have FQNs, add ParsedSourceDefinition
-        if not isinstance(self.node, (CompiledNode, ParsedNode)):
-            return cli_vars
+        search_node: IsFQNResource
+        if isinstance(self.node, IsFQNResource):
+            search_node = self.node
+        else:
+            search_node = FQNLookup(self.node.package_name)
 
         adapter_type = self.config.credentials.type
 
         merged = MultiDict()
         for project in self.packages_for_node():
-            merged.add(project.vars.vars_for(self.node, adapter_type))
+            merged.add(project.vars.vars_for(search_node, adapter_type))
         merged.add(self.cli_vars)
         return merged
 
@@ -490,6 +519,15 @@ class ParseProvider(Provider):
     Config = ParseConfigObject
     DatabaseWrapper = ParseDatabaseWrapper
     Var = ParseVar
+    ref = ParseRefResolver
+    source = ParseSourceResolver
+
+
+class GenerateNameProvider(Provider):
+    execute = False
+    Config = RuntimeConfigObject
+    DatabaseWrapper = ParseDatabaseWrapper
+    Var = RuntimeVar
     ref = ParseRefResolver
     source = ParseSourceResolver
 
@@ -1116,6 +1154,17 @@ def generate_parser_macro(
 ) -> Dict[str, Any]:
     ctx = MacroContext(
         macro, config, manifest, ParseProvider(), package_name
+    )
+    return ctx.to_dict()
+
+
+def generate_generate_component_name_macro(
+    macro: ParsedMacro,
+    config: RuntimeConfig,
+    manifest: Manifest,
+) -> Dict[str, Any]:
+    ctx = MacroContext(
+        macro, config, manifest, GenerateNameProvider(), None
     )
     return ctx.to_dict()
 
