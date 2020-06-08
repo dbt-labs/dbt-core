@@ -8,11 +8,13 @@
 
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
+- Remove misleading "Opening a new connection" log message in set_connection_name. ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2417](https://github.com/fishtown-analytics/dbt/pull/2417), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
  - [@alf-mindshift](https://github.com/alf-mindshift) ([#2431](https://github.com/fishtown-analytics/dbt/pull/2431))
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
+- [@southpolemonkey](https://github.com/southpolemonkey)([#2511](https://github.com/fishtown-analytics/dbt/issues/2511)) 
 
 ## dbt 0.17.0 (Release TBD)
 
@@ -22,7 +24,6 @@ Contributors:
 - Fixed an argument issue with the `create_schema` macro on bigquery ([#2445](https://github.com/fishtown-analytics/dbt/issues/2445), [#2448](https://github.com/fishtown-analytics/dbt/pull/2448))
 - dbt now logs using the adapter plugin's ideas about how relations should be displayed ([dbt-spark/#74](https://github.com/fishtown-analytics/dbt-spark/issues/74), [#2450](https://github.com/fishtown-analytics/dbt/pull/2450))
 - The create_adapter_plugin.py script creates a version 2 dbt_project.yml file ([#2451](https://github.com/fishtown-analytics/dbt/issues/2451), [#2455](https://github.com/fishtown-analytics/dbt/pull/2455))
-- Remove misleading "Opening a new connection" log message in set_connection_name. [#2511](https://github.com/fishtown-analytics/dbt/issues/2511)
 
 
 ## dbt 0.17.0rc1 (May 12, 2020)
