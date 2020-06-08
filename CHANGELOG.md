@@ -8,11 +8,13 @@
 
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
+- Remove misleading "Opening a new connection" log message in set_connection_name. ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2417](https://github.com/fishtown-analytics/dbt/pull/2417), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
  - [@alf-mindshift](https://github.com/alf-mindshift) ([#2431](https://github.com/fishtown-analytics/dbt/pull/2431))
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
+- [@southpolemonkey](https://github.com/southpolemonkey)([#2511](https://github.com/fishtown-analytics/dbt/issues/2511)) 
 
 ## dbt 0.17.0 (Release TBD)
 

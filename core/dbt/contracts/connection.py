@@ -15,6 +15,8 @@ from dbt.contracts.util import Replaceable
 from dbt.exceptions import InternalException
 from dbt.utils import translate_aliases
 
+from dbt.logger import GLOBAL_LOGGER as logger
+
 
 Identifier = NewType('Identifier', str)
 register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
@@ -87,6 +89,10 @@ class LazyHandle:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:
+        logger.debug(
+            'Opening a new connection, currently in state {}'
+            .format(connection.state)
+        )
         return self.opener(connection)
 
 
