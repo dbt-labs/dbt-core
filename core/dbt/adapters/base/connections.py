@@ -161,11 +161,6 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        logger.debug(
-            'Opening a new connection, currently in state {}'
-            .format(connection.state)
-        )
-
         raise dbt.exceptions.NotImplementedException(
             '`open` is not implemented for this adapter!'
         )
