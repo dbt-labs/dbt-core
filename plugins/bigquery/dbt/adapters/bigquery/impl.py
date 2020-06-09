@@ -143,7 +143,6 @@ class BigQueryAdapter(BaseAdapter):
     def rename_relation(
         self, from_relation: BigQueryRelation, to_relation: BigQueryRelation
     ) -> None:
-        self.cache_renamed(from_relation, to_relation)
 
         conn = self.connections.get_thread_connection()
         client = conn.handle
@@ -153,7 +152,9 @@ class BigQueryAdapter(BaseAdapter):
                                                     from_relation.identifier,
                                                     conn)
         from_table = client.get_table(from_table_ref)
-        if from_table.table_type == "VIEW":
+        if from_table.table_type == "VIEW" or \
+                from_relation.type == RelationType.View or \
+                to_relation.type == RelationType.View:
             raise dbt.exceptions.RuntimeException(
                 'Renaming of views is not currently supported in BigQuery'
             )
@@ -162,6 +163,8 @@ class BigQueryAdapter(BaseAdapter):
                                                   to_relation.schema,
                                                   to_relation.identifier,
                                                   conn)
+
+        self.cache_renamed(from_relation, to_relation)
         client.copy_table(from_table_ref, to_table_ref)
         client.delete_table(from_table_ref)
 
