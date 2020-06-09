@@ -318,11 +318,11 @@
   {{ config.set('sql_header', caller()) }}
 {%- endmacro %}
 
-{% macro grant_access_to(entity, entity_type, role, dataset_id) -%}
-  {{ return(adapter_macro('grant_access_to', entity, entity_type, role, dataset_id)) }}
+{% macro grant_access_to(entity, entity_type, role, relation) -%}
+  {{ return(adapter_macro('grant_access_to', entity, entity_type, role, relation)) }}
 {% endmacro %}
 
-{% macro default__grant_access_to(entity, entity_type, role, dataset_id) -%}
+{% macro default__grant_access_to(entity, entity_type, role, relation) -%}
   {{ exceptions.raise_not_implemented(
     'grant_access_to macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}

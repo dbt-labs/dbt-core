@@ -124,6 +124,6 @@
   {% do adapter.update_column_descriptions(relation, column_dict) %}
 {% endmacro %}
 
-{% macro bigquery__grant_access_to(entity, entity_type, role, dataset_id) -%}
-  {% do adapter.grant_access_to(entity, entity_type, role, dataset_id) %}
+{% macro bigquery__grant_access_to(entity, entity_type, role, relation) -%}
+  {% do adapter.grant_access_to(entity, entity_type, role, relation) %}
 {% endmacro %}

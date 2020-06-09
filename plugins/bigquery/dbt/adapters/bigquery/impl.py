@@ -94,7 +94,7 @@ class BigqueryConfig(AdapterConfig):
     kms_key_name: Optional[str] = None
     labels: Optional[Dict[str, str]] = None
     partitions: Optional[List[str]] = None
-    grant_access_to: Optional[List[str]] = None
+    grant_access_to: Optional[List[BigQueryRelation]] = None
 
 
 class BigQueryAdapter(BaseAdapter):
@@ -677,7 +677,7 @@ class BigQueryAdapter(BaseAdapter):
         return opts
 
     @available.parse_none
-    def grant_access_to(self, entity, entity_type, role, dataset_id):
+    def grant_access_to(self, entity, entity_type, role, relation):
         """
         Given an entity, grants it access to a permissioned dataset.
         """
@@ -685,7 +685,10 @@ class BigQueryAdapter(BaseAdapter):
         client = conn.handle
 
         dataset = client.get_dataset(
-            self.connections.dataset_from_id(dataset_id))
+            self.connections.dataset_from_id(
+                f'{relation.database}.{relation.schema}'
+            )
+        )
 
         if entity_type == 'view':
             entity = self.connections.table_ref(

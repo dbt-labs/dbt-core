@@ -15,8 +15,8 @@
     {% do persist_docs(target_relation, model) %}
 
     {% if config.get('grant_access_to') %}
-      {% for dataset_id in config.get('grant_access_to') %}
-        {% do adapter.grant_access_to(this, 'view', None, dataset_id) %}
+      {% for relation in config.get('grant_access_to') %}
+        {% do adapter.grant_access_to(this, 'view', None, relation) %}
       {% endfor %}
     {% endif %}
 
