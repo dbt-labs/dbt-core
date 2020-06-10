@@ -1,3 +1,9 @@
+## dbt 0.17.1 (Release TBD)
+
+### Fixes
+- dbt compile and ls no longer create schemas if they don't already exist ([#2525](https://github.com/fishtown-analytics/dbt/issues/2525), [#2528](https://github.com/fishtown-analytics/dbt/pull/2528))
+
+
 ## dbt 0.17.0 (June 08, 2020)
 
 ### Fixes
