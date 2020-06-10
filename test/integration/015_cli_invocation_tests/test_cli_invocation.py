@@ -6,6 +6,7 @@ import yaml
 
 
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
+
     def _symlink_test_folders(self):
         # dbt's normal symlink behavior breaks this test, so special-case it
         for entry in os.listdir(self.test_original_source_path):
@@ -13,8 +14,19 @@ class ModelCopyingIntegrationTest(DBTIntegrationTest):
             tst = os.path.join(self.test_root_dir, entry)
             if entry == 'models':
                 shutil.copytree(src, tst)
+            elif entry == 'local_dependency':
+                continue
             elif os.path.isdir(entry) or entry.endswith('.sql'):
                 os.symlink(src, tst)
+
+    @property
+    def packages_config(self):
+        path = os.path.join(self.test_original_source_path, 'local_dependency')
+        return {
+            'packages': [{
+                'local': path,
+            }],
+        }
 
 
 class TestCLIInvocation(ModelCopyingIntegrationTest):
@@ -33,6 +45,7 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_toplevel_dbt_run(self):
+        self.run_dbt(['deps'])
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
@@ -40,6 +53,7 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
     @use_profile('postgres')
     def test_postgres_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
+        self.run_dbt(['deps'])
 
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
@@ -99,6 +113,7 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_toplevel_dbt_run_with_profile_dir_arg(self):
+        self.run_dbt(['deps'])
         results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
         self.assertEqual(len(results), 1)
 

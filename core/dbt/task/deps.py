@@ -11,7 +11,7 @@ from dbt.deps.resolver import resolve_packages
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.clients import system
 
-from dbt.task.base import BaseTask
+from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
 
 class DepsTask(BaseTask):
@@ -65,3 +65,10 @@ class DepsTask(BaseTask):
                     package_name=package.name,
                     source_type=package.source_type(),
                     version=package.get_version())
+
+    @classmethod
+    def from_args(cls, args):
+        # deps needs to move to the project directory, as it does put files
+        # into the modules directory
+        move_to_nearest_project_dir(args)
+        return super().from_args(args)

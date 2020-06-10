@@ -353,7 +353,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 yield project.project_name, project
 
     def _get_project_directories(self) -> Iterator[Path]:
-        root = Path(self.project_root) / self.modules_path
+        root = Path.cwd() / self.modules_path
 
         if root.exists():
             for path in root.iterdir():
