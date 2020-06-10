@@ -8,7 +8,7 @@ import google.cloud.exceptions
 from google.api_core import retry, client_info
 from google.oauth2 import service_account
 
-from dbt.utils import format_bytes
+from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
 from dbt.exceptions import (
     FailedToConnectException, RuntimeException, DatabaseException
@@ -245,16 +245,21 @@ class BigQueryConnectionManager(BaseConnectionManager):
             conn = self.get_thread_connection()
             client = conn.handle
             table = client.get_table(query_job.destination)
-            status = 'CREATE TABLE ({})'.format(table.num_rows)
+            processed = format_bytes(query_job.total_bytes_processed)
+            status = 'CREATE TABLE ({} rows, {} processed)'.format(
+                format_rows_number(table.num_rows),
+                format_bytes(query_job.total_bytes_processed),
+            )
 
         elif query_job.statement_type == 'SCRIPT':
             processed = format_bytes(query_job.total_bytes_processed)
             status = f'SCRIPT ({processed} processed)'
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-            status = '{} ({})'.format(
+            status = '{} ({} rows, {} processed)'.format(
                 query_job.statement_type,
-                query_job.num_dml_affected_rows
+                format_rows_number(query_job.num_dml_affected_rows),
+                format_bytes(query_job.total_bytes_processed),
             )
 
         else:

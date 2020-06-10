@@ -11,10 +11,12 @@
 - Added support for renaming BigQuery relations ([#2520](https://github.com/fishtown-analytics/dbt/issues/2520), [#2521](https://github.com/fishtown-analytics/dbt/pull/2521))
 - Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/pull/2517))
 - Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
+- Format rows number in BigQuery plugin logs, [#2526](https://github.com/fishtown-analytics/dbt/issues/2526)
 
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
 - Remove misleading "Opening a new connection" log message in set_connection_name. ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
+- Now all the BigQuery statement types return the number of bytes processed ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526)).
 
 Contributors:
  - [@raalsky](https://github.com/Raalsky) ([#2417](https://github.com/fishtown-analytics/dbt/pull/2417), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
@@ -22,6 +24,7 @@ Contributors:
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
  - [@southpolemonkey](https://github.com/southpolemonkey) ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
  - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/pull/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
+ - [@alepuccetti](https://github.com/alepuccetti) ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
 
 ## dbt 0.17.1 (Release TBD)
