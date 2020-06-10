@@ -730,7 +730,8 @@ class BigQueryAdapter(BaseAdapter):
         access_entries = dataset.access_entries
 
         if access_entry in access_entries:
-            logger.debug(f"Access entry {access_entry} already in dataset")
+            logger.debug(f"Access entry {access_entry} "
+                         f"already exists in dataset")
             return
 
         access_entries.append(AccessEntry(role, entity_type, entity))
