@@ -15,8 +15,8 @@
     {% do persist_docs(target_relation, model) %}
 
     {% if config.get('grant_access_to') %}
-      {% for relation in config.get('grant_access_to') %}
-        {% do adapter.grant_access_to(this, 'view', None, relation) %}
+      {% for grant_target_dict in config.get('grant_access_to') %}
+        {% do adapter.grant_access_to(this, 'view', None, grant_target_dict) %}
       {% endfor %}
     {% endif %}
 

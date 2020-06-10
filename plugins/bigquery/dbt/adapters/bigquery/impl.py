@@ -77,6 +77,15 @@ class PartitionConfig(JsonSchemaMixin):
             )
 
 
+@dataclass
+class GrantTarget(JsonSchemaMixin):
+    dataset: str
+    project: str
+
+    def render(self):
+        return f'{self.project}.{self.dataset}'
+
+
 def _stub_relation(*args, **kwargs):
     return BigQueryRelation.create(
         database='',
@@ -94,7 +103,7 @@ class BigqueryConfig(AdapterConfig):
     kms_key_name: Optional[str] = None
     labels: Optional[Dict[str, str]] = None
     partitions: Optional[List[str]] = None
-    grant_access_to: Optional[List[BigQueryRelation]] = None
+    grant_access_to: Optional[List[Dict[str, str]]] = None
 
 
 class BigQueryAdapter(BaseAdapter):
@@ -677,17 +686,16 @@ class BigQueryAdapter(BaseAdapter):
         return opts
 
     @available.parse_none
-    def grant_access_to(self, entity, entity_type, role, relation):
+    def grant_access_to(self, entity, entity_type, role, grant_target_dict):
         """
         Given an entity, grants it access to a permissioned dataset.
         """
         conn = self.connections.get_thread_connection()
         client = conn.handle
 
+        grant_target = GrantTarget.from_dict(grant_target_dict)
         dataset = client.get_dataset(
-            self.connections.dataset_from_id(
-                f'{relation.database}.{relation.schema}'
-            )
+            self.connections.dataset_from_id(grant_target.render())
         )
 
         if entity_type == 'view':
