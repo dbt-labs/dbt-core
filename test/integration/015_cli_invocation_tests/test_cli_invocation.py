@@ -65,8 +65,8 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
     def setUp(self):
         super().setUp()
 
-        self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.custom_schema))
-        self.run_sql("CREATE SCHEMA {};".format(self.custom_schema))
+        self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
+        self.run_sql(f"CREATE SCHEMA {self.custom_schema};")
 
         # the test framework will remove this in teardown for us.
         if not os.path.exists('./dbt-profile'):
@@ -76,6 +76,10 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
             yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
 
         self.run_sql_file("seed_custom.sql")
+
+    def tearDown(self):
+        self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
+        super().tearDown()
 
     def custom_profile_config(self):
         return {
