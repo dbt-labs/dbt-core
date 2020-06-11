@@ -352,7 +352,6 @@ class GraphRunnableTask(ManifestTask):
 
     def before_run(self, adapter, selected_uids):
         with adapter.connection_named('master'):
-            self.create_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter)
 
     def after_run(self, adapter, results):

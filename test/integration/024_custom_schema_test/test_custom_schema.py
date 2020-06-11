@@ -66,17 +66,36 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
             },
         }
 
+    def _list_schemas(self):
+        with self.get_connection():
+            return set(self.adapter.list_schemas(self.default_database))
+
+    def assert_schemas_created(self, expected):
+        assert self._list_schemas().intersection(expected) == expected
+
+    def assert_schemas_not_created(self, expected):
+        assert not self._list_schemas().intersection(expected)
+
     @use_profile('postgres')
     def test__postgres__custom_schema_with_prefix(self):
+        schema = self.unique_schema()
+        v1_schema = f"{schema}_dbt_test"
+        v2_schema = f"{schema}_custom"
+        xf_schema = f"{schema}_test"
+        new_schemas = {v1_schema, v2_schema, xf_schema}
+
+        self.assert_schemas_not_created(new_schemas)
+
         self.run_sql_file("seed.sql")
+
+        self.run_dbt(['ls'])
+        self.assert_schemas_not_created(new_schemas)
+        self.run_dbt(['compile'])
+        self.assert_schemas_not_created(new_schemas)
 
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
-
-        schema = self.unique_schema()
-        v1_schema = "{}_dbt_test".format(schema)
-        v2_schema = "{}_custom".format(schema)
-        xf_schema = "{}_test".format(schema)
+        self.assert_schemas_created(new_schemas)
 
         self.assertTablesEqual("seed", "view_1", schema, v1_schema)
         self.assertTablesEqual("seed", "view_2", schema, v2_schema)
