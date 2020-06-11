@@ -1,6 +1,4 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-from dbt.adapters.bigquery import GrantTarget
-from google.cloud.bigquery import AccessEntry
 import yaml
 
 
@@ -92,6 +90,9 @@ class TestGrantAccess(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test_bigquery_adapter_methods(self):
+        from dbt.adapters.bigquery import GrantTarget
+        from google.cloud.bigquery import AccessEntry
+
         self.run_dbt(['compile'])  # trigger any compile-time issues
         self.run_sql_file("seed_bq.sql")
         self.run_dbt(['seed'])
