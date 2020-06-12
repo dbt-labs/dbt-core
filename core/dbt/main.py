@@ -1145,7 +1145,7 @@ def parse_args(args, cls=DBTArgumentParser):
             parsed.fail_fast = True
         delattr(parsed, "sub_fail_fast")
 
-    if getattr(parsed, 'project_dir', None) is not None:
+    if getattr(parsed, "project_dir", None) is not None:
         expanded_user = os.path.expanduser(parsed.project_dir)
         parsed.project_dir = os.path.abspath(expanded_user)
 
