@@ -155,6 +155,14 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
             self._run_simple_dbt_commands(workdir)
             os.chdir(workdir)
 
+    @use_profile('postgres')
+    def test_postgres_dbt_commands_with_relative_dir_as_project_dir(self):
+        workdir = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chdir(tmpdir)
+            self._run_simple_dbt_commands(os.path.relpath(workdir, tmpdir))
+            os.chdir(workdir)
+
     def _run_simple_dbt_commands(self, project_dir):
         self.run_dbt(['deps', '--project-dir', project_dir])
         self.run_dbt(['seed', '--project-dir', project_dir])
