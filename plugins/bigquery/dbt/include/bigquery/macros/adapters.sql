@@ -127,3 +127,25 @@
 {% macro bigquery__rename_relation(from_relation, to_relation) -%}
   {% do adapter.rename_relation(from_relation, to_relation) %}
 {% endmacro %}
+
+{% macro bigquery__alter_column_type(relation, column_name, new_column_type) -%}
+  {% set relation_columns = get_columns_in_relation(relation) %}
+
+  {% set sql %}
+    select
+      {%- for col in relation_columns -%}
+        {% if col.column == column_name %}
+          CAST({{ col.quoted }} AS {{ new_column_type }}) AS {{ col.quoted }}
+        {%- else %}
+          {{ col.quoted }}
+        {%- endif %}
+        {%- if not loop.last %},{% endif -%}
+      {%- endfor %}
+    from {{ relation }}
+  {% endset %}
+
+  {% call statement('alter_column_type') %}
+    {{ create_table_as(False, relation, sql)}}
+  {%- endcall %}
+
+{% endmacro %}

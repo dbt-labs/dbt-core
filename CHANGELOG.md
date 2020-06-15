@@ -9,7 +9,8 @@
 - Added intersection syntax for model selector ([#2167](https://github.com/fishtown-analytics/dbt/issues/2167), [#2417](https://github.com/fishtown-analytics/dbt/pull/2417))
 - Extends model selection syntax with at most n-th parent/children `dbt run --models 3+m1+2` ([#2052](https://github.com/fishtown-analytics/dbt/issues/2052), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
 - Added support for renaming BigQuery relations ([#2520](https://github.com/fishtown-analytics/dbt/issues/2520), [#2521](https://github.com/fishtown-analytics/dbt/pull/2521))
-- Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/issues/2517))
+- Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/pull/2517))
+- Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
 
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
@@ -20,7 +21,7 @@ Contributors:
  - [@alf-mindshift](https://github.com/alf-mindshift) ([#2431](https://github.com/fishtown-analytics/dbt/pull/2431))
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
  - [@southpolemonkey](https://github.com/southpolemonkey) ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
- - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/issues/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)))
+ - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/pull/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
 
 ## dbt 0.17.0 (June 08, 2020)
 
