@@ -54,8 +54,11 @@ class TestSimpleSeed(DBTIntegrationTest):
 class TestSimpleSeedCustomSchema(DBTIntegrationTest):
 
     def setUp(self):
-        DBTIntegrationTest.setUp(self)
+        super().setUp()
         self.run_sql_file("seed.sql")
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.custom_schema_name())
+        )
 
     @property
     def schema(self):
@@ -76,9 +79,12 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
             },
         }
 
+    def custom_schema_name(self):
+        return "{}_{}".format(self.unique_schema(), 'custom_schema')
+
     @use_profile('postgres')
     def test_postgres_simple_seed_with_schema(self):
-        schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
+        schema_name = self.custom_schema_name()
 
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)

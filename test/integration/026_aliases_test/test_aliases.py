@@ -85,6 +85,15 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
             "macro-paths": ['macros'],
         }
 
+    def setUp(self):
+        super().setUp()
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.unique_schema() + '_schema_a')
+        )
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.unique_schema() + '_schema_b')
+        )
+
     @use_profile('postgres')
     def test__postgres_same_alias_succeeds_in_different_schemas(self):
         results = self.run_dbt(['run'])

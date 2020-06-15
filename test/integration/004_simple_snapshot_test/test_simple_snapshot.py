@@ -406,6 +406,7 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
 
 class TestCrossDBSnapshotFiles(DBTIntegrationTest):
     setup_alternate_db = True
+
     @property
     def schema(self):
         return "simple_snapshot_004"
@@ -464,6 +465,13 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
 
 class TestCrossSchemaSnapshotFiles(DBTIntegrationTest):
     NUM_SNAPSHOT_MODELS = 1
+
+    def setUp(self):
+        super().setUp()
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.target_schema()),
+        )
+
 
     @property
     def schema(self):
