@@ -48,17 +48,33 @@ class LocalPackage(Package):
     local: str
 
 
+# `float` also allows `int`, according to PEP484 (and jsonschema!)
+RawVersion = Union[str, float]
+
+
 @dataclass
 class GitPackage(Package):
     git: str
-    revision: Optional[str]
+    revision: Optional[RawVersion]
     warn_unpinned: Optional[bool] = None
+
+    def get_revisions(self) -> List[str]:
+        if self.revision is None:
+            return []
+        else:
+            return [str(self.revision)]
 
 
 @dataclass
 class RegistryPackage(Package):
     package: str
-    version: Union[str, List[str]]
+    version: Union[RawVersion, List[RawVersion]]
+
+    def get_versions(self) -> List[str]:
+        if isinstance(self.version, list):
+            return [str(v) for v in self.version]
+        else:
+            return [str(self.version)]
 
 
 PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]

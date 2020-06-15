@@ -9,10 +9,9 @@ from dbt.task.deps import DepsTask
 
 
 def _clean_deps(config):
-    modules_dir = os.path.join(config.project_root, config.modules_path)
-    if os.path.exists(modules_dir):
-        shutil.rmtree(modules_dir)
-    os.makedirs(modules_dir)
+    if os.path.exists(config.modules_path):
+        shutil.rmtree(config.modules_path)
+    os.makedirs(config.modules_path)
 
 
 class RemoteDepsTask(

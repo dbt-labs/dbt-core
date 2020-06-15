@@ -105,7 +105,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def from_contract(
         cls, contract: GitPackage
     ) -> 'GitUnpinnedPackage':
-        revisions = [contract.revision] if contract.revision else []
+        revisions = contract.get_revisions()
 
         # we want to map None -> True
         warn_unpinned = contract.warn_unpinned is not False
