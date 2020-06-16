@@ -907,6 +907,10 @@ def parse_args(args, cls=DBTArgumentParser):
     if hasattr(parsed, 'profiles_dir'):
         parsed.profiles_dir = os.path.expanduser(parsed.profiles_dir)
 
+    if getattr(parsed, 'project_dir', None) is not None:
+        expanded_user = os.path.expanduser(parsed.project_dir)
+        parsed.project_dir = os.path.abspath(expanded_user)
+
     if not hasattr(parsed, 'which'):
         # the user did not provide a valid subcommand. trigger the help message
         # and exit with a error

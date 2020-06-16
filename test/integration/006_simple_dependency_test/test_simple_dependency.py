@@ -26,7 +26,7 @@ class TestSimpleDependency(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
+                    'revision': '1.0',
                 }
             ]
         }

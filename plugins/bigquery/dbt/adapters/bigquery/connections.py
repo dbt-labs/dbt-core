@@ -313,6 +313,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
         dataset_ref = conn.handle.dataset(schema, database)
         return google.cloud.bigquery.Dataset(dataset_ref)
 
+    @staticmethod
+    def dataset_from_id(dataset_id):
+        return google.cloud.bigquery.Dataset.from_string(dataset_id)
+
     def table_ref(self, database, schema, table_name, conn):
         dataset = self.dataset(database, schema, conn)
         return dataset.table(table_name)
