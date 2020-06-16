@@ -457,7 +457,7 @@ def format_bytes(num_bytes):
 
 
 def format_rows_number(rows_number):
-    for unit in ['', 'k', 'm', 'b', 't']:
+    for unit in ["", "k", "m", "b", "t"]:
         if abs(rows_number) < 1000.0:
             return f"{rows_number:3.1f}{unit}".strip()
         rows_number /= 1000.0
