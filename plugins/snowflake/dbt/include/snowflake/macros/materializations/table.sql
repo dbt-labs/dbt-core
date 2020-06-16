@@ -1,4 +1,7 @@
 {% materialization table, adapter='snowflake' %}
+
+  {% set original_query_tag = set_query_tag() %}
+
   {%- set identifier = model['alias'] -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
@@ -31,6 +34,8 @@
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
   {% do persist_docs(target_relation, model) %}
+
+  {% do unset_query_tag(original_query_tag) %}
 
   {{ return({'relations': [target_relation]}) }}
 
