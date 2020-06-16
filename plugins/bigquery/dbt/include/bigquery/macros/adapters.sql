@@ -129,6 +129,12 @@
 {% endmacro %}
 
 {% macro bigquery__alter_column_type(relation, column_name, new_column_type) -%}
+  {#
+    Changing a column's data type using a query requires you to scan the entire table.
+    The query charges can be significant if the table is very large.
+
+    https://cloud.google.com/bigquery/docs/manually-changing-schemas#changing_a_columns_data_type
+  #}
   {% set relation_columns = get_columns_in_relation(relation) %}
 
   {% set sql %}
