@@ -519,6 +519,16 @@ def format_bytes(num_bytes):
     return f"{num_bytes:3.1f} {unit}"
 
 
+def format_rows_number(rows_number):
+    for unit in ['', 'k', 'm', 'b', 't']:
+        if abs(rows_number) < 1000.0:
+            return f"{rows_number:3.1f}{unit}".strip()
+        rows_number /= 1000.0
+
+    rows_number *= 1000.0
+    return f"{rows_number:3.1f}{unit}".strip()
+
+
 # a little concurrent.futures.Executor for single-threaded mode
 class SingleThreadedExecutor(concurrent.futures.Executor):
     def submit(*args, **kwargs):
