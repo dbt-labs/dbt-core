@@ -726,8 +726,9 @@ class TestRPCServerCompileRun(HasRPCServer):
             'hi this is not sql',
             name='foo'
         ).json()
-        # neat mystery: Why is this "1" on macos and "2" on linux?
-        lineno = '1' if sys.platform == 'darwin' else '2'
+        # this is "1" if the multiprocessing context is "spawn" and "2" if
+        # it's fork.
+        lineno = '1'
         error_data = self.assertIsErrorWith(data, 10003, 'Database Error', {
             'type': 'DatabaseException',
             'message': f'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE {lineno}: hi this is not sql\n          ^',
