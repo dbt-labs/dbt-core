@@ -90,7 +90,7 @@ ENABLE_LEGACY_LOGGER = env_set_truthy("DBT_ENABLE_LEGACY_LOGGER")
 
 def _get_context():
     # TODO: change this back to use fork() on linux when we have made that safe
-    return multiprocessing.get_context('spawn')
+    return multiprocessing.get_context("spawn")
 
 
 # This is not a flag, it's a place to store the lock
