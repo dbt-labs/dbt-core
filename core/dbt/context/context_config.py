@@ -131,8 +131,9 @@ class ContextConfigGenerator:
     def _update_from_config(
         self, result: T, partial: Dict[str, Any], validate: bool = False
     ) -> T:
+        translated = self.active_project.credentials.translate_aliases(partial)
         return result.update_from(
-            partial,
+            translated,
             self.active_project.credentials.type,
             validate=validate
         )
