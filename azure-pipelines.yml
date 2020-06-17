@@ -67,7 +67,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
+  condition: succeeded()
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -92,7 +92,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
+  condition: succeeded()
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -109,7 +109,7 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   dependsOn: PostgresIntegrationTest
-  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
+  condition: succeeded()
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -137,7 +137,7 @@ jobs:
     - RedshiftIntegrationTest
     - SnowflakeIntegrationTest
     - BigQueryIntegrationTest
-  condition: and(succeeded(), ne(variables['SYSTEM.PULLREQUEST.ISFORK'], 'true'))
+  condition: succeeded()
   steps:
     - task: UsePythonVersion@0
       inputs:
