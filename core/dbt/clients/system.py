@@ -66,6 +66,7 @@ def find_matching(
 
 
 def load_file_contents(path: str, strip: bool = True) -> str:
+    path = convert_path(path)
     with open(path, 'rb') as handle:
         to_return = handle.read().decode('utf-8')
 
@@ -81,6 +82,7 @@ def make_directory(path: str) -> None:
     exist. This function handles the case where two threads try to create
     a directory at once.
     """
+    path = convert_path(path)
     if not os.path.exists(path):
         # concurrent writes that try to create the same dir can fail
         try:
@@ -99,6 +101,7 @@ def make_file(path: str, contents: str = '', overwrite: bool = False) -> bool:
     exists. The file is saved with contents `contents`
     """
     if overwrite or not os.path.exists(path):
+        path = convert_path(path)
         with open(path, 'w') as fh:
             fh.write(contents)
         return True
@@ -121,6 +124,7 @@ def supports_symlinks() -> bool:
 
 
 def write_file(path: str, contents: str = '') -> bool:
+    path = convert_path(path)
     make_directory(os.path.dirname(path))
     with open(path, 'w', encoding='utf-8') as f:
         f.write(str(contents))
@@ -163,7 +167,7 @@ def rmdir(path: str) -> None:
     different permissions on Windows. Otherwise, removing directories (eg.
     cloned via git) can cause rmtree to throw a PermissionError exception
     """
-    logger.debug("DEBUG** Window rmdir sys.platform: {}".format(sys.platform))
+    path = convert_path(path)
     if sys.platform == 'win32':
         onerror = _windows_rmdir_readonly
     else:
@@ -172,15 +176,49 @@ def rmdir(path: str) -> None:
     shutil.rmtree(path, onerror=onerror)
 
 
+def convert_path(path: str) -> str:
+    """Convert a path that dbt has, which might be >260 characters long, to one
+    that will be writable/readable on Windows.
+
+    On other platforms, this is a no-op.
+    """
+    if sys.platform != 'win32':
+        return path
+    prefix = '\\\\?\\'
+    # Nothing to do
+    if path.startswith(prefix):
+        return path
+    path = os.path.normpath(path)
+    if path.startswith('\\'):
+        # if a path starts with '\\', splitdrive() on it will return '' for the
+        # drive, but the prefix requires a drive letter. So let's add the drive
+        # letter back in.
+        curdrive = os.path.splitdrive(os.getcwd())[0]
+        path = curdrive + path
+
+    # now our path is either an absolute UNC path or relative to the current
+    # directory. If it's relative, we need to make it absolute or the prefix
+    # won't work.
+    if not os.path.splitdrive(path)[0]:
+        path = os.path.join(os.getcwd(), path)
+
+    if not path.startswith(prefix):
+        path = prefix + path
+    return path
+
+
 def remove_file(path: str) -> None:
+    path = convert_path(path)
     os.remove(path)
 
 
 def path_exists(path: str) -> bool:
+    path = convert_path(path)
     return os.path.lexists(path)
 
 
 def path_is_symlink(path: str) -> bool:
+    path = convert_path(path)
     return os.path.islink(path)
 
 
@@ -326,6 +364,7 @@ def run_cmd(
 
 
 def download(url: str, path: str, timeout: Union[float, tuple] = None) -> None:
+    path = convert_path(path)
     connection_timeout = timeout or float(os.getenv('DBT_HTTP_TIMEOUT', 10))
     response = requests.get(url, timeout=connection_timeout)
     with open(path, 'wb') as handle:
@@ -334,6 +373,8 @@ def download(url: str, path: str, timeout: Union[float, tuple] = None) -> None:
 
 
 def rename(from_path: str, to_path: str, force: bool = False) -> None:
+    from_path = convert_path(from_path)
+    to_path = convert_path(to_path)
     is_symlink = path_is_symlink(to_path)
 
     if os.path.exists(to_path) and force:
@@ -348,6 +389,7 @@ def rename(from_path: str, to_path: str, force: bool = False) -> None:
 def untar_package(
     tar_path: str, dest_dir: str, rename_to: Optional[str] = None
 ) -> None:
+    tar_path = convert_path(tar_path)
     tar_dir_name = None
     with tarfile.open(tar_path, 'r') as tarball:
         tarball.extractall(dest_dir)
@@ -384,6 +426,8 @@ def move(src, dst):
     This is almost identical to the real shutil.move, except it uses our rmtree
     and skips handling non-windows OSes since the existing one works ok there.
     """
+    src = convert_path(src)
+    dst = convert_path(dst)
     if os.name != 'nt':
         return shutil.move(src, dst)
 
@@ -418,4 +462,5 @@ def rmtree(path):
     """Recursively remove path. On permissions errors on windows, try to remove
     the read-only flag and try again.
     """
+    path = convert_path(path)
     return shutil.rmtree(path, onerror=chmod_and_retry)
