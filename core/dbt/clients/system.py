@@ -271,7 +271,7 @@ def convert_path(path: str) -> str:
     if _supports_long_paths():
         return path
 
-    prefix = '\\\\?\\'
+    prefix = "\\\\?\\"
     # Nothing to do
     if path.startswith(prefix):
         return path
