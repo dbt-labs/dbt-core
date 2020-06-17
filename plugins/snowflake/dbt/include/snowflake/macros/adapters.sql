@@ -168,7 +168,7 @@
 
 
 {% macro set_query_tag() -%}
-  {% set new_query_tag = config.get('query_tag', none) %}
+  {% set new_query_tag = config.get('query_tag') %}
   {% if new_query_tag %}
     {% set original_query_tag = get_current_query_tag() %}
     {{ log("Setting query_tag to '" ~ new_query_tag ~ "'. Will reset to '" ~ original_query_tag ~ "' after materialization.") }}
@@ -179,7 +179,7 @@
 {% endmacro %}
 
 {% macro unset_query_tag(original_query_tag) -%}
-  {% set new_query_tag = config.get('query_tag', none) %}
+  {% set new_query_tag = config.get('query_tag') %}
   {% if new_query_tag %}
     {% if original_query_tag %}
       {{ log("Resetting query_tag to '" ~ original_query_tag ~ "'.") }}
