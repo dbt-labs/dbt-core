@@ -199,8 +199,9 @@ class RunTask(CompileTask):
             .format(stat_line=stat_line, execution=execution))
 
     def before_run(self, adapter, selected_uids):
-        super().before_run(adapter, selected_uids)
         with adapter.connection_named('master'):
+            self.create_schemas(adapter, selected_uids)
+            self.populate_adapter_cache(adapter)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):

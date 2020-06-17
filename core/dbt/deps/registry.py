@@ -85,9 +85,7 @@ class RegistryUnpinnedPackage(
     def from_contract(
         cls, contract: RegistryPackage
     ) -> 'RegistryUnpinnedPackage':
-        raw_version = contract.version
-        if isinstance(raw_version, str):
-            raw_version = [raw_version]
+        raw_version = contract.get_versions()
 
         versions = [
             semver.VersionSpecifier.from_version_string(v)

@@ -25,6 +25,15 @@ class BaseDependencyTest(DBTIntegrationTest):
     def configured_schema(self):
         return self.unique_schema() + '_configured'
 
+    def setUp(self):
+        super().setUp()
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.base_schema())
+        )
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.configured_schema())
+        )
+
     @property
     def packages_config(self):
         return {

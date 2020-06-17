@@ -6,6 +6,7 @@ import yaml
 
 
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
+
     def _symlink_test_folders(self):
         # dbt's normal symlink behavior breaks this test, so special-case it
         for entry in os.listdir(self.test_original_source_path):
@@ -13,8 +14,19 @@ class ModelCopyingIntegrationTest(DBTIntegrationTest):
             tst = os.path.join(self.test_root_dir, entry)
             if entry == 'models':
                 shutil.copytree(src, tst)
+            elif entry == 'local_dependency':
+                continue
             elif os.path.isdir(entry) or entry.endswith('.sql'):
                 os.symlink(src, tst)
+
+    @property
+    def packages_config(self):
+        path = os.path.join(self.test_original_source_path, 'local_dependency')
+        return {
+            'packages': [{
+                'local': path,
+            }],
+        }
 
 
 class TestCLIInvocation(ModelCopyingIntegrationTest):
@@ -33,6 +45,7 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_toplevel_dbt_run(self):
+        self.run_dbt(['deps'])
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
@@ -40,6 +53,7 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
     @use_profile('postgres')
     def test_postgres_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
+        self.run_dbt(['deps'])
 
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
@@ -51,8 +65,8 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
     def setUp(self):
         super().setUp()
 
-        self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.custom_schema))
-        self.run_sql("CREATE SCHEMA {};".format(self.custom_schema))
+        self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
+        self.run_sql(f"CREATE SCHEMA {self.custom_schema};")
 
         # the test framework will remove this in teardown for us.
         if not os.path.exists('./dbt-profile'):
@@ -62,6 +76,10 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
             yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
 
         self.run_sql_file("seed_custom.sql")
+
+    def tearDown(self):
+        self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
+        super().tearDown()
 
     def custom_profile_config(self):
         return {
@@ -99,6 +117,7 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_toplevel_dbt_run_with_profile_dir_arg(self):
+        self.run_dbt(['deps'])
         results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
         self.assertEqual(len(results), 1)
 
@@ -134,6 +153,14 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             self._run_simple_dbt_commands(workdir)
+            os.chdir(workdir)
+
+    @use_profile('postgres')
+    def test_postgres_dbt_commands_with_relative_dir_as_project_dir(self):
+        workdir = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chdir(tmpdir)
+            self._run_simple_dbt_commands(os.path.relpath(workdir, tmpdir))
             os.chdir(workdir)
 
     def _run_simple_dbt_commands(self, project_dir):
