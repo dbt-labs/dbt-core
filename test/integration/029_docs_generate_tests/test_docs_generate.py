@@ -3244,3 +3244,5 @@ class TestDocsGenerateLongWindowsPaths(DBTIntegrationTest):
         manifest = _read_json('./target/manifest.json')
         self.assertIn('nodes', manifest)
         assert os.path.exists('./target/run/test/trivial_models/model.sql')
+        self.run_dbt(['clean'])
+        assert not os.path.exists('./target/run')
