@@ -25,7 +25,7 @@ from dbt.events.types import (
 import dbt.exceptions
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
-if sys.platform == 'win32':
+if sys.platform == "win32":
     from ctypes import WinDLL, c_bool
 else:
     WinDLL = None
@@ -145,7 +145,7 @@ def write_file(path: str, contents: str = "") -> bool:
     path = convert_path(path)
     try:
         make_directory(os.path.dirname(path))
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(str(contents))
     except Exception as exc:
         # note that you can't just catch FileNotFound, because sometimes
@@ -228,7 +228,7 @@ def _win_prepare_path(path: str) -> str:
     # letter back in.
     # Unless it starts with '\\'. In that case, the path is a UNC mount point
     # and splitdrive will be fine.
-    if not path.startswith('\\\\') and path.startswith('\\'):
+    if not path.startswith("\\\\") and path.startswith("\\"):
         curdrive = os.path.splitdrive(os.getcwd())[0]
         path = curdrive + path
 
@@ -243,7 +243,7 @@ def _win_prepare_path(path: str) -> str:
 
 
 def _supports_long_paths() -> bool:
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         return True
     # Eryk Sun says to use `WinDLL('ntdll')` instead of `windll.ntdll` because
     # of pointer caching in a comment here:
@@ -251,11 +251,11 @@ def _supports_long_paths() -> bool:
     # I don't know exaclty what he means, but I am inclined to believe him as
     # he's pretty active on Python windows bugs!
     try:
-        dll = WinDLL('ntdll')
+        dll = WinDLL("ntdll")
     except OSError:  # I don't think this happens? you need ntdll to run python
         return False
     # not all windows versions have it at all
-    if not hasattr(dll, 'RtlAreLongPathsEnabled'):
+    if not hasattr(dll, "RtlAreLongPathsEnabled"):
         return False
     # tell windows we want to get back a single unsigned byte (a bool).
     dll.RtlAreLongPathsEnabled.restype = c_bool
