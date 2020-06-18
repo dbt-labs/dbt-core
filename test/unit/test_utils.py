@@ -93,7 +93,6 @@ class TestDeepMap(unittest.TestCase):
         actual = dbt.utils.deep_map(self.intify_all, expected)
         self.assertEqual(actual, expected)
 
-
     @staticmethod
     def special_keypath(value, keypath):
 
