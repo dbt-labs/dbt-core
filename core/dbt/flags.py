@@ -28,13 +28,8 @@ MACRO_DEBUGGING = env_set_truthy('DBT_MACRO_DEBUGGING')
 
 
 def _get_context():
-    if os.name == 'posix' and os.uname().sysname.lower() != 'darwin':
-        # on linux fork is available and it's fast
-        return multiprocessing.get_context('fork')
-    else:
-        # on windows, spawn is the only choice.
-        # On osx, fork is buggy: https://bugs.python.org/issue33725
-        return multiprocessing.get_context('spawn')
+    # TODO: change this back to use fork() on linux when we have made that safe
+    return multiprocessing.get_context('spawn')
 
 
 MP_CONTEXT = _get_context()
