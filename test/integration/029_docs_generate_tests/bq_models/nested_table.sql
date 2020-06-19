@@ -10,6 +10,6 @@ select
     3 as field_3,
 
     struct(
-        4 as field_4,
-        5 as field_5
+        5 as field_5,
+        6 as field_6
     ) as nested_field
