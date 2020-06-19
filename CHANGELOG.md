@@ -6,6 +6,7 @@
 - `packages.yml` revision/version fields can be float-like again (`revision: '1.0'` is valid). ([#2518](https://github.com/fishtown-analytics/dbt/issues/2518), [#2535](https://github.com/fishtown-analytics/dbt/pull/2535))
 - Parallel RPC requests no longer step on each others' arguments ([[#2484](https://github.com/fishtown-analytics/dbt/issues/2484), [#2554](https://github.com/fishtown-analytics/dbt/pull/2554)])
 - `persist_docs` now takes into account descriptions for nested columns in bigquery ([#2549](https://github.com/fishtown-analytics/dbt/issues/2549), [#2550](https://github.com/fishtown-analytics/dbt/pull/2550))
+- On windows (depending upon OS support), dbt no longer fails with errors when writing artifacts ([#2558](https://github.com/fishtown-analytics/dbt/issues/2558), [#2566](https://github.com/fishtown-analytics/dbt/pull/2566))
 
 Contributors:
  - [@bodschut](https://github.com/bodschut) ([#2550](https://github.com/fishtown-analytics/dbt/pull/2550))
