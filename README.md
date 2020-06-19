@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/fishtown-analytics/dbt/blob/master/etc/dbt-horizontal.png?raw=true" alt="dbt logo"/>
+  <img src="/etc/dbt-logo-full.svg" alt="dbt logo" width="500"/>
 </p>
 <p align="center">
   <a href="https://codeclimate.com/github/fishtown-analytics/dbt">
