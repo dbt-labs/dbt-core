@@ -327,10 +327,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                     f'in {self.packages_install_path}. Run "dbt deps" to '
                     f"install package dependencies."
                 )
-            project_paths = itertools.chain(
-                internal_packages,
-                self._get_project_directories()
-            )
+            project_paths = itertools.chain(internal_packages, self._get_project_directories())
             for project_name, project in self.load_projects(project_paths):
                 if project_name in all_projects:
                     raise_compiler_error(
