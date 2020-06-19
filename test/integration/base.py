@@ -1024,6 +1024,8 @@ class DBTIntegrationTest(unittest.TestCase):
         first_columns = None
         for relation in specs:
             key = (relation.database, relation.schema, relation.identifier)
+            # get a good error here instead of a hard-to-diagnose KeyError
+            self.assertIn(key, column_specs, f'No columns found for {key}')
             columns = column_specs[key]
             if first_columns is None:
                 first_columns = columns
