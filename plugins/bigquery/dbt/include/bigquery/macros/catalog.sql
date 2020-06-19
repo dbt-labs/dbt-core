@@ -83,7 +83,6 @@
             -- use the "real" column name from the paths query below
             column_name as base_column_name,
             ordinal_position as column_index,
-            -- cast(null as string) as column_comment,
 
             is_partitioning_column,
             clustering_ordinal_position
@@ -103,7 +102,6 @@
             description as column_comment
 
         from {{ information_schema.replace(information_schema_view='COLUMN_FIELD_PATHS') }}
-        -- where data_type not like 'STRUCT%'
 
     ),
 
