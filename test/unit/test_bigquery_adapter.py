@@ -12,6 +12,7 @@ import dbt.flags as flags
 from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery import Plugin as BigQueryPlugin
 from dbt.adapters.bigquery.relation import BigQueryInformationSchema
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
@@ -94,7 +95,7 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
         self.mock_query_header_add = self.qh_patch.start()
         self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
 
-        inject_adapter(adapter)
+        inject_adapter(adapter, BigQueryPlugin)
         return adapter
 
 

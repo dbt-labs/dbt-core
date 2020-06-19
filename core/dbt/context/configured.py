@@ -1,10 +1,9 @@
-from typing import Any, Dict, Iterable, Union, Optional
+from typing import Any, Dict, Iterable, Union, Optional, Set
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
 from dbt.contracts.connection import AdapterRequiredConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedMacro
-from dbt.include.global_project import PACKAGES
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.node_types import NodeType
 from dbt.utils import MultiDict
@@ -93,10 +92,12 @@ class MacroNamespace:
         root_package: str,
         search_package: str,
         thread_ctx: MacroStack,
+        internal_packages: Set[str],
         node: Optional[Any] = None,
     ) -> None:
         self.root_package = root_package
         self.search_package = search_package
+        self.internal_packages = internal_packages
         self.globals: FlatNamespace = {}
         self.locals: FlatNamespace = {}
         self.packages: Dict[str, FlatNamespace] = {}
@@ -110,7 +111,7 @@ class MacroNamespace:
         )
 
         # put plugin macros into the root namespace
-        if macro.package_name in PACKAGES:
+        if macro.package_name in self.internal_packages:
             namespace: str = GLOBAL_PROJECT_NAME
         else:
             namespace = macro.package_name
@@ -161,10 +162,16 @@ class ManifestContext(ConfiguredContext):
         self.macro_stack = MacroStack()
 
     def _get_namespace(self):
+        # avoid an import loop
+        from dbt.adapters.factory import get_adapter_package_names
+        internal_packages = get_adapter_package_names(
+            self.config.credentials.type
+        )
         return MacroNamespace(
             self.config.project_name,
             self.search_package,
             self.macro_stack,
+            internal_packages,
             None,
         )
 

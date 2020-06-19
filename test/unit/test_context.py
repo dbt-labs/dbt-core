@@ -5,7 +5,7 @@ from unittest import mock
 
 import pytest
 
-# make sure 'postgres' is in PACKAGES
+# make sure 'postgres' is available
 from dbt.adapters import postgres  # noqa
 from dbt.adapters.base import AdapterConfig
 from dbt.clients.jinja import MacroStack
@@ -350,6 +350,13 @@ def get_adapter():
 
 
 @pytest.fixture
+def get_include_paths():
+    with mock.patch.object(providers, 'get_include_paths') as patch:
+        patch.return_value = []
+        yield patch
+
+
+@pytest.fixture
 def config():
     return config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
 
@@ -367,7 +374,7 @@ def test_query_header_context(config, manifest):
     assert_has_keys(REQUIRED_QUERY_HEADER_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_parse_context(config, manifest, get_adapter):
+def test_macro_parse_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_parser_macro(
         macro=manifest.macros['macro.root.macro_a'],
         config=config,
@@ -377,7 +384,7 @@ def test_macro_parse_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_runtime_context(config, manifest, get_adapter):
+def test_macro_runtime_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_macro(
         macro=manifest.macros['macro.root.macro_a'],
         config=config,
@@ -387,7 +394,7 @@ def test_macro_runtime_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_parse_context(config, manifest, get_adapter):
+def test_model_parse_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_parser_model(
         model=mock_model(),
         config=config,
@@ -397,7 +404,7 @@ def test_model_parse_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_runtime_context(config, manifest, get_adapter):
+def test_model_runtime_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_model(
         model=mock_model(),
         config=config,

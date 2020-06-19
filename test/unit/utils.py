@@ -103,14 +103,20 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
     )
 
 
-def inject_adapter(value):
+def inject_plugin(plugin):
+    from dbt.adapters.factory import FACTORY
+    key = plugin.adapter.type()
+    FACTORY.plugins[key] = plugin
+
+
+def inject_adapter(value, plugin):
     """Inject the given adapter into the adapter factory, so your hand-crafted
     artisanal adapter will be available from get_adapter() as if dbt loaded it.
     """
+    inject_plugin(plugin)
     from dbt.adapters.factory import FACTORY
     key = value.type()
     FACTORY.adapters[key] = value
-    FACTORY.adapter_types[key] = type(value)
 
 
 class ContractTestCase(TestCase):

@@ -1,9 +1,13 @@
 import threading
+from pathlib import Path
 from importlib import import_module
-from typing import Type, Dict, Any
+from typing import Type, Dict, Any, List, Set, Optional
 
-from dbt.exceptions import RuntimeException
-from dbt.include.global_project import PACKAGES
+from dbt.exceptions import RuntimeException, InternalException
+from dbt.include.global_project import (
+    PACKAGE_PATH as GLOBAL_PROJECT_PATH,
+    PROJECT_NAME as GLOBAL_PROJECT_NAME,
+)
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.connection import Credentials, AdapterRequiredConfig
 
@@ -24,17 +28,24 @@ class AdpaterContainer:
     def __init__(self):
         self.lock = threading.Lock()
         self.adapters: Dict[str, Adapter] = {}
-        self.adapter_types: Dict[str, Type[Adapter]] = {}
+        self.plugins: Dict[str, AdapterPlugin] = {}
+        # map package names to their include paths
+        self.packages: Dict[str, Path] = {
+            GLOBAL_PROJECT_NAME: Path(GLOBAL_PROJECT_PATH),
+        }
 
-    def get_adapter_class_by_name(self, name: str) -> Type[Adapter]:
+    def get_plugin_by_name(self, name: str) -> AdapterPlugin:
         with self.lock:
-            if name in self.adapter_types:
-                return self.adapter_types[name]
-
-            names = ", ".join(self.adapter_types.keys())
+            if name in self.plugins:
+                return self.plugins[name]
+            names = ", ".join(self.plugins.keys())
 
         message = f"Invalid adapter type {name}! Must be one of {names}"
         raise RuntimeException(message)
+
+    def get_adapter_class_by_name(self, name: str) -> Type[Adapter]:
+        plugin = self.get_plugin_by_name(name)
+        return plugin.adapter
 
     def get_relation_class_by_name(self, name: str) -> Type[BaseRelation]:
         adapter = self.get_adapter_class_by_name(name)
@@ -47,7 +58,7 @@ class AdpaterContainer:
         return adapter.AdapterSpecificConfigs
 
     def load_plugin(self, name: str) -> Type[Credentials]:
-        # this doesn't need a lock: in the worst case we'll overwrite PACKAGES
+        # this doesn't need a lock: in the worst case we'll overwrite packages
         # and adapter_type entries with the same value, as they're all
         # singletons
         try:
@@ -74,9 +85,9 @@ class AdpaterContainer:
 
         with self.lock:
             # things do hold the lock to iterate over it so we need it to add
-            self.adapter_types[name] = plugin.adapter
+            self.plugins[name] = plugin
 
-        PACKAGES[plugin.project_name] = plugin.include_path
+        self.packages[plugin.project_name] = Path(plugin.include_path)
 
         for dep in plugin.dependencies:
             self.load_plugin(dep)
@@ -113,6 +124,39 @@ class AdpaterContainer:
         with self.lock:
             for adapter in self.adapters.values():
                 adapter.cleanup_connections()
+
+    def get_adapter_package_names(self, name: Optional[str]) -> Set[str]:
+        if name is None:
+            return list(self.packages)
+        package_names: Set[str] = {GLOBAL_PROJECT_NAME}
+        plugin_names: Set[str] = {name}
+        while plugin_names:
+            plugin_name = plugin_names.pop()
+            try:
+                plugin = self.plugins[plugin_name]
+            except KeyError:
+                raise InternalException(
+                    f'No plugin found for {plugin_name}'
+                ) from None
+            package_names.add(plugin.adapter.type())
+            if plugin.dependencies is None:
+                continue
+            for dep in plugin.dependencies:
+                if dep not in package_names:
+                    plugin_names.add(dep)
+        return package_names
+
+    def get_include_paths(self, name: Optional[str]) -> List[Path]:
+        paths = []
+        for package_name in self.get_adapter_package_names(name):
+            try:
+                path = self.packages[package_name]
+            except KeyError:
+                raise InternalException(
+                    f'No internal package listing found for {package_name}'
+                )
+            paths.append(path)
+        return paths
 
 
 FACTORY: AdpaterContainer = AdpaterContainer()
@@ -153,3 +197,11 @@ def get_relation_class_by_name(name: str) -> Type[BaseRelation]:
 
 def load_plugin(name: str) -> Type[Credentials]:
     return FACTORY.load_plugin(name)
+
+
+def get_include_paths(name: Optional[str]) -> List[Path]:
+    return FACTORY.get_include_paths(name)
+
+
+def get_adapter_package_names(name: Optional[str]) -> Set[str]:
+    return FACTORY.get_adapter_package_names(name)

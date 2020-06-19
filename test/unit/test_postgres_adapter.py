@@ -8,6 +8,7 @@ from dbt.task.debug import DebugTask
 
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.clients import agate_helper
 from dbt.exceptions import ValidationException, DbtConfigError
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -50,7 +51,7 @@ class TestPostgresAdapter(unittest.TestCase):
     def adapter(self):
         if self._adapter is None:
             self._adapter = PostgresAdapter(self.config)
-            inject_adapter(self._adapter)
+            inject_adapter(self._adapter, PostgresPlugin)
         return self._adapter
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -283,7 +284,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_query_header_add = self.qh_patch.start()
         self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
         self.adapter.acquire_connection()
-        inject_adapter(self.adapter)
+        inject_adapter(self.adapter, PostgresPlugin)
 
         self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
         self.mock_parse_result = self.load_patch.start()

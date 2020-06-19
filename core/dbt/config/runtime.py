@@ -12,7 +12,7 @@ from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt import tracking
-from dbt.adapters.factory import get_relation_class_by_name
+from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
 from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
@@ -31,7 +31,6 @@ from dbt.exceptions import (
     warn_or_error,
     raise_compiler_error
 )
-from dbt.include.global_project import PACKAGES
 from dbt.legacy_config_updater import ConfigUpdater
 
 from hologram import ValidationError
@@ -323,8 +322,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
         if self.dependencies is None:
             all_projects = {self.project_name: self}
+            internal_packages = get_include_paths(self.credentials.type)
             project_paths = itertools.chain(
-                map(Path, PACKAGES.values()),
+                internal_packages,
                 self._get_project_directories()
             )
             for project_name, project in self.load_projects(project_paths):

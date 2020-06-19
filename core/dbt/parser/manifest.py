@@ -9,9 +9,11 @@ import dbt.exceptions
 import dbt.flags
 
 from dbt import deprecations
-from dbt.adapters.factory import get_relation_class_by_name
+from dbt.adapters.factory import (
+    get_relation_class_by_name,
+    get_adapter_package_names,
+)
 from dbt.helper_types import PathSet
-from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered
@@ -119,13 +121,14 @@ class ManifestLoader:
     ) -> None:
         projects = self.all_projects
         if internal_manifest is not None:
+            # skip internal packages
+            packages = get_adapter_package_names(self.root_project.credentials.type)
             projects = {
-                k: v for k, v in self.all_projects.items() if k not in PACKAGES
+                k: v for k, v in self.all_projects.items() if k not in packages
             }
             self.results.macros.update(internal_manifest.macros)
             self.results.files.update(internal_manifest.files)
 
-        # TODO: go back to skipping the internal manifest during macro parsing
         for project in projects.values():
             parser = MacroParser(self.results, project)
             for path in parser.search():
@@ -416,10 +419,6 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _warn_for_unused_resource_config_paths(manifest, config)
 
 
-def internal_project_names():
-    return iter(PACKAGES.values())
-
-
 def _load_projects(config, paths):
     for path in paths:
         try:
@@ -626,7 +625,8 @@ def process_node(
 
 
 def load_internal_projects(config):
-    return dict(_load_projects(config, internal_project_names()))
+    project_names = get_adapter_package_names(config.credentials.type)
+    return dict(_load_projects(config, project_names))
 
 
 def load_internal_manifest(config: RuntimeConfig) -> Manifest:

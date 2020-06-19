@@ -4,7 +4,8 @@ from dbt.adapters.factory import FACTORY
 
 
 def get_adapter_standalone(config):
-    cls = FACTORY.adapter_types[config.credentials.type]
+    plugin = FACTORY.plugins[config.credentials.type]
+    cls = plugin.adapter
     return cls(config)
 
 
