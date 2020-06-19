@@ -6,7 +6,7 @@
 - `packages.yml` revision/version fields can be float-like again (`revision: '1.0'` is valid). ([#2518](https://github.com/fishtown-analytics/dbt/issues/2518), [#2535](https://github.com/fishtown-analytics/dbt/pull/2535))
 - Parallel RPC requests no longer step on each others' arguments ([[#2484](https://github.com/fishtown-analytics/dbt/issues/2484), [#2554](https://github.com/fishtown-analytics/dbt/pull/2554)])
 - On windows (depending upon OS support), dbt no longer fails with errors when writing artifacts ([#2558](https://github.com/fishtown-analytics/dbt/issues/2558), [#2566](https://github.com/fishtown-analytics/dbt/pull/2566))
-- dbt again respects config aliases in config() calls ([#2557](https://github.com/fishtown-analytics/dbt/issues/2557), [#2559](https://github.com/fishtown-analytics/dbt/pull/2559))
+- dbt again respects config aliases in config() calls and dbt_project.yml ([#2557](https://github.com/fishtown-analytics/dbt/issues/2557), [#2559](https://github.com/fishtown-analytics/dbt/pull/2559), [#2575](https://github.com/fishtown-analytics/dbt/pull/2575))
 
 ## dbt 0.17.0 (June 08, 2020)
 
