@@ -137,7 +137,7 @@ class BaseTestProjectModelOverride(BaseOverrideDatabase):
 class TestProjectModelOverride(BaseTestProjectModelOverride):
     @property
     def project_config(self):
-        self.use_default_project({
+        return {
             'config-version': 2,
             'vars': {
                 'alternate_db': self.alternative_database,
@@ -150,7 +150,17 @@ class TestProjectModelOverride(BaseTestProjectModelOverride):
                     }
                 }
             },
-        })
+            'data-paths': ['data'],
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
+            'quoting': {
+                'database': True,
+            },
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
 
     @use_profile('bigquery')
     def test_bigquery_database_override(self):
@@ -177,6 +187,16 @@ class TestProjectModelAliasOverride(BaseTestProjectModelOverride):
                     }
                 }
             },
+            'data-paths': ['data'],
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
+            'quoting': {
+                'database': True,
+            },
+            'seeds': {
+                'quote_columns': False,
+            }
         }
 
     @use_profile('bigquery')
