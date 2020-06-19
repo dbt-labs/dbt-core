@@ -768,11 +768,9 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertIn('message', error_data)
         self.assertEqual(error_data['message'], 'RPC timed out after 1.0s')
         self.assertIn('logs', error_data)
-        if sys.platform == 'darwin':
-            # because fork() without exec() is broken on macos, we use 'spawn'
-            # so on macos we don't get logs back because we didn't fork()
-            return
-        self.assertTrue(len(error_data['logs']) > 0)
+        # because fork() without exec() is broken, we use 'spawn' so we don't
+        # get logs back because we didn't fork()
+        return
 
 
 @mark.flaky(rerun_filter=addr_in_use)

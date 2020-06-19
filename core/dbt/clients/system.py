@@ -19,6 +19,12 @@ import dbt.utils
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
+if sys.platform == 'win32':
+    from ctypes import WinDLL, c_bool
+else:
+    WinDLL = None
+    c_bool = None
+
 
 def find_matching(
     root_path: str,
@@ -66,6 +72,7 @@ def find_matching(
 
 
 def load_file_contents(path: str, strip: bool = True) -> str:
+    path = convert_path(path)
     with open(path, 'rb') as handle:
         to_return = handle.read().decode('utf-8')
 
@@ -81,6 +88,7 @@ def make_directory(path: str) -> None:
     exist. This function handles the case where two threads try to create
     a directory at once.
     """
+    path = convert_path(path)
     if not os.path.exists(path):
         # concurrent writes that try to create the same dir can fail
         try:
@@ -99,6 +107,7 @@ def make_file(path: str, contents: str = '', overwrite: bool = False) -> bool:
     exists. The file is saved with contents `contents`
     """
     if overwrite or not os.path.exists(path):
+        path = convert_path(path)
         with open(path, 'w') as fh:
             fh.write(contents)
         return True
@@ -121,10 +130,25 @@ def supports_symlinks() -> bool:
 
 
 def write_file(path: str, contents: str = '') -> bool:
-    make_directory(os.path.dirname(path))
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(str(contents))
-
+    path = convert_path(path)
+    try:
+        make_directory(os.path.dirname(path))
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(str(contents))
+    except FileNotFoundError as exc:
+        if (
+            os.name == 'nt' and
+            getattr(exc, 'winerror', 0) == 3 and
+            len(path) >= 260
+        ):
+            # all our hard work and the path was still too long. Log and
+            # continue.
+            logger.debug(
+                f'Could not write to path {path}: Path was too long '
+                f'({len(path)} characters)'
+            )
+        else:
+            raise
     return True
 
 
@@ -163,7 +187,7 @@ def rmdir(path: str) -> None:
     different permissions on Windows. Otherwise, removing directories (eg.
     cloned via git) can cause rmtree to throw a PermissionError exception
     """
-    logger.debug("DEBUG** Window rmdir sys.platform: {}".format(sys.platform))
+    path = convert_path(path)
     if sys.platform == 'win32':
         onerror = _windows_rmdir_readonly
     else:
@@ -172,15 +196,90 @@ def rmdir(path: str) -> None:
     shutil.rmtree(path, onerror=onerror)
 
 
+def _win_prepare_path(path: str) -> str:
+    """Given a windows path, prepare it for use by making sure it is absolute
+    and normalized.
+    """
+    path = os.path.normpath(path)
+
+    # if a path starts with '\', splitdrive() on it will return '' for the
+    # drive, but the prefix requires a drive letter. So let's add the drive
+    # letter back in.
+    # Unless it starts with '\\'. In that case, the path is a UNC mount point
+    # and splitdrive will be fine.
+    if not path.startswith('\\\\') and path.startswith('\\'):
+        curdrive = os.path.splitdrive(os.getcwd())[0]
+        path = curdrive + path
+
+    # now our path is either an absolute UNC path or relative to the current
+    # directory. If it's relative, we need to make it absolute or the prefix
+    # won't work. `ntpath.abspath` allegedly doesn't always play nice with long
+    # paths, so do this instead.
+    if not os.path.splitdrive(path)[0]:
+        path = os.path.join(os.getcwd(), path)
+
+    return path
+
+
+def _supports_long_paths() -> bool:
+    if sys.platform != 'win32':
+        return True
+    # Eryk Sun says to use `WinDLL('ntdll')` instead of `windll.ntdll` because
+    # of pointer caching in a comment here:
+    # https://stackoverflow.com/a/35097999/11262881
+    # I don't know exaclty what he means, but I am inclined to believe him as
+    # he's pretty active on Python windows bugs!
+    try:
+        dll = WinDLL('ntdll')
+    except OSError:  # I don't think this happens? you need ntdll to run python
+        return False
+    # not all windows versions have it at all
+    if not hasattr(dll, 'RtlAreLongPathsEnabled'):
+        return False
+    # tell windows we want to get back a single unsigned byte (a bool).
+    dll.RtlAreLongPathsEnabled.restype = c_bool
+    return dll.RtlAreLongPathsEnabled()
+
+
+def convert_path(path: str) -> str:
+    """Convert a path that dbt has, which might be >260 characters long, to one
+    that will be writable/readable on Windows.
+
+    On other platforms, this is a no-op.
+    """
+    # some parts of python seem to append '\*.*' to strings, better safe than
+    # sorry.
+    if len(path) < 250:
+        return path
+    if _supports_long_paths():
+        return path
+
+    prefix = '\\\\?\\'
+    # Nothing to do
+    if path.startswith(prefix):
+        return path
+
+    path = _win_prepare_path(path)
+
+    # add the prefix. The check is just in case os.getcwd() does something
+    # unexpected - I believe this if-state should always be True though!
+    if not path.startswith(prefix):
+        path = prefix + path
+    return path
+
+
 def remove_file(path: str) -> None:
+    path = convert_path(path)
     os.remove(path)
 
 
 def path_exists(path: str) -> bool:
+    path = convert_path(path)
     return os.path.lexists(path)
 
 
 def path_is_symlink(path: str) -> bool:
+    path = convert_path(path)
     return os.path.islink(path)
 
 
@@ -326,6 +425,7 @@ def run_cmd(
 
 
 def download(url: str, path: str, timeout: Union[float, tuple] = None) -> None:
+    path = convert_path(path)
     connection_timeout = timeout or float(os.getenv('DBT_HTTP_TIMEOUT', 10))
     response = requests.get(url, timeout=connection_timeout)
     with open(path, 'wb') as handle:
@@ -334,6 +434,8 @@ def download(url: str, path: str, timeout: Union[float, tuple] = None) -> None:
 
 
 def rename(from_path: str, to_path: str, force: bool = False) -> None:
+    from_path = convert_path(from_path)
+    to_path = convert_path(to_path)
     is_symlink = path_is_symlink(to_path)
 
     if os.path.exists(to_path) and force:
@@ -348,6 +450,7 @@ def rename(from_path: str, to_path: str, force: bool = False) -> None:
 def untar_package(
     tar_path: str, dest_dir: str, rename_to: Optional[str] = None
 ) -> None:
+    tar_path = convert_path(tar_path)
     tar_dir_name = None
     with tarfile.open(tar_path, 'r') as tarball:
         tarball.extractall(dest_dir)
@@ -384,6 +487,8 @@ def move(src, dst):
     This is almost identical to the real shutil.move, except it uses our rmtree
     and skips handling non-windows OSes since the existing one works ok there.
     """
+    src = convert_path(src)
+    dst = convert_path(dst)
     if os.name != 'nt':
         return shutil.move(src, dst)
 
@@ -418,4 +523,5 @@ def rmtree(path):
     """Recursively remove path. On permissions errors on windows, try to remove
     the read-only flag and try again.
     """
+    path = convert_path(path)
     return shutil.rmtree(path, onerror=chmod_and_retry)
