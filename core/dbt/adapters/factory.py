@@ -137,9 +137,7 @@ class AdapterContainer:
             try:
                 plugin = self.plugins[plugin_name]
             except KeyError:
-                raise InternalException(
-                    f'No plugin found for {plugin_name}'
-                ) from None
+                raise InternalException(f"No plugin found for {plugin_name}") from None
             plugins.append(plugin)
             seen.add(plugin_name)
             if plugin.dependencies is None:
@@ -162,9 +160,7 @@ class AdapterContainer:
             try:
                 path = self.packages[package_name]
             except KeyError:
-                raise InternalException(
-                    f'No internal package listing found for {package_name}'
-                )
+                raise InternalException(f"No internal package listing found for {package_name}")
             paths.append(path)
         return paths
 

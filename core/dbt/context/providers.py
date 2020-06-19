@@ -667,9 +667,7 @@ class ProviderContext(ManifestContext):
     # This overrides the method in ManifestContext, and provides
     # a model, which the ManifestContext builder does not
     def _get_namespace_builder(self):
-        internal_packages = get_adapter_package_names(
-            self.config.credentials.type
-        )
+        internal_packages = get_adapter_package_names(self.config.credentials.type)
         return MacroNamespaceBuilder(
             self.config.project_name,
             self.search_package,
