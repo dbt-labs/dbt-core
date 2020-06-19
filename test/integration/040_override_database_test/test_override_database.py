@@ -99,14 +99,45 @@ class TestModelOverride(BaseOverrideDatabase):
         self.run_database_override()
 
 
-class TestProjectModelOverride(BaseOverrideDatabase):
+class BaseTestProjectModelOverride(BaseOverrideDatabase):
+    # this is janky, but I really want to access self.default_database in
+    # project_config
+    @property
+    def default_database(self):
+        target = self._profile_config['test']['target']
+        profile = self._profile_config['test']['outputs'][target]
+        for key in ['database', 'project', 'dbname']:
+            if key in profile:
+                database = profile[key]
+                if self.adapter_type == 'snowflake':
+                    return database.upper()
+                return database
+        assert False, 'No profile database found!'
+
     def run_database_override(self):
+        self.run_dbt_notstrict(['seed'])
+        self.assertEqual(len(self.run_dbt_notstrict(['run'])), 4)
+        self.assertExpectedRelations()
+
+    def assertExpectedRelations(self):
         if self.adapter_type == 'snowflake':
             func = lambda x: x.upper()
         else:
             func = lambda x: x
 
-        self.use_default_project({
+        self.assertManyRelationsEqual([
+            (func('seed'), self.unique_schema(), self.default_database),
+            (func('view_2'), self.unique_schema(), self.alternative_database),
+            (func('view_1'), self.unique_schema(), self.alternative_database),
+            (func('view_3'), self.unique_schema(), self.default_database),
+            (func('view_4'), self.unique_schema(), self.alternative_database),
+        ])
+
+
+class TestProjectModelOverride(BaseTestProjectModelOverride):
+    @property
+    def project_config(self):
+        return {
             'config-version': 2,
             'vars': {
                 'alternate_db': self.alternative_database,
@@ -119,17 +150,17 @@ class TestProjectModelOverride(BaseOverrideDatabase):
                     }
                 }
             },
-        })
-        self.run_dbt_notstrict(['seed'])
-
-        self.assertEqual(len(self.run_dbt_notstrict(['run'])), 4)
-        self.assertManyRelationsEqual([
-            (func('seed'), self.unique_schema(), self.default_database),
-            (func('view_2'), self.unique_schema(), self.alternative_database),
-            (func('view_1'), self.unique_schema(), self.alternative_database),
-            (func('view_3'), self.unique_schema(), self.default_database),
-            (func('view_4'), self.unique_schema(), self.alternative_database),
-        ])
+            'data-paths': ['data'],
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
+            'quoting': {
+                'database': True,
+            },
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
 
     @use_profile('bigquery')
     def test_bigquery_database_override(self):
@@ -137,6 +168,39 @@ class TestProjectModelOverride(BaseOverrideDatabase):
 
     @use_profile('snowflake')
     def test_snowflake_database_override(self):
+        self.run_database_override()
+
+
+class TestProjectModelAliasOverride(BaseTestProjectModelOverride):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
+            'models': {
+                'project': self.alternative_database,
+                'test': {
+                    'subfolder': {
+                        'project': self.default_database,
+                    }
+                }
+            },
+            'data-paths': ['data'],
+            'vars': {
+                'alternate_db': self.alternative_database,
+            },
+            'quoting': {
+                'database': True,
+            },
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
+
+    @use_profile('bigquery')
+    def test_bigquery_project_override(self):
         self.run_database_override()
 
 

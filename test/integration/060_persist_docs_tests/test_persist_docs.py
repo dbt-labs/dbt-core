@@ -33,13 +33,15 @@ class BasePersistDocsTest(DBTIntegrationTest):
         assert table_id_comment.startswith('id Column description')
 
         table_name_comment = table_node['columns']['name']['comment']
-        assert table_name_comment.startswith('Some stuff here and then a call to')
+        assert table_name_comment.startswith(
+            'Some stuff here and then a call to')
 
         self._assert_common_comments(
             table_comment, table_id_comment, table_name_comment
         )
 
-    def _assert_has_view_comments(self, view_node, has_node_comments=True, has_column_comments=True):
+    def _assert_has_view_comments(self, view_node, has_node_comments=True,
+                                  has_column_comments=True):
         view_comment = view_node['metadata']['comment']
         if has_node_comments:
             assert view_comment.startswith('View model description')
@@ -156,3 +158,76 @@ class TestPersistDocsSimple(BasePersistDocsTest):
     @use_profile('bigquery')
     def test_bigquery_persist_docs(self):
         self.run_dbt()
+
+
+class TestPersistDocsNested(BasePersistDocsTest):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'models': {
+                'test': {
+                    '+persist_docs': {
+                        "relation": True,
+                        "columns": True,
+                    },
+                }
+            }
+        }
+
+    @property
+    def models(self):
+        return 'models-bigquery-nested'
+
+    @use_profile('bigquery')
+    def test_bigquery_persist_docs(self):
+        """
+        run dbt and use the bigquery client from the adapter to check if the
+        colunmn descriptions are persisted on the test model table and view.
+
+        Next, generate the catalog and check if the comments are also included.
+        """
+        self.run_dbt()
+
+        self.run_dbt(['docs', 'generate'])
+        with open('target/catalog.json') as fp:
+            catalog_data = json.load(fp)
+        assert 'nodes' in catalog_data
+        assert len(catalog_data['nodes']) == 2  # table and view model
+
+        for node_id in ['table_model_nested', 'view_model_nested']:
+            # check the descriptions using the api
+            with self.adapter.connection_named('_test'):
+                client = self.adapter.connections \
+                    .get_thread_connection().handle
+
+                table_id = "{}.{}.{}".format(
+                    self.default_database,
+                    self.unique_schema(),
+                    node_id
+                )
+                bq_schema = client.get_table(table_id).schema
+
+                level_1_field = bq_schema[0]
+                assert level_1_field.description == \
+                       "level_1 column description"
+
+                level_2_field = level_1_field.fields[0]
+                assert level_2_field.description == \
+                       "level_2 column description"
+
+                level_3_field = level_2_field.fields[0]
+                assert level_3_field.description == \
+                       "level_3 column description"
+
+            # check the descriptions in the catalog
+            node = catalog_data['nodes']['model.test.{}'.format(node_id)]
+
+            level_1_column = node['columns']['level_1']
+            assert level_1_column['comment'] == "level_1 column description"
+
+            level_2_column = node['columns']['level_1.level_2']
+            assert level_2_column['comment'] == "level_2 column description"
+
+            level_3_column = node['columns']['level_1.level_2.level_3_a']
+            assert level_3_column['comment'] == "level_3 column description"

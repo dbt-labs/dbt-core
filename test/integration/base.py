@@ -348,6 +348,9 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             return self.test_root_dir
 
+    def _generate_test_root_dir(self):
+        return normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
+
     def setUp(self):
         self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
@@ -357,7 +360,7 @@ class DBTIntegrationTest(unittest.TestCase):
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
-        self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
+        self.test_root_dir = self._generate_test_root_dir()
 
         os.chdir(self.test_root_dir)
         try:
@@ -1021,6 +1024,8 @@ class DBTIntegrationTest(unittest.TestCase):
         first_columns = None
         for relation in specs:
             key = (relation.database, relation.schema, relation.identifier)
+            # get a good error here instead of a hard-to-diagnose KeyError
+            self.assertIn(key, column_specs, f'No columns found for {key}')
             columns = column_specs[key]
             if first_columns is None:
                 first_columns = columns
