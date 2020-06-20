@@ -314,10 +314,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             return
 
         msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
-            len(unused),
-            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
+            printer.red(len(unused)),
+            '\n'.join('\t\t- {}'.format('.'.join(u)) for u in unused)
         )
-        warn_or_error(msg, log_fmt=printer.yellow('{}'))
+        
+        warn_or_error(msg, log_fmt = printer.warning_tag('{}'))
 
     def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
         if self.dependencies is None:
@@ -549,9 +550,9 @@ class UnsetProfileConfig(RuntimeConfig):
 
 
 UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
-WARNING: Configuration paths exist in your dbt_project.yml file which do not \
-apply to any resources.
-There are {} unused configuration paths:\n{}
+Configuration paths exist in your dbt_project.yml file which do not \
+apply to any resources. 
+\t     There are {} unused configuration paths:\n{}
 """
 
 
