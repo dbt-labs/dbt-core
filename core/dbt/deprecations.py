@@ -105,6 +105,7 @@ class DbtProjectYamlDeprecation(DBTDeprecation):
     For upgrading instructions, consult the documentation:
 
       https://docs.getdbt.com/docs/guides/migration-guide/upgrading-to-0-17-0
+      
     '''
 
 
