@@ -44,6 +44,7 @@ class RedshiftCredentials(PostgresCredentials):
         default=None,
         metadata={'description': 'If using IAM auth, the name of the cluster'},
     )
+    iam_profile: Optional[str] = None
     iam_duration_seconds: int = 900
     search_path: Optional[str] = None
     keepalives_idle: int = 240
@@ -56,7 +57,7 @@ class RedshiftCredentials(PostgresCredentials):
 
     def _connection_keys(self):
         keys = super()._connection_keys()
-        return keys + ('method', 'cluster_id', 'iam_duration_seconds')
+        return keys + ('method', 'cluster_id', 'iam_profile', 'iam_duration_seconds')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
@@ -86,11 +87,20 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             self.begin()
 
     @classmethod
-    def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,
+    def fetch_cluster_credentials(cls, db_user, db_name, cluster_id, iam_profile,
                                   duration_s, autocreate, db_groups):
         """Fetches temporary login credentials from AWS. The specified user
         must already exist in the database, or else an error will occur"""
-        boto_client = boto3.client('redshift')
+
+        if iam_profile is None:
+            boto_client = boto3.client('redshift')
+        else:
+            logger.debug(f"Connecting to Redshift using 'IAM' with profile {iam_profile}")
+            boto_session = boto3.Session(
+                profile_name=iam_profile,
+                region_name='eu-west-1'
+            )
+            boto_client = boto_session.client('redshift')
 
         try:
             return boto_client.get_cluster_credentials(
@@ -123,6 +133,7 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             credentials.user,
             credentials.database,
             credentials.cluster_id,
+            credentials.iam_profile,
             iam_duration_s,
             credentials.autocreate,
             credentials.db_groups,
