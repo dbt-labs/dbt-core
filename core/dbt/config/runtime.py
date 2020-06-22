@@ -314,8 +314,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             return
 
         msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
-            printer.red(len(unused)),
-            '\n'.join('\t\t- {}'.format('.'.join(u)) for u in unused)
+            len(unused),
+            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
         
         warn_or_error(msg, log_fmt = printer.warning_tag('{}'))
@@ -551,8 +551,9 @@ class UnsetProfileConfig(RuntimeConfig):
 
 UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
 Configuration paths exist in your dbt_project.yml file which do not \
-apply to any resources. 
-\t     There are {} unused configuration paths:\n{}
+apply to any resources.
+There are {} unused configuration paths:
+{}
 """
 
 
