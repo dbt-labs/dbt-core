@@ -1,12 +1,9 @@
 import textwrap
 import time
 from typing import Dict, Optional, Tuple
-
 from dbt.logger import GLOBAL_LOGGER as logger, DbtStatusMessage, TextOnly
 from dbt.node_types import NodeType
-from dbt.tracking import InvocationProcessor
 import dbt.ui.colors
-
 
 USE_COLORS = False
 
@@ -368,6 +365,9 @@ def print_end_of_run_summary(
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
+    # Prevent import loop from happening by importing tracking here.
+    from dbt.tracking import InvocationProcessor  # noqa
+
     errors = [r for r in results if r.error is not None or r.fail]
     warnings = [r for r in results if r.warn]
     with DbtStatusMessage(), InvocationProcessor():
@@ -404,3 +404,7 @@ def line_wrap_message(
     splitter = '\r\n\r\n' if '\r\n\r\n' in msg else '\n\n'
     chunks = msg.split(splitter)
     return '\n'.join(textwrap.fill(chunk, width=width) for chunk in chunks)
+
+
+def warning_tag(msg: str) -> str:
+    return f'[{yellow("WARNING")}]: {msg}'
