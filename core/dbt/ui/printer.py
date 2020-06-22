@@ -407,5 +407,4 @@ def line_wrap_message(
 
 
 def warning_tag(msg: str) -> str:
-    warning_tag = warning_tag = '[' + yellow('WARNING') + ']: '
-    return warning_tag + msg
+    return f'[{yellow("WARNING")}]: {msg}'
