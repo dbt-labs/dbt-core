@@ -317,8 +317,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             len(unused),
             '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
-        
-        warn_or_error(msg, log_fmt = printer.warning_tag('{}'))
+
+        warn_or_error(msg, log_fmt=printer.warning_tag('{}'))
 
     def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
         if self.dependencies is None:

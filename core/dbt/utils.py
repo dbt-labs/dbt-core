@@ -310,7 +310,7 @@ def invalid_ref_fail_unless_test(node, target_model_name,
             logger.debug(printer.warning_tag(msg))
         else:
             dbt.exceptions.warn_or_error(
-                msg, 
+                msg,
                 log_fmt=printer.warning_tag('{}')
             )
     else:
@@ -324,15 +324,18 @@ def invalid_ref_fail_unless_test(node, target_model_name,
 
 def invalid_source_fail_unless_test(
     node, target_name, target_table_name, disabled
-):    
+):
     if node.resource_type == NodeType.Test:
         msg = dbt.exceptions.get_source_not_found_or_disabled_msg(
             node, target_name, target_table_name, disabled
         )
         if disabled:
-            logger.debug(printer.warning_tag(msg))    
+            logger.debug(printer.warning_tag(msg))
         else:
-            dbt.exceptions.warn_or_error(msg, log_fmt=printer.warning_tag('{}'))
+            dbt.exceptions.warn_or_error(
+                msg,
+                log_fmt=printer.warning_tag('{}')
+        )
     else:
         dbt.exceptions.source_target_not_found(
             node,

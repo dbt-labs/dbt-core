@@ -405,7 +405,7 @@ def line_wrap_message(
     chunks = msg.split(splitter)
     return '\n'.join(textwrap.fill(chunk, width=width) for chunk in chunks)
 
+
 def warning_tag(msg: str) -> str:
     warning_tag = warning_tag = '[' + yellow('WARNING') + ']: '
     return warning_tag + msg
-    
