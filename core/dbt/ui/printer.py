@@ -366,7 +366,7 @@ def print_end_of_run_summary(
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     # Prevent import loop from happening by importing tracking here.
-    from dbt.tracking import InvocationProcessor #noqa
+    from dbt.tracking import InvocationProcessor  # noqa
 
     errors = [r for r in results if r.error is not None or r.fail]
     warnings = [r for r in results if r.warn]
