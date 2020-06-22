@@ -2,7 +2,7 @@
 
 ## About this document
 
-This document is a guide intended for folks interested in contributing to dbt. It is not intended as a guide for using dbt, and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. This guide also documents the process by which community-contributed Pull Requests can be incorporated into this repository. This guide assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](community.getdbt.com).
+This document is a guide intended for folks interested in contributing to dbt. Below, we document the process by which members of the community should create issues and submit pull requests (PRs) in this repository. It is not intended as a guide for using dbt, and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on.  This guide assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](community.getdbt.com).
 
 ## Contributing a change
 
@@ -16,7 +16,7 @@ If you have an idea for a new feature or if you've discovered a bug in dbt, the 
 
 ### Discussing the idea
 
-After creating an issue, a dbt maintainer will follow up with you to explore your idea further and advise on how to implement the suggested changes. In many cases, community members will chime in with their own thoughts on the problem statement. If you as the issue creator are interested in submitting a Pull Request to address the issue, you should indicate this in the body of the issue. The dbt maintainers are _always_ happy to help contributors with the implementation of fixes and features, so please also indicate if there's anything you're unsure about or could use guidance around in the issue.
+After you open an issue, a dbt maintainer will follow up by commenting on your issue (usually within 1-3 days) to explore your idea further and advise on how to implement the suggested changes. In many cases, community members will chime in with their own thoughts on the problem statement. If you as the issue creator are interested in submitting a Pull Request to address the issue, you should indicate this in the body of the issue. The dbt maintainers are _always_ happy to help contributors with the implementation of fixes and features, so please also indicate if there's anything you're unsure about or could use guidance around in the issue.
 
 ### Submitting a change
 
