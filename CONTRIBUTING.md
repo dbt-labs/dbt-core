@@ -22,7 +22,7 @@ After creating an issue, a dbt maintainer will follow up with you to explore you
 
 If an issue is appropriately well scoped and describes a beneficial change to the dbt codebase, then anyone may submit a Pull Request to implement the functionality described in the issue. See the sections below on how to do this.
 
-The dbt maintainers will add a `good first issue` label if an issue is suitable for a first-time contributor. Often if a required code change is small and self-contained, only applicable to one database adapter, or a net-new addition that does not impact existing functionality. You can see the list of currently open issues on the [Contribute](https://github.com/fishtown-analytics/dbt/contribute) page.
+The dbt maintainers will add a `good first issue` label if an issue is suitable for a first-time contributor. This label often means that the required code change is small, limited to one database adapter, or a net-new addition that does not impact existing functionality. You can see the list of currently open issues on the [Contribute](https://github.com/fishtown-analytics/dbt/contribute) page.
 
 Here's a good workflow:
 - Comment on the open issue, expressing your interest in contributing the required code change

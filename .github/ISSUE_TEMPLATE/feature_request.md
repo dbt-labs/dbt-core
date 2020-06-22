@@ -20,4 +20,4 @@ Is this feature database-specific? Which database(s) is/are relevant? Please inc
 What kind of use case will this feature be useful for? Please be specific and provide examples, this will help us prioritize properly.
 
 ### Are you interested in contributing this feature?
-Let us know if you want to write some code, and what help you want in getting started.
+Let us know if you want to write some code, and how we can help.
