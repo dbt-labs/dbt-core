@@ -307,8 +307,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             return
 
         msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
-            len(unused),
-            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
+            len(unused), "\n".join("- {}".format(".".join(u)) for u in unused)
         )
 
         warn_or_error(msg, log_fmt=warning_tag("{}"))
