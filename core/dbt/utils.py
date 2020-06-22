@@ -332,7 +332,7 @@ def invalid_source_fail_unless_test(
         if disabled:
             logger.debug(printer.warning_tag(msg))    
         else:
-            dbt.exceptions.warn_or_error(msg, log_fmt=warning_tag + '{}')
+            dbt.exceptions.warn_or_error(msg, log_fmt=printer.warning_tag('{}'))
     else:
         dbt.exceptions.source_target_not_found(
             node,
