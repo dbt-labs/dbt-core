@@ -1,3 +1,7 @@
+### Next
+- Added option to specify profile when connecting to Redshift via IAM
+
+
 ## dbt 0.18.0 (Release TBD)
 
 ## dbt 0.18.0b1 (June 08, 2020)
