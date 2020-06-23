@@ -78,7 +78,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
         if first in {'on-run-start', 'on-run-end', 'query-comment'}:
             return False
         # models have two things to avoid
-        if first in {'seeds', 'models', 'snapshots', 'seeds'}:
+        if first in {'seeds', 'models', 'snapshots'}:
             # model-level hooks
             if 'pre-hook' in keypath or 'post-hook' in keypath:
                 return False
@@ -102,11 +102,12 @@ class DbtProjectYamlRenderer(BaseRenderer):
             return False
 
         if first in {'seeds', 'models', 'snapshots', 'seeds'}:
+            keypath_parts = {
+                (k.lstrip('+') if isinstance(k, str) else k)
+                for k in keypath
+            }
             # model-level hooks
-            if 'pre-hook' in keypath or 'post-hook' in keypath:
-                return False
-            # model-level 'vars' declarations
-            if 'vars' in keypath:
+            if 'pre-hook' in keypath_parts or 'post-hook' in keypath_parts:
                 return False
 
         return True

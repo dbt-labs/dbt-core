@@ -226,6 +226,23 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
         self.assertEqual(len(res), 1, 'Expected exactly one item')
 
 
+class TestPrePostModelHooksOnSeedsPlusPrefixed(TestPrePostModelHooksOnSeeds):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'data-paths': ['data'],
+            'models': {},
+            'seeds': {
+                '+post-hook': [
+                    'alter table {{ this }} add column new_col int',
+                    'update {{ this }} set new_col = 1'
+                ],
+                'quote_columns': False,
+            },
+        }
+
+
 class TestPrePostModelHooksOnSnapshots(DBTIntegrationTest):
     @property
     def schema(self):
