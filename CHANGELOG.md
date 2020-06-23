@@ -11,7 +11,7 @@
 - Added support for renaming BigQuery relations ([#2520](https://github.com/fishtown-analytics/dbt/issues/2520), [#2521](https://github.com/fishtown-analytics/dbt/pull/2521))
 - Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/pull/2517))
 - Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
-- Format rows number in BigQuery plugin logs, [#2526](https://github.com/fishtown-analytics/dbt/issues/2526)
+- Include row counts and bytes processed in log output for all BigQuery statement types ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
