@@ -104,8 +104,7 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             logger.debug("Connecting to Redshift using 'IAM'" +
                          f"with profile {iam_profile}")
             boto_session = boto3.Session(
-                profile_name=iam_profile,
-                region_name='eu-west-1'
+                profile_name=iam_profile
             )
             boto_client = boto_session.client('redshift')
 
