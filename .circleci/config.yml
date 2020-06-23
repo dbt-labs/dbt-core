@@ -132,33 +132,24 @@ workflows:
       - integration-redshift-py36:
           requires:
             - integration-postgres-py36
-          filters: &no_forks
-            branches:
-              # Forked pull requests have CIRCLE_BRANCH set to pull/XXX
-              ignore: /pull\/[0-9]+/
       - integration-bigquery-py36:
           requires:
             - integration-postgres-py36
-          filters: *no_forks
       - integration-snowflake-py36:
           requires:
             - integration-postgres-py36
-          filters: *no_forks
       - integration-postgres-py38:
           requires:
             - unit
       - integration-redshift-py38:
           requires:
             - integration-postgres-py38
-          filters: *no_forks
       - integration-bigquery-py38:
           requires:
             - integration-postgres-py38
-          filters: *no_forks
       - integration-snowflake-py38:
           requires:
             - integration-postgres-py38
-          filters: *no_forks
       - build-wheels:
           requires:
             - unit
@@ -170,4 +161,3 @@ workflows:
             - integration-redshift-py38
             - integration-bigquery-py38
             - integration-snowflake-py38
-          filters: *no_forks

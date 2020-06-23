@@ -1,16 +1,20 @@
+## Next
+- Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030))
+
 ## dbt 0.18.0 (Release TBD)
 
 ## dbt 0.18.0b1 (June 08, 2020)
 
 
 ### Features
+- Made project-level warnings more apparent ([#2545](https://github.com/fishtown-analytics/dbt/issues/2545))
 - Added a `full_refresh` config item that overrides the behavior of the `--full-refresh` flag ([#1009](https://github.com/fishtown-analytics/dbt/issues/1009), [#2348](https://github.com/fishtown-analytics/dbt/pull/2348))
 - Added a "docs" field to macros, with a "show" subfield to allow for hiding macros from the documentation site ([#2430](https://github.com/fishtown-analytics/dbt/issues/2430))
 - Added intersection syntax for model selector ([#2167](https://github.com/fishtown-analytics/dbt/issues/2167), [#2417](https://github.com/fishtown-analytics/dbt/pull/2417))
 - Extends model selection syntax with at most n-th parent/children `dbt run --models 3+m1+2` ([#2052](https://github.com/fishtown-analytics/dbt/issues/2052), [#2485](https://github.com/fishtown-analytics/dbt/pull/2485))
 - Added support for renaming BigQuery relations ([#2520](https://github.com/fishtown-analytics/dbt/issues/2520), [#2521](https://github.com/fishtown-analytics/dbt/pull/2521))
-- Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030))
-- Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/issues/2517))
+- Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/pull/2517))
+- Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
 
 
 ### Fixes
@@ -24,7 +28,6 @@ Contributors:
  - [@southpolemonkey](https://github.com/southpolemonkey) ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
  - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/issues/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)))
  - [@DrMcTaco](https://github.com/DrMcTaco) ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030)))
- 
 
 ## dbt 0.17.1 (Release TBD)
 
@@ -32,6 +35,7 @@ Contributors:
 - dbt compile and ls no longer create schemas if they don't already exist ([#2525](https://github.com/fishtown-analytics/dbt/issues/2525), [#2528](https://github.com/fishtown-analytics/dbt/pull/2528))
 - `dbt deps` now respects the `--project-dir` flag, so using `dbt deps --project-dir=/some/path` and then `dbt run --project-dir=/some/path` will properly find dependencies ([#2519](https://github.com/fishtown-analytics/dbt/issues/2519), [#2534](https://github.com/fishtown-analytics/dbt/pull/2534))
 - `packages.yml` revision/version fields can be float-like again (`revision: '1.0'` is valid). ([#2518](https://github.com/fishtown-analytics/dbt/issues/2518), [#2535](https://github.com/fishtown-analytics/dbt/pull/2535))
+- dbt again respects config aliases in config() calls ([#2557](https://github.com/fishtown-analytics/dbt/issues/2557), [#2559](https://github.com/fishtown-analytics/dbt/pull/2559))
 
 
 
