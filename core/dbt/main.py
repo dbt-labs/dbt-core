@@ -180,10 +180,7 @@ def handle_and_check(args):
         if parsed.record_timing_info:
             profiler_enabled = True
 
-        with profiler(
-            enable=profiler_enabled,
-            outfile=parsed.record_timing_info
-        ):
+        with profiler(enable=profiler_enabled, outfile=parsed.record_timing_info):
 
             with adapter_management():
 
