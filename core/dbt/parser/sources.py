@@ -312,7 +312,7 @@ class SourcePatcher:
 
         if unused_tables:
             msg = self.get_unused_msg(unused_tables)
-            warn_or_error(msg, log_fmt=ui.warning_tag('{}'))
+            warn_or_error(msg, log_fmt=ui.warning_tag("{}"))
 
         self.manifest.source_patches = {}
 

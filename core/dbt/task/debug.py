@@ -81,7 +81,7 @@ class DebugTask(BaseTask):
             else:
                 self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, 'dbt_project.yml')
-        self.cli_vars = parse_cli_vars(getattr(self.args, 'vars', '{}'))
+        self.cli_vars = parse_cli_vars(getattr(self.args, "vars", "{}"))
 
         # set by _load_*
         self.profile: Optional[Profile] = None

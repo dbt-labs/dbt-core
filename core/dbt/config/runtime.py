@@ -328,7 +328,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
 
-        warn_or_error(msg, log_fmt=warning_tag('{}'))
+        warn_or_error(msg, log_fmt=warning_tag("{}"))
 
     def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
         if self.dependencies is None:

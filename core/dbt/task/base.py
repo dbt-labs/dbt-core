@@ -11,8 +11,10 @@ from dbt.contracts.results import (
     NodeStatus, RunResult, collect_timing_info, RunStatus, RunningStatus
 )
 from dbt.exceptions import (
-    NotImplementedException, CompilationException, RuntimeException,
-    InternalException
+    NotImplementedException,
+    CompilationException,
+    RuntimeException,
+    InternalException,
 )
 from dbt.logger import log_manager
 import dbt.events.functions as event_logger
@@ -200,11 +202,11 @@ class BaseRunner(metaclass=ABCMeta):
         if result.status == NodeStatus.Error:
             return {'node_status': 'error', 'node_error': str(result.message)}
         elif result.status == NodeStatus.Skipped:
-            return {'node_status': 'skipped'}
+            return {"node_status": "skipped"}
         elif result.status == NodeStatus.Fail:
-            return {'node_status': 'failed'}
+            return {"node_status": "failed"}
         elif result.status == NodeStatus.Warn:
-            return {'node_status': 'warn'}
+            return {"node_status": "warn"}
         else:
             return {'node_status': 'passed'}
 
@@ -294,7 +296,7 @@ class BaseRunner(metaclass=ABCMeta):
                     unique_id=ctx.node.unique_id,
                 )
             )
-            with collect_timing_info('compile') as timing_info:
+            with collect_timing_info("compile") as timing_info:
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
                 # model
@@ -310,7 +312,7 @@ class BaseRunner(metaclass=ABCMeta):
                         unique_id=ctx.node.unique_id,
                     )
                 )
-                with collect_timing_info('execute') as timing_info:
+                with collect_timing_info("execute") as timing_info:
                     result = self.run(ctx.node, manifest)
                     ctx.node = result.node
 
@@ -367,7 +369,7 @@ class BaseRunner(metaclass=ABCMeta):
             # if releasing failed and the result doesn't have an error yet, set
             # an error
             if (
-                exc_str is not None and result is not None and
+                exc_str is not None
                 result.status != NodeStatus.Error and error is None
             ):
                 error = exc_str
@@ -430,15 +432,14 @@ class BaseRunner(metaclass=ABCMeta):
                 print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
                     raise InternalException(
-                        'Skip cause not set but skip was somehow caused by '
-                        'an ephemeral failure'
+                        "Skip cause not set but skip was somehow caused by " "an ephemeral failure"
                     )
                 # set an error so dbt will exit with an error code
                 error_message = (
-                    'Compilation Error in {}, caused by compilation error '
-                    'in referenced ephemeral model {}'
-                    .format(self.node.unique_id,
-                            self.skip_cause.node.unique_id)
+                    "Compilation Error in {}, caused by compilation error "
+                    "in referenced ephemeral model {}".format(
+                        self.node.unique_id, self.skip_cause.node.unique_id
+                    )
                 )
             else:
                 fire_event(

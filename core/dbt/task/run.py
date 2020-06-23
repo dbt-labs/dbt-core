@@ -101,42 +101,40 @@ def get_hook(source, index):
 
 def track_model_run(index, num_nodes, run_model_result):
     if tracking.active_user is None:
-        raise InternalException('cannot track model run with no active user')
+        raise InternalException("cannot track model run with no active user")
     invocation_id = get_invocation_id()
-    tracking.track_model_run({
-        "invocation_id": invocation_id,
-        "index": index,
-        "total": num_nodes,
-        "execution_time": run_model_result.execution_time,
+    tracking.track_model_run(
+        {
+            "invocation_id": invocation_id,
+            "index": index,
+            "total": num_nodes,
         "run_status": str(run_model_result.status).upper(),
         "run_skipped": run_model_result.status == NodeStatus.Skipped,
         "run_error": run_model_result.status == NodeStatus.Error,
-        "model_materialization": run_model_result.node.get_materialization(),
-        "model_id": utils.get_hash(run_model_result.node),
-        "hashed_contents": utils.get_hashed_contents(
-            run_model_result.node
-        ),
+            "run_error": run_model_result.status == NodeStatus.Error,
+            "model_materialization": run_model_result.node.get_materialization(),
+            "model_id": utils.get_hash(run_model_result.node),
+            "hashed_contents": utils.get_hashed_contents(run_model_result.node),
+            "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
         "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
-    })
+    )
 
 
 # make sure that we got an ok result back from a materialization
-def _validate_materialization_relations_dict(
-    inp: Dict[Any, Any], model
-) -> List[BaseRelation]:
+def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List[BaseRelation]:
     try:
-        relations_value = inp['relations']
+        relations_value = inp["relations"]
     except KeyError:
         msg = (
             'Invalid return value from materialization, "relations" '
-            'not found, got keys: {}'.format(list(inp))
+            "not found, got keys: {}".format(list(inp))
         )
         raise CompilationException(msg, node=model) from None
 
     if not isinstance(relations_value, list):
         msg = (
             'Invalid return value from materialization, "relations" '
-            'not a list, got: {}'.format(relations_value)
+            "not a list, got: {}".format(relations_value)
         )
         raise CompilationException(msg, node=model) from None
 
@@ -144,9 +142,8 @@ def _validate_materialization_relations_dict(
     for relation in relations_value:
         if not isinstance(relation, BaseRelation):
             msg = (
-                'Invalid return value from materialization, '
-                '"relations" contains non-Relation: {}'
-                .format(relation)
+                "Invalid return value from materialization, "
+                '"relations" contains non-Relation: {}'.format(relation)
             )
             raise CompilationException(msg, node=model)
 
@@ -157,9 +154,7 @@ def _validate_materialization_relations_dict(
 
 class ModelRunner(CompileRunner):
     def get_node_representation(self):
-        display_quote_policy = {
-            'database': False, 'schema': False, 'identifier': False
-        }
+        display_quote_policy = {"database": False, "schema": False, "identifier": False}
         relation = self.adapter.Relation.create_from(
             self.config, self.node, quote_policy=display_quote_policy
         )
@@ -169,8 +164,9 @@ class ModelRunner(CompileRunner):
         return str(relation)
 
     def describe_node(self):
-        return "{} model {}".format(self.node.get_materialization(),
-                                    self.get_node_representation())
+        return "{} model {}".format(
+            self.node.get_materialization(), self.get_node_representation()
+        )
 
     def print_start_line(self):
         fire_event(
@@ -215,7 +211,7 @@ class ModelRunner(CompileRunner):
         self.print_result_line(result)
 
     def _build_run_model_result(self, model, context):
-        result = context['load_result']('main')
+        result = context["load_result"]("main")
         adapter_response = {}
         if isinstance(result.response, dbtClassMixin):
             adapter_response = result.response.to_dict(omit_none=True)
@@ -230,9 +226,7 @@ class ModelRunner(CompileRunner):
             failures=result.get('failures')
         )
 
-    def _materialization_relations(
-        self, result: Any, model
-    ) -> List[BaseRelation]:
+    def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
         if isinstance(result, str):
             msg = (
                 'The materialization ("{}") did not explicitly return a '
@@ -245,7 +239,7 @@ class ModelRunner(CompileRunner):
             return _validate_materialization_relations_dict(result, model)
 
         msg = (
-            'Invalid return value from materialization, expected a dict '
+            "Invalid return value from materialization, expected a dict "
             'with key "relations", got: {}'.format(str(result))
         )
         raise CompilationException(msg, node=model)
@@ -256,19 +250,17 @@ class ModelRunner(CompileRunner):
         )
 
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name,
-            model.get_materialization(),
-            self.adapter.type())
+            self.config.project_name, model.get_materialization(), self.adapter.type()
+        )
 
         if materialization_macro is None:
             missing_materialization(model, self.adapter.type())
 
-        if 'config' not in context:
+        if "config" not in context:
             raise InternalException(
-                'Invalid materialization context generated, missing config: {}'
-                .format(context)
+                "Invalid materialization context generated, missing config: {}".format(context)
             )
-        context_config = context['config']
+        context_config = context["config"]
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
         try:

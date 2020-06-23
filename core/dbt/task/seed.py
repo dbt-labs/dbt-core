@@ -34,7 +34,7 @@ class SeedRunner(ModelRunner):
 
     def _build_run_model_result(self, model, context):
         result = super()._build_run_model_result(model, context)
-        agate_result = context['load_result']('agate_table')
+        agate_result = context["load_result"]("agate_table")
         result.agate_table = agate_result.table
         return result
 

@@ -30,12 +30,10 @@ RESULT_FILE_NAME = "sources.json"
 
 class FreshnessRunner(BaseRunner):
     def on_skip(self):
-        raise RuntimeException(
-            'Freshness: nodes cannot be skipped!'
-        )
+        raise RuntimeException("Freshness: nodes cannot be skipped!")
 
     def before_execute(self):
-        description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
+        description = "freshness of {0.source_name}.{0.name}".format(self.node)
         fire_event(
             PrintStartLine(
                 description=description,
@@ -128,7 +126,7 @@ class FreshnessRunner(BaseRunner):
         )
 
     def from_run_result(self, result, start_time, timing_info):
-        result.execution_time = (time.time() - start_time)
+        result.execution_time = time.time() - start_time
         result.timing.extend(timing_info)
         return result
 
@@ -138,8 +136,7 @@ class FreshnessRunner(BaseRunner):
         # broken, raise!
         if compiled_node.loaded_at_field is None:
             raise InternalException(
-                'Got to execute for source freshness of a source that has no '
-                'loaded_at_field!'
+                "Got to execute for source freshness of a source that has no " "loaded_at_field!"
             )
 
         relation = self.adapter.Relation.create_from_source(compiled_node)
@@ -150,10 +147,10 @@ class FreshnessRunner(BaseRunner):
                 relation,
                 compiled_node.loaded_at_field,
                 compiled_node.freshness.filter,
-                manifest=manifest
+                manifest=manifest,
             )
 
-        status = compiled_node.freshness.status(freshness['age'])
+        status = compiled_node.freshness.status(freshness["age"])
 
         return SourceFreshnessResult(
             node=compiled_node,
@@ -170,7 +167,7 @@ class FreshnessRunner(BaseRunner):
     def compile(self, manifest):
         if self.node.resource_type != NodeType.Source:
             # should be unreachable...
-            raise RuntimeException('fresnhess runner: got a non-Source')
+            raise RuntimeException("fresnhess runner: got a non-Source")
         # we don't do anything interesting when we compile a source node
         return self.node
 
