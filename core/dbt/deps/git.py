@@ -13,7 +13,7 @@ from dbt.exceptions import (
     ExecutableError, warn_or_error, raise_dependency_error
 )
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.ui import printer
+from dbt import ui
 
 PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
 
@@ -77,7 +77,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
                 'The git package "{}" is not pinned.\n\tThis can introduce '
                 'breaking changes into your project without warning!\n\nSee {}'
                 .format(self.git, PIN_PACKAGE_URL),
-                log_fmt=printer.yellow('WARNING: {}')
+                log_fmt=ui.yellow('WARNING: {}')
             )
         loaded = Project.from_project_root(path, renderer)
         return ProjectPackageMetadata.from_project(loaded)

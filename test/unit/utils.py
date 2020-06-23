@@ -40,7 +40,7 @@ def profile_from_dict(profile, profile_name, cli_vars='{}'):
     from dbt.config import Profile
     from dbt.config.renderer import ProfileRenderer
     from dbt.context.base import generate_base_context
-    from dbt.utils import parse_cli_vars
+    from dbt.config.utils import parse_cli_vars
     if not isinstance(cli_vars, dict):
         cli_vars = parse_cli_vars(cli_vars)
 
@@ -56,7 +56,7 @@ def project_from_dict(project, profile, packages=None, cli_vars='{}'):
     from dbt.context.target import generate_target_context
     from dbt.config import Project
     from dbt.config.renderer import DbtProjectYamlRenderer
-    from dbt.utils import parse_cli_vars
+    from dbt.config.utils import parse_cli_vars
     if not isinstance(cli_vars, dict):
         cli_vars = parse_cli_vars(cli_vars)
 

@@ -14,10 +14,10 @@ from hologram import _validate_schema
 from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import StrEnum, register_pattern
 
-from dbt import hooks
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
 from dbt.exceptions import CompilationException, InternalException
 from dbt.contracts.util import Replaceable, list_str
+from dbt import hooks
 from dbt.node_types import NodeType
 
 

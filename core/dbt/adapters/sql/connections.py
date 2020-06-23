@@ -6,9 +6,10 @@ import agate
 
 import dbt.clients.agate_helper
 import dbt.exceptions
-from dbt.contracts.connection import Connection
 from dbt.adapters.base import BaseConnectionManager
+from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt import flags
 
 
 class SQLConnectionManager(BaseConnectionManager):
@@ -133,7 +134,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def begin(self):
         connection = self.get_thread_connection()
 
-        if dbt.flags.STRICT_MODE:
+        if flags.STRICT_MODE:
             if not isinstance(connection, Connection):
                 raise dbt.exceptions.CompilerException(
                     f'In begin, got {connection} - not a Connection!'
@@ -151,7 +152,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def commit(self):
         connection = self.get_thread_connection()
-        if dbt.flags.STRICT_MODE:
+        if flags.STRICT_MODE:
             if not isinstance(connection, Connection):
                 raise dbt.exceptions.CompilerException(
                     f'In commit, got {connection} - not a Connection!'

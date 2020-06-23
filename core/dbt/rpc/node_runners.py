@@ -7,7 +7,7 @@ from dbt.contracts.rpc import (
     RemoteCompileResult, RemoteRunResult, ResultTable,
 )
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.node_runners import CompileRunner
+from dbt.task.compile import CompileRunner
 from dbt.rpc.error import dbt_error, RPCException, server_error
 
 

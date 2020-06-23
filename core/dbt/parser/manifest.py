@@ -6,7 +6,7 @@ from typing import (
 )
 
 import dbt.exceptions
-import dbt.flags
+import dbt.flags as flags
 
 from dbt import deprecations
 from dbt.adapters.factory import (
@@ -25,6 +25,14 @@ from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo,
 )
+from dbt.exceptions import (
+    ref_target_not_found,
+    get_target_not_found_or_disabled_msg,
+    source_target_not_found,
+    get_source_not_found_or_disabled_msg,
+    warn_or_error,
+)
+from dbt.include.global_project import PACKAGES
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.data_test import DataTestParser
@@ -38,6 +46,7 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import patch_sources
+from dbt.ui import warning_tag
 from dbt.version import __version__
 
 
@@ -270,8 +279,8 @@ class ManifestLoader:
 
     def _partial_parse_enabled(self):
         # if the CLI is set, follow that
-        if dbt.flags.PARTIAL_PARSE is not None:
-            return dbt.flags.PARTIAL_PARSE
+        if flags.PARTIAL_PARSE is not None:
+            return flags.PARTIAL_PARSE
         # if the config is set, follow that
         elif self.root_project.config.partial_parse is not None:
             return self.root_project.config.partial_parse
@@ -369,6 +378,52 @@ class ManifestLoader:
             projects = load_internal_projects(root_config)
             loader = cls(root_config, projects)
             return loader.load_only_macros()
+
+
+def invalid_ref_fail_unless_test(node, target_model_name,
+                                 target_model_package, disabled):
+
+    if node.resource_type == NodeType.Test:
+        msg = get_target_not_found_or_disabled_msg(
+            node, target_model_name, target_model_package, disabled
+        )
+        if disabled:
+            logger.debug(warning_tag(msg))
+        else:
+            warn_or_error(
+                msg,
+                log_fmt=warning_tag('{}')
+            )
+    else:
+        ref_target_not_found(
+            node,
+            target_model_name,
+            target_model_package,
+            disabled=disabled,
+        )
+
+
+def invalid_source_fail_unless_test(
+    node, target_name, target_table_name, disabled
+):
+    if node.resource_type == NodeType.Test:
+        msg = get_source_not_found_or_disabled_msg(
+            node, target_name, target_table_name, disabled
+        )
+        if disabled:
+            logger.debug(warning_tag(msg))
+        else:
+            warn_or_error(
+                msg,
+                log_fmt=warning_tag('{}')
+            )
+    else:
+        source_target_not_found(
+            node,
+            target_name,
+            target_table_name,
+            disabled=disabled
+        )
 
 
 def _check_resource_uniqueness(
@@ -542,7 +597,7 @@ def _process_refs_for_node(
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node
             node.config.enabled = False
-            dbt.utils.invalid_ref_fail_unless_test(
+            invalid_ref_fail_unless_test(
                 node, target_model_name, target_model_package,
                 disabled=(isinstance(target_model, Disabled))
             )
@@ -579,7 +634,7 @@ def _process_sources_for_node(
         if target_source is None or isinstance(target_source, Disabled):
             # this folows the same pattern as refs
             node.config.enabled = False
-            dbt.utils.invalid_source_fail_unless_test(
+            invalid_source_fail_unless_test(
                 node,
                 source_name,
                 table_name,

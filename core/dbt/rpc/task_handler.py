@@ -38,7 +38,6 @@ from dbt.rpc.logger import (
     QueueTimeoutMessage,
 )
 from dbt.rpc.method import RemoteMethod
-from dbt.flags import SINGLE_THREADED_HANDLER
 
 
 # we use this in typing only...
@@ -311,7 +310,10 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
 
     @property
     def _single_threaded(self):
-        return bool(self.task.args.single_threaded or SINGLE_THREADED_HANDLER)
+        return bool(
+            self.task.args.single_threaded or
+            dbt.flags.SINGLE_THREADED_HANDLER
+        )
 
     @property
     def timeout(self) -> Optional[float]:

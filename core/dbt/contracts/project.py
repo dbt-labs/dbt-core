@@ -3,7 +3,7 @@ from dbt.contracts.connection import UserConfigContract, QueryComment
 from dbt.helper_types import NoValue
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import tracking
-from dbt.ui import printer
+from dbt import ui
 
 from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import HyphenatedJsonSchemaMixin, register_pattern, \
@@ -268,10 +268,10 @@ class UserConfig(ExtensibleJsonSchemaMixin, Replaceable, UserConfigContract):
             tracking.do_not_track()
 
         if self.use_colors:
-            printer.use_colors()
+            ui.use_colors()
 
         if self.printer_width:
-            printer.printer_width(self.printer_width)
+            ui.printer_width(self.printer_width)
 
 
 @dataclass

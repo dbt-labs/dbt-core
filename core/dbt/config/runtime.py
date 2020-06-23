@@ -11,6 +11,7 @@ from typing import (
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
+from .utils import parse_cli_vars
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
@@ -19,8 +20,7 @@ from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.ui import printer
-from dbt.utils import parse_cli_vars
+from dbt.ui import warning_tag
 
 from dbt.contracts.project import Configuration, UserConfig
 from dbt.exceptions import (
@@ -317,7 +317,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
 
-        warn_or_error(msg, log_fmt=printer.warning_tag('{}'))
+        warn_or_error(msg, log_fmt=warning_tag('{}'))
 
     def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
         if self.dependencies is None:

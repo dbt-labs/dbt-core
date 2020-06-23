@@ -6,18 +6,17 @@ from typing import Optional, Dict, Any, List
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.clients.system
-import dbt.config
-import dbt.utils
 import dbt.exceptions
-from dbt.links import ProfileConfigDocs
 from dbt.adapters.factory import get_adapter, register_adapter
-from dbt.version import get_installed_version
-from dbt.config import Project, Profile
+from dbt.config import Project, Profile, PROFILES_DIR
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
+from dbt.config.utils import parse_cli_vars
 from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.ui.printer import green, red
+from dbt.links import ProfileConfigDocs
+from dbt.ui import green, red
+from dbt.version import get_installed_version
 
 from dbt.task.base import BaseTask, get_nearest_project_dir
 
@@ -70,8 +69,7 @@ class QueryCommentedProfile(Profile):
 class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
-        self.profiles_dir = getattr(self.args, 'profiles_dir',
-                                    dbt.config.PROFILES_DIR)
+        self.profiles_dir = getattr(self.args, 'profiles_dir', PROFILES_DIR)
         self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')
         try:
             self.project_dir = get_nearest_project_dir(self.args)
@@ -83,9 +81,7 @@ class DebugTask(BaseTask):
             else:
                 self.project_dir = os.getcwd()
         self.project_path = os.path.join(self.project_dir, 'dbt_project.yml')
-        self.cli_vars = dbt.utils.parse_cli_vars(
-            getattr(self.args, 'vars', '{}')
-        )
+        self.cli_vars = parse_cli_vars(getattr(self.args, 'vars', '{}'))
 
         # set by _load_*
         self.profile: Optional[Profile] = None

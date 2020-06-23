@@ -5,6 +5,12 @@ from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable
 
+from .printer import (
+    print_run_result_error,
+    print_run_end_messages,
+    print_cancel_line,
+)
+from dbt import ui
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
@@ -17,6 +23,7 @@ from dbt.logger import (
     DbtModelState,
     ModelMetadata,
     NodeCount,
+    print_timestamped_line,
 )
 from dbt.compilation import compile_manifest
 
@@ -34,8 +41,7 @@ from dbt.linker import Linker, GraphQueue
 from dbt.perf_utils import get_full_manifest
 
 import dbt.exceptions
-import dbt.flags
-import dbt.ui.printer
+from dbt import flags
 import dbt.utils
 
 import dbt.graph.selector
@@ -46,7 +52,7 @@ RUNNING_STATE = DbtProcessState('running')
 
 
 def write_manifest(config, manifest):
-    if dbt.flags.WRITE_JSON:
+    if flags.WRITE_JSON:
         manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
 
 
@@ -293,8 +299,8 @@ class GraphRunnableTask(ManifestTask):
                    "cancellation. Some queries may still be "
                    "running!".format(adapter.type()))
 
-            yellow = dbt.ui.printer.COLOR_FG_YELLOW
-            dbt.ui.printer.print_timestamped_line(msg, yellow)
+            yellow = ui.COLOR_FG_YELLOW
+            print_timestamped_line(msg, yellow)
             raise
 
         for conn_name in adapter.cancel_open_connections():
@@ -303,7 +309,7 @@ class GraphRunnableTask(ManifestTask):
                 if node is not None and node.is_ephemeral_model:
                     continue
             # if we don't have a manifest/don't have a node, print anyway.
-            dbt.ui.printer.print_cancel_line(conn_name)
+            print_cancel_line(conn_name)
 
         pool.join()
 
@@ -314,9 +320,9 @@ class GraphRunnableTask(ManifestTask):
         text = "Concurrency: {} threads (target='{}')"
         concurrency_line = text.format(num_threads, target_name)
         with NodeCount(self.num_nodes):
-            dbt.ui.printer.print_timestamped_line(concurrency_line)
+            print_timestamped_line(concurrency_line)
         with TextOnly():
-            dbt.ui.printer.print_timestamped_line("")
+            print_timestamped_line("")
 
         pool = ThreadPool(num_threads)
         try:
@@ -324,13 +330,12 @@ class GraphRunnableTask(ManifestTask):
 
         except FailFastException as failure:
             self._cancel_connections(pool)
-            dbt.ui.printer.print_run_result_error(failure.result)
+            print_run_result_error(failure.result)
             raise
 
         except KeyboardInterrupt:
             self._cancel_connections(pool)
-            dbt.ui.printer.print_run_end_messages(self.node_results,
-                                                  keyboard_interrupt=True)
+            print_run_end_messages(self.node_results, keyboard_interrupt=True)
             raise
 
         pool.close()
@@ -407,7 +412,7 @@ class GraphRunnableTask(ManifestTask):
         selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         result = self.execute_with_hooks(selected_uids)
 
-        if dbt.flags.WRITE_JSON:
+        if flags.WRITE_JSON:
             result.write(self.result_path())
 
         self.task_end_messages(result.results)
@@ -515,4 +520,4 @@ class GraphRunnableTask(ManifestTask):
         )
 
     def task_end_messages(self, results):
-        dbt.ui.printer.print_run_end_messages(results)
+        print_run_end_messages(results)

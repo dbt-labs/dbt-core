@@ -7,8 +7,8 @@ import dbt.exceptions
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
-import dbt.links
 
+from dbt import ui
 from dbt.adapters.base import (
     BaseAdapter, available, RelationType, SchemaSearchMap, AdapterConfig
 )
@@ -17,7 +17,7 @@ from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
 from dbt.contracts.graph.manifest import Manifest
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, print_timestamped_line
 from dbt.utils import filter_null_values
 
 import google.auth
@@ -454,8 +454,9 @@ class BigQueryAdapter(BaseAdapter):
     @classmethod
     def warning_on_hooks(hook_type):
         msg = "{} is not supported in bigquery and will be ignored"
-        dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
-                                              dbt.ui.printer.COLOR_FG_YELLOW)
+        print_timestamped_line(
+            msg.format(hook_type), ui.COLOR_FG_YELLOW
+        )
 
     @available
     def add_query(self, sql, auto_begin=True, bindings=None,

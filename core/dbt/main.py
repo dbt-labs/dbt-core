@@ -22,14 +22,12 @@ import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
+from dbt.profiler import profiler
 from dbt.task.list import ListTask
 from dbt.task.rpc.server import RPCServerTask
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
 import dbt.tracking
-import dbt.ui.printer
-import dbt.deprecations
-import dbt.profiler
 
 from dbt.utils import ExitCodes
 from dbt.config import PROFILES_DIR, read_user_config
@@ -147,7 +145,7 @@ def handle_and_check(args):
         if parsed.record_timing_info:
             profiler_enabled = True
 
-        with dbt.profiler.profiler(
+        with profiler(
             enable=profiler_enabled,
             outfile=parsed.record_timing_info
         ):

@@ -17,7 +17,7 @@ from dbt.exceptions import (
     get_relation_returned_multiple_results,
     InternalException, NotImplementedException, RuntimeException,
 )
-import dbt.flags
+from dbt import flags
 
 from dbt import deprecations
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
@@ -267,7 +267,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def _schema_is_cached(self, database: Optional[str], schema: str) -> bool:
         """Check if the schema is cached, and by default logs if it is not."""
 
-        if dbt.flags.USE_CACHE is False:
+        if flags.USE_CACHE is False:
             return False
         elif (database, schema) not in self.cache:
             logger.debug(
@@ -323,7 +323,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
-        if not dbt.flags.USE_CACHE:
+        if not flags.USE_CACHE:
             return
 
         cache_schemas = self._get_cache_schemas(manifest)
@@ -352,7 +352,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
-        if not dbt.flags.USE_CACHE:
+        if not flags.USE_CACHE:
             return
 
         with self.cache.lock:
@@ -368,7 +368,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to cache a null relation for {}'.format(name)
             )
-        if dbt.flags.USE_CACHE:
+        if flags.USE_CACHE:
             self.cache.add(relation)
         # so jinja doesn't render things
         return ''
@@ -383,7 +383,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to drop a null relation for {}'.format(name)
             )
-        if dbt.flags.USE_CACHE:
+        if flags.USE_CACHE:
             self.cache.drop(relation)
         return ''
 
@@ -405,7 +405,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 .format(src_name, dst_name, name)
             )
 
-        if dbt.flags.USE_CACHE:
+        if flags.USE_CACHE:
             self.cache.rename(from_relation, to_relation)
         return ''
 

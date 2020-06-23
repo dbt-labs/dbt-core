@@ -31,7 +31,7 @@ from dbt.exceptions import (
     raise_compiler_error, raise_duplicate_source_patch_name
 )
 from dbt.node_types import NodeType
-from dbt.ui import printer
+from dbt.ui import line_wrap_message
 from dbt.version import __version__
 
 
@@ -120,7 +120,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             # subtract 2 for the "Compilation Error" indent
             # note that the line wrap eats newlines, so if you want newlines,
             # this is the result :(
-            msg = printer.line_wrap_message(
+            msg = line_wrap_message(
                 f'''\
                 dbt found two macros named "{macro.name}" in the project
                 "{macro.package_name}".

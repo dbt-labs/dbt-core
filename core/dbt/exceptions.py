@@ -4,7 +4,8 @@ from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-import dbt.flags
+from dbt import flags
+from dbt.ui import line_wrap_message
 
 import hologram
 
@@ -867,7 +868,6 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 def raise_invalid_patch(
     node, patch_section: str, patch_path: str,
 ) -> NoReturn:
-    from dbt.ui.printer import line_wrap_message
     msg = line_wrap_message(
         f'''\
         '{node.name}' is a {node.resource_type} node, but it is
@@ -904,7 +904,7 @@ def raise_duplicate_alias(
 
 
 def warn_or_error(msg, node=None, log_fmt=None):
-    if dbt.flags.WARN_ERROR:
+    if flags.WARN_ERROR:
         raise_compiler_error(msg, node)
     else:
         if log_fmt is not None:
@@ -913,7 +913,7 @@ def warn_or_error(msg, node=None, log_fmt=None):
 
 
 def warn_or_raise(exc, log_fmt=None):
-    if dbt.flags.WARN_ERROR:
+    if flags.WARN_ERROR:
         raise exc
     else:
         msg = str(exc)

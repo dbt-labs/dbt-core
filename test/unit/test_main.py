@@ -16,7 +16,7 @@ class FakeArgs:
         self.profile = 'test'
 
 
-@mock.patch('dbt.ui.printer.use_colors')
+@mock.patch('dbt.ui.use_colors')
 @mock.patch('dbt.tracking.do_not_track')
 @mock.patch('dbt.tracking.initialize_tracking')
 class TestInitializeConfig(unittest.TestCase):

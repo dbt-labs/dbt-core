@@ -10,7 +10,6 @@ from typing import (
 import agate
 
 import dbt.exceptions
-import dbt.flags
 from dbt.contracts.connection import (
     Connection, Identifier, ConnectionState, AdapterRequiredConfig, LazyHandle
 )
@@ -19,6 +18,7 @@ from dbt.adapters.base.query_headers import (
     MacroQueryStringSetter,
 )
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt import flags
 
 
 class BaseConnectionManager(metaclass=abc.ABCMeta):
@@ -39,7 +39,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def __init__(self, profile: AdapterRequiredConfig):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
-        self.lock: RLock = dbt.flags.MP_CONTEXT.RLock()
+        self.lock: RLock = flags.MP_CONTEXT.RLock()
         self.query_header: Optional[MacroQueryStringSetter] = None
 
     def set_query_header(self, manifest: Manifest) -> None:
@@ -235,7 +235,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @classmethod
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
-        if dbt.flags.STRICT_MODE:
+        if flags.STRICT_MODE:
             if not isinstance(connection, Connection):
                 raise dbt.exceptions.CompilerException(
                     f'In _rollback, got {connection} - not a Connection!'
@@ -253,7 +253,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     @classmethod
     def close(cls, connection: Connection) -> Connection:
-        if dbt.flags.STRICT_MODE:
+        if flags.STRICT_MODE:
             if not isinstance(connection, Connection):
                 raise dbt.exceptions.CompilerException(
                     f'In close, got {connection} - not a Connection!'

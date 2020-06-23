@@ -1,10 +1,10 @@
-import dbt.flags
-import dbt.ui.colors
+import dbt.ui
 
 import json
 import logging
 import os
 import sys
+import time
 import warnings
 from dataclasses import dataclass
 from datetime import datetime
@@ -440,7 +440,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
     def format(self, record: logbook.LogRecord) -> str:
         msg = super().format(record)
         subbed = str(msg)
-        for escape_sequence in dbt.ui.colors.COLORS.values():
+        for escape_sequence in dbt.ui.COLORS.values():
             subbed = subbed.replace(escape_sequence, '')
         return subbed
 
@@ -615,3 +615,14 @@ def list_handler(
     """Return a context manager that temporarly attaches a list to the logger.
     """
     return ListLogHandler(lst=lst, level=level, bubble=True)
+
+
+def get_timestamp():
+    return time.strftime("%H:%M:%S")
+
+
+def print_timestamped_line(msg: str, use_color: Optional[str] = None):
+    if use_color is not None:
+        msg = dbt.ui.color(msg, use_color)
+
+    GLOBAL_LOGGER.info("{} | {}".format(get_timestamp(), msg))

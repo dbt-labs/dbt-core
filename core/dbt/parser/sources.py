@@ -22,7 +22,7 @@ from dbt.exceptions import warn_or_error
 
 from dbt.parser.schemas import SchemaParser, ParserRef
 from dbt.parser.results import ParseResult
-from dbt.ui import printer
+from dbt import ui
 
 
 class SourcePatcher:
@@ -157,7 +157,7 @@ class SourcePatcher:
 
         if unused_tables:
             msg = self.get_unused_msg(unused_tables)
-            warn_or_error(msg, log_fmt=printer.yellow('WARNING: {}'))
+            warn_or_error(msg, log_fmt=ui.warning_tag('{}'))
 
     def get_unused_msg(
         self,

@@ -1,10 +1,37 @@
 import random
 
+from .run import ModelRunner, RunTask
+from .printer import (
+    print_start_line,
+    print_seed_result_line,
+    print_run_end_messages,
+)
+
 from dbt.logger import GLOBAL_LOGGER as logger, TextOnly
-from dbt.node_runners import SeedRunner
 from dbt.node_types import NodeType
-from dbt.task.run import RunTask
-import dbt.ui.printer
+
+
+class SeedRunner(ModelRunner):
+    def describe_node(self):
+        return "seed file {}".format(self.get_node_representation())
+
+    def before_execute(self):
+        description = self.describe_node()
+        print_start_line(description, self.node_index, self.num_nodes)
+
+    def _build_run_model_result(self, model, context):
+        result = super()._build_run_model_result(model, context)
+        agate_result = context['load_result']('agate_table')
+        result.agate_table = agate_result.table
+        return result
+
+    def compile(self, manifest):
+        return self.node
+
+    def print_result_line(self, result):
+        schema_name = self.node.schema
+        print_seed_result_line(result, schema_name, self.node_index,
+                               self.num_nodes)
 
 
 class SeedTask(RunTask):
@@ -25,7 +52,7 @@ class SeedTask(RunTask):
         if self.args.show:
             self.show_tables(results)
 
-        dbt.ui.printer.print_run_end_messages(results)
+        print_run_end_messages(results)
 
     def show_table(self, result):
         table = result.agate_table

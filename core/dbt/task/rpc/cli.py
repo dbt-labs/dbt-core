@@ -4,6 +4,7 @@ import yaml
 from typing import Type, Optional
 
 
+from dbt.config.utils import parse_cli_vars
 from dbt.contracts.rpc import RPCCliParameters
 
 from dbt.rpc.method import (
@@ -14,7 +15,6 @@ from dbt.rpc.method import (
 )
 from dbt.exceptions import InternalException
 from dbt.perf_utils import get_full_manifest
-from dbt.utils import parse_cli_vars
 
 from .base import RPCTask
 
