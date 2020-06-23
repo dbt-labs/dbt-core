@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import (
-    Type, Hashable, Optional, ContextManager, List, Generic, TypeVar, ClassVar,
+    Type,
     Tuple, Union, Dict, Any
 )
 from typing_extensions import Protocol
@@ -64,10 +64,10 @@ class CompilerProtocol(Protocol):
         ...
 
 
-AdapterConfig_T = TypeVar(
-    'AdapterConfig_T', bound=AdapterConfig
-)
-ConnectionManager_T = TypeVar(
+AdapterConfig_T = TypeVar("AdapterConfig_T", bound=AdapterConfig)
+ConnectionManager_T = TypeVar("ConnectionManager_T", bound=ConnectionManagerProtocol)
+Relation_T = TypeVar("Relation_T", bound=RelationProtocol)
+Column_T = TypeVar("Column_T", bound=ColumnProtocol)
     'ConnectionManager_T', bound=ConnectionManagerProtocol
 )
 Relation_T = TypeVar(
