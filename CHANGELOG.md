@@ -1,5 +1,10 @@
 ## dbt 0.17.1 (Release TBD)
 
+
+### Fixes
+- dbt config-version: 2 now properly defers rendering `+pre-hook` and `+post-hook` fields. ([#2583](https://github.com/fishtown-analytics/dbt/issues/2583), [#2854](https://github.com/fishtown-analytics/dbt/pull/2854))
+
+
 ## dbt 0.17.1rc1 (June 19, 2020)
 
 
@@ -16,7 +21,7 @@
 
 Contributors:
  - [@bodschut](https://github.com/bodschut) ([#2550](https://github.com/fishtown-analytics/dbt/pull/2550))
- 
+
 ## dbt 0.17.0 (June 08, 2020)
 
 ### Fixes

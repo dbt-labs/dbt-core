@@ -102,11 +102,12 @@ class DbtProjectYamlRenderer(BaseRenderer):
             return False
 
         if first in {'seeds', 'models', 'snapshots', 'seeds'}:
+            keypath_parts = {
+                (k.lstrip('+') if isinstance(k, str) else k)
+                for k in keypath
+            }
             # model-level hooks
-            if 'pre-hook' in keypath or 'post-hook' in keypath:
-                return False
-            # model-level 'vars' declarations
-            if 'vars' in keypath:
+            if 'pre-hook' in keypath_parts or 'post-hook' in keypath_parts:
                 return False
 
         return True
