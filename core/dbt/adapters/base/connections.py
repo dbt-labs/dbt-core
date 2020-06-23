@@ -60,7 +60,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 )
             return self.thread_connections[key]
 
-    def set_thread_connection(self, conn):
+    def set_thread_connection(self, conn: Connection) -> None:
         key = self.get_thread_identifier()
         if key in self.thread_connections:
             raise dbt.exceptions.InternalException(

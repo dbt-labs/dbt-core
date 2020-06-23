@@ -1,7 +1,8 @@
 from typing import List, Optional, Type
 
-from dbt.adapters.base import BaseAdapter, Credentials
+from dbt.adapters.base import Credentials
 from dbt.exceptions import CompilationException
+from dbt.adapters.protocol import AdapterProtocol
 
 
 class AdapterPlugin:
@@ -13,7 +14,7 @@ class AdapterPlugin:
     """
     def __init__(
         self,
-        adapter: Type[BaseAdapter],
+        adapter: Type[AdapterProtocol],
         credentials: Type[Credentials],
         include_path: str,
         dependencies: Optional[List[str]] = None
@@ -21,7 +22,7 @@ class AdapterPlugin:
         # avoid an import cycle
         from dbt.config.project import Project
 
-        self.adapter: Type[BaseAdapter] = adapter
+        self.adapter: Type[AdapterProtocol] = adapter
         self.credentials: Type[Credentials] = credentials
         self.include_path: str = include_path
         partial = Project.partial_load(include_path)

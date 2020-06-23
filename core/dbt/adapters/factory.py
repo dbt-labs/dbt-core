@@ -11,7 +11,8 @@ from dbt.include.global_project import (
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.connection import Credentials, AdapterRequiredConfig
 
-from dbt.adapters.base.impl import BaseAdapter, AdapterConfig
+
+from dbt.adapters.protocol import AdapterProtocol, AdapterConfig
 from dbt.adapters.base.plugin import AdapterPlugin
 
 
@@ -21,7 +22,7 @@ from dbt.adapters.base.plugin import AdapterPlugin
 BaseRelation = Any
 
 
-Adapter = BaseAdapter
+Adapter = AdapterProtocol
 
 
 class AdpaterContainer:
@@ -183,7 +184,7 @@ def cleanup_connections():
     FACTORY.cleanup_connections()
 
 
-def get_adapter_class_by_name(name: str) -> Type[BaseAdapter]:
+def get_adapter_class_by_name(name: str) -> Type[AdapterProtocol]:
     return FACTORY.get_adapter_class_by_name(name)
 
 

@@ -1,7 +1,6 @@
 import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import datetime
 from itertools import chain
 from typing import (
@@ -20,12 +19,15 @@ from dbt.exceptions import (
 from dbt import flags
 
 from dbt import deprecations
+from dbt.adapters.protocol import (
+    AdapterConfig,
+    ConnectionManagerProtocol,
+)
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
-from dbt.contracts.graph.model_config import BaseConfig
 from dbt.exceptions import warn_or_error
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -108,11 +110,6 @@ def _relation_name(rel: Optional[BaseRelation]) -> str:
         return str(rel)
 
 
-@dataclass
-class AdapterConfig(BaseConfig):
-    pass
-
-
 class BaseAdapter(metaclass=AdapterMeta):
     """The BaseAdapter provides an abstract base class for adapters.
 
@@ -151,7 +148,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     """
     Relation: Type[BaseRelation] = BaseRelation
     Column: Type[BaseColumn] = BaseColumn
-    ConnectionManager: Type[BaseConnectionManager]
+    ConnectionManager: Type[ConnectionManagerProtocol]
 
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
