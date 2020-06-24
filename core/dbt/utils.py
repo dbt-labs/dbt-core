@@ -517,12 +517,23 @@ class classproperty(object):
 
 
 def format_bytes(num_bytes):
-    for unit in ['Bytes', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB']:
         if abs(num_bytes) < 1024.0:
             return f"{num_bytes:3.1f} {unit}"
         num_bytes /= 1024.0
 
-    return "> 1024 TB"
+    num_bytes *= 1024.0
+    return f"{num_bytes:3.1f} {unit}"
+
+
+def format_rows_number(rows_number):
+    for unit in ['', 'k', 'm', 'b', 't']:
+        if abs(rows_number) < 1000.0:
+            return f"{rows_number:3.1f}{unit}".strip()
+        rows_number /= 1000.0
+
+    rows_number *= 1000.0
+    return f"{rows_number:3.1f}{unit}".strip()
 
 
 # a little concurrent.futures.Executor for single-threaded mode
