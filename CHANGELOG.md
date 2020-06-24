@@ -1,7 +1,14 @@
-## Next
-- Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030))
-
 ## dbt 0.18.0 (Release TBD)
+
+
+### Features
+- Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030), [#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
+
+
+### Fixes
+
+Contributors:
+- [@DrMcTaco](https://github.com/DrMcTaco) ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030)),[#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
 
 ## dbt 0.18.0b1 (June 08, 2020)
 
@@ -27,7 +34,6 @@ Contributors:
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
  - [@southpolemonkey](https://github.com/southpolemonkey) ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
  - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/issues/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)))
- - [@DrMcTaco](https://github.com/DrMcTaco) ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030)))
 
 ## dbt 0.17.1 (Release TBD)
 
