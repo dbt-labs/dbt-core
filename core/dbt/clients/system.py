@@ -158,10 +158,10 @@ def write_file(path: str, contents: str = "") -> bool:
             # definitely too long, but other times we don't and it means the
             # path was just probably too long. This is probably based on the
             # windows/python version.
-            if getattr(exc, 'winerror', 0) == 3:
-                reason = 'Path was too long'
+            if getattr(exc, "winerror", 0) == 3:
+                reason = "Path was too long"
             else:
-                reason = 'Path was possibly too long'
+                reason = "Path was possibly too long"
             # all our hard work and the path was still too long. Log and
             # continue.
             fire_event(SystemCouldNotWrite(path=path, reason=reason, exc=exc))
