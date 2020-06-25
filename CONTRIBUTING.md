@@ -1,7 +1,7 @@
 # Contributing to dbt
 
 1. [About this document](#about-this-document)
-2. [Proposing a change](#contributing-a-change)
+2. [Proposing a change](#proposing-a-change)
 3. [Getting the code](#getting-the-code)
 4. [Setting up an environment](#setting-up-an-environment)
 5. [Running dbt in development](#running-dbt-in-development)
