@@ -612,6 +612,10 @@ class BigQueryAdapter(BaseAdapter):
         if dotted_column_name in dbt_columns:
             column_config = dbt_columns[dotted_column_name]
             bq_column_dict['description'] = column_config.get('description')
+            if column_config.get('tags'):
+                bq_column_dict['policyTags'] = {}
+                bq_column_dict['policyTags']['names'] = \
+                    column_config.get('tags')
 
         new_fields = []
         for child_col_dict in bq_column_dict.get('fields', list()):
@@ -627,7 +631,7 @@ class BigQueryAdapter(BaseAdapter):
         return bq_column_dict
 
     @available.parse_none
-    def update_column_descriptions(self, relation, columns):
+    def update_column(self, relation, columns):
         if len(columns) == 0:
             return
 
@@ -643,6 +647,16 @@ class BigQueryAdapter(BaseAdapter):
                 columns
             )
             new_schema.append(SchemaField.from_api_repr(new_bq_column_dict))
+        # for column in table.schema:
+        #     if column.name in columns:
+        #         column_config = columns[column.name]
+        #         column_dict = column.to_api_repr()
+        #         column_dict['description'] = column_config.get('description')
+        #         if column_config.get('tags'):
+        #             column_dict['policyTags'] = {}
+        #             column_dict['policyTags']['names'] = column_config.get('tags')
+        #         column = SchemaField.from_api_repr(column_dict)
+        #     new_schema.append(column)
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
         conn.handle.update_table(new_table, ['schema'])

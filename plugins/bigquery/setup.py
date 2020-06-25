@@ -42,7 +42,7 @@ setup(
         'dbt-core=={}'.format(package_version),
         'protobuf>=3.6.0,<3.12',
         'google-cloud-core>=1.3.0,<1.4',
-        'google-cloud-bigquery>=1.24.0,<1.25.0',
+        'google-cloud-bigquery>=1.25.0,<1.26.0',
         'google-api-core>=1.16.0,<1.17.0',
         'googleapis-common-protos>=1.6.0,<1.7.0',
         'six>=1.14.0',

@@ -121,7 +121,7 @@
 {% endmacro %}
 
 {% macro bigquery__alter_column_comment(relation, column_dict) -%}
-  {% do adapter.update_column_descriptions(relation, column_dict) %}
+  {% do adapter.update_column(relation, column_dict) %}
 {% endmacro %}
 
 {% macro bigquery__rename_relation(from_relation, to_relation) -%}

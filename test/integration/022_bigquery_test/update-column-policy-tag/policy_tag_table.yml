@@ -1,0 +1,8 @@
+version: 2
+
+models:
+- name: policy_tag_table
+  columns:
+  - name: field
+    tags:
+      - '{{ var("policy_tag") }}'
