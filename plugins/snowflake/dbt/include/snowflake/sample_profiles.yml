@@ -1,0 +1,17 @@
+my-snowflake-db:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: [account id]
+
+      # User/password auth
+      user: [username]
+      password: [password]
+
+      role: [user role]
+      database: [database name]
+      warehouse: [warehouse name]
+      schema: [dbt schema]
+      threads: [1 or more]
+      client_session_keep_alive: False

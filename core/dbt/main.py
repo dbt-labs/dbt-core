@@ -317,6 +317,14 @@ def _build_init_subparser(subparsers, base_subparser):
         Name of the new project
         ''',
     )
+    sub.add_argument(
+        '--adapter',
+        default='redshift',
+        type=str,
+        help='''
+        Write sample profiles.yml for which adapter
+        ''',
+    )
     sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
     return sub
 

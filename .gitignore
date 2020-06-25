@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 env/
+dbt_env/
 build/
 develop-eggs/
 dist/
@@ -83,3 +84,11 @@ target/
 
 # pycharm
 .idea/
+
+# AWS credentials
+.aws/
+
+.DS_Store
+
+# vscode
+.vscode/

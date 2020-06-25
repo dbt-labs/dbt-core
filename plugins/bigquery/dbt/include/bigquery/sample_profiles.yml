@@ -1,0 +1,13 @@
+my-bigquery-db:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: [GCP project id]
+      dataset: [the name of your dbt dataset]
+      threads: [1 or more]
+      keyfile: [/path/to/bigquery/keyfile.json]
+      timeout_seconds: 300
+      priority: interactive
+      retries: 1
