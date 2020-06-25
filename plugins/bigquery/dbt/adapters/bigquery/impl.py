@@ -631,7 +631,7 @@ class BigQueryAdapter(BaseAdapter):
         return bq_column_dict
 
     @available.parse_none
-    def update_column(self, relation, columns):
+    def update_columns(self, relation, columns):
         if len(columns) == 0:
             return
 
