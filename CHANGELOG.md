@@ -1,7 +1,7 @@
 ## dbt 0.18.0 (Release TBD)
 
 ### Breaking changes
-- Previously, dbt put macros from all installed plugins into the namespace. This version of dbt will not include adpater plugin macros unless they are from the currently-in-use adapter or one of its dependencies [#2590](https://github.com/fishtown-analytics/dbt/pull/2590)
+- Previously, dbt put macros from all installed plugins into the namespace. This version of dbt will not include adapter plugin macros unless they are from the currently-in-use adapter or one of its dependencies [#2590](https://github.com/fishtown-analytics/dbt/pull/2590)
 
 ### Features
 - Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030), [#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
