@@ -647,16 +647,6 @@ class BigQueryAdapter(BaseAdapter):
                 columns
             )
             new_schema.append(SchemaField.from_api_repr(new_bq_column_dict))
-        # for column in table.schema:
-        #     if column.name in columns:
-        #         column_config = columns[column.name]
-        #         column_dict = column.to_api_repr()
-        #         column_dict['description'] = column_config.get('description')
-        #         if column_config.get('tags'):
-        #             column_dict['policyTags'] = {}
-        #             column_dict['policyTags']['names'] = column_config.get('tags')
-        #         column = SchemaField.from_api_repr(column_dict)
-        #     new_schema.append(column)
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
         conn.handle.update_table(new_table, ['schema'])
