@@ -3,6 +3,7 @@
 
 ### Fixes
 - dbt config-version: 2 now properly defers rendering `+pre-hook` and `+post-hook` fields. ([#2583](https://github.com/fishtown-analytics/dbt/issues/2583), [#2854](https://github.com/fishtown-analytics/dbt/pull/2854))
+- dbt handles too-long paths on windows that do not report that the path is too long ([#2591](https://github.com/fishtown-analytics/dbt/pull/2591))
 
 
 ## dbt 0.17.1rc1 (June 19, 2020)
