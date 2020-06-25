@@ -32,7 +32,7 @@ Contributors:
 - Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/pull/2517))
 - Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
 - Include row counts and bytes processed in log output for all BigQuery statement types ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
-- Added support for setting policy tags for columns in BigQuery ([#2586](https://github.com/fishtown-analytics/dbt/issues/2586), [#2589](https://github.com/fishtown-analytics/dbt/pull/2589))
+- Added support for setting policy tags for BigQuery columns ([#2586](https://github.com/fishtown-analytics/dbt/issues/2586), [#2589](https://github.com/fishtown-analytics/dbt/pull/2589))
 
 
 ### Fixes
