@@ -33,7 +33,7 @@ from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values, executor
 
-from dbt.adapters.base.connections import BaseConnectionManager, Connection
+from dbt.adapters.base.connections import Connection
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
     ComponentName, BaseRelation, InformationSchema, SchemaSearchMap

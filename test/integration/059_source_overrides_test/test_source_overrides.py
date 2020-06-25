@@ -78,7 +78,7 @@ class TestSourceOverrides(DBTIntegrationTest):
     def test_postgres_source_overrides(self):
         # without running 'deps', our source overrides are invalid
         _, stdout = self.run_dbt_and_capture(['compile'], strict=False)
-        self.assertIn('WARNING: During parsing, dbt encountered source overrides that had no target', stdout)
+        self.assertRegex(stdout, r'WARNING(\x1b\[0m\])?: During parsing, dbt encountered source overrides that had no target')
         schema_path = os.path.join('models', 'schema.yml')
         self.assertIn(f'Source localdep.my_source (in {schema_path})', stdout)
         self.run_dbt(['deps'])

@@ -12,6 +12,7 @@ from dbt import deprecations
 from dbt.adapters.factory import (
     get_relation_class_by_name,
     get_adapter_package_names,
+    get_include_paths,
 )
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
@@ -32,7 +33,6 @@ from dbt.exceptions import (
     get_source_not_found_or_disabled_msg,
     warn_or_error,
 )
-from dbt.include.global_project import PACKAGES
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.data_test import DataTestParser
@@ -131,7 +131,9 @@ class ManifestLoader:
         projects = self.all_projects
         if internal_manifest is not None:
             # skip internal packages
-            packages = get_adapter_package_names(self.root_project.credentials.type)
+            packages = get_adapter_package_names(
+                self.root_project.credentials.type
+            )
             projects = {
                 k: v for k, v in self.all_projects.items() if k not in packages
             }
@@ -680,8 +682,8 @@ def process_node(
 
 
 def load_internal_projects(config):
-    project_names = get_adapter_package_names(config.credentials.type)
-    return dict(_load_projects(config, project_names))
+    project_paths = get_include_paths(config.credentials.type)
+    return dict(_load_projects(config, project_paths))
 
 
 def load_internal_manifest(config: RuntimeConfig) -> Manifest:

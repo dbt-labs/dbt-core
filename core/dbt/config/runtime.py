@@ -19,6 +19,7 @@ from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
+from dbt.contracts.relation import ComponentName
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.ui import warning_tag
 
@@ -34,6 +35,19 @@ from dbt.exceptions import (
 from dbt.legacy_config_updater import ConfigUpdater
 
 from hologram import ValidationError
+
+
+def _project_quoting_dict(
+    proj: Project, profile: Profile
+) -> Dict[ComponentName, bool]:
+    src: Dict[str, Any] = profile.credentials.translate_aliases(proj.quoting)
+    result: Dict[ComponentName, bool] = {}
+    for key in ComponentName:
+        if key in src:
+            value = src[key]
+            if isinstance(value, bool):
+                result[key] = value
+    return result
 
 
 @dataclass
@@ -64,7 +78,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         quoting: Dict[str, Any] = (
             get_relation_class_by_name(profile.credentials.type)
             .get_default_quote_policy()
-            .replace_dict(project.quoting)
+            .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict()
 
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))

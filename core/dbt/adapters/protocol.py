@@ -1,15 +1,18 @@
 from dataclasses import dataclass
 from typing import (
     Type, Hashable, Optional, ContextManager, List, Generic, TypeVar, ClassVar,
-    Tuple
+    Tuple, Union
 )
 from typing_extensions import Protocol
 
 import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig
+from dbt.contracts.graph.compiled import CompiledNode
+from dbt.contracts.graph.parsed import ParsedNode, ParsedSourceDefinition
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.relation import Policy, HasQuoting
 
 
 @dataclass
@@ -25,8 +28,21 @@ class ColumnProtocol(Protocol):
     pass
 
 
+Self = TypeVar('Self', bound='RelationProtocol')
+
+
 class RelationProtocol(Protocol):
-    pass
+    @classmethod
+    def get_default_quote_policy(cls) -> Policy:
+        ...
+
+    @classmethod
+    def create_from(
+        cls: Type[Self],
+        config: HasQuoting,
+        node: Union[CompiledNode, ParsedNode, ParsedSourceDefinition],
+    ) -> Self:
+        ...
 
 
 AdapterConfig_T = TypeVar(

@@ -651,7 +651,7 @@ class Manifest:
         # avoid an import cycle
         from dbt.adapters.factory import get_adapter_package_names
         candidates: CandidateList = CandidateList()
-        packages = get_adapter_package_names(self.metadata.adapter_type)
+        packages = set(get_adapter_package_names(self.metadata.adapter_type))
         for unique_id, macro in self.macros.items():
             if macro.name != name:
                 continue

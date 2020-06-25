@@ -3,6 +3,7 @@ from .printer import print_snapshot_result_line
 
 from dbt.node_types import NodeType
 
+
 class SnapshotRunner(ModelRunner):
     def describe_node(self):
         return "snapshot {}".format(self.get_node_representation())

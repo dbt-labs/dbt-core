@@ -8,7 +8,7 @@ from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.adapters.factory import BaseRelation
+from dbt.adapters.base.relation import BaseRelation
 
 LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
 GET_COLUMNS_IN_RELATION_MACRO_NAME = 'get_columns_in_relation'
