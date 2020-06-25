@@ -1,8 +1,6 @@
 from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import (
-    Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
-)
+from typing import Optional, TypeVar, Any, Type, Dict, Union, Iterator, Tuple, Set
 
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedNode
