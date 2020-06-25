@@ -24,7 +24,7 @@ class TestBigqueryUpdateColumnPolicyTag(DBTIntegrationTest):
 
     @property
     def policy_tag(self):
-        return os.environ['BIGQUERY_POLICY_TAG']
+        return os.environ.get('BIGQUERY_POLICY_TAG')
 
     @use_profile('bigquery')
     def test__bigquery_update_column_policy_tag(self):
