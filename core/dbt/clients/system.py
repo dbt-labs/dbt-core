@@ -138,13 +138,20 @@ def write_file(path: str, contents: str = '') -> bool:
     except FileNotFoundError as exc:
         if (
             os.name == 'nt' and
-            getattr(exc, 'winerror', 0) == 3 and
             len(path) >= 260
         ):
+            # sometimes we get a winerror of 3 which means the path was
+            # definitely too long, but other times we don't and it means the
+            # path was just probably too long. This is probably based on the
+            # windows/python version.
+            if getattr(exc, 'winerror', 0) == 3:
+                reason = 'Path was too long'
+            else:
+                reason = 'Path was possibly too long'
             # all our hard work and the path was still too long. Log and
             # continue.
             logger.debug(
-                f'Could not write to path {path}: Path was too long '
+                f'Could not write to path {path}: {reason} '
                 f'({len(path)} characters)'
             )
         else:
