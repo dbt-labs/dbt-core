@@ -1,10 +1,24 @@
-# Getting started with dbt
+# Contributing to dbt
+
+1. [About this document](#about-this-document)
+2. [Proposing a change](#contributing-a-change)
+3. [Getting the code](#getting-the-code)
+4. [Setting up an environment](#setting-up-an-environment)
+5. [Running dbt in development](#running-dbt-in-development)
+6. [Testing](#testing)
+7. [Submitting a Pull Request](#submitting-a-pull-request)
 
 ## About this document
 
-This document is a guide intended for folks interested in contributing to dbt. Below, we document the process by which members of the community should create issues and submit pull requests (PRs) in this repository. It is not intended as a guide for using dbt, and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on.  This guide assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](community.getdbt.com).
+This document is a guide intended for folks interested in contributing to dbt. Below, we document the process by which members of the community should create issues and submit pull requests (PRs) in this repository. It is not intended as a guide for using dbt, and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. This guide assumes you are using macOS or Linux and are comfortable with the command line.
 
-## Contributing a change
+If you're new to python development or contributing to open-source software, we encourage you to read this document from start to finish. If you get stuck, drop us a line in the #development channel on [slack](community.getdbt.com).
+
+### Signing the CLA
+
+Please note that all contributors to dbt must sign the [Contributor License Agreement](https://docs.getdbt.com/docs/contributor-license-agreements) to have their Pull Request merged into the dbt codebase. If you are unable to sign the CLA, then the dbt maintainers will unfortunately be unable to merge your Pull Request. You are, however, welcome to open issues and comment on existing ones.
+
+## Proposing a change
 
 dbt is Apache 2.0-licensed open source software. dbt is what it is today because community members like you have opened issues, provided feedback, and contributed to the knowledge loop for the entire communtiy. Whether you are a seasoned open source contributor or a first-time committer, we welcome and encourage you to contribute code, documentation, ideas, or problem statements to this project.
 
@@ -48,10 +62,6 @@ The dbt maintainers use labels to categorize open issues. Some labels indicate t
 | [stale](https://github.com/fishtown-analytics/dbt/labels/stale) | This is an old issue which has not recently been updated. Stale issues will periodically be closed by dbt maintainers, but they can be re-opened if the discussion is restarted. |
 | [wontfix](https://github.com/fishtown-analytics/dbt/labels/wontfix) | This issue does not require a code change in the dbt repository, or the maintainers are unwilling/unable to merge a Pull Request which implements the behavior described in the issue. |
 
-### Signing the CLA
-
-All contributors to dbt must sign the [Contributor License Agreement](https://docs.getdbt.com/docs/contributor-license-agreements) to have their Pull Request merged into the dbt codebase. If you are unable to sign the CLA, then the dbt maintainers will unfortunately be unable to merge your Pull Request.
-
 
 ## Getting the code
 
@@ -92,7 +102,7 @@ A short list of tools used in dbt testing that will be helpful to your understan
 
 A deep understanding of these tools in not required to effectively contribute to dbt, but we recommend checking out the attached documentation if you're interested in learning more about them.
 
-### virtualenv
+#### virtual environments
 
 We strongly recommend using virtual environments when developing code in dbt. We recommend creating this virtualenv
 in the root of the dbt repository. To create a new virtualenv, run:
@@ -103,12 +113,12 @@ source env/bin/activate
 
 This will create and activate a new Python virtual environment.
 
-### docker and docker-compose
+#### docker and docker-compose
 
 Docker and docker-compose are both used in testing. For macOS, the easiest thing to do is to [download docker for mac](https://store.docker.com/editions/community/docker-ce-desktop-mac). You'll need to make an account. On Linux, you can use one of the packages [here](https://docs.docker.com/install/#server). We recommend installing from docker.com instead of from your package manager. On Linux you also have to install docker-compose separately, following [these instructions](https://docs.docker.com/compose/install/#install-compose).
 
 
-### Installing postgres locally (optional)
+#### postgres (optional)
 
 For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. On macOS, with homebrew setup, you can run:
 
@@ -140,10 +150,10 @@ Getting the dbt integration tests set up in your local environment will be very 
 
 ### Running tests via Docker
 
-dbt's unit and integration tests run in Docker. Because dbt works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, Fishtown Analytics provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on _Submitting a Pull Request_ below for more information on this CI setup.
+dbt's unit and integration tests run in Docker. Because dbt works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, Fishtown Analytics provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on [_Submitting a Pull Request_](#submitting-a-pull-request) below for more information on this CI setup.
 
 
-#### Specifying your test credentials
+### Specifying your test credentials
 
 dbt uses test credentials specified in a `test.env` file in the root of the repository. This `test.env` file is git-ignored, but please be _extra_ careful to never check in credentials or other sensitive information when developing against dbt. To create your `test.env` file, copy the provided sample file, then supply your relevant credentials:
 
@@ -156,7 +166,7 @@ We recommend starting with dbt's Postgres tests. These tests cover most of the f
 
 If you additionally want to test Snowflake, Bigquery, or Redshift, locally you'll need to get credentials and add them to the `test.env` file. In general, it's most important to have successful unit and Postgres tests. Once you open a PR, dbt will automatically run integration tests for the other three core database adapters. Of course, if you are a BigQuery user, contributing a BigQuery-only feature, it's important to run BigQuery tests as well.
 
-#### Test commands
+### Test commands
 
 dbt's unit tests and Python linter can be run with:
 
@@ -203,7 +213,7 @@ docker-compose run test tox -e explicit-py36 -- -s -x -m profile_snowflake test/
 
 See the `Makefile` contents for more some other examples of ways to run `tox`.
 
-### Submitting a Pull Request
+## Submitting a Pull Request
 
 Fishtown Analytics provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `fishtown-analytics/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines.
 
