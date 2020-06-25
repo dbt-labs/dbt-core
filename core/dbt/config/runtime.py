@@ -33,9 +33,7 @@ from dbt.exceptions import (
 from dbt.dataclass_schema import ValidationError
 
 
-def _project_quoting_dict(
-    proj: Project, profile: Profile
-) -> Dict[ComponentName, bool]:
+def _project_quoting_dict(proj: Project, profile: Profile) -> Dict[ComponentName, bool]:
     src: Dict[str, Any] = profile.credentials.translate_aliases(proj.quoting)
     result: Dict[ComponentName, bool] = {}
     for key in ComponentName:

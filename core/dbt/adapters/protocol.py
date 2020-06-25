@@ -34,7 +34,7 @@ class ColumnProtocol(Protocol):
     pass
 
 
-Self = TypeVar('Self', bound='RelationProtocol')
+Self = TypeVar("Self", bound="RelationProtocol")
 
 
 class RelationProtocol(Protocol):

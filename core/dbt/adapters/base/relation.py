@@ -7,7 +7,12 @@ from typing import (
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedNode
 from dbt.contracts.relation import (
-    RelationType, ComponentName, HasQuoting, FakeAPIObject, Policy, Path
+    RelationType,
+    ComponentName,
+    HasQuoting,
+    FakeAPIObject,
+    Policy,
+    Path,
 )
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
