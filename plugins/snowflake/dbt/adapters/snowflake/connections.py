@@ -38,6 +38,7 @@ class SnowflakeCredentials(Credentials):
     token: Optional[str]
     oauth_client_id: Optional[str]
     oauth_client_secret: Optional[str]
+    query_tag: Optional[str]
     client_session_keep_alive: bool = False
 
     def __post_init__(self):
@@ -210,6 +211,11 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 application='dbt',
                 **creds.auth_args()
             )
+
+            if creds.query_tag:
+                handle.cursor().execute(
+                    ("alter session set query_tag = '{}'")
+                    .format(creds.query_tag))
 
             connection.handle = handle
             connection.state = 'open'

@@ -26,6 +26,8 @@
 
 {% materialization incremental, adapter='snowflake' -%}
 
+  {% set original_query_tag = set_query_tag() %}
+
   {%- set unique_key = config.get('unique_key') -%}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
@@ -73,6 +75,8 @@
 
   {% set target_relation = target_relation.incorporate(type='table') %}
   {% do persist_docs(target_relation, model) %}
+
+  {% do unset_query_tag(original_query_tag) %}
 
   {{ return({'relations': [target_relation]}) }}
 

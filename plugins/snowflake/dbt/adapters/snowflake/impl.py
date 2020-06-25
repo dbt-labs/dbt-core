@@ -25,6 +25,7 @@ class SnowflakeConfig(AdapterConfig):
     secure: Optional[bool] = None
     copy_grants: Optional[bool] = None
     snowflake_warehouse: Optional[str] = None
+    query_tag: Optional[str] = None
 
 
 class SnowflakeAdapter(SQLAdapter):

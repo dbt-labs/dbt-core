@@ -1,10 +1,12 @@
 ## dbt 0.18.0 (Release TBD)
 
 ### Features
+- Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030), [#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
 - Added option to specify profile when connecting to Redshift via IAM ([#2437](https://github.com/fishtown-analytics/dbt/issues/2437), [#2581](https://github.com/fishtown-analytics/dbt/pull/2581))
 
 Contributors:
 - [@brunomurino](https://github.com/brunomurino) ([#2437](https://github.com/fishtown-analytics/dbt/pull/2581))
+- [@DrMcTaco](https://github.com/DrMcTaco) ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030)),[#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
 
 
 ## dbt 0.18.0b1 (June 08, 2020)
@@ -21,6 +23,7 @@ Contributors:
 - Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
 - Include row counts and bytes processed in log output for all BigQuery statement types ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
+
 ### Fixes
 - Fixed an error in create_adapter_plugins.py script when -dependency arg not passed ([#2507](https://github.com/fishtown-analytics/dbt/issues/2507), [#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
 - Remove misleading "Opening a new connection" log message in set_connection_name. ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
@@ -34,7 +37,6 @@ Contributors:
  - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/pull/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
  - [@alepuccetti](https://github.com/alepuccetti) ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
-
 ## dbt 0.17.1 (Release TBD)
 
 ### Fixes
@@ -42,6 +44,7 @@ Contributors:
 - `dbt deps` now respects the `--project-dir` flag, so using `dbt deps --project-dir=/some/path` and then `dbt run --project-dir=/some/path` will properly find dependencies ([#2519](https://github.com/fishtown-analytics/dbt/issues/2519), [#2534](https://github.com/fishtown-analytics/dbt/pull/2534))
 - `packages.yml` revision/version fields can be float-like again (`revision: '1.0'` is valid). ([#2518](https://github.com/fishtown-analytics/dbt/issues/2518), [#2535](https://github.com/fishtown-analytics/dbt/pull/2535))
 - dbt again respects config aliases in config() calls ([#2557](https://github.com/fishtown-analytics/dbt/issues/2557), [#2559](https://github.com/fishtown-analytics/dbt/pull/2559))
+
 
 
 ## dbt 0.17.0 (June 08, 2020)
