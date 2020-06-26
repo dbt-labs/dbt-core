@@ -34,6 +34,7 @@ setup(
     package_data={
         'dbt': [
             'include/snowflake/dbt_project.yml',
+            'include/snowflake/sample_profiles.yml',
             'include/snowflake/macros/*.sql',
             'include/snowflake/macros/**/*.sql',
         ]

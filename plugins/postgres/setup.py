@@ -57,6 +57,7 @@ setup(
     package_data={
         'dbt': [
             'include/postgres/dbt_project.yml',
+            'include/postgres/sample_profiles.yml',
             'include/postgres/macros/*.sql',
             'include/postgres/macros/**/*.sql',
         ]
