@@ -616,6 +616,21 @@ class BigQueryAdapter(BaseAdapter):
         conn.handle.update_table(new_table, ['schema'])
 
     @available.parse_none
+    def update_table_description(self, database, schema, identifier, description):
+        conn = self.connections.get_thread_connection()
+        client = conn.handle
+
+        table_ref = self.connections.table_ref(
+            database,
+            schema,
+            identifier,
+            conn
+        )
+        table = client.get_table(table_ref)
+        table.description = description
+        client.update_table(table, ['description'])
+
+    @available.parse_none
     def alter_table_add_columns(self, relation, columns):
 
         logger.debug('Adding columns ({}) to table {}".'.format(

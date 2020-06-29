@@ -2,6 +2,7 @@
 
 ### Fixes
 - Hash name of local packages ([#2600](https://github.com/fishtown-analytics/dbt/pull/2600))
+- On bigquery, also persist docs for seeds ([#2598](https://github.com/fishtown-analytics/dbt/issues/2598), [#2601](https://github.com/fishtown-analytics/dbt/pull/2601))
 
 ## dbt 0.17.1rc2 (June 25, 2020)
 
