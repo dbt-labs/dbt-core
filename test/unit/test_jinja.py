@@ -453,6 +453,8 @@ native_expected_behaviors = [
     ('''foo: "{{ a_int ~ 100 }}"''', 100100),
     ('''foo: "{{ a_str }}{{ a_str }}"''', 100100),
     ('''foo: "{{ a_int }}{{ a_int }}"''', 100100),
+    ('''foo: "'{{ a_int }}{{ a_int }}'"''', "'100100'"),
+
 ]
 
 
