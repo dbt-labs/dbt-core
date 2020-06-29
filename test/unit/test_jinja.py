@@ -1,4 +1,6 @@
+import pytest
 import unittest
+import yaml
 
 from dbt.clients.jinja import get_rendered
 from dbt.clients.jinja import get_template
@@ -413,3 +415,61 @@ hi
 '''
 
 
+native_expected_behaviors = [
+    # strings
+    ('''foo: bar''', 'bar'),
+    ('''foo: "bar"''', 'bar'),
+    ('''foo: "'bar'"''', "'bar'"),
+    ("""foo: '"bar"'""", '"bar"'),
+    # ints
+    ('''foo: 1''', 1),
+    ('''foo: "1"''', 1),
+    ('''foo: "'1'"''', "'1'"),
+    ('''foo: "{{ 1 }}"''', 1),
+    ('''foo: "{{ '1' }}"''', 1),
+    ('''foo: "'{{ 1 }}'"''', "'1'"),
+    ('''foo: "'{{ '1' }}'"''', "'1'"),
+    ('''foo: "{{ 1 | as_text }}"''', '1'),
+    ('''foo: "{{ '1' | as_text }}"''', '1'),
+    # booleans.
+    # Note the discrepancy with true vs True: `true` is recognized by jinja but
+    # not literal_eval, but `True` is recognized by ast.literal_eval.
+    # For extra fun, yaml recognizes both.
+    ('''foo: "{{ true }}"''', True),
+    ('''foo: "{{ 'true' }}"''', 'true'),
+    ('''foo: "'{{ true }}'"''', "'True'"),
+    ('''foo: "{{ true | as_text }}"''', "True"),  # true -> boolean True -> text -> str(True) -> 'True'
+    ('''foo: "{{ 'true' | as_text }}"''', "true"),  # 'true' -> string 'true' -> text -> str('true') -> 'true'
+    ('''foo: "{{ True }}"''', True),
+    ('''foo: "{{ 'True' }}"''', True),
+    ('''foo: "'{{ True }}'"''', "'True'"),
+    ('''foo: "{{ True | as_text }}"''', "True"),  # True -> string 'True' -> text -> str('True') -> 'True'
+    ('''foo: "{{ 'True' | as_text }}"''', "True"),  # 'True' -> string 'True' -> text -> str('True') -> 'True'
+    ('''foo: yes''', True),  # yaml turns 'yes' into a boolean true
+    ('''foo: "yes"''', "yes"),
+    # concatenation
+    ('''foo: "{{ a_int + 100 }}"''', 200),
+    ('''foo: "{{ a_str ~ 100 }}"''', 100100),
+    ('''foo: "{{ a_int ~ 100 }}"''', 100100),
+    ('''foo: "{{ a_str }}{{ a_str }}"''', 100100),
+    ('''foo: "{{ a_int }}{{ a_int }}"''', 100100),
+]
+
+
+def expected_id(arg):
+    if isinstance(arg, list):
+        return '_'.join(arg)
+
+
+@pytest.mark.parametrize(
+    'inputvalue,expected', native_expected_behaviors, ids=expected_id
+)
+def test_native_rendering(inputvalue, expected):
+    # this test is pretty useless without preprocessing things in yaml.
+    value = yaml.safe_load(inputvalue)['foo']
+    ctx = {
+        'a_str': '100',
+        'a_int': 100,
+        'b_str': 'hello'
+    }
+    assert get_rendered(value, ctx, native=True) == expected

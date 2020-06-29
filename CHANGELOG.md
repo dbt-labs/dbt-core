@@ -1,8 +1,9 @@
 ## dbt 0.17.1 (Release TBD)
 
+### Fixes
+- dbt native rendering now avoids turning quoted strings into unqouted strings ([#2597](https://github.com/fishtown-analytics/dbt/issues/2597), [#2599](https://github.com/fishtown-analytics/dbt/pull/2599))
+
 ## dbt 0.17.1rc2 (June 25, 2020)
-
-
 
 ### Fixes
 - dbt config-version: 2 now properly defers rendering `+pre-hook` and `+post-hook` fields. ([#2583](https://github.com/fishtown-analytics/dbt/issues/2583), [#2854](https://github.com/fishtown-analytics/dbt/pull/2854))
