@@ -1,5 +1,8 @@
 ## dbt 0.17.1 (Release TBD)
 
+### Fixes
+- Hash name of local packages
+
 ## dbt 0.17.1rc2 (June 25, 2020)
 
 
