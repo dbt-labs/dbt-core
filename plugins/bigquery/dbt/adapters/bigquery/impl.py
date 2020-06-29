@@ -616,7 +616,9 @@ class BigQueryAdapter(BaseAdapter):
         conn.handle.update_table(new_table, ['schema'])
 
     @available.parse_none
-    def update_table_description(self, database, schema, identifier, description):
+    def update_table_description(
+        self, database: str, schema: str, identifier: str, description: str
+    ):
         conn = self.connections.get_thread_connection()
         client = conn.handle
 
