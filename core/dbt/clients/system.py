@@ -154,8 +154,8 @@ def write_file(path: str, contents: str = '') -> bool:
             # all our hard work and the path was still too long. Log and
             # continue.
             logger.debug(
-                f'Could not write to path {path}: {reason} '
-                f'({len(path)} characters)'
+                f'Could not write to path {path}({len(path)} characters): '
+                f'{reason}\nexception: {exc}'
             )
         else:
             raise
