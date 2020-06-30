@@ -153,7 +153,7 @@ def write_file(path: str, contents: str = "") -> bool:
         # sometimes windows fails to write paths that are less than the length
         # limit. So on windows, suppress all errors that happen from writing
         # to disk.
-        if os.name == 'nt':
+        if os.name == "nt":
             # sometimes we get a winerror of 3 which means the path was
             # definitely too long, but other times we don't and it means the
             # path was just probably too long. This is probably based on the
