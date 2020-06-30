@@ -135,11 +135,14 @@ def write_file(path: str, contents: str = '') -> bool:
         make_directory(os.path.dirname(path))
         with open(path, 'w', encoding='utf-8') as f:
             f.write(str(contents))
-    except FileNotFoundError as exc:
-        if (
-            os.name == 'nt' and
-            len(path) >= 260
-        ):
+    except Exception as exc:
+        # note that you can't just catch FileNotFound, because sometimes
+        # windows apparently raises something else.
+        # It's also not sufficient to look at the path length, because
+        # sometimes windows fails to write paths that are less than the length
+        # limit. So on windows, suppress all errors that happen from writing
+        # to disk.
+        if os.name == 'nt':
             # sometimes we get a winerror of 3 which means the path was
             # definitely too long, but other times we don't and it means the
             # path was just probably too long. This is probably based on the
@@ -151,8 +154,8 @@ def write_file(path: str, contents: str = '') -> bool:
             # all our hard work and the path was still too long. Log and
             # continue.
             logger.debug(
-                f'Could not write to path {path}: {reason} '
-                f'({len(path)} characters)'
+                f'Could not write to path {path}({len(path)} characters): '
+                f'{reason}\nexception: {exc}'
             )
         else:
             raise
