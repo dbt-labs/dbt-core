@@ -2,6 +2,7 @@
 
 ### Fixes
 - Hash name of local packages ([#2600](https://github.com/fishtown-analytics/dbt/pull/2600))
+- Swallow all file-writing related errors on Windows, regardless of path length or exception type. ([#2603](https://github.com/fishtown-analytics/dbt/pull/2603))
 
 ## dbt 0.17.1rc2 (June 25, 2020)
 
