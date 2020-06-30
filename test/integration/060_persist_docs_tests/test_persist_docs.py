@@ -148,7 +148,15 @@ class TestPersistDocsSimple(BasePersistDocsTest):
                         "columns": True,
                     },
                 }
-            }
+            },
+            'seeds': {
+                'test': {
+                    '+persist_docs': {
+                        "relation": True,
+                        "columns": True,
+                    },
+                }
+            },
         }
 
     @use_profile('snowflake')
@@ -157,7 +165,31 @@ class TestPersistDocsSimple(BasePersistDocsTest):
 
     @use_profile('bigquery')
     def test_bigquery_persist_docs(self):
+        self.run_dbt(['seed'])
         self.run_dbt()
+        desc_map = {
+            'seed': 'Seed model description',
+            'table_model': 'Table model description',
+            'view_model': 'View model description',
+        }
+        for node_id in ['seed', 'table_model', 'view_model']:
+            with self.adapter.connection_named('_test'):
+                client = self.adapter.connections \
+                    .get_thread_connection().handle
+
+                table_id = "{}.{}.{}".format(
+                    self.default_database,
+                    self.unique_schema(),
+                    node_id
+                )
+                bq_table = client.get_table(table_id)
+
+                bq_schema = bq_table.schema
+
+                assert bq_table.description.startswith(desc_map[node_id])
+                assert bq_schema[0].description.startswith('id Column description ')
+                if not node_id.startswith('view'):
+                    assert bq_schema[1].description.startswith('Some stuff here and then a call to')
 
 
 class TestPersistDocsNested(BasePersistDocsTest):
@@ -187,13 +219,14 @@ class TestPersistDocsNested(BasePersistDocsTest):
 
         Next, generate the catalog and check if the comments are also included.
         """
+        self.run_dbt(['seed'])
         self.run_dbt()
 
         self.run_dbt(['docs', 'generate'])
         with open('target/catalog.json') as fp:
             catalog_data = json.load(fp)
         assert 'nodes' in catalog_data
-        assert len(catalog_data['nodes']) == 2  # table and view model
+        assert len(catalog_data['nodes']) == 3  # seed, table, and view model
 
         for node_id in ['table_model_nested', 'view_model_nested']:
             # check the descriptions using the api
