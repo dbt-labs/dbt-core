@@ -133,6 +133,10 @@ def quoted_native_concat(nodes):
     except (ValueError, SyntaxError, MemoryError):
         return raw
 
+    # if it was a str and it still is a str, return it as-is.
+    if isinstance(result, str):
+        result = raw
+
     return result
 
 
