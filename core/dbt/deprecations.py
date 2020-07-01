@@ -1,9 +1,7 @@
 from typing import Optional, Set, List, Dict, ClassVar
 
-import dbt.links
 import dbt.exceptions
-import dbt.flags
-from dbt.ui import printer
+from dbt import ui
 
 
 class DBTDeprecation:
@@ -29,7 +27,7 @@ class DBTDeprecation:
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
-            msg = printer.line_wrap_message(
+            msg = ui.line_wrap_message(
                 desc, prefix='* Deprecation Warning: '
             )
             dbt.exceptions.warn_or_error(msg)

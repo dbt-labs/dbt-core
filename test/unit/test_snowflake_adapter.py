@@ -6,6 +6,7 @@ from unittest import mock
 import dbt.flags as flags
 
 from dbt.adapters.snowflake import SnowflakeAdapter
+from dbt.adapters.snowflake import Plugin as SnowflakePlugin
 from dbt.adapters.snowflake.column import SnowflakeColumn
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
@@ -72,7 +73,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
 
         self.adapter.acquire_connection()
-        inject_adapter(self.adapter)
+        inject_adapter(self.adapter, SnowflakePlugin)
 
     def tearDown(self):
         # we want a unique self.handle every time.

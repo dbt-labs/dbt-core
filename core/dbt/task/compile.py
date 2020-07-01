@@ -1,8 +1,26 @@
-from dbt.node_runners import CompileRunner
-from dbt.node_types import NodeType
-import dbt.ui.printer
 
-from dbt.task.runnable import GraphRunnableTask
+
+from .runnable import GraphRunnableTask
+from .base import BaseRunner
+
+from dbt.compilation import compile_node
+from dbt.contracts.results import RunModelResult
+from dbt.logger import print_timestamped_line
+from dbt.node_types import NodeType
+
+
+class CompileRunner(BaseRunner):
+    def before_execute(self):
+        pass
+
+    def after_execute(self, result):
+        pass
+
+    def execute(self, compiled_node, manifest):
+        return RunModelResult(compiled_node)
+
+    def compile(self, manifest):
+        return compile_node(self.adapter, self.config, self.node, manifest, {})
 
 
 class CompileTask(GraphRunnableTask):
@@ -21,4 +39,4 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        dbt.ui.printer.print_timestamped_line('Done.')
+        print_timestamped_line('Done.')

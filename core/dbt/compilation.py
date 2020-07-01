@@ -6,6 +6,7 @@ import dbt.utils
 import dbt.include
 import dbt.tracking
 
+from dbt import flags
 from dbt.node_types import NodeType
 from dbt.linker import Linker
 
@@ -13,7 +14,6 @@ from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.compiled import NonSourceNode
 from dbt.contracts.graph.manifest import Manifest
 import dbt.exceptions
-import dbt.flags
 import dbt.config
 from dbt.contracts.graph.compiled import (
     InjectedCTE,
@@ -104,7 +104,7 @@ def recursively_prepend_ctes(model, manifest):
     if model.extra_ctes_injected:
         return (model, model.extra_ctes, manifest)
 
-    if dbt.flags.STRICT_MODE:
+    if flags.STRICT_MODE:
         if not isinstance(model, tuple(COMPILED_TYPES.values())):
             raise dbt.exceptions.InternalException(
                 'Bad model type: {}'.format(type(model))
@@ -187,7 +187,7 @@ class Compiler:
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
         graph_path = os.path.join(self.config.target_path, filename)
-        if dbt.flags.WRITE_JSON:
+        if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
 
     def link_node(

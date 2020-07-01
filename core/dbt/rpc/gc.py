@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Iterable, Tuple
 
 import dbt.exceptions
-import dbt.flags
 from dbt.contracts.rpc import (
     GCSettings,
     GCResultState,

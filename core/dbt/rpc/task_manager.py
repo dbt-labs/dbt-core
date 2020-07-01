@@ -7,7 +7,7 @@ from typing import (
 
 
 import dbt.exceptions
-import dbt.flags
+import dbt.flags as flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.rpc import (
     LastParse,
@@ -32,7 +32,6 @@ import dbt.rpc.builtins  # noqa
 
 # import this to make sure our timedelta encoder is registered
 from dbt import helper_types  # noqa
-from dbt.flags import SINGLE_THREADED_WEBSERVER
 
 
 WrappedHandler = Callable[..., Dict[str, Any]]
@@ -86,12 +85,12 @@ class TaskManager:
         self.active_tasks: TaskHandlerMap = {}
         self.gc = GarbageCollector(active_tasks=self.active_tasks)
         self.last_parse: LastParse = LastParse(state=ManifestStatus.Init)
-        self._lock: dbt.flags.MP_CONTEXT.Lock = dbt.flags.MP_CONTEXT.Lock()
+        self._lock: flags.MP_CONTEXT.Lock = flags.MP_CONTEXT.Lock()
         self._reloader: Optional[ManifestReloader] = None
         self.reload_manifest()
 
     def single_threaded(self):
-        return SINGLE_THREADED_WEBSERVER or self.args.single_threaded
+        return flags.SINGLE_THREADED_WEBSERVER or self.args.single_threaded
 
     def _reload_task_manager_thread(self, reloader: ManifestReloader):
         """This function can only be running once at a time, as it runs in the

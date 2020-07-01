@@ -2,6 +2,34 @@ import functools
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional
 
+from .compile import CompileRunner, CompileTask
+
+from .printer import (
+    print_start_line,
+    print_model_result_line,
+    print_hook_start_line,
+    print_hook_end_line,
+    print_run_end_messages,
+    get_counts,
+)
+
+from dbt import deprecations
+from dbt import tracking
+from dbt import utils
+from dbt.adapters.base import BaseRelation
+from dbt.clients.jinja import MacroGenerator
+from dbt.compilation import compile_node
+from dbt.context.providers import generate_runtime_model
+from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.model_config import Hook
+from dbt.contracts.graph.parsed import ParsedHookNode
+from dbt.contracts.results import RunModelResult
+from dbt.exceptions import (
+    CompilationException,
+    InternalException,
+    RuntimeException,
+    missing_materialization,
+)
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
     TextOnly,
@@ -9,26 +37,10 @@ from dbt.logger import (
     UniqueID,
     TimestampNamed,
     DbtModelState,
+    print_timestamped_line,
 )
-from dbt.exceptions import InternalException
-from dbt.node_types import NodeType, RunHookType
-from dbt.node_runners import ModelRunner
-
-import dbt.exceptions
-import dbt.flags
 from dbt.hooks import get_hook_dict
-from dbt.ui.printer import \
-    print_hook_start_line, \
-    print_hook_end_line, \
-    print_timestamped_line, \
-    print_run_end_messages, \
-    get_counts
-
-from dbt.compilation import compile_node
-from dbt.contracts.graph.compiled import CompileResultNode
-from dbt.contracts.graph.model_config import Hook
-from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.task.compile import CompileTask
+from dbt.node_types import NodeType, RunHookType
 
 
 class Timer:
@@ -81,6 +93,150 @@ def get_hook(source, index):
     hook_dict = get_hook_dict(source)
     hook_dict.setdefault('index', index)
     return Hook.from_dict(hook_dict)
+
+
+def track_model_run(index, num_nodes, run_model_result):
+    if tracking.active_user is None:
+        raise InternalException('cannot track model run with no active user')
+    invocation_id = tracking.active_user.invocation_id
+    tracking.track_model_run({
+        "invocation_id": invocation_id,
+        "index": index,
+        "total": num_nodes,
+        "execution_time": run_model_result.execution_time,
+        "run_status": run_model_result.status,
+        "run_skipped": run_model_result.skip,
+        "run_error": None,
+        "model_materialization": run_model_result.node.get_materialization(),
+        "model_id": utils.get_hash(run_model_result.node),
+        "hashed_contents": utils.get_hashed_contents(
+            run_model_result.node
+        ),
+        "timing": [t.to_dict() for t in run_model_result.timing],
+    })
+
+
+# make sure that we got an ok result back from a materialization
+def _validate_materialization_relations_dict(
+    inp: Dict[Any, Any], model
+) -> List[BaseRelation]:
+    try:
+        relations_value = inp['relations']
+    except KeyError:
+        msg = (
+            'Invalid return value from materialization, "relations" '
+            'not found, got keys: {}'.format(list(inp))
+        )
+        raise CompilationException(msg, node=model) from None
+
+    if not isinstance(relations_value, list):
+        msg = (
+            'Invalid return value from materialization, "relations" '
+            'not a list, got: {}'.format(relations_value)
+        )
+        raise CompilationException(msg, node=model) from None
+
+    relations: List[BaseRelation] = []
+    for relation in relations_value:
+        if not isinstance(relation, BaseRelation):
+            msg = (
+                'Invalid return value from materialization, '
+                '"relations" contains non-Relation: {}'
+                .format(relation)
+            )
+            raise CompilationException(msg, node=model)
+
+        assert isinstance(relation, BaseRelation)
+        relations.append(relation)
+    return relations
+
+
+class ModelRunner(CompileRunner):
+    def get_node_representation(self):
+        display_quote_policy = {
+            'database': False, 'schema': False, 'identifier': False
+        }
+        relation = self.adapter.Relation.create_from(
+            self.config, self.node, quote_policy=display_quote_policy
+        )
+        # exclude the database from output if it's the default
+        if self.node.database == self.config.credentials.database:
+            relation = relation.include(database=False)
+        return str(relation)
+
+    def describe_node(self):
+        return "{} model {}".format(self.node.get_materialization(),
+                                    self.get_node_representation())
+
+    def print_start_line(self):
+        description = self.describe_node()
+        print_start_line(description, self.node_index, self.num_nodes)
+
+    def print_result_line(self, result):
+        description = self.describe_node()
+        print_model_result_line(result, description, self.node_index,
+                                self.num_nodes)
+
+    def before_execute(self):
+        self.print_start_line()
+
+    def after_execute(self, result):
+        track_model_run(self.node_index, self.num_nodes, result)
+        self.print_result_line(result)
+
+    def _build_run_model_result(self, model, context):
+        result = context['load_result']('main')
+        return RunModelResult(model, status=result.status)
+
+    def _materialization_relations(
+        self, result: Any, model
+    ) -> List[BaseRelation]:
+        if isinstance(result, str):
+            deprecations.warn('materialization-return',
+                              materialization=model.get_materialization())
+            return [
+                self.adapter.Relation.create_from(self.config, model)
+            ]
+
+        if isinstance(result, dict):
+            return _validate_materialization_relations_dict(result, model)
+
+        msg = (
+            'Invalid return value from materialization, expected a dict '
+            'with key "relations", got: {}'.format(str(result))
+        )
+        raise CompilationException(msg, node=model)
+
+    def execute(self, model, manifest):
+        context = generate_runtime_model(
+            model, self.config, manifest
+        )
+
+        materialization_macro = manifest.find_materialization_macro_by_name(
+            self.config.project_name,
+            model.get_materialization(),
+            self.adapter.type())
+
+        if materialization_macro is None:
+            missing_materialization(model, self.adapter.type())
+
+        if 'config' not in context:
+            raise InternalException(
+                'Invalid materialization context generated, missing config: {}'
+                .format(context)
+            )
+        context_config = context['config']
+
+        hook_ctx = self.adapter.pre_model_hook(context_config)
+        try:
+            result = MacroGenerator(materialization_macro, context)()
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        for relation in self._materialization_relations(result, model):
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+        return self._build_run_model_result(model, context)
 
 
 class RunTask(CompileTask):
@@ -178,7 +334,7 @@ class RunTask(CompileTask):
     ) -> None:
         try:
             self.run_hooks(adapter, hook_type, extra_context)
-        except dbt.exceptions.RuntimeException:
+        except RuntimeException:
             logger.info("Database error while running {}".format(hook_type))
             raise
 

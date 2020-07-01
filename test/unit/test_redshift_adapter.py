@@ -1,4 +1,3 @@
-import string
 import unittest
 from unittest import mock
 import agate
@@ -6,12 +5,15 @@ import agate
 import dbt.adapters  # noqa
 import dbt.flags as flags
 
-from dbt.adapters.redshift import RedshiftAdapter
+from dbt.adapters.redshift import (
+    RedshiftAdapter,
+    Plugin as RedshiftPlugin,
+)
 from dbt.clients import agate_helper
 from dbt.exceptions import FailedToConnectException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts, mock_connection, TestAdapterConversions
+from .utils import config_from_parts_or_dicts, mock_connection, TestAdapterConversions, inject_adapter
 
 
 @classmethod
@@ -60,6 +62,7 @@ class TestRedshiftAdapter(unittest.TestCase):
     def adapter(self):
         if self._adapter is None:
             self._adapter = RedshiftAdapter(self.config)
+            inject_adapter(self._adapter, RedshiftPlugin)
         return self._adapter
 
     def test_implicit_database_conn(self):

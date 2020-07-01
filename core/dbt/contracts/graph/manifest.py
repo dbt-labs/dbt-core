@@ -25,7 +25,6 @@ from dbt.exceptions import (
     warn_or_error, raise_invalid_patch
 )
 from dbt.helper_types import PathSet
-from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt import deprecations
@@ -468,10 +467,12 @@ class CandidateList(List[M]):
         return self[-1].macro
 
 
-def _get_locality(macro: ParsedMacro, root_project_name: str) -> Locality:
+def _get_locality(
+    macro: ParsedMacro, root_project_name: str, internal_packages: Set[str]
+) -> Locality:
     if macro.package_name == root_project_name:
         return Locality.Root
-    elif macro.package_name in PACKAGES:
+    elif macro.package_name in internal_packages:
         return Locality.Core
     else:
         return Locality.Imported
@@ -647,12 +648,15 @@ class Manifest:
     ) -> CandidateList:
         """Find macros by their name.
         """
+        # avoid an import cycle
+        from dbt.adapters.factory import get_adapter_package_names
         candidates: CandidateList = CandidateList()
+        packages = set(get_adapter_package_names(self.metadata.adapter_type))
         for unique_id, macro in self.macros.items():
             if macro.name != name:
                 continue
             candidate = MacroCandidate(
-                locality=_get_locality(macro, root_project_name),
+                locality=_get_locality(macro, root_project_name, packages),
                 macro=macro,
             )
             if filter is None or filter(candidate):

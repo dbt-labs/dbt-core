@@ -7,14 +7,13 @@ from typing import (
 
 from hologram import ValidationError
 
+from dbt import utils
 from dbt.clients.jinja import MacroGenerator
 from dbt.clients.system import load_file_contents
 from dbt.context.providers import (
     generate_parser_model,
     generate_generate_component_name_macro,
 )
-import dbt.flags
-from dbt import hooks
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
@@ -29,6 +28,7 @@ from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
     CompilationException, validator_error_message, InternalException
 )
+from dbt import hooks
 from dbt.node_types import NodeType
 from dbt.parser.results import ParseResult, ManifestNodes
 from dbt.parser.search import FileBlock
@@ -172,7 +172,7 @@ class ConfiguredParser(
     def get_fqn_prefix(self, path: str) -> List[str]:
         no_ext = os.path.splitext(path)[0]
         fqn = [self.project.project_name]
-        fqn.extend(dbt.utils.split_path(no_ext)[:-1])
+        fqn.extend(utils.split_path(no_ext)[:-1])
         return fqn
 
     def get_fqn(self, path: str, name: str) -> List[str]:

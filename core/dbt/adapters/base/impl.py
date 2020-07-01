@@ -1,7 +1,6 @@
 import abc
 from concurrent.futures import as_completed, Future
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import datetime
 from itertools import chain
 from typing import (
@@ -17,21 +16,24 @@ from dbt.exceptions import (
     get_relation_returned_multiple_results,
     InternalException, NotImplementedException, RuntimeException,
 )
-import dbt.flags
+from dbt import flags
 
 from dbt import deprecations
+from dbt.adapters.protocol import (
+    AdapterConfig,
+    ConnectionManagerProtocol,
+)
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
-from dbt.contracts.graph.model_config import BaseConfig
 from dbt.exceptions import warn_or_error
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values, executor
 
-from dbt.adapters.base.connections import BaseConnectionManager, Connection
+from dbt.adapters.base.connections import Connection
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
     ComponentName, BaseRelation, InformationSchema, SchemaSearchMap
@@ -108,11 +110,6 @@ def _relation_name(rel: Optional[BaseRelation]) -> str:
         return str(rel)
 
 
-@dataclass
-class AdapterConfig(BaseConfig):
-    pass
-
-
 class BaseAdapter(metaclass=AdapterMeta):
     """The BaseAdapter provides an abstract base class for adapters.
 
@@ -151,7 +148,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     """
     Relation: Type[BaseRelation] = BaseRelation
     Column: Type[BaseColumn] = BaseColumn
-    ConnectionManager: Type[BaseConnectionManager]
+    ConnectionManager: Type[ConnectionManagerProtocol]
 
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
@@ -267,7 +264,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def _schema_is_cached(self, database: Optional[str], schema: str) -> bool:
         """Check if the schema is cached, and by default logs if it is not."""
 
-        if dbt.flags.USE_CACHE is False:
+        if flags.USE_CACHE is False:
             return False
         elif (database, schema) not in self.cache:
             logger.debug(
@@ -323,7 +320,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
-        if not dbt.flags.USE_CACHE:
+        if not flags.USE_CACHE:
             return
 
         cache_schemas = self._get_cache_schemas(manifest)
@@ -352,7 +349,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
-        if not dbt.flags.USE_CACHE:
+        if not flags.USE_CACHE:
             return
 
         with self.cache.lock:
@@ -368,7 +365,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to cache a null relation for {}'.format(name)
             )
-        if dbt.flags.USE_CACHE:
+        if flags.USE_CACHE:
             self.cache.add(relation)
         # so jinja doesn't render things
         return ''
@@ -383,7 +380,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to drop a null relation for {}'.format(name)
             )
-        if dbt.flags.USE_CACHE:
+        if flags.USE_CACHE:
             self.cache.drop(relation)
         return ''
 
@@ -405,7 +402,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 .format(src_name, dst_name, name)
             )
 
-        if dbt.flags.USE_CACHE:
+        if flags.USE_CACHE:
             self.cache.rename(from_relation, to_relation)
         return ''
 

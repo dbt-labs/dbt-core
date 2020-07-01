@@ -15,7 +15,6 @@ from typing import (
 from hologram import JsonSchemaMixin
 
 from dbt.clients.system import write_file
-import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
@@ -24,6 +23,7 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt import flags
 from dbt.node_types import NodeType
 
 
@@ -117,7 +117,7 @@ class ParsedNodeMixins(JsonSchemaMixin):
         self.columns = patch.columns
         self.meta = patch.meta
         self.docs = patch.docs
-        if dbt.flags.STRICT_MODE:
+        if flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
             self.to_dict(validate=True)
 
@@ -300,7 +300,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.meta = patch.meta
         self.docs = patch.docs
         self.arguments = patch.arguments
-        if dbt.flags.STRICT_MODE:
+        if flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
             self.to_dict(validate=True)
 

@@ -6,12 +6,15 @@ from typing import (
 )
 
 import dbt.exceptions
-import dbt.flags
+import dbt.flags as flags
 
 from dbt import deprecations
-from dbt.adapters.factory import get_relation_class_by_name
+from dbt.adapters.factory import (
+    get_relation_class_by_name,
+    get_adapter_package_names,
+    get_include_paths,
+)
 from dbt.helper_types import PathSet
-from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered
@@ -22,6 +25,13 @@ from dbt.contracts.graph.compiled import NonSourceNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo,
+)
+from dbt.exceptions import (
+    ref_target_not_found,
+    get_target_not_found_or_disabled_msg,
+    source_target_not_found,
+    get_source_not_found_or_disabled_msg,
+    warn_or_error,
 )
 from dbt.parser.base import BaseParser, Parser
 from dbt.parser.analysis import AnalysisParser
@@ -36,6 +46,7 @@ from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import patch_sources
+from dbt.ui import warning_tag
 from dbt.version import __version__
 
 
@@ -119,13 +130,16 @@ class ManifestLoader:
     ) -> None:
         projects = self.all_projects
         if internal_manifest is not None:
+            # skip internal packages
+            packages = get_adapter_package_names(
+                self.root_project.credentials.type
+            )
             projects = {
-                k: v for k, v in self.all_projects.items() if k not in PACKAGES
+                k: v for k, v in self.all_projects.items() if k not in packages
             }
             self.results.macros.update(internal_manifest.macros)
             self.results.files.update(internal_manifest.files)
 
-        # TODO: go back to skipping the internal manifest during macro parsing
         for project in projects.values():
             parser = MacroParser(self.results, project)
             for path in parser.search():
@@ -267,8 +281,8 @@ class ManifestLoader:
 
     def _partial_parse_enabled(self):
         # if the CLI is set, follow that
-        if dbt.flags.PARTIAL_PARSE is not None:
-            return dbt.flags.PARTIAL_PARSE
+        if flags.PARTIAL_PARSE is not None:
+            return flags.PARTIAL_PARSE
         # if the config is set, follow that
         elif self.root_project.config.partial_parse is not None:
             return self.root_project.config.partial_parse
@@ -368,6 +382,52 @@ class ManifestLoader:
             return loader.load_only_macros()
 
 
+def invalid_ref_fail_unless_test(node, target_model_name,
+                                 target_model_package, disabled):
+
+    if node.resource_type == NodeType.Test:
+        msg = get_target_not_found_or_disabled_msg(
+            node, target_model_name, target_model_package, disabled
+        )
+        if disabled:
+            logger.debug(warning_tag(msg))
+        else:
+            warn_or_error(
+                msg,
+                log_fmt=warning_tag('{}')
+            )
+    else:
+        ref_target_not_found(
+            node,
+            target_model_name,
+            target_model_package,
+            disabled=disabled,
+        )
+
+
+def invalid_source_fail_unless_test(
+    node, target_name, target_table_name, disabled
+):
+    if node.resource_type == NodeType.Test:
+        msg = get_source_not_found_or_disabled_msg(
+            node, target_name, target_table_name, disabled
+        )
+        if disabled:
+            logger.debug(warning_tag(msg))
+        else:
+            warn_or_error(
+                msg,
+                log_fmt=warning_tag('{}')
+            )
+    else:
+        source_target_not_found(
+            node,
+            target_name,
+            target_table_name,
+            disabled=disabled
+        )
+
+
 def _check_resource_uniqueness(
     manifest: Manifest,
     config: RuntimeConfig,
@@ -414,10 +474,6 @@ def _warn_for_unused_resource_config_paths(
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-
-
-def internal_project_names():
-    return iter(PACKAGES.values())
 
 
 def _load_projects(config, paths):
@@ -543,7 +599,7 @@ def _process_refs_for_node(
             # This may raise. Even if it doesn't, we don't want to add
             # this node to the graph b/c there is no destination node
             node.config.enabled = False
-            dbt.utils.invalid_ref_fail_unless_test(
+            invalid_ref_fail_unless_test(
                 node, target_model_name, target_model_package,
                 disabled=(isinstance(target_model, Disabled))
             )
@@ -580,7 +636,7 @@ def _process_sources_for_node(
         if target_source is None or isinstance(target_source, Disabled):
             # this folows the same pattern as refs
             node.config.enabled = False
-            dbt.utils.invalid_source_fail_unless_test(
+            invalid_source_fail_unless_test(
                 node,
                 source_name,
                 table_name,
@@ -626,7 +682,8 @@ def process_node(
 
 
 def load_internal_projects(config):
-    return dict(_load_projects(config, internal_project_names()))
+    project_paths = get_include_paths(config.credentials.type)
+    return dict(_load_projects(config, project_paths))
 
 
 def load_internal_manifest(config: RuntimeConfig) -> Manifest:

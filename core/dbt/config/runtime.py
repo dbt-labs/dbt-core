@@ -11,16 +11,17 @@ from typing import (
 from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
+from .utils import parse_cli_vars
 from dbt import tracking
-from dbt.adapters.factory import get_relation_class_by_name
+from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
 from dbt.context.base import generate_base_context
 from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
+from dbt.contracts.relation import ComponentName
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.ui import printer
-from dbt.utils import parse_cli_vars
+from dbt.ui import warning_tag
 
 from dbt.contracts.project import Configuration, UserConfig
 from dbt.exceptions import (
@@ -31,10 +32,22 @@ from dbt.exceptions import (
     warn_or_error,
     raise_compiler_error
 )
-from dbt.include.global_project import PACKAGES
 from dbt.legacy_config_updater import ConfigUpdater
 
 from hologram import ValidationError
+
+
+def _project_quoting_dict(
+    proj: Project, profile: Profile
+) -> Dict[ComponentName, bool]:
+    src: Dict[str, Any] = profile.credentials.translate_aliases(proj.quoting)
+    result: Dict[ComponentName, bool] = {}
+    for key in ComponentName:
+        if key in src:
+            value = src[key]
+            if isinstance(value, bool):
+                result[key] = value
+    return result
 
 
 @dataclass
@@ -65,7 +78,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         quoting: Dict[str, Any] = (
             get_relation_class_by_name(profile.credentials.type)
             .get_default_quote_policy()
-            .replace_dict(project.quoting)
+            .replace_dict(_project_quoting_dict(project, profile))
         ).to_dict()
 
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
@@ -318,13 +331,14 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
 
-        warn_or_error(msg, log_fmt=printer.warning_tag('{}'))
+        warn_or_error(msg, log_fmt=warning_tag('{}'))
 
     def load_dependencies(self) -> Mapping[str, 'RuntimeConfig']:
         if self.dependencies is None:
             all_projects = {self.project_name: self}
+            internal_packages = get_include_paths(self.credentials.type)
             project_paths = itertools.chain(
-                map(Path, PACKAGES.values()),
+                internal_packages,
                 self._get_project_directories()
             )
             for project_name, project in self.load_projects(project_paths):

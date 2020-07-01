@@ -5,6 +5,9 @@ from typing import Dict, List, Any, Optional, Tuple, Set
 
 from hologram import ValidationError
 
+from .compile import CompileTask
+from .runnable import write_manifest
+
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
@@ -14,15 +17,11 @@ from dbt.contracts.results import (
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, print_timestamped_line
 from dbt.perf_utils import get_full_manifest
-import dbt.ui.printer
 import dbt.utils
 import dbt.compilation
 import dbt.exceptions
-
-from dbt.task.compile import CompileTask
-from dbt.task.runnable import write_manifest
 
 
 CATALOG_FILENAME = 'catalog.json'
@@ -214,7 +213,7 @@ class GenerateTask(CompileTask):
         if self.args.compile:
             compile_results = CompileTask.run(self)
             if any(r.error is not None for r in compile_results):
-                dbt.ui.printer.print_timestamped_line(
+                print_timestamped_line(
                     'compile failed, cannot generate docs'
                 )
                 return CatalogResults(
@@ -238,7 +237,7 @@ class GenerateTask(CompileTask):
 
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):
-            dbt.ui.printer.print_timestamped_line("Building catalog")
+            print_timestamped_line("Building catalog")
             catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
@@ -272,7 +271,7 @@ class GenerateTask(CompileTask):
                 .format(len(exceptions), (len(exceptions) != 1) * 's')
             )
 
-        dbt.ui.printer.print_timestamped_line(
+        print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))
         )
 

@@ -4,7 +4,6 @@ from typing import Optional, Union, MutableMapping
 from typing_extensions import Protocol
 
 import dbt.exceptions
-import dbt.flags
 from dbt.contracts.rpc import (
     TaskHandlerState,
     TaskID,

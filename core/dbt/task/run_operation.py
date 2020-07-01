@@ -3,15 +3,14 @@ from typing import Dict, Any
 
 import agate
 
-from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.task.runnable import ManifestTask
+from .runnable import ManifestTask
+
+import dbt.exceptions
 from dbt.adapters.factory import get_adapter
+from dbt.config.utils import parse_cli_vars
 from dbt.contracts.results import RunOperationResult
 from dbt.exceptions import InternalException
-
-import dbt
-import dbt.utils
-import dbt.exceptions
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class RunOperationTask(ManifestTask):
@@ -25,7 +24,7 @@ class RunOperationTask(ManifestTask):
         return package_name, macro_name
 
     def _get_kwargs(self) -> Dict[str, Any]:
-        return dbt.utils.parse_cli_vars(self.args.args)
+        return parse_cli_vars(self.args.args)
 
     def compile_manifest(self) -> None:
         if self.manifest is None:

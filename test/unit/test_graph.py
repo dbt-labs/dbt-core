@@ -2,6 +2,8 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
+from dbt.adapters.postgres import Plugin as PostgresPlugin
+from dbt.adapters.factory import reset_adapters
 import dbt.clients.system
 import dbt.compilation
 import dbt.exceptions
@@ -24,7 +26,7 @@ except ImportError:
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
-from .utils import config_from_parts_or_dicts, generate_name_macros, MockMacro
+from .utils import config_from_parts_or_dicts, generate_name_macros, MockMacro, inject_plugin
 
 
 class GraphTest(unittest.TestCase):
@@ -39,7 +41,7 @@ class GraphTest(unittest.TestCase):
         self.mock_hook_constructor.stop()
         self.load_patch.stop()
         self.load_source_file_patcher.stop()
-        # self.relation_update_patcher.stop()
+        reset_adapters()
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -104,8 +106,6 @@ class GraphTest(unittest.TestCase):
         self.mock_source_file = self.load_source_file_patcher.start()
         self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 
-        # self.relation_update_patcher = patch.object(RelationUpdate, '_relation_components', lambda: [])
-        # self.mock_relation_update = self.relation_update_patcher.start()
         self.internal_manifest = Manifest.from_macros(macros={
             n.unique_id: n for n in generate_name_macros('test_models_compile')
         })
@@ -131,6 +131,7 @@ class GraphTest(unittest.TestCase):
         self.mock_filesystem_constructor.side_effect = create_filesystem_searcher
         self.mock_hook_constructor = self.hook_patcher.start()
         self.mock_hook_constructor.side_effect = create_hook_patcher
+        inject_plugin(PostgresPlugin)
 
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:

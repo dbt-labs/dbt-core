@@ -8,7 +8,7 @@ from typing_extensions import Protocol
 
 
 from dbt.adapters.base.column import Column
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.clients import agate_helper
 from dbt.clients.jinja import get_rendered
 from dbt.config import RuntimeConfig, Project
@@ -573,10 +573,14 @@ class ProviderContext(ManifestContext):
         self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
 
     def _get_namespace(self):
+        internal_packages = get_adapter_package_names(
+            self.config.credentials.type
+        )
         return MacroNamespace(
             self.config.project_name,
             self.search_package,
             self.macro_stack,
+            internal_packages,
             self.model,
         )
 

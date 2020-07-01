@@ -5,8 +5,9 @@ from unittest import mock
 
 import pytest
 
-# make sure 'postgres' is in PACKAGES
+# make sure 'postgres' is available
 from dbt.adapters import postgres  # noqa
+from dbt.adapters import factory
 from dbt.adapters.base import AdapterConfig
 from dbt.clients.jinja import MacroStack
 from dbt.contracts.graph.parsed import (
@@ -186,7 +187,7 @@ REQUIRED_BASE_KEYS = frozenset({
 
 REQUIRED_TARGET_KEYS = REQUIRED_BASE_KEYS | {'target'}
 REQUIRED_DOCS_KEYS = REQUIRED_TARGET_KEYS | {'project_name'} | {'doc'}
-MACROS = frozenset({'macro_a', 'macro_b', 'root'})
+MACROS = frozenset({'macro_a', 'macro_b', 'root', 'dbt'})
 REQUIRED_QUERY_HEADER_KEYS = REQUIRED_TARGET_KEYS | {'project_name'} | MACROS
 REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     '_sql_results',
@@ -350,6 +351,13 @@ def get_adapter():
 
 
 @pytest.fixture
+def get_include_paths():
+    with mock.patch.object(factory, 'get_include_paths') as patch:
+        patch.return_value = []
+        yield patch
+
+
+@pytest.fixture
 def config():
     return config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
 
@@ -367,7 +375,7 @@ def test_query_header_context(config, manifest):
     assert_has_keys(REQUIRED_QUERY_HEADER_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_parse_context(config, manifest, get_adapter):
+def test_macro_parse_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_parser_macro(
         macro=manifest.macros['macro.root.macro_a'],
         config=config,
@@ -377,7 +385,7 @@ def test_macro_parse_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_runtime_context(config, manifest, get_adapter):
+def test_macro_runtime_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_macro(
         macro=manifest.macros['macro.root.macro_a'],
         config=config,
@@ -387,7 +395,7 @@ def test_macro_runtime_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_parse_context(config, manifest, get_adapter):
+def test_model_parse_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_parser_model(
         model=mock_model(),
         config=config,
@@ -397,7 +405,7 @@ def test_model_parse_context(config, manifest, get_adapter):
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_runtime_context(config, manifest, get_adapter):
+def test_model_runtime_context(config, manifest, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_model(
         model=mock_model(),
         config=config,
@@ -412,7 +420,7 @@ def test_docs_runtime_context(config):
 
 
 def test_macro_namespace(config, manifest):
-    mn = configured.MacroNamespace('root', 'search', MacroStack())
+    mn = configured.MacroNamespace('root', 'search', MacroStack(), ['dbt_postgres', 'dbt'])
     mn.add_macros(manifest.macros.values(), {})
 
     # same pkg, same name
@@ -421,6 +429,11 @@ def test_macro_namespace(config, manifest):
 
     mn.add_macro(mock_macro('some_macro', 'dbt'), {})
 
-    # same namespace, same name (different pkg!)
-    with pytest.raises(dbt.exceptions.CompilationException):
-        mn.add_macro(mock_macro('some_macro', 'dbt_postgres'), {})
+    # same namespace, same name, different pkg!
+    pg_macro = mock_macro('some_macro', 'dbt_postgres')
+    mn.add_macro(pg_macro, {})
+
+    results = mn.get_macro_dict()
+    assert len(results['dbt']) == 1
+    assert len(results['root']) == 2
+    assert results['dbt']['some_macro'].macro is pg_macro
