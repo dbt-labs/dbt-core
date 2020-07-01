@@ -132,7 +132,6 @@ class AdapterContainer:
                 key=lambda k: k == GLOBAL_PROJECT_NAME
             )
         package_names: List[str] = []
-        # package_names: Set[str] = {GLOBAL_PROJECT_NAME}
         # slice into a list instead of using a set + pop(), to preserve order
         plugin_names: List[str] = [name]
         while plugin_names:
