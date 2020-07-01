@@ -1,5 +1,8 @@
 ## dbt 0.17.1 (Release TBD)
 
+## dbt 0.17.1rc3 (July 01, 2020)
+
+
 ### Fixes
 - dbt native rendering now avoids turning quoted strings into unquoted strings ([#2597](https://github.com/fishtown-analytics/dbt/issues/2597), [#2599](https://github.com/fishtown-analytics/dbt/pull/2599))
 - Hash name of local packages ([#2600](https://github.com/fishtown-analytics/dbt/pull/2600))
