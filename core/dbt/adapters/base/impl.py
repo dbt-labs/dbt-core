@@ -1124,7 +1124,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         relation_a: BaseRelation,
         relation_b: BaseRelation,
         column_names: Optional[List[str]] = None,
-        except_operator: str = 'EXCEPT',
+        except_operator: str = "EXCEPT",
     ) -> str:
         """Generate SQL for a query that returns a single row with a two
         columns: the number of rows that are different between the two
@@ -1137,7 +1137,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             names = sorted((self.quote(c.name) for c in columns))
         else:
             names = sorted((self.quote(n) for n in column_names))
-        columns_csv = ', '.join(names)
+        columns_csv = ", ".join(names)
 
         sql = COLUMNS_EQUAL_SQL.format(
             columns=columns_csv,
@@ -1149,7 +1149,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return sql
 
 
-COLUMNS_EQUAL_SQL = '''
+COLUMNS_EQUAL_SQL = """
 with diff_count as (
     SELECT
         1 as id,
@@ -1175,7 +1175,7 @@ select
     diff_count.num_missing as num_mismatched
 from row_count_diff
 join diff_count using (id)
-'''.strip()
+""".strip()
 
 
 def catch_as_completed(

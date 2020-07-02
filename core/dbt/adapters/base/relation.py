@@ -56,7 +56,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @classmethod
     def get_default_include_policy(cls) -> Policy:
-        return cls._get_field_named('include_policy').default
+        return cls._get_field_named("include_policy").default
 
     def get(self, key, default=None):
         """Override `.get` to return a metadata object so we don't break
