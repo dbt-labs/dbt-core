@@ -1,21 +1,24 @@
 default:
   outputs:
+
     dev:
       type: postgres
       threads: 1
       host: 127.0.0.1
       port: 5439
-      user: alice
-      pass: pa55word
+      user: [dev_username]
+      pass: [dev_password]
       dbname: warehouse
-      schema: dbt_alice
+      schema: [dev_schema]
+
     prod:
       type: postgres
       threads: 1
       host: 127.0.0.1
       port: 5439
-      user: alice
-      pass: pa55word
+      user: [prod_username]
+      pass: [prod_password]
       dbname: warehouse
-      schema: analytics
+      schema: [prod_schema]
+
   target: dev
