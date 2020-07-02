@@ -3,16 +3,27 @@ import tempfile
 import unittest
 from unittest import mock
 
-from dbt import linker
+from dbt import compilation
 try:
     from queue import Empty
 except ImportError:
     from Queue import Empty
 
+from dbt.graph.selector import NodeSelector
+from dbt.graph.cli import parse_difference
+
 
 def _mock_manifest(nodes):
+    config = mock.MagicMock(enabled=True)
     manifest = mock.MagicMock(nodes={
-        n: mock.MagicMock(unique_id=n) for n in nodes
+        n: mock.MagicMock(
+            unique_id=n,
+            package_name='pkg',
+            name=n,
+            empty=False,
+            config=config,
+            fqn=['pkg', n],
+        ) for n in nodes
     })
     manifest.expect.side_effect = lambda n: mock.MagicMock(unique_id=n)
     return manifest
@@ -21,13 +32,7 @@ def _mock_manifest(nodes):
 class LinkerTest(unittest.TestCase):
 
     def setUp(self):
-        self.patcher = mock.patch.object(linker, 'is_blocking_dependency')
-        self.is_blocking_dependency = self.patcher.start()
-        self.is_blocking_dependency.return_value = True
-        self.linker = linker.Linker()
-
-    def tearDown(self):
-        self.patcher.stop()
+        self.linker = compilation.Linker()
 
     def test_linker_add_node(self):
         expected_nodes = ['A', 'B', 'C']
@@ -40,7 +45,7 @@ class LinkerTest(unittest.TestCase):
 
         self.assertEqual(len(actual_nodes), len(expected_nodes))
 
-    def test_linker_write_and_read_graph(self):
+    def test_linker_write_graph(self):
         expected_nodes = ['A', 'B', 'C']
         for node in expected_nodes:
             self.linker.add_node(node)
@@ -50,19 +55,19 @@ class LinkerTest(unittest.TestCase):
         os.close(fd)
         try:
             self.linker.write_graph(fname, manifest)
-            new_linker = linker.from_file(fname)
+            assert os.path.exists(fname)
         finally:
             os.unlink(fname)
-
-        actual_nodes = new_linker.nodes()
-        for node in expected_nodes:
-            self.assertIn(node, actual_nodes)
-
-        self.assertEqual(len(actual_nodes), len(expected_nodes))
 
     def assert_would_join(self, queue):
         """test join() without timeout risk"""
         self.assertEqual(queue.inner.unfinished_tasks, 0)
+
+    def _get_graph_queue(self, manifest, include=None, exclude=None):
+        graph = compilation.Graph(self.linker.graph)
+        selector = NodeSelector(graph, manifest)
+        spec = parse_difference(include, exclude)
+        return selector.get_graph_queue(spec)
 
     def test_linker_add_dependency(self):
         actual_deps = [('A', 'B'), ('A', 'C'), ('B', 'C')]
@@ -70,8 +75,7 @@ class LinkerTest(unittest.TestCase):
         for (l, r) in actual_deps:
             self.linker.dependency(l, r)
 
-        manifest = _mock_manifest('ABC')
-        queue = self.linker.as_graph_queue(manifest)
+        queue = self._get_graph_queue(_mock_manifest('ABC'))
 
         got = queue.get(block=False)
         self.assertEqual(got.unique_id, 'C')
@@ -106,10 +110,7 @@ class LinkerTest(unittest.TestCase):
             self.linker.dependency(l, r)
         self.linker.add_node(additional_node)
 
-
-        manifest = _mock_manifest('ABZ')
-        queue = self.linker.as_graph_queue(manifest)
-
+        queue = self._get_graph_queue(_mock_manifest('ABCZ'))
         # the first one we get must be B, it has the longest dep chain
         first = queue.get(block=False)
         self.assertEqual(first.unique_id, 'B')
@@ -139,14 +140,14 @@ class LinkerTest(unittest.TestCase):
         for (l, r) in actual_deps:
             self.linker.dependency(l, r)
 
-        queue = self.linker.as_graph_queue(_mock_manifest('ABCD'), ['B'])
+        queue = self._get_graph_queue(_mock_manifest('ABCD'), ['B'])
         got = queue.get(block=False)
         self.assertEqual(got.unique_id, 'B')
         self.assertTrue(queue.empty())
         queue.mark_done('B')
         self.assert_would_join(queue)
 
-        queue_2 = self.linker.as_graph_queue(_mock_manifest('ABCD'), ['A', 'B'])
+        queue_2 = queue = self._get_graph_queue(_mock_manifest('ABCD'), ['A', 'B'])
         got = queue_2.get(block=False)
         self.assertEqual(got.unique_id, 'B')
         self.assertFalse(queue_2.empty())
@@ -163,15 +164,6 @@ class LinkerTest(unittest.TestCase):
         self.assertTrue(queue_2.empty())
         queue_2.mark_done('A')
         self.assert_would_join(queue_2)
-
-    def test_linker_bad_limit_throws_runtime_error(self):
-        actual_deps = [('A', 'B'), ('B', 'C'), ('C', 'D')]
-
-        for (l, r) in actual_deps:
-            self.linker.dependency(l, r)
-
-        with self.assertRaises(RuntimeError):
-            self.linker.as_graph_queue(_mock_manifest('ABCD'), ['ZZZ'])
 
     def test__find_cycles__cycles(self):
         actual_deps = [('A', 'B'), ('B', 'C'), ('C', 'A')]

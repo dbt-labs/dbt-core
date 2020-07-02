@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from typing import Dict
+from typing import Dict, List
 
 from .base import BaseRunner
 from .printer import (
@@ -21,6 +21,11 @@ from dbt.logger import print_timestamped_line
 from dbt.node_types import NodeType
 
 from dbt import utils
+
+from dbt.graph.selector import NodeSelector
+from dbt.graph.cli import parse_difference
+from dbt.contracts.graph.parsed import ParsedSourceDefinition
+
 
 RESULT_FILE_NAME = 'sources.json'
 
@@ -101,6 +106,15 @@ class FreshnessRunner(BaseRunner):
         return self.node
 
 
+class FreshnessSelector(NodeSelector):
+    def node_is_match(self, node):
+        if not super().node_is_match(node):
+            return False
+        if not isinstance(node, ParsedSourceDefinition):
+            return False
+        return node.has_freshness
+
+
 class FreshnessTask(GraphRunnableTask):
     def result_path(self):
         if self.args.output:
@@ -111,18 +125,23 @@ class FreshnessTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return False
 
-    def build_query(self):
+    def get_selection_spec(self) -> List[str]:
         include = [
             'source:{}'.format(s)
             for s in (self.args.selected or ['*'])
         ]
-        return {
-            "include": include,
-            "resource_types": [NodeType.Source],
-            "tags": [],
-            "required": ['has_freshness'],
-            "addin_ephemeral_nodes": False,
-        }
+        spec = parse_difference(include, None)
+        return spec
+
+    def get_node_selector(self):
+        if self.manifest is None or self.graph is None:
+            raise InternalException(
+                'manifest and graph must be set to get perform node selection'
+            )
+        return FreshnessSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+        )
 
     def get_runner_type(self):
         return FreshnessRunner
