@@ -51,6 +51,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     def get_default_quote_policy(cls) -> Policy:
         return cls._get_field_named('quote_policy').default
 
+    @classmethod
+    def get_default_include_policy(cls) -> Policy:
+        return cls._get_field_named('include_policy').default
+
     def get(self, key, default=None):
         """Override `.get` to return a metadata object so we don't break
         dbt_utils.

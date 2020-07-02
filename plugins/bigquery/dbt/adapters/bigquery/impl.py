@@ -738,3 +738,17 @@ class BigQueryAdapter(BaseAdapter):
         access_entries.append(AccessEntry(role, entity_type, entity))
         dataset.access_entries = access_entries
         client.update_dataset(dataset, ['access_entries'])
+
+    def get_rows_different_sql(
+        self,
+        relation_a: BigQueryRelation,
+        relation_b: BigQueryRelation,
+        column_names: Optional[List[str]] = None,
+        except_operator='EXCEPT DISTINCT'
+    ) -> str:
+        return super().get_rows_different_sql(
+            relation_a=relation_a,
+            relation_b=relation_b,
+            column_names=column_names,
+            except_operator=except_operator,
+        )

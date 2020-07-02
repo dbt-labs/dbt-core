@@ -880,46 +880,11 @@ class DBTIntegrationTest(unittest.TestCase):
     def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
         if columns is None:
             columns = self.get_relation_columns(relation_a)
+        column_names = [c[0] for c in columns]
 
-        columns_csv = ', '.join([self.adapter.quote(record[0]) for record in columns])
-
-        if self.adapter_type == 'bigquery':
-            except_operator = 'EXCEPT DISTINCT'
-        else:
-            except_operator = 'EXCEPT'
-
-        sql = """
-            with diff_count as (
-                SELECT
-                    1 as id,
-                    COUNT(*) as num_missing FROM (
-                        (SELECT {columns} FROM {relation_a} {except_op}
-                         SELECT {columns} FROM {relation_b})
-                         UNION ALL
-                        (SELECT {columns} FROM {relation_b} {except_op}
-                         SELECT {columns} FROM {relation_a})
-                    ) as a
-            ), table_a as (
-                SELECT COUNT(*) as num_rows FROM {relation_a}
-            ), table_b as (
-                SELECT COUNT(*) as num_rows FROM {relation_b}
-            ), row_count_diff as (
-                select
-                    1 as id,
-                    table_a.num_rows - table_b.num_rows as difference
-                from table_a, table_b
-            )
-            select
-                row_count_diff.difference as row_count_difference,
-                diff_count.num_missing as num_mismatched
-            from row_count_diff
-            join diff_count using (id)
-            """.strip().format(
-                columns=columns_csv,
-                relation_a=str(relation_a),
-                relation_b=str(relation_b),
-                except_op=except_operator
-            )
+        sql = self.adapter.get_rows_different_sql(
+            relation_a, relation_b, column_names
+        )
 
         return sql
 
