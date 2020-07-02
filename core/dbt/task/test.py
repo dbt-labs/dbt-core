@@ -243,9 +243,7 @@ class TestTask(RunTask):
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get perform node selection'
-            )
+            raise InternalException("manifest and graph must be set to get perform node selection")
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,

@@ -13,12 +13,12 @@ from dbt.exceptions import RuntimeException, InvalidSelectorException
 
 
 RAW_SELECTOR_PATTERN = re.compile(
-    r'\A'
+    r"\A"
     r'(?P<childrens_parents>(\@))?'
-    r'(?P<parents>((?P<parents_depth>(\d*))\+))?'
+    r"(?P<parents>((?P<parents_depth>(\d*))\+))?"
     r'((?P<method>([\w.]+)):)?(?P<value>(.*?))'
-    r'(?P<children>(\+(?P<children_depth>(\d*))))?'
-    r'\Z'
+    r"(?P<children>(\+(?P<children_depth>(\d*))))?"
+    r"\Z"
 )
 SELECTOR_METHOD_SEPARATOR = '.'
 
@@ -48,16 +48,14 @@ def _match_to_int(match: Dict[str, str], key: str) -> Optional[int]:
     try:
         return int(raw)
     except ValueError as exc:
-        raise RuntimeException(
-            f'Invalid node spec - could not handle parent depth {raw}'
-        ) from exc
+        raise RuntimeException(f"Invalid node spec - could not handle parent depth {raw}") from exc
 
 
 SelectionSpec = Union[
-    'SelectionCriteria',
-    'SelectionIntersection',
-    'SelectionDifference',
-    'SelectionUnion',
+    "SelectionCriteria",
+    "SelectionIntersection",
+    "SelectionDifference",
+    "SelectionUnion",
 ]
 
 
@@ -77,8 +75,7 @@ class SelectionCriteria:
     def __post_init__(self):
         if self.children and self.childrens_parents:
             raise RuntimeException(
-                f'Invalid node spec {self.raw} - "@" prefix and "+" suffix '
-                'are incompatible'
+                f'Invalid node spec {self.raw} - "@" prefix and "+" suffix ' "are incompatible"
             )
 
     @classmethod
@@ -114,9 +111,9 @@ class SelectionCriteria:
         indirect_selection: IndirectSelection = IndirectSelection.Eager
         dct: Dict[str, Any],
         if 'value' not in dct:
-            raise RuntimeException(
-                f'Invalid node spec "{raw}" - no search value!'
-            )
+    ) -> "SelectionCriteria":
+        if "value" not in dct:
+            raise RuntimeException(f'Invalid node spec "{raw}" - no search value!')
         method_name, method_arguments = cls.parse_method(dct)
 
         parents_depth = _match_to_int(dct, 'parents_depth')
@@ -197,9 +194,7 @@ class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):
         self,
         selections: List[Set[UniqueId]],
     ) -> Set[UniqueId]:
-        raise NotImplementedError(
-            '_combine_selections not implemented!'
-        )
+        raise NotImplementedError("_combine_selections not implemented!")
 
     def combined(self, selections: List[Set[UniqueId]]) -> Set[UniqueId]:
         if not selections:

@@ -19,7 +19,7 @@ from .selector_spec import (
     IndirectSelection
 )
 
-INTERSECTION_DELIMITER = ','
+INTERSECTION_DELIMITER = ","
 
 DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*', 'metric:*']
 DEFAULT_EXCLUDES: List[str] = []
@@ -30,9 +30,7 @@ def parse_union(
     indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
-    raw_specs = itertools.chain.from_iterable(
-        r.split(' ') for r in components
-    )
+    raw_specs = itertools.chain.from_iterable(r.split(" ") for r in components)
     union_components: List[SelectionSpec] = []
 
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
@@ -41,11 +39,13 @@ def parse_union(
             SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
-        union_components.append(SelectionIntersection(
-            components=intersection_components,
-            expect_exists=expect_exists,
-            raw=raw_spec,
-        ))
+        union_components.append(
+            SelectionIntersection(
+                components=intersection_components,
+                expect_exists=expect_exists,
+                raw=raw_spec,
+            )
+        )
     return SelectionUnion(
         components=union_components,
         expect_exists=False,

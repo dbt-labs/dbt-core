@@ -30,8 +30,8 @@ from dbt.exceptions import (
 from dbt.node_types import NodeType
 
 
-SELECTOR_GLOB = '*'
-SELECTOR_DELIMITER = ':'
+SELECTOR_GLOB = "*"
+SELECTOR_DELIMITER = ":"
 
 
 class MethodName(StrEnum):
@@ -162,7 +162,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         included_nodes: Set[UniqueId],
         selector: str,
     ) -> Iterator[UniqueId]:
-        raise NotImplementedError('subclasses should implement this')
+        raise NotImplementedError("subclasses should implement this")
 
 
 class QualifiedNameSelectorMethod(SelectorMethod):
@@ -211,7 +211,7 @@ class SourceSelectorMethod(SelectorMethod):
         self, included_nodes: Set[UniqueId], selector: str
     ) -> Iterator[UniqueId]:
         """yields nodes from included are the specified source."""
-        parts = selector.split('.')
+        parts = selector.split(".")
         target_package = SELECTOR_GLOB
         if len(parts) == 1:
             target_source, target_table = parts[0], None
@@ -222,9 +222,9 @@ class SourceSelectorMethod(SelectorMethod):
         else:  # len(parts) > 3 or len(parts) == 0
             msg = (
                 'Invalid source selector value "{}". Sources must be of the '
-                'form `${{source_name}}`, '
-                '`${{source_name}}.${{target_name}}`, or '
-                '`${{package_name}}.${{source_name}}.${{target_name}}'
+                "form `${{source_name}}`, "
+                "`${{source_name}}.${{target_name}}`, or "
+                "`${{package_name}}.${{source_name}}.${{target_name}}"
             ).format(selector)
             raise RuntimeException(msg)
 

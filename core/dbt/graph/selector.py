@@ -43,7 +43,7 @@ def can_select_indirectly(node):
 
 
 class NodeSelector(MethodManager):
-    """The node selector is aware of the graph and manifest,
+    """The node selector is aware of the graph and manifest,"""
     """
     def __init__(
         self,
@@ -200,9 +200,7 @@ class NodeSelector(MethodManager):
         """Return the subset of selected nodes that is a match for this
         selector.
         """
-        return {
-            unique_id for unique_id in selected if self._is_match(unique_id)
-        }
+        return {unique_id for unique_id in selected if self._is_match(unique_id)}
 
     def expand_selection(
         self, selected: Set[UniqueId],
@@ -263,12 +261,12 @@ class NodeSelector(MethodManager):
     def get_selected(self, spec: SelectionSpec) -> Set[UniqueId]:
         """get_selected runs through the node selection process:
 
-            - node selection. Based on the include/exclude sets, the set
-                of matched unique IDs is returned
+        - node selection. Based on the include/exclude sets, the set
+            of matched unique IDs is returned
                 - includes direct + indirect selection (for tests)
-            - filtering:
-                - selectors can filter the nodes after all of them have been
-                  selected
+        - filtering:
+            - selectors can filter the nodes after all of them have been
+              selected
         """
         selected_nodes, indirect_only = self.select_nodes(spec)
         filtered_nodes = self.filter_selection(selected_nodes)

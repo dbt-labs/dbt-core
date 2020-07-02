@@ -609,9 +609,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         obj._lock = flags.MP_CONTEXT.Lock()
         return obj
 
-    def sync_update_node(
-        self, new_node: NonSourceCompiledNode
-    ) -> NonSourceCompiledNode:
+    def sync_update_node(self, new_node: NonSourceCompiledNode) -> NonSourceCompiledNode:
         """update the node with a lock. The only time we should want to lock is
         when compiling an ephemeral ancestor of a node at runtime, because
         multiple threads could be just-in-time compiling the same ephemeral
@@ -623,7 +621,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         """
         with self._lock:
             existing = self.nodes[new_node.unique_id]
-            if getattr(existing, 'compiled', False):
+            if getattr(existing, "compiled", False):
                 # already compiled -> must be a NonSourceCompiledNode
                 return cast(NonSourceCompiledNode, existing)
             _update_into(self.nodes, new_node)

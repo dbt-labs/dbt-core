@@ -396,7 +396,7 @@ class GraphRunnableTask(ManifestTask):
 
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
-            raise InternalException('graph is None in _mark_dependent_errors')
+            raise InternalException("graph is None in _mark_dependent_errors")
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 

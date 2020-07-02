@@ -39,7 +39,7 @@ graph_file_name = "graph.gpickle"
 def _compiled_type_for(model: ParsedNode):
     if type(model) not in COMPILED_TYPES:
         raise InternalException(
-            f'Asked to compile {type(model)} node, but it has no compiled form'
+            f"Asked to compile {type(model)} node, but it has no compiled form"
         )
     return COMPILED_TYPES[type(model)]
 
