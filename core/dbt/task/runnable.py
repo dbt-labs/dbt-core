@@ -139,9 +139,7 @@ class GraphRunnableTask(ManifestTask):
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
-        raise NotImplementedException(
-            f'get_node_selector not implemented for task {type(self)}'
-        )
+        raise NotImplementedException(f"get_node_selector not implemented for task {type(self)}")
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
