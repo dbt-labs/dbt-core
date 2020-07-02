@@ -184,9 +184,7 @@ class NodeSelector(MethodManager):
         elif unique_id in self.manifest.metrics:
             node = self.manifest.metrics[unique_id]
         else:
-            raise InternalException(
-                f'Node {unique_id} not found in the manifest!'
-            )
+            raise InternalException(f"Node {unique_id} not found in the manifest!")
         return self.node_is_match(node)
 
     def filter_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
