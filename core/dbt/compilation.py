@@ -66,10 +66,7 @@ def print_compile_stats(stats):
         resource_counts = {k.pluralize(): v for k, v in results.items()}
         dbt.tracking.track_resource_counts(resource_counts)
 
-    stat_line = ", ".join([
-        pluralize(ct, names.get(t)) for t, ct in results.items()
-        if t in names
-    ])
+    stat_line = ", ".join([pluralize(ct, names.get(t)) for t, ct in results.items() if t in names])
 
     fire_event(FoundStats(stat_line=stat_line))
 
