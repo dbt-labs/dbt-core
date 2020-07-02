@@ -1,5 +1,6 @@
 import os
 import time
+from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
@@ -37,14 +38,14 @@ from dbt.exceptions import (
     RuntimeException,
     FailFastException
 )
-from dbt.linker import Linker, GraphQueue
+from dbt.graph.graph import Graph
+from dbt.graph.queue import GraphQueue
+from dbt.graph.selector import NodeSelector
 from dbt.perf_utils import get_full_manifest
 
 import dbt.exceptions
 from dbt import flags
 import dbt.utils
-
-import dbt.graph.selector
 
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
@@ -60,7 +61,7 @@ class ManifestTask(ConfiguredTask):
     def __init__(self, args, config):
         super().__init__(args, config)
         self.manifest: Optional[Manifest] = None
-        self.linker: Optional[Linker] = None
+        self.graph: Optional[Graph] = None
 
     def load_manifest(self):
         self.manifest = get_full_manifest(self.config)
@@ -71,7 +72,7 @@ class ManifestTask(ConfiguredTask):
             raise InternalException(
                 'compile_manifest called before manifest was loaded'
             )
-        self.linker = compile_manifest(self.config, self.manifest)
+        self.graph = compile_manifest(self.config, self.manifest)
 
     def _runtime_initialize(self):
         self.load_manifest()
@@ -93,31 +94,35 @@ class GraphRunnableTask(ManifestTask):
     def index_offset(self, value: int) -> int:
         return value
 
-    def select_nodes(self):
-        if self.manifest is None or self.linker is None:
-            raise InternalException(
-                'select_nodes called before manifest and linker were loaded'
-            )
-
-        selector = dbt.graph.selector.NodeSelector(
-            self.linker.graph, self.manifest
+    @abstractmethod
+    def get_selection_spec(self) -> List[str]:
+        raise NotImplementedException(
+            f'get_selection_spec not implemented for task {type(self)}'
         )
-        selected_nodes = selector.select(self.build_query())
-        return selected_nodes
+
+    @abstractmethod
+    def get_node_selector(self) -> NodeSelector:
+        raise NotImplementedException(
+            f'get_node_selector not implemented for task {type(self)}'
+        )
+
+    def get_graph_queue(self) -> GraphQueue:
+        selector = self.get_node_selector()
+        spec = self.get_selection_spec()
+        return selector.get_graph_queue(spec)
 
     def _runtime_initialize(self):
         super()._runtime_initialize()
-        if self.manifest is None or self.linker is None:
+        if self.manifest is None or self.graph is None:
             raise InternalException(
-                '_runtime_initialize never loaded the manifest and linker!'
+                '_runtime_initialize never loaded the manifest and graph!'
             )
-        selected_nodes = self.select_nodes()
-        self.job_queue = self.linker.as_graph_queue(self.manifest,
-                                                    selected_nodes)
+
+        self.job_queue = self.get_graph_queue()
 
         # we use this a couple times. order does not matter.
         self._flattened_nodes = []
-        for uid in selected_nodes:
+        for uid in self.job_queue.get_selected_nodes():
             if uid in self.manifest.nodes:
                 self._flattened_nodes.append(self.manifest.nodes[uid])
             elif uid in self.manifest.sources:
@@ -135,9 +140,6 @@ class GraphRunnableTask(ManifestTask):
 
     def raise_on_first_error(self):
         return False
-
-    def build_query(self):
-        raise NotImplementedException('Not Implemented')
 
     def get_runner_type(self):
         raise NotImplementedException('Not Implemented')
@@ -344,9 +346,9 @@ class GraphRunnableTask(ManifestTask):
         return self.node_results
 
     def _mark_dependent_errors(self, node_id, result, cause):
-        if self.linker is None:
-            raise InternalException('linker is None in _mark_dependent_errors')
-        for dep_node_id in self.linker.get_dependent_nodes(node_id):
+        if self.graph is None:
+            raise InternalException('graph is None in _mark_dependent_errors')
+        for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
     def populate_adapter_cache(self, adapter):

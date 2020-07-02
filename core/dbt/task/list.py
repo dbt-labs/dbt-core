@@ -1,6 +1,10 @@
 import json
+from typing import Type, List
 
+from dbt.graph.selector import ResourceTypeSelector
+from dbt.graph.cli import parse_difference
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
+from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import log_manager, GLOBAL_LOGGER as logger
@@ -49,7 +53,8 @@ class ListTask(GraphRunnableTask):
         super().pre_init_hook(args)
 
     def _iterate_selected_nodes(self):
-        nodes = sorted(self.select_nodes())
+        selector = self.get_node_selector()
+        nodes = sorted(selector.get_selected())
         if not nodes:
             logger.warning('No nodes selected!')
             return
@@ -139,14 +144,29 @@ class ListTask(GraphRunnableTask):
         else:
             return self.args.select
 
-    def build_query(self):
-        return {
-            "include": self.selector,
-            "exclude": self.args.exclude,
-            "resource_types": self.resource_types,
-            "tags": [],
-            "addin_ephemeral_nodes": False
-        }
+    def get_selection_spec(self) -> List[str]:
+        spec = parse_difference(self.selector, self.args.exclude)
+        return spec
+
+    def get_node_selector(self):
+        if self.manifest is None or self.graph is None:
+            raise InternalException(
+                'manifest and graph must be set to get perform node selection'
+            )
+        cls: Type[ResourceTypeSelector]
+        if self.resource_types == [NodeType.Test]:
+            return TestSelector(
+                graph=self.graph,
+                manifest=self.manifest,
+                schema=True,
+                data=True
+            )
+        else:
+            return ResourceTypeSelector(
+                graph=self.graph,
+                manifest=self.manifest,
+                resource_types=self.resource_types,
+            )
 
     def interpret_results(self, results):
         return bool(results)

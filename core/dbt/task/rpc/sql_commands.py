@@ -97,28 +97,6 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
         sql = ''.join(data_chunks)
         return sql, macros
 
-    def _compile_ancestors(self, unique_id: str):
-        # this just gets a transitive closure of the nodes. We could build a
-        # special GraphQueue around this, but we do them all in the main thread
-        # so we only care about preserving dependency order anyway
-        if self.linker is None or self.manifest is None:
-            raise InternalException(
-                'linker and manifest not set in _compile_ancestors'
-            )
-        sorted_ancestors = self.linker.sorted_ephemeral_ancestors(
-            self.manifest,
-            unique_id,
-        )
-        # We're just compiling, so we don't need to use a graph queue
-        adapter = get_adapter(self.config)  # type: ignore
-
-        for unique_id in sorted_ancestors:
-            # for each node, compile it + overwrite it
-            parsed = self.manifest.expect(unique_id)
-            self.manifest.nodes[unique_id] = compile_node(
-                adapter, self.config, parsed, self.manifest, {}, write=False
-            )
-
     def _get_exec_node(self):
         if self.manifest is None:
             raise InternalException(
@@ -151,8 +129,9 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
         )
 
         # don't write our new, weird manifest!
-        self.linker = compile_manifest(self.config, self.manifest, write=False)
-        self._compile_ancestors(rpc_node.unique_id)
+        self.graph = compile_manifest(self.config, self.manifest, write=False)
+        # previously, this compiled the ancestors, but they are compiled at
+        # runtime now.
         return rpc_node
 
     def _raise_set_error(self):
