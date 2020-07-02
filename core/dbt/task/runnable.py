@@ -149,9 +149,7 @@ class GraphRunnableTask(ManifestTask):
     def _runtime_initialize(self):
         super()._runtime_initialize()
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                '_runtime_initialize never loaded the manifest and graph!'
-            )
+            raise InternalException("_runtime_initialize never loaded the manifest and graph!")
 
         self.job_queue = self.get_graph_queue()
 
