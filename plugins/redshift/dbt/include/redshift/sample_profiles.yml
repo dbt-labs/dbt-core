@@ -1,21 +1,25 @@
 default:
   outputs:
+
     dev:
       type: redshift
       threads: 1
       host: 127.0.0.1
       port: 5439
-      user: alice
-      pass: pa55word
+      user: [dev_username]
+      pass: [dev_password]
       dbname: warehouse
-      schema: dbt_alice
+      schema: [dev_schema]
+
     prod:
       type: redshift
+      method: iam
+      cluster_id: [cluster_id]
       threads: 1
       host: 127.0.0.1
       port: 5439
-      user: alice
-      pass: pa55word
+      user: [prod_user]
       dbname: warehouse
-      schema: analytics
+      schema: [prod_schema]
+
   target: dev

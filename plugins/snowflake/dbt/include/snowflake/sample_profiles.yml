@@ -1,17 +1,29 @@
-my-snowflake-db:
-  target: dev
+default:
   outputs:
-    dev:
+
+    dev: # User-Password config
       type: snowflake
       account: [account id]
-
-      # User/password auth
       user: [username]
       password: [password]
-
       role: [user role]
       database: [database name]
       warehouse: [warehouse name]
       schema: [dbt schema]
       threads: [1 or more]
       client_session_keep_alive: False
+
+    prod: # Keypair config
+      type: snowflake
+      account: [account id]
+      user: [username]
+      role: [user role]
+      private_key_path: [path/to/private.key]
+      private_key_passphrase: [passphrase for the private key, if key is encrypted]
+      database: [database name]
+      warehouse: [warehouse name]
+      schema: [dbt schema]
+      threads: [1 or more]
+      client_session_keep_alive: False
+  
+  target: dev
