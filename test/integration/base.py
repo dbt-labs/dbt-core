@@ -184,7 +184,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'type': 'redshift',
                         'threads': 1,
                         'host': os.getenv('REDSHIFT_TEST_HOST'),
-                        'port': os.getenv('REDSHIFT_TEST_PORT'),
+                        'port': int(os.getenv('REDSHIFT_TEST_PORT')),
                         'user': os.getenv('REDSHIFT_TEST_USER'),
                         'pass': os.getenv('REDSHIFT_TEST_PASS'),
                         'dbname': os.getenv('REDSHIFT_TEST_DBNAME'),

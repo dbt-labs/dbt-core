@@ -8,7 +8,8 @@ from ast import literal_eval
 from contextlib import contextmanager
 from itertools import chain, islice
 from typing import (
-    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn, Tuple
+    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn, Tuple,
+    Callable
 )
 
 import jinja2
@@ -28,7 +29,7 @@ from dbt.contracts.graph.compiled import CompiledSchemaTestNode
 from dbt.contracts.graph.parsed import ParsedSchemaTestNode
 from dbt.exceptions import (
     InternalException, raise_compiler_error, CompilationException,
-    invalid_materialization_argument, MacroReturn
+    invalid_materialization_argument, MacroReturn, JinjaRenderingException
 )
 from dbt.flags import MACRO_DEBUGGING
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -111,6 +112,24 @@ class TextMarker(str):
     """
 
 
+class NativeMarker(str):
+    """A special native-env marker that indicates the field should be passed to
+    literal_eval.
+    """
+
+
+class BoolMarker(NativeMarker):
+    pass
+
+
+class NumberMarker(NativeMarker):
+    pass
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def quoted_native_concat(nodes):
     """This is almost native_concat from the NativeTemplate, except in the
     special case of a single argument that is a quoted string and returns a
@@ -119,23 +138,31 @@ def quoted_native_concat(nodes):
     head = list(islice(nodes, 2))
 
     if not head:
-        return None
+        return ''
 
     if len(head) == 1:
         raw = head[0]
         if isinstance(raw, TextMarker):
             return str(raw)
+        elif not isinstance(raw, NativeMarker):
+            # return non-strings as-is
+            return raw
     else:
-        raw = "".join([str(v) for v in chain(head, nodes)])
+        # multiple nodes become a string.
+        return "".join([str(v) for v in chain(head, nodes)])
 
     try:
         result = literal_eval(raw)
     except (ValueError, SyntaxError, MemoryError):
-        return raw
-
-    # if it was a str and it still is a str, return it as-is.
-    if isinstance(result, str):
         result = raw
+    if isinstance(raw, BoolMarker) and not isinstance(result, bool):
+        raise JinjaRenderingException(
+            f"Could not convert '{raw!s} into bool"
+        )
+    if isinstance(raw, NumberMarker) and not _is_number(result):
+        raise JinjaRenderingException(
+            f"Could not convert '{raw!s}' into number"
+        )
 
     return result
 
@@ -417,6 +444,22 @@ def create_undefined(node=None):
     return Undefined
 
 
+NATIVE_FILTERS: Dict[str, Callable[[Any], Any]] = {
+    'as_text': TextMarker,
+    'as_bool': BoolMarker,
+    'as_native': NativeMarker,
+    'as_number': NumberMarker,
+}
+
+
+TEXT_FILTERS: Dict[str, Callable[[Any], Any]] = {
+    'as_text': lambda x: x,
+    'as_bool': lambda x: x,
+    'as_native': lambda x: x,
+    'as_number': lambda x: x,
+}
+
+
 def get_environment(
     node=None,
     capture_macros: bool = False,
@@ -436,13 +479,13 @@ def get_environment(
     text_filter: Type
     if native:
         env_cls = NativeSandboxEnvironment
-        text_filter = TextMarker
+        filters = NATIVE_FILTERS
     else:
         env_cls = MacroFuzzEnvironment
-        text_filter = str
+        filters = TEXT_FILTERS
 
     env = env_cls(**args)
-    env.filters['as_text'] = text_filter
+    env.filters.update(filters)
 
     return env
 
