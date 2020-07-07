@@ -135,7 +135,7 @@ def quoted_native_concat(nodes):
     head = list(islice(nodes, 2))
 
     if not head:
-        return ''
+        return ""
 
     if len(head) == 1:
         raw = head[0]
@@ -453,18 +453,18 @@ def create_undefined(node=None):
 
 
 NATIVE_FILTERS: Dict[str, Callable[[Any], Any]] = {
-    'as_text': TextMarker,
-    'as_bool': BoolMarker,
-    'as_native': NativeMarker,
-    'as_number': NumberMarker,
+    "as_text": TextMarker,
+    "as_bool": BoolMarker,
+    "as_native": NativeMarker,
+    "as_number": NumberMarker,
 }
 
 
 TEXT_FILTERS: Dict[str, Callable[[Any], Any]] = {
-    'as_text': lambda x: x,
-    'as_bool': lambda x: x,
-    'as_native': lambda x: x,
-    'as_number': lambda x: x,
+    "as_text": lambda x: x,
+    "as_bool": lambda x: x,
+    "as_native": lambda x: x,
+    "as_number": lambda x: x,
 }
 
 
