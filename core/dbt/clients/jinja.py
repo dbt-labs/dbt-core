@@ -7,10 +7,7 @@ import threading
 from ast import literal_eval
 from contextlib import contextmanager
 from itertools import chain, islice
-from typing import (
-    List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn, Tuple,
-    Callable
-)
+from typing import List, Union, Set, Optional, Dict, Any, Iterator, Type, NoReturn, Tuple, Callable
 
 import jinja2
 import jinja2.ext
