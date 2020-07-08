@@ -1,5 +1,8 @@
 ## dbt 0.17.1 (Release TBD)
 
+## dbt 0.17.1rc4 (July 08, 2020)
+
+
 ### Fixes
 - dbt native rendering now requires an opt-in with the `as_native` filter. Added `as_bool` and `as_number` filters, which are like `as_native` but also type-check. ([#2612](https://github.com/fishtown-analytics/dbt/issues/2612), [#2618](https://github.com/fishtown-analytics/dbt/pull/2618))
 

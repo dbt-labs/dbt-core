@@ -18,7 +18,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.17.1rc3"
+package_version = "0.17.1rc4"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
