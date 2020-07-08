@@ -153,13 +153,9 @@ def quoted_native_concat(nodes):
     except (ValueError, SyntaxError, MemoryError):
         result = raw
     if isinstance(raw, BoolMarker) and not isinstance(result, bool):
-        raise JinjaRenderingException(
-            f"Could not convert value '{raw!s}' into type 'bool'"
-        )
+        raise JinjaRenderingException(f"Could not convert value '{raw!s}' into type 'bool'")
     if isinstance(raw, NumberMarker) and not _is_number(result):
-        raise JinjaRenderingException(
-            f"Could not convert value '{raw!s}' into type 'number'"
-        )
+        raise JinjaRenderingException(f"Could not convert value '{raw!s}' into type 'number'")
 
     return result
 
