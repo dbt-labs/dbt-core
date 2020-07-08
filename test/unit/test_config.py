@@ -367,7 +367,7 @@ class TestProfile(BaseConfigTest):
                     renderer,
                     target_override='with-vars'
                 )
-        self.assertIn("Could not convert 'hello' into number", str(exc.exception))
+        self.assertIn("Could not convert value 'hello' into type 'number'", str(exc.exception))
 
 
 class TestProfileFile(BaseFileTest):
@@ -511,7 +511,7 @@ class TestProfileFile(BaseFileTest):
             with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
                 self.from_args()
 
-        self.assertIn("Could not convert 'hello' into number", str(exc.exception))
+        self.assertIn("Could not convert value 'hello' into type 'number'", str(exc.exception))
 
     def test_cli_and_env_vars(self):
         self.args.target = 'cli-and-env-vars'
