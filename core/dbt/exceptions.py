@@ -256,6 +256,10 @@ class JSONValidationException(ValidationException):
         return (JSONValidationException, (self.typename, self.errors))
 
 
+class JinjaRenderingException(CompilationException):
+    pass
+
+
 class UnknownAsyncIDException(Exception):
     CODE = 10012
     MESSAGE = 'RPC server got an unknown async ID'

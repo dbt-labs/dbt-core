@@ -110,9 +110,9 @@ class TestDisabledConfigs(DBTIntegrationTest):
                     'default2': {
                         'type': 'postgres',
                         # make sure you can do this and get an int out
-                        'threads': "{{ 1 + 3 }}",
+                        'threads': "{{ (1 + 3) | as_number }}",
                         'host': self.database_host,
-                        'port': "{{ 5400 + 32 }}",
+                        'port': "{{ (5400 + 32) | as_number }}",
                         'user': 'root',
                         'pass': 'password',
                         'dbname': 'dbt',
@@ -121,9 +121,9 @@ class TestDisabledConfigs(DBTIntegrationTest):
                     'disabled': {
                         'type': 'postgres',
                         # make sure you can do this and get an int out
-                        'threads': "{{ 1 + 3 }}",
+                        'threads': "{{ (1 + 3) | as_number }}",
                         'host': self.database_host,
-                        'port': "{{ 5400 + 32 }}",
+                        'port': "{{ (5400 + 32) | as_number }}",
                         'user': 'root',
                         'pass': 'password',
                         'dbname': 'dbt',
@@ -141,7 +141,7 @@ class TestDisabledConfigs(DBTIntegrationTest):
             'data-paths': ['data'],
             'models': {
                 'test': {
-                    'enabled': "{{ target.name == 'default2' }}",
+                    'enabled': "{{ (target.name == 'default2' | as_bool) }}",
                 },
             },
             # set the `var` result in schema.yml to be 'seed', so that the
@@ -155,7 +155,7 @@ class TestDisabledConfigs(DBTIntegrationTest):
                 'quote_columns': False,
                 'test': {
                     'seed': {
-                        'enabled': "{{ target.name == 'default2' }}",
+                        'enabled': "{{ (target.name == 'default2') | as_bool }}",
                     },
                 },
             },
