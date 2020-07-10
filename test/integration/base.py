@@ -65,6 +65,7 @@ class FakeArgs:
         self.models = None
         self.exclude = None
         self.single_threaded = False
+        self.selector_name = None
 
 
 class TestArgs:
@@ -289,6 +290,10 @@ class DBTIntegrationTest(unittest.TestCase):
     def packages_config(self):
         return None
 
+    @property
+    def selectors_config(self):
+        return None
+
     def unique_schema(self):
         schema = self.schema
 
@@ -388,6 +393,7 @@ class DBTIntegrationTest(unittest.TestCase):
         self.use_profile(self._pick_profile())
         self.use_default_project()
         self.set_packages()
+        self.set_selectors()
         self.load_config()
 
     def use_default_project(self, overrides=None):
@@ -430,6 +436,11 @@ class DBTIntegrationTest(unittest.TestCase):
         if self.packages_config is not None:
             with open('packages.yml', 'w') as f:
                 yaml.safe_dump(self.packages_config, f, default_flow_style=True)
+
+    def set_selectors(self):
+        if self.selectors_config is not None:
+            with open('selectors.yml', 'w') as f:
+                yaml.safe_dump(self.selectors_config, f, default_flow_style=True)
 
     def load_config(self):
         # we've written our profile and project. Now we want to instantiate a

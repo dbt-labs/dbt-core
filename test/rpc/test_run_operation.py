@@ -1,3 +1,5 @@
+import pytest
+
 from .util import (
     get_querier,
     ProjectDefinition,
@@ -16,8 +18,9 @@ macros_data = '''
 '''
 
 
+@pytest.mark.supported('postgres')
 def test_run_operation(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'},
@@ -62,8 +65,9 @@ def test_run_operation(
         assert poll_result['success'] is True
 
 
+@pytest.mark.supported('postgres')
 def test_run_operation_cli(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'},

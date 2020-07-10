@@ -9,15 +9,17 @@ from dbt.logger import log_manager
 
 
 class TestDefaultQueryComments(DBTIntegrationTest):
-    def matches_comment(self, msg):
+    def matches_comment(self, msg) -> bool:
         if not msg.startswith('/* '):
             return False
         # our blob is the first line of the query comments, minus the comment
         json_str = msg.split('\n')[0][3:-3]
         data = json.loads(json_str)
-        self.assertEqual(data['app'], 'dbt')
-        self.assertEqual(data['dbt_version'], dbt_version)
-        self.assertEqual(data['node_id'], 'model.test.x')
+        return (
+            data['app'] == 'dbt' and
+            data['dbt_version'] == dbt_version and
+            data['node_id'] == 'model.test.x'
+        )
 
     @property
     def project_config(self):
@@ -25,7 +27,6 @@ class TestDefaultQueryComments(DBTIntegrationTest):
             'config-version': 2,
             'macro-paths': ['macros']
         }
-
 
     @property
     def schema(self):
@@ -84,8 +85,7 @@ class TestDefaultQueryComments(DBTIntegrationTest):
         seen = False
         for log in logs:
             msg = self.query_comment('model.test.x', log)
-            if msg is not None:
-                self.matches_comment(msg)
+            if msg is not None and self.matches_comment(msg):
                 seen = True
 
         self.assertTrue(seen, 'Never saw a matching log message! Logs:\n{}'.format('\n'.join(l['message'] for l in logs)))
@@ -115,10 +115,7 @@ class TestQueryComments(TestDefaultQueryComments):
         return cfg
 
     def matches_comment(self, msg) -> bool:
-        self.assertTrue(
-            msg.startswith('/* dbt\nrules! */\n'),
-            f'{msg} did not start with query comment'
-        )
+        return msg.startswith('/* dbt\nrules! */\n')
 
 
 class TestMacroQueryComments(TestDefaultQueryComments):
@@ -130,10 +127,7 @@ class TestMacroQueryComments(TestDefaultQueryComments):
 
     def matches_comment(self, msg) -> bool:
         start_with = '/* dbt macros\nare pretty cool */\n'
-        self.assertTrue(
-            msg.startswith(start_with),
-            f'"{msg}" did not start with expected query comment "{start_with}"'
-        )
+        return msg.startswith(start_with)
 
 
 class TestMacroArgsQueryComments(TestDefaultQueryComments):
@@ -148,10 +142,7 @@ class TestMacroArgsQueryComments(TestDefaultQueryComments):
     def matches_comment(self, msg) -> bool:
         expected_dct = {'app': 'dbt++', 'dbt_version': dbt_version, 'macro_version': '0.1.0', 'message': 'blah: default2'}
         expected = '/* {} */\n'.format(json.dumps(expected_dct, sort_keys=True))
-        self.assertTrue(
-            msg.startswith(expected),
-            f"'{msg}' did not start with query comment '{expected}'"
-        )
+        return msg.startswith(expected)
 
 
 class TestMacroInvalidQueryComments(TestDefaultQueryComments):
@@ -174,10 +165,7 @@ class TestNullQueryComments(TestDefaultQueryComments):
         return cfg
 
     def matches_comment(self, msg) -> bool:
-        self.assertFalse(
-            '/*' in msg or '*/' in msg,
-            f"'{msg}' contained a query comment"
-        )
+        return not ('/*' in msg or '*/' in msg)
 
 
 class TestEmptyQueryComments(TestDefaultQueryComments):
@@ -188,7 +176,4 @@ class TestEmptyQueryComments(TestDefaultQueryComments):
         return cfg
 
     def matches_comment(self, msg) -> bool:
-        self.assertFalse(
-            '/*' in msg or '*/' in msg,
-            f"'{msg}' contained a query comment"
-        )
+        return not ('/*' in msg or '*/' in msg)

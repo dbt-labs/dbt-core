@@ -18,11 +18,11 @@ def test_raw_parse_simple():
     assert result.method == MethodName.FQN
     assert result.method_arguments == []
     assert result.value == raw
-    assert not result.select_childrens_parents
-    assert not result.select_children
-    assert not result.select_parents
-    assert result.select_parents_max_depth is None
-    assert result.select_children_max_depth is None
+    assert not result.childrens_parents
+    assert not result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
 
 
 def test_raw_parse_simple_infer_path():
@@ -32,11 +32,11 @@ def test_raw_parse_simple_infer_path():
     assert result.method == MethodName.Path
     assert result.method_arguments == []
     assert result.value == raw
-    assert not result.select_childrens_parents
-    assert not result.select_children
-    assert not result.select_parents
-    assert result.select_parents_max_depth is None
-    assert result.select_children_max_depth is None
+    assert not result.childrens_parents
+    assert not result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
 
 
 def test_raw_parse_simple_infer_path_modified():
@@ -46,11 +46,11 @@ def test_raw_parse_simple_infer_path_modified():
     assert result.method == MethodName.Path
     assert result.method_arguments == []
     assert result.value == raw[1:]
-    assert result.select_childrens_parents
-    assert not result.select_children
-    assert not result.select_parents
-    assert result.select_parents_max_depth is None
-    assert result.select_children_max_depth is None
+    assert result.childrens_parents
+    assert not result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
 
 
 def test_raw_parse_simple_infer_fqn_parents():
@@ -60,11 +60,11 @@ def test_raw_parse_simple_infer_fqn_parents():
     assert result.method == MethodName.FQN
     assert result.method_arguments == []
     assert result.value == 'asdf'
-    assert not result.select_childrens_parents
-    assert not result.select_children
-    assert result.select_parents
-    assert result.select_parents_max_depth is None
-    assert result.select_children_max_depth is None
+    assert not result.childrens_parents
+    assert not result.children
+    assert result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
 
 
 def test_raw_parse_simple_infer_fqn_children():
@@ -74,11 +74,11 @@ def test_raw_parse_simple_infer_fqn_children():
     assert result.method == MethodName.FQN
     assert result.method_arguments == []
     assert result.value == 'asdf'
-    assert not result.select_childrens_parents
-    assert result.select_children
-    assert not result.select_parents
-    assert result.select_parents_max_depth is None
-    assert result.select_children_max_depth is None
+    assert not result.childrens_parents
+    assert result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
 
 
 def test_raw_parse_complex():
@@ -88,11 +88,11 @@ def test_raw_parse_complex():
     assert result.method == MethodName.Config
     assert result.method_arguments == ['arg', 'secondarg']
     assert result.value == 'argument_value'
-    assert not result.select_childrens_parents
-    assert result.select_children
-    assert result.select_parents
-    assert result.select_parents_max_depth == 2
-    assert result.select_children_max_depth == 4
+    assert not result.childrens_parents
+    assert result.children
+    assert result.parents
+    assert result.parents_depth == 2
+    assert result.children_depth == 4
 
 
 def test_raw_parse_weird():
@@ -103,11 +103,11 @@ def test_raw_parse_weird():
     assert result.method == MethodName.FQN
     assert result.method_arguments == []
     assert result.value == ''
-    assert not result.select_childrens_parents
-    assert not result.select_children
-    assert not result.select_parents
-    assert result.select_parents_max_depth is None
-    assert result.select_children_max_depth is None
+    assert not result.childrens_parents
+    assert not result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
 
 
 def test_raw_parse_invalid():

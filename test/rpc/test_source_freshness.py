@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime, timedelta
 from .util import (
     get_querier,
@@ -21,8 +22,9 @@ sources:
 '''
 
 
+@pytest.mark.supported('postgres')
 def test_source_freshness(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     start_time = datetime.utcnow()
     warn_me = start_time - timedelta(hours=18)

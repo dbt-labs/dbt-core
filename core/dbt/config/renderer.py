@@ -69,6 +69,9 @@ class DbtProjectYamlRenderer(BaseRenderer):
     def get_package_renderer(self) -> BaseRenderer:
         return PackageRenderer(self.context)
 
+    def get_selector_renderer(self) -> BaseRenderer:
+        return SelectorRenderer(self.context)
+
     def should_render_keypath_v1(self, keypath: Keypath) -> bool:
         if not keypath:
             return True
@@ -206,3 +209,9 @@ class PackageRenderer(BaseRenderer):
     @property
     def name(self):
         return 'Packages config'
+
+
+class SelectorRenderer(BaseRenderer):
+    @property
+    def name(self):
+        return 'Selector config'

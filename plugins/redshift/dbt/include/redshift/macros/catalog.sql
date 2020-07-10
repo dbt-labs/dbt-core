@@ -43,7 +43,11 @@
         join pg_catalog.pg_attribute col on col.attrelid = tbl.oid
         left outer join pg_catalog.pg_description tbl_desc on (tbl_desc.objoid = tbl.oid and tbl_desc.objsubid = 0)
         left outer join pg_catalog.pg_description col_desc on (col_desc.objoid = tbl.oid and col_desc.objsubid = col.attnum)
-        where upper(sch.nspname) = upper('{{ schema }}')
+        where (
+            {%- for schema in schemas -%}
+              upper(sch.nspname) = upper('{{ schema }}'){%- if not loop.last %} or {% endif -%}
+            {%- endfor -%}
+          )
             and tbl.relkind in ('r', 'v', 'f', 'p')
             and col.attnum > 0
             and not col.attisdropped

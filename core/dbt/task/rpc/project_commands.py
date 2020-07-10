@@ -62,6 +62,7 @@ class RemoteCompileProjectTask(
     def set_args(self, params: RPCCompileParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
         if params.threads is not None:
             self.args.threads = params.threads
 
@@ -72,6 +73,7 @@ class RemoteRunProjectTask(RPCCommandTask[RPCCompileParameters], RunTask):
     def set_args(self, params: RPCCompileParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
         if params.threads is not None:
             self.args.threads = params.threads
 
@@ -83,6 +85,7 @@ class RemoteSeedProjectTask(RPCCommandTask[RPCSeedParameters], SeedTask):
         # select has an argparse `dest` value of `models`.
         self.args.models = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
         if params.threads is not None:
             self.args.threads = params.threads
         self.args.show = params.show
@@ -94,6 +97,7 @@ class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
     def set_args(self, params: RPCTestParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
         self.args.data = params.data
         self.args.schema = params.schema
         if params.threads is not None:
@@ -109,6 +113,7 @@ class RemoteDocsGenerateProjectTask(
     def set_args(self, params: RPCDocsGenerateParameters) -> None:
         self.args.models = None
         self.args.exclude = None
+        self.args.selector_name = None
         self.args.compile = params.compile
 
     def get_catalog_results(
@@ -176,6 +181,7 @@ class RemoteSnapshotTask(RPCCommandTask[RPCSnapshotParameters], SnapshotTask):
         # select has an argparse `dest` value of `models`.
         self.args.models = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
         if params.threads is not None:
             self.args.threads = params.threads
 
@@ -202,6 +208,7 @@ class GetManifest(
     def set_args(self, params: GetManifestParameters) -> None:
         self.args.models = None
         self.args.exclude = None
+        self.args.selector_name = None
 
     def handle_request(self) -> GetManifestResult:
         task = RemoteCompileProjectTask(self.args, self.config, self.manifest)

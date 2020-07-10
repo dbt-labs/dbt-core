@@ -44,6 +44,7 @@ class RPCCompileParameters(RPCParameters):
     threads: Optional[int] = None
     models: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
 
 
 @dataclass
@@ -51,6 +52,7 @@ class RPCSnapshotParameters(RPCParameters):
     threads: Optional[int] = None
     select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
 
 
 @dataclass
@@ -64,6 +66,7 @@ class RPCSeedParameters(RPCParameters):
     threads: Optional[int] = None
     select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
     show: bool = False
 
 

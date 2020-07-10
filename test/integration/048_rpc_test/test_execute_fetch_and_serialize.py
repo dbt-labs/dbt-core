@@ -33,7 +33,8 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
         with open(file_path) as fh:
             query = fh.read()
 
-        status, table = self.adapter.execute(query, auto_begin=False, fetch=True)
+        with self.adapter.connection_named('master'):
+            status, table = self.adapter.execute(query, auto_begin=False, fetch=True)
         self.assertTrue(len(table.columns) > 0, "agate table had no columns")
         self.assertTrue(len(table.rows) > 0, "agate table had no rows")
 

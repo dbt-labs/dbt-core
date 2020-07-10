@@ -461,6 +461,14 @@ def _add_selection_arguments(*subparsers, **kwargs):
             Specify the models to exclude.
             ''',
         )
+        sub.add_argument(
+            '--selector',
+            dest='selector_name',
+            metavar='SELECTOR_NAME',
+            help='''
+            The selector name to use, as defined in selectors.yml
+            '''
+        )
 
 
 def _add_table_mutability_arguments(*subparsers):
@@ -703,6 +711,14 @@ def _build_list_subparser(subparsers, base_subparser):
         Specify the models to exclude.
         '''
     )
+    sub.add_argument(
+        '--selector',
+        metavar='SELECTOR_NAME',
+        dest='selector_name',
+        help='''
+        The selector name to use, as defined in selectors.yml
+        '''
+    )
     return sub
 
 
@@ -790,6 +806,31 @@ def parse_args(args, cls=DBTArgumentParser):
         dest='write_json',
         help='''
         If set, skip writing the manifest and run_results.json files to disk
+        '''
+    )
+
+    colors_flag = p.add_mutually_exclusive_group()
+    colors_flag.add_argument(
+        '--use-colors',
+        action='store_const',
+        const=True,
+        dest='use_colors',
+        help='''
+        Colorize the output DBT prints to the terminal. Output is colorized by
+        default and may also be set in a profile or at the command line.
+        Mutually exclusive with --no-use-colors
+        '''
+    )
+    colors_flag.add_argument(
+        '--no-use-colors',
+        action='store_const',
+        const=False,
+        dest='use_colors',
+        help='''
+        Do not colorize the output DBT prints to the terminal. Output is
+        colorized by default and may also be set in a profile or at the
+        command line.
+        Mutually exclusive with --use-colors
         '''
     )
 

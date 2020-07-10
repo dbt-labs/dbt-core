@@ -28,7 +28,10 @@ class CompileTask(GraphRunnableTask):
         return True
 
     def get_selection_spec(self) -> SelectionSpec:
-        spec = parse_difference(self.args.models, self.args.exclude)
+        if self.args.selector_name:
+            spec = self.config.get_selector(self.args.selector_name)
+        else:
+            spec = parse_difference(self.args.models, self.args.exclude)
         return spec
 
     def get_node_selector(self) -> ResourceTypeSelector:

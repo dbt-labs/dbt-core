@@ -1,3 +1,4 @@
+import pytest
 from .util import (
     assert_has_threads,
     get_querier,
@@ -5,8 +6,9 @@ from .util import (
 )
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_compile_threads(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}

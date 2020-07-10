@@ -13,7 +13,7 @@ from dbt.exceptions import RuntimeException, InvalidSelectorException
 
 RAW_SELECTOR_PATTERN = re.compile(
     r'\A'
-    r'(?P<childs_parents>(\@))?'
+    r'(?P<childrens_parents>(\@))?'
     r'(?P<parents>((?P<parents_depth>(\d*))\+))?'
     r'((?P<method>([\w.]+)):)?(?P<value>(.*?))'
     r'(?P<children>(\+(?P<children_depth>(\d*))))?'
@@ -57,18 +57,18 @@ SelectionSpec = Union[
 
 @dataclass
 class SelectionCriteria:
-    raw: str
+    raw: Any
     method: MethodName
     method_arguments: List[str]
-    value: str
-    select_childrens_parents: bool
-    select_parents: bool
-    select_parents_max_depth: Optional[int]
-    select_children: bool
-    select_children_max_depth: Optional[int]
+    value: Any
+    childrens_parents: bool
+    parents: bool
+    parents_depth: Optional[int]
+    children: bool
+    children_depth: Optional[int]
 
     def __post_init__(self):
-        if self.select_children and self.select_childrens_parents:
+        if self.children and self.childrens_parents:
             raise RuntimeException(
                 f'Invalid node spec {self.raw} - "@" prefix and "+" suffix '
                 'are incompatible'
@@ -83,7 +83,7 @@ class SelectionCriteria:
 
     @classmethod
     def parse_method(
-        cls, raw: str, groupdict: Dict[str, Any]
+        cls, groupdict: Dict[str, Any]
     ) -> Tuple[MethodName, List[str]]:
         raw_method = groupdict.get('method')
         if raw_method is None:
@@ -100,34 +100,35 @@ class SelectionCriteria:
         return method_name, method_arguments
 
     @classmethod
+    def from_dict(cls, raw: Any, dct: Dict[str, Any]) -> 'SelectionCriteria':
+        if 'value' not in dct:
+            raise RuntimeException(
+                f'Invalid node spec "{raw}" - no search value!'
+            )
+        method_name, method_arguments = cls.parse_method(dct)
+
+        parents_depth = _match_to_int(dct, 'parents_depth')
+        children_depth = _match_to_int(dct, 'children_depth')
+        return cls(
+            raw=raw,
+            method=method_name,
+            method_arguments=method_arguments,
+            value=dct['value'],
+            childrens_parents=bool(dct.get('childrens_parents')),
+            parents=bool(dct.get('parents')),
+            parents_depth=parents_depth,
+            children=bool(dct.get('children')),
+            children_depth=children_depth,
+        )
+
+    @classmethod
     def from_single_spec(cls, raw: str) -> 'SelectionCriteria':
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
             raise RuntimeException(f'Invalid selector spec "{raw}"')
-        result_dict = result.groupdict()
 
-        if 'value' not in result_dict:
-            raise RuntimeException(
-                f'Invalid node spec "{raw}" - no search value!'
-            )
-
-        method_name, method_arguments = cls.parse_method(raw, result_dict)
-
-        parents_max_depth = _match_to_int(result_dict, 'parents_depth')
-        children_max_depth = _match_to_int(result_dict, 'children_depth')
-
-        return cls(
-            raw=raw,
-            method=method_name,
-            method_arguments=method_arguments,
-            value=result_dict['value'],
-            select_childrens_parents=bool(result_dict.get('childs_parents')),
-            select_parents=bool(result_dict.get('parents')),
-            select_parents_max_depth=parents_max_depth,
-            select_children=bool(result_dict.get('children')),
-            select_children_max_depth=children_max_depth,
-        )
+        return cls.from_dict(raw, result.groupdict())
 
 
 class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):
