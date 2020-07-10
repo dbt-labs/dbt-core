@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/fishtown-analytics/dbt/blob/master/etc/dbt-horizontal.png?raw=true" alt="dbt logo"/>
+  <img src="/etc/dbt-logo-full.svg" alt="dbt logo" width="500"/>
 </p>
 
 **[dbt](https://www.getdbt.com/)** (data build tool) enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
