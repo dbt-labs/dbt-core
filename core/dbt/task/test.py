@@ -16,7 +16,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.results import RunModelResult
 from dbt.exceptions import raise_compiler_error, InternalException
-from dbt.graph.selector import ResourceTypeSelector, Graph
+from dbt.graph import ResourceTypeSelector, Graph
 from dbt.node_types import NodeType, RunHookType
 from dbt import flags
 
@@ -103,14 +103,12 @@ SCHEMA_TEST_TYPES = (CompiledSchemaTestNode, ParsedSchemaTestNode)
 
 class TestSelector(ResourceTypeSelector):
     def __init__(
-        self, graph, manifest, include, exclude, data: bool, schema: bool
+        self, graph, manifest, data: bool, schema: bool
     ):
         super().__init__(
             graph=graph,
             manifest=manifest,
             resource_types=[NodeType.Test],
-            include=include,
-            exclude=exclude,
         )
         self.data = data
         self.schema = schema

@@ -109,6 +109,12 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
         # we parsed args from the cli, so we're set on that front
         return self.real_task.handle_request()
 
+    def get_selection_spec(self):
+        return self.real_task.get_selection_spec()
+
+    def get_node_selector(self):
+        return self.real_task.get_node_selector()
+
     def interpret_results(self, results):
         if self.real_task is None:
             # I don't know what happened, but it was surely some flavor of

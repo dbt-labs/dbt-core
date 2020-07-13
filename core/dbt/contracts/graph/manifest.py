@@ -8,7 +8,7 @@ from itertools import chain
 from multiprocessing.synchronize import Lock
 from typing import (
     Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
-    TypeVar, Callable, Iterable, Generic
+    TypeVar, Callable, Iterable, Generic, cast
 )
 from typing_extensions import Protocol
 from uuid import UUID
@@ -622,7 +622,8 @@ class Manifest:
         with self._lock:
             existing = self.nodes[new_node.unique_id]
             if getattr(existing, 'compiled', False):
-                return existing
+                # already compiled -> must be a NonSourceCompiledNode
+                return cast(NonSourceCompiledNode, existing)
             _update_into(self.nodes, new_node)
             return new_node
 

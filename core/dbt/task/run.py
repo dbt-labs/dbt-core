@@ -39,7 +39,7 @@ from dbt.logger import (
     DbtModelState,
     print_timestamped_line,
 )
-from dbt.graph.selector import ResourceTypeSelector
+from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
 from dbt.node_types import NodeType, RunHookType
 

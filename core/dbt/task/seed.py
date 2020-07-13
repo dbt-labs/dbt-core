@@ -8,7 +8,7 @@ from .printer import (
 )
 
 from dbt.exceptions import InternalException
-from dbt.graph.selector import ResourceTypeSelector
+from dbt.graph import ResourceTypeSelector
 from dbt.logger import GLOBAL_LOGGER as logger, TextOnly
 from dbt.node_types import NodeType
 

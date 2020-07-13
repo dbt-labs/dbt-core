@@ -38,9 +38,7 @@ from dbt.exceptions import (
     RuntimeException,
     FailFastException
 )
-from dbt.graph.graph import Graph
-from dbt.graph.queue import GraphQueue
-from dbt.graph.selector import NodeSelector
+from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
 from dbt.perf_utils import get_full_manifest
 
 import dbt.exceptions
@@ -95,7 +93,7 @@ class GraphRunnableTask(ManifestTask):
         return value
 
     @abstractmethod
-    def get_selection_spec(self) -> List[str]:
+    def get_selection_spec(self) -> SelectionSpec:
         raise NotImplementedException(
             f'get_selection_spec not implemented for task {type(self)}'
         )

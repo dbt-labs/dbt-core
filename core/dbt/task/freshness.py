@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from typing import Dict, List
+from typing import Dict
 
 from .base import BaseRunner
 from .printer import (
@@ -22,8 +22,7 @@ from dbt.node_types import NodeType
 
 from dbt import utils
 
-from dbt.graph.selector import NodeSelector
-from dbt.graph.cli import parse_difference
+from dbt.graph import NodeSelector, SelectionSpec, parse_difference
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 
 
@@ -125,7 +124,7 @@ class FreshnessTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return False
 
-    def get_selection_spec(self) -> List[str]:
+    def get_selection_spec(self) -> SelectionSpec:
         include = [
             'source:{}'.format(s)
             for s in (self.args.selected or ['*'])

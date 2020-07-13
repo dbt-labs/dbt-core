@@ -7,7 +7,7 @@ from typing import Dict, Any
 from dbt import flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
-from dbt.compilation import compile_manifest, compile_node
+from dbt.compilation import compile_manifest
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedRPCNode

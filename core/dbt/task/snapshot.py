@@ -2,7 +2,7 @@ from .run import ModelRunner, RunTask
 from .printer import print_snapshot_result_line
 
 from dbt.exceptions import InternalException
-from dbt.graph.selector import ResourceTypeSelector
+from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 
 
