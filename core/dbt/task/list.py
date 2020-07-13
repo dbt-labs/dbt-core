@@ -1,8 +1,7 @@
 import json
-from typing import Type, List
+from typing import Type
 
-from dbt.graph.selector import ResourceTypeSelector
-from dbt.graph.cli import parse_difference
+from dbt.graph import ResourceTypeSelector, parse_difference, SelectionSpec
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
@@ -54,7 +53,8 @@ class ListTask(GraphRunnableTask):
 
     def _iterate_selected_nodes(self):
         selector = self.get_node_selector()
-        nodes = sorted(selector.get_selected())
+        spec = self.get_selection_spec()
+        nodes = sorted(selector.get_selected(spec))
         if not nodes:
             logger.warning('No nodes selected!')
             return
@@ -144,7 +144,7 @@ class ListTask(GraphRunnableTask):
         else:
             return self.args.select
 
-    def get_selection_spec(self) -> List[str]:
+    def get_selection_spec(self) -> SelectionSpec:
         spec = parse_difference(self.selector, self.args.exclude)
         return spec
 

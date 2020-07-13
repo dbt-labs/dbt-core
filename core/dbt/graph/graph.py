@@ -3,9 +3,7 @@ from typing import (
 )
 import networkx as nx  # type: ignore
 
-from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import RuntimeException, InternalException
-from dbt.node_types import NodeType
+from dbt.exceptions import InternalException
 
 # it would be nice to use a NewType for this, but that will cause problems with
 # str interop, which dbt relies on implicilty all over.

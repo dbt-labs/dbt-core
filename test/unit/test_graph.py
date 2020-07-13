@@ -15,8 +15,7 @@ import dbt.parser.manifest
 from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash, Manifest
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
-from dbt.graph.selector import NodeSelector
-from dbt.graph.cli import parse_difference
+from dbt.graph import NodeSelector, parse_difference
 
 try:
     from queue import Empty

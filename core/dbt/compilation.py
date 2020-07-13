@@ -18,7 +18,7 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.exceptions import dependency_not_found, InternalException
-from dbt.graph.graph import Graph
+from dbt.graph import Graph
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.utils import add_ephemeral_model_prefix, pluralize

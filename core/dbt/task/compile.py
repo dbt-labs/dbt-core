@@ -1,13 +1,10 @@
-from typing import List
-
 from .runnable import GraphRunnableTask
 from .base import BaseRunner
 
 from dbt.compilation import compile_node
 from dbt.contracts.results import RunModelResult
 from dbt.exceptions import InternalException
-from dbt.graph.selector import ResourceTypeSelector
-from dbt.graph.cli import parse_difference
+from dbt.graph import ResourceTypeSelector, SelectionSpec, parse_difference
 from dbt.logger import print_timestamped_line
 from dbt.node_types import NodeType
 
@@ -30,7 +27,7 @@ class CompileTask(GraphRunnableTask):
     def raise_on_first_error(self):
         return True
 
-    def get_selection_spec(self) -> List[str]:
+    def get_selection_spec(self) -> SelectionSpec:
         spec = parse_difference(self.args.models, self.args.exclude)
         return spec
 
