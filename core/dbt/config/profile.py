@@ -228,7 +228,7 @@ class Profile(HasCredentials):
                 f"output '{target_name}' of profile '{profile_name}' is "
                 f"misconfigured in profiles.yml"
             )
-            raise DbtProfileError(msg, result_type='invalid_target')
+            raise DbtProfileError(msg, result_type="invalid_target")
 
         return profile_data
 
