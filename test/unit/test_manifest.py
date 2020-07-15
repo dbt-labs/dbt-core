@@ -17,13 +17,12 @@ from dbt.contracts.graph.parsed import (
     NodeConfig,
     ParsedSeedNode,
     ParsedSourceDefinition,
-    ParsedDocumentation,
 )
 from dbt.contracts.graph.compiled import CompiledModelNode
 from dbt.node_types import NodeType
 import freezegun
 
-from .utils import MockMacro
+from .utils import MockMacro, MockDocumentation, MockSource, MockNode, MockMaterialization, MockGenerateMacro
 
 
 REQUIRED_PARSED_NODE_KEYS = frozenset({
@@ -663,62 +662,6 @@ class MixedManifestTest(unittest.TestCase):
 
 
 # Tests of the manifest search code (find_X_by_Y)
-def MockMaterialization(package, name='my_materialization', adapter_type=None, kwargs={}):
-    if adapter_type is None:
-        adapter_type = 'default'
-    kwargs['adapter_type'] = adapter_type
-    return MockMacro(package, f'materialization_{name}_{adapter_type}', kwargs)
-
-
-def MockGenerateMacro(package, component='some_component', kwargs={}):
-    name = f'generate_{component}_name'
-    return MockMacro(package, name=name, kwargs=kwargs)
-
-
-def MockSource(package, source_name, name, kwargs={}):
-    src = mock.MagicMock(
-        __class__=ParsedSourceDefinition,
-        resource_type=NodeType.Source,
-        source_name=source_name,
-        package_name=package,
-        unique_id=f'source.{package}.{source_name}.{name}',
-        search_name=f'{source_name}.{name}',
-        **kwargs
-    )
-    src.name = name
-    return src
-
-
-def MockNode(package, name, resource_type=NodeType.Model, kwargs={}):
-    if resource_type == NodeType.Model:
-        cls = ParsedModelNode
-    elif resource_type == NodeType.Seed:
-        cls = ParsedSeedNode
-    else:
-        raise ValueError(f'I do not know how to handle {resource_type}')
-    node = mock.MagicMock(
-        __class__=cls,
-        resource_type=resource_type,
-        package_name=package,
-        unique_id=f'{str(resource_type)}.{package}.{name}',
-        search_name=name,
-        **kwargs
-    )
-    node.name = name
-    return node
-
-
-def MockDocumentation(package, name, kwargs={}):
-    doc = mock.MagicMock(
-        __class__=ParsedDocumentation,
-        resource_type=NodeType.Documentation,
-        package_name=package,
-        search_name=name,
-        unique_id=f'{package}.{name}',
-    )
-    doc.name = name
-    return doc
-
 
 class TestManifestSearch(unittest.TestCase):
     _macros = []

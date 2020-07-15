@@ -16,7 +16,12 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.results import RunModelResult
 from dbt.exceptions import raise_compiler_error, InternalException
-from dbt.graph import ResourceTypeSelector, Graph, UniqueId
+from dbt.graph import (
+    ResourceTypeSelector,
+    SelectionSpec,
+    UniqueId,
+    parse_test_selectors,
+)
 from dbt.node_types import NodeType, RunHookType
 from dbt import flags
 
@@ -102,37 +107,19 @@ SCHEMA_TEST_TYPES = (CompiledSchemaTestNode, ParsedSchemaTestNode)
 
 
 class TestSelector(ResourceTypeSelector):
-    def __init__(
-        self, graph, manifest, data: bool, schema: bool
-    ):
+    def __init__(self, graph, manifest):
         super().__init__(
             graph=graph,
             manifest=manifest,
             resource_types=[NodeType.Test],
         )
-        self.data = data
-        self.schema = schema
 
-    def expand_selection(
-        self, filtered_graph: Graph, selected: Set[UniqueId]
-    ) -> Set[UniqueId]:
+    def expand_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         selected_tests = {
-            n for n in filtered_graph.select_successors(selected)
+            n for n in self.graph.select_successors(selected)
             if self.manifest.nodes[n].resource_type == NodeType.Test
         }
         return selected | selected_tests
-
-    def node_is_match(self, node):
-        if super().node_is_match(node):
-            test_types = [self.data, self.schema]
-
-            if all(test_types) or not any(test_types):
-                return True
-            elif self.data:
-                return isinstance(node, DATA_TEST_TYPES)
-            elif self.schema:
-                return isinstance(node, SCHEMA_TEST_TYPES)
-        return False
 
 
 class TestTask(RunTask):
@@ -150,6 +137,14 @@ class TestTask(RunTask):
         # Don't execute on-run-* hooks for tests
         pass
 
+    def get_selection_spec(self) -> SelectionSpec:
+        base_spec = super().get_selection_spec()
+        return parse_test_selectors(
+            data=self.args.data,
+            schema=self.args.schema,
+            base=base_spec
+        )
+
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:
             raise InternalException(
@@ -158,8 +153,6 @@ class TestTask(RunTask):
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,
-            data=self.args.data,
-            schema=self.args.schema,
         )
 
     def get_runner_type(self):

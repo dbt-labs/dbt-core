@@ -256,6 +256,12 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
 
+        results = self.run_dbt(
+            ['test', '--models', 'test_name:not_null'],
+        )
+        self.assertEqual(len(results), 1)
+        assert results[0].node.name == 'not_null_emails_email'
+
     @use_profile('postgres')
     def test__postgres__more_childrens_parents(self):
         self.run_sql_file("seed.sql")
@@ -269,6 +275,13 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('emails_alt', created_models)
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
+
+        results = self.run_dbt(
+            ['test', '--models', 'test_name:unique'],
+        )
+        self.assertEqual(len(results), 2)
+        assert sorted([r.node.name for r in results]) == ['unique_users_id', 'unique_users_rollup_gender']
+
 
     @use_profile('snowflake')
     def test__snowflake__skip_intermediate(self):
@@ -335,3 +348,10 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('users_rollup', created_models)
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
+
+        results = self.run_dbt(
+            ['test', '--models', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt', 'users_rollup']
+        )
+        self.assertEqual(len(results), 1)
+        assert results[0].node.name == 'unique_users_id'
+

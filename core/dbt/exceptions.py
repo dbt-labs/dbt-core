@@ -393,6 +393,12 @@ class InvalidConnectionException(RuntimeException):
         )
 
 
+class InvalidSelectorException(RuntimeException):
+    def __init__(self, name: str):
+        self.name = name
+        super().__init__(name)
+
+
 def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 

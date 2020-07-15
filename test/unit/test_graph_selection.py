@@ -7,6 +7,7 @@ import string
 import dbt.exceptions
 import dbt.graph.selector as graph_selector
 import dbt.graph.cli as graph_cli
+from dbt.node_types import NodeType
 
 import networkx as nx
 
@@ -28,7 +29,13 @@ def _get_manifest(graph):
     for unique_id in graph:
         fqn = unique_id.split('.')
         node = mock.MagicMock(
-            unique_id=unique_id, fqn=fqn, package_name=fqn[0], tags=[]
+            unique_id=unique_id,
+            fqn=fqn,
+            package_name=fqn[0],
+            tags=[],
+            resource_type=NodeType.Model,
+            empty=False,
+            config=mock.MagicMock(enabled=True),
         )
         nodes[unique_id] = node
 
@@ -111,11 +118,9 @@ run_specs = [
 def test_run_specs(include, exclude, expected):
     graph = _get_graph()
     manifest = _get_manifest(graph)
-    # we can use the same graph twice.
     selector = graph_selector.NodeSelector(graph, manifest)
     spec = graph_cli.parse_difference(include, exclude)
-    subgraph = graph.subgraph(set(graph.nodes()))
-    selected = selector.select_nodes(subgraph, spec)
+    selected = selector.select_nodes(spec)
 
     assert selected == expected
 

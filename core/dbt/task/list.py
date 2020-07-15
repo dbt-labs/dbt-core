@@ -1,7 +1,11 @@
 import json
 from typing import Type
 
-from dbt.graph import ResourceTypeSelector, parse_difference, SelectionSpec
+from dbt.graph import (
+    parse_difference,
+    ResourceTypeSelector,
+    SelectionSpec,
+)
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
@@ -158,8 +162,6 @@ class ListTask(GraphRunnableTask):
             return TestSelector(
                 graph=self.graph,
                 manifest=self.manifest,
-                schema=True,
-                data=True
             )
         else:
             return ResourceTypeSelector(
