@@ -43,15 +43,56 @@ Contributors:
  - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/pull/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
  - [@alepuccetti](https://github.com/alepuccetti) ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
+
 ## dbt 0.17.1 (Release TBD)
+
+
+## dbt 0.17.1rc4 (July 08, 2020)
+
+
+### Fixes
+- dbt native rendering now requires an opt-in with the `as_native` filter. Added `as_bool` and `as_number` filters, which are like `as_native` but also type-check. ([#2612](https://github.com/fishtown-analytics/dbt/issues/2612), [#2618](https://github.com/fishtown-analytics/dbt/pull/2618))
+
+
+## dbt 0.17.1rc3 (July 01, 2020)
+
+
+### Fixes
+- dbt native rendering now avoids turning quoted strings into unquoted strings ([#2597](https://github.com/fishtown-analytics/dbt/issues/2597), [#2599](https://github.com/fishtown-analytics/dbt/pull/2599))
+- Hash name of local packages ([#2600](https://github.com/fishtown-analytics/dbt/pull/2600))
+- On bigquery, also persist docs for seeds ([#2598](https://github.com/fishtown-analytics/dbt/issues/2598), [#2601](https://github.com/fishtown-analytics/dbt/pull/2601))
+- Swallow all file-writing related errors on Windows, regardless of path length or exception type. ([#2603](https://github.com/fishtown-analytics/dbt/pull/2603))
+
+
+## dbt 0.17.1rc2 (June 25, 2020)
+
+### Fixes
+- dbt config-version: 2 now properly defers rendering `+pre-hook` and `+post-hook` fields. ([#2583](https://github.com/fishtown-analytics/dbt/issues/2583), [#2854](https://github.com/fishtown-analytics/dbt/pull/2854))
+- dbt handles too-long paths on windows that do not report that the path is too long ([#2591](https://github.com/fishtown-analytics/dbt/pull/2591))
+
+
+## dbt 0.17.1rc1 (June 19, 2020)
+
 
 ### Fixes
 - dbt compile and ls no longer create schemas if they don't already exist ([#2525](https://github.com/fishtown-analytics/dbt/issues/2525), [#2528](https://github.com/fishtown-analytics/dbt/pull/2528))
 - `dbt deps` now respects the `--project-dir` flag, so using `dbt deps --project-dir=/some/path` and then `dbt run --project-dir=/some/path` will properly find dependencies ([#2519](https://github.com/fishtown-analytics/dbt/issues/2519), [#2534](https://github.com/fishtown-analytics/dbt/pull/2534))
 - `packages.yml` revision/version fields can be float-like again (`revision: '1.0'` is valid). ([#2518](https://github.com/fishtown-analytics/dbt/issues/2518), [#2535](https://github.com/fishtown-analytics/dbt/pull/2535))
+<<<<<<< HEAD
 - dbt again respects config aliases in config() calls ([#2557](https://github.com/fishtown-analytics/dbt/issues/2557), [#2559](https://github.com/fishtown-analytics/dbt/pull/2559))
 
 
+=======
+- Parallel RPC requests no longer step on each others' arguments ([[#2484](https://github.com/fishtown-analytics/dbt/issues/2484), [#2554](https://github.com/fishtown-analytics/dbt/pull/2554)])
+- `persist_docs` now takes into account descriptions for nested columns in bigquery ([#2549](https://github.com/fishtown-analytics/dbt/issues/2549), [#2550](https://github.com/fishtown-analytics/dbt/pull/2550))
+- On windows (depending upon OS support), dbt no longer fails with errors when writing artifacts ([#2558](https://github.com/fishtown-analytics/dbt/issues/2558), [#2566](https://github.com/fishtown-analytics/dbt/pull/2566))
+- dbt again respects config aliases in config() calls and dbt_project.yml ([#2557](https://github.com/fishtown-analytics/dbt/issues/2557), [#2559](https://github.com/fishtown-analytics/dbt/pull/2559), [#2575](https://github.com/fishtown-analytics/dbt/pull/2575))
+- fix unclickable nodes in the dbt Docs DAG viz ([#101](https://github.com/fishtown-analytics/dbt-docs/pull/101))
+- fix null database names for Spark projects in dbt Docs site ([#96](https://github.com/fishtown-analytics/dbt-docs/pull/96))
+
+Contributors:
+ - [@bodschut](https://github.com/bodschut) ([#2550](https://github.com/fishtown-analytics/dbt/pull/2550))
+>>>>>>> dev/0.17.1
 
 ## dbt 0.17.0 (June 08, 2020)
 

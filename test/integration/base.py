@@ -184,7 +184,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'type': 'redshift',
                         'threads': 1,
                         'host': os.getenv('REDSHIFT_TEST_HOST'),
-                        'port': os.getenv('REDSHIFT_TEST_PORT'),
+                        'port': int(os.getenv('REDSHIFT_TEST_PORT')),
                         'user': os.getenv('REDSHIFT_TEST_USER'),
                         'pass': os.getenv('REDSHIFT_TEST_PASS'),
                         'dbname': os.getenv('REDSHIFT_TEST_DBNAME'),
@@ -348,6 +348,9 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             return self.test_root_dir
 
+    def _generate_test_root_dir(self):
+        return normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
+
     def setUp(self):
         self.dbt_core_install_root = os.path.dirname(dbt.__file__)
         log_manager.reset_handlers()
@@ -357,7 +360,7 @@ class DBTIntegrationTest(unittest.TestCase):
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
-        self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
+        self.test_root_dir = self._generate_test_root_dir()
 
         os.chdir(self.test_root_dir)
         try:

@@ -596,6 +596,36 @@ class BigQueryAdapter(BaseAdapter):
                                           relation.identifier,
                                           conn)
 
+    def _update_column_dict(self, bq_column_dict, dbt_columns, parent=''):
+        """
+        Helper function to recursively traverse the schema of a table in the
+        update_column_descriptions function below.
+
+        bq_column_dict should be a dict as obtained by the to_api_repr()
+        function of a SchemaField object.
+        """
+        if parent:
+            dotted_column_name = '{}.{}'.format(parent, bq_column_dict['name'])
+        else:
+            dotted_column_name = bq_column_dict['name']
+
+        if dotted_column_name in dbt_columns:
+            column_config = dbt_columns[dotted_column_name]
+            bq_column_dict['description'] = column_config.get('description')
+
+        new_fields = []
+        for child_col_dict in bq_column_dict.get('fields', list()):
+            new_child_column_dict = self._update_column_dict(
+                child_col_dict,
+                dbt_columns,
+                parent=dotted_column_name
+            )
+            new_fields.append(new_child_column_dict)
+
+        bq_column_dict['fields'] = new_fields
+
+        return bq_column_dict
+
     @available.parse_none
     def update_column_descriptions(self, relation, columns):
         if len(columns) == 0:
@@ -606,16 +636,33 @@ class BigQueryAdapter(BaseAdapter):
         table = conn.handle.get_table(table_ref)
 
         new_schema = []
-        for column in table.schema:
-            if column.name in columns:
-                column_config = columns[column.name]
-                column_dict = column.to_api_repr()
-                column_dict['description'] = column_config.get('description')
-                column = SchemaField.from_api_repr(column_dict)
-            new_schema.append(column)
+        for bq_column in table.schema:
+            bq_column_dict = bq_column.to_api_repr()
+            new_bq_column_dict = self._update_column_dict(
+                bq_column_dict,
+                columns
+            )
+            new_schema.append(SchemaField.from_api_repr(new_bq_column_dict))
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
         conn.handle.update_table(new_table, ['schema'])
+
+    @available.parse_none
+    def update_table_description(
+        self, database: str, schema: str, identifier: str, description: str
+    ):
+        conn = self.connections.get_thread_connection()
+        client = conn.handle
+
+        table_ref = self.connections.table_ref(
+            database,
+            schema,
+            identifier,
+            conn
+        )
+        table = client.get_table(table_ref)
+        table.description = description
+        client.update_table(table, ['description'])
 
     @available.parse_none
     def alter_table_add_columns(self, relation, columns):

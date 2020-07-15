@@ -1,5 +1,6 @@
 import inspect
 from abc import abstractmethod
+from copy import deepcopy
 from typing import List, Optional, Type, TypeVar, Generic, Dict, Any
 
 from hologram import JsonSchemaMixin, ValidationError
@@ -20,7 +21,7 @@ class RemoteMethod(Generic[Parameters, Result]):
     METHOD_NAME: Optional[str] = None
 
     def __init__(self, args, config):
-        self.args = args
+        self.args = deepcopy(args)
         self.config = config
 
     @classmethod
