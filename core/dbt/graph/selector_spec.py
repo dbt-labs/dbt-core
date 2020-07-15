@@ -4,9 +4,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from dbt.dataclass_schema import StrEnum
 
-from typing import (
-    Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
-)
+from typing import Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
 from .graph import UniqueId
 from .selector_methods import MethodName
 from dbt.exceptions import RuntimeException, InvalidSelectorException

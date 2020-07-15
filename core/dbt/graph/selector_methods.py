@@ -279,11 +279,7 @@ class MetricSelectorMethod(SelectorMethod):
 
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
-        """Yields nodes from inclucded that match the given path.
-
-        """
+        """Yields nodes from inclucded that match the given path."""
         # use '.' and not 'root' for easy comparison
         root = Path.cwd()
         paths = set(p.relative_to(root) for p in root.glob(selector))
