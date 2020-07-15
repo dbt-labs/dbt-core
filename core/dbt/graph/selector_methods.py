@@ -35,14 +35,14 @@ SELECTOR_DELIMITER = ":"
 
 
 class MethodName(StrEnum):
-    FQN = 'fqn'
-    Tag = 'tag'
-    Source = 'source'
-    Path = 'path'
-    Package = 'package'
-    Config = 'config'
-    TestName = 'test_name'
-    TestType = 'test_type'
+    FQN = "fqn"
+    Tag = "tag"
+    Source = "source"
+    Path = "path"
+    Package = "package"
+    Config = "config"
+    TestName = "test_name"
+    TestType = "test_type"
     ResourceType = "resource_type"
     State = "state"
     Exposure = "exposure"
@@ -86,8 +86,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         self.arguments: List[str] = arguments
 
     def parsed_nodes(
-        self,
-        included_nodes: Set[UniqueId]
+        self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, ManifestNode]]:
 
         for key, node in self.manifest.nodes.items():
@@ -97,8 +96,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             yield unique_id, node
 
     def source_nodes(
-        self,
-        included_nodes: Set[UniqueId]
+        self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, ParsedSourceDefinition]]:
 
         for key, source in self.manifest.sources.items():
@@ -128,8 +126,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             yield unique_id, metric
 
     def all_nodes(
-        self,
-        included_nodes: Set[UniqueId]
+        self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
         yield from chain(
             self.parsed_nodes(included_nodes),
@@ -141,8 +138,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def configurable_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, CompileResultNode]]:
-        yield from chain(self.parsed_nodes(included_nodes),
-                         self.source_nodes(included_nodes))
+        yield from chain(self.parsed_nodes(included_nodes), self.source_nodes(included_nodes))
 
     def non_source_nodes(
         self,
@@ -181,9 +177,7 @@ class QualifiedNameSelectorMethod(SelectorMethod):
 
         return False
 
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yield all nodes in the graph that match the selector.
 
         :param str selector: The selector or node name
@@ -195,19 +189,15 @@ class QualifiedNameSelectorMethod(SelectorMethod):
 
 
 class TagSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
-        """ yields nodes from included that have the specified tag """
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """yields nodes from included that have the specified tag"""
         for node, real_node in self.all_nodes(included_nodes):
             if selector in real_node.tags:
                 yield node
 
 
 class SourceSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included are the specified source."""
         parts = selector.split(".")
         target_package = SELECTOR_GLOB
@@ -290,7 +280,7 @@ class MetricSelectorMethod(SelectorMethod):
 
 
 class PathSelectorMethod(SelectorMethod):
-    def search(
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         self, included_nodes: Set[UniqueId], selector: str
     ) -> Iterator[UniqueId]:
         """Yields nodes from inclucded that match the given path.
@@ -310,9 +300,7 @@ class PathSelectorMethod(SelectorMethod):
 
 
 class PackageSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that have the specified package"""
         for node, real_node in self.all_nodes(included_nodes):
             if real_node.package_name == selector:
@@ -354,7 +342,7 @@ class ConfigSelectorMethod(SelectorMethod):
         parts = self.arguments
         # special case: if the user wanted to compare test severity,
         # make the comparison case-insensitive
-        if parts == ['severity']:
+        if parts == ["severity"]:
             selector = CaseInsensitive(selector)
 
         # search sources is kind of useless now source configs only have
@@ -382,9 +370,7 @@ class ResourceTypeSelectorMethod(SelectorMethod):
 
 
 class TestNameSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         for node, real_node in self.parsed_nodes(included_nodes):
             if isinstance(real_node, HasTestMetadata):
                 if real_node.test_metadata.name == selector:
@@ -392,9 +378,7 @@ class TestNameSelectorMethod(SelectorMethod):
 
 
 class TestTypeSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         search_types: Tuple[Type, ...]
         # continue supporting 'schema' + 'data' for backwards compatibility
         if selector in ("generic", "schema"):
@@ -579,14 +563,12 @@ class MethodManager:
         self.manifest = manifest
         self.previous_state = previous_state
 
-    def get_method(
-        self, method: MethodName, method_arguments: List[str]
-    ) -> SelectorMethod:
+    def get_method(self, method: MethodName, method_arguments: List[str]) -> SelectorMethod:
 
         if method not in self.SELECTOR_METHODS:
             raise InternalException(
                 f'Method name "{method}" is a valid node selection '
-                f'method name, but it is not handled'
+                f"method name, but it is not handled"
             )
         cls: Type[SelectorMethod] = self.SELECTOR_METHODS[method]
         return cls(self.manifest, self.previous_state, method_arguments)

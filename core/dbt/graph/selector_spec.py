@@ -16,11 +16,11 @@ RAW_SELECTOR_PATTERN = re.compile(
     r"\A"
     r"(?P<childrens_parents>(\@))?"
     r"(?P<parents>((?P<parents_depth>(\d*))\+))?"
-    r'((?P<method>([\w.]+)):)?(?P<value>(.*?))'
+    r"((?P<method>([\w.]+)):)?(?P<value>(.*?))"
     r"(?P<children>(\+(?P<children_depth>(\d*))))?"
     r"\Z"
 )
-SELECTOR_METHOD_SEPARATOR = '.'
+SELECTOR_METHOD_SEPARATOR = "."
 
 
 class IndirectSelection(StrEnum):
@@ -86,12 +86,12 @@ class SelectionCriteria:
             return MethodName.FQN
 
     @classmethod
-    def parse_method(
+    def parse_method(cls, groupdict: Dict[str, Any]) -> Tuple[MethodName, List[str]]:
         cls, groupdict: Dict[str, Any]
     ) -> Tuple[MethodName, List[str]]:
         raw_method = groupdict.get('method')
         if raw_method is None:
-            return cls.default_method(groupdict['value']), []
+            return cls.default_method(groupdict["value"]), []
 
         method_parts: List[str] = raw_method.split(SELECTOR_METHOD_SEPARATOR)
         try:

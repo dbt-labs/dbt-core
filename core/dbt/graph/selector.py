@@ -57,8 +57,7 @@ class NodeSelector(MethodManager):
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
         graph_members = {
-            unique_id for unique_id in self.full_graph.nodes()
-            if self._is_graph_member(unique_id)
+            unique_id for unique_id in self.full_graph.nodes() if self._is_graph_member(unique_id)
         }
         self.graph = self.full_graph.subgraph(graph_members)
 
