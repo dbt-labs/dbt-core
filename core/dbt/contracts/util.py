@@ -68,6 +68,7 @@ class AdditionalPropertiesMixin:
     The underlying class definition must include a type definition for a field
     named '_extra' that is of type `Dict[str, Any]`.
     """
+
     ADDITIONAL_PROPERTIES = True
 
     # This takes attributes in the dictionary that are

@@ -14,7 +14,7 @@ from dbt.exceptions import RuntimeException, InvalidSelectorException
 
 RAW_SELECTOR_PATTERN = re.compile(
     r"\A"
-    r'(?P<childrens_parents>(\@))?'
+    r"(?P<childrens_parents>(\@))?"
     r"(?P<parents>((?P<parents_depth>(\d*))\+))?"
     r'((?P<method>([\w.]+)):)?(?P<value>(.*?))'
     r"(?P<children>(\+(?P<children_depth>(\d*))))?"
@@ -110,14 +110,14 @@ class SelectionCriteria:
         cls, raw: Any, dct: Dict[str, Any],
         indirect_selection: IndirectSelection = IndirectSelection.Eager
         dct: Dict[str, Any],
-        if 'value' not in dct:
+        indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> "SelectionCriteria":
         if "value" not in dct:
             raise RuntimeException(f'Invalid node spec "{raw}" - no search value!')
         method_name, method_arguments = cls.parse_method(dct)
 
-        parents_depth = _match_to_int(dct, 'parents_depth')
-        children_depth = _match_to_int(dct, 'children_depth')
+        parents_depth = _match_to_int(dct, "parents_depth")
+        children_depth = _match_to_int(dct, "children_depth")
 
         # If defined field in selector, override CLI flag
         indirect_selection = IndirectSelection(
@@ -128,11 +128,11 @@ class SelectionCriteria:
             raw=raw,
             method=method_name,
             method_arguments=method_arguments,
-            value=dct['value'],
-            childrens_parents=bool(dct.get('childrens_parents')),
-            parents=bool(dct.get('parents')),
+            value=dct["value"],
+            childrens_parents=bool(dct.get("childrens_parents")),
+            parents=bool(dct.get("parents")),
             parents_depth=parents_depth,
-            children=bool(dct.get('children')),
+            children=bool(dct.get("children")),
             children_depth=children_depth,
             indirect_selection=indirect_selection
         )

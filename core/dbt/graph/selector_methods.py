@@ -43,7 +43,7 @@ class MethodName(StrEnum):
     Config = 'config'
     TestName = 'test_name'
     TestType = 'test_type'
-    ResourceType = 'resource_type'
+    ResourceType = "resource_type"
     State = "state"
     Exposure = "exposure"
     Metric = "metric"
@@ -371,15 +371,11 @@ class ConfigSelectorMethod(SelectorMethod):
 
 
 class ResourceTypeSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         try:
             resource_type = NodeType(selector)
         except ValueError as exc:
-            raise RuntimeException(
-                f'Invalid resource_type selector "{selector}"'
-            ) from exc
+            raise RuntimeException(f'Invalid resource_type selector "{selector}"') from exc
         for node, real_node in self.parsed_nodes(included_nodes):
             if real_node.resource_type == resource_type:
                 yield node

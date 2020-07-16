@@ -95,9 +95,7 @@ def _get_list_dicts(
 ) -> List[RawDefinition]:
     result: List[RawDefinition] = []
     if key not in dct:
-        raise InternalException(
-            f'Expected to find key {key} in dict, only found {list(dct)}'
-        )
+        raise InternalException(f"Expected to find key {key} in dict, only found {list(dct)}")
     values = dct[key]
     if not isinstance(values, list):
         raise ValidationException(
@@ -157,7 +155,7 @@ def _parse_include_exclude_subdefs(
 
 
 def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
-    union_def_parts = _get_list_dicts(definition, 'union')
+    union_def_parts = _get_list_dicts(definition, "union")
     include, exclude = _parse_include_exclude_subdefs(union_def_parts)
 
     union = SelectionUnion(components=include)
@@ -172,10 +170,8 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
         )
 
 
-def parse_intersection_definition(
-    definition: Dict[str, Any]
-) -> SelectionSpec:
-    intersection_def_parts = _get_list_dicts(definition, 'intersection')
+def parse_intersection_definition(definition: Dict[str, Any]) -> SelectionSpec:
+    intersection_def_parts = _get_list_dicts(definition, "intersection")
     include, exclude = _parse_include_exclude_subdefs(intersection_def_parts)
     intersection = SelectionIntersection(components=include)
 
@@ -196,14 +192,13 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
         value = definition[key]
         if not isinstance(key, str):
             raise ValidationException(
-                f'Expected definition key to be a "str", got one of type '
-                f'"{type(key)}" ({key})'
+                f'Expected definition key to be a "str", got one of type ' f'"{type(key)}" ({key})'
             )
         dct = {
-            'method': key,
-            'value': value,
+            "method": key,
+            "value": value,
         }
-    elif 'method' in definition and 'value' in definition:
+    elif "method" in definition and "value" in definition:
         dct = definition
         if "exclude" in definition:
             diff_arg = _parse_exclusions(definition)
@@ -239,7 +234,7 @@ def parse_from_definition(definition: RawDefinition, rootlevel=False) -> Selecti
         return SelectionCriteria.from_single_spec(definition)
     elif "union" in definition:
         return parse_union_definition(definition)
-    elif 'intersection' in definition:
+    elif "intersection" in definition:
         return parse_intersection_definition(definition)
     elif isinstance(definition, dict):
         return parse_dict_definition(definition)

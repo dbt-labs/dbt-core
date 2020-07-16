@@ -4,6 +4,7 @@ from dbt.contracts.util import (
     Mergeable,
     Replaceable,
 )
+
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException
