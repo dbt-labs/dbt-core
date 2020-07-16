@@ -85,9 +85,7 @@ class SelectionCriteria:
 
     @classmethod
     def parse_method(cls, groupdict: Dict[str, Any]) -> Tuple[MethodName, List[str]]:
-        cls, groupdict: Dict[str, Any]
-    ) -> Tuple[MethodName, List[str]]:
-        raw_method = groupdict.get('method')
+        raw_method = groupdict.get("method")
         if raw_method is None:
             return cls.default_method(groupdict["value"]), []
 
