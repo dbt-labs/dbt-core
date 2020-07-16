@@ -198,8 +198,11 @@ class Profile(HasCredentials):
             raise DbtProfileError(msg, result_type='invalid_target')
         profile_data = outputs[target_name]
 
-        if profile_data is None:
-            msg = (f"{target_name} is misconfigured in your profiles.yml")
+        if not isinstance(profile_data, dict):
+            msg = (
+                f"output '{target_name}' of profile '{profile_name}' is "
+                f"misconfigured in profiles.yml"
+            )
             raise DbtProfileError(msg, result_type='invalid_target')
 
         return profile_data
