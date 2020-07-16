@@ -3,9 +3,7 @@ from dbt import flags
 import itertools
 from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 
-from typing import (
-    Dict, List, Optional, Tuple, Any, Union
-)
+from typing import Dict, List, Optional, Tuple, Any, Union
 
 from dbt.contracts.selection import SelectorDefinition, SelectorFile
 from dbt.exceptions import InternalException, ValidationException
