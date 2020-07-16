@@ -93,15 +93,15 @@ class NodeSelector(MethodManager):
         overlap with the selected set).
         """
         additional: Set[UniqueId] = set()
-        if spec.select_childrens_parents:
+        if spec.childrens_parents:
             additional.update(self.graph.select_childrens_parents(selected))
 
-        if spec.select_parents:
-            depth = spec.select_parents_max_depth
+        if spec.parents:
+            depth = spec.parents_depth
             additional.update(self.graph.select_parents(selected, depth))
 
-        if spec.select_children:
-            depth = spec.select_children_max_depth
+        if spec.children:
+            depth = spec.children_depth
             additional.update(self.graph.select_children(selected, depth))
         return additional
 

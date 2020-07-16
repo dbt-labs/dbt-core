@@ -167,19 +167,19 @@ param_specs = [
 
 
 @pytest.mark.parametrize(
-    'spec,parents,parents_max_depth,children,children_max_depth,filter_type,filter_value,childrens_parents',
+    'spec,parents,parents_depth,children,children_depth,filter_type,filter_value,childrens_parents',
     param_specs,
     ids=id_macro
 )
-def test_parse_specs(spec, parents, parents_max_depth, children, children_max_depth, filter_type, filter_value, childrens_parents):
+def test_parse_specs(spec, parents, parents_depth, children, children_depth, filter_type, filter_value, childrens_parents):
     parsed = graph_selector.SelectionCriteria.from_single_spec(spec)
-    assert parsed.select_parents == parents
-    assert parsed.select_parents_max_depth == parents_max_depth
-    assert parsed.select_children == children
-    assert parsed.select_children_max_depth == children_max_depth
+    assert parsed.parents == parents
+    assert parsed.parents_depth == parents_depth
+    assert parsed.children == children
+    assert parsed.children_depth == children_depth
     assert parsed.method == filter_type
     assert parsed.value == filter_value
-    assert parsed.select_childrens_parents == childrens_parents
+    assert parsed.childrens_parents == childrens_parents
 
 
 invalid_specs = [
