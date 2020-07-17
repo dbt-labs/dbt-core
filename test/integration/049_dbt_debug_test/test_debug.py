@@ -41,7 +41,8 @@ class TestDebug(DBTIntegrationTest):
                 'pass': 'notmypassword',
                 'dbname': 'dbt',
                 'schema': self.unique_schema()
-            }
+            },
+            'none_target': None
         })
         return profile
 
@@ -72,6 +73,11 @@ class TestDebug(DBTIntegrationTest):
     def test_postgres_wronguser(self):
         self.run_dbt(['debug', '--target', 'wronguser'])
         self.assertGotValue(re.compile(r'\s+Connection test'), 'ERROR')
+
+    @use_profile('postgres')
+    def test_postgres_empty_target(self):
+        self.run_dbt(['debug', '--target', 'none_target'])
+        self.assertGotValue(re.compile(r"\s+output 'none_target'"), 'misconfigured')
 
 
 class TestDebugProfileVariable(TestDebug):
