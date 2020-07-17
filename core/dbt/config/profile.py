@@ -198,6 +198,14 @@ class Profile(HasCredentials):
                    .format(profile_name, target_name, outputs))
             raise DbtProfileError(msg, result_type='invalid_target')
         profile_data = outputs[target_name]
+
+        if not isinstance(profile_data, dict):
+            msg = (
+                f"output '{target_name}' of profile '{profile_name}' is "
+                f"misconfigured in profiles.yml"
+            )
+            raise DbtProfileError(msg, result_type='invalid_target')
+
         return profile_data
 
     @classmethod
