@@ -1,6 +1,4 @@
-from typing import (
-    Set, Iterable, Iterator, Optional, NewType
-)
+from typing import Set, Iterable, Iterator, Optional, NewType
 from itertools import product
 import networkx as nx  # type: ignore
 
