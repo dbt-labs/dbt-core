@@ -4,7 +4,7 @@ import networkx as nx  # type: ignore
 
 from dbt.exceptions import InternalException
 
-UniqueId = NewType('UniqueId', str)
+UniqueId = NewType("UniqueId", str)
 
 
 class Graph:
@@ -24,9 +24,7 @@ class Graph:
     def __iter__(self) -> Iterator[UniqueId]:
         return iter(self.graph.nodes())
 
-    def ancestors(
-        self, node: UniqueId, max_depth: Optional[int] = None
-    ) -> Set[UniqueId]:
+    def ancestors(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes having a path to `node` in `graph`"""
         if not self.graph.has_node(node):
             raise InternalException(f"Node {node} not found in the graph!")
@@ -36,9 +34,7 @@ class Graph:
         anc = nx.single_source_shortest_path_length(G=G, source=node, cutoff=max_depth).keys()
         return anc - {node}
 
-    def descendants(
-        self, node: UniqueId, max_depth: Optional[int] = None
-    ) -> Set[UniqueId]:
+    def descendants(self, node: UniqueId, max_depth: Optional[int] = None) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
             raise InternalException(f"Node {node} not found in the graph!")

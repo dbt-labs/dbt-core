@@ -63,7 +63,9 @@ class NodeSelector(MethodManager):
         self.graph = self.full_graph.subgraph(graph_members)
 
     def select_included(
-        self, included_nodes: Set[UniqueId], spec: SelectionCriteria,
+        self,
+        included_nodes: Set[UniqueId],
+        spec: SelectionCriteria,
     ) -> Set[UniqueId]:
         """Select the explicitly included nodes, using the given spec. Return
         the selected set of unique IDs.
