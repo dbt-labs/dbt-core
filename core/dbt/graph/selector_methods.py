@@ -6,7 +6,7 @@ from typing import Set, List
 from hologram.helpers import StrEnum
 
 from dbt.exceptions import RuntimeException
-
+from .graph import UniqueId
 
 SELECTOR_GLOB = '*'
 SELECTOR_DELIMITER = ':'
@@ -55,7 +55,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             yield unique_id, source
 
     @abc.abstractmethod
-    def search(self, included_nodes: Set[str], selector: str):
+    def search(self, included_nodes: Set[UniqueId], selector: str):
         raise NotImplementedError('subclasses should implement this')
 
 

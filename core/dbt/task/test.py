@@ -16,7 +16,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.results import RunModelResult
 from dbt.exceptions import raise_compiler_error, InternalException
-from dbt.graph import ResourceTypeSelector, Graph
+from dbt.graph import ResourceTypeSelector, Graph, UniqueId
 from dbt.node_types import NodeType, RunHookType
 from dbt import flags
 
@@ -114,8 +114,8 @@ class TestSelector(ResourceTypeSelector):
         self.schema = schema
 
     def expand_selection(
-        self, filtered_graph: Graph, selected: Set[str]
-    ) -> Set[str]:
+        self, filtered_graph: Graph, selected: Set[UniqueId]
+    ) -> Set[UniqueId]:
         selected_tests = {
             n for n in filtered_graph.select_successors(selected)
             if self.manifest.nodes[n].resource_type == NodeType.Test

@@ -22,7 +22,7 @@ class GraphQueue:
     the same time, as there is an unlocked race!
     """
     def __init__(
-        self, graph: nx.DiGraph, manifest: Manifest, selected: Set[str]
+        self, graph: nx.DiGraph, manifest: Manifest, selected: Set[UniqueId]
     ):
         self.graph = graph
         self.manifest = manifest
@@ -43,7 +43,7 @@ class GraphQueue:
         # awaits after task end
         self.some_task_done = threading.Condition(self.lock)
 
-    def get_selected_nodes(self) -> Set[str]:
+    def get_selected_nodes(self) -> Set[UniqueId]:
         return self._selected.copy()
 
     def _include_in_cost(self, node_id: UniqueId) -> bool:

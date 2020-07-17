@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import (
     Set, Iterator, List, Optional, Dict, Union, Any, Sequence
 )
+from .graph import UniqueId
 from .selector_methods import MethodName
 from dbt.exceptions import RuntimeException
 
@@ -137,22 +138,34 @@ class BaseSelectionGroup(metaclass=ABCMeta):
             yield component
 
     @abstractmethod
-    def combine_selections(self, selections: List[Set[str]]) -> Set[str]:
+    def combine_selections(
+        self,
+        selections: List[Set[UniqueId]],
+    ) -> Set[UniqueId]:
         raise NotImplementedError(
             '_combine_selections not implemented!'
         )
 
 
 class SelectionIntersection(BaseSelectionGroup):
-    def combine_selections(self, selections: List[Set[str]]) -> Set[str]:
+    def combine_selections(
+        self,
+        selections: List[Set[UniqueId]],
+    ) -> Set[UniqueId]:
         return set.intersection(*selections)
 
 
 class SelectionDifference(BaseSelectionGroup):
-    def combine_selections(self, selections: List[Set[str]]) -> Set[str]:
+    def combine_selections(
+        self,
+        selections: List[Set[UniqueId]],
+    ) -> Set[UniqueId]:
         return set.difference(*selections)
 
 
 class SelectionUnion(BaseSelectionGroup):
-    def combine_selections(self, selections: List[Set[str]]) -> Set[str]:
+    def combine_selections(
+        self,
+        selections: List[Set[UniqueId]],
+    ) -> Set[UniqueId]:
         return set.union(*selections)

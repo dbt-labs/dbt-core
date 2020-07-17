@@ -1,13 +1,11 @@
 from typing import (
-    Set, Iterable, Iterator, Optional
+    Set, Iterable, Iterator, Optional, NewType
 )
 import networkx as nx  # type: ignore
 
 from dbt.exceptions import InternalException
 
-# it would be nice to use a NewType for this, but that will cause problems with
-# str interop, which dbt relies on implicilty all over.
-UniqueId = str
+UniqueId = NewType('UniqueId', str)
 
 
 class Graph:
@@ -26,7 +24,9 @@ class Graph:
     def __iter__(self) -> Iterator[UniqueId]:
         return iter(self.graph.nodes())
 
-    def ancestors(self, node, max_depth: Optional[int] = None) -> Set[str]:
+    def ancestors(
+        self, node: UniqueId, max_depth: Optional[int] = None
+    ) -> Set[UniqueId]:
         """Returns all nodes having a path to `node` in `graph`"""
         if not self.graph.has_node(node):
             raise InternalException(f'Node {node} not found in the graph!')
@@ -37,7 +37,9 @@ class Graph:
                 .keys()
         return anc - {node}
 
-    def descendants(self, node, max_depth: Optional[int] = None) -> Set[str]:
+    def descendants(
+        self, node: UniqueId, max_depth: Optional[int] = None
+    ) -> Set[UniqueId]:
         """Returns all nodes reachable from `node` in `graph`"""
         if not self.graph.has_node(node):
             raise InternalException(f'Node {node} not found in the graph!')
