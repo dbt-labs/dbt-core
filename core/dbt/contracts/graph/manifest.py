@@ -5,16 +5,19 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import chain
+from multiprocessing.synchronize import Lock
 from typing import (
     Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
-    TypeVar, Callable, Iterable, Generic
+    TypeVar, Callable, Iterable, Generic, cast
 )
 from typing_extensions import Protocol
 from uuid import UUID
 
 from hologram import JsonSchemaMixin
 
-from dbt.contracts.graph.compiled import CompileResultNode, NonSourceNode
+from dbt.contracts.graph.compiled import (
+    CompileResultNode, NonSourceNode, NonSourceCompiledNode
+)
 from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
     ParsedSourceDefinition
@@ -28,6 +31,7 @@ from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt import deprecations
+from dbt import flags
 from dbt import tracking
 import dbt.utils
 
@@ -546,6 +550,10 @@ T = TypeVar('T', bound=CompileResultNode)
 
 
 def _update_into(dest: MutableMapping[str, T], new_item: T):
+    """Update dest to overwrite whatever is at dest[new_item.unique_id] with
+    new_itme. There must be an existing value to overwrite, and they two nodes
+    must have the same original file path.
+    """
     unique_id = new_item.unique_id
     if unique_id not in dest:
         raise dbt.exceptions.RuntimeException(
@@ -577,6 +585,7 @@ class Manifest:
     _docs_cache: Optional[DocCache] = None
     _sources_cache: Optional[SourceCache] = None
     _refs_cache: Optional[RefableCache] = None
+    _lock: Lock = field(default_factory=flags.MP_CONTEXT.Lock)
 
     @classmethod
     def from_macros(
@@ -597,6 +606,26 @@ class Manifest:
             disabled=[],
             files=files,
         )
+
+    def sync_update_node(
+        self, new_node: NonSourceCompiledNode
+    ) -> NonSourceCompiledNode:
+        """update the node with a lock. The only time we should want to lock is
+        when compiling an ephemeral ancestor of a node at runtime, because
+        multiple threads could be just-in-time compiling the same ephemeral
+        dependency, and we want them to have a consistent view of the manifest.
+
+        If the existing node is not compiled, update it with the new node and
+        return that. If the existing node is compiled, do not update the
+        manifest and return the existing node.
+        """
+        with self._lock:
+            existing = self.nodes[new_node.unique_id]
+            if getattr(existing, 'compiled', False):
+                # already compiled -> must be a NonSourceCompiledNode
+                return cast(NonSourceCompiledNode, existing)
+            _update_into(self.nodes, new_node)
+            return new_node
 
     def update_node(self, new_node: NonSourceNode):
         _update_into(self.nodes, new_node)

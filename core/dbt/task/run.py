@@ -39,6 +39,7 @@ from dbt.logger import (
     DbtModelState,
     print_timestamped_line,
 )
+from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
 from dbt.node_types import NodeType, RunHookType
 
@@ -382,13 +383,16 @@ class RunTask(CompileTask):
     def after_hooks(self, adapter, results, elapsed):
         self.print_results_line(results, elapsed)
 
-    def build_query(self):
-        return {
-            "include": self.args.models,
-            "exclude": self.args.exclude,
-            "resource_types": [NodeType.Model],
-            "tags": []
-        }
+    def get_node_selector(self) -> ResourceTypeSelector:
+        if self.manifest is None or self.graph is None:
+            raise InternalException(
+                'manifest and graph must be set to get perform node selection'
+            )
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            resource_types=[NodeType.Model],
+        )
 
     def get_runner_type(self):
         return ModelRunner

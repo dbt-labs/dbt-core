@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Set
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -10,10 +10,15 @@ from dbt.contracts.graph.compiled import (
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import (
+    ParsedDataTestNode,
+    ParsedSchemaTestNode,
+)
 from dbt.contracts.results import RunModelResult
 from dbt.exceptions import raise_compiler_error, InternalException
-from dbt import flags
+from dbt.graph import ResourceTypeSelector, Graph, UniqueId
 from dbt.node_types import NodeType, RunHookType
+from dbt import flags
 
 
 class TestRunner(CompileRunner):
@@ -92,6 +97,44 @@ class TestRunner(CompileRunner):
         self.print_result_line(result)
 
 
+DATA_TEST_TYPES = (CompiledDataTestNode, ParsedDataTestNode)
+SCHEMA_TEST_TYPES = (CompiledSchemaTestNode, ParsedSchemaTestNode)
+
+
+class TestSelector(ResourceTypeSelector):
+    def __init__(
+        self, graph, manifest, data: bool, schema: bool
+    ):
+        super().__init__(
+            graph=graph,
+            manifest=manifest,
+            resource_types=[NodeType.Test],
+        )
+        self.data = data
+        self.schema = schema
+
+    def expand_selection(
+        self, filtered_graph: Graph, selected: Set[UniqueId]
+    ) -> Set[UniqueId]:
+        selected_tests = {
+            n for n in filtered_graph.select_successors(selected)
+            if self.manifest.nodes[n].resource_type == NodeType.Test
+        }
+        return selected | selected_tests
+
+    def node_is_match(self, node):
+        if super().node_is_match(node):
+            test_types = [self.data, self.schema]
+
+            if all(test_types) or not any(test_types):
+                return True
+            elif self.data:
+                return isinstance(node, DATA_TEST_TYPES)
+            elif self.schema:
+                return isinstance(node, SCHEMA_TEST_TYPES)
+        return False
+
+
 class TestTask(RunTask):
     """
     Testing:
@@ -107,25 +150,17 @@ class TestTask(RunTask):
         # Don't execute on-run-* hooks for tests
         pass
 
-    def build_query(self):
-        query = {
-            "include": self.args.models,
-            "exclude": self.args.exclude,
-            "resource_types": NodeType.Test
-        }
-        test_types = [self.args.data, self.args.schema]
-
-        if all(test_types) or not any(test_types):
-            tags = []
-        elif self.args.data:
-            tags = ['data']
-        elif self.args.schema:
-            tags = ['schema']
-        else:
-            raise RuntimeError("unexpected")
-
-        query['tags'] = tags
-        return query
+    def get_node_selector(self) -> TestSelector:
+        if self.manifest is None or self.graph is None:
+            raise InternalException(
+                'manifest and graph must be set to get perform node selection'
+            )
+        return TestSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            data=self.args.data,
+            schema=self.args.schema,
+        )
 
     def get_runner_type(self):
         return TestRunner

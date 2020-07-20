@@ -1,6 +1,8 @@
 from .run import ModelRunner, RunTask
 from .printer import print_snapshot_result_line
 
+from dbt.exceptions import InternalException
+from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
 
 
@@ -20,13 +22,16 @@ class SnapshotTask(RunTask):
     def raise_on_first_error(self):
         return False
 
-    def build_query(self):
-        return {
-            "include": self.args.models,
-            "exclude": self.args.exclude,
-            "resource_types": [NodeType.Snapshot],
-            "tags": [],
-        }
+    def get_node_selector(self):
+        if self.manifest is None or self.graph is None:
+            raise InternalException(
+                'manifest and graph must be set to get perform node selection'
+            )
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            resource_types=[NodeType.Snapshot],
+        )
 
     def get_runner_type(self):
         return SnapshotRunner
