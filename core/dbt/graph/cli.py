@@ -42,7 +42,7 @@ def parse_union(
 
     return SelectionUnion(
         components=union_components,
-        expect_exists=expect_exists,
+        expect_exists=False,
         raw=components,
     )
 
