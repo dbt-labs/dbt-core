@@ -1,4 +1,4 @@
-## dbt 0.17.2b1 (Release TBD)
+## dbt 0.17.2 (Release TBD)
 
 ### Features
 - Added environment variables for debug-level logging ([#2633](https://github.com/fishtown-analytics/dbt/issues/2633), [#2635](https://github.com/fishtown-analytics/dbt/pull/2635))
