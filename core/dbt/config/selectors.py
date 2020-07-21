@@ -47,8 +47,8 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
             ) from exc
         except RuntimeException as exc:
             raise DbtSelectorsError(
-                f'Could not read selector file data: {exc}',
-                result_type='invalid_selector',
+                f"Could not read selector file data: {exc}",
+                result_type="invalid_selector",
             ) from exc
 
         return cls(selectors)
@@ -58,26 +58,28 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
         cls,
         data: Dict[str, Any],
         renderer: SelectorRenderer,
-    ) -> 'SelectorConfig':
+    ) -> "SelectorConfig":
         try:
             rendered = renderer.render_data(data)
         except (ValidationError, RuntimeException) as exc:
             raise DbtSelectorsError(
-                f'Could not render selector data: {exc}',
-                result_type='invalid_selector',
+                f"Could not render selector data: {exc}",
+                result_type="invalid_selector",
             ) from exc
         return cls.selectors_from_dict(rendered)
 
     @classmethod
     def from_path(
-        cls, path: Path, renderer: SelectorRenderer,
-    ) -> 'SelectorConfig':
+        cls,
+        path: Path,
+        renderer: SelectorRenderer,
+    ) -> "SelectorConfig":
         try:
             data = load_yaml_text(load_file_contents(str(path)))
         except (ValidationError, RuntimeException) as exc:
             raise DbtSelectorsError(
-                f'Could not read selector file: {exc}',
-                result_type='invalid_selector',
+                f"Could not read selector file: {exc}",
+                result_type="invalid_selector",
                 path=path,
             ) from exc
 
@@ -89,9 +91,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
 
 
 def selector_data_from_root(project_root: str) -> Dict[str, Any]:
-    selector_filepath = resolve_path_from_base(
-        'selectors.yml', project_root
-    )
+    selector_filepath = resolve_path_from_base("selectors.yml", project_root)
 
     if path_exists(selector_filepath):
         selectors_dict = load_yaml_text(load_file_contents(selector_filepath))
@@ -104,14 +104,14 @@ def selector_config_from_data(
     selectors_data: Dict[str, Any]
 ) -> SelectorConfig:
     if not selectors_data:
-        selectors_data = {'selectors': []}
+        selectors_data = {"selectors": []}
 
     try:
         selectors = SelectorConfig.selectors_from_dict(selectors_data)
     except ValidationError as e:
         raise DbtSelectorsError(
             MALFORMED_SELECTOR_ERROR.format(error=str(e.message)),
-            result_type='invalid_selector',
+            result_type="invalid_selector",
         ) from e
     return selectors
 

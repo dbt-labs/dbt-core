@@ -363,8 +363,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 project = self.new_project(str(path))
             except DbtProjectError as e:
                 raise DbtProjectError(
-                    f'Failed to read package: {e}',
-                    result_type='invalid_project',
+                    f"Failed to read package: {e}",
+                    result_type="invalid_project",
                     path=path,
                 ) from e
             else:

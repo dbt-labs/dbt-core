@@ -117,36 +117,31 @@ def _get_list_dicts(
         else:
             raise ValidationException(
                 f'Invalid value type {type(value)} in key "{key}", expected '
-                f'dict or str (value: {value}).'
+                f"dict or str (value: {value})."
             )
 
     return result
 
 
 def _parse_exclusions(definition) -> Optional[SelectionSpec]:
-    exclusions = _get_list_dicts(definition, 'exclude')
-    parsed_exclusions = [
-        parse_from_definition(excl) for excl in exclusions
-    ]
+    exclusions = _get_list_dicts(definition, "exclude")
+    parsed_exclusions = [parse_from_definition(excl) for excl in exclusions]
     if len(parsed_exclusions) == 1:
         return parsed_exclusions[0]
     elif len(parsed_exclusions) > 1:
-        return SelectionUnion(
-            components=parsed_exclusions,
-            raw=exclusions
-        )
+        return SelectionUnion(components=parsed_exclusions, raw=exclusions)
     else:
         return None
 
 
 def _parse_include_exclude_subdefs(
-    definitions: List[RawDefinition]
+    definitions: List[RawDefinition],
 ) -> Tuple[List[SelectionSpec], Optional[SelectionSpec]]:
     include_parts: List[SelectionSpec] = []
     diff_arg: Optional[SelectionSpec] = None
 
     for definition in definitions:
-        if isinstance(definition, dict) and 'exclude' in definition:
+        if isinstance(definition, dict) and "exclude" in definition:
             # do not allow multiple exclude: defs at the same level
             if diff_arg is not None:
                 yaml_sel_cfg = yaml.dump(definition)
@@ -210,9 +205,9 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
         }
     elif 'method' in definition and 'value' in definition:
         dct = definition
-        if 'exclude' in definition:
+        if "exclude" in definition:
             diff_arg = _parse_exclusions(definition)
-            dct = {k: v for k, v in dct.items() if k != 'exclude'}
+            dct = {k: v for k, v in dct.items() if k != "exclude"}
     else:
         raise ValidationException(
             f'Expected either 1 key or else "method" '
@@ -241,7 +236,7 @@ def parse_from_definition(
         )
     if isinstance(definition, str):
         return SelectionCriteria.from_single_spec(definition)
-    elif 'union' in definition:
+    elif "union" in definition:
         return parse_union_definition(definition)
     elif 'intersection' in definition:
         return parse_intersection_definition(definition)
@@ -255,7 +250,7 @@ def parse_from_definition(
 
 
 def parse_from_selectors_definition(
-    source: SelectorFile
+    source: SelectorFile,
 ) -> Dict[str, Dict[str, Union[SelectionSpec, bool]]]:
     result: Dict[str, Dict[str, Union[SelectionSpec, bool]]] = {}
     selector: SelectorDefinition

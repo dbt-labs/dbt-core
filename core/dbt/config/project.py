@@ -647,8 +647,7 @@ class Project:
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:
             raise RuntimeException(
-                f'Could not find selector named {name}, expected one of '
-                f'{list(self.selectors)}'
+                f"Could not find selector named {name}, expected one of " f"{list(self.selectors)}"
             )
         return self.selectors[name]["definition"]
 
