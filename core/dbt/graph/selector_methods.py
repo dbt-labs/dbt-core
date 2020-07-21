@@ -313,9 +313,7 @@ def _getattr_descend(obj: Any, attrs: List[str]) -> Any:
             try:
                 value = value[attr]
             except Exception as exc:
-                raise AttributeError(
-                    f"'{type(value)}' object has no attribute '{attr}'"
-                ) from exc
+                raise AttributeError(f"'{type(value)}' object has no attribute '{attr}'") from exc
     return value
 
 
