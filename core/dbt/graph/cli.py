@@ -85,9 +85,7 @@ def parse_difference(
 RawDefinition = Union[str, Dict[str, Any]]
 
 
-def _get_list_dicts(
-    dct: Dict[str, Any], key: str
-) -> List[RawDefinition]:
+def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
     result: List[RawDefinition] = []
     if key not in dct:
         raise InternalException(f"Expected to find key {key} in dict, only found {list(dct)}")
