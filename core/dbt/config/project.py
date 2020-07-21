@@ -589,7 +589,7 @@ class Project:
                 "seed-paths": self.seed_paths,
                 "test-paths": self.test_paths,
                 "analysis-paths": self.analysis_paths,
-            'asset-paths': self.asset_paths,
+                "docs-paths": self.docs_paths,
                 "asset-paths": self.asset_paths,
                 "target-path": self.target_path,
                 "snapshot-paths": self.snapshot_paths,

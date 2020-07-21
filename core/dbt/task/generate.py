@@ -223,9 +223,7 @@ class GenerateTask(CompileTask):
                 shutil.rmtree(to_asset_path)
 
             if os.path.exists(asset_path):
-                shutil.copytree(
-                    asset_path,
-                    to_asset_path)
+                shutil.copytree(asset_path, to_asset_path)
 
         if self.manifest is None:
             raise InternalException("self.manifest was None in run!")
