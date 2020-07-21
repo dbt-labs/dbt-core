@@ -580,6 +580,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.test_paths, ['test'])
         self.assertEqual(project.analysis_paths, [])
         self.assertEqual(project.docs_paths, ['models', 'data', 'snapshots', 'macros'])
+        self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, 'target')
         self.assertEqual(project.clean_targets, ['target'])
         self.assertEqual(project.log_path, 'logs')
@@ -636,6 +637,7 @@ class TestProject(BaseConfigTest):
             'test-paths': ['other-test'],
             'analysis-paths': ['analysis'],
             'docs-paths': ['docs'],
+            'asset-paths': ['other-assets'],
             'target-path': 'other-target',
             'clean-targets': ['another-target'],
             'log-path': 'other-logs',
@@ -700,6 +702,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.test_paths, ['other-test'])
         self.assertEqual(project.analysis_paths, ['analysis'])
         self.assertEqual(project.docs_paths, ['docs'])
+        self.assertEqual(project.asset_paths, ['other-assets'])
         self.assertEqual(project.target_path, 'other-target')
         self.assertEqual(project.clean_targets, ['another-target'])
         self.assertEqual(project.log_path, 'other-logs')
@@ -1186,6 +1189,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.test_paths, ['test'])
         self.assertEqual(config.analysis_paths, [])
         self.assertEqual(config.docs_paths, ['models', 'data', 'snapshots', 'macros'])
+        self.assertEqual(config.asset_paths, [])
         self.assertEqual(config.target_path, 'target')
         self.assertEqual(config.clean_targets, ['target'])
         self.assertEqual(config.log_path, 'logs')

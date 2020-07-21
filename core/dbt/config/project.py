@@ -304,6 +304,7 @@ class Project:
     test_paths: List[str]
     analysis_paths: List[str]
     docs_paths: List[str]
+    asset_paths: List[str]
     target_path: str
     snapshot_paths: List[str]
     clean_targets: List[str]
@@ -412,6 +413,7 @@ class Project:
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
+        asset_paths: List[str] = value_or(cfg.asset_paths, [])
         target_path: str = value_or(cfg.target_path, 'target')
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
         log_path: str = value_or(cfg.log_path, 'logs')
@@ -491,6 +493,7 @@ class Project:
             test_paths=test_paths,
             analysis_paths=analysis_paths,
             docs_paths=docs_paths,
+            asset_paths=asset_paths,
             target_path=target_path,
             snapshot_paths=snapshot_paths,
             clean_targets=clean_targets,
@@ -544,6 +547,7 @@ class Project:
             'test-paths': self.test_paths,
             'analysis-paths': self.analysis_paths,
             'docs-paths': self.docs_paths,
+            'asset-paths': self.asset_paths,
             'target-path': self.target_path,
             'snapshot-paths': self.snapshot_paths,
             'clean-targets': self.clean_targets,

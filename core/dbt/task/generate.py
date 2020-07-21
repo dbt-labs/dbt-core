@@ -230,6 +230,17 @@ class GenerateTask(CompileTask):
             DOCS_INDEX_FILE_PATH,
             os.path.join(self.config.target_path, 'index.html'))
 
+        for asset_path in self.config.asset_paths:
+            to_asset_path = os.path.join(self.config.target_path, asset_path)
+
+            if os.path.exists(to_asset_path):
+                shutil.rmtree(to_asset_path)
+
+            if os.path.exists(asset_path):
+                shutil.copytree(
+                    asset_path,
+                    to_asset_path)
+
         if self.manifest is None:
             raise InternalException(
                 'self.manifest was None in run!'

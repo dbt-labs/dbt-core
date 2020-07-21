@@ -164,6 +164,7 @@ class ProjectV1(HyphenatedJsonSchemaMixin, Replaceable):
     test_paths: Optional[List[str]] = None
     analysis_paths: Optional[List[str]] = None
     docs_paths: Optional[List[str]] = None
+    asset_paths: Optional[List[str]] = None
     target_path: Optional[str] = None
     snapshot_paths: Optional[List[str]] = None
     clean_targets: Optional[List[str]] = None
@@ -204,6 +205,7 @@ class ProjectV2(HyphenatedJsonSchemaMixin, Replaceable):
     test_paths: Optional[List[str]] = None
     analysis_paths: Optional[List[str]] = None
     docs_paths: Optional[List[str]] = None
+    asset_paths: Optional[List[str]] = None
     target_path: Optional[str] = None
     snapshot_paths: Optional[List[str]] = None
     clean_targets: Optional[List[str]] = None
