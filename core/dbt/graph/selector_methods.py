@@ -234,7 +234,18 @@ class PackageSelectorMethod(SelectorMethod):
 def _getattr_descend(obj: Any, attrs: List[str]) -> Any:
     value = obj
     for attr in attrs:
-        value = getattr(value, attr)
+        try:
+            value = getattr(value, attr)
+        except AttributeError:
+            # if it implements getitem (dict, list, ...), use that. On failure,
+            # raise an attribute error instead of the KeyError, TypeError, etc.
+            # that arbitrary getitem calls might raise
+            try:
+                value = value[attr]
+            except Exception as exc:
+                raise AttributeError(
+                    f"'{type(value)}' object has no attribute '{attr}'"
+                ) from exc
     return value
 
 
@@ -251,7 +262,7 @@ class ConfigSelectorMethod(SelectorMethod):
         self, included_nodes: Set[UniqueId], selector: str
     ) -> Iterator[UniqueId]:
         parts = self.arguments
-        # special case: if the user wanted to compoare test severity,
+        # special case: if the user wanted to compare test severity,
         # make the comparison case-insensitive
         if parts == ['severity']:
             selector = CaseInsensitive(selector)

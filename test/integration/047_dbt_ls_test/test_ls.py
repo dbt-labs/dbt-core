@@ -33,6 +33,10 @@ class TestStrictUndefined(DBTIntegrationTest):
             },
         }
 
+    def setUp(self):
+        super().setUp()
+        self.maxDiff = None
+
     def run_dbt_ls(self, args=None, expect_pass=True):
         log_manager.stdout_console()
         full_args = ['ls']
@@ -123,8 +127,8 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     def expect_model_output(self):
         expectations = {
-            'name': ('ephemeral', 'inner', 'outer'),
-            'selector': ('test.ephemeral', 'test.sub.inner', 'test.outer'),
+            'name': ('ephemeral', 'incremental', 'inner', 'outer'),
+            'selector': ('test.ephemeral', 'test.incremental', 'test.sub.inner', 'test.outer'),
             'json': (
                 {
                     'name': 'ephemeral',
@@ -144,6 +148,27 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'full_refresh': None,
                     },
                     'alias': 'ephemeral',
+                    'resource_type': 'model',
+                },
+                {
+                    'name': 'incremental',
+                    'package_name': 'test',
+                    'depends_on': {'nodes': ['seed.test.seed'], 'macros': ['macro.dbt.is_incremental']},
+                    'tags': [],
+                    'config': {
+                        'enabled': True,
+                        'materialized': 'incremental',
+                        'post-hook': [],
+                        'tags': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                        'column_types': {},
+                        'persist_docs': {},
+                        'full_refresh': None,
+                        'incremental_strategy': 'delete+insert',
+                    },
+                    'alias': 'incremental',
                     'resource_type': 'model',
                 },
                 {
@@ -187,7 +212,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'resource_type': 'model',
                 },
             ),
-            'path': (self.dir('models/ephemeral.sql'), self.dir('models/sub/inner.sql'), self.dir('models/outer.sql')),
+            'path': (self.dir('models/ephemeral.sql'), self.dir('models/incremental.sql'), self.dir('models/sub/inner.sql'), self.dir('models/outer.sql')),
         }
         self.expect_given_output(['--resource-type', 'model'], expectations)
 
@@ -351,6 +376,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         # sources are like models - (package.source_name.table_name)
         expected_default = {
             'test.ephemeral',
+            'test.incremental',
             'test.snapshot.my_snapshot',
             'test.sub.inner',
             'test.outer',
@@ -387,7 +413,13 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.assertEqual(set(results), {'test.outer', 'test.sub.inner'})
 
         results = self.run_dbt_ls(['--resource-type', 'model', '--exclude', 'inner'])
-        self.assertEqual(set(results), {'test.ephemeral', 'test.outer'})
+        self.assertEqual(set(results), {'test.ephemeral', 'test.outer', 'test.incremental'})
+
+        results = self.run_dbt_ls(['--select', 'config.incremental_strategy:delete+insert'])
+        self.assertEqual(set(results), {'test.incremental'})
+
+        self.run_dbt_ls(['--select', 'config.incremental_strategy:insert_overwrite'], expect_pass=False)
+
 
     @use_profile('postgres')
     def test_postgres_ls(self):
