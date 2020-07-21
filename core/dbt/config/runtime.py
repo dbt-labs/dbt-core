@@ -106,6 +106,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             snapshots=project.snapshots,
             dbt_version=project.dbt_version,
             packages=project.packages,
+            selectors=project.selectors,
             query_comment=project.query_comment,
             sources=project.sources,
             vars=project.vars,
@@ -361,8 +362,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 project = self.new_project(str(path))
             except DbtProjectError as e:
                 raise DbtProjectError(
-                    'Failed to read package at {}: {}'
-                    .format(path, e)
+                    f'Failed to read package: {e}',
+                    result_type='invalid_project',
+                    path=path,
                 ) from e
             else:
                 yield project.project_name, project
@@ -501,6 +503,7 @@ class UnsetProfileConfig(RuntimeConfig):
             snapshots=project.snapshots,
             dbt_version=project.dbt_version,
             packages=project.packages,
+            selectors=project.selectors,
             query_comment=project.query_comment,
             sources=project.sources,
             vars=project.vars,

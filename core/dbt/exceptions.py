@@ -319,6 +319,10 @@ class DbtProjectError(DbtConfigError):
     pass
 
 
+class DbtSelectorsError(DbtConfigError):
+    pass
+
+
 class DbtProfileError(DbtConfigError):
     pass
 

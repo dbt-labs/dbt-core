@@ -101,7 +101,7 @@ def test_parse_simple():
     ''')
 
     assert len(sf.selectors) == 1
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
     assert len(parsed) == 1
     assert 'tagged_foo' in parsed
     assert Criteria(
@@ -127,7 +127,7 @@ def test_parse_simple_childrens_parents():
     ''')
 
     assert len(sf.selectors) == 1
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
     assert len(parsed) == 1
     assert 'tagged_foo' in parsed
     assert Criteria(
@@ -155,7 +155,7 @@ def test_parse_simple_arguments_with_modifiers():
     ''')
 
     assert len(sf.selectors) == 1
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
     assert len(parsed) == 1
     assert 'configured_view' in parsed
     assert Criteria(
@@ -181,7 +181,7 @@ def test_parse_union():
                   - tag: foo
     ''')
     assert len(sf.selectors) == 1
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
     assert 'views-or-foos' in parsed
     assert Union(
         Criteria(method=MethodName.Config, value='view', method_arguments=['materialized']),
@@ -200,7 +200,7 @@ def test_parse_intersection():
                   - tag: foo
     ''')
     assert len(sf.selectors) == 1
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
 
     assert 'views-and-foos' in parsed
     assert Intersection(
@@ -222,7 +222,7 @@ def test_parse_union_excluding():
                     - tag: bar
     ''')
     assert len(sf.selectors) == 1
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
     assert 'views-or-foos-not-bars' in parsed
     assert Difference(
         Union(
@@ -233,7 +233,7 @@ def test_parse_union_excluding():
     ) == parsed['views-or-foos-not-bars']
 
 
-def test_parse_yaml():
+def test_parse_yaml_complex():
     sf = parse_file('''\
         selectors:
             - name: test_name
@@ -264,7 +264,7 @@ def test_parse_yaml():
         ''')
 
     assert len(sf.selectors) == 2
-    parsed = cli.parse_from_selectors_definition(sf.selectors)
+    parsed = cli.parse_from_selectors_definition(sf)
     assert 'test_name' in parsed
     assert 'weeknights' in parsed
     assert Union(

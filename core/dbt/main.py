@@ -461,6 +461,14 @@ def _add_selection_arguments(*subparsers, **kwargs):
             Specify the models to exclude.
             ''',
         )
+        sub.add_argument(
+            '--selector',
+            dest='selector_name',
+            metavar='SELECTOR_NAME',
+            help='''
+            The selector name to use, as defined in selectors.yml
+            '''
+        )
 
 
 def _add_table_mutability_arguments(*subparsers):
@@ -701,6 +709,14 @@ def _build_list_subparser(subparsers, base_subparser):
         metavar='SELECTOR',
         help='''
         Specify the models to exclude.
+        '''
+    )
+    sub.add_argument(
+        '--selector',
+        metavar='SELECTOR_NAME',
+        dest='selector_name',
+        help='''
+        The selector name to use, as defined in selectors.yml
         '''
     )
     return sub

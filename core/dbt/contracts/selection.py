@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from hologram import JsonSchemaMixin
 
 from typing import List, Dict, Any, Union
@@ -16,6 +16,6 @@ class SelectorFile(JsonSchemaMixin):
     version: int = 2
 
 
-@dataclass
-class SelectorCollection:
-    packages: Dict[str, List[SelectorFile]] = field(default_factory=dict)
+# @dataclass
+# class SelectorCollection:
+#     packages: Dict[str, List[SelectorFile]] = field(default_factory=dict)

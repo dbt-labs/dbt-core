@@ -1,4 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import yaml
 
 
 class TestGraphSelection(DBTIntegrationTest):
@@ -11,11 +12,70 @@ class TestGraphSelection(DBTIntegrationTest):
     def models(self):
         return "models"
 
-    @use_profile('postgres')
-    def test__postgres__same_model_intersection(self):
-        self.run_sql_file("seed.sql")
+    @property
+    def selectors_config(self):
+        return yaml.safe_load('''
+            selectors:
+            - name: same_intersection
+              definition:
+                intersection:
+                  - fqn: users
+                  - fqn:users
+            - name: tags_intersection
+              definition:
+                intersection:
+                  - tag: bi
+                  - tag: users
+            - name: triple_descending
+              definition:
+                intersection:
+                  - fqn: "*"
+                  - tag: bi
+                  - tag: users
+            - name: triple_ascending
+              definition:
+                intersection:
+                  - tag: users
+                  - tag: bi
+                  - fqn: "*"
+            - name: intersection_with_exclusion
+              definition:
+                intersection:
+                  - method: fqn
+                    value: users_rollup_dependency
+                    parents: true
+                  - method: fqn
+                    value: users
+                    children: true
+                  - exclude:
+                    - users_rollup_dependency
+            - name: intersection_exclude_intersection
+              definition:
+                intersection:
+                  - tag:bi
+                  - "@users"
+                  - exclude:
+                      - intersection:
+                        - tag:bi
+                        - method: fqn
+                          value: users_rollup
+                          children: true
+            - name: intersection_exclude_intersection_lack
+              definition:
+                intersection:
+                  - tag:bi
+                  - "@users"
+                  - exclude:
+                      - intersection:
+                        - method: fqn
+                          value: emails
+                          children_parents: true
+                        - method: fqn
+                          value: emails_alt
+                          children_parents: true
+        ''')
 
-        results = self.run_dbt(['run', '--models', 'users,users'])
+    def _verify_selected_users(self, results):
         # users
         self.assertEqual(len(results), 1)
 
@@ -25,48 +85,77 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('emails_alt', created_models)
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
+
+    @use_profile('postgres')
+    def test__postgres__same_model_intersection(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--models', 'users,users'])
+        self._verify_selected_users(results)
+
+    @use_profile('postgres')
+    def test__postgres__same_model_intersection_selectors(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--selector', 'same_intersection'])
+        self._verify_selected_users(results)
 
     @use_profile('postgres')
     def test__postgres__tags_intersection(self):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(['run', '--models', 'tag:bi,tag:users'])
-        # users
-        self.assertEqual(len(results), 1)
+        self._verify_selected_users(results)
 
-        created_models = self.get_models_in_schema()
-        self.assertIn('users', created_models)
-        self.assertNotIn('users_rollup', created_models)
-        self.assertNotIn('emails_alt', created_models)
-        self.assertNotIn('subdir', created_models)
-        self.assertNotIn('nested_users', created_models)
+    @use_profile('postgres')
+    def test__postgres__tags_intersection_selectors(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--selector', 'tags_intersection'])
+        self._verify_selected_users(results)
 
     @use_profile('postgres')
     def test__postgres__intersection_triple_descending(self):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(['run', '--models', '*,tag:bi,tag:users'])
-        # users
-        self.assertEqual(len(results), 1)
+        self._verify_selected_users(results)
 
-        created_models = self.get_models_in_schema()
-        self.assertIn('users', created_models)
-        self.assertNotIn('users_rollup', created_models)
-        self.assertNotIn('emails_alt', created_models)
-        self.assertNotIn('subdir', created_models)
-        self.assertNotIn('nested_users', created_models)
+    @use_profile('postgres')
+    def test__postgres__intersection_triple_descending_schema(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--models', '*,tag:bi,tag:users'])
+        self._verify_selected_users(results)
+
+    @use_profile('postgres')
+    def test__postgres__intersection_triple_descending_schema_selectors(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--selector', 'triple_descending'])
+        self._verify_selected_users(results)
 
     @use_profile('postgres')
     def test__postgres__intersection_triple_ascending(self):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(['run', '--models', 'tag:users,tag:bi,*'])
-        # users
-        self.assertEqual(len(results), 1)
+        self._verify_selected_users(results)
+
+    @use_profile('postgres')
+    def test__postgres__intersection_triple_ascending_schema_selectors(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--selector', 'triple_ascending'])
+        self._verify_selected_users(results)
+
+    def _verify_selected_users_and_rollup(self, results):
+        # users, users_rollup
+        self.assertEqual(len(results), 2)
 
         created_models = self.get_models_in_schema()
         self.assertIn('users', created_models)
-        self.assertNotIn('users_rollup', created_models)
+        self.assertIn('users_rollup', created_models)
         self.assertNotIn('emails_alt', created_models)
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
@@ -76,15 +165,14 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(['run', '--models', '+users_rollup_dependency,users+', '--exclude', 'users_rollup_dependency'])
-        # users, users_rollup
-        self.assertEqual(len(results), 2)
+        self._verify_selected_users_and_rollup(results)
 
-        created_models = self.get_models_in_schema()
-        self.assertIn('users', created_models)
-        self.assertIn('users_rollup', created_models)
-        self.assertNotIn('emails_alt', created_models)
-        self.assertNotIn('subdir', created_models)
-        self.assertNotIn('nested_users', created_models)
+    @use_profile('postgres')
+    def test__postgres__intersection_with_exclusion_selectors(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(['run', '--selector', 'intersection_with_exclusion'])
+        self._verify_selected_users_and_rollup(results)
 
     @use_profile('postgres')
     def test__postgres__intersection_exclude_intersection(self):
@@ -93,15 +181,16 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(
             ['run', '--models', 'tag:bi,@users', '--exclude',
              'tag:bi,users_rollup+'])
-        # users
-        self.assertEqual(len(results), 1)
+        self._verify_selected_users(results)
 
-        created_models = self.get_models_in_schema()
-        self.assertIn('users', created_models)
-        self.assertNotIn('users_rollup', created_models)
-        self.assertNotIn('emails_alt', created_models)
-        self.assertNotIn('subdir', created_models)
-        self.assertNotIn('nested_users', created_models)
+    @use_profile('postgres')
+    def test__postgres__intersection_exclude_intersection_selectors(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt(
+            ['run', '--selector', 'intersection_exclude_intersection']
+        )
+        self._verify_selected_users(results)
 
     @use_profile('postgres')
     def test__postgres__intersection_exclude_intersection_lack(self):
@@ -110,16 +199,15 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(
             ['run', '--models', 'tag:bi,@users', '--exclude',
              '@emails,@emails_alt'])
-        # users, users_rollup
-        self.assertEqual(len(results), 2)
+        self._verify_selected_users_and_rollup(results)
 
-        created_models = self.get_models_in_schema()
-        self.assertIn('users', created_models)
-        self.assertIn('users_rollup', created_models)
-        self.assertNotIn('emails_alt', created_models)
-        self.assertNotIn('subdir', created_models)
-        self.assertNotIn('nested_users', created_models)
+    @use_profile('postgres')
+    def test__postgres__intersection_exclude_intersection_lack_selector(self):
+        self.run_sql_file("seed.sql")
 
+        results = self.run_dbt(
+            ['run', '--selector', 'intersection_exclude_intersection_lack'])
+        self._verify_selected_users_and_rollup(results)
 
     @use_profile('postgres')
     def test__postgres__intersection_exclude_triple_intersection(self):
@@ -128,15 +216,7 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(
             ['run', '--models', 'tag:bi,@users', '--exclude',
              '*,tag:bi,users_rollup'])
-        # users
-        self.assertEqual(len(results), 1)
-
-        created_models = self.get_models_in_schema()
-        self.assertIn('users', created_models)
-        self.assertNotIn('users_rollup', created_models)
-        self.assertNotIn('emails_alt', created_models)
-        self.assertNotIn('subdir', created_models)
-        self.assertNotIn('nested_users', created_models)
+        self._verify_selected_users(results)
 
     @use_profile('postgres')
     def test__postgres__intersection_concat(self):

@@ -19,6 +19,8 @@ from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import validator_error_message
+from dbt.exceptions import RuntimeException
+from dbt.graph import SelectionSpec
 from dbt.helper_types import NoValue
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
@@ -37,6 +39,11 @@ from dbt.contracts.project import PackageConfig
 from hologram import ValidationError
 
 from .renderer import DbtProjectYamlRenderer
+from .selectors import (
+    selector_config_from_data,
+    selector_data_from_root,
+    SelectorConfig,
+)
 
 
 INVALID_VERSION_ERROR = """\
@@ -211,10 +218,12 @@ class PartialProject:
 
     def render(self, renderer):
         packages_dict = package_data_from_root(self.project_root)
+        selectors_dict = selector_data_from_root(self.project_root)
         return Project.render_from_dict(
             self.project_root,
             self.project_dict,
             packages_dict,
+            selectors_dict,
             renderer,
         )
 
@@ -310,6 +319,7 @@ class Project:
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
+    selectors: SelectorConfig
     query_comment: QueryComment
     config_version: int
 
@@ -351,6 +361,7 @@ class Project:
         cls,
         project_dict: Dict[str, Any],
         packages_dict: Optional[Dict[str, Any]] = None,
+        selectors_dict: Optional[Dict[str, Any]] = None,
     ) -> 'Project':
         """Create a project from its project and package configuration, as read
         by yaml.safe_load().
@@ -464,6 +475,11 @@ class Project:
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
+        try:
+            selectors = selector_config_from_data(selectors_dict)
+        except ValidationError as e:
+            raise DbtProjectError(validator_error_message(e)) from e
+
         project = cls(
             project_name=name,
             version=version,
@@ -488,6 +504,7 @@ class Project:
             snapshots=snapshots,
             dbt_version=dbt_version,
             packages=packages,
+            selectors=selectors,
             query_comment=query_comment,
             sources=sources,
             vars=vars_value,
@@ -568,14 +585,21 @@ class Project:
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
+        selectors_dict: Dict[str, Any],
         renderer: DbtProjectYamlRenderer,
     ) -> 'Project':
         rendered_project = renderer.render_data(project_dict)
         rendered_project['project-root'] = project_root
         package_renderer = renderer.get_package_renderer()
         rendered_packages = package_renderer.render_data(packages_dict)
+        selectors_renderer = renderer.get_selector_renderer()
+        rendered_selectors = selectors_renderer.render_data(selectors_dict)
         try:
-            return cls.from_project_config(rendered_project, rendered_packages)
+            return cls.from_project_config(
+                rendered_project,
+                rendered_packages,
+                rendered_selectors,
+            )
         except DbtProjectError as exc:
             if exc.path is None:
                 exc.path = os.path.join(project_root, 'dbt_project.yml')
@@ -658,6 +682,14 @@ class Project:
         project = Project.from_project_config(mutated)
         project.packages = self.packages
         return project
+
+    def get_selector(self, name: str) -> SelectionSpec:
+        if name not in self.selectors:
+            raise RuntimeException(
+                f'Could not find selector named {name}, expected one of '
+                f'{list(self.selectors)}'
+            )
+        return self.selectors[name]
 
 
 def v2_vars_to_v1(
