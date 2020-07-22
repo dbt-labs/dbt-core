@@ -26,60 +26,13 @@ from dbt.contracts.graph.model_config import (
     NodeConfig, TestConfig, TimestampSnapshotConfig, SnapshotStrategy,
 )
 from dbt.contracts.graph.parsed import (
-    ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
-    DependsOn, ColumnInfo, ParsedDataTestNode, ParsedSnapshotNode,
-    ParsedAnalysisNode, ParsedDocumentation, UnpatchedSourceDefinition,
-    ParsedSeedNode
+    ParsedModelNode, ParsedMacro, ParsedNodePatch, DependsOn, ColumnInfo,
+    ParsedDataTestNode, ParsedSnapshotNode, ParsedAnalysisNode,
+    UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
 
-from .utils import config_from_parts_or_dicts, normalize, generate_name_macros
-
-
-def MockSource(package, source_name, name, **kwargs):
-    src = mock.MagicMock(
-        __class__=ParsedSourceDefinition,
-        resource_type=NodeType.Source,
-        source_name=source_name,
-        package_name=package,
-        unique_id=f'source.{package}.{source_name}.{name}',
-        search_name=f'{source_name}.{name}',
-        **kwargs
-    )
-    src.name = name
-    return src
-
-
-def MockNode(package, name, resource_type=NodeType.Model, **kwargs):
-    if resource_type == NodeType.Model:
-        cls = ParsedModelNode
-    elif resource_type == NodeType.Seed:
-        cls = ParsedSeedNode
-    else:
-        raise ValueError(f'I do not know how to handle {resource_type}')
-    node = mock.MagicMock(
-        __class__=cls,
-        resource_type=resource_type,
-        package_name=package,
-        unique_id=f'{str(resource_type)}.{package}.{name}',
-        search_name=name,
-        **kwargs
-    )
-    node.name = name
-    return node
-
-
-def MockDocumentation(package, name, **kwargs):
-    doc = mock.MagicMock(
-        __class__=ParsedDocumentation,
-        resource_type=NodeType.Documentation,
-        package_name=package,
-        search_name=name,
-        unique_id=f'{package}.{name}',
-        **kwargs
-    )
-    doc.name = name
-    return doc
+from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode, MockSource, MockDocumentation
 
 
 def get_abs_os_path(unix_path):

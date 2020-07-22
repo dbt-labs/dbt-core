@@ -73,3 +73,20 @@ class TestGraphSelection(DBTIntegrationTest):
             {'users', 'users_rollup', 'emails_alt', 'users_rollup_dependency'},
             models_run
         )
+
+        # just the users/users_rollup tests
+        results = self.run_dbt(['test', '--models', '@tag:users'])
+        self.assertEqual(len(results), 2)
+        assert sorted(r.node.name for r in results) == ['unique_users_id', 'unique_users_rollup_gender']
+        # just the email test
+        results = self.run_dbt(['test', '--models', 'tag:base,config.materialized:ephemeral'])
+        self.assertEqual(len(results), 1)
+        assert results[0].node.name == 'not_null_emails_email'
+        # also just the email test
+        results = self.run_dbt(['test', '--models', 'config.severity:warn'])
+        self.assertEqual(len(results), 1)
+        assert results[0].node.name == 'not_null_emails_email'
+        # all 3 tests
+        results = self.run_dbt(['test', '--models', '@tag:users tag:base,config.materialized:ephemeral'])
+        self.assertEqual(len(results), 3)
+        assert sorted(r.node.name for r in results) == ['not_null_emails_email', 'unique_users_id', 'unique_users_rollup_gender']
