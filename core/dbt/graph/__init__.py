@@ -9,9 +9,6 @@ from .selector import (  # noqa: F401
     ResourceTypeSelector,
     NodeSelector,
 )
-from .cli import (  # noqa: F401
-    parse_difference,
-    parse_test_selectors,
-)
+from .cli import parse_difference  # noqa: F401
 from .queue import GraphQueue  # noqa: F401
 from .graph import Graph, UniqueId  # noqa: F401

@@ -4,22 +4,21 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 
 from typing import (
-    Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
+    Set, Iterator, List, Optional, Dict, Union, Any, Sequence
 )
 from .graph import UniqueId
 from .selector_methods import MethodName
-from dbt.exceptions import RuntimeException, InvalidSelectorException
+from dbt.exceptions import RuntimeException
 
 
 RAW_SELECTOR_PATTERN = re.compile(
     r'\A'
     r'(?P<childs_parents>(\@))?'
     r'(?P<parents>((?P<parents_depth>(\d*))\+))?'
-    r'((?P<method>([\w.]+)):)?(?P<value>(.*?))'
+    r'((?P<method>(\w+)):)?(?P<value>(.*?))'
     r'(?P<children>(\+(?P<children_depth>(\d*))))?'
     r'\Z'
 )
-SELECTOR_METHOD_SEPARATOR = '.'
 
 
 def _probably_path(value: str):
@@ -59,7 +58,6 @@ SelectionSpec = Union[
 class SelectionCriteria:
     raw: str
     method: MethodName
-    method_arguments: List[str]
     value: str
     select_childrens_parents: bool
     select_parents: bool
@@ -82,22 +80,17 @@ class SelectionCriteria:
             return MethodName.FQN
 
     @classmethod
-    def parse_method(
-        cls, raw: str, groupdict: Dict[str, Any]
-    ) -> Tuple[MethodName, List[str]]:
+    def parse_method(cls, raw: str, groupdict: Dict[str, Any]) -> MethodName:
         raw_method = groupdict.get('method')
         if raw_method is None:
-            return cls.default_method(groupdict['value']), []
+            return cls.default_method(groupdict['value'])
 
-        method_parts: List[str] = raw_method.split(SELECTOR_METHOD_SEPARATOR)
         try:
-            method_name = MethodName(method_parts[0])
-        except ValueError as exc:
-            raise InvalidSelectorException(method_parts[0]) from exc
-
-        method_arguments: List[str] = method_parts[1:]
-
-        return method_name, method_arguments
+            return MethodName(raw_method)
+        except ValueError:
+            raise RuntimeException(
+                f'unknown selector filter "{raw_method}" in "{raw}"'
+            ) from None
 
     @classmethod
     def from_single_spec(cls, raw: str) -> 'SelectionCriteria':
@@ -112,15 +105,14 @@ class SelectionCriteria:
                 f'Invalid node spec "{raw}" - no search value!'
             )
 
-        method_name, method_arguments = cls.parse_method(raw, result_dict)
+        method = cls.parse_method(raw, result_dict)
 
         parents_max_depth = _match_to_int(result_dict, 'parents_depth')
         children_max_depth = _match_to_int(result_dict, 'children_depth')
 
         return cls(
             raw=raw,
-            method=method_name,
-            method_arguments=method_arguments,
+            method=method,
             value=result_dict['value'],
             select_childrens_parents=bool(result_dict.get('childs_parents')),
             select_parents=bool(result_dict.get('parents')),
@@ -130,10 +122,10 @@ class SelectionCriteria:
         )
 
 
-class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):
+class BaseSelectionGroup(metaclass=ABCMeta):
     def __init__(
         self,
-        components: Iterable[SelectionSpec],
+        components: Sequence[SelectionSpec],
         expect_exists: bool = False,
         raw: Any = None,
     ):
@@ -153,12 +145,6 @@ class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):
         raise NotImplementedError(
             '_combine_selections not implemented!'
         )
-
-    def combined(self, selections: List[Set[UniqueId]]) -> Set[UniqueId]:
-        if not selections:
-            return set()
-
-        return self.combine_selections(selections)
 
 
 class SelectionIntersection(BaseSelectionGroup):

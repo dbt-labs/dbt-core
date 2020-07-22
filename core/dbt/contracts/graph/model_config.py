@@ -120,7 +120,6 @@ def insensitive_patterns(*patterns: str):
 
 
 Severity = NewType('Severity', str)
-
 register_pattern(Severity, insensitive_patterns('warn', 'error'))
 
 

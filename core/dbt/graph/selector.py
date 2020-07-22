@@ -1,18 +1,23 @@
 
-from typing import Set, List, Union
+from typing import (
+    Set, List, Dict, Union, Type
+)
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
-from .selector_methods import MethodManager
+from .selector_methods import (
+    MethodName,
+    SelectorMethod,
+    QualifiedNameSelectorMethod,
+    TagSelectorMethod,
+    SourceSelectorMethod,
+    PathSelectorMethod,
+)
 from .selector_spec import SelectionCriteria, SelectionSpec
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-from dbt.exceptions import (
-    InternalException,
-    InvalidSelectorException,
-    warn_or_error,
-)
+from dbt.exceptions import InternalException, warn_or_error
 from dbt.contracts.graph.compiled import NonSourceNode, CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
@@ -30,9 +35,16 @@ def alert_non_existence(raw_spec, nodes):
         )
 
 
-class NodeSelector(MethodManager):
+class InvalidSelectorError(Exception):
+    # this internal exception should never escape the module.
+    pass
+
+
+class NodeSelector:
     """The node selector is aware of the graph and manifest,
     """
+    SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {}
+
     def __init__(
         self,
         graph: Graph,
@@ -41,13 +53,16 @@ class NodeSelector(MethodManager):
         self.full_graph = graph
         self.manifest = manifest
 
-        # build a subgraph containing only non-empty, enabled nodes and enabled
-        # sources.
-        graph_members = {
-            unique_id for unique_id in self.full_graph.nodes()
-            if self._is_graph_member(unique_id)
-        }
-        self.graph = self.full_graph.subgraph(graph_members)
+    @classmethod
+    def register_method(cls, name: MethodName, method: Type[SelectorMethod]):
+        cls.SELECTOR_METHODS[name] = method
+
+    def get_method(self, method: MethodName) -> SelectorMethod:
+        if method in self.SELECTOR_METHODS:
+            cls: Type[SelectorMethod] = self.SELECTOR_METHODS[method]
+            return cls(self.manifest)
+        else:
+            raise InvalidSelectorError(method)
 
     def select_included(
         self, included_nodes: Set[UniqueId], spec: SelectionCriteria,
@@ -55,24 +70,22 @@ class NodeSelector(MethodManager):
         """Select the explicitly included nodes, using the given spec. Return
         the selected set of unique IDs.
         """
-        method = self.get_method(spec.method, spec.method_arguments)
+        method = self.get_method(spec.method)
         return set(method.search(included_nodes, spec.value))
 
     def get_nodes_from_criteria(
-        self,
-        spec: SelectionCriteria,
+        self, graph: Graph, spec: SelectionCriteria
     ) -> Set[UniqueId]:
-        """Get all nodes specified by the single selection criteria.
+        """Given a Graph, get all nodes specified by the spec.
 
         - collect the directly included nodes
         - find their specified relatives
         - perform any selector-specific expansion
         """
-
-        nodes = self.graph.nodes()
+        nodes = graph.nodes()
         try:
             collected = self.select_included(nodes, spec)
-        except InvalidSelectorException:
+        except InvalidSelectorError:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
             logger.info(
                 f"The '{spec.method}' selector specified in {spec.raw} is "
@@ -80,12 +93,12 @@ class NodeSelector(MethodManager):
             )
             return set()
 
-        extras = self.collect_specified_neighbors(spec, collected)
-        result = self.expand_selection(collected | extras)
+        extras = self.collect_specified_neighbors(spec, graph, collected)
+        result = self.expand_selection(graph, collected | extras)
         return result
 
     def collect_specified_neighbors(
-        self, spec: SelectionCriteria, selected: Set[UniqueId]
+        self, spec: SelectionCriteria, graph: Graph, selected: Set[UniqueId]
     ) -> Set[UniqueId]:
         """Given the set of models selected by the explicit part of the
         selector (like "tag:foo"), apply the modifiers on the spec ("+"/"@").
@@ -94,18 +107,18 @@ class NodeSelector(MethodManager):
         """
         additional: Set[UniqueId] = set()
         if spec.select_childrens_parents:
-            additional.update(self.graph.select_childrens_parents(selected))
-
+            additional.update(graph.select_childrens_parents(selected))
         if spec.select_parents:
-            depth = spec.select_parents_max_depth
-            additional.update(self.graph.select_parents(selected, depth))
-
+            additional.update(
+                graph.select_parents(selected, spec.select_parents_max_depth)
+            )
         if spec.select_children:
-            depth = spec.select_children_max_depth
-            additional.update(self.graph.select_children(selected, depth))
+            additional.update(
+                graph.select_children(selected, spec.select_children_max_depth)
+            )
         return additional
 
-    def select_nodes(self, spec: SelectionSpec) -> Set[UniqueId]:
+    def select_nodes(self, graph: Graph, spec: SelectionSpec) -> Set[UniqueId]:
         """Select the nodes in the graph according to the spec.
 
         If the spec is a composite spec (a union, difference, or intersection),
@@ -113,13 +126,16 @@ class NodeSelector(MethodManager):
         selection criteria, resolve that using the given graph.
         """
         if isinstance(spec, SelectionCriteria):
-            result = self.get_nodes_from_criteria(spec)
+            result = self.get_nodes_from_criteria(graph, spec)
         else:
             node_selections = [
-                self.select_nodes(component)
+                self.select_nodes(graph, component)
                 for component in spec
             ]
-            result = spec.combined(node_selections)
+            if node_selections:
+                result = spec.combine_selections(node_selections)
+            else:
+                result = set()
             if spec.expect_exists:
                 alert_non_existence(spec.raw, result)
         return result
@@ -152,6 +168,16 @@ class NodeSelector(MethodManager):
             )
         return self.node_is_match(node)
 
+    def build_graph_member_subgraph(self) -> Graph:
+        """Build a subgraph of all enabled, non-empty nodes based on the full
+        graph.
+        """
+        graph_members = {
+            unique_id for unique_id in self.full_graph.nodes()
+            if self._is_graph_member(unique_id)
+        }
+        return self.full_graph.subgraph(graph_members)
+
     def filter_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         """Return the subset of selected nodes that is a match for this
         selector.
@@ -160,13 +186,17 @@ class NodeSelector(MethodManager):
             unique_id for unique_id in selected if self._is_match(unique_id)
         }
 
-    def expand_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
+    def expand_selection(
+        self, filtered_graph: Graph, selected: Set[UniqueId]
+    ) -> Set[UniqueId]:
         """Perform selector-specific expansion."""
         return selected
 
     def get_selected(self, spec: SelectionSpec) -> Set[UniqueId]:
         """get_selected runs trhough the node selection process:
 
+            - build a subgraph containing only non-empty, enabled nodes and
+                enabled sources.
             - node selection. Based on the include/exclude sets, the set
                 of matched unique IDs is returned
                 - expand the graph at each leaf node, before combination
@@ -176,7 +206,8 @@ class NodeSelector(MethodManager):
                 - selectors can filter the nodes after all of them have been
                   selected
         """
-        selected_nodes = self.select_nodes(spec)
+        filtered_graph = self.build_graph_member_subgraph()
+        selected_nodes = self.select_nodes(filtered_graph, spec)
         filtered_nodes = self.filter_selection(selected_nodes)
         return filtered_nodes
 
@@ -205,3 +236,9 @@ class ResourceTypeSelector(NodeSelector):
 
     def node_is_match(self, node):
         return node.resource_type in self.resource_types
+
+
+NodeSelector.register_method(MethodName.FQN, QualifiedNameSelectorMethod)
+NodeSelector.register_method(MethodName.Tag, TagSelectorMethod)
+NodeSelector.register_method(MethodName.Source, SourceSelectorMethod)
+NodeSelector.register_method(MethodName.Path, PathSelectorMethod)

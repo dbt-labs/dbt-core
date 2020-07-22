@@ -4,8 +4,7 @@ models:
   columns:
   - name: email
     tests:
-    - not_null:
-        severity: warn
+    - unique
 - name: users
   columns:
   - name: id
