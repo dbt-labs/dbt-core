@@ -1097,9 +1097,7 @@ class WritableManifest(ArtifactMixin):
         metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
     )
     sources: Mapping[UniqueID, ParsedSourceDefinition] = field(
-        metadata=dict(description=(
-            'The sources defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The sources defined in the dbt project and its dependencies"))
     )
     macros: Mapping[UniqueID, ParsedMacro] = field(
         metadata=dict(description=("The macros defined in the dbt project and its dependencies"))
