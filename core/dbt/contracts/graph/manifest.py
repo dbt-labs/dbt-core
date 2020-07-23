@@ -932,7 +932,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def merge_from_artifact(
         self,
         adapter,
-        other: 'WritableManifest',
+        other: "WritableManifest",
         selected: AbstractSet[UniqueID],
     ) -> None:
         """Given the selected unique IDs and a writable manifest, update this
@@ -945,8 +945,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
             if current and (
-                node.resource_type in refables and
-                not node.is_ephemeral and
+                node.resource_type in refables
+                and not node.is_ephemeral
                 unique_id not in selected and
                 not adapter.get_relation(
                     current.database, current.schema, current.identifier

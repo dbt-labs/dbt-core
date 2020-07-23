@@ -425,8 +425,7 @@ class RunTask(CompileTask):
             return
         if self.manifest is None:
             raise InternalException(
-                'Expected to defer to manifest, but there is no runtime '
-                'manifest to defer from!'
+                "Expected to defer to manifest, but there is no runtime " "manifest to defer from!"
             )
         self.manifest.merge_from_artifact(
             adapter=adapter,

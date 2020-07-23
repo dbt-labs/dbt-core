@@ -85,22 +85,21 @@ class DBTArgumentParser(argparse.ArgumentParser):
         default=None,
     ):
         mutex_group = self.add_mutually_exclusive_group()
-        if not name.startswith('--'):
+        if not name.startswith("--"):
             raise InternalException(
-                'cannot handle optional argument without "--" prefix: '
-                f'got "{name}"'
+                'cannot handle optional argument without "--" prefix: ' f'got "{name}"'
             )
         if dest is None:
-            dest_name = name[2:].replace('-', '_')
+            dest_name = name[2:].replace("-", "_")
         else:
             dest_name = dest
 
         if no_name is None:
-            no_name = f'--no-{name[2:]}'
+            no_name = f"--no-{name[2:]}"
 
         mutex_group.add_argument(
             name,
-            action='store_const',
+            action="store_const",
             const=True,
             dest=dest_name,
             default=default,
@@ -108,8 +107,8 @@ class DBTArgumentParser(argparse.ArgumentParser):
         )
 
         mutex_group.add_argument(
-            f'--no-{name[2:]}',
-            action='store_const',
+            f"--no-{name[2:]}",
+            action="store_const",
             const=False,
             dest=dest_name,
             default=default,
@@ -513,7 +512,7 @@ def _build_run_subparser(subparsers, base_subparser):
         parents=[base_subparser],
         help='''
         Compile SQL and execute against the current target database.
-        '''
+        """,
     )
     run_sub.add_argument(
         '-x',
@@ -522,7 +521,7 @@ def _build_run_subparser(subparsers, base_subparser):
         action='store_true',
         help='''
         Stop execution upon a first failure.
-        '''
+        """,
     )
 
     run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
@@ -1004,13 +1003,13 @@ def parse_args(args, cls=DBTArgumentParser):
 
     p.add_optional_argument_inverse(
         '--partial-parse',
-        enable_help='''
+        enable_help="""
         Allow for partial parsing by looking for and writing to a pickle file
         in the target directory. This overrides the user configuration file.
-        ''',
-        disable_help='''
+        """,
+        disable_help="""
         Disallow partial parsing. This overrides the user configuration file.
-        ''',
+        """,
     )
 
     # if set, run dbt in single-threaded mode: thread count is ignored, and
