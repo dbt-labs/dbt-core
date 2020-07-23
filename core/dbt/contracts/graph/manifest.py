@@ -22,7 +22,7 @@ from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
     ParsedSourceDefinition
 )
-from dbt.contracts.util import Writable, Replaceable
+from dbt.contracts.util import Readable, Writable, Replaceable
 from dbt.exceptions import (
     raise_duplicate_resource_name, InternalException, raise_compiler_error,
     warn_or_error, raise_invalid_patch
@@ -1011,25 +1011,44 @@ class Manifest:
                 return result
         return None
 
+    def merge_from_artifact(
+        self,
+        other: 'WritableManifest',
+        selected: Set[UniqueID],
+    ) -> None:
+        """Given the selected unique IDs and a writable manifest, update this
+        manifest by replacing any unselected nodes with their counterpart.
+
+        Only non-ephemeral refable nodes are examined.
+        """
+        refables = set(NodeType.refable())
+        for unique_id, node in other.nodes.items():
+            if (
+                node.resource_type in refables and
+                not node.is_ephemeral and
+                unique_id not in selected
+            ):
+                self.nodes[unique_id] = node
+
 
 @dataclass
-class WritableManifest(JsonSchemaMixin, Writable):
-    nodes: Mapping[str, NonSourceNode] = field(
+class WritableManifest(JsonSchemaMixin, Writable, Readable):
+    nodes: Mapping[UniqueID, NonSourceNode] = field(
         metadata=dict(description=(
             'The nodes defined in the dbt project and its dependencies'
-        )),
-    )
-    sources: Mapping[str, ParsedSourceDefinition] = field(
-        metadata=dict(description=(
-            'The sources defined in the dbt project and its dependencies',
         ))
     )
-    macros: Mapping[str, ParsedMacro] = field(
+    sources: Mapping[UniqueID, ParsedSourceDefinition] = field(
+        metadata=dict(description=(
+            'The sources defined in the dbt project and its dependencies'
+        ))
+    )
+    macros: Mapping[UniqueID, ParsedMacro] = field(
         metadata=dict(description=(
             'The macros defined in the dbt project and its dependencies'
         ))
     )
-    docs: Mapping[str, ParsedDocumentation] = field(
+    docs: Mapping[UniqueID, ParsedDocumentation] = field(
         metadata=dict(description=(
             'The docs defined in the dbt project and its dependencies'
         ))

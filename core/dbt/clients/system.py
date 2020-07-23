@@ -162,6 +162,10 @@ def write_file(path: str, contents: str = '') -> bool:
     return True
 
 
+def read_json(path: str) -> Dict[str, Any]:
+    return json.loads(load_file_contents(path))
+
+
 def write_json(path: str, data: Dict[str, Any]) -> bool:
     return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
 

@@ -1,5 +1,7 @@
 import functools
+import os
 import time
+from pathlib import Path
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional
 
 from .compile import CompileRunner, CompileTask
@@ -21,6 +23,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.compilation import compile_node
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.contracts.results import RunModelResult
@@ -42,6 +45,9 @@ from dbt.logger import (
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
 from dbt.node_types import NodeType, RunHookType
+
+
+ARTIFACT_STATE_PATH: Optional[str] = os.getenv('ARTIFACT_STATE_PATH')
 
 
 class Timer:
@@ -245,6 +251,34 @@ class RunTask(CompileTask):
         super().__init__(args, config)
         self.ran_hooks = []
         self._total_executed = 0
+        self.deferred_manifest: Optional[WritableManifest] = None
+
+    def _get_state_path(self) -> Path:
+        if self.args.state is not None:
+            return self.args.state
+        elif ARTIFACT_STATE_PATH is not None:
+            return Path(ARTIFACT_STATE_PATH)
+        else:
+            raise RuntimeException(
+                'Received a --defer argument, but no value was provided '
+                'to --state'
+            )
+
+    def _get_deferred_manifest(self) -> Optional[WritableManifest]:
+        if not self.args.defer:
+            return None
+
+        path = self._get_state_path()
+
+        if not path.is_absolute():
+            path = Path(self.config.project_root) / path
+        if path.exists() and not path.is_file():
+            path = path / 'manifest.json'
+        if not path.exists():
+            raise RuntimeException(
+                f'Could not find --state path: "{path}"'
+            )
+        return WritableManifest.read(str(path))
 
     def index_offset(self, value: int) -> int:
         return self._total_executed + value
@@ -355,7 +389,24 @@ class RunTask(CompileTask):
             "Finished running {stat_line}{execution}."
             .format(stat_line=stat_line, execution=execution))
 
+    def defer_to_manifest(self, selected_uids):
+        self.deferred_manifest = self._get_deferred_manifest()
+        if self.deferred_manifest is None:
+            return
+        if self.manifest is None:
+            raise InternalException(
+                'Expected to defer to manifest, but there is no runtime '
+                'manifest to defer from!'
+            )
+        self.manifest.merge_from_artifact(
+            other=self.deferred_manifest,
+            selected=selected_uids,
+        )
+        # TODO: is it wrong to write the manifest here? I think it's right...
+        self.write_manifest()
+
     def before_run(self, adapter, selected_uids):
+        self.defer_to_manifest(selected_uids)
         with adapter.connection_named('master'):
             self.create_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter)

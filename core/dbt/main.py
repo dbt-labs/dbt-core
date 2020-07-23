@@ -6,6 +6,7 @@ import os.path
 import sys
 import traceback
 from contextlib import contextmanager
+from pathlib import Path
 
 import dbt.version
 import dbt.flags as flags
@@ -31,7 +32,7 @@ import dbt.tracking
 
 from dbt.utils import ExitCodes
 from dbt.config import PROFILES_DIR, read_user_config
-from dbt.exceptions import RuntimeException
+from dbt.exceptions import RuntimeException, InternalException
 
 
 class DBTVersion(argparse.Action):
@@ -61,6 +62,50 @@ class DBTArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.register('action', 'dbtversion', DBTVersion)
+
+    def add_optional_argument_inverse(
+        self,
+        name,
+        *,
+        enable_help=None,
+        disable_help=None,
+        dest=None,
+        no_name=None,
+        default=None,
+    ):
+        mutex_group = self.add_mutually_exclusive_group()
+        if not name.startswith('--'):
+            raise InternalException(
+                'cannot handle optional argument without "--" prefix: '
+                f'got "{name}"'
+            )
+        if dest is None:
+            dest_name = name[2:].replace('-', '_')
+        else:
+            dest_name = dest
+
+        if no_name is None:
+            no_name = f'--no-{name[2:]}'
+
+        mutex_group.add_argument(
+            name,
+            action='store_const',
+            const=True,
+            dest=dest_name,
+            default=default,
+            help=enable_help,
+        )
+
+        mutex_group.add_argument(
+            f'--no-{name[2:]}',
+            action='store_const',
+            const=False,
+            dest=dest_name,
+            default=default,
+            help=disable_help,
+        )
+
+        return mutex_group
 
 
 class RPCArgumentParser(DBTArgumentParser):
@@ -279,6 +324,8 @@ def _build_base_subparser():
         If set, bypass the adapter-level cache of database state
         ''',
     )
+
+    base_subparser.set_defaults(defer=None, state=None)
     return base_subparser
 
 
@@ -395,15 +442,38 @@ def _build_run_subparser(subparsers, base_subparser):
         parents=[base_subparser],
         help='''
         Compile SQL and execute against the current target database.
-        ''')
+        '''
+    )
     run_sub.add_argument(
         '-x',
         '--fail-fast',
         action='store_true',
         help='''
-            Stop execution upon a first failure.
-            '''
+        Stop execution upon a first failure.
+        '''
     )
+
+    # for now, this is a "dbt run"-only thing
+    run_sub.add_argument(
+        '--state',
+        help='''
+        If set, use the given directory as the source for json files to compare
+        with this project.
+        ''',
+        type=Path,
+    )
+    run_sub.add_optional_argument_inverse(
+        '--defer',
+        enable_help='''
+        If set, defer to the state variable for resolving unselected nodes.
+        ''',
+        disable_help='''
+        If set, do not defer to the state variable for resolving unselected
+        nodes.
+        ''',
+        default=flags.DEFER_MODE,
+    )
+
     run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
     return run_sub
 
@@ -830,30 +900,17 @@ def parse_args(args, cls=DBTArgumentParser):
         '''
     )
 
-    partial_flag = p.add_mutually_exclusive_group()
-    partial_flag.add_argument(
+    p.add_optional_argument_inverse(
         '--partial-parse',
-        action='store_const',
-        const=True,
-        dest='partial_parse',
-        default=None,
-        help='''
+        enable_help='''
         Allow for partial parsing by looking for and writing to a pickle file
         in the target directory. This overrides the user configuration file.
 
         WARNING: This can result in unexpected behavior if you use env_var()!
-        '''
-    )
-
-    partial_flag.add_argument(
-        '--no-partial-parse',
-        action='store_const',
-        const=False,
-        default=None,
-        dest='partial_parse',
-        help='''
+        ''',
+        disable_help='''
         Disallow partial parsing. This overrides the user configuration file.
-        '''
+        ''',
     )
 
     # if set, run dbt in single-threaded mode: thread count is ignored, and

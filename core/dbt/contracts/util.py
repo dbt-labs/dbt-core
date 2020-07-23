@@ -1,7 +1,8 @@
 import dataclasses
 from typing import List
 
-from dbt.clients.system import write_json
+from dbt.clients.system import write_json, read_json
+from dbt.exceptions import RuntimeException
 
 
 def list_str() -> List[str]:
@@ -76,3 +77,16 @@ class AdditionalPropertiesMixin:
     @property
     def extra(self):
         return self._extra
+
+
+class Readable:
+    @classmethod
+    def read(cls, path: str):
+        try:
+            data = read_json(path)
+        except (EnvironmentError, ValueError) as exc:
+            raise RuntimeException(
+                f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
+            ) from exc
+
+        return cls.from_dict(data)

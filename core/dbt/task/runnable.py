@@ -50,20 +50,20 @@ MANIFEST_FILE_NAME = 'manifest.json'
 RUNNING_STATE = DbtProcessState('running')
 
 
-def write_manifest(config, manifest):
-    if flags.WRITE_JSON:
-        manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
-
-
 class ManifestTask(ConfiguredTask):
     def __init__(self, args, config):
         super().__init__(args, config)
         self.manifest: Optional[Manifest] = None
         self.graph: Optional[Graph] = None
 
+    def write_manifest(self):
+        if flags.WRITE_JSON:
+            path = os.path.join(self.config.target_path, MANIFEST_FILE_NAME)
+            self.manifest.write(path)
+
     def load_manifest(self):
         self.manifest = get_full_manifest(self.config)
-        write_manifest(self.config, self.manifest)
+        self.write_manifest()
 
     def compile_manifest(self):
         if self.manifest is None:
