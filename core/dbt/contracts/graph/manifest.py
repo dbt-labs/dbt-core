@@ -1094,9 +1094,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 @schema_version("manifest", 4)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
-        metadata=dict(description=(
-            'The nodes defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The nodes defined in the dbt project and its dependencies"))
     )
     sources: Mapping[UniqueID, ParsedSourceDefinition] = field(
         metadata=dict(description=(
