@@ -4,6 +4,7 @@
 ### Fixes
 - fast-fail option with adapters that don't support cancelling queries will now passthrough the original error messages ([#2644](https://github.com/fishtown-analytics/dbt/issues/2644), [#2646](https://github.com/fishtown-analytics/dbt/pull/2646))
 - `dbt clean` no longer requires a profile ([#2620](https://github.com/fishtown-analytics/dbt/issues/2620), [#2649](https://github.com/fishtown-analytics/dbt/pull/2649))
+- Close all connections so snowflake's keepalive thread will exit. ([#2645](https://github.com/fishtown-analytics/dbt/issues/2645), [#2650](https://github.com/fishtown-analytics/dbt/pull/2650))
 
 Contributors:
  - [@joshpeng-quibi](https://github.com/joshpeng-quibi) ([#2646](https://github.com/fishtown-analytics/dbt/pull/2646))

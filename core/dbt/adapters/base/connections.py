@@ -179,8 +179,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             if conn.state == 'open':
                 if conn.transaction_open is True:
                     self._rollback(conn)
-            else:
-                self.close(conn)
+            # always close the connection
+            self.close(conn)
         except Exception:
             # if rollback or close failed, remove our busted connection
             self.clear_thread_connection()
