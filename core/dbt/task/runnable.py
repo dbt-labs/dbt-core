@@ -296,7 +296,7 @@ class GraphRunnableTask(ManifestTask):
             yellow = dbt.ui.printer.COLOR_FG_YELLOW
             dbt.ui.printer.print_timestamped_line(msg, yellow)
 
-        if adapter.cancel_open_connections():
+        else:
             for conn_name in adapter.cancel_open_connections():
                 if self.manifest is not None:
                     node = self.manifest.nodes.get(conn_name)
