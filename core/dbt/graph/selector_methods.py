@@ -23,6 +23,7 @@ from dbt.exceptions import (
     InternalException,
     RuntimeException,
 )
+from dbt.node_types import NodeType
 
 
 SELECTOR_GLOB = '*'
@@ -38,6 +39,7 @@ class MethodName(StrEnum):
     Config = 'config'
     TestName = 'test_name'
     TestType = 'test_type'
+    ResourceType = 'resource_type'
 
 
 def is_selected_node(real_node, node_selector):
@@ -259,7 +261,9 @@ class CaseInsensitive(str):
 
 class ConfigSelectorMethod(SelectorMethod):
     def search(
-        self, included_nodes: Set[UniqueId], selector: str
+        self,
+        included_nodes: Set[UniqueId],
+        selector: Any,
     ) -> Iterator[UniqueId]:
         parts = self.arguments
         # special case: if the user wanted to compare test severity,
@@ -276,12 +280,23 @@ class ConfigSelectorMethod(SelectorMethod):
             except AttributeError:
                 continue
             else:
-                # the selector can only be a str, so call str() on the value.
-                # of course, if one wished to render the selector in the jinja
-                # native env, this would no longer be true
-
-                if selector == str(value):
+                if selector == value:
                     yield node
+
+
+class ResourceTypeSelectorMethod(SelectorMethod):
+    def search(
+        self, included_nodes: Set[UniqueId], selector: str
+    ) -> Iterator[UniqueId]:
+        try:
+            resource_type = NodeType(selector)
+        except ValueError as exc:
+            raise RuntimeException(
+                f'Invalid resource_type selector "{selector}"'
+            ) from exc
+        for node, real_node in self.parsed_nodes(included_nodes):
+            if real_node.resource_type == resource_type:
+                yield node
 
 
 class TestNameSelectorMethod(SelectorMethod):

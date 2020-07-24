@@ -52,7 +52,7 @@ def profile_from_dict(profile, profile_name, cli_vars='{}'):
     )
 
 
-def project_from_dict(project, profile, packages=None, cli_vars='{}'):
+def project_from_dict(project, profile, packages=None, selectors=None, cli_vars='{}'):
     from dbt.context.target import generate_target_context
     from dbt.config import Project
     from dbt.config.renderer import DbtProjectYamlRenderer
@@ -65,11 +65,11 @@ def project_from_dict(project, profile, packages=None, cli_vars='{}'):
     project_root = project.pop('project-root', os.getcwd())
 
     return Project.render_from_dict(
-            project_root, project, packages, renderer
+            project_root, project, packages, selectors, renderer
         )
 
 
-def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
+def config_from_parts_or_dicts(project, profile, packages=None, selectors=None, cli_vars='{}'):
     from dbt.config import Project, Profile, RuntimeConfig
     from copy import deepcopy
 
@@ -90,6 +90,7 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
             deepcopy(project),
             profile,
             packages,
+            selectors,
             cli_vars,
         )
 

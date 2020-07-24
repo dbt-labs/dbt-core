@@ -1,5 +1,9 @@
 from dbt.node_types import NodeType
-from dbt.contracts.util import Replaceable, Mergeable
+from dbt.contracts.util import (
+    AdditionalPropertiesMixin,
+    Mergeable,
+    Replaceable,
+)
 # trigger the PathEncoder
 import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException
@@ -177,31 +181,11 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
 
 
 @dataclass
-class AdditionalPropertiesAllowed(ExtensibleJsonSchemaMixin):
+class AdditionalPropertiesAllowed(
+    AdditionalPropertiesMixin,
+    ExtensibleJsonSchemaMixin
+):
     _extra: Dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def extra(self):
-        return self._extra
-
-    @classmethod
-    def from_dict(cls, data, validate=True):
-        self = super().from_dict(data=data, validate=validate)
-        keys = self.to_dict(validate=False, omit_none=False)
-        for key, value in data.items():
-            if key not in keys:
-                self._extra[key] = value
-        return self
-
-    def to_dict(self, omit_none=True, validate=False):
-        data = super().to_dict(omit_none=omit_none, validate=validate)
-        data.update(self._extra)
-        return data
-
-    def replace(self, **kwargs):
-        dct = self.to_dict(omit_none=False, validate=False)
-        dct.update(kwargs)
-        return self.from_dict(dct)
 
 
 @dataclass

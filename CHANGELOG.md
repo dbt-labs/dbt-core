@@ -10,6 +10,7 @@
 - Add more helpful error message for misconfiguration in profiles.yml ([#2569](https://github.com/fishtown-analytics/dbt/issues/2569), [#2627](https://github.com/fishtown-analytics/dbt/pull/2627))
 ### Fixes
 - Adapter plugins can once again override plugins defined in core ([#2548](https://github.com/fishtown-analytics/dbt/issues/2548), [#2590](https://github.com/fishtown-analytics/dbt/pull/2590))
+- Added `--selector` argument and support for `selectors.yml` file to define selection mechanisms. ([#2172](https://github.com/fishtown-analytics/dbt/issues/2172), [#2640](https://github.com/fishtown-analytics/dbt/pull/2640))
 
 Contributors:
 - [@brunomurino](https://github.com/brunomurino) ([#2437](https://github.com/fishtown-analytics/dbt/pull/2581))
