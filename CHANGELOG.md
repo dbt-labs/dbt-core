@@ -1,5 +1,10 @@
 ## dbt 0.17.2 (Release TBD)
 
+
+### Fixes
+- fast-fail option with adapters that don't support cancelling queries will now passthrough the original error messages ([#2644](https://github.com/fishtown-analytics/dbt/issues/2644))
+
+
 ## dbt 0.17.2b1 (July 21, 2020)
 
 

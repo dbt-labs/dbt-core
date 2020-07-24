@@ -295,15 +295,15 @@ class GraphRunnableTask(ManifestTask):
 
             yellow = dbt.ui.printer.COLOR_FG_YELLOW
             dbt.ui.printer.print_timestamped_line(msg, yellow)
-            raise
 
-        for conn_name in adapter.cancel_open_connections():
-            if self.manifest is not None:
-                node = self.manifest.nodes.get(conn_name)
-                if node is not None and node.is_ephemeral_model:
-                    continue
-            # if we don't have a manifest/don't have a node, print anyway.
-            dbt.ui.printer.print_cancel_line(conn_name)
+        if adapter.cancel_open_connections():
+            for conn_name in adapter.cancel_open_connections():
+                if self.manifest is not None:
+                    node = self.manifest.nodes.get(conn_name)
+                    if node is not None and node.is_ephemeral_model:
+                        continue
+                # if we don't have a manifest/don't have a node, print anyway.
+                dbt.ui.printer.print_cancel_line(conn_name)
 
         pool.join()
 
