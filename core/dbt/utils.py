@@ -8,6 +8,7 @@ import hashlib
 import itertools
 import json
 import os
+from contextlib import contextmanager
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
@@ -518,8 +519,16 @@ def format_bytes(num_bytes):
     return "> 1024 TB"
 
 
+class ConnectingExecutor(concurrent.futures.Executor):
+    def submit_connected(self, adapter, conn_name, func, *args, **kwargs):
+        def connected(conn_name, func, *args, **kwargs):
+            with self.connection_named(adapter, conn_name):
+                return func(*args, **kwargs)
+        return self.submit(connected, conn_name, func, *args, **kwargs)
+
+
 # a little concurrent.futures.Executor for single-threaded mode
-class SingleThreadedExecutor(concurrent.futures.Executor):
+class SingleThreadedExecutor(ConnectingExecutor):
     def submit(*args, **kwargs):
         # this basic pattern comes from concurrent.futures.Executor itself,
         # but without handling the `fn=` form.
@@ -544,6 +553,20 @@ class SingleThreadedExecutor(concurrent.futures.Executor):
             fut.set_result(result)
         return fut
 
+    @contextmanager
+    def connection_named(self, adapter, name):
+        yield
+
+
+class MultiThreadedExecutor(
+    ConnectingExecutor,
+    concurrent.futures.ThreadPoolExecutor,
+):
+    @contextmanager
+    def connection_named(self, adapter, name):
+        with adapter.connection_named(name):
+            yield
+
 
 class ThreadedArgs(Protocol):
     single_threaded: bool
@@ -554,13 +577,11 @@ class HasThreadingConfig(Protocol):
     threads: Optional[int]
 
 
-def executor(config: HasThreadingConfig) -> concurrent.futures.Executor:
+def executor(config: HasThreadingConfig) -> ConnectingExecutor:
     if config.args.single_threaded:
         return SingleThreadedExecutor()
     else:
-        return concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.threads
-        )
+        return MultiThreadedExecutor(max_workers=config.threads)
 
 
 def fqn_search(

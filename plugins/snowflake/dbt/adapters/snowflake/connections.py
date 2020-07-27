@@ -165,7 +165,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in msg:
-                self.release()
                 raise FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
@@ -173,7 +172,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                      'Please double check your profile and try again.')
                     .format(msg))
             else:
-                self.release()
                 raise DatabaseException(msg)
         except Exception as e:
             if isinstance(e, snowflake.connector.errors.Error):
@@ -181,7 +179,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
             logger.debug("Error running SQL: {}", sql)
             logger.debug("Rolling back transaction.")
-            self.release()
+            self.rollback_if_open()
             if isinstance(e, RuntimeException):
                 # during a sql query, an internal to dbt exception was raised.
                 # this sounds a lot like a signal handler and probably has
@@ -328,7 +326,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         """On snowflake, rolling back the handle of an aborted session raises
         an exception.
         """
-        logger.debug('initiating rollback')
         try:
             connection.handle.rollback()
         except snowflake.connector.errors.ProgrammingError as e:
