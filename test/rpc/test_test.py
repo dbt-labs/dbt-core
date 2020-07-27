@@ -1,3 +1,4 @@
+import pytest
 import yaml
 from .util import (
     assert_has_threads,
@@ -6,8 +7,9 @@ from .util import (
 )
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_test_threads(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     schema_yaml = {
         'version': 2,
