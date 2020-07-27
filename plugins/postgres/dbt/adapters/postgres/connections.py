@@ -151,10 +151,8 @@ class PostgresConnectionManager(SQLConnectionManager):
             pid = connection.handle.get_backend_pid()
         except psycopg2.InterfaceError as exc:
             # if the connection is already closed, not much to cancel!
-            if 'already closed' in str(exc):
-                logger.debug(
-                    f'Connection {connection_name} was already closed'
-                )
+            if "already closed" in str(exc):
+                logger.debug(f"Connection {connection_name} was already closed")
                 return
             # probably bad, re-raise it
             raise
