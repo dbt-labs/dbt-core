@@ -354,7 +354,7 @@ class GraphRunnableTask(ManifestTask):
         if not adapter.is_cancelable():
             fire_event(QueryCancelationUnsupported(type=adapter.type()))
         else:
-            with adapter.connection_named('master'):
+            with adapter.connection_named("master"):
                 for conn_name in adapter.cancel_open_connections():
                     if self.manifest is not None:
                         node = self.manifest.nodes.get(conn_name)
@@ -546,9 +546,9 @@ class GraphRunnableTask(ManifestTask):
         with dbt.utils.executor(self.config) as tpe:
             for req in required_databases:
                 if req.database is None:
-                    name = 'list_schemas'
+                    name = "list_schemas"
                 else:
-                    name = f'list_{req.database}'
+                    name = f"list_{req.database}"
                 fut = tpe.submit_connected(adapter, name, list_schemas, req)
                 list_futures.append(fut)
 
@@ -568,8 +568,7 @@ class GraphRunnableTask(ManifestTask):
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
                     fut = tpe.submit_connected(
-                        adapter, f'create_{info.database or ""}_{info.schema}',
-                        create_schema, info
+                        adapter, f'create_{info.database or ""}_{info.schema}', create_schema, info
                     )
                     create_futures.append(fut)
 

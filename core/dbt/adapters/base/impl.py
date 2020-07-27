@@ -344,9 +344,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             for cache_schema in cache_schemas:
                 fut = tpe.submit_connected(
                     self,
-                    f'list_{cache_schema.database}_{cache_schema.schema}',
+                    f"list_{cache_schema.database}_{cache_schema.schema}",
                     self.list_relations_without_caching,
-                    cache_schema
+                    cache_schema,
                 )
                 futures.append(fut)
 
@@ -983,10 +983,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         manifest: Manifest,
     ) -> agate.Table:
 
-        kwargs = {
-            'information_schema': information_schema,
-            'schemas': schemas
-        }
+        kwargs = {"information_schema": information_schema, "schemas": schemas}
         table = self.execute_macro(
             GET_CATALOG_MACRO_NAME,
             kwargs=kwargs,
@@ -1008,14 +1005,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             for info, schemas in schema_map.items():
                 if len(schemas) == 0:
                     continue
-                name = '.'.join([
-                    str(info.database),
-                    'information_schema'
-                ])
+                name = ".".join([str(info.database), "information_schema"])
 
                 fut = tpe.submit_connected(
-                    self, name,
-                    self._get_one_catalog, info, schemas, manifest
+                    self, name, self._get_one_catalog, info, schemas, manifest
                 )
                 futures.append(fut)
 

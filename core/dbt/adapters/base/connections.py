@@ -242,7 +242,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """Roll back the given connection."""
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
-                f'Tried to rollback transaction on connection '
+                f"Tried to rollback transaction on connection "
                 f'"{connection.name}", but it does not have one open!'
             )
 

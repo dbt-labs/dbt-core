@@ -471,6 +471,7 @@ class ConnectingExecutor(concurrent.futures.Executor):
         def connected(conn_name, func, *args, **kwargs):
             with self.connection_named(adapter, conn_name):
                 return func(*args, **kwargs)
+
         return self.submit(connected, conn_name, func, *args, **kwargs)
 
 
