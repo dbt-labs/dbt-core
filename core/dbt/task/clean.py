@@ -2,11 +2,13 @@ import os.path
 import os
 import shutil
 
-from dbt.task.base import ConfiguredTask
+from dbt.task.base import BaseTask
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.config import UnsetProfileConfig
 
 
-class CleanTask(ConfiguredTask):
+class CleanTask(BaseTask):
+    ConfigType = UnsetProfileConfig
 
     def __is_project_path(self, path):
         proj_path = os.path.abspath('.')
