@@ -1,5 +1,8 @@
 ## dbt 0.17.2 (Release TBD)
 
+## dbt 0.17.2rc1 (July 28, 2020)
+
+
 
 ### Breaking changes (for plugins)
 - The `release` argument to adapter.execute_macro no longer has any effect. It will be removed in a future release of dbt (likely 0.18.0) ([#2650](https://github.com/fishtown-analytics/dbt/pull/2650))
