@@ -3072,6 +3072,17 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_postgres_references_manifest())
         self.verify_run_results(self.expected_postgres_references_run_results())
 
+    @use_profile('postgres')
+    def test_postgres_asset_paths_copied(self):
+        self.run_and_generate(
+            {'asset-paths': [self.dir('assets'), self.dir('non-existent-assets')]},
+        )
+
+        assert os.path.exists('./target/assets')
+        assert os.path.exists('./target/assets/lorem-ipsum.txt')
+
+        assert not os.path.exists('./target/non-existent-assets')
+
     @use_profile('snowflake')
     def test__snowflake__run_and_generate(self):
         self.run_and_generate()

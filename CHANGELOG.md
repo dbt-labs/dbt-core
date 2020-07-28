@@ -11,6 +11,7 @@
 ### Fixes
 - Adapter plugins can once again override plugins defined in core ([#2548](https://github.com/fishtown-analytics/dbt/issues/2548), [#2590](https://github.com/fishtown-analytics/dbt/pull/2590))
 - Added `--selector` argument and support for `selectors.yml` file to define selection mechanisms. ([#2172](https://github.com/fishtown-analytics/dbt/issues/2172), [#2640](https://github.com/fishtown-analytics/dbt/pull/2640))
+- Compile assets as part of docs generate ([#2072](https://github.com/fishtown-analytics/dbt/issues/2072), [#2623](https://github.com/fishtown-analytics/dbt/pull/2623))
 
 Contributors:
 - [@brunomurino](https://github.com/brunomurino) ([#2437](https://github.com/fishtown-analytics/dbt/pull/2581))
