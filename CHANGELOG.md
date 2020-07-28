@@ -3,6 +3,7 @@
 
 ### Fixes
 - fast-fail option with adapters that don't support cancelling queries will now passthrough the original error messages ([#2644](https://github.com/fishtown-analytics/dbt/issues/2644), [#2646](https://github.com/fishtown-analytics/dbt/pull/2646))
+- The redshift catalog now contains information for all schemas in a project, not just the default ([#2653](https://github.com/fishtown-analytics/dbt/issues/2653), [#2654](https://github.com/fishtown-analytics/dbt/pull/2654))
 - `dbt clean` no longer requires a profile ([#2620](https://github.com/fishtown-analytics/dbt/issues/2620), [#2649](https://github.com/fishtown-analytics/dbt/pull/2649))
 
 Contributors:
