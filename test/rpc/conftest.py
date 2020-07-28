@@ -35,12 +35,11 @@ def pytest_collection_modifyitems(config, items):
 
 
 def pytest_configure(config):
-    config.addinivalue_line('markers', 'supported(: Marks postgres-only tests')
+    # the '(plugin, ...)' part isn't really important: any positional arguments
+    # to `pytest.mark.supported` will be consumed as plugin names.
+    helptxt = 'Marks supported test types ("postgres", "snowflake", "any")'
     config.addinivalue_line(
-        'markers', 'snowflake: Mark snowflake-only tests'
-    )
-    config.addinivalue_line(
-        'markers', 'any: Mark '
+        'markers', f'supported(plugin, ...): {helptxt}'
     )
 
 

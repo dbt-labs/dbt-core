@@ -934,8 +934,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             execution context.
         :param kwargs: An optional dict of keyword args used to pass to the
             macro.
-        :param release: If True, release the connection after executing.
+        :param release: Ignored.
         """
+        if release is not False:
+            deprecations.warn('execute-macro-release')
         if kwargs is None:
             kwargs = {}
         if context_override is None:
@@ -971,11 +973,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         macro_function = MacroGenerator(macro, macro_context)
 
         with self.connections.exception_handler(f'macro {macro_name}'):
-            try:
-                result = macro_function(**kwargs)
-            finally:
-                if release:
-                    self.release_connection()
+            result = macro_function(**kwargs)
         return result
 
     @classmethod
@@ -1007,7 +1005,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         table = self.execute_macro(
             GET_CATALOG_MACRO_NAME,
             kwargs=kwargs,
-            release=False,
             # pass in the full manifest so we get any local project
             # overrides
             manifest=manifest,
@@ -1063,7 +1060,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         table = self.execute_macro(
             FRESHNESS_MACRO_NAME,
             kwargs=kwargs,
-            release=False,
             manifest=manifest
         )
         # now we have a 1-row table of the maximum `loaded_at_field` value and
