@@ -108,6 +108,15 @@ class DbtProjectYamlDeprecation(DBTDeprecation):
     '''
 
 
+class ExecuteMacrosReleaseDeprecation(DBTDeprecation):
+    _name = 'execute-macro-release'
+    _description = '''\
+    The "release" argument to execute_macro is now ignored, and will be removed
+    in a future relase of dbt. At that time, providing a `release` argument
+    will result in an error.
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
 a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -151,6 +160,7 @@ deprecations_list: List[DBTDeprecation] = [
     ColumnQuotingDeprecation(),
     ModelsKeyNonModelDeprecation(),
     DbtProjectYamlDeprecation(),
+    ExecuteMacrosReleaseDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

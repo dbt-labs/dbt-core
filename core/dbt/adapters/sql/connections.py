@@ -6,7 +6,7 @@ import agate
 
 import dbt.clients.agate_helper
 import dbt.exceptions
-from dbt.contracts.connection import Connection
+from dbt.contracts.connection import Connection, ConnectionState
 from dbt.adapters.base import BaseConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -37,7 +37,10 @@ class SQLConnectionManager(BaseConnectionManager):
 
                 # if the connection failed, the handle will be None so we have
                 # nothing to cancel.
-                if connection.handle is not None:
+                if (
+                    connection.handle is not None and
+                    connection.state == ConnectionState.OPEN
+                ):
                     self.cancel(connection)
                 if connection.name is not None:
                     names.append(connection.name)

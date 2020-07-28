@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import pytest
 
 from .util import (
     get_querier,
@@ -15,8 +16,9 @@ def _compile_poll_for_result(querier, id: int):
     assert compile_sql_result['results'][0]['compiled_sql'] == sql
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_compile_sql_concurrency(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}

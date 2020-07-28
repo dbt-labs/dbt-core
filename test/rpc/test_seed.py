@@ -1,3 +1,4 @@
+import pytest
 from .util import (
     assert_has_threads,
     get_querier,
@@ -5,8 +6,9 @@ from .util import (
 )
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_seed_threads(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         project_data={'seeds': {'config': {'quote_columns': False}}},
@@ -30,8 +32,9 @@ def test_rpc_seed_threads(
         assert_has_threads(results, 7)
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_seed_include_exclude(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         project_data={'seeds': {'config': {'quote_columns': False}}},

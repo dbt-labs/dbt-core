@@ -297,13 +297,15 @@ class GraphRunnableTask(ManifestTask):
             dbt.ui.printer.print_timestamped_line(msg, yellow)
 
         else:
-            for conn_name in adapter.cancel_open_connections():
-                if self.manifest is not None:
-                    node = self.manifest.nodes.get(conn_name)
-                    if node is not None and node.is_ephemeral_model:
-                        continue
-                # if we don't have a manifest/don't have a node, print anyway.
-                dbt.ui.printer.print_cancel_line(conn_name)
+            with adapter.connection_named('master'):
+                for conn_name in adapter.cancel_open_connections():
+                    if self.manifest is not None:
+                        node = self.manifest.nodes.get(conn_name)
+                        if node is not None and node.is_ephemeral_model:
+                            continue
+                    # if we don't have a manifest/don't have a node, print
+                    # anyway.
+                    dbt.ui.printer.print_cancel_line(conn_name)
 
         pool.join()
 
@@ -457,18 +459,15 @@ class GraphRunnableTask(ManifestTask):
             db_lowercase = dbt.utils.lowercase(db_only.database)
             if db_only.database is None:
                 database_quoted = None
-                conn_name = 'list_schemas'
             else:
                 database_quoted = str(db_only)
-                conn_name = f'list_{db_only.database}'
 
-            with adapter.connection_named(conn_name):
-                # we should never create a null schema, so just filter them out
-                return [
-                    (db_lowercase, s.lower())
-                    for s in adapter.list_schemas(database_quoted)
-                    if s is not None
-                ]
+            # we should never create a null schema, so just filter them out
+            return [
+                (db_lowercase, s.lower())
+                for s in adapter.list_schemas(database_quoted)
+                if s is not None
+            ]
 
         def create_schema(relation: BaseRelation) -> None:
             db = relation.database or ''
@@ -480,9 +479,13 @@ class GraphRunnableTask(ManifestTask):
         create_futures = []
 
         with dbt.utils.executor(self.config) as tpe:
-            list_futures = [
-                tpe.submit(list_schemas, db) for db in required_databases
-            ]
+            for req in required_databases:
+                if req.database is None:
+                    name = 'list_schemas'
+                else:
+                    name = f'list_{req.database}'
+                fut = tpe.submit_connected(adapter, name, list_schemas, req)
+                list_futures.append(fut)
 
             for ls_future in as_completed(list_futures):
                 existing_schemas_lowered.update(ls_future.result())
@@ -499,9 +502,12 @@ class GraphRunnableTask(ManifestTask):
                 db_schema = (db_lower, schema.lower())
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
-                    create_futures.append(
-                        tpe.submit(create_schema, info)
+
+                    fut = tpe.submit_connected(
+                        adapter, f'create_{info.database or ""}_{info.schema}',
+                        create_schema, info
                     )
+                    create_futures.append(fut)
 
             for create_future in as_completed(create_futures):
                 # trigger/re-raise any excceptions while creating schemas

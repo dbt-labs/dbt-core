@@ -312,13 +312,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         # databases
         return info_schema_name_map
 
-    def _list_relations_get_connection(
-        self, schema_relation: BaseRelation
-    ) -> List[BaseRelation]:
-        name = f'list_{schema_relation.database}_{schema_relation.schema}'
-        with self.connection_named(name):
-            return self.list_relations_without_caching(schema_relation)
-
     def _relations_cache_for_schemas(self, manifest: Manifest) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
@@ -328,10 +321,16 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         cache_schemas = self._get_cache_schemas(manifest)
         with executor(self.config) as tpe:
-            futures: List[Future[List[BaseRelation]]] = [
-                tpe.submit(self._list_relations_get_connection, cache_schema)
-                for cache_schema in cache_schemas
-            ]
+            futures: List[Future[List[BaseRelation]]] = []
+            for cache_schema in cache_schemas:
+                fut = tpe.submit_connected(
+                    self,
+                    f'list_{cache_schema.database}_{cache_schema.schema}',
+                    self.list_relations_without_caching,
+                    cache_schema
+                )
+                futures.append(fut)
+
             for future in as_completed(futures):
                 # if we can't read the relations we need to just raise anyway,
                 # so just call future.result() and let that raise on failure
@@ -935,8 +934,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             execution context.
         :param kwargs: An optional dict of keyword args used to pass to the
             macro.
-        :param release: If True, release the connection after executing.
+        :param release: Ignored.
         """
+        if release is not False:
+            deprecations.warn('execute-macro-release')
         if kwargs is None:
             kwargs = {}
         if context_override is None:
@@ -972,11 +973,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         macro_function = MacroGenerator(macro, macro_context)
 
         with self.connections.exception_handler(f'macro {macro_name}'):
-            try:
-                result = macro_function(**kwargs)
-            finally:
-                if release:
-                    self.release_connection()
+            result = macro_function(**kwargs)
         return result
 
     @classmethod
@@ -1001,24 +998,17 @@ class BaseAdapter(metaclass=AdapterMeta):
         manifest: Manifest,
     ) -> agate.Table:
 
-        name = '.'.join([
-            str(information_schema.database),
-            'information_schema'
-        ])
-
-        with self.connection_named(name):
-            kwargs = {
-                'information_schema': information_schema,
-                'schemas': schemas
-            }
-            table = self.execute_macro(
-                GET_CATALOG_MACRO_NAME,
-                kwargs=kwargs,
-                release=True,
-                # pass in the full manifest so we get any local project
-                # overrides
-                manifest=manifest,
-            )
+        kwargs = {
+            'information_schema': information_schema,
+            'schemas': schemas
+        }
+        table = self.execute_macro(
+            GET_CATALOG_MACRO_NAME,
+            kwargs=kwargs,
+            # pass in the full manifest so we get any local project
+            # overrides
+            manifest=manifest,
+        )
 
         results = self._catalog_filter_table(table, manifest)
         return results
@@ -1029,10 +1019,21 @@ class BaseAdapter(metaclass=AdapterMeta):
         schema_map = self._get_catalog_schemas(manifest)
 
         with executor(self.config) as tpe:
-            futures: List[Future[agate.Table]] = [
-                tpe.submit(self._get_one_catalog, info, schemas, manifest)
-                for info, schemas in schema_map.items() if len(schemas) > 0
-            ]
+            futures: List[Future[agate.Table]] = []
+            for info, schemas in schema_map.items():
+                if len(schemas) == 0:
+                    continue
+                name = '.'.join([
+                    str(info.database),
+                    'information_schema'
+                ])
+
+                fut = tpe.submit_connected(
+                    self, name,
+                    self._get_one_catalog, info, schemas, manifest
+                )
+                futures.append(fut)
+
             catalogs, exceptions = catch_as_completed(futures)
 
         return catalogs, exceptions
@@ -1059,7 +1060,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         table = self.execute_macro(
             FRESHNESS_MACRO_NAME,
             kwargs=kwargs,
-            release=True,
             manifest=manifest
         )
         # now we have a 1-row table of the maximum `loaded_at_field` value and

@@ -88,6 +88,11 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             self.begin()
             self.commit()
 
+    def rollback_if_open(self) -> None:
+        conn = self.get_if_exists()
+        if conn is not None and conn.handle and conn.transaction_open:
+            self._rollback(conn)
+
     @abc.abstractmethod
     def exception_handler(self, sql: str) -> ContextManager:
         """Create a context manager that handles exceptions caused by database
@@ -176,11 +181,9 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 return
 
         try:
-            if conn.state == 'open':
-                if conn.transaction_open is True:
-                    self._rollback(conn)
-            else:
-                self.close(conn)
+            # always close the connection. close() calls _rollback() if there
+            # is an open transaction
+            self.close(conn)
         except Exception:
             # if rollback or close failed, remove our busted connection
             self.clear_thread_connection()
@@ -230,11 +233,10 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, 'close'):
-            logger.debug('On {}: Close'.format(connection.name))
+            logger.debug(f'On {connection.name}: Close')
             connection.handle.close()
         else:
-            logger.debug('On {}: No close available on handle'
-                         .format(connection.name))
+            logger.debug(f'On {connection.name}: No close available on handle')
 
     @classmethod
     def _rollback(cls, connection: Connection) -> None:
@@ -247,10 +249,11 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
-                'Tried to rollback transaction on connection "{}", but '
-                'it does not have one open!'.format(connection.name))
+                f'Tried to rollback transaction on connection '
+                f'"{connection.name}", but it does not have one open!'
+            )
 
-        logger.debug('On {}: ROLLBACK'.format(connection.name))
+        logger.debug(f'On {connection.name}: ROLLBACK')
         cls._rollback_handle(connection)
 
         connection.transaction_open = False
@@ -268,6 +271,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             return connection
 
         if connection.transaction_open and connection.handle:
+            logger.debug('On {}: ROLLBACK'.format(connection.name))
             cls._rollback_handle(connection)
         connection.transaction_open = False
 
