@@ -13,6 +13,9 @@
 - `dbt clean` no longer requires a profile ([#2620](https://github.com/fishtown-analytics/dbt/issues/2620), [#2649](https://github.com/fishtown-analytics/dbt/pull/2649))
 - Close all connections so snowflake's keepalive thread will exit. ([#2645](https://github.com/fishtown-analytics/dbt/issues/2645), [#2650](https://github.com/fishtown-analytics/dbt/pull/2650))
 
+### Docs
+- Fix background appearance of markdown ` ``` ` code blocks ([docs#114](https://github.com/fishtown-analytics/dbt-docs/pull/114), [docs#115](https://github.com/fishtown-analytics/dbt-docs/pull/115))
+
 Contributors:
  - [@joshpeng-quibi](https://github.com/joshpeng-quibi) ([#2646](https://github.com/fishtown-analytics/dbt/pull/2646))
 
