@@ -4,7 +4,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from itertools import chain
+from itertools import chain, islice
 from multiprocessing.synchronize import Lock
 from typing import (
     Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
@@ -1022,13 +1022,21 @@ class Manifest:
         Only non-ephemeral refable nodes are examined.
         """
         refables = set(NodeType.refable())
+        merged = set()
         for unique_id, node in other.nodes.items():
             if (
                 node.resource_type in refables and
                 not node.is_ephemeral and
                 unique_id not in selected
             ):
+                merged.add(unique_id)
                 self.nodes[unique_id] = node
+
+        # log up to 5 items
+        sample = list(islice(merged, 5))
+        logger.debug(
+            f'Merged {len(merged)} items from state (sample: {sample})'
+        )
 
 
 @dataclass

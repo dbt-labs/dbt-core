@@ -89,4 +89,4 @@ class Readable:
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'
             ) from exc
 
-        return cls.from_dict(data)
+        return cls.from_dict(data)  # type: ignore

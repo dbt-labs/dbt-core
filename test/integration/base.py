@@ -60,6 +60,7 @@ class FakeArgs:
     def __init__(self):
         self.threads = 1
         self.data = False
+        self.defer = False
         self.schema = True
         self.full_refresh = False
         self.models = None

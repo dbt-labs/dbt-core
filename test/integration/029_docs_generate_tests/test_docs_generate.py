@@ -966,6 +966,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': model_config,
                     'schema': my_schema_name,
                     'database': model_database,
+                    'deferred': False,
                     'alias': 'model',
                     'description': 'The test model',
                     'columns': {
@@ -1032,6 +1033,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': second_config,
                     'schema': self.alternate_schema,
                     'database': self.default_database,
+                    'deferred': False,
                     'alias': 'second_model',
                     'description': 'The second test model',
                     'columns': {
@@ -1115,6 +1117,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'alias': 'seed',
+                    'deferred': False,
                     'description': 'The test seed',
                     'columns': {
                         'id': {
@@ -1183,6 +1186,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': ['macro.dbt.test_not_null'],
                         'nodes': ['model.test.model'],
                     },
+                    'deferred': False,
                     'description': '',
                     'fqn': ['test', 'schema_test', 'not_null_model_id'],
                     'name': 'not_null_model_id',
@@ -1237,6 +1241,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': ['macro.test.test_nothing'],
                         'nodes': ['model.test.model'],
                     },
+                    'deferred': False,
                     'description': '',
                     'fqn': ['test', 'schema_test', 'test_nothing_model_'],
                     'name': 'test_nothing_model_',
@@ -1290,6 +1295,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': ['macro.dbt.test_unique'],
                         'nodes': ['model.test.model'],
                     },
+                    'deferred': False,
                     'description': '',
                     'fqn': ['test', 'schema_test', 'unique_model_id'],
                     'name': 'unique_model_id',
@@ -1386,6 +1392,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['source.test.my_source.my_table']
                     },
+                    'deferred': False,
                     'description': '',
                     'docs': {'show': True},
                     'fqn': ['test', 'ephemeral_copy'],
@@ -1448,6 +1455,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['model.test.ephemeral_copy']
                     },
+                    'deferred': False,
                     'description': 'A summmary table of the ephemeral copy of the seed data',
                     'docs': {'show': True},
                     'fqn': ['test', 'ephemeral_summary'],
@@ -1512,6 +1520,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['model.test.ephemeral_summary']
                     },
+                    'deferred': False,
                     'description': 'A view of the summary of the ephemeral copy of the seed data',
                     'docs': {'show': True},
                     'fqn': ['test', 'view_summary'],
@@ -1594,6 +1603,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
+                    'deferred': False,
                     'description': 'The test seed',
                     'docs': {'show': True},
                     'fqn': ['test', 'seed'],
@@ -1879,6 +1889,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'tags': [],
                         },
                     },
+                    'deferred': False,
                     'description': 'A clustered and partitioned copy of the test model',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docs': {'show': True},
@@ -1958,6 +1969,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'tags': [],
                         },
                     },
+                    'deferred': False,
                     'description': 'A clustered and partitioned copy of the test model, clustered on multiple columns',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docs': {'show': True},
@@ -2038,6 +2050,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'tags': [],
                         },
                     },
+                    'deferred': False,
                     'description': 'The test model',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docs': {'show': True},
@@ -2083,6 +2096,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'meta': {},
                     'unique_id': 'model.test.nested_table',
                     'columns': {},
+                    'deferred': False,
                     'description': '',
                     'docs': {'show': True},
                     'compiled': True,
@@ -2164,6 +2178,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'tags': [],
                         },
                     },
+                    'deferred': False,
                     'description': 'The test seed',
                     'docs': {'show': True},
                     'compiled': True,
@@ -2268,6 +2283,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'alias': 'model',
+                    'deferred': False,
                     'description': 'The test model',
                     'columns': {
                         'id': {
@@ -2387,6 +2403,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'tags': [],
                         },
                     },
+                    'deferred': False,
                     'description': 'The test seed',
                     'docs': {'show': True},
                     'compiled': True,
@@ -2559,6 +2576,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['seed.test.seed']
                     },
+                    'deferred': False,
                     'description': 'The test model',
                     'docs': {'show': False},
                     'extra_ctes': [],
@@ -2640,6 +2658,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['seed.test.seed']
                     },
+                    'deferred': False,
                     'description': 'The second test model',
                     'docs': {'show': False},
                     'extra_ctes': [],
@@ -2728,6 +2747,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
+                    'deferred': False,
                     'description': 'The test seed',
                     'docs': {'show': True},
                     'extra_ctes': [],
@@ -2784,6 +2804,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': ['macro.dbt.test_not_null'],
                         'nodes': ['model.test.model'],
                     },
+                    'deferred': False,
                     'description': '',
                     'docs': {'show': True},
                     'extra_ctes': [],
@@ -2848,6 +2869,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': ['macro.test.test_nothing'],
                         'nodes': ['model.test.model'],
                     },
+                    'deferred': False,
                     'description': '',
                     'docs': {'show': True},
                     'extra_ctes': [],
@@ -2911,6 +2933,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': ['macro.dbt.test_unique'],
                         'nodes': ['model.test.model'],
                     },
+                    'deferred': False,
                     'description': '',
                     'docs': {'show': True},
                     'extra_ctes': [],
@@ -3016,6 +3039,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'nodes': ['model.test.ephemeral_copy'],
                         'macros': []
                     },
+                    'deferred': False,
                     'description': (
                         'A summmary table of the ephemeral copy of the seed data'
                     ),
@@ -3097,6 +3121,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'nodes': ['model.test.ephemeral_summary'],
                         'macros': []
                     },
+                    'deferred': False,
                     'description': (
                         'A view of the summary of the ephemeral copy of the '
                         'seed data'
@@ -3192,6 +3217,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
+                    'deferred': False,
                     'description': 'The test seed',
                     'docs': {'show': True},
                     'extra_ctes': [],

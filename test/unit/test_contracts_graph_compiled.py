@@ -28,6 +28,7 @@ class TestCompiledModelNode(ContractTestCase):
             'database': 'test_db',
             'schema': 'test_schema',
             'alias': 'bar',
+            'compiled': False,
         }
 
     def test_basic_uncompiled(self):
@@ -45,6 +46,7 @@ class TestCompiledModelNode(ContractTestCase):
             'sources': [],
             'depends_on': {'macros': [], 'nodes': []},
             'database': 'test_db',
+            'deferred': False,
             'description': '',
             'schema': 'test_schema',
             'alias': 'bar',
@@ -80,6 +82,7 @@ class TestCompiledModelNode(ContractTestCase):
             refs=[],
             sources=[],
             depends_on=DependsOn(),
+            deferred=False,
             description='',
             database='test_db',
             schema='test_schema',
@@ -116,6 +119,7 @@ class TestCompiledModelNode(ContractTestCase):
             'sources': [],
             'depends_on': {'macros': [], 'nodes': []},
             'database': 'test_db',
+            'deferred': True,
             'description': '',
             'schema': 'test_schema',
             'alias': 'bar',
@@ -153,6 +157,7 @@ class TestCompiledModelNode(ContractTestCase):
             refs=[],
             sources=[],
             depends_on=DependsOn(),
+            deferred=True,
             description='',
             database='test_db',
             schema='test_schema',
@@ -204,6 +209,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
                 'name': 'foo',
                 'kwargs': {},
             },
+            'compiled': False,
         }
 
     def test_basic_uncompiled(self):
@@ -237,6 +243,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'ERROR',
             },
+            'deferred': False,
             'docs': {'show': True},
             'columns': {},
             'meta': {},
@@ -260,6 +267,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             fqn=['test', 'models', 'foo'],
             refs=[],
             sources=[],
+            deferred=False,
             depends_on=DependsOn(),
             description='',
             database='test_db',
@@ -297,6 +305,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             'refs': [],
             'sources': [],
             'depends_on': {'macros': [], 'nodes': []},
+            'deferred': False,
             'database': 'test_db',
             'description': '',
             'schema': 'test_schema',
@@ -314,6 +323,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
                 'vars': {},
                 'severity': 'warn',
             },
+
             'docs': {'show': True},
             'columns': {},
             'meta': {},
@@ -341,6 +351,7 @@ class TestCompiledSchemaTestNode(ContractTestCase):
             refs=[],
             sources=[],
             depends_on=DependsOn(),
+            deferred=False,
             description='',
             database='test_db',
             schema='test_schema',
