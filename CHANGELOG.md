@@ -48,7 +48,37 @@ Contributors:
  - [@alepuccetti](https://github.com/alepuccetti) ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
 
-## dbt 0.17.1 (Release TBD)
+## dbt 0.17.2 (July 29, 2020)
+
+### Fixes
+- The redshift catalog now contains information for all schemas in a project, not just the default ([#2653](https://github.com/fishtown-analytics/dbt/issues/2653), [#2654](https://github.com/fishtown-analytics/dbt/pull/2654))
+
+### Docs
+- Fix background appearance of markdown ` ``` ` code blocks ([docs#114](https://github.com/fishtown-analytics/dbt-docs/pull/114), [docs#115](https://github.com/fishtown-analytics/dbt-docs/pull/115))
+
+
+## dbt 0.17.2rc1 (July 28, 2020)
+
+### Breaking changes (for plugins)
+- The `release` argument to adapter.execute_macro no longer has any effect. It will be removed in a future release of dbt (likely 0.18.0) ([#2650](https://github.com/fishtown-analytics/dbt/pull/2650))
+
+
+### Fixes
+- fast-fail option with adapters that don't support cancelling queries will now passthrough the original error messages ([#2644](https://github.com/fishtown-analytics/dbt/issues/2644), [#2646](https://github.com/fishtown-analytics/dbt/pull/2646))
+- `dbt clean` no longer requires a profile ([#2620](https://github.com/fishtown-analytics/dbt/issues/2620), [#2649](https://github.com/fishtown-analytics/dbt/pull/2649))
+- Close all connections so snowflake's keepalive thread will exit. ([#2645](https://github.com/fishtown-analytics/dbt/issues/2645), [#2650](https://github.com/fishtown-analytics/dbt/pull/2650))
+
+Contributors:
+ - [@joshpeng-quibi](https://github.com/joshpeng-quibi) ([#2646](https://github.com/fishtown-analytics/dbt/pull/2646))
+
+
+## dbt 0.17.2b1 (July 21, 2020)
+
+
+### Features
+- Added environment variables for debug-level logging ([#2633](https://github.com/fishtown-analytics/dbt/issues/2633), [#2635](https://github.com/fishtown-analytics/dbt/pull/2635))
+
+## dbt 0.17.1 (July 20, 2020)
 
 
 ## dbt 0.17.1rc4 (July 08, 2020)

@@ -1,3 +1,4 @@
+import pytest
 import time
 from .util import (
     get_querier,
@@ -5,8 +6,9 @@ from .util import (
 )
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_basics(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
@@ -62,7 +64,8 @@ sources:
 '''
 
 
-def test_rpc_status_error(project_root, profiles_root, postgres_profile, unique_schema):
+@pytest.mark.supported('postgres')
+def test_rpc_status_error(project_root, profiles_root, dbt_profile, unique_schema):
     project = ProjectDefinition(
         models={
             'descendant_model.sql': 'select * from {{ source("test_source", "test_table") }}',
@@ -130,7 +133,8 @@ def test_rpc_status_error(project_root, profiles_root, postgres_profile, unique_
         querier.is_result(querier.compile_sql('select 1 as id'))
 
 
-def test_gc_change_interval(project_root, profiles_root, postgres_profile, unique_schema):
+@pytest.mark.supported('postgres')
+def test_gc_change_interval(project_root, profiles_root, dbt_profile, unique_schema):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
@@ -173,10 +177,11 @@ def test_gc_change_interval(project_root, profiles_root, postgres_profile, uniqu
 
         time.sleep(0.5)
         result = querier.is_result(querier.ps(True, True))
-        assert len(result['rows']) == 2
+        assert len(result['rows']) <= 2
 
 
-def test_ps_poll_output_match(project_root, profiles_root, postgres_profile, unique_schema):
+@pytest.mark.supported('postgres')
+def test_ps_poll_output_match(project_root, profiles_root, dbt_profile, unique_schema):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'}
     )
@@ -248,8 +253,9 @@ def wait_for_log_ordering(querier, token, attempts, *messages) -> int:
     assert False, msg
 
 
+@pytest.mark.supported('postgres')
 def test_get_status(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={'my_model.sql': 'select 1 as id'},
@@ -294,8 +300,9 @@ def test_get_status(
         assert len(result['logs']) == 0
 
 
+@pytest.mark.supported('postgres')
 def test_missing_tag_sighup(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={
@@ -333,8 +340,9 @@ def test_missing_tag_sighup(
         assert querier.wait_for_status('ready') is True
 
 
+@pytest.mark.supported('postgres')
 def test_get_manifest(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         models={

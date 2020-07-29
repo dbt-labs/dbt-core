@@ -30,9 +30,10 @@ class Obj:
     single_threaded = False
 
 
-def mock_connection(name):
+def mock_connection(name, state='open'):
     conn = mock.MagicMock()
     conn.name = name
+    conn.state = state
     return conn
 
 

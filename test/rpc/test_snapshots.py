@@ -1,3 +1,4 @@
+import pytest
 from .util import (
     assert_has_threads,
     get_querier,
@@ -22,8 +23,9 @@ snapshot_data = '''
 '''
 
 
+@pytest.mark.supported('postgres')
 def test_snapshots(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         snapshots={'my_snapshots.sql': snapshot_data},
@@ -50,8 +52,9 @@ def test_snapshots(
         assert len(results['results']) == 1
 
 
+@pytest.mark.supported('postgres')
 def test_snapshots_cli(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         snapshots={'my_snapshots.sql': snapshot_data},
@@ -81,8 +84,9 @@ def test_snapshots_cli(
         assert len(results['results']) == 1
 
 
+@pytest.mark.supported('postgres')
 def test_rpc_snapshot_threads(
-    project_root, profiles_root, postgres_profile, unique_schema
+    project_root, profiles_root, dbt_profile, unique_schema
 ):
     project = ProjectDefinition(
         snapshots={'my_snapshots.sql': snapshot_data},

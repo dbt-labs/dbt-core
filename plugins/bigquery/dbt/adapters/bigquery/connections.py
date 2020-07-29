@@ -10,6 +10,7 @@ from google.oauth2 import service_account
 
 from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
+from dbt.contracts.connection import ConnectionState
 from dbt.exceptions import (
     FailedToConnectException, RuntimeException, DatabaseException
 )
@@ -111,7 +112,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
     @classmethod
     def close(cls, connection):
-        connection.state = 'closed'
+        connection.state = ConnectionState.CLOSED
 
         return connection
 

@@ -30,7 +30,13 @@ class NoServerException(Exception):
 
 class ServerProcess(dbt.flags.MP_CONTEXT.Process):
     def __init__(
-        self, cwd, port, profiles_dir, cli_vars=None, criteria=('ready',)
+        self,
+        cwd,
+        port,
+        profiles_dir,
+        cli_vars=None,
+        criteria=('ready',),
+        target=None,
     ):
         self.cwd = cwd
         self.port = port
@@ -43,6 +49,9 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
         ]
         if cli_vars:
             handle_and_check_args.extend(['--vars', cli_vars])
+        if target is not None:
+            handle_and_check_args.extend(['--target', target])
+
         super().__init__(
             target=handle_and_check,
             args=(handle_and_check_args,),
@@ -421,7 +430,7 @@ class Querier:
         return self.is_error(self.async_wait(token, state=state))
 
 
-def _first_server(cwd, cli_vars, profiles_dir, criteria):
+def _first_server(cwd, cli_vars, profiles_dir, criteria, target):
     stored = None
     for _ in range(5):
         port = random.randint(20000, 65535)
@@ -432,6 +441,7 @@ def _first_server(cwd, cli_vars, profiles_dir, criteria):
             profiles_dir=str(profiles_dir),
             port=port,
             criteria=criteria,
+            target=target,
         )
         try:
             proc.start()
@@ -444,7 +454,9 @@ def _first_server(cwd, cli_vars, profiles_dir, criteria):
 
 
 @contextmanager
-def rpc_server(project_dir, schema, profiles_dir, criteria='ready'):
+def rpc_server(
+    project_dir, schema, profiles_dir, criteria='ready', target=None
+):
     if isinstance(criteria, str):
         criteria = (criteria,)
     else:
@@ -452,7 +464,7 @@ def rpc_server(project_dir, schema, profiles_dir, criteria='ready'):
 
     cli_vars = '{{test_run_schema: {}}}'.format(schema)
 
-    proc = _first_server(project_dir, cli_vars, profiles_dir, criteria)
+    proc = _first_server(project_dir, cli_vars, profiles_dir, criteria, target)
     yield proc
     if proc.is_alive():
         os.kill(proc.pid, signal.SIGKILL)
@@ -605,10 +617,11 @@ def get_querier(
     schema,
     test_kwargs,
     criteria='ready',
+    target=None,
 ):
     server_ctx = rpc_server(
         project_dir=project_dir, schema=schema, profiles_dir=profiles_dir,
-        criteria=criteria,
+        criteria=criteria, target=target,
     )
     schema_ctx = built_schema(
         project_dir=project_dir, schema=schema, profiles_dir=profiles_dir,

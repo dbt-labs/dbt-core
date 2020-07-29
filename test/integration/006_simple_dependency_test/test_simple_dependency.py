@@ -1,5 +1,4 @@
 import os
-import shutil
 import tempfile
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.exceptions import CompilationException
@@ -34,6 +33,9 @@ class TestSimpleDependency(DBTIntegrationTest):
     def run_deps(self):
         return self.run_dbt(["deps"])
 
+    def run_clean(self):
+        return self.run_dbt(['clean'])
+
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
         self.run_deps()
@@ -56,6 +58,10 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "incremental")
 
+        assert os.path.exists('target')
+        self.run_clean()
+        assert not os.path.exists('target')
+
     @use_profile('postgres')
     def test_postgres_simple_dependency_with_models(self):
         self.run_deps()
@@ -72,6 +78,10 @@ class TestSimpleDependency(DBTIntegrationTest):
 
         self.assertEqual(created_models['view_model'], 'view')
         self.assertEqual(created_models['view_summary'], 'view')
+
+        assert os.path.exists('target')
+        self.run_clean()
+        assert not os.path.exists('target')
 
 
 class TestSimpleDependencyUnpinned(DBTIntegrationTest):
@@ -234,9 +244,11 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
 class TestSimpleDependencyNoProfile(TestSimpleDependency):
     def run_deps(self):
-        tmpdir = tempfile.mkdtemp()
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
             result = self.run_dbt(["deps", "--profiles-dir", tmpdir])
-        finally:
-            shutil.rmtree(tmpdir)
+        return result
+
+    def run_clean(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.run_dbt(["clean", "--profiles-dir", tmpdir])
         return result

@@ -49,8 +49,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             logger.debug('Postgres error: {}'.format(str(e)))
 
             try:
-                # attempt to release the connection
-                self.release()
+                self.rollback_if_open()
             except psycopg2.Error:
                 logger.debug("Failed to release connection!")
                 pass
@@ -60,7 +59,7 @@ class PostgresConnectionManager(SQLConnectionManager):
         except Exception as e:
             logger.debug("Error running SQL: {}", sql)
             logger.debug("Rolling back transaction.")
-            self.release()
+            self.rollback_if_open()
             if isinstance(e, dbt.exceptions.RuntimeException):
                 # during a sql query, an internal to dbt exception was raised.
                 # this sounds a lot like a signal handler and probably has
@@ -122,7 +121,17 @@ class PostgresConnectionManager(SQLConnectionManager):
 
     def cancel(self, connection):
         connection_name = connection.name
-        pid = connection.handle.get_backend_pid()
+        try:
+            pid = connection.handle.get_backend_pid()
+        except psycopg2.InterfaceError as exc:
+            # if the connection is already closed, not much to cancel!
+            if 'already closed' in str(exc):
+                logger.debug(
+                    f'Connection {connection_name} was already closed'
+                )
+                return
+            # probably bad, re-raise it
+            raise
 
         sql = "select pg_terminate_backend({})".format(pid)
 

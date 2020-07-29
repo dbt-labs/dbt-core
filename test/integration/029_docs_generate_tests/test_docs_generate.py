@@ -98,6 +98,11 @@ class TestDocsGenerate(DBTIntegrationTest):
     def setUp(self):
         super().setUp()
         self.maxDiff = None
+        self.alternate_schema = self.unique_schema() + '_test'
+        if self.adapter_type == 'snowflake':
+            self.alternate_schema = self.alternate_schema.upper()
+
+        self._created_schemas.add(self.alternate_schema)
 
     @property
     def schema(self):
@@ -131,7 +136,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             }
         }
 
-    def run_and_generate(self, extra=None, seed_count=1, model_count=1, alternate_db=None, args=None):
+    def run_and_generate(self, extra=None, seed_count=1, model_count=2, alternate_db=None, args=None):
         if alternate_db is None:
             alternate_db = self.alternative_database
         project = {
@@ -139,6 +144,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'macro-paths': [self.dir('macros')],
             'vars': {
                 'alternate_db': alternate_db,
+                'alternate_schema': self.alternate_schema,
             },
             'seeds': {
                 'quote_columns': True,
@@ -364,6 +370,19 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'schema': my_schema_name,
                         'database': model_database,
                         'name': case('model'),
+                        'type': view_type,
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': model_stats,
+                    'columns': expected_cols,
+                },
+                'model.test.second_model': {
+                    'unique_id': 'model.test.second_model',
+                    'metadata': {
+                        'schema': self.alternate_schema,
+                        'database': self.default_database,
+                        'name': case('second_model'),
                         'type': view_type,
                         'comment': None,
                         'owner': role,
@@ -890,6 +909,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_seeded_manifest(self, model_database=None):
         models_path = self.dir('models')
         model_sql_path = os.path.join(models_path, 'model.sql')
+        second_model_sql_path = os.path.join(models_path, 'second_model.sql')
         model_schema_yml_path = os.path.join(models_path, 'schema.yml')
         seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
 
@@ -900,6 +920,19 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         model_config = {
             'database': model_database,
+            'enabled': True,
+            'materialized': 'view',
+            'pre-hook': [],
+            'post-hook': [],
+            'vars': {},
+            'column_types': {},
+            'quoting': {},
+            'tags': [],
+            'persist_docs': {},
+            'full_refresh': None,
+        }
+        second_config = {
+            'schema': self.alternate_schema[-4:],
             'enabled': True,
             'materialized': 'view',
             'pre-hook': [],
@@ -935,6 +968,72 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': model_database,
                     'alias': 'model',
                     'description': 'The test model',
+                    'columns': {
+                        'id': {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'first_name': {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'email': {
+                            'name': 'email',
+                            'description': "The user's email",
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'ip_address': {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'updated_at': {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                    },
+                    'patch_path': model_schema_yml_path,
+                    'docs': {'show': False},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                },
+                'model.test.second_model': {
+                    'build_path': Normalized('target/compiled/test/models/second_model.sql'),
+                    'name': 'second_model',
+                    'root_path': self.test_root_realpath,
+                    'resource_type': 'model',
+                    'path': 'second_model.sql',
+                    'original_file_path': second_model_sql_path,
+                    'package_name': 'test',
+                    'raw_sql': LineIndifferent(_read_file(second_model_sql_path).rstrip('\r\n')),
+                    'refs': [['seed']],
+                    'sources': [],
+                    'depends_on': {'nodes': ['seed.test.seed'], 'macros': []},
+                    'unique_id': 'model.test.second_model',
+                    'fqn': ['test', 'second_model'],
+                    'tags': [],
+                    'meta': {},
+                    'config': second_config,
+                    'schema': self.alternate_schema,
+                    'database': self.default_database,
+                    'alias': 'second_model',
+                    'description': 'The second test model',
                     'columns': {
                         'id': {
                             'name': 'id',
@@ -1226,6 +1325,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'sources': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
+                'model.test.second_model': ['seed.test.seed'],
                 'seed.test.seed': [],
                 'test.test.not_null_model_id': ['model.test.model'],
                 'test.test.test_nothing_model_': ['model.test.model'],
@@ -1237,7 +1337,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'test.test.test_nothing_model_',
                     'test.test.unique_model_id',
                 ],
-                'seed.test.seed': ['model.test.model'],
+                'model.test.second_model': [],
+                'seed.test.seed': ['model.test.model', 'model.test.second_model'],
                 'test.test.not_null_model_id': [],
                 'test.test.test_nothing_model_': [],
                 'test.test.unique_model_id': [],
@@ -2351,6 +2452,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         """
         models_path = self.dir('models')
         model_sql_path = os.path.join(models_path, 'model.sql')
+        second_model_sql_path = os.path.join(models_path, 'second_model.sql')
         model_schema_yml_path = os.path.join(models_path, 'schema.yml')
         seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
 
@@ -2359,6 +2461,19 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         model_config = {
             'database': model_database,
+            'enabled': True,
+            'materialized': 'view',
+            'persist_docs': {},
+            'pre-hook': [],
+            'post-hook': [],
+            'vars': {},
+            'column_types': {},
+            'quoting': {},
+            'tags': [],
+            'full_refresh': None,
+        }
+        second_model_config = {
+            'schema': self.alternate_schema[-4:],
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -2464,6 +2579,87 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': model_database,
                     'tags': [],
                     'unique_id': 'model.test.model',
+                },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
+                'skip': False,
+                'status': None,
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'warn': None,
+                'node': {
+                    'alias': 'second_model',
+                    'build_path': Normalized(
+                        'target/compiled/test/models/second_model.sql'
+                    ),
+                    'columns': {
+                        'id': {
+                            'description': 'The user ID number',
+                            'name': 'id',
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'first_name': {
+                            'description': "The user's first name",
+                            'name': 'first_name',
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'email': {
+                            'description': "The user's email",
+                            'name': 'email',
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'ip_address': {
+                            'description': "The user's IP address",
+                            'name': 'ip_address',
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        },
+                        'updated_at': {
+                            'description': "The last time this user's email was updated",
+                            'name': 'updated_at',
+                            'data_type': None,
+                            'meta': {},
+                            'tags': [],
+                        }
+                    },
+                    'compiled': True,
+                    'compiled_sql': compiled_sql,
+                    'config': second_model_config,
+                    'sources': [],
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['seed.test.seed']
+                    },
+                    'description': 'The second test model',
+                    'docs': {'show': False},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'second_model'],
+                    'injected_sql': compiled_sql,
+                    'meta': {},
+                    'name': 'second_model',
+                    'original_file_path': second_model_sql_path,
+                    'package_name': 'test',
+                    'patch_path': model_schema_yml_path,
+                    'path': 'second_model.sql',
+                    'raw_sql': LineIndifferent(_read_file(second_model_sql_path).rstrip('\r\n')),
+                    'refs': [['seed']],
+                    'resource_type': 'model',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'database': self.default_database,
+                    'tags': [],
+                    'unique_id': 'model.test.second_model',
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -3151,7 +3347,8 @@ class TestDocsGenerate(DBTIntegrationTest):
     def test__redshift__incremental_view(self):
         self.run_and_generate(
             {'source-paths': [self.dir('rs_models')]},
-            alternate_db=self.default_database
+            alternate_db=self.default_database,
+            model_count=1,
         )
         self.verify_catalog(self.expected_redshift_incremental_catalog())
         self.verify_manifest(self.expected_redshift_incremental_view_manifest())

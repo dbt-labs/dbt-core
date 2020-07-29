@@ -1,3 +1,4 @@
+import dbt.flags
 import dbt.ui
 
 import json
@@ -597,15 +598,28 @@ class ListLogHandler(LogMessageHandler):
         self.records.append(as_dict)
 
 
-# we still need to use logging to suppress these or pytest captures them
-logging.getLogger('botocore').setLevel(logging.ERROR)
-logging.getLogger('requests').setLevel(logging.ERROR)
-logging.getLogger('urllib3').setLevel(logging.ERROR)
-logging.getLogger('google').setLevel(logging.ERROR)
-logging.getLogger('snowflake.connector').setLevel(logging.ERROR)
+def _env_log_level(var_name: str) -> int:
+    # convert debugging environment variable name to a log level
+    if dbt.flags.env_set_truthy(var_name):
+        return logging.DEBUG
+    else:
+        return logging.ERROR
+
+
+LOG_LEVEL_GOOGLE = _env_log_level('DBT_GOOGLE_DEBUG_LOGGING')
+LOG_LEVEL_SNOWFLAKE = _env_log_level('DBT_SNOWFLAKE_CONNECTOR_DEBUG_LOGGING')
+LOG_LEVEL_BOTOCORE = _env_log_level('DBT_BOTOCORE_DEBUG_LOGGING')
+LOG_LEVEL_HTTP = _env_log_level('DBT_HTTP_DEBUG_LOGGING')
+LOG_LEVEL_WERKZEUG = _env_log_level('DBT_WERKZEUG_DEBUG_LOGGING')
+
+logging.getLogger('botocore').setLevel(LOG_LEVEL_BOTOCORE)
+logging.getLogger('requests').setLevel(LOG_LEVEL_HTTP)
+logging.getLogger('urllib3').setLevel(LOG_LEVEL_HTTP)
+logging.getLogger('google').setLevel(LOG_LEVEL_GOOGLE)
+logging.getLogger('snowflake.connector').setLevel(LOG_LEVEL_SNOWFLAKE)
+
 logging.getLogger('parsedatetime').setLevel(logging.ERROR)
-# want to see werkzeug logs about errors
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
+logging.getLogger('werkzeug').setLevel(LOG_LEVEL_WERKZEUG)
 
 
 def list_handler(
