@@ -1,4 +1,4 @@
-## dbt 0.17.2 (Release TBD)
+## dbt 0.17.2 (July 29, 2020)
 
 ### Fixes
 - The redshift catalog now contains information for all schemas in a project, not just the default ([#2653](https://github.com/fishtown-analytics/dbt/issues/2653), [#2654](https://github.com/fishtown-analytics/dbt/pull/2654))
