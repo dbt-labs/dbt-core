@@ -83,3 +83,5 @@ target/
 
 # pycharm
 .idea/
+
+.history/

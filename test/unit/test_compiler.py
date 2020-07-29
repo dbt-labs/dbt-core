@@ -78,7 +78,7 @@ class CompilerTest(unittest.TestCase):
                     injected_sql='',
                     compiled_sql=(
                         'with cte as (select * from something_else) '
-                        'select * from __dbt__CTE__ephemeral')
+                        'select * from dbt__CTE__ephemeral')
                 ),
                 'model.root.ephemeral': CompiledModelNode(
                     name='ephemeral',
@@ -121,10 +121,10 @@ class CompilerTest(unittest.TestCase):
         self.assertEqual(result.extra_ctes_injected, True)
         self.assertEqualIgnoreWhitespace(
             result.injected_sql,
-            ('with __dbt__CTE__ephemeral as ('
+            ('with dbt__CTE__ephemeral as ('
              'select * from source_table'
              '), cte as (select * from something_else) '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from dbt__CTE__ephemeral'))
 
         self.assertEqual(
             input_graph.nodes['model.root.ephemeral'].extra_ctes_injected,
@@ -244,7 +244,7 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
-                    compiled_sql='select * from __dbt__CTE__ephemeral'
+                    compiled_sql='select * from dbt__CTE__ephemeral'
                 ),
                 'model.root.ephemeral': CompiledModelNode(
                     name='ephemeral',
@@ -288,10 +288,10 @@ class CompilerTest(unittest.TestCase):
         self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
             result.injected_sql,
-            ('with __dbt__CTE__ephemeral as ('
+            ('with dbt__CTE__ephemeral as ('
              'select * from source_table'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from dbt__CTE__ephemeral'))
 
         self.assertTrue(output_graph.nodes['model.root.ephemeral'].extra_ctes_injected)
 
@@ -323,7 +323,7 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
-                    compiled_sql='select * from __dbt__CTE__ephemeral'
+                    compiled_sql='select * from dbt__CTE__ephemeral'
                 ),
                 'model.root.ephemeral': CompiledModelNode(
                     name='ephemeral',
@@ -347,7 +347,7 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral_level_two', sql='select * from source_table')],
                     injected_sql='',
-                    compiled_sql='select * from __dbt__CTE__ephemeral_level_two' # noqa
+                    compiled_sql='select * from dbt__CTE__ephemeral_level_two' # noqa
                 ),
                 'model.root.ephemeral_level_two': CompiledModelNode(
                     name='ephemeral_level_two',
@@ -389,12 +389,12 @@ class CompilerTest(unittest.TestCase):
         self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
             result.injected_sql,
-            ('with __dbt__CTE__ephemeral_level_two as ('
+            ('with dbt__CTE__ephemeral_level_two as ('
              'select * from source_table'
-             '), __dbt__CTE__ephemeral as ('
-             'select * from __dbt__CTE__ephemeral_level_two'
+             '), dbt__CTE__ephemeral as ('
+             'select * from dbt__CTE__ephemeral_level_two'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from dbt__CTE__ephemeral'))
 
         self.assertTrue(output_graph.nodes['model.root.ephemeral'].extra_ctes_injected)
         self.assertTrue(output_graph.nodes['model.root.ephemeral_level_two'].extra_ctes_injected)

@@ -130,11 +130,11 @@ def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
         [
             InjectedCTE(
                 id="cte_id_1",
-                sql="__dbt__CTE__ephemeral as (select * from table)",
+                sql="dbt__CTE__ephemeral as (select * from table)",
             ),
             InjectedCTE(
                 id="cte_id_2",
-                sql="__dbt__CTE__events as (select id, type from events)",
+                sql="dbt__CTE__events as (select id, type from events)",
             ),
         ]
 
@@ -145,8 +145,8 @@ def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
 
     This will spit out:
 
-      "with __dbt__CTE__ephemeral as (select * from table),
-            __dbt__CTE__events as (select id, type from events),
+      "with dbt__CTE__ephemeral as (select * from table),
+            dbt__CTE__events as (select id, type from events),
             with internal_cte as (select * from sessions)
        select * from internal_cte"
 

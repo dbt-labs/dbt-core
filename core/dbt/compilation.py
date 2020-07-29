@@ -9,6 +9,7 @@ import dbt.tracking
 from dbt import flags
 from dbt.node_types import NodeType
 from dbt.linker import Linker
+from dbt.utils import add_ephemeral_model_prefix
 
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.compiled import NonSourceNode
@@ -118,7 +119,7 @@ def recursively_prepend_ctes(model, manifest):
         cte_to_add, new_prepended_ctes, manifest = recursively_prepend_ctes(
             cte_to_add, manifest)
         _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
-        new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.name)
+        new_cte_name = add_ephemeral_model_prefix(cte_to_add.name)
         sql = ' {} as (\n{}\n)'.format(new_cte_name, cte_to_add.compiled_sql)
         _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte_id, sql=sql))
 
