@@ -41,9 +41,8 @@ class TestBigqueryUpdateColumnPolicyTag(DBTIntegrationTest):
                 )
 
                 for schema_field in table.schema:
-                    if self.policy_tag:
-                        self.assertEquals(schema_field.policy_tags.names,
-                                          (self.policy_tag,))
+                    self.assertEquals(schema_field.policy_tags.names,
+                                      (self.policy_tag,))
 
 
 class TestBigqueryUpdateColumnDescription(DBTIntegrationTest):

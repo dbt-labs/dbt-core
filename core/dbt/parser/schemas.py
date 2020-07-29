@@ -100,6 +100,7 @@ class ParserRef:
             data_type=data_type,
             meta=meta,
             tags=tags,
+            _extra=column.extra
         )
 
     @classmethod

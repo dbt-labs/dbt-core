@@ -4,5 +4,5 @@ models:
 - name: policy_tag_table
   columns:
   - name: field
-    tags:
+    policy_tags:
       - '{{ var("policy_tag") }}'
