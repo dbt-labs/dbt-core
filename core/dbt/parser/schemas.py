@@ -147,7 +147,7 @@ class ParserRef:
             meta=meta,
             tags=tags,
             quote=quote,
-            _extra=column.extra
+            _extra=column.extra,
         )
 
     @classmethod
