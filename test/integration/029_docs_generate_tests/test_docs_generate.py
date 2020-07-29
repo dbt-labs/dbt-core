@@ -2755,17 +2755,17 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         ephemeral_compiled_sql = (
             '\n\nselect first_name, count(*) as ct from '
-            '__dbt__CTE__ephemeral_copy\ngroup by first_name\n'
+            'dbt__CTE__ephemeral_copy\ngroup by first_name\n'
             'order by first_name asc'
         )
 
         cte_sql = (
-            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from {}."{}"."seed"\n)'
+            ' dbt__CTE__ephemeral_copy as (\n\n\nselect * from {}."{}"."seed"\n)'
         ).format(self.default_database, my_schema_name)
 
         ephemeral_injected_sql = (
             '\n\nwith{}select first_name, count(*) as ct from '
-            '__dbt__CTE__ephemeral_copy\ngroup by first_name\n'
+            'dbt__CTE__ephemeral_copy\ngroup by first_name\n'
             'order by first_name asc'
         ).format(cte_sql)
 
