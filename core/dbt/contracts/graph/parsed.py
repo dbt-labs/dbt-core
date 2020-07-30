@@ -20,10 +20,9 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
-    AdditionalPropertiesMixin
+    UnparsedSourceTableDefinition, UnparsedColumn, TestDef
 )
-from dbt.contracts.util import Replaceable
+from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import flags
 from dbt.node_types import NodeType

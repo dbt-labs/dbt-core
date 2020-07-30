@@ -8,6 +8,7 @@
 - Added new node selector methods (`config`, `test_type`, `test_name`, `package`) ([#2425](https://github.com/fishtown-analytics/dbt/issues/2425), [#2629](https://github.com/fishtown-analytics/dbt/pull/2629))
 - Added option to specify profile when connecting to Redshift via IAM ([#2437](https://github.com/fishtown-analytics/dbt/issues/2437), [#2581](https://github.com/fishtown-analytics/dbt/pull/2581))
 - Add more helpful error message for misconfiguration in profiles.yml ([#2569](https://github.com/fishtown-analytics/dbt/issues/2569), [#2627](https://github.com/fishtown-analytics/dbt/pull/2627))
+- Added support for setting policy tags for BigQuery columns ([#2586](https://github.com/fishtown-analytics/dbt/issues/2586), [#2589](https://github.com/fishtown-analytics/dbt/pull/2589))
 ### Fixes
 - Adapter plugins can once again override plugins defined in core ([#2548](https://github.com/fishtown-analytics/dbt/issues/2548), [#2590](https://github.com/fishtown-analytics/dbt/pull/2590))
 - Added `--selector` argument and support for `selectors.yml` file to define selection mechanisms. ([#2172](https://github.com/fishtown-analytics/dbt/issues/2172), [#2640](https://github.com/fishtown-analytics/dbt/pull/2640))
@@ -17,6 +18,7 @@ Contributors:
 - [@brunomurino](https://github.com/brunomurino) ([#2437](https://github.com/fishtown-analytics/dbt/pull/2581))
 - [@DrMcTaco](https://github.com/DrMcTaco) ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030)),[#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
 - [@kning](https://github.com/kning) ([#2627](https://github.com/fishtown-analytics/dbt/pull/2627))
+- [@azhard](https://github.com/azhard) ([#2588](https://github.com/fishtown-analytics/dbt/pull/2588))
 
 
 ## dbt 0.18.0b1 (June 08, 2020)
@@ -32,7 +34,6 @@ Contributors:
 - Added support for BigQuery authorized views ([#1718](https://github.com/fishtown-analytics/dbt/issues/1718), [#2517](https://github.com/fishtown-analytics/dbt/pull/2517))
 - Added support for altering BigQuery column types ([#2546](https://github.com/fishtown-analytics/dbt/issues/2546), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
 - Include row counts and bytes processed in log output for all BigQuery statement types ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
-- Added support for setting policy tags for BigQuery columns ([#2586](https://github.com/fishtown-analytics/dbt/issues/2586), [#2589](https://github.com/fishtown-analytics/dbt/pull/2589))
 
 
 ### Fixes
@@ -45,7 +46,7 @@ Contributors:
  - [@alf-mindshift](https://github.com/alf-mindshift) ([#2431](https://github.com/fishtown-analytics/dbt/pull/2431))
  - [@scarrucciu](https://github.com/scarrucciu) ([#2508](https://github.com/fishtown-analytics/dbt/pull/2508))
  - [@southpolemonkey](https://github.com/southpolemonkey) ([#2511](https://github.com/fishtown-analytics/dbt/issues/2511))
- - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/pull/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547), [#2588](https://github.com/fishtown-analytics/dbt/pull/2588))
+ - [@azhard](https://github.com/azhard) ([#2517](https://github.com/fishtown-analytics/dbt/pull/2517), ([#2521](https://github.com/fishtown-analytics/dbt/pull/2521)), [#2547](https://github.com/fishtown-analytics/dbt/pull/2547))
  - [@alepuccetti](https://github.com/alepuccetti) ([#2526](https://github.com/fishtown-analytics/dbt/issues/2526))
 
 

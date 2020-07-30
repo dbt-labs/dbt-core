@@ -70,36 +70,6 @@ class Docs(JsonSchemaMixin, Replaceable):
     show: bool = True
 
 
-class AdditionalPropertiesMixin:
-    """Make this class an extensible property.
-
-    The underlying class definition must include a type definition for a field
-    named '_extra' that is of type `Dict[str, Any]`.
-    """
-    @classmethod
-    def from_dict(cls, data, validate=True):
-        self = super().from_dict(data=data, validate=validate)
-        keys = self.to_dict(validate=False, omit_none=False)
-        for key, value in data.items():
-            if key not in keys:
-                self.extra[key] = value
-        return self
-
-    def to_dict(self, omit_none=True, validate=False):
-        data = super().to_dict(omit_none=omit_none, validate=validate)
-        data.update(self.extra)
-        return data
-
-    def replace(self, **kwargs):
-        dct = self.to_dict(omit_none=False, validate=False)
-        dct.update(kwargs)
-        return self.from_dict(dct)
-
-    @property
-    def extra(self):
-        return self._extra
-
-
 @dataclass
 class HasDocs(AdditionalPropertiesMixin, ExtensibleJsonSchemaMixin,
               Replaceable):
