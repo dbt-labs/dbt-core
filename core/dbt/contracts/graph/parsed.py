@@ -13,6 +13,7 @@ from typing import (
 )
 
 from hologram import JsonSchemaMixin
+from hologram.helpers import ExtensibleJsonSchemaMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.graph.unparsed import (
@@ -21,7 +22,7 @@ from dbt.contracts.graph.unparsed import (
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedColumn, TestDef
 )
-from dbt.contracts.util import Replaceable
+from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import flags
 from dbt.node_types import NodeType
@@ -44,12 +45,14 @@ from .model_config import (  # noqa
 
 
 @dataclass
-class ColumnInfo(JsonSchemaMixin, Replaceable):
+class ColumnInfo(AdditionalPropertiesMixin, ExtensibleJsonSchemaMixin,
+                 Replaceable):
     name: str
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

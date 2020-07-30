@@ -71,12 +71,14 @@ class Docs(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class HasDocs(JsonSchemaMixin, Replaceable):
+class HasDocs(AdditionalPropertiesMixin, ExtensibleJsonSchemaMixin,
+              Replaceable):
     name: str
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
+    _extra: Dict[str, Any] = field(default_factory=dict)
 
 
 TestDef = Union[Dict[str, Any], str]
