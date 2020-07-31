@@ -148,9 +148,7 @@ class AdapterContainer:
         return plugins
 
     def get_adapter_package_names(self, name: Optional[str]) -> List[str]:
-        package_names: List[str] = [
-            p.project_name for p in self.get_adapter_plugins(name)
-        ]
+        package_names: List[str] = [p.project_name for p in self.get_adapter_plugins(name)]
         package_names.append(GLOBAL_PROJECT_NAME)
         return package_names
 

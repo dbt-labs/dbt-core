@@ -1,13 +1,9 @@
-from typing import (
-    Any, Dict, Iterable, Union, Optional, List, Iterator, Mapping, Set
-)
+from typing import Any, Dict, Iterable, Union, Optional, List, Iterator, Mapping, Set
 
 from dbt.clients.jinja import MacroGenerator, MacroStack
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-from dbt.exceptions import (
-    raise_duplicate_macro_name, raise_compiler_error
-)
+from dbt.exceptions import raise_duplicate_macro_name, raise_compiler_error
 
 
 FlatNamespace = Dict[str, MacroGenerator]
@@ -68,9 +64,7 @@ class MacroNamespace(Mapping):
                 return dct[key]
         raise KeyError(key)
 
-    def get_from_package(
-        self, package_name: Optional[str], name: str
-    ) -> Optional[MacroGenerator]:
+    def get_from_package(self, package_name: Optional[str], name: str) -> Optional[MacroGenerator]:
         pkg: FlatNamespace
         if package_name is None:
             return self.get(name)
@@ -79,9 +73,7 @@ class MacroNamespace(Mapping):
         elif package_name in self.packages:
             return self.packages[package_name].get(name)
         else:
-            raise_compiler_error(
-                f"Could not find package '{package_name}'"
-            )
+            raise_compiler_error(f"Could not find package '{package_name}'")
 
 
 # This class builds the MacroNamespace by adding macros to
@@ -128,9 +120,7 @@ class MacroNamespaceBuilder:
             hierarchy[macro.package_name] = namespace
 
         if macro.name in namespace:
-            raise_duplicate_macro_name(
-                macro_func.macro, macro, macro.package_name
-            )
+            raise_duplicate_macro_name(macro_func.macro, macro, macro.package_name)
         hierarchy[macro.package_name][macro.name] = macro_func
 
     def add_macro(self, macro: ParsedMacro, ctx: Dict[str, Any]):
@@ -139,9 +129,7 @@ class MacroNamespaceBuilder:
         # MacroGenerator is in clients/jinja.py
         # a MacroGenerator object is a callable object that will
         # execute the MacroGenerator.__call__ function
-        macro_func: MacroGenerator = MacroGenerator(
-            macro, ctx, self.node, self.thread_ctx
-        )
+        macro_func: MacroGenerator = MacroGenerator(macro, ctx, self.node, self.thread_ctx)
 
         # internal macros (from plugins) will be processed separately from
         # project macros, so store them in a different place
