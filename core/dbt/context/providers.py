@@ -159,7 +159,7 @@ class BaseDatabaseWrapper:
 
         for package_name in search_packages:
             for prefix in self._get_adapter_macro_prefixes():
-                search_name = f'{prefix}__{macro_name}'
+                search_name = f"{prefix}__{macro_name}"
                 try:
                     # this uses the namespace from the context
                     macro = self._namespace.get_from_package(
@@ -173,12 +173,12 @@ class BaseDatabaseWrapper:
                 if package_name is None:
                     attempts.append(search_name)
                 else:
-                    attempts.append(f'{package_name}.{search_name}')
+                    attempts.append(f"{package_name}.{search_name}")
 
                 if macro is not None:
                     return macro
 
-        searched = ', '.join(repr(a) for a in attempts)
+        searched = ", ".join(repr(a) for a in attempts)
         msg = (
             f"In dispatch: No macro named '{macro_name}' found\n"
             f"    Searched for: {searched}"
@@ -641,9 +641,7 @@ class ProviderContext(ManifestContext):
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         # The macro namespace is used in creating the DatabaseWrapper
-        self.db_wrapper = self.provider.DatabaseWrapper(
-            self.adapter, self.namespace
-        )
+        self.db_wrapper = self.provider.DatabaseWrapper(self.adapter, self.namespace)
 
     # This overrides the method in ManifestContext, and provides
     # a model, which the ManifestContext builder does not
