@@ -1030,7 +1030,7 @@ class Manifest:
                 unique_id not in selected
             ):
                 merged.add(unique_id)
-                self.nodes[unique_id] = node
+                self.nodes[unique_id] = node.replace(deferred=True)
 
         # log up to 5 items
         sample = list(islice(merged, 5))

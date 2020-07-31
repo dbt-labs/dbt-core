@@ -461,6 +461,7 @@ def _build_run_subparser(subparsers, base_subparser):
         with this project.
         ''',
         type=Path,
+        default=flags.ARTIFACT_STATE_PATH,
     )
     run_sub.add_optional_argument_inverse(
         '--defer',

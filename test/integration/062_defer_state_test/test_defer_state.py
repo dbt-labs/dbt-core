@@ -1,9 +1,11 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import copy
+import json
 import os
 import shutil
 
 import pytest
+
 
 class TestDeferState(DBTIntegrationTest):
     @property
@@ -49,8 +51,10 @@ class TestDeferState(DBTIntegrationTest):
     def run_and_defer(self):
         results = self.run_dbt(['seed'])
         assert len(results) == 1
+        assert not any(r.node.deferred for r in results)
         results = self.run_dbt(['run'])
         assert len(results) == 2
+        assert not any(r.node.deferred for r in results)
 
         # copy files over from the happy times when we had a good target
         self.copy_state()
@@ -62,6 +66,11 @@ class TestDeferState(DBTIntegrationTest):
         results = self.run_dbt(['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'])
         assert self.other_schema not in results[0].node.injected_sql
         assert self.unique_schema() in results[0].node.injected_sql
+
+        with open('target/manifest.json') as fp:
+            data = json.load(fp)
+        assert data['nodes']['seed.test.seed']['deferred']
+
         assert len(results) == 1
 
     def run_switchdirs_defer(self):

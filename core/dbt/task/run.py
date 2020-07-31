@@ -1,5 +1,4 @@
 import functools
-import os
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional
@@ -45,9 +44,6 @@ from dbt.logger import (
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
 from dbt.node_types import NodeType, RunHookType
-
-
-ARTIFACT_STATE_PATH: Optional[str] = os.getenv('ARTIFACT_STATE_PATH')
 
 
 class Timer:
@@ -256,8 +252,6 @@ class RunTask(CompileTask):
     def _get_state_path(self) -> Path:
         if self.args.state is not None:
             return self.args.state
-        elif ARTIFACT_STATE_PATH is not None:
-            return Path(ARTIFACT_STATE_PATH)
         else:
             raise RuntimeException(
                 'Received a --defer argument, but no value was provided '
