@@ -6,8 +6,8 @@ from unittest import mock
 
 import pytest
 
-# make sure 'postgres' is available
-from dbt.adapters import postgres  # noqa
+# make sure 'redshift' is available
+from dbt.adapters import postgres, redshift
 from dbt.adapters import factory
 from dbt.adapters.base import AdapterConfig
 from dbt.clients.jinja import MacroStack
@@ -18,7 +18,7 @@ from dbt.config.project import V1VarProvider
 from dbt.context import base, target, configured, providers, docs, manifest, macros
 from dbt.node_types import NodeType
 import dbt.exceptions
-from .utils import profile_from_dict, config_from_parts_or_dicts
+from .utils import profile_from_dict, config_from_parts_or_dicts, inject_adapter, clear_plugin
 from .mock_adapter import adapter_factory
 
 
@@ -112,7 +112,8 @@ class TestParseWrapper(unittest.TestCase):
         self.mock_config = mock.MagicMock()
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
-        self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter)
+        self.namespace = mock.MagicMock()
+        self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):
@@ -131,7 +132,8 @@ class TestRuntimeWrapper(unittest.TestCase):
         self.mock_config.quoting = {'database': True, 'schema': True, 'identifier': True}
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
-        self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter)
+        self.namespace = mock.MagicMock()
+        self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):
@@ -369,6 +371,39 @@ def manifest_fx(config):
     return mock_manifest(config)
 
 
+@pytest.fixture
+def manifest_extended(manifest_fx):
+    dbt_macro = mock_macro('default__some_macro', 'dbt')
+    # same namespace, same name, different pkg!
+    rs_macro = mock_macro('redshift__some_macro', 'dbt_redshift')
+    # same name, different package
+    package_default_macro = mock_macro('default__some_macro', 'root')
+    package_rs_macro = mock_macro('redshift__some_macro', 'root')
+    manifest_fx.macros[dbt_macro.unique_id] = dbt_macro
+    manifest_fx.macros[rs_macro.unique_id] = rs_macro
+    manifest_fx.macros[package_default_macro.unique_id] = package_default_macro
+    manifest_fx.macros[package_rs_macro.unique_id] = package_rs_macro
+    return manifest_fx
+
+
+@pytest.fixture
+def redshift_adapter(config, get_adapter):
+    adapter = redshift.RedshiftAdapter(config)
+    inject_adapter(adapter, redshift.Plugin)
+    get_adapter.return_value = adapter
+    yield adapter
+    clear_plugin(redshift.Plugin)
+
+
+@pytest.fixture
+def postgres_adapter(config, get_adapter):
+    adapter = postgres.PostgresAdapter(config)
+    inject_adapter(adapter, postgres.Plugin)
+    get_adapter.return_value = adapter
+    yield adapter
+    clear_plugin(postgres.Plugin)
+
+
 def test_query_header_context(config, manifest_fx):
     ctx = manifest.generate_query_header_context(
         config=config,
@@ -463,3 +498,44 @@ def test_macro_namespace(config, manifest_fx):
         assert result['root']['some_macro'].macro is package_macro
         assert result['some_macro'].macro is package_macro
 
+
+def test_resolve_specific(config, manifest_extended, redshift_adapter, get_include_paths):
+    rs_macro = manifest_extended.macros['macro.dbt_redshift.redshift__some_macro']
+    package_rs_macro = manifest_extended.macros['macro.root.redshift__some_macro']
+
+    ctx = providers.generate_runtime_model(
+        model=mock_model(),
+        config=config,
+        manifest=manifest_extended,
+    )
+
+    # macro_a exists, but default__macro_a and redshift__macro_a do not
+    with pytest.raises(dbt.exceptions.CompilationException):
+        ctx['adapter'].dispatch('macro_a').macro
+
+    assert ctx['adapter'].dispatch('some_macro').macro is package_rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['dbt']).macro is rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['root']).macro is package_rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['root', 'dbt']).macro is package_rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['dbt', 'root']).macro is rs_macro
+
+
+def test_resolve_default(config, manifest_extended, postgres_adapter, get_include_paths):
+    dbt_macro = manifest_extended.macros['macro.dbt.default__some_macro']
+    package_macro = manifest_extended.macros['macro.root.default__some_macro']
+
+    ctx = providers.generate_runtime_model(
+        model=mock_model(),
+        config=config,
+        manifest=manifest_extended,
+    )
+
+    # macro_a exists, but default__macro_a and redshift__macro_a do not
+    with pytest.raises(dbt.exceptions.CompilationException):
+        ctx['adapter'].dispatch('macro_a').macro
+
+    assert ctx['adapter'].dispatch('some_macro').macro is package_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['dbt']).macro is dbt_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['root']).macro is package_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['root', 'dbt']).macro is package_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=['dbt', 'root']).macro is dbt_macro

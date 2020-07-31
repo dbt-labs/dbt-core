@@ -2,7 +2,7 @@
     Add new columns to the table if applicable
 #}
 {% macro create_columns(relation, columns) %}
-  {{ adapter_macro('create_columns', relation, columns) }}
+  {{ adapter.dispatch('create_columns')(relation, columns) }}
 {% endmacro %}
 
 {% macro default__create_columns(relation, columns) %}
@@ -15,7 +15,7 @@
 
 
 {% macro post_snapshot(staging_relation) %}
-  {{ adapter_macro('post_snapshot', staging_relation) }}
+  {{ adapter.dispatch('post_snapshot')(staging_relation) }}
 {% endmacro %}
 
 {% macro default__post_snapshot(staging_relation) %}

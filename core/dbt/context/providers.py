@@ -6,16 +6,16 @@ from typing import (
 )
 from typing_extensions import Protocol
 
-
+from dbt import deprecations
 from dbt.adapters.base.column import Column
 from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.clients import agate_helper
-from dbt.clients.jinja import get_rendered
+from dbt.clients.jinja import get_rendered, MacroGenerator
 from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
 from .context_config import ContextConfigType
-from .macros import MacroNamespaceBuilder
+from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
@@ -82,9 +82,10 @@ class BaseDatabaseWrapper:
     Wrapper for runtime database interaction. Applies the runtime quote policy
     via a relation proxy.
     """
-    def __init__(self, adapter):
+    def __init__(self, adapter, namespace: MacroNamespace):
         self.adapter = adapter
         self.Relation = RelationProxy(adapter)
+        self.namespace = namespace
 
     def __getattr__(self, name):
         raise NotImplementedError('subclasses need to implement this')
@@ -98,6 +99,50 @@ class BaseDatabaseWrapper:
 
     def commit(self):
         return self.adapter.commit_if_has_connection()
+
+    def _get_adapter_macro_prefixes(self) -> List[str]:
+        # a future version of this could have plugins automatically call fall
+        # back to their dependencies' dependencies by using
+        # `get_adapter_type_names` instead of `[self.config.credentials.type]`
+        search_prefixes = [self.adapter.type(), 'default']
+        return search_prefixes
+
+    def dispatch(
+        self, macro_name: str, packages: Optional[List[str]] = None
+    ) -> MacroGenerator:
+        search_packages: List[Optional[str]]
+        if packages is None:
+            search_packages = [None]
+        else:
+            search_packages = packages
+
+        attempts = []
+
+        for package_name in search_packages:
+            for prefix in self._get_adapter_macro_prefixes():
+                search_name = f'{prefix}__{macro_name}'
+                try:
+                    macro = self.namespace.get_from_package(
+                        package_name, search_name
+                    )
+                except CompilationException as exc:
+                    raise CompilationException(
+                        f'In dispatch: {exc.msg}',
+                    ) from exc
+
+                if package_name is None:
+                    attempts.append(search_name)
+                else:
+                    attempts.append(f'{package_name}.{search_name}')
+
+                if macro is not None:
+                    return macro
+
+        searched = ', '.join(repr(a) for a in attempts)
+        raise CompilationException(
+            f"In dispatch: No macro named '{macro_name}' found\n",
+            f"    Searched for: {searched}"
+        )
 
 
 class BaseResolver(metaclass=abc.ABCMeta):
@@ -574,7 +619,9 @@ class ProviderContext(ManifestContext):
         self.context_config: Optional[ContextConfigType] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
-        self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
+        self.db_wrapper = self.provider.DatabaseWrapper(
+            self.adapter, self.namespace
+        )
 
     def _get_namespace_builder(self):
         internal_packages = get_adapter_package_names(
@@ -1045,13 +1092,6 @@ class ProviderContext(ManifestContext):
     def sql_now(self) -> str:
         return self.adapter.date_function()
 
-    def _get_adapter_macro_prefixes(self) -> List[str]:
-        # a future version of this could have plugins automatically call fall
-        # back to their dependencies' dependencies by using
-        # `get_adapter_type_names` instead of `[self.config.credentials.type]`
-        search_prefixes = [self.config.credentials.type, 'default']
-        return search_prefixes
-
     @contextmember
     def adapter_macro(self, name: str, *args, **kwargs):
         """Find the most appropriate macro for the name, considering the
@@ -1096,38 +1136,23 @@ class ProviderContext(ManifestContext):
                ...
             {%- endmacro %}
         """
-        original_name: str = name
-        package_name: Optional[str] = None
+        deprecations.warn('adapter-macro', macro_name=name)
+        package_names: Optional[List[str]] = None
         if '.' in name:
             package_name, name = name.split('.', 1)
+            package_names = [package_name]
 
-        attempts = []
-
-        for prefix in self._get_adapter_macro_prefixes():
-            search_name = f'{prefix}__{name}'
-            try:
-                macro = self.namespace.get_from_package(
-                    package_name, search_name
-                )
-            except CompilationException as exc:
-                raise CompilationException(
-                    f'In adapter_macro: {exc.msg}, original name '
-                    f"'{original_name}'",
-                    node=self.model,
-                ) from exc
-            if package_name is None:
-                attempts.append(search_name)
-            else:
-                attempts.append(f'{package_name}.{search_name}')
-            if macro is not None:
-                return macro(*args, **kwargs)
-
-        searched = ', '.join(repr(a) for a in attempts)
-        raise_compiler_error(
-            f"In adapter_macro: No macro named '{name}' found\n"
-            f"    Original name: '{original_name}'\n"
-            f"    Searched for: {searched}"
-        )
+        try:
+            macro = self.db_wrapper.dispatch(
+                macro_name=name, packages=package_names
+            )
+        except CompilationException as exc:
+            raise CompilationException(
+                f'In adapter_macro: {exc.msg}\n'
+                f"    Original name: '{name}'",
+                node=self.model
+            ) from exc
+        return macro(*args, **kwargs)
 
 
 class MacroContext(ProviderContext):

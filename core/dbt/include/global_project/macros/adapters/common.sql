@@ -1,5 +1,5 @@
 {% macro get_columns_in_query(select_sql) -%}
-  {{ return(adapter_macro('get_columns_in_query', select_sql)) }}
+  {{ return(adapter.dispatch('get_columns_in_query')(select_sql)) }}
 {% endmacro %}
 
 {% macro default__get_columns_in_query(select_sql) %}
@@ -15,7 +15,7 @@
 {% endmacro %}
 
 {% macro create_schema(relation) -%}
-  {{ adapter_macro('create_schema', relation) }}
+  {{ adapter.dispatch('create_schema')(relation) }}
 {% endmacro %}
 
 {% macro default__create_schema(relation) -%}
@@ -25,7 +25,7 @@
 {% endmacro %}
 
 {% macro drop_schema(relation) -%}
-  {{ adapter_macro('drop_schema', relation) }}
+  {{ adapter.dispatch('drop_schema')(relation) }}
 {% endmacro %}
 
 {% macro default__drop_schema(relation) -%}
@@ -35,7 +35,7 @@
 {% endmacro %}
 
 {% macro create_table_as(temporary, relation, sql) -%}
-  {{ adapter_macro('create_table_as', temporary, relation, sql) }}
+  {{ adapter.dispatch('create_table_as')(temporary, relation, sql) }}
 {%- endmacro %}
 
 {% macro default__create_table_as(temporary, relation, sql) -%}
@@ -52,7 +52,7 @@
 {% endmacro %}
 
 {% macro create_view_as(relation, sql) -%}
-  {{ adapter_macro('create_view_as', relation, sql) }}
+  {{ adapter.dispatch('create_view_as')(relation, sql) }}
 {%- endmacro %}
 
 {% macro default__create_view_as(relation, sql) -%}
@@ -66,7 +66,7 @@
 
 
 {% macro get_catalog(information_schema, schemas) -%}
-  {{ return(adapter_macro('get_catalog', information_schema, schemas)) }}
+  {{ return(adapter.dispatch('get_catalog')(information_schema, schemas)) }}
 {%- endmacro %}
 
 {% macro default__get_catalog(information_schema, schemas) -%}
@@ -81,7 +81,7 @@
 
 
 {% macro get_columns_in_relation(relation) -%}
-  {{ return(adapter_macro('get_columns_in_relation', relation)) }}
+  {{ return(adapter.dispatch('get_columns_in_relation')(relation)) }}
 {% endmacro %}
 
 {% macro sql_convert_columns_in_relation(table) -%}
@@ -98,13 +98,13 @@
 {% endmacro %}
 
 {% macro alter_column_type(relation, column_name, new_column_type) -%}
-  {{ return(adapter_macro('alter_column_type', relation, column_name, new_column_type)) }}
+  {{ return(adapter.dispatch('alter_column_type')(relation, column_name, new_column_type)) }}
 {% endmacro %}
 
 
 
 {% macro alter_column_comment(relation, column_dict) -%}
-  {{ return(adapter_macro('alter_column_comment', relation, column_dict)) }}
+  {{ return(adapter.dispatch('alter_column_comment')(relation, column_dict)) }}
 {% endmacro %}
 
 {% macro default__alter_column_comment(relation, column_dict) -%}
@@ -113,7 +113,7 @@
 {% endmacro %}
 
 {% macro alter_relation_comment(relation, relation_comment) -%}
-  {{ return(adapter_macro('alter_relation_comment', relation, relation_comment)) }}
+  {{ return(adapter.dispatch('alter_relation_comment')(relation, relation_comment)) }}
 {% endmacro %}
 
 {% macro default__alter_relation_comment(relation, relation_comment) -%}
@@ -122,7 +122,7 @@
 {% endmacro %}
 
 {% macro persist_docs(relation, model, for_relation=true, for_columns=true) -%}
-  {{ return(adapter_macro('persist_docs', relation, model, for_relation, for_columns)) }}
+  {{ return(adapter.dispatch('persist_docs')(relation, model, for_relation, for_columns)) }}
 {% endmacro %}
 
 {% macro default__persist_docs(relation, model, for_relation, for_columns) -%}
@@ -157,7 +157,7 @@
 
 
 {% macro drop_relation(relation) -%}
-  {{ return(adapter_macro('drop_relation', relation)) }}
+  {{ return(adapter.dispatch('drop_relation')(relation)) }}
 {% endmacro %}
 
 
@@ -168,7 +168,7 @@
 {% endmacro %}
 
 {% macro truncate_relation(relation) -%}
-  {{ return(adapter_macro('truncate_relation', relation)) }}
+  {{ return(adapter.dispatch('truncate_relation')(relation)) }}
 {% endmacro %}
 
 
@@ -179,7 +179,7 @@
 {% endmacro %}
 
 {% macro rename_relation(from_relation, to_relation) -%}
-  {{ return(adapter_macro('rename_relation', from_relation, to_relation)) }}
+  {{ return(adapter.dispatch('rename_relation')(from_relation, to_relation)) }}
 {% endmacro %}
 
 {% macro default__rename_relation(from_relation, to_relation) -%}
@@ -191,7 +191,7 @@
 
 
 {% macro information_schema_name(database) %}
-  {{ return(adapter_macro('information_schema_name', database)) }}
+  {{ return(adapter.dispatch('information_schema_name')(database)) }}
 {% endmacro %}
 
 {% macro default__information_schema_name(database) -%}
@@ -204,7 +204,7 @@
 
 
 {% macro list_schemas(database) -%}
-  {{ return(adapter_macro('list_schemas', database)) }}
+  {{ return(adapter.dispatch('list_schemas')(database)) }}
 {% endmacro %}
 
 {% macro default__list_schemas(database) -%}
@@ -218,7 +218,7 @@
 
 
 {% macro check_schema_exists(information_schema, schema) -%}
-  {{ return(adapter_macro('check_schema_exists', information_schema, schema)) }}
+  {{ return(adapter.dispatch('check_schema_exists')(information_schema, schema)) }}
 {% endmacro %}
 
 {% macro default__check_schema_exists(information_schema, schema) -%}
@@ -233,7 +233,7 @@
 
 
 {% macro list_relations_without_caching(schema_relation) %}
-  {{ return(adapter_macro('list_relations_without_caching', schema_relation)) }}
+  {{ return(adapter.dispatch('list_relations_without_caching')(schema_relation)) }}
 {% endmacro %}
 
 
@@ -244,7 +244,7 @@
 
 
 {% macro current_timestamp() -%}
-  {{ adapter_macro('current_timestamp') }}
+  {{ adapter.dispatch('current_timestamp')() }}
 {%- endmacro %}
 
 
@@ -255,7 +255,7 @@
 
 
 {% macro collect_freshness(source, loaded_at_field, filter) %}
-  {{ return(adapter_macro('collect_freshness', source, loaded_at_field, filter))}}
+  {{ return(adapter.dispatch('collect_freshness')(source, loaded_at_field, filter))}}
 {% endmacro %}
 
 
@@ -273,7 +273,7 @@
 {% endmacro %}
 
 {% macro make_temp_relation(base_relation, suffix='__dbt_tmp') %}
-  {{ return(adapter_macro('make_temp_relation', base_relation, suffix))}}
+  {{ return(adapter.dispatch('make_temp_relation')(base_relation, suffix))}}
 {% endmacro %}
 
 {% macro default__make_temp_relation(base_relation, suffix) %}

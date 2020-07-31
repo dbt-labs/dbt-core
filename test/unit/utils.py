@@ -121,6 +121,13 @@ def inject_adapter(value, plugin):
     FACTORY.adapters[key] = value
 
 
+def clear_plugin(plugin):
+    from dbt.adapters.factory import FACTORY
+    key = plugin.adapter.type()
+    FACTORY.plugins.pop(key, None)
+    FACTORY.adapters.pop(key, None)
+
+
 class ContractTestCase(TestCase):
     ContractType = None
 

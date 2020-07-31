@@ -1,14 +1,14 @@
 
 {% macro create_csv_table(model, agate_table) -%}
-  {{ adapter_macro('create_csv_table', model, agate_table) }}
+  {{ adapter.dispatch('create_csv_table')(model, agate_table) }}
 {%- endmacro %}
 
 {% macro reset_csv_table(model, full_refresh, old_relation, agate_table) -%}
-  {{ adapter_macro('reset_csv_table', model, full_refresh, old_relation, agate_table) }}
+  {{ adapter.dispatch('reset_csv_table')(model, full_refresh, old_relation, agate_table) }}
 {%- endmacro %}
 
 {% macro load_csv_rows(model, agate_table) -%}
-  {{ adapter_macro('load_csv_rows', model, agate_table) }}
+  {{ adapter.dispatch('load_csv_rows')(model, agate_table) }}
 {%- endmacro %}
 
 {% macro default__create_csv_table(model, agate_table) %}
