@@ -43,15 +43,6 @@ class MacroNamespace(Mapping):
             keys.update(search)
         return keys
 
-    def to_dict(self) -> FullNamespace:
-        root_namespace: FullNamespace = {}
-        root_namespace.update(self.global_project_namespace)
-        root_namespace[GLOBAL_PROJECT_NAME] = self.global_project_namespace
-        root_namespace.update(self.packages)
-        root_namespace.update(self.global_namespace)
-        root_namespace.update(self.local_namespace)
-        return root_namespace
-
     def __iter__(self) -> Iterator[str]:
         for key in self._keys():
             yield key

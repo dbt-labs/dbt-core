@@ -448,7 +448,6 @@ def test_macro_namespace(config, manifest_fx):
 
     namespace = mn.build_namespace(all_macros, {})
     dct = dict(namespace)
-    assert dct == namespace.to_dict()
     for result in [dct, namespace]:
         assert 'dbt' in result
         assert 'root' in result
