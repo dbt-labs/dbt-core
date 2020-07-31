@@ -1,3 +1,4 @@
+import itertools
 import unittest
 import os
 from typing import Set, Dict, Any
@@ -14,7 +15,7 @@ from dbt.contracts.graph.parsed import (
     ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
 )
 from dbt.config.project import V1VarProvider
-from dbt.context import base, target, configured, providers, docs
+from dbt.context import base, target, configured, providers, docs, manifest, macros
 from dbt.node_types import NodeType
 import dbt.exceptions
 from .utils import profile_from_dict, config_from_parts_or_dicts
@@ -215,6 +216,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     'post_hooks',
     'sql',
     'sql_now',
+    'adapter_macro',
 }
 REQUIRED_MODEL_KEYS = REQUIRED_MACRO_KEYS | {'this'}
 MAYBE_KEYS = frozenset({'debug'})
@@ -302,11 +304,11 @@ def mock_macro(name, package_name):
 
 
 def mock_manifest(config):
-    macros = {}
+    manifest_macros = {}
     for name in ['macro_a', 'macro_b']:
         macro = mock_macro(name, config.project_name)
-        macros[macro.unique_id] = macro
-    return mock.MagicMock(macros=macros)
+        manifest_macros[macro.unique_id] = macro
+    return mock.MagicMock(macros=manifest_macros)
 
 
 def mock_model():
@@ -363,53 +365,53 @@ def config():
 
 
 @pytest.fixture
-def manifest(config):
+def manifest_fx(config):
     return mock_manifest(config)
 
 
-def test_query_header_context(config, manifest):
-    ctx = configured.generate_query_header_context(
+def test_query_header_context(config, manifest_fx):
+    ctx = manifest.generate_query_header_context(
         config=config,
-        manifest=manifest,
+        manifest=manifest_fx,
     )
     assert_has_keys(REQUIRED_QUERY_HEADER_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_parse_context(config, manifest, get_adapter, get_include_paths):
+def test_macro_parse_context(config, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_parser_macro(
-        macro=manifest.macros['macro.root.macro_a'],
+        macro=manifest_fx.macros['macro.root.macro_a'],
         config=config,
-        manifest=manifest,
+        manifest=manifest_fx,
         package_name='root',
     )
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_runtime_context(config, manifest, get_adapter, get_include_paths):
+def test_macro_runtime_context(config, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_macro(
-        macro=manifest.macros['macro.root.macro_a'],
+        macro=manifest_fx.macros['macro.root.macro_a'],
         config=config,
-        manifest=manifest,
+        manifest=manifest_fx,
         package_name='root',
     )
     assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_parse_context(config, manifest, get_adapter, get_include_paths):
+def test_model_parse_context(config, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_parser_model(
         model=mock_model(),
         config=config,
-        manifest=manifest,
+        manifest=manifest_fx,
         context_config=mock.MagicMock(),
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_model_runtime_context(config, manifest, get_adapter, get_include_paths):
+def test_model_runtime_context(config, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_model(
         model=mock_model(),
         config=config,
-        manifest=manifest,
+        manifest=manifest_fx,
     )
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
@@ -419,21 +421,46 @@ def test_docs_runtime_context(config):
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_namespace(config, manifest):
-    mn = configured.MacroNamespace('root', 'search', MacroStack(), ['dbt_postgres', 'dbt'])
-    mn.add_macros(manifest.macros.values(), {})
+def test_macro_namespace_duplicates(config, manifest_fx):
+    mn = macros.MacroNamespaceBuilder(
+        'root', 'search', MacroStack(), ['dbt_postgres', 'dbt']
+    )
+    mn.add_macros(manifest_fx.macros.values(), {})
 
-    # same pkg, same name
+    # same pkg, same name: error
     with pytest.raises(dbt.exceptions.CompilationException):
-        mn.add_macros(manifest.macros.values(), {})
+        mn.add_macro(mock_macro('macro_a', 'root'), {})
 
-    mn.add_macro(mock_macro('some_macro', 'dbt'), {})
+    # different pkg, same name: no error
+    mn.add_macros(mock_macro('macro_a', 'dbt'), {})
 
+
+def test_macro_namespace(config, manifest_fx):
+    mn = macros.MacroNamespaceBuilder('root', 'search', MacroStack(), ['dbt_postgres', 'dbt'])
+
+    dbt_macro = mock_macro('some_macro', 'dbt')
     # same namespace, same name, different pkg!
     pg_macro = mock_macro('some_macro', 'dbt_postgres')
-    mn.add_macro(pg_macro, {})
+    # same name, different package
+    package_macro = mock_macro('some_macro', 'root')
 
-    results = mn.get_macro_dict()
-    assert len(results['dbt']) == 1
-    assert len(results['root']) == 2
-    assert results['dbt']['some_macro'].macro is pg_macro
+    all_macros = itertools.chain(manifest_fx.macros.values(), [dbt_macro, pg_macro, package_macro])
+
+    namespace = mn.build_namespace(all_macros, {})
+    dct = dict(namespace)
+    assert dct == namespace.to_dict()
+    for result in [dct, namespace]:
+        assert 'dbt' in result
+        assert 'root' in result
+        assert 'some_macro' in result
+        assert 'dbt_postgres' not in result
+        # tests __len__
+        assert len(result) == 5
+        # tests __iter__
+        assert set(result) == {'dbt', 'root', 'some_macro', 'macro_a', 'macro_b'}
+        assert len(result['dbt']) == 1
+        assert len(result['root']) == 3  # from the regular manifest + some_macro
+        assert result['dbt']['some_macro'].macro is pg_macro
+        assert result['root']['some_macro'].macro is package_macro
+        assert result['some_macro'].macro is package_macro
+
