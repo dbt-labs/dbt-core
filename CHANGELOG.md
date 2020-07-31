@@ -2,6 +2,9 @@
 
 ## dbt 0.18.0b2 (July 30, 2020)
 
+### Features
+- Added `--defer` and `--state` flags to `dbt run`, to defer to a previously generated manifest for unselected nodes in a run. ([#2527](https://github.com/fishtown-analytics/dbt/issues/2527), [#2656](https://github.com/fishtown-analytics/dbt/pull/2656))
+
 
 ### Breaking changes
 - Previously, dbt put macros from all installed plugins into the namespace. This version of dbt will not include adapter plugin macros unless they are from the currently-in-use adapter or one of its dependencies [#2590](https://github.com/fishtown-analytics/dbt/pull/2590)

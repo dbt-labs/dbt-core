@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+from pathlib import Path
 from typing import Optional
 # initially all flags are set to None, the on-load call of reset() will set
 # them for their first time.
@@ -22,9 +23,19 @@ def env_set_truthy(key: str) -> Optional[str]:
     return value
 
 
+def env_set_path(key: str) -> Optional[Path]:
+    value = os.getenv(key)
+    if value is None:
+        return value
+    else:
+        return Path(value)
+
+
 SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
 SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
 MACRO_DEBUGGING = env_set_truthy('DBT_MACRO_DEBUGGING')
+DEFER_MODE = env_set_truthy('DBT_DEFER_TO_STATE')
+ARTIFACT_STATE_PATH = env_set_path('DBT_ARTIFACT_STATE_PATH')
 
 
 def _get_context():

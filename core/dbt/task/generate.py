@@ -6,7 +6,6 @@ from typing import Dict, List, Any, Optional, Tuple, Set
 from hologram import ValidationError
 
 from .compile import CompileTask
-from .runnable import write_manifest
 
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.compiled import CompileResultNode
@@ -274,7 +273,7 @@ class GenerateTask(CompileTask):
         path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         results.write(path)
         if self.args.compile:
-            write_manifest(self.config, self.manifest)
+            self.write_manifest()
 
         if exceptions:
             logger.error(

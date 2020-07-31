@@ -29,15 +29,16 @@ class InjectedCTE(JsonSchemaMixin, Replaceable):
     id: str
     sql: str
 
-# for some frustrating reason, we can't subclass from ParsedNode directly,
-# or typing.Union will flatten CompiledNode+ParsedNode into just ParsedNode.
-# TODO: understand that issue and come up with some way for these two to share
-# logic
+
+@dataclass
+class CompiledNodeMixin(JsonSchemaMixin):
+    # this is a special mixin class to provide a required argument. If a node
+    # is missing a `compiled` flag entirely, it must not be a CompiledNode.
+    compiled: bool
 
 
 @dataclass
-class CompiledNode(ParsedNode):
-    compiled: bool = False
+class CompiledNode(ParsedNode, CompiledNodeMixin):
     compiled_sql: Optional[str] = None
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)

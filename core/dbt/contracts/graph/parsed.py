@@ -159,6 +159,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
+    deferred: bool = False
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if (os.path.basename(self.path) ==
