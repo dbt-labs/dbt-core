@@ -2,6 +2,9 @@
 
 ## dbt 0.18.0b2 (July 30, 2020)
 
+### Features
+- Added `--defer` and `--state` flags to `dbt run`, to defer to a previously generated manifest for unselected nodes in a run. ([#2527](https://github.com/fishtown-analytics/dbt/issues/2527), [#2656](https://github.com/fishtown-analytics/dbt/pull/2656))
+
 
 ### Breaking changes
 - Previously, dbt put macros from all installed plugins into the namespace. This version of dbt will not include adapter plugin macros unless they are from the currently-in-use adapter or one of its dependencies [#2590](https://github.com/fishtown-analytics/dbt/pull/2590)
@@ -16,7 +19,6 @@
 - Adapter plugins can once again override plugins defined in core ([#2548](https://github.com/fishtown-analytics/dbt/issues/2548), [#2590](https://github.com/fishtown-analytics/dbt/pull/2590))
 - Added `--selector` argument and support for `selectors.yml` file to define selection mechanisms. ([#2172](https://github.com/fishtown-analytics/dbt/issues/2172), [#2640](https://github.com/fishtown-analytics/dbt/pull/2640))
 - Compile assets as part of docs generate ([#2072](https://github.com/fishtown-analytics/dbt/issues/2072), [#2623](https://github.com/fishtown-analytics/dbt/pull/2623))
-- Added `--defer` and `--state` flags to `dbt run`, to defer to a previously generated manifest for unselected nodes in a run. ([#2527](https://github.com/fishtown-analytics/dbt/issues/2527), [#2656](https://github.com/fishtown-analytics/dbt/pull/2656))
 
 Contributors:
 - [@brunomurino](https://github.com/brunomurino) ([#2437](https://github.com/fishtown-analytics/dbt/pull/2581))
