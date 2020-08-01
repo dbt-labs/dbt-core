@@ -61,6 +61,14 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
                     'priority': 'batch',
                     'maximum_bytes_billed': 0,
                 },
+                'impersonate': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'impersonate_service_account': 'dummyaccount@dbt.iam.gserviceaccount.com'
+                },
             },
             'target': 'oauth',
         }
@@ -120,6 +128,23 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
     def test_acquire_connection_service_account_validations(self, mock_open_connection):
         adapter = self.get_adapter('service_account')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_impersonated_service_account_validations(self, mock_open_connection):
+        adapter = self.get_adapter('impersonate')
         try:
             connection = adapter.acquire_connection('dummy')
             self.assertEqual(connection.type, 'bigquery')
