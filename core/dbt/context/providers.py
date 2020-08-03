@@ -127,7 +127,7 @@ class BaseDatabaseWrapper:
     ) -> MacroGenerator:
         search_packages: List[Optional[str]]
 
-        if '.' in macro_name:
+        if "." in macro_name:
             suggest_macro_namespace, suggest_macro_name = macro_name.split(".", 1)
             msg = (
                 f'In adapter.dispatch, got a macro name of "{macro_name}", '
