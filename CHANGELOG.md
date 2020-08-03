@@ -1,5 +1,8 @@
 ## dbt 0.18.0 (Release TBD)
 
+### Breaking changes
+- `adapter_macro` is no longer a macro, instead it is a builtin context method. Any custom macros that intercepted it by going through `context['dbt']` will need to instead access it via `context['builtins']` ([#2302](https://github.com/fishtown-analytics/dbt/issues/2302), [#2673](https://github.com/fishtown-analytics/dbt/pull/2673))
+
 ## dbt 0.18.0b2 (July 30, 2020)
 
 ### Features

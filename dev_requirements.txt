@@ -9,7 +9,7 @@ six>=1.14.0
 ipdb
 pytest-xdist>=1.28.0,<2
 flaky>=3.5.3,<4
-mypy==0.761
+mypy==0.782
 wheel
 twine
 pytest-logbook>=1.2.0,<1.3

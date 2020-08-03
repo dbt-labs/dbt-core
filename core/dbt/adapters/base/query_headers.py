@@ -3,7 +3,7 @@ from typing import Optional, Callable, Dict, Any
 
 from dbt.clients.jinja import QueryStringGenerator
 
-from dbt.context.configured import generate_query_header_context
+from dbt.context.manifest import generate_query_header_context
 from dbt.contracts.connection import AdapterRequiredConfig, QueryComment
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest

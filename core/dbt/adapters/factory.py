@@ -1,7 +1,7 @@
 import threading
 from pathlib import Path
 from importlib import import_module
-from typing import Type, Dict, Any, List, Optional
+from typing import Type, Dict, Any, List, Optional, Set
 
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.include.global_project import (
@@ -124,15 +124,15 @@ class AdapterContainer:
             for adapter in self.adapters.values():
                 adapter.cleanup_connections()
 
-    def get_adapter_package_names(self, name: Optional[str]) -> List[str]:
+    def get_adapter_plugins(self, name: Optional[str]) -> List[AdapterPlugin]:
+        """Iterate over the known adapter plugins. If a name is provided,
+        iterate in dependency order over the named plugin and its dependencies.
+        """
         if name is None:
-            # the important thing is that the global project is last.
-            return sorted(
-                self.packages,
-                key=lambda k: k == GLOBAL_PROJECT_NAME
-            )
-        package_names: List[str] = []
-        # slice into a list instead of using a set + pop(), to preserve order
+            return list(self.plugins.values())
+
+        plugins: List[AdapterPlugin] = []
+        seen: Set[str] = set()
         plugin_names: List[str] = [name]
         while plugin_names:
             plugin_name = plugin_names[0]
@@ -143,12 +143,19 @@ class AdapterContainer:
                 raise InternalException(
                     f'No plugin found for {plugin_name}'
                 ) from None
-            package_names.append(plugin.project_name)
+            plugins.append(plugin)
+            seen.add(plugin_name)
             if plugin.dependencies is None:
                 continue
             for dep in plugin.dependencies:
-                if dep not in package_names:
+                if dep not in seen:
                     plugin_names.append(dep)
+        return plugins
+
+    def get_adapter_package_names(self, name: Optional[str]) -> List[str]:
+        package_names: List[str] = [
+            p.project_name for p in self.get_adapter_plugins(name)
+        ]
         package_names.append(GLOBAL_PROJECT_NAME)
         return package_names
 
@@ -163,6 +170,9 @@ class AdapterContainer:
                 )
             paths.append(path)
         return paths
+
+    def get_adapter_type_names(self, name: Optional[str]) -> List[str]:
+        return [p.adapter.type() for p in self.get_adapter_plugins(name)]
 
 
 FACTORY: AdapterContainer = AdapterContainer()
@@ -211,3 +221,7 @@ def get_include_paths(name: Optional[str]) -> List[Path]:
 
 def get_adapter_package_names(name: Optional[str]) -> List[str]:
     return FACTORY.get_adapter_package_names(name)
+
+
+def get_adapter_type_names(name: Optional[str]) -> List[str]:
+    return FACTORY.get_adapter_type_names(name)
