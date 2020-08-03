@@ -10,4 +10,3 @@ group by {{ column_name }}
 having count(*) > 1
 
 {% endmacro %}
-
