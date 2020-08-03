@@ -177,10 +177,7 @@ class BaseDatabaseWrapper:
                     return macro
 
         searched = ", ".join(repr(a) for a in attempts)
-        msg = (
-            f"In dispatch: No macro named '{macro_name}' found\n"
-            f"    Searched for: {searched}"
-        )
+        msg = f"In dispatch: No macro named '{macro_name}' found\n" f"    Searched for: {searched}"
         raise CompilationException(msg)
 
 
