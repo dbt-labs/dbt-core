@@ -1,10 +1,13 @@
 ## dbt 0.18.0 (Release TBD)
 
+
+### Features
+- Add support for impersonating a service account using `impersonate_service_account` in the BigQuery profile configuration ([#2677](https://github.com/fishtown-analytics/dbt/issues/2677)) ([docs](https://docs.getdbt.com/reference/warehouse-profiles/bigquery-profile#service-account-impersonation))
+
 ## dbt 0.18.0b2 (July 30, 2020)
 
 ### Features
 - Added `--defer` and `--state` flags to `dbt run`, to defer to a previously generated manifest for unselected nodes in a run. ([#2527](https://github.com/fishtown-analytics/dbt/issues/2527), [#2656](https://github.com/fishtown-analytics/dbt/pull/2656))
-- Add support for impersonating a service account using `impersonate_service_account` in the BigQuery profile configuration ([#2677](https://github.com/fishtown-analytics/dbt/issues/2677)) ([docs](https://docs.getdbt.com/reference/warehouse-profiles/bigquery-profile#service-account-impersonation))
 
 
 ### Breaking changes
