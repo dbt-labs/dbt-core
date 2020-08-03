@@ -12,17 +12,21 @@ from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.clients import agate_helper
 from dbt.clients.jinja import get_rendered
 from dbt.config import RuntimeConfig, Project
-from dbt.context.base import (
-    contextmember, contextproperty, Var
-)
-from dbt.context.configured import ManifestContext, MacroNamespace, FQNLookup
-from dbt.context.context_config import ContextConfigType
+from .base import contextmember, contextproperty, Var
+from .configured import FQNLookup
+from .context_config import ContextConfigType
+from .macros import MacroNamespaceBuilder
+from .manifest import ManifestContext
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
-    NonSourceNode, CompiledSeedNode, CompiledResource
+    CompiledResource,
+    CompiledSeedNode,
+    NonSourceNode,
 )
 from dbt.contracts.graph.parsed import (
-    ParsedMacro, ParsedSourceDefinition, ParsedSeedNode
+    ParsedMacro,
+    ParsedSeedNode,
+    ParsedSourceDefinition,
 )
 from dbt.exceptions import (
     CompilationException,
@@ -564,19 +568,19 @@ class ProviderContext(ManifestContext):
             )
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
+        self.model: Union[ParsedMacro, NonSourceNode] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
-        self.model: Union[ParsedMacro, NonSourceNode] = model
         self.context_config: Optional[ContextConfigType] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
 
-    def _get_namespace(self):
+    def _get_namespace_builder(self):
         internal_packages = get_adapter_package_names(
             self.config.credentials.type
         )
-        return MacroNamespace(
+        return MacroNamespaceBuilder(
             self.config.project_name,
             self.search_package,
             self.macro_stack,
@@ -1040,6 +1044,90 @@ class ProviderContext(ManifestContext):
     @contextproperty
     def sql_now(self) -> str:
         return self.adapter.date_function()
+
+    def _get_adapter_macro_prefixes(self) -> List[str]:
+        # a future version of this could have plugins automatically call fall
+        # back to their dependencies' dependencies by using
+        # `get_adapter_type_names` instead of `[self.config.credentials.type]`
+        search_prefixes = [self.config.credentials.type, 'default']
+        return search_prefixes
+
+    @contextmember
+    def adapter_macro(self, name: str, *args, **kwargs):
+        """Find the most appropriate macro for the name, considering the
+        adapter type currently in use, and call that with the given arguments.
+
+        If the name has a `.` in it, the first section before the `.` is
+        interpreted as a package name, and the remainder as a macro name.
+
+        If no adapter is found, raise a compiler exception. If an invalid
+        package name is specified, raise a compiler exception.
+
+
+        Some examples:
+
+            {# dbt will call this macro by name, providing any arguments #}
+            {% macro create_table_as(temporary, relation, sql) -%}
+
+              {# dbt will dispatch the macro call to the relevant macro #}
+              {{ adapter_macro('create_table_as', temporary, relation, sql) }}
+            {%- endmacro %}
+
+
+            {#
+                If no macro matches the specified adapter, "default" will be
+                used
+            #}
+            {% macro default__create_table_as(temporary, relation, sql) -%}
+               ...
+            {%- endmacro %}
+
+
+
+            {# Example which defines special logic for Redshift #}
+            {% macro redshift__create_table_as(temporary, relation, sql) -%}
+               ...
+            {%- endmacro %}
+
+
+
+            {# Example which defines special logic for BigQuery #}
+            {% macro bigquery__create_table_as(temporary, relation, sql) -%}
+               ...
+            {%- endmacro %}
+        """
+        original_name: str = name
+        package_name: Optional[str] = None
+        if '.' in name:
+            package_name, name = name.split('.', 1)
+
+        attempts = []
+
+        for prefix in self._get_adapter_macro_prefixes():
+            search_name = f'{prefix}__{name}'
+            try:
+                macro = self.namespace.get_from_package(
+                    package_name, search_name
+                )
+            except CompilationException as exc:
+                raise CompilationException(
+                    f'In adapter_macro: {exc.msg}, original name '
+                    f"'{original_name}'",
+                    node=self.model,
+                ) from exc
+            if package_name is None:
+                attempts.append(search_name)
+            else:
+                attempts.append(f'{package_name}.{search_name}')
+            if macro is not None:
+                return macro(*args, **kwargs)
+
+        searched = ', '.join(repr(a) for a in attempts)
+        raise_compiler_error(
+            f"In adapter_macro: No macro named '{name}' found\n"
+            f"    Original name: '{original_name}'\n"
+            f"    Searched for: {searched}"
+        )
 
 
 class MacroContext(ProviderContext):
