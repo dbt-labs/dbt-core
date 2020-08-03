@@ -1149,6 +1149,7 @@ class ProviderContext(ManifestContext):
             {%- endmacro %}
         """
         deprecations.warn('adapter-macro', macro_name=name)
+        original_name = name
         package_names: Optional[List[str]] = None
         if '.' in name:
             package_name, name = name.split('.', 1)
@@ -1161,7 +1162,7 @@ class ProviderContext(ManifestContext):
         except CompilationException as exc:
             raise CompilationException(
                 f'In adapter_macro: {exc.msg}\n'
-                f"    Original name: '{name}'",
+                f"    Original name: '{original_name}'",
                 node=self.model
             ) from exc
         return macro(*args, **kwargs)
