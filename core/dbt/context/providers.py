@@ -1060,7 +1060,7 @@ class ProviderContext(ManifestContext):
         If the name has a `.` in it, the first section before the `.` is
         interpreted as a package name, and the remainder as a macro name.
 
-        If no adapter is faund, raise a compiler exception. If an invalid
+        If no adapter is found, raise a compiler exception. If an invalid
         package name is specified, raise a compiler exception.
 
 
@@ -1101,6 +1101,8 @@ class ProviderContext(ManifestContext):
         if '.' in name:
             package_name, name = name.split('.', 1)
 
+        attempts = []
+
         for prefix in self._get_adapter_macro_prefixes():
             search_name = f'{prefix}__{name}'
             try:
@@ -1110,14 +1112,21 @@ class ProviderContext(ManifestContext):
             except CompilationException as exc:
                 raise CompilationException(
                     f'In adapter_macro: {exc.msg}, original name '
-                    f"'{original_name}'"
+                    f"'{original_name}'",
+                    node=self.model,
                 ) from exc
+            if package_name is None:
+                attempts.append(search_name)
+            else:
+                attempts.append(f'{package_name}.{search_name}')
             if macro is not None:
                 return macro(*args, **kwargs)
 
+        searched = ', '.join(repr(a) for a in attempts)
         raise_compiler_error(
-            f"In adapter_macro: No macro named '{name}' found "
-            f"(original name: '{original_name}')"
+            f"In adapter_macro: No macro named '{name}' found\n"
+            f"    Original name: '{original_name}'\n"
+            f"    Searched for: {searched}"
         )
 
 
