@@ -1,5 +1,5 @@
 
-{% macro test_relationships(model, to, field) %}
+{% macro default__test_relationships(model, to, field) %}
 
 {% set column_name = kwargs.get('column_name', kwargs.get('from')) %}
 
@@ -16,3 +16,9 @@ where child.id is not null
 
 {% endmacro %}
 
+
+
+{% macro test_relationships(model, to, field) %}
+    {% set macro = adapter.dispatch('test_relationships') %}
+    {{ macro(model, to, field, **kwargs) }}
+{% endmacro %}

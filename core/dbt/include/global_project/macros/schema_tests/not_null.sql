@@ -1,5 +1,5 @@
 
-{% macro test_not_null(model) %}
+{% macro default__test_not_null(model) %}
 
 {% set column_name = kwargs.get('column_name', kwargs.get('arg')) %}
 
@@ -9,3 +9,9 @@ where {{ column_name }} is null
 
 {% endmacro %}
 
+
+
+{% macro test_not_null(model) %}
+    {% set macro = adapter.dispatch('test_not_null') %}
+    {{ macro(model, **kwargs) }}
+{% endmacro %}
