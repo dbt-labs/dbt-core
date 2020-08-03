@@ -13,3 +13,10 @@
     {{ ref('table_model') }}
 
 {% endmacro %}
+
+
+{# there is no no default__dispatch_to_nowhere! #}
+{% macro dispatch_to_nowhere() %}
+	{% set macro = adapter.dispatch('dispatch_to_nowhere') %}
+	{{ macro() }}
+{% endmacro %}

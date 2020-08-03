@@ -1,5 +1,8 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 
+import dbt.exceptions
+import pytest
+
 
 class TestMacros(DBTIntegrationTest):
 
@@ -70,20 +73,11 @@ class TestInvalidMacros(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_invalid_macro(self):
-
-        try:
-            self.run_dbt(["run"], expect_pass=False)
-            self.assertTrue(False,
-                            'compiling bad macro should raise a runtime error')
-
-        except RuntimeError:
-            pass
+        with pytest.raises(RuntimeError):
+            self.run_dbt(["run"])
 
 
-class TestMisusedMacros(DBTIntegrationTest):
-
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
+class TestAdapterMacroNoDestination(DBTIntegrationTest):
 
     @property
     def schema(self):
@@ -91,36 +85,11 @@ class TestMisusedMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "bad-models"
+        return "fail-missing-macro-models"
 
-    @property
-    def packages_config(self):
-        return {
-            'packages': [
-                {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
-                }
-            ]
-        }
+    @use_profile('postgres')
+    def test_postgres_invalid_macro(self):
+        with pytest.raises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['run'])
 
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            "macro-paths": ["macros"],
-        }
-
-    # TODO: compilation no longer exists, so while the model calling this macro
-    # fails, it does not raise a runtime exception. change this test to verify
-    # that the model finished with ERROR state.
-    #
-    # @use_profile('postgres')
-    # def test_working_macros(self):
-    #     self.run_dbt(["deps"])
-
-    #     try:
-    #         self.run_dbt(["run"])
-    #         self.assertTrue(False, 'invoked a package macro from global scope')
-    #     except RuntimeError:
-    #         pass
+        assert "In dispatch: No macro named 'dispatch_to_nowhere' found" in str(exc.value)

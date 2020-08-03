@@ -111,6 +111,17 @@ class BaseDatabaseWrapper:
         self, macro_name: str, packages: Optional[List[str]] = None
     ) -> MacroGenerator:
         search_packages: List[Optional[str]]
+
+        if '.' in macro_name:
+            suggest_package, suggest_macro_name = macro_name.split('.', 1)
+            msg = (
+                f'In adapter.dispatch, got a macro name of "{macro_name}", '
+                f'but "." is not a valid macro name component. Did you mean '
+                f'`adapter.dispatch("{suggest_macro_name}", '
+                f'packages=["{suggest_package}"])`?'
+            )
+            raise CompilationException(msg)
+
         if packages is None:
             search_packages = [None]
         else:
@@ -139,10 +150,11 @@ class BaseDatabaseWrapper:
                     return macro
 
         searched = ', '.join(repr(a) for a in attempts)
-        raise CompilationException(
-            f"In dispatch: No macro named '{macro_name}' found\n",
+        msg = (
+            f"In dispatch: No macro named '{macro_name}' found\n"
             f"    Searched for: {searched}"
         )
+        raise CompilationException(msg)
 
 
 class BaseResolver(metaclass=abc.ABCMeta):

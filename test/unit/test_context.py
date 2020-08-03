@@ -539,3 +539,21 @@ def test_resolve_default(config, manifest_extended, postgres_adapter, get_includ
     assert ctx['adapter'].dispatch('some_macro', packages=['root']).macro is package_macro
     assert ctx['adapter'].dispatch('some_macro', packages=['root', 'dbt']).macro is package_macro
     assert ctx['adapter'].dispatch('some_macro', packages=['dbt', 'root']).macro is dbt_macro
+
+
+def test_resolve_errors(config, manifest_extended, redshift_adapter, get_include_paths):
+    ctx = providers.generate_runtime_model(
+        model=mock_model(),
+        config=config,
+        manifest=manifest_extended,
+    )
+    with pytest.raises(dbt.exceptions.CompilationException) as exc:
+        ctx['adapter'].dispatch('no_default_exists')
+    assert 'default__no_default_exists' in str(exc.value)
+    assert 'redshift__no_default_exists' in str(exc.value)
+
+    with pytest.raises(dbt.exceptions.CompilationException) as exc:
+        ctx['adapter'].dispatch('namespace.no_default_exists')
+    assert '"." is not a valid macro name component' in str(exc.value)
+    assert 'adapter.dispatch' in str(exc.value)
+    assert 'packages=["namespace"]' in str(exc.value)
