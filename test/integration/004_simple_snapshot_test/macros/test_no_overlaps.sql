@@ -1,5 +1,5 @@
 {% macro get_snapshot_unique_id() -%}
-    {{ return(adapter_macro('get_snapshot_unique_id', )) }}
+    {{ return(adapter.dispatch('get_snapshot_unique_id')()) }}
 {%- endmacro %}
 
 {% macro default__get_snapshot_unique_id() -%}

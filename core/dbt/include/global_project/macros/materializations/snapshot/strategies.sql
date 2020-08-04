@@ -36,7 +36,7 @@
     Create SCD Hash SQL fields cross-db
 #}
 {% macro snapshot_hash_arguments(args) -%}
-  {{ adapter_macro('snapshot_hash_arguments', args) }}
+  {{ adapter.dispatch('snapshot_hash_arguments')(args) }}
 {%- endmacro %}
 
 
@@ -52,7 +52,7 @@
     Get the current time cross-db
 #}
 {% macro snapshot_get_time() -%}
-  {{ adapter_macro('snapshot_get_time') }}
+  {{ adapter.dispatch('snapshot_get_time')() }}
 {%- endmacro %}
 
 {% macro default__snapshot_get_time() -%}
@@ -92,7 +92,7 @@
 
 
 {% macro snapshot_string_as_time(timestamp) -%}
-    {{ adapter_macro('snapshot_string_as_time', timestamp) }}
+    {{ adapter.dispatch('snapshot_string_as_time')(timestamp) }}
 {%- endmacro %}
 
 

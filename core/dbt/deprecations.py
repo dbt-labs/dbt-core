@@ -116,6 +116,15 @@ class ExecuteMacrosReleaseDeprecation(DBTDeprecation):
     '''
 
 
+class AdapterMacroDeprecation(DBTDeprecation):
+    _name = 'adapter-macro'
+    _description = '''\
+    The "adapter_macro" macro has been deprecated. Instead, use the
+    `adapter.dispatch` method to find a macro and call the result.
+    adapter_macro was called for: {macro_name}
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
 a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -160,6 +169,7 @@ deprecations_list: List[DBTDeprecation] = [
     ModelsKeyNonModelDeprecation(),
     DbtProjectYamlDeprecation(),
     ExecuteMacrosReleaseDeprecation(),
+    AdapterMacroDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

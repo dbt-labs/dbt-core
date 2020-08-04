@@ -1,17 +1,17 @@
 
 
 {% macro get_merge_sql(target, source, unique_key, dest_columns, predicates=none) -%}
-  {{ adapter_macro('get_merge_sql', target, source, unique_key, dest_columns, predicates) }}
+  {{ adapter.dispatch('get_merge_sql')(target, source, unique_key, dest_columns, predicates) }}
 {%- endmacro %}
 
 
 {% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-  {{ adapter_macro('get_delete_insert_merge_sql', target, source, unique_key, dest_columns) }}
+  {{ adapter.dispatch('get_delete_insert_merge_sql')(target, source, unique_key, dest_columns) }}
 {%- endmacro %}
 
 
 {% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
-  {{ adapter_macro('get_insert_overwrite_merge_sql', target, source, dest_columns, predicates, include_sql_header) }}
+  {{ adapter.dispatch('get_insert_overwrite_merge_sql')(target, source, dest_columns, predicates, include_sql_header) }}
 {%- endmacro %}
 
 
@@ -97,7 +97,7 @@
     merge into {{ target }} as DBT_INTERNAL_DEST
         using {{ source }} as DBT_INTERNAL_SOURCE
         on FALSE
-    
+
     when not matched by source
         {% if predicates %} and {{ predicates | join(' and ') }} {% endif %}
         then delete
