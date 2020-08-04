@@ -35,6 +35,9 @@ setup(
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
     packages=[],
+    data_files=[
+        ('etc', ['etc/dbt.bash-completion.sh']),
+    ],
     install_requires=[
         'dbt-core=={}'.format(package_version),
         'dbt-postgres=={}'.format(package_version),
