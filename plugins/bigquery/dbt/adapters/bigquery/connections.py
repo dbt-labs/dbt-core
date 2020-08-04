@@ -3,9 +3,11 @@ from dataclasses import dataclass
 from typing import Optional, Any, Dict
 
 import google.auth
+import google.auth.exceptions
 import google.cloud.bigquery
 import google.cloud.exceptions
 from google.api_core import retry, client_info
+from google.auth import impersonated_credentials
 from google.oauth2 import service_account
 
 from dbt.utils import format_bytes, format_rows_number
@@ -45,6 +47,7 @@ class BigQueryCredentials(Credentials):
     priority: Optional[Priority] = None
     retries: Optional[int] = 1
     maximum_bytes_billed: Optional[int] = None
+    impersonate_service_account: Optional[str] = None
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
@@ -91,6 +94,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
         except google.cloud.exceptions.Forbidden as e:
             message = "Access denied while running query"
             self.handle_error(e, message)
+
+        except google.auth.exceptions.RefreshError:
+            message = "Unable to generate access token, if you're using " \
+                      "impersonate_service_account, make sure your " \
+                      'initial account has the "roles/' \
+                      'iam.serviceAccountTokenCreator" role on the ' \
+                      'account you are trying to impersonate.'
+            raise RuntimeException(message)
 
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
@@ -143,9 +154,23 @@ class BigQueryConnectionManager(BaseConnectionManager):
         raise FailedToConnectException(error)
 
     @classmethod
+    def get_impersonated_bigquery_credentials(cls, profile_credentials):
+        source_credentials = cls.get_bigquery_credentials(profile_credentials)
+        return impersonated_credentials.Credentials(
+            source_credentials=source_credentials,
+            target_principal=profile_credentials.impersonate_service_account,
+            target_scopes=list(cls.SCOPE),
+            lifetime=profile_credentials.timeout_seconds,
+        )
+
+    @classmethod
     def get_bigquery_client(cls, profile_credentials):
+        if profile_credentials.impersonate_service_account:
+            creds =\
+                cls.get_impersonated_bigquery_credentials(profile_credentials)
+        else:
+            creds = cls.get_bigquery_credentials(profile_credentials)
         database = profile_credentials.database
-        creds = cls.get_bigquery_credentials(profile_credentials)
         location = getattr(profile_credentials, 'location', None)
 
         info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
