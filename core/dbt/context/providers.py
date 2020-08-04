@@ -124,6 +124,11 @@ class BaseDatabaseWrapper:
 
         if packages is None:
             search_packages = [None]
+        elif isinstance(packages, str):
+            raise CompilationException(
+                f'In adapter.dispatch, got a string packages argument '
+                f'("{packages}"), but packages should be None or a list.'
+            )
         else:
             search_packages = packages
 
