@@ -3,7 +3,7 @@ default:
 
     dev: # User-Password config
       type: snowflake
-      account: [account id]
+      account: [account id + region (if applicable)]
       user: [username]
       password: [password]
       role: [user role]
@@ -15,7 +15,7 @@ default:
 
     prod: # Keypair config
       type: snowflake
-      account: [account id]
+      account: [account id + region (if applicable)]
       user: [username]
       role: [user role]
       private_key_path: [path/to/private.key]

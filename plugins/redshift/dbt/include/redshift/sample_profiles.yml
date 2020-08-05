@@ -4,11 +4,11 @@ default:
     dev:
       type: redshift
       threads: 1
-      host: 127.0.0.1
+      host: [host]
       port: 5439
       user: [dev_username]
       pass: [dev_password]
-      dbname: warehouse
+      dbname: [dbname]
       schema: [dev_schema]
 
     prod:
@@ -16,10 +16,10 @@ default:
       method: iam
       cluster_id: [cluster_id]
       threads: 1
-      host: 127.0.0.1
+      host: [host]
       port: 5439
       user: [prod_user]
-      dbname: warehouse
+      dbname: [dbname]
       schema: [prod_schema]
 
   target: dev
