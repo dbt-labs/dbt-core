@@ -1,5 +1,5 @@
 
-{% macro test_unique(model) %}
+{% macro default__test_unique(model) %}
 
 {% set column_name = kwargs.get('column_name', kwargs.get('arg')) %}
 
@@ -16,4 +16,10 @@ from (
 
 ) validation_errors
 
+{% endmacro %}
+
+
+{% macro test_unique(model) %}
+    {% set macro = adapter.dispatch('test_unique') %}
+    {{ macro(model, **kwargs) }}
 {% endmacro %}
