@@ -7,7 +7,11 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.config import RuntimeConfig
 
 
-def get_full_manifest(config: RuntimeConfig) -> Manifest:
+def get_full_manifest(
+    config: RuntimeConfig,
+    *,
+    reset: bool = False,
+) -> Manifest:
     """Load the full manifest, using the adapter's internal manifest if it
     exists to skip parsing internal (dbt + plugins) macros a second time.
 
@@ -15,6 +19,10 @@ def get_full_manifest(config: RuntimeConfig) -> Manifest:
     attached to the adapter for any methods that need it.
     """
     adapter = get_adapter(config)  # type: ignore
+    if reset:
+        config.clear_dependencies()
+        adapter.clear_macro_manifest()
+
     internal: Manifest = adapter.load_macro_manifest()
 
     return load_manifest(

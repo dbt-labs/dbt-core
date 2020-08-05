@@ -260,6 +260,10 @@ class BaseAdapter(metaclass=AdapterMeta):
             self._macro_manifest_lazy = manifest
         return self._macro_manifest_lazy
 
+    def clear_macro_manifest(self):
+        if self._macro_manifest_lazy is not None:
+            self._macro_manifest_lazy = None
+
     ###
     # Caching methods
     ###
