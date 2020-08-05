@@ -93,3 +93,27 @@ class TestAdapterMacroNoDestination(DBTIntegrationTest):
             self.run_dbt(['run'])
 
         assert "In dispatch: No macro named 'dispatch_to_nowhere' found" in str(exc.value)
+
+
+class TestMacroOverrideBuiltin(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "test_macros_016"
+
+    @property
+    def models(self):
+        return 'override-get-columns-models'
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'macro-paths': ['override-get-columns-macros'],
+        }
+
+
+    @use_profile('postgres')
+    def test_postgres_overrides(self):
+        # the first time, the model doesn't exist
+        self.run_dbt()
+        self.run_dbt()

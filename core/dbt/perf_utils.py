@@ -15,9 +15,10 @@ def get_full_manifest(config: RuntimeConfig) -> Manifest:
     attached to the adapter for any methods that need it.
     """
     adapter = get_adapter(config)  # type: ignore
-    internal: Manifest = adapter.load_internal_manifest()
+    internal: Manifest = adapter.load_macro_manifest()
 
-    def set_header(manifest: Manifest) -> None:
-        adapter.connections.set_query_header(manifest)
-
-    return load_manifest(config, internal, set_header)
+    return load_manifest(
+        config,
+        internal,
+        adapter.connections.set_query_header,
+    )
