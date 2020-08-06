@@ -355,6 +355,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             self.dependencies = all_projects
         return self.dependencies
 
+    def clear_dependencies(self):
+        self.dependencies = None
+
     def load_projects(
         self, paths: Iterable[Path]
     ) -> Iterator[Tuple[str, 'RuntimeConfig']]:

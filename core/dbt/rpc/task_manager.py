@@ -8,6 +8,7 @@ from typing import (
 
 import dbt.exceptions
 import dbt.flags as flags
+from dbt.adapters.factory import reset_adapters, register_adapter
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.rpc import (
     LastParse,
@@ -126,6 +127,8 @@ class TaskManager:
     def reload_config(self):
         config = self.config.from_args(self.args)
         self.config = config
+        reset_adapters()
+        register_adapter(config)
         return config
 
     def add_request(self, request_handler: TaskHandlerProtocol):
@@ -184,7 +187,7 @@ class TaskManager:
         return True
 
     def parse_manifest(self) -> None:
-        self.manifest = get_full_manifest(self.config)
+        self.manifest = get_full_manifest(self.config, reset=True)
 
     def set_compile_exception(self, exc, logs=List[LogMessage]) -> None:
         assert self.last_parse.state == ManifestStatus.Compiling, \
@@ -227,6 +230,7 @@ class TaskManager:
             return None
 
         task = self.rpc_task(method)
+
         return task
 
     def task_table(self) -> List[TaskRow]:

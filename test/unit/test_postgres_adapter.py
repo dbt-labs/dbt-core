@@ -16,7 +16,7 @@ from dbt.parser.results import ParseResult
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError
 
-from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions
+from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions, load_internal_manifest_macros
 
 
 class TestPostgresAdapter(unittest.TestCase):
@@ -276,19 +276,20 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.patcher = mock.patch('dbt.adapters.postgres.connections.psycopg2')
         self.psycopg2 = self.patcher.start()
 
+        self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
+        self.mock_parse_result = self.load_patch.start()
+        self.mock_parse_result.return_value = ParseResult.rpc()
+
         self.psycopg2.connect.return_value = self.handle
         self.adapter = PostgresAdapter(self.config)
-        self.adapter.connections.query_header = MacroQueryStringSetter(self.config, mock.MagicMock(macros={}))
+        self.adapter._macro_manifest_lazy = load_internal_manifest_macros(self.config)
+        self.adapter.connections.query_header = MacroQueryStringSetter(self.config, self.adapter._macro_manifest_lazy)
 
         self.qh_patch = mock.patch.object(self.adapter.connections.query_header, 'add')
         self.mock_query_header_add = self.qh_patch.start()
         self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
         self.adapter.acquire_connection()
         inject_adapter(self.adapter, PostgresPlugin)
-
-        self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
-        self.mock_parse_result = self.load_patch.start()
-        self.mock_parse_result.return_value = ParseResult.rpc()
 
     def tearDown(self):
         # we want a unique self.handle every time.

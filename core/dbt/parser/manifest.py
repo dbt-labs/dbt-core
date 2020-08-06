@@ -11,8 +11,6 @@ import dbt.flags as flags
 from dbt import deprecations
 from dbt.adapters.factory import (
     get_relation_class_by_name,
-    get_adapter_package_names,
-    get_include_paths,
 )
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
@@ -123,28 +121,6 @@ class ManifestLoader:
         )
         self._loaded_file_cache: Dict[str, FileBlock] = {}
 
-    def _load_macros(
-        self,
-        old_results: Optional[ParseResult],
-        internal_manifest: Optional[Manifest] = None,
-    ) -> None:
-        projects = self.all_projects
-        if internal_manifest is not None:
-            # skip internal packages
-            packages = get_adapter_package_names(
-                self.root_project.credentials.type
-            )
-            projects = {
-                k: v for k, v in self.all_projects.items() if k not in packages
-            }
-            self.results.macros.update(internal_manifest.macros)
-            self.results.files.update(internal_manifest.files)
-
-        for project in projects.values():
-            parser = MacroParser(self.results, project)
-            for path in parser.search():
-                self.parse_with_cache(path, parser, old_results)
-
     def parse_with_cache(
         self,
         path: FilePath,
@@ -201,25 +177,26 @@ class ManifestLoader:
 
     def load_only_macros(self) -> Manifest:
         old_results = self.read_parse_results()
-        self._load_macros(old_results, internal_manifest=None)
-        # make a manifest with just the macros to get the context
-        macro_manifest = Manifest.from_macros(
-            macros=self.results.macros,
-            files=self.results.files
-        )
-        return macro_manifest
 
-    def load(self, internal_manifest: Optional[Manifest] = None):
-        old_results = self.read_parse_results()
-        if old_results is not None:
-            logger.debug('Got an acceptable cached parse result')
-        self._load_macros(old_results, internal_manifest=internal_manifest)
+        for project in self.all_projects.values():
+            parser = MacroParser(self.results, project)
+            for path in parser.search():
+                self.parse_with_cache(path, parser, old_results)
+
         # make a manifest with just the macros to get the context
         macro_manifest = Manifest.from_macros(
             macros=self.results.macros,
             files=self.results.files
         )
         self.macro_hook(macro_manifest)
+        return macro_manifest
+
+    def load(self, macro_manifest: Manifest):
+        old_results = self.read_parse_results()
+        if old_results is not None:
+            logger.debug('Got an acceptable cached parse result')
+        self.results.macros.update(macro_manifest.macros)
+        self.results.files.update(macro_manifest.files)
 
         for project in self.all_projects.values():
             # parse a single project
@@ -352,7 +329,7 @@ class ManifestLoader:
     def load_all(
         cls,
         root_config: RuntimeConfig,
-        internal_manifest: Optional[Manifest],
+        macro_manifest: Manifest,
         macro_hook: Callable[[Manifest], Any],
     ) -> Manifest:
         with PARSING_STATE:
@@ -367,7 +344,7 @@ class ManifestLoader:
                     project_names=''.join(v1_configs)
                 )
             loader = cls(root_config, projects, macro_hook)
-            loader.load(internal_manifest=internal_manifest)
+            loader.load(macro_manifest=macro_manifest)
             loader.write_parse_results()
             manifest = loader.create_manifest()
             _check_manifest(manifest, root_config)
@@ -375,10 +352,14 @@ class ManifestLoader:
             return manifest
 
     @classmethod
-    def load_internal(cls, root_config: RuntimeConfig) -> Manifest:
+    def load_macros(
+        cls,
+        root_config: RuntimeConfig,
+        macro_hook: Callable[[Manifest], Any],
+    ) -> Manifest:
         with PARSING_STATE:
-            projects = load_internal_projects(root_config)
-            loader = cls(root_config, projects)
+            projects = root_config.load_dependencies()
+            loader = cls(root_config, projects, macro_hook)
             return loader.load_only_macros()
 
 
@@ -681,18 +662,16 @@ def process_node(
     _process_docs_for_node(ctx, node)
 
 
-def load_internal_projects(config):
-    project_paths = get_include_paths(config.credentials.type)
-    return dict(_load_projects(config, project_paths))
-
-
-def load_internal_manifest(config: RuntimeConfig) -> Manifest:
-    return ManifestLoader.load_internal(config)
+def load_macro_manifest(
+    config: RuntimeConfig,
+    macro_hook: Callable[[Manifest], Any],
+) -> Manifest:
+    return ManifestLoader.load_macros(config, macro_hook)
 
 
 def load_manifest(
     config: RuntimeConfig,
-    internal_manifest: Optional[Manifest],
+    macro_manifest: Manifest,
     macro_hook: Callable[[Manifest], Any],
 ) -> Manifest:
-    return ManifestLoader.load_all(config, internal_manifest, macro_hook)
+    return ManifestLoader.load_all(config, macro_manifest, macro_hook)

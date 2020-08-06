@@ -320,7 +320,7 @@ class JSONEncoder(json.JSONEncoder):
         if hasattr(obj, 'to_dict'):
             # if we have a to_dict we should try to serialize the result of
             # that!
-            obj = obj.to_dict()
+            return obj.to_dict()
         return super().default(obj)
 
 

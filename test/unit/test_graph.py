@@ -104,7 +104,7 @@ class GraphTest(unittest.TestCase):
         self.mock_source_file = self.load_source_file_patcher.start()
         self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 
-        self.internal_manifest = Manifest.from_macros(macros={
+        self.macro_manifest = Manifest.from_macros(macros={
             n.unique_id: n for n in generate_name_macros('test_models_compile')
         })
 
@@ -161,7 +161,7 @@ class GraphTest(unittest.TestCase):
 
     def load_manifest(self, config):
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.load(internal_manifest=self.internal_manifest)
+        loader.load(macro_manifest=self.macro_manifest)
         return loader.create_manifest()
 
     def test__single_model(self):
@@ -319,7 +319,7 @@ class GraphTest(unittest.TestCase):
         config = self.get_config()
 
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.load(internal_manifest=self.internal_manifest)
+        loader.load(macro_manifest=self.macro_manifest)
         loader.create_manifest()
         results = loader.results
 

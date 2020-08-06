@@ -158,7 +158,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.config = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
-        self._internal_manifest_lazy: Optional[Manifest] = None
+        self._macro_manifest_lazy: Optional[Manifest] = None
 
     ###
     # Methods that pass through to the connection manager
@@ -239,24 +239,30 @@ class BaseAdapter(metaclass=AdapterMeta):
         return cls.ConnectionManager.TYPE
 
     @property
-    def _internal_manifest(self) -> Manifest:
-        if self._internal_manifest_lazy is None:
-            return self.load_internal_manifest()
-        return self._internal_manifest_lazy
+    def _macro_manifest(self) -> Manifest:
+        if self._macro_manifest_lazy is None:
+            return self.load_macro_manifest()
+        return self._macro_manifest_lazy
 
-    def check_internal_manifest(self) -> Optional[Manifest]:
+    def check_macro_manifest(self) -> Optional[Manifest]:
         """Return the internal manifest (used for executing macros) if it's
         been initialized, otherwise return None.
         """
-        return self._internal_manifest_lazy
+        return self._macro_manifest_lazy
 
-    def load_internal_manifest(self) -> Manifest:
-        if self._internal_manifest_lazy is None:
+    def load_macro_manifest(self) -> Manifest:
+        if self._macro_manifest_lazy is None:
             # avoid a circular import
-            from dbt.parser.manifest import load_internal_manifest
-            manifest = load_internal_manifest(self.config)
-            self._internal_manifest_lazy = manifest
-        return self._internal_manifest_lazy
+            from dbt.parser.manifest import load_macro_manifest
+            manifest = load_macro_manifest(
+                self.config, self.connections.set_query_header
+            )
+            self._macro_manifest_lazy = manifest
+        return self._macro_manifest_lazy
+
+    def clear_macro_manifest(self):
+        if self._macro_manifest_lazy is not None:
+            self._macro_manifest_lazy = None
 
     ###
     # Caching methods
@@ -941,7 +947,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             context_override = {}
 
         if manifest is None:
-            manifest = self._internal_manifest
+            manifest = self._macro_manifest
 
         macro = manifest.find_macro_by_name(
             macro_name, self.config.project_name, project

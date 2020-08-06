@@ -104,7 +104,9 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
         if dumped != self.args.vars:
             self.real_task.args.vars = dumped
             if isinstance(self.real_task, RemoteManifestMethod):
-                self.real_task.manifest = get_full_manifest(self.config)
+                self.real_task.manifest = get_full_manifest(
+                    self.config, reset=True
+                )
 
         # we parsed args from the cli, so we're set on that front
         return self.real_task.handle_request()

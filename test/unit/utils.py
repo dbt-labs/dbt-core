@@ -289,3 +289,12 @@ def MockDocumentation(package, name, **kwargs):
     )
     doc.name = name
     return doc
+
+
+def load_internal_manifest_macros(config, macro_hook = lambda m: None):
+    from dbt.adapters.factory import get_include_paths
+    from dbt.parser.manifest import ManifestLoader
+    paths = get_include_paths(config.credentials.type)
+    projects = {k: v for k, v in config.load_dependencies().items() if k.startswith('dbt')}
+    loader = ManifestLoader(config, projects, macro_hook)
+    return loader.load_only_macros()
