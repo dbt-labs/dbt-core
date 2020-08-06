@@ -3,7 +3,7 @@ default:
 
     dev:
       type: redshift
-      threads: 1
+      threads: [1 or more]
       host: [host]
       port: 5439
       user: [dev_username]
@@ -15,7 +15,7 @@ default:
       type: redshift
       method: iam
       cluster_id: [cluster_id]
-      threads: 1
+      threads: [1 or more]
       host: [host]
       port: 5439
       user: [prod_user]
