@@ -3,9 +3,7 @@ from typing import TypeVar, MutableMapping, Mapping, Union, List
 
 from hologram import JsonSchemaMixin
 
-from dbt.contracts.graph.manifest import (
-    SourceFile, RemoteFile, FileHash, MacroKey, SourceKey
-)
+from dbt.contracts.files import RemoteFile, FileHash, SourceFile
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.parsed import (
     HasUniqueID,
@@ -24,7 +22,7 @@ from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
-from dbt.contracts.util import Writable, Replaceable
+from dbt.contracts.util import Writable, Replaceable, MacroKey, SourceKey
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_duplicate_patch_name,
     raise_duplicate_macro_patch_name, CompilationException, InternalException,

@@ -16,6 +16,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.config.project import V1VarProvider
 from dbt.context import base, target, configured, providers, docs, manifest, macros
+from dbt.contracts.files import FileHash
 from dbt.node_types import NodeType
 import dbt.exceptions
 from .utils import profile_from_dict, config_from_parts_or_dicts, inject_adapter, clear_plugin
@@ -53,7 +54,8 @@ class TestVar(unittest.TestCase):
             path='model_one.sql',
             raw_sql='',
             description='',
-            columns={}
+            columns={},
+            checksum=FileHash.from_contents(''),
         )
         self.context = mock.MagicMock()
         self.provider = V1VarProvider({}, {}, {})

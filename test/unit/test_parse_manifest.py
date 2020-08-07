@@ -3,7 +3,7 @@ from unittest import mock
 
 from .utils import config_from_parts_or_dicts, normalize
 
-from dbt.contracts.graph.manifest import FileHash, FilePath, SourceFile
+from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.parser import ParseResult
 from dbt.parser.search import FileBlock
 from dbt.parser import manifest

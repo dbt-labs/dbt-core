@@ -1,7 +1,8 @@
 import os
 import unittest
 
-from dbt.contracts.graph.manifest import SourceFile, FileHash, FilePath, Manifest
+from dbt.contracts.files import SourceFile, FileHash, FilePath
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.node_types import NodeType
 from dbt.parser import docs

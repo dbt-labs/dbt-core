@@ -11,7 +11,8 @@ from dbt.contracts.graph.parsed import (
     ParsedSeedNode,
     ParsedSnapshotNode,
     ParsedSourceDefinition,
-    SeedConfig,
+    SchemaTestMixin,
+    SeedMixin,
     TestConfig,
 )
 from dbt.node_types import NodeType
@@ -93,14 +94,8 @@ class CompiledRPCNode(CompiledNode):
 
 
 @dataclass
-class CompiledSeedNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
-    config: SeedConfig = field(default_factory=SeedConfig)
-
-    @property
-    def empty(self):
-        """ Seeds are never empty"""
-        return False
+class CompiledSeedNode(SeedMixin, CompiledNode):
+    pass
 
 
 @dataclass
@@ -115,10 +110,8 @@ class CompiledDataTestNode(CompiledNode):
 
 
 @dataclass
-class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
-    column_name: Optional[str] = None
-    config: TestConfig = field(default_factory=TestConfig)
+class CompiledSchemaTestNode(SchemaTestMixin, CompiledNode, HasTestMetadata):
+    pass
 
 
 CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]

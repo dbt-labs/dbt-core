@@ -20,9 +20,10 @@ from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import (
     LegacyContextConfig, ContextConfig, ContextConfigType
 )
-from dbt.contracts.graph.manifest import (
-    Manifest, SourceFile, FilePath, FileHash
+from dbt.contracts.files import (
+    SourceFile, FilePath, FileHash
 )
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
@@ -76,11 +77,19 @@ class BaseParser(Generic[FinalValue]):
                                  self.project.project_name,
                                  resource_name)
 
-    def load_file(self, path: FilePath) -> SourceFile:
+    def load_file(
+        self,
+        path: FilePath,
+        *,
+        set_contents: bool = True,
+    ) -> SourceFile:
         file_contents = load_file_contents(path.absolute_path, strip=False)
         checksum = FileHash.from_contents(file_contents)
         source_file = SourceFile(path=path, checksum=checksum)
-        source_file.contents = file_contents.strip()
+        if set_contents:
+            source_file.contents = file_contents.strip()
+        else:
+            source_file.contents = ''
         return source_file
 
 
@@ -239,6 +248,7 @@ class ConfiguredParser(
             'raw_sql': block.contents,
             'unique_id': self.generate_unique_id(name),
             'config': self.config_dict(config),
+            'checksum': block.file.checksum.to_dict(),
         }
         dct.update(kwargs)
         try:

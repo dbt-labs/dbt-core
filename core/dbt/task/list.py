@@ -165,11 +165,13 @@ class ListTask(GraphRunnableTask):
             return TestSelector(
                 graph=self.graph,
                 manifest=self.manifest,
+                previous_state=self.previous_state,
             )
         else:
             return ResourceTypeSelector(
                 graph=self.graph,
                 manifest=self.manifest,
+                previous_state=self.previous_state,
                 resource_types=self.resource_types,
             )
 

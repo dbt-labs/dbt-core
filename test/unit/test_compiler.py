@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import dbt.flags
 import dbt.compilation
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import NodeConfig, DependsOn, ParsedModelNode
 from dbt.contracts.graph.compiled import CompiledModelNode, InjectedCTE
@@ -80,7 +81,8 @@ class CompilerTest(unittest.TestCase):
                     injected_sql='',
                     compiled_sql=(
                         'with cte as (select * from something_else) '
-                        'select * from __dbt__CTE__ephemeral')
+                        'select * from __dbt__CTE__ephemeral'),
+                    checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': CompiledModelNode(
                     name='ephemeral',
@@ -104,7 +106,8 @@ class CompilerTest(unittest.TestCase):
                     compiled_sql='select * from source_table',
                     extra_ctes_injected=False,
                     extra_ctes=[],
-                    injected_sql=''
+                    injected_sql='',
+                    checksum=FileHash.from_contents(''),
                 ),
             },
             sources={},
@@ -163,7 +166,8 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes=[],
                     injected_sql='',
                     compiled_sql=('with cte as (select * from something_else) '
-                                  'select * from source_table')
+                                  'select * from source_table'),
+                    checksum=FileHash.from_contents(''),
                 ),
                 'model.root.view_no_cte': CompiledModelNode(
                     name='view_no_cte',
@@ -187,7 +191,8 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[],
                     injected_sql='',
-                    compiled_sql=('select * from source_table')
+                    compiled_sql=('select * from source_table'),
+                    checksum=FileHash.from_contents(''),
                 ),
             },
             sources={},
@@ -254,7 +259,8 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
-                    compiled_sql='select * from __dbt__CTE__ephemeral'
+                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': CompiledModelNode(
                     name='ephemeral',
@@ -278,7 +284,8 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[],
                     injected_sql='',
-                    compiled_sql='select * from source_table'
+                    compiled_sql='select * from source_table',
+                    checksum=FileHash.from_contents(''),
                 ),
             },
             sources={},
@@ -328,6 +335,7 @@ class CompilerTest(unittest.TestCase):
             path='ephemeral.sql',
             original_file_path='ephemeral.sql',
             raw_sql='select * from source_table',
+            checksum=FileHash.from_contents(''),
         )
         compiled_ephemeral = CompiledModelNode(
             name='ephemeral',
@@ -352,6 +360,7 @@ class CompilerTest(unittest.TestCase):
             injected_sql='select * from source_table',
             extra_ctes_injected=True,
             extra_ctes=[],
+            checksum=FileHash.from_contents(''),
         )
         manifest = Manifest(
             macros={},
@@ -378,7 +387,8 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     injected_sql='',
-                    compiled_sql='select * from __dbt__CTE__ephemeral'
+                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': parsed_ephemeral,
             },
@@ -442,7 +452,9 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql=None)],
                     injected_sql=None,
-                    compiled_sql='select * from __dbt__CTE__ephemeral'
+                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    checksum=FileHash.from_contents(''),
+
                 ),
                 'model.root.ephemeral': ParsedModelNode(
                     name='ephemeral',
@@ -462,6 +474,7 @@ class CompilerTest(unittest.TestCase):
                     path='ephemeral.sql',
                     original_file_path='ephemeral.sql',
                     raw_sql='select * from {{ref("ephemeral_level_two")}}',
+                    checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral_level_two': ParsedModelNode(
                     name='ephemeral_level_two',
@@ -481,6 +494,7 @@ class CompilerTest(unittest.TestCase):
                     path='ephemeral_level_two.sql',
                     original_file_path='ephemeral_level_two.sql',
                     raw_sql='select * from source_table',
+                    checksum=FileHash.from_contents(''),
                 ),
             },
             sources={},

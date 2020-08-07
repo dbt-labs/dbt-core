@@ -9,6 +9,7 @@ from unittest import mock
 from unittest import TestCase
 
 import agate
+import pytest
 from hologram import ValidationError
 
 
@@ -153,6 +154,26 @@ class ContractTestCase(TestCase):
 
         with self.assertRaises(ValidationError):
             cls.from_dict(dct)
+
+
+def assert_to_dict(obj, dct):
+    assert obj.to_dict() == dct
+
+
+def assert_from_dict(obj, dct, cls=None):
+    if cls is None:
+        cls = obj.__class__
+    assert cls.from_dict(dct) == obj
+
+
+def assert_symmetric(obj, dct, cls=None):
+    assert_to_dict(obj, dct)
+    assert_from_dict(obj, dct, cls)
+
+
+def assert_fails_validation(dct, cls):
+    with pytest.raises(ValidationError):
+        cls.from_dict(dct)
 
 
 def generate_name_macros(package):

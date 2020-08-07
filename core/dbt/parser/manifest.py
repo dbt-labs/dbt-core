@@ -19,8 +19,9 @@ from dbt.clients.jinja import get_rendered
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
+from dbt.contracts.files import FilePath, FileHash
 from dbt.contracts.graph.compiled import NonSourceNode
-from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash, Disabled
+from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo,
 )

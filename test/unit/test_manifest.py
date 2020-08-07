@@ -10,6 +10,7 @@ import pytest
 
 import dbt.flags
 from dbt import tracking
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.parsed import (
     ParsedModelNode,
@@ -30,7 +31,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
     'description', 'columns', 'fqn', 'build_path', 'patch_path', 'docs',
-    'deferred',
+    'deferred', 'checksum',
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
@@ -76,7 +77,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='events.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.events': ParsedModelNode(
                 name='events',
@@ -96,7 +98,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='events.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.dep': ParsedModelNode(
                 name='dep',
@@ -116,7 +119,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.nested': ParsedModelNode(
                 name='nested',
@@ -136,7 +140,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.sibling': ParsedModelNode(
                 name='sibling',
@@ -156,7 +161,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.multi': ParsedModelNode(
                 name='multi',
@@ -176,7 +182,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
         }
 
@@ -382,6 +389,7 @@ class ManifestTest(unittest.TestCase):
             original_file_path='seed.csv',
             root_path='',
             raw_sql='-- csv --',
+            checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
@@ -448,7 +456,8 @@ class MixedManifestTest(unittest.TestCase):
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
                 injected_sql=None,
-                extra_ctes=[]
+                extra_ctes=[],
+                checksum=FileHash.empty(),
             ),
             'model.root.events': CompiledModelNode(
                 name='events',
@@ -473,7 +482,8 @@ class MixedManifestTest(unittest.TestCase):
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
                 injected_sql='and this also does not matter',
-                extra_ctes=[]
+                extra_ctes=[],
+                checksum=FileHash.empty(),
             ),
             'model.root.dep': ParsedModelNode(
                 name='dep',
@@ -493,7 +503,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.nested': ParsedModelNode(
                 name='nested',
@@ -513,7 +524,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.sibling': ParsedModelNode(
                 name='sibling',
@@ -533,7 +545,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
             'model.root.multi': ParsedModelNode(
                 name='multi',
@@ -553,7 +566,8 @@ class MixedManifestTest(unittest.TestCase):
                 original_file_path='multi.sql',
                 root_path='',
                 meta={},
-                raw_sql='does not matter'
+                raw_sql='does not matter',
+                checksum=FileHash.empty(),
             ),
         }
 

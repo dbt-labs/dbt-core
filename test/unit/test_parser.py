@@ -19,9 +19,8 @@ from dbt.parser.schema_test_builders import YamlBlock
 from dbt.parser.manifest import process_docs, process_sources, process_refs
 
 from dbt.node_types import NodeType
-from dbt.contracts.graph.manifest import (
-    Manifest, FilePath, SourceFile, FileHash
-)
+from dbt.contracts.files import SourceFile, FileHash, FilePath
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import (
     NodeConfig, TestConfig, TimestampSnapshotConfig, SnapshotStrategy,
 )
@@ -483,6 +482,7 @@ class ModelParserTest(BaseParserTest):
             config=NodeConfig(materialized='table'),
             path=normalize('nested/model_1.sql'),
             raw_sql=raw_sql,
+            checksum=block.file.checksum,
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/models/nested/model_1.sql')
@@ -551,6 +551,7 @@ class SnapshotParserTest(BaseParserTest):
             ),
             path=normalize('nested/snap_1.sql'),
             raw_sql=raw_sql,
+            checksum=block.file.checksum,
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
@@ -603,6 +604,7 @@ class SnapshotParserTest(BaseParserTest):
             ),
             path=normalize('nested/snap_1.sql'),
             raw_sql=raw_1,
+            checksum=block.file.checksum,
         )
         expect_bar = ParsedSnapshotNode(
             alias='bar',
@@ -625,6 +627,7 @@ class SnapshotParserTest(BaseParserTest):
             ),
             path=normalize('nested/snap_1.sql'),
             raw_sql=raw_2,
+            checksum=block.file.checksum,
         )
         self.assertEqual(nodes[0], expect_bar)
         self.assertEqual(nodes[1], expect_foo)
@@ -736,6 +739,7 @@ class DataTestParserTest(BaseParserTest):
             tags=['data'],
             path=normalize('data_test/test_1.sql'),
             raw_sql=raw_sql,
+            checksum=block.file.checksum,
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/tests/test_1.sql')
@@ -777,6 +781,7 @@ class AnalysisParserTest(BaseParserTest):
             config=NodeConfig(),
             path=normalize('analysis/nested/analysis_1.sql'),
             raw_sql=raw_sql,
+            checksum=block.file.checksum,
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/analyses/nested/analysis_1.sql')

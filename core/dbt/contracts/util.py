@@ -1,8 +1,12 @@
 import dataclasses
-from typing import List
+from typing import List, Tuple
 
 from dbt.clients.system import write_json, read_json
 from dbt.exceptions import RuntimeException
+
+
+MacroKey = Tuple[str, str]
+SourceKey = Tuple[str, str]
 
 
 def list_str() -> List[str]:

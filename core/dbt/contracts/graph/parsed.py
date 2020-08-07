@@ -10,12 +10,14 @@ from typing import (
     Sequence,
     Tuple,
     Iterator,
+    TypeVar,
 )
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import ExtensibleJsonSchemaMixin
 
 from dbt.clients.system import write_file
+from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
@@ -23,6 +25,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition, UnparsedColumn, TestDef
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
+from dbt.exceptions import warn_or_error
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import flags
 from dbt.node_types import NodeType
@@ -45,8 +48,11 @@ from .model_config import (  # noqa
 
 
 @dataclass
-class ColumnInfo(AdditionalPropertiesMixin, ExtensibleJsonSchemaMixin,
-                 Replaceable):
+class ColumnInfo(
+    AdditionalPropertiesMixin,
+    ExtensibleJsonSchemaMixin,
+    Replaceable
+):
     name: str
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -122,7 +128,7 @@ class ParsedNodeMixins(JsonSchemaMixin):
         self.docs = patch.docs
         if flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
-            self.to_dict(validate=True)
+            self.to_dict(validate=True, omit_none=False)
 
     def get_materialization(self):
         return self.config.materialized
@@ -140,6 +146,7 @@ class ParsedNodeMandatory(
     Replaceable
 ):
     alias: str
+    checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
 
     @property
@@ -177,9 +184,63 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
         return full_path
 
 
+T = TypeVar('T', bound='ParsedNode')
+
+
 @dataclass
 class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
-    pass
+
+    def _persist_column_docs(self) -> bool:
+        return bool(self.config.persist_docs.get('columns'))
+
+    def _persist_relation_docs(self) -> bool:
+        return bool(self.config.persist_docs.get('relation'))
+
+    def _same_body(self: T, other: T) -> bool:
+        return self.raw_sql == other.raw_sql
+
+    def _same_description_persisted(self: T, other: T) -> bool:
+        # the check on configs will handle the case where we have different
+        # persist settings, so we only have to care about the cases where they
+        # are the same..
+        if self._persist_relation_docs():
+            if self.description != other.description:
+                return False
+
+        if self._persist_column_docs():
+            # assert other._persist_column_docs()
+            column_descriptions = {
+                k: v.description for k, v in self.columns.items()
+            }
+            other_column_descriptions = {
+                k: v.description for k, v in other.columns.items()
+            }
+            if column_descriptions != other_column_descriptions:
+                return False
+
+        return True
+
+    def _same_name(self: T, old: T) -> bool:
+        return (
+            self.database == old.database and
+            self.schema == old.schema and
+            self.identifier == old.identifier and
+            True
+        )
+
+    def same_contents(self: T, old: Optional[T]) -> bool:
+        if old is None:
+            return False
+
+        return (
+            self.resource_type == old.resource_type and
+            self._same_body(old) and
+            self.config.same_contents(old.config) and
+            self._same_description_persisted(old) and
+            self._same_name(old) and
+            self.fqn == old.fqn and
+            True
+        )
 
 
 @dataclass
@@ -188,11 +249,64 @@ class ParsedAnalysisNode(ParsedNode):
 
 
 @dataclass
-class ParsedHookNode(ParsedNode):
+class HookMixin(JsonSchemaMixin):
     resource_type: NodeType = field(
         metadata={'restrict': [NodeType.Operation]}
     )
     index: Optional[int] = None
+
+
+@dataclass
+class SeedMixin(JsonSchemaMixin):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    config: SeedConfig = field(default_factory=SeedConfig)
+
+    @property
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
+
+    def _same_body(self: 'ParsedSeedNode', other: 'ParsedSeedNode') -> bool:
+        # for seeds, we check the hashes. If the hashes are different types,
+        # no match. If the hashes are both the same 'path', log a warning and
+        # assume they are the same
+        # if the current checksum is a path, we want to log a warning.
+        result = self.checksum == other.checksum
+
+        if self.checksum.name == 'path':
+            msg: str
+            if other.checksum.name != 'path':
+                msg = (
+                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
+                    f'previous file was <={MAXIMUM_SEED_SIZE_NAME}, so it '
+                    f'has changed'
+                )
+            elif result:
+                msg = (
+                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size at '
+                    f'the same path, dbt cannot tell if it has changed: '
+                    f'assuming they are the same'
+                )
+            elif not result:
+                msg = (
+                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
+                    f'previous file was in a different location, assuming it '
+                    f'has changed'
+                )
+            else:
+                msg = (
+                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
+                    f'previous file had a checksum type of '
+                    f'{other.checksum.name}, so it has changed'
+                )
+            warn_or_error(msg, node=self)
+
+        return result
+
+
+@dataclass
+class ParsedHookNode(HookMixin, ParsedNode):
+    pass
 
 
 @dataclass
@@ -206,18 +320,12 @@ class ParsedRPCNode(ParsedNode):
 
 
 @dataclass
-class ParsedSeedNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
-    config: SeedConfig = field(default_factory=SeedConfig)
-
-    @property
-    def empty(self):
-        """ Seeds are never empty"""
-        return False
+class ParsedSeedNode(SeedMixin, ParsedNode):
+    pass
 
 
 @dataclass
-class TestMetadata(JsonSchemaMixin):
+class TestMetadata(JsonSchemaMixin, Replaceable):
     namespace: Optional[str]
     name: str
     kwargs: Dict[str, Any]
@@ -235,10 +343,21 @@ class ParsedDataTestNode(ParsedNode):
 
 
 @dataclass
-class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
+class SchemaTestMixin(JsonSchemaMixin):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
+
+    # make sure to keep this in sync with CompiledSchemaTestNode...
+    def _same_body(
+        self: 'ParsedSchemaTestNode', other: 'ParsedSchemaTestNode'
+    ) -> bool:
+        return self.test_metadata == other.test_metadata
+
+
+@dataclass
+class ParsedSchemaTestNode(SchemaTestMixin, ParsedNode, HasTestMetadata):
+    pass
 
 
 @dataclass
@@ -306,7 +425,14 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.arguments = patch.arguments
         if flags.STRICT_MODE:
             assert isinstance(self, JsonSchemaMixin)
-            self.to_dict(validate=True)
+            self.to_dict(validate=True, omit_none=False)
+
+    def same_contents(self, other: Optional['ParsedMacro']) -> bool:
+        if other is None:
+            return False
+        # the only thing that makes one macro different from another with the
+        # same name/package is its content
+        return self.macro_sql == other.macro_sql
 
 
 @dataclass
@@ -317,6 +443,13 @@ class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
     @property
     def search_name(self):
         return self.name
+
+    def same_contents(self, other: Optional['ParsedDocumentation']) -> bool:
+        if other is None:
+            return False
+        # the only thing that makes one doc different from another with the
+        # same name/package is its content
+        return self.block_contents == other.block_contents
 
 
 def normalize_test(testdef: TestDef) -> Dict[str, Any]:
@@ -402,6 +535,27 @@ class ParsedSourceDefinition(
     tags: List[str] = field(default_factory=list)
     config: SourceConfig = field(default_factory=SourceConfig)
     patch_path: Optional[Path] = None
+
+    def same_contents(self, old: Optional['ParsedSourceDefinition']) -> bool:
+        # existing when it didn't before is a change!
+        if old is None:
+            return True
+
+        # config changes are changes (because the only config is "enabled", and
+        # enabling a source is a change!)
+        # changing the database/schema/identifier is a change
+        # messing around with external stuff is a change (uh, right?)
+        # quoting changes are changes
+        # freshness changes are changes, I guess
+        # metadata/tags changes are not "changes"
+        # patching/description changes are not "changes"
+        return (
+            old.config == self.config and
+            old.freshness == self.freshness and
+            old.database == self.database and
+            old.schema == self.schema and
+            old.identifier == self.identifier
+        )
 
     def get_full_source_name(self):
         return f'{self.source_name}_{self.name}'

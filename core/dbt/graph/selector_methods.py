@@ -1,7 +1,7 @@
 import abc
 from itertools import chain
 from pathlib import Path
-from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type
+from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional
 
 from hologram.helpers import StrEnum
 
@@ -12,18 +12,21 @@ from dbt.contracts.graph.compiled import (
     CompiledSchemaTestNode,
     NonSourceNode,
 )
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.parsed import (
     HasTestMetadata,
     ParsedDataTestNode,
     ParsedSchemaTestNode,
     ParsedSourceDefinition,
 )
+from dbt.contracts.state import PreviousState
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import (
     InternalException,
     RuntimeException,
 )
 from dbt.node_types import NodeType
+from dbt.ui import warning_tag
 
 
 SELECTOR_GLOB = '*'
@@ -40,6 +43,7 @@ class MethodName(StrEnum):
     TestName = 'test_name'
     TestType = 'test_type'
     ResourceType = 'resource_type'
+    State = 'state'
 
 
 def is_selected_node(real_node, node_selector):
@@ -72,8 +76,14 @@ SelectorTarget = Union[ParsedSourceDefinition, NonSourceNode]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
-    def __init__(self, manifest: Manifest, arguments: List[str]):
+    def __init__(
+        self,
+        manifest: Manifest,
+        previous_state: Optional[PreviousState],
+        arguments: List[str]
+    ):
         self.manifest: Manifest = manifest
+        self.previous_state = previous_state
         self.arguments: List[str] = arguments
 
     def parsed_nodes(
@@ -329,6 +339,85 @@ class TestTypeSelectorMethod(SelectorMethod):
                 yield node
 
 
+class StateSelectorMethod(SelectorMethod):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.macros_were_modified = None
+
+    def _macros_modified(self):
+        # we checked in the caller!
+        if self.previous_state is None or self.previous_state.manifest is None:
+            raise InternalException(
+                f'No deferred manifest in _macros_modified'
+            )
+        old_macros = self.previous_state.manifest.macros
+        new_macros = self.manifest.macros
+        # macros were added/removed
+        if old_macros.keys() != new_macros.keys():
+            return True
+
+        return any(
+            old_macros[uid].macro_sql != new_macros[uid].macro_sql
+            for uid in new_macros
+        )
+
+    def check_modified(
+        self,
+        old: Optional[SelectorTarget],
+        new: SelectorTarget,
+    ) -> bool:
+        # check if there are any changes in macros, if so, log a warning the
+        # first time
+        if self.macros_were_modified is None:
+            self.macros_were_modified = self._macros_modified()
+            if self.macros_were_modified:
+                logger.warning(warning_tag(
+                    'During a state comparison, dbt detected a change in '
+                    'macros. This will not be marked as a modification.'
+                ))
+
+        return not new.same_contents(old)
+
+    def check_new(
+        self,
+        old: Optional[SelectorTarget],
+        new: SelectorTarget,
+    ) -> bool:
+        return old is None
+
+    def search(
+        self, included_nodes: Set[UniqueId], selector: str
+    ) -> Iterator[UniqueId]:
+        if self.previous_state is None or self.previous_state.manifest is None:
+            raise RuntimeException(
+                f'Got a state selector method, but no deferred manifest'
+            )
+
+        state_checks = {
+            'modified': self.check_modified,
+            'new': self.check_new,
+        }
+        if selector in state_checks:
+            checker = state_checks[selector]
+        else:
+            raise RuntimeException(
+                f'Got an invalid selector "{selector}", expected one of '
+                f'"{list(state_checks)}"'
+            )
+
+        manifest: WritableManifest = self.previous_state.manifest
+
+        for node, real_node in self.all_nodes(included_nodes):
+            previous_node: Optional[SelectorTarget] = None
+            if node in manifest.nodes:
+                previous_node = manifest.nodes[node]
+            elif node in manifest.sources:
+                previous_node = manifest.sources[node]
+
+            if checker(previous_node, real_node):
+                yield node
+
+
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
@@ -339,10 +428,16 @@ class MethodManager:
         MethodName.Config: ConfigSelectorMethod,
         MethodName.TestName: TestNameSelectorMethod,
         MethodName.TestType: TestTypeSelectorMethod,
+        MethodName.State: StateSelectorMethod,
     }
 
-    def __init__(self, manifest: Manifest):
+    def __init__(
+        self,
+        manifest: Manifest,
+        previous_state: Optional[PreviousState],
+    ):
         self.manifest = manifest
+        self.previous_state = previous_state
 
     def get_method(
         self, method: MethodName, method_arguments: List[str]
@@ -354,4 +449,4 @@ class MethodManager:
                 f'method name, but it is not handled'
             )
         cls: Type[SelectorMethod] = self.SELECTOR_METHODS[method]
-        return cls(self.manifest, method_arguments)
+        return cls(self.manifest, self.previous_state, method_arguments)

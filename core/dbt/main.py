@@ -461,16 +461,7 @@ def _build_run_subparser(subparsers, base_subparser):
         '''
     )
 
-    # for now, this is a "dbt run"-only thing
-    run_sub.add_argument(
-        '--state',
-        help='''
-        If set, use the given directory as the source for json files to compare
-        with this project.
-        ''',
-        type=Path,
-        default=flags.ARTIFACT_STATE_PATH,
-    )
+    # this is a "dbt run"-only thing, for now
     run_sub.add_optional_argument_inverse(
         '--defer',
         enable_help='''
@@ -519,35 +510,79 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     return generate_sub
 
 
+def _add_models_argument(sub, help_override=None, **kwargs):
+    help_str = '''
+        Specify the models to include.
+    '''
+    if help_override is not None:
+        help_str = help_override
+    sub.add_argument(
+        '-m',
+        '--models',
+        dest='models',
+        nargs='+',
+        help=help_str,
+        **kwargs
+    )
+
+
+def _add_select_argument(sub, dest='models', help_override=None, **kwargs):
+    help_str = '''
+        Specify the nodes to include.
+    '''
+    if help_override is not None:
+        help_str = help_override
+
+    sub.add_argument(
+        '-s',
+        '--select',
+        dest=dest,
+        nargs='+',
+        help=help_str,
+        **kwargs
+    )
+
+
+def _add_common_selector_arguments(sub):
+    sub.add_argument(
+        '--exclude',
+        required=False,
+        nargs='+',
+        help='''
+            Specify the models to exclude.
+        ''',
+    )
+    sub.add_argument(
+        '--selector',
+        dest='selector_name',
+        metavar='SELECTOR_NAME',
+        help='''
+        The selector name to use, as defined in selectors.yml
+        '''
+    )
+    sub.add_argument(
+        '--state',
+        help='''
+        If set, use the given directory as the source for json files to
+        compare with this project.
+        ''',
+        type=Path,
+        default=flags.ARTIFACT_STATE_PATH,
+    )
+
+
 def _add_selection_arguments(*subparsers, **kwargs):
     models_name = kwargs.get('models_name', 'models')
     for sub in subparsers:
-        sub.add_argument(
-            '-{}'.format(models_name[0]),
-            '--{}'.format(models_name),
-            dest='models',
-            required=False,
-            nargs='+',
-            help='''
-            Specify the models to include.
-            ''',
-        )
-        sub.add_argument(
-            '--exclude',
-            required=False,
-            nargs='+',
-            help='''
-            Specify the models to exclude.
-            ''',
-        )
-        sub.add_argument(
-            '--selector',
-            dest='selector_name',
-            metavar='SELECTOR_NAME',
-            help='''
-            The selector name to use, as defined in selectors.yml
-            '''
-        )
+        if models_name == 'models':
+            _add_models_argument(sub)
+        elif models_name == 'select':
+            # these still get stored in 'models', so they present the same
+            # interface to the task
+            _add_select_argument(sub)
+        else:
+            raise InternalException(f'Unknown models style {models_name}')
+        _add_common_selector_arguments(sub)
 
 
 def _add_table_mutability_arguments(*subparsers):
@@ -760,44 +795,24 @@ def _build_list_subparser(subparsers, base_subparser):
     sub.add_argument('--output',
                      choices=['json', 'name', 'path', 'selector'],
                      default='selector')
-    sub.add_argument(
-        '-s',
-        '--select',
-        required=False,
-        nargs='+',
-        metavar='SELECTOR',
-        help='''
-        Specify the nodes to select.
-        ''',
-    )
-    sub.add_argument(
-        '-m',
-        '--models',
-        required=False,
-        nargs='+',
-        metavar='SELECTOR',
-        help='''
+
+    _add_models_argument(
+        sub,
+        help_override='''
         Specify the models to select and set the resource-type to 'model'.
         Mutually exclusive with '--select' (or '-s') and '--resource-type'
         ''',
-    )
-    sub.add_argument(
-        '--exclude',
-        required=False,
-        nargs='+',
         metavar='SELECTOR',
-        help='''
-        Specify the models to exclude.
-        '''
+        required=False
     )
-    sub.add_argument(
-        '--selector',
-        metavar='SELECTOR_NAME',
-        dest='selector_name',
-        help='''
-        The selector name to use, as defined in selectors.yml
-        '''
+    _add_select_argument(
+        sub,
+        dest='select',
+        metavar='SELECTOR',
+        required=False,
     )
+    _add_common_selector_arguments(sub)
+
     return sub
 
 
@@ -969,6 +984,7 @@ def parse_args(args, cls=DBTArgumentParser):
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
                           rpc_sub, seed_sub)
     # --models, --exclude
+    # list_sub sets up its own arguments.
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
     # --full-refresh

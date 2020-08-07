@@ -7,7 +7,7 @@ from typing import (
 from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
 from dbt.config import Project
-from dbt.contracts.graph.manifest import SourceFile, FilePath
+from dbt.contracts.files import SourceFile, FilePath
 from dbt.exceptions import CompilationException, InternalException
 
 

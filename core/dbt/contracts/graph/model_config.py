@@ -174,15 +174,36 @@ class BaseConfig(
         else:
             del self._extra[key]
 
-    def __iter__(self):
+    def _content_iterator(self, include_hidden: bool):
+        seen = set()
         for fld, _ in self._get_fields():
-            yield fld.name
+            seen.add(fld.name)
+            if (
+                include_hidden or
+                ShowBehavior.from_field(fld) != ShowBehavior.Hide
+            ):
+                yield fld.name
 
         for key in self._extra:
-            yield key
+            if key not in seen:
+                seen.add(key)
+                yield key
+
+    def __iter__(self):
+        yield from self._content_iterator(include_hidden=True)
 
     def __len__(self):
         return len(self._get_fields()) + len(self._extra)
+
+    def same_contents(self: T, other: T) -> bool:
+        """This is like __eq__, except it ignores hidden fields."""
+        for key in self._content_iterator(include_hidden=False):
+            try:
+                if self[key] != other[key]:
+                    return False
+            except KeyError:
+                return False
+        return True
 
     @classmethod
     def _extract_dict(
@@ -272,6 +293,15 @@ class BaseConfig(
         dct = self.to_dict(omit_none=False, validate=False)
         return self.from_dict(dct)
 
+    def replace(self, **kwargs):
+        dct = self.to_dict(validate=False)
+
+        mapping = self.field_mapping()
+        for key, value in kwargs.items():
+            new_key = mapping.get(key, key)
+            dct[new_key] = value
+        return self.from_dict(dct, validate=False)
+
 
 @dataclass
 class SourceConfig(BaseConfig):
@@ -320,8 +350,7 @@ class NodeConfig(BaseConfig):
     )
     tags: Union[List[str], str] = field(
         default_factory=list_str,
-        # TODO: hide this one?
-        metadata=MergeBehavior.Append.meta(),
+        metadata=ShowBehavior.Hide.meta(MergeBehavior.Append.meta()),
     )
     full_refresh: Optional[bool] = None
 

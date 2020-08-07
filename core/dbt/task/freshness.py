@@ -140,6 +140,7 @@ class FreshnessTask(GraphRunnableTask):
         return FreshnessSelector(
             graph=self.graph,
             manifest=self.manifest,
+            previous_state=self.previous_state,
         )
 
     def get_runner_type(self):
