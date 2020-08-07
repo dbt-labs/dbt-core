@@ -10,7 +10,7 @@ from .util import SourceKey
 
 
 MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
-MAXIMUM_SEED_SIZE_NAME = '1MB'
+MAXIMUM_SEED_SIZE_NAME = "1MB"
 
 
 class ParseFileType(StrEnum):
@@ -55,9 +55,7 @@ class FilePath(dbtClassMixin):
     @property
     def full_path(self) -> str:
         # useful for symlink preservation
-        return os.path.join(
-            self.project_root, self.searched_path, self.relative_path
-        )
+        return os.path.join(self.project_root, self.searched_path, self.relative_path)
 
     @property
     def absolute_path(self) -> str:
@@ -67,13 +65,10 @@ class FilePath(dbtClassMixin):
     def original_file_path(self) -> str:
         # this is mostly used for reporting errors. It doesn't show the project
         # name, should it?
-        return os.path.join(
-            self.searched_path, self.relative_path
-        )
+        return os.path.join(self.searched_path, self.relative_path)
 
     def seed_too_large(self) -> bool:
-        """Return whether the file this represents is over the seed size limit
-        """
+        """Return whether the file this represents is over the seed size limit"""
         return os.stat(self.full_path).st_size > MAXIMUM_SEED_SIZE
 
 
@@ -84,35 +79,35 @@ class FileHash(dbtClassMixin):
 
     @classmethod
     def empty(cls):
-        return FileHash(name='none', checksum='')
+        return FileHash(name="none", checksum="")
 
     @classmethod
     def path(cls, path: str):
-        return FileHash(name='path', checksum=path)
+        return FileHash(name="path", checksum=path)
 
     def __eq__(self, other):
         if not isinstance(other, FileHash):
             return NotImplemented
 
-        if self.name == 'none' or self.name != other.name:
+        if self.name == "none" or self.name != other.name:
             return False
 
         return self.checksum == other.checksum
 
     def compare(self, contents: str) -> bool:
         """Compare the file contents with the given hash"""
-        if self.name == 'none':
+        if self.name == "none":
             return False
 
         return self.from_contents(contents, name=self.name) == self.checksum
 
     @classmethod
-    def from_contents(cls, contents: str, name='sha256') -> 'FileHash':
+    def from_contents(cls, contents: str, name="sha256") -> "FileHash":
         """Create a file hash from the given file contents. The hash is always
         the utf-8 encoding of the contents given, because dbt only reads files
         as utf-8.
         """
-        data = contents.encode('utf-8')
+        data = contents.encode("utf-8")
         checksum = hashlib.new(name, data).hexdigest()
         return cls(name=name, checksum=checksum)
 
@@ -121,19 +116,19 @@ class FileHash(dbtClassMixin):
 class RemoteFile(dbtClassMixin):
     @property
     def searched_path(self) -> str:
-        return 'from remote system'
+        return "from remote system"
 
     @property
     def relative_path(self) -> str:
-        return 'from remote system'
+        return "from remote system"
 
     @property
     def absolute_path(self) -> str:
-        return 'from remote system'
+        return "from remote system"
 
     @property
     def original_file_path(self):
-        return 'from remote system'
+        return "from remote system"
 
     @property
     def modification_time(self):
@@ -143,6 +138,7 @@ class RemoteFile(dbtClassMixin):
 @dataclass
 class BaseSourceFile(dbtClassMixin, SerializableType):
     """Define a source file in dbt"""
+
     path: Union[FilePath, RemoteFile]  # the path information
     checksum: FileHash
     # Seems like knowing which project the file came from would be useful
@@ -193,10 +189,10 @@ class SourceFile(BaseSourceFile):
     env_vars: List[str] = field(default_factory=list)
 
     @classmethod
-    def big_seed(cls, path: FilePath) -> 'SourceFile':
+    def big_seed(cls, path: FilePath) -> "SourceFile":
         """Parse seeds over the size limit with just the path"""
         self = cls(path=path, checksum=FileHash.path(path.original_file_path))
-        self.contents = ''
+        self.contents = ""
         return self
 
     def add_node(self, value):

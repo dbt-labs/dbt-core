@@ -44,7 +44,7 @@ class MethodName(StrEnum):
     TestName = 'test_name'
     TestType = 'test_type'
     ResourceType = 'resource_type'
-    State = 'state'
+    State = "state"
     Exposure = 'exposure'
     Metric = "metric"
     Result = 'result'
@@ -79,10 +79,7 @@ SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure, Par
 
 class SelectorMethod(metaclass=abc.ABCMeta):
     def __init__(
-        self,
-        manifest: Manifest,
-        previous_state: Optional[PreviousState],
-        arguments: List[str]
+        self, manifest: Manifest, previous_state: Optional[PreviousState], arguments: List[str]
     ):
         self.manifest: Manifest = manifest
         self.previous_state = previous_state
@@ -503,9 +500,7 @@ class StateSelectorMethod(SelectorMethod):
     def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return old is None
 
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
             raise RuntimeException(
                 'Got a state selector method, but no comparison manifest'
@@ -533,8 +528,7 @@ class StateSelectorMethod(SelectorMethod):
             checker = state_checks[selector]
         else:
             raise RuntimeException(
-                f'Got an invalid selector "{selector}", expected one of '
-                f'"{list(state_checks)}"'
+                f'Got an invalid selector "{selector}", expected one of ' f'"{list(state_checks)}"'
             )
 
         manifest: WritableManifest = self.previous_state.manifest

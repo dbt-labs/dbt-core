@@ -240,7 +240,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
         return full_path
 
 
-T = TypeVar('T', bound='ParsedNode')
+T = TypeVar("T", bound="ParsedNode")
 
 
 @dataclass
@@ -311,12 +311,8 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
         if self._persist_column_docs():
             # assert other._persist_column_docs()
-            column_descriptions = {
-                k: v.description for k, v in self.columns.items()
-            }
-            other_column_descriptions = {
-                k: v.description for k, v in other.columns.items()
-            }
+            column_descriptions = {k: v.description for k, v in self.columns.items()}
+            other_column_descriptions = {k: v.description for k, v in other.columns.items()}
             if column_descriptions != other_column_descriptions:
                 return False
 
@@ -351,7 +347,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             self.same_persisted_description(old) and
             self.same_fqn(old) and
             self.same_database_representation(old) and
-            True
+            and True
         )
 
 
@@ -553,7 +549,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.docs = patch.docs
         self.arguments = patch.arguments
 
-    def same_contents(self, other: Optional['ParsedMacro']) -> bool:
+    def same_contents(self, other: Optional["ParsedMacro"]) -> bool:
         if other is None:
             return False
         # the only thing that makes one macro different from another with the
@@ -570,7 +566,7 @@ class ParsedDocumentation(UnparsedDocumentation, HasUniqueID):
     def search_name(self):
         return self.name
 
-    def same_contents(self, other: Optional['ParsedDocumentation']) -> bool:
+    def same_contents(self, other: Optional["ParsedDocumentation"]) -> bool:
         if other is None:
             return False
         # the only thing that makes one doc different from another with the
@@ -706,7 +702,7 @@ class ParsedSourceDefinition(
             old.unrendered_config,
         )
 
-    def same_contents(self, old: Optional['ParsedSourceDefinition']) -> bool:
+    def same_contents(self, old: Optional["ParsedSourceDefinition"]) -> bool:
         # existing when it didn't before is a change!
         if old is None:
             return True

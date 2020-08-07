@@ -578,27 +578,27 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
 
 def _add_common_selector_arguments(sub):
     sub.add_argument(
-        '--exclude',
+        "--exclude",
         required=False,
-        nargs='+',
-        help='''
+        nargs="+",
+        help="""
             Specify the models to exclude.
-        ''',
+        """,
     )
     sub.add_argument(
-        '--selector',
-        dest='selector_name',
-        metavar='SELECTOR_NAME',
-        help='''
+        "--selector",
+        dest="selector_name",
+        metavar="SELECTOR_NAME",
+        help="""
         The selector name to use, as defined in selectors.yml
-        '''
+        """,
     )
     sub.add_argument(
-        '--state',
-        help='''
+        "--state",
+        help="""
         If set, use the given directory as the source for json files to
         compare with this project.
-        ''',
+        """,
         type=Path,
         default=flags.ARTIFACT_STATE_PATH,
     )
@@ -834,12 +834,12 @@ def _build_list_subparser(subparsers, base_subparser):
     sub.add_argument(
         '-s',
         '--select',
-        dest='select',
+        dest="select",
         nargs='+',
         help='''
             Specify the nodes to include.
         ''',
-        metavar='SELECTOR',
+        metavar="SELECTOR",
         required=False,
     )
     sub.add_argument(

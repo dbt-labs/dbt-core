@@ -412,14 +412,11 @@ class RunTask(CompileTask):
         state = self.previous_state
         if state is None:
             raise RuntimeException(
-                'Received a --defer argument, but no value was provided '
-                'to --state'
+                "Received a --defer argument, but no value was provided " "to --state"
             )
 
         if state.manifest is None:
-            raise RuntimeException(
-                f'Could not find manifest in --state path: "{self.args.state}"'
-            )
+            raise RuntimeException(f'Could not find manifest in --state path: "{self.args.state}"')
         return state.manifest
 
     def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
