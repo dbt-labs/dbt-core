@@ -8,7 +8,7 @@ default:
       port: [port]
       user: [dev_username]
       pass: [dev_password]
-      dbname: warehouse
+      dbname: [dbname]
       schema: [dev_schema]
 
     prod:
