@@ -17,7 +17,7 @@ default:
       cluster_id: [cluster_id]
       threads: [1 or more]
       host: [host]
-      port: 5439
+      port: [port]
       user: [prod_user]
       dbname: [dbname]
       schema: [prod_schema]
