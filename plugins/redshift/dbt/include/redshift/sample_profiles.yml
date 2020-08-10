@@ -5,7 +5,7 @@ default:
       type: redshift
       threads: [1 or more]
       host: [host]
-      port: 5439
+      port: [port]
       user: [dev_username]
       pass: [dev_password]
       dbname: [dbname]
