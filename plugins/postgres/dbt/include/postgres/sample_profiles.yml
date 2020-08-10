@@ -18,7 +18,7 @@ default:
       port: [port]
       user: [prod_username]
       pass: [prod_password]
-      dbname: warehouse
+      dbname: [dbname]
       schema: [prod_schema]
 
   target: dev
