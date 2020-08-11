@@ -348,7 +348,7 @@ class StateSelectorMethod(SelectorMethod):
         # we checked in the caller!
         if self.previous_state is None or self.previous_state.manifest is None:
             raise InternalException(
-                f'No deferred manifest in _macros_modified'
+                'No deferred manifest in _macros_modified'
             )
         old_macros = self.previous_state.manifest.macros
         new_macros = self.manifest.macros
@@ -390,7 +390,7 @@ class StateSelectorMethod(SelectorMethod):
     ) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
             raise RuntimeException(
-                f'Got a state selector method, but no deferred manifest'
+                'Got a state selector method, but no deferred manifest'
             )
 
         state_checks = {
