@@ -404,7 +404,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
     def _retry_and_handle(self, msg, conn, fn):
         """retry a function call within the context of exception_handler."""
         def reopen_conn_on_error(error):
-            if isinstance(error, type):
+            if isinstance(error, REOPENABLE_ERRORS):
                 logger.warning('Reopening connection after {!r}', error)
                 self.close(conn)
                 self.open(conn)
