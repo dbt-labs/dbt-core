@@ -34,6 +34,7 @@ setup(
     package_data={
         'dbt': [
             'include/redshift/dbt_project.yml',
+            'include/redshift/sample_profiles.yml',
             'include/redshift/macros/*.sql',
             'include/redshift/macros/**/*.sql',
         ]

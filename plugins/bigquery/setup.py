@@ -34,6 +34,7 @@ setup(
     package_data={
         'dbt': [
             'include/bigquery/dbt_project.yml',
+            'include/bigquery/sample_profiles.yml',
             'include/bigquery/macros/*.sql',
             'include/bigquery/macros/**/*.sql',
         ]

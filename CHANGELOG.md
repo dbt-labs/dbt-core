@@ -27,6 +27,7 @@ Contributors:
 - Previously, dbt put macros from all installed plugins into the namespace. This version of dbt will not include adapter plugin macros unless they are from the currently-in-use adapter or one of its dependencies [#2590](https://github.com/fishtown-analytics/dbt/pull/2590)
 
 ### Features
+- Added option "--adapter" to `dbt init` to create a sample `profiles.yml` based on the chosen adapter ([#2533](https://github.com/fishtown-analytics/dbt/issues/2533), [#2594](https://github.com/fishtown-analytics/dbt/pull/2594))
 - Added support for Snowflake query tags at the connection and model level ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030), [#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
 - Added new node selector methods (`config`, `test_type`, `test_name`, `package`) ([#2425](https://github.com/fishtown-analytics/dbt/issues/2425), [#2629](https://github.com/fishtown-analytics/dbt/pull/2629))
 - Added option to specify profile when connecting to Redshift via IAM ([#2437](https://github.com/fishtown-analytics/dbt/issues/2437), [#2581](https://github.com/fishtown-analytics/dbt/pull/2581))
@@ -38,7 +39,7 @@ Contributors:
 - Compile assets as part of docs generate ([#2072](https://github.com/fishtown-analytics/dbt/issues/2072), [#2623](https://github.com/fishtown-analytics/dbt/pull/2623))
 
 Contributors:
-- [@brunomurino](https://github.com/brunomurino) ([#2437](https://github.com/fishtown-analytics/dbt/pull/2581))
+- [@brunomurino](https://github.com/brunomurino) ([#2581](https://github.com/fishtown-analytics/dbt/pull/2581), [#2594](https://github.com/fishtown-analytics/dbt/pull/2594))
 - [@DrMcTaco](https://github.com/DrMcTaco) ([#1030](https://github.com/fishtown-analytics/dbt/issues/1030)),[#2555](https://github.com/fishtown-analytics/dbt/pull/2555/))
 - [@kning](https://github.com/kning) ([#2627](https://github.com/fishtown-analytics/dbt/pull/2627))
 - [@azhard](https://github.com/azhard) ([#2588](https://github.com/fishtown-analytics/dbt/pull/2588))

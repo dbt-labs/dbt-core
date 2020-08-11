@@ -28,7 +28,7 @@ class TestInit(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_init_task(self):
         project_name = self.get_project_name()
-        self.run_dbt(['init', project_name])
+        self.run_dbt(['init', project_name, '--adapter', 'postgres'])
 
         assert os.path.exists(project_name)
         project_file = os.path.join(project_name, 'dbt_project.yml')
