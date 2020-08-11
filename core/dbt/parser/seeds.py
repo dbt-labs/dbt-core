@@ -28,10 +28,12 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
     ) -> None:
         """Seeds don't need to do any rendering."""
 
-    def load_file(self, match: FilePath) -> SourceFile:
+    def load_file(
+        self, match: FilePath, *, set_contents: bool = False
+    ) -> SourceFile:
         if match.seed_too_large():
             # We don't want to calculate a hash of this file. Use the path.
             return SourceFile.big_seed(match)
         else:
             # We want to calculate a hash, but we don't need the contents
-            return super().load_file(match, set_contents=False)
+            return super().load_file(match, set_contents=set_contents)

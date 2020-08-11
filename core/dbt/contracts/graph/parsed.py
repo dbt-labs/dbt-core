@@ -249,64 +249,11 @@ class ParsedAnalysisNode(ParsedNode):
 
 
 @dataclass
-class HookMixin(JsonSchemaMixin):
+class ParsedHookNode(ParsedNode):
     resource_type: NodeType = field(
         metadata={'restrict': [NodeType.Operation]}
     )
     index: Optional[int] = None
-
-
-@dataclass
-class SeedMixin(JsonSchemaMixin):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
-    config: SeedConfig = field(default_factory=SeedConfig)
-
-    @property
-    def empty(self):
-        """ Seeds are never empty"""
-        return False
-
-    def _same_body(self: 'ParsedSeedNode', other: 'ParsedSeedNode') -> bool:
-        # for seeds, we check the hashes. If the hashes are different types,
-        # no match. If the hashes are both the same 'path', log a warning and
-        # assume they are the same
-        # if the current checksum is a path, we want to log a warning.
-        result = self.checksum == other.checksum
-
-        if self.checksum.name == 'path':
-            msg: str
-            if other.checksum.name != 'path':
-                msg = (
-                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
-                    f'previous file was <={MAXIMUM_SEED_SIZE_NAME}, so it '
-                    f'has changed'
-                )
-            elif result:
-                msg = (
-                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size at '
-                    f'the same path, dbt cannot tell if it has changed: '
-                    f'assuming they are the same'
-                )
-            elif not result:
-                msg = (
-                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
-                    f'previous file was in a different location, assuming it '
-                    f'has changed'
-                )
-            else:
-                msg = (
-                    f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
-                    f'previous file had a checksum type of '
-                    f'{other.checksum.name}, so it has changed'
-                )
-            warn_or_error(msg, node=self)
-
-        return result
-
-
-@dataclass
-class ParsedHookNode(HookMixin, ParsedNode):
-    pass
 
 
 @dataclass
@@ -319,9 +266,57 @@ class ParsedRPCNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
+def compare_seeds(first: ParsedNode, second: ParsedNode) -> bool:
+    # for seeds, we check the hashes. If the hashes are different types,
+    # no match. If the hashes are both the same 'path', log a warning and
+    # assume they are the same
+    # if the current checksum is a path, we want to log a warning.
+    result = first.checksum == second.checksum
+
+    if first.checksum.name == 'path':
+        msg: str
+        if second.checksum.name != 'path':
+            msg = (
+                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
+                f'previous file was <={MAXIMUM_SEED_SIZE_NAME}, so it '
+                f'has changed'
+            )
+        elif result:
+            msg = (
+                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size at '
+                f'the same path, dbt cannot tell if it has changed: '
+                f'assuming they are the same'
+            )
+        elif not result:
+            msg = (
+                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
+                f'previous file was in a different location, assuming it '
+                f'has changed'
+            )
+        else:
+            msg = (
+                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
+                f'previous file had a checksum type of '
+                f'{second.checksum.name}, so it has changed'
+            )
+        warn_or_error(msg, node=first)
+
+    return result
+
+
 @dataclass
-class ParsedSeedNode(SeedMixin, ParsedNode):
-    pass
+class ParsedSeedNode(ParsedNode):
+    # keep this in sync with CompiledSeedNode!
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    config: SeedConfig = field(default_factory=SeedConfig)
+
+    @property
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
+
+    def _same_body(self: T, other: T) -> bool:
+        return compare_seeds(self, other)
 
 
 @dataclass
@@ -343,21 +338,14 @@ class ParsedDataTestNode(ParsedNode):
 
 
 @dataclass
-class SchemaTestMixin(JsonSchemaMixin):
+class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
+    # keep this in sync with CompiledSchemaTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
-    # make sure to keep this in sync with CompiledSchemaTestNode...
-    def _same_body(
-        self: 'ParsedSchemaTestNode', other: 'ParsedSchemaTestNode'
-    ) -> bool:
+    def _same_body(self: HasTestMetadata, other: HasTestMetadata) -> bool:
         return self.test_metadata == other.test_metadata
-
-
-@dataclass
-class ParsedSchemaTestNode(SchemaTestMixin, ParsedNode, HasTestMetadata):
-    pass
 
 
 @dataclass

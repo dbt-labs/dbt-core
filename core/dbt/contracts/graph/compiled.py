@@ -11,9 +11,9 @@ from dbt.contracts.graph.parsed import (
     ParsedSeedNode,
     ParsedSnapshotNode,
     ParsedSourceDefinition,
-    SchemaTestMixin,
-    SeedMixin,
+    SeedConfig,
     TestConfig,
+    compare_seeds,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
@@ -94,8 +94,18 @@ class CompiledRPCNode(CompiledNode):
 
 
 @dataclass
-class CompiledSeedNode(SeedMixin, CompiledNode):
-    pass
+class CompiledSeedNode(CompiledNode):
+    # keep this in sync with ParsedSeedNode!
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    config: SeedConfig = field(default_factory=SeedConfig)
+
+    @property
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
+
+    def _same_body(self, other) -> bool:
+        return compare_seeds(self, other)
 
 
 @dataclass
@@ -110,8 +120,14 @@ class CompiledDataTestNode(CompiledNode):
 
 
 @dataclass
-class CompiledSchemaTestNode(SchemaTestMixin, CompiledNode, HasTestMetadata):
-    pass
+class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
+    # keep this in sync with ParsedSchemaTestNode!
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    column_name: Optional[str] = None
+    config: TestConfig = field(default_factory=TestConfig)
+
+    def _same_body(self, other) -> bool:
+        return self.test_metadata == other.test_metadata
 
 
 CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]

@@ -376,7 +376,7 @@ class StateSelectorMethod(SelectorMethod):
                     'macros. This will not be marked as a modification.'
                 ))
 
-        return not new.same_contents(old)
+        return not new.same_contents(old)  # type: ignore
 
     def check_new(
         self,
