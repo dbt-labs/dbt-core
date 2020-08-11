@@ -95,12 +95,12 @@ class CompiledSqlNode(CompiledNode):
 @dataclass
 class CompiledSeedNode(CompiledNode):
     # keep this in sync with ParsedSeedNode!
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
 
     @property
     def empty(self):
-        """ Seeds are never empty"""
+        """Seeds are never empty"""
         return False
 
     def same_body(self, other) -> bool:
@@ -123,7 +123,7 @@ class CompiledSingularTestNode(CompiledNode):
 @dataclass
 class CompiledGenericTestNode(CompiledNode, HasTestMetadata):
     # keep this in sync with ParsedGenericTestNode!
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to

@@ -382,9 +382,9 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
     # if the current checksum is a path, we want to log a warning.
     result = first.checksum == second.checksum
 
-    if first.checksum.name == 'path':
+    if first.checksum.name == "path":
         msg: str
-        if second.checksum.name != 'path':
+        if second.checksum.name != "path":
             msg = (
                 f"Found a seed ({first.package_name}.{first.name}) "
                 f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
@@ -416,12 +416,12 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
 @dataclass
 class ParsedSeedNode(ParsedNode):
     # keep this in sync with CompiledSeedNode!
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
 
     @property
     def empty(self):
-        """ Seeds are never empty"""
+        """Seeds are never empty"""
         return False
 
     def same_body(self: T, other: T) -> bool:
