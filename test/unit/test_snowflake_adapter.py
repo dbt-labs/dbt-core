@@ -302,7 +302,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 password='test_password', role=None, schema='public',
                 user='test_user', warehouse='test_warehouse',
                 authenticator='test_sso_url', private_key=None,
-                application='dbt')
+                application='dbt', client_store_temporary_credential=True)
         ])
 
     def test_authenticator_externalbrowser_authentication(self):
@@ -320,7 +320,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', authenticator='externalbrowser',
-                private_key=None, application='dbt')
+                private_key=None, application='dbt', client_store_temporary_credential=True)
         ])
 
     def test_authenticator_oauth_authentication(self):
@@ -339,7 +339,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', authenticator='oauth', token='my-oauth-token',
-                private_key=None, application='dbt')
+                private_key=None, application='dbt', client_store_temporary_credential=True)
         ])
 
     @mock.patch('dbt.adapters.snowflake.SnowflakeCredentials._get_private_key', return_value='test_key')
