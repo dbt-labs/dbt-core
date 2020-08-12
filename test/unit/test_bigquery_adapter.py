@@ -3,6 +3,7 @@ import decimal
 import re
 import unittest
 from contextlib import contextmanager
+from requests.exceptions import ConnectionError
 from unittest.mock import patch, MagicMock, Mock
 
 import hologram
@@ -427,9 +428,10 @@ class TestBigQueryConnectionManager(unittest.TestCase):
 
         self.connections.get_thread_connection = lambda: self.mock_connection
 
-    def test_retry_and_handle(self):
+    @patch(
+        'dbt.adapters.bigquery.connections._is_retryable', return_value=True)
+    def test_retry_and_handle(self, is_retryable):
         self.connections.DEFAULT_MAXIMUM_DELAY = 2.0
-        dbt.adapters.bigquery.connections._is_retryable = lambda x: True
 
         @contextmanager
         def dummy_handler(msg):
@@ -453,14 +455,42 @@ class TestBigQueryConnectionManager(unittest.TestCase):
                  raiseDummyException)
             self.assertEqual(DummyException.count, 9)
 
+    @patch(
+        'dbt.adapters.bigquery.connections._is_retryable', return_value=True)
+    def test_retry_connection_reset(self, is_retryable):
+        self.connections.open = MagicMock()
+        self.connections.close = MagicMock()
+        self.connections.DEFAULT_MAXIMUM_DELAY = 2.0
+
+        @contextmanager
+        def dummy_handler(msg):
+            yield
+
+        self.connections.exception_handler = dummy_handler
+
+        def raiseConnectionResetError():
+            raise ConnectionResetError("Connection broke")
+
+        mock_conn = Mock(credentials=Mock(retries=1))
+        with self.assertRaises(ConnectionResetError):
+            self.connections._retry_and_handle(
+              "some sql", mock_conn,
+              raiseConnectionResetError)
+        self.connections.close.assert_called_once_with(mock_conn)
+        self.connections.open.assert_called_once_with(mock_conn)
+
     def test_is_retryable(self):
         _is_retryable = dbt.adapters.bigquery.connections._is_retryable
         exceptions = dbt.adapters.bigquery.impl.google.cloud.exceptions
         internal_server_error = exceptions.InternalServerError('code broke')
         bad_request_error = exceptions.BadRequest('code broke')
+        connection_error = ConnectionError('code broke')
+        client_error = exceptions.ClientError('bad code')
 
         self.assertTrue(_is_retryable(internal_server_error))
-        self.assertFalse(_is_retryable(bad_request_error))
+        self.assertTrue(_is_retryable(bad_request_error))
+        self.assertTrue(_is_retryable(connection_error))
+        self.assertFalse(_is_retryable(client_error))
 
     def test_drop_dataset(self):
         mock_table = Mock()

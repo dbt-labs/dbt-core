@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
+from requests.exceptions import ConnectionError
 from typing import Optional, Any, Dict
 
 import google.auth
@@ -24,6 +25,18 @@ from hologram.helpers import StrEnum
 
 
 BQ_QUERY_JOB_SPLIT = '-----Query Job SQL Follows-----'
+
+REOPENABLE_ERRORS = (
+    ConnectionResetError,
+    ConnectionError,
+)
+
+RETRYABLE_ERRORS = (
+    google.cloud.exceptions.ServerError,
+    google.cloud.exceptions.BadRequest,
+    ConnectionResetError,
+    ConnectionError,
+)
 
 
 class Priority(StrEnum):
@@ -390,12 +403,20 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
     def _retry_and_handle(self, msg, conn, fn):
         """retry a function call within the context of exception_handler."""
+        def reopen_conn_on_error(error):
+            if isinstance(error, REOPENABLE_ERRORS):
+                logger.warning('Reopening connection after {!r}', error)
+                self.close(conn)
+                self.open(conn)
+                return
+
         with self.exception_handler(msg):
             return retry.retry_target(
                 target=fn,
                 predicate=_ErrorCounter(self.get_retries(conn)).count_error,
                 sleep_generator=self._retry_generator(),
-                deadline=None)
+                deadline=None,
+                on_error=reopen_conn_on_error)
 
     def _retry_generator(self):
         """Generates retry intervals that exponentially back off."""
@@ -425,5 +446,7 @@ class _ErrorCounter(object):
 
 
 def _is_retryable(error):
-    """Return true for 500 level (retryable) errors."""
-    return isinstance(error, google.cloud.exceptions.ServerError)
+    """Return true for errors that are unlikely to occur again if retried."""
+    if isinstance(error, RETRYABLE_ERRORS):
+        return True
+    return False
