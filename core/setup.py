@@ -68,9 +68,9 @@ setup(
         'logbook>=1.5,<1.6',
         'typing-extensions>=3.7.4,<3.8',
         # the following are all to match snowflake-connector-python
-        'requests>=2.18.0,<2.23.0',
-        'idna<2.9',
-        'cffi>=1.9,<1.14',
+        'requests>=2.18.0,<2.24.0',
+        'idna<2.10',
+        'cffi>=1.9,<1.15',
     ],
     zip_safe=False,
     classifiers=[
