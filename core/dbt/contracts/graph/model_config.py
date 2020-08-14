@@ -2,7 +2,7 @@ from dataclasses import field, Field, dataclass
 from enum import Enum
 from typing import (
     Any, List, Optional, Dict, MutableMapping, Union, Type, NewType, Tuple,
-    TypeVar
+    TypeVar, Callable
 )
 
 # TODO: patch+upgrade hologram to avoid this jsonschema import
@@ -21,7 +21,10 @@ from dbt import hooks
 from dbt.node_types import NodeType
 
 
-def _get_meta_value(cls: Type[Enum], fld: Field, key: str, default: Any):
+M = TypeVar('M', bound='Metadata')
+
+
+def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
     # a metadata field might exist. If it does, it might have a matching key.
     # If it has both, make sure the value is valid and return it. If it
     # doesn't, return the default.
@@ -39,7 +42,7 @@ def _get_meta_value(cls: Type[Enum], fld: Field, key: str, default: Any):
 
 
 def _set_meta_value(
-    obj: Enum, key: str, existing: Optional[Dict[str, Any]] = None
+    obj: M, key: str, existing: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     if existing is None:
         result = {}
@@ -49,35 +52,82 @@ def _set_meta_value(
     return result
 
 
-MERGE_KEY = 'merge'
+class Metadata(Enum):
+    @classmethod
+    def from_field(cls: Type[M], fld: Field) -> M:
+        default = cls.default_field()
+        key = cls.metadata_key()
+
+        return _get_meta_value(cls, fld, key, default)
+
+    def meta(
+        self, existing: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        key = self.metadata_key()
+        return _set_meta_value(self, key, existing)
+
+    @classmethod
+    def default_field(cls) -> 'Metadata':
+        raise NotImplementedError('Not implemented')
+
+    @classmethod
+    def metadata_key(cls) -> str:
+        raise NotImplementedError('Not implemented')
 
 
-class MergeBehavior(Enum):
+class MergeBehavior(Metadata):
     Append = 1
     Update = 2
     Clobber = 3
 
     @classmethod
-    def from_field(cls, fld: Field) -> 'MergeBehavior':
-        return _get_meta_value(cls, fld, MERGE_KEY, cls.Clobber)
+    def default_field(cls) -> 'MergeBehavior':
+        return cls.Clobber
 
-    def meta(self, existing: Optional[Dict[str, Any]] = None):
-        return _set_meta_value(self, MERGE_KEY, existing)
-
-
-SHOW_HIDE_KEY = 'show_hide'
+    @classmethod
+    def metadata_key(cls) -> str:
+        return 'merge'
 
 
-class ShowBehavior(Enum):
+class ShowBehavior(Metadata):
     Show = 1
     Hide = 2
 
     @classmethod
-    def from_field(cls, fld: Field) -> 'ShowBehavior':
-        return _get_meta_value(cls, fld, SHOW_HIDE_KEY, cls.Show)
+    def default_field(cls) -> 'ShowBehavior':
+        return cls.Show
 
-    def meta(self, existing: Optional[Dict[str, Any]] = None):
-        return _set_meta_value(self, SHOW_HIDE_KEY, existing)
+    @classmethod
+    def metadata_key(cls) -> str:
+        return 'show_hide'
+
+    @classmethod
+    def should_show(cls, fld: Field) -> bool:
+        return cls.from_field(fld) == cls.Show
+
+
+class CompareBehavior(Metadata):
+    Include = 1
+    Exclude = 2
+
+    @classmethod
+    def default_field(cls) -> 'CompareBehavior':
+        return cls.Include
+
+    @classmethod
+    def metadata_key(cls) -> str:
+        return 'compare'
+
+    @classmethod
+    def should_include(cls, fld: Field) -> bool:
+        return cls.from_field(fld) == cls.Include
+
+
+def metas(*metas: Metadata) -> Dict[str, Any]:
+    existing: Dict[str, Any] = {}
+    for m in metas:
+        existing = m.meta(existing)
+    return existing
 
 
 def _listify(value: Any) -> List:
@@ -174,14 +224,11 @@ class BaseConfig(
         else:
             del self._extra[key]
 
-    def _content_iterator(self, include_hidden: bool):
+    def _content_iterator(self, include_condition: Callable[[Field], bool]):
         seen = set()
         for fld, _ in self._get_fields():
             seen.add(fld.name)
-            if (
-                include_hidden or
-                ShowBehavior.from_field(fld) != ShowBehavior.Hide
-            ):
+            if include_condition(fld):
                 yield fld.name
 
         for key in self._extra:
@@ -190,14 +237,16 @@ class BaseConfig(
                 yield key
 
     def __iter__(self):
-        yield from self._content_iterator(include_hidden=True)
+        yield from self._content_iterator(include_condition=lambda f: True)
 
     def __len__(self):
         return len(self._get_fields()) + len(self._extra)
 
     def same_contents(self: T, other: T) -> bool:
-        """This is like __eq__, except it ignores hidden fields."""
-        for key in self._content_iterator(include_hidden=False):
+        """This is like __eq__, except it ignores some fields."""
+        for key in self._content_iterator(
+            include_condition=CompareBehavior.should_include
+        ):
             try:
                 if self[key] != other[key]:
                     return False
@@ -259,8 +308,7 @@ class BaseConfig(
                 if result[target_field] is not None:
                     continue
 
-                show_behavior = ShowBehavior.from_field(fld)
-                if show_behavior == ShowBehavior.Hide:
+                if not ShowBehavior.should_show(fld):
                     del result[target_field]
         return result
 
@@ -321,9 +369,10 @@ class NodeConfig(BaseConfig):
         default_factory=list,
         metadata=MergeBehavior.Append.meta(),
     )
+    # this only applies for config v1, so it doesn't participate in comparison
     vars: Dict[str, Any] = field(
         default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
+        metadata=metas(CompareBehavior.Exclude, MergeBehavior.Update),
     )
     quoting: Dict[str, Any] = field(
         default_factory=dict,
@@ -335,22 +384,25 @@ class NodeConfig(BaseConfig):
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
     )
-    # these fields are all config-only (they're ultimately applied to the node)
+    # these fields are included in serialized output, but are not part of
+    # config comparison (they are part of database_representation)
     alias: Optional[str] = field(
         default=None,
-        metadata=ShowBehavior.Hide.meta(),
+        metadata=CompareBehavior.Exclude.meta(),
     )
     schema: Optional[str] = field(
         default=None,
-        metadata=ShowBehavior.Hide.meta(),
+        metadata=CompareBehavior.Exclude.meta(),
     )
     database: Optional[str] = field(
         default=None,
-        metadata=ShowBehavior.Hide.meta(),
+        metadata=CompareBehavior.Exclude.meta(),
     )
     tags: Union[List[str], str] = field(
         default_factory=list_str,
-        metadata=ShowBehavior.Hide.meta(MergeBehavior.Append.meta()),
+        metadata=metas(ShowBehavior.Hide,
+                       MergeBehavior.Append,
+                       CompareBehavior.Exclude),
     )
     full_refresh: Optional[bool] = None
 

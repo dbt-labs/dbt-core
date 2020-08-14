@@ -342,24 +342,27 @@ class TestTypeSelectorMethod(SelectorMethod):
 class StateSelectorMethod(SelectorMethod):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.macros_were_modified = None
+        self.macros_were_modified: Optional[List[str]] = None
 
-    def _macros_modified(self):
+    def _macros_modified(self) -> List[str]:
         # we checked in the caller!
         if self.previous_state is None or self.previous_state.manifest is None:
             raise InternalException(
-                'No deferred manifest in _macros_modified'
+                'No comparison manifest in _macros_modified'
             )
         old_macros = self.previous_state.manifest.macros
         new_macros = self.manifest.macros
         # macros were added/removed
         if old_macros.keys() != new_macros.keys():
-            return True
+            return []
 
-        return any(
-            old_macros[uid].macro_sql != new_macros[uid].macro_sql
-            for uid in new_macros
-        )
+        modified = []
+        for uid, new_macro in new_macros.items():
+            old_macro = old_macros[uid]
+            if new_macro.macro_sql != old_macro.macro_sql:
+                modified.append(f'{new_macro.package_name}.{new_macro.name}')
+
+        return modified[:3]
 
     def check_modified(
         self,
@@ -371,9 +374,11 @@ class StateSelectorMethod(SelectorMethod):
         if self.macros_were_modified is None:
             self.macros_were_modified = self._macros_modified()
             if self.macros_were_modified:
+                log_str = ', '.join(self.macros_were_modified)
                 logger.warning(warning_tag(
-                    'During a state comparison, dbt detected a change in '
-                    'macros. This will not be marked as a modification.'
+                    f'During a state comparison, dbt detected a change in '
+                    f'macros. This will not be marked as a modification. Some '
+                    f'macros: {log_str}'
                 ))
 
         return not new.same_contents(old)  # type: ignore
@@ -390,7 +395,7 @@ class StateSelectorMethod(SelectorMethod):
     ) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
             raise RuntimeException(
-                'Got a state selector method, but no deferred manifest'
+                'Got a state selector method, but no comparison manifest'
             )
 
         state_checks = {

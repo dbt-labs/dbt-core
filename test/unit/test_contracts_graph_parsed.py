@@ -32,7 +32,7 @@ from dbt.contracts.graph.parsed import (
     ParsedHookNode,
     TestMetadata,
 )
-from dbt.contracts.graph.unparsed import Quoting
+from dbt.contracts.graph.unparsed import Quoting, Time, TimePeriod, FreshnessThreshold
 from dbt import flags
 
 from hologram import ValidationError
@@ -319,15 +319,16 @@ unchanged_nodes = [
     # only columns docs enabled, but description changed
     lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), description='a model description')),
     # only relation docs eanbled, but columns changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')}))
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
 
+    # not tracked, we track config.alias/config.schema/config.database
+    lambda u: (u, u.replace(alias='other')),
+    lambda u: (u, u.replace(schema='other')),
+    lambda u: (u, u.replace(database='other')),
 ]
 
 
 changed_nodes = [
-    lambda u: (u, u.replace(alias='other')),
-    lambda u: (u, u.replace(schema='other')),
-    lambda u: (u, u.replace(database='other')),
     lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
 
     # None -> False is a config change even though it's pretty much the same
@@ -338,6 +339,11 @@ changed_nodes = [
     lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), description='a model description')),
     # persist docs was true for columns and we changed the model description
     lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+
+    # not tracked, we track config.alias/config.schema/config.database
+    lambda u: (u, u.replace(config=u.config.replace(alias='other'))),
+    lambda u: (u, u.replace(config=u.config.replace(schema='other'))),
+    lambda u: (u, u.replace(config=u.config.replace(database='other'))),
 ]
 
 
@@ -535,14 +541,15 @@ unchanged_seeds = [
     # only columns docs enabled, but description changed
     lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), description='a model description')),
     # only relation docs eanbled, but columns changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')}))
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+
+    lambda u: (u, u.replace(alias='other')),
+    lambda u: (u, u.replace(schema='other')),
+    lambda u: (u, u.replace(database='other')),
 ]
 
 
 changed_seeds = [
-    lambda u: (u, u.replace(alias='other')),
-    lambda u: (u, u.replace(schema='other')),
-    lambda u: (u, u.replace(database='other')),
     lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
 
     # None -> False is a config change even though it's pretty much the same
@@ -553,6 +560,10 @@ changed_seeds = [
     lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), description='a model description')),
     # persist docs was true for columns and we changed the model description
     lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+
+    lambda u: (u, u.replace(config=u.config.replace(alias='other'))),
+    lambda u: (u, u.replace(config=u.config.replace(schema='other'))),
+    lambda u: (u, u.replace(config=u.config.replace(database='other'))),
 ]
 
 
@@ -1637,85 +1648,218 @@ class TestParsedDocumentation(ContractTestCase):
         self.assert_fails_validation(bad_extra_field)
 
 
-class TestParsedSourceDefinition(ContractTestCase):
-    ContractType = ParsedSourceDefinition
+@pytest.fixture
+def minimum_parsed_source_definition_dict():
+    return {
+        'package_name': 'test',
+        'root_path': '/root',
+        'path': '/root/models/sources.yml',
+        'original_file_path': '/root/models/sources.yml',
+        'database': 'some_db',
+        'schema': 'some_schema',
+        'fqn': ['test', 'source', 'my_source', 'my_source_table'],
+        'source_name': 'my_source',
+        'name': 'my_source_table',
+        'source_description': 'my source description',
+        'loader': 'stitch',
+        'identifier': 'my_source_table',
+        'resource_type': str(NodeType.Source),
+        'unique_id': 'test.source.my_source.my_source_table',
+    }
 
-    def _minimum_dict(self):
-        return {
-            'package_name': 'test',
-            'root_path': '/root',
-            'path': '/root/models/sources.yml',
-            'original_file_path': '/root/models/sources.yml',
-            'database': 'some_db',
-            'schema': 'some_schema',
-            'fqn': ['test', 'source', 'my_source', 'my_source_table'],
-            'source_name': 'my_source',
-            'name': 'my_source_table',
-            'source_description': 'my source description',
-            'loader': 'stitch',
-            'identifier': 'my_source_table',
-            'resource_type': str(NodeType.Source),
-            'unique_id': 'test.source.my_source.my_source_table',
+
+@pytest.fixture
+def basic_parsed_source_definition_dict():
+    return {
+        'package_name': 'test',
+        'root_path': '/root',
+        'path': '/root/models/sources.yml',
+        'original_file_path': '/root/models/sources.yml',
+        'database': 'some_db',
+        'schema': 'some_schema',
+        'fqn': ['test', 'source', 'my_source', 'my_source_table'],
+        'source_name': 'my_source',
+        'name': 'my_source_table',
+        'source_description': 'my source description',
+        'loader': 'stitch',
+        'identifier': 'my_source_table',
+        'resource_type': str(NodeType.Source),
+        'description': '',
+        'columns': {},
+        'quoting': {},
+        'unique_id': 'test.source.my_source.my_source_table',
+        'meta': {},
+        'source_meta': {},
+        'tags': [],
+        'config': {
+            'enabled': True,
         }
+    }
 
-    def test_basic(self):
-        source_def_dict = {
-            'package_name': 'test',
-            'root_path': '/root',
-            'path': '/root/models/sources.yml',
-            'original_file_path': '/root/models/sources.yml',
-            'database': 'some_db',
-            'schema': 'some_schema',
-            'fqn': ['test', 'source', 'my_source', 'my_source_table'],
-            'source_name': 'my_source',
-            'name': 'my_source_table',
-            'source_description': 'my source description',
-            'loader': 'stitch',
-            'identifier': 'my_source_table',
-            'resource_type': str(NodeType.Source),
-            'description': '',
-            'columns': {},
-            'quoting': {},
-            'unique_id': 'test.source.my_source.my_source_table',
-            'meta': {},
-            'source_meta': {},
-            'tags': [],
-            'config': {
-                'enabled': True,
-            }
-        }
-        source_def = self.ContractType(
-            columns={},
-            database='some_db',
-            description='',
-            fqn=['test', 'source', 'my_source', 'my_source_table'],
-            identifier='my_source_table',
-            loader='stitch',
-            name='my_source_table',
-            original_file_path='/root/models/sources.yml',
-            package_name='test',
-            path='/root/models/sources.yml',
-            quoting=Quoting(),
-            resource_type=NodeType.Source,
-            root_path='/root',
-            schema='some_schema',
-            source_description='my source description',
-            source_name='my_source',
-            unique_id='test.source.my_source.my_source_table',
-            tags=[],
-            config=SourceConfig(),
-        )
-        self.assert_symmetric(source_def, source_def_dict)
-        minimum = self._minimum_dict()
-        self.assert_from_dict(source_def, minimum)
-        pickle.loads(pickle.dumps(source_def))
 
-    def test_invalid_missing(self):
-        bad_missing_name = self._minimum_dict()
-        del bad_missing_name['name']
-        self.assert_fails_validation(bad_missing_name)
+@pytest.fixture
+def basic_parsed_source_definition_object():
+    return ParsedSourceDefinition(
+        columns={},
+        database='some_db',
+        description='',
+        fqn=['test', 'source', 'my_source', 'my_source_table'],
+        identifier='my_source_table',
+        loader='stitch',
+        name='my_source_table',
+        original_file_path='/root/models/sources.yml',
+        package_name='test',
+        path='/root/models/sources.yml',
+        quoting=Quoting(),
+        resource_type=NodeType.Source,
+        root_path='/root',
+        schema='some_schema',
+        source_description='my source description',
+        source_name='my_source',
+        unique_id='test.source.my_source.my_source_table',
+        tags=[],
+        config=SourceConfig(),
+    )
 
-    def test_invalid_bad_resource_type(self):
-        bad_resource_type = self._minimum_dict()
-        bad_resource_type['resource_type'] = str(NodeType.Model)
-        self.assert_fails_validation(bad_resource_type)
+
+@pytest.fixture
+def complex_parsed_source_definition_dict():
+    return {
+        'package_name': 'test',
+        'root_path': '/root',
+        'path': '/root/models/sources.yml',
+        'original_file_path': '/root/models/sources.yml',
+        'database': 'some_db',
+        'schema': 'some_schema',
+        'fqn': ['test', 'source', 'my_source', 'my_source_table'],
+        'source_name': 'my_source',
+        'name': 'my_source_table',
+        'source_description': 'my source description',
+        'loader': 'stitch',
+        'identifier': 'my_source_table',
+        'resource_type': str(NodeType.Source),
+        'description': '',
+        'columns': {},
+        'quoting': {},
+        'unique_id': 'test.source.my_source.my_source_table',
+        'meta': {},
+        'source_meta': {},
+        'tags': ['my_tag'],
+        'config': {
+            'enabled': True,
+        },
+        'freshness': {
+            'warn_after': {'period': 'hour', 'count': 1},
+        },
+        'loaded_at_field': 'loaded_at',
+    }
+
+
+@pytest.fixture
+def complex_parsed_source_definition_object():
+    return ParsedSourceDefinition(
+        columns={},
+        database='some_db',
+        description='',
+        fqn=['test', 'source', 'my_source', 'my_source_table'],
+        identifier='my_source_table',
+        loader='stitch',
+        name='my_source_table',
+        original_file_path='/root/models/sources.yml',
+        package_name='test',
+        path='/root/models/sources.yml',
+        quoting=Quoting(),
+        resource_type=NodeType.Source,
+        root_path='/root',
+        schema='some_schema',
+        source_description='my source description',
+        source_name='my_source',
+        unique_id='test.source.my_source.my_source_table',
+        tags=['my_tag'],
+        config=SourceConfig(),
+        freshness=FreshnessThreshold(warn_after=Time(period=TimePeriod.hour, count=1)),
+        loaded_at_field='loaded_at',
+    )
+
+
+def test_basic_source_definition(minimum_parsed_source_definition_dict, basic_parsed_source_definition_dict, basic_parsed_source_definition_object):
+    node = basic_parsed_source_definition_object
+    node_dict = basic_parsed_source_definition_dict
+    minimum = minimum_parsed_source_definition_dict
+
+    assert_symmetric(node, node_dict, ParsedSourceDefinition)
+
+    assert node.is_ephemeral is False
+    assert node.is_refable is False
+    assert node.has_freshness is False
+
+    assert_from_dict(node, minimum, ParsedSourceDefinition)
+    pickle.loads(pickle.dumps(node))
+
+
+def test_invalid_missing(minimum_parsed_source_definition_dict):
+    bad_missing_name = minimum_parsed_source_definition_dict
+    del bad_missing_name['name']
+    assert_fails_validation(bad_missing_name, ParsedSourceDefinition)
+
+
+def test_invalid_bad_resource_type(minimum_parsed_source_definition_dict):
+    bad_resource_type = minimum_parsed_source_definition_dict
+    bad_resource_type['resource_type'] = str(NodeType.Model)
+    assert_fails_validation(bad_resource_type, ParsedSourceDefinition)
+
+
+def test_complex_source_definition(complex_parsed_source_definition_dict, complex_parsed_source_definition_object):
+    node = complex_parsed_source_definition_object
+    node_dict = complex_parsed_source_definition_dict
+    assert_symmetric(node, node_dict, ParsedSourceDefinition)
+
+    assert node.is_ephemeral is False
+    assert node.is_refable is False
+    assert node.has_freshness is True
+
+    pickle.loads(pickle.dumps(node))
+
+
+def test_source_no_loaded_at(complex_parsed_source_definition_object):
+    node = complex_parsed_source_definition_object
+    assert node.has_freshness is True
+    # no loaded_at_field -> does not have freshness
+    node.loaded_at_field = None
+    assert node.has_freshness is False
+
+
+def test_source_no_freshness(complex_parsed_source_definition_object):
+    node = complex_parsed_source_definition_object
+    assert node.has_freshness is True
+    node.freshness = None
+    assert node.has_freshness is False
+
+
+unchanged_source_definitions = [
+    lambda u: (u, u.replace(tags=['mytag'])),
+    lambda u: (u, u.replace(meta={'a': 1000})),
+]
+
+changed_source_definitions = [
+    lambda u: (u, u.replace(freshness=FreshnessThreshold(warn_after=Time(period=TimePeriod.hour, count=1)), loaded_at_field='loaded_at')),
+    lambda u: (u, u.replace(loaded_at_field='loaded_at')),
+    lambda u: (u, u.replace(freshness=FreshnessThreshold(error_after=Time(period=TimePeriod.hour, count=1)))),
+    lambda u: (u, u.replace(quoting=Quoting(identifier=True))),
+    lambda u: (u, u.replace(database='other_database')),
+    lambda u: (u, u.replace(schema='other_schema')),
+    lambda u: (u, u.replace(identifier='identifier')),
+]
+
+
+@pytest.mark.parametrize('func', unchanged_source_definitions)
+def test_compare_unchanged_parsed_source_definition(func, basic_parsed_source_definition_object):
+    node, compare = func(basic_parsed_source_definition_object)
+    assert node.same_contents(compare)
+
+
+@pytest.mark.parametrize('func', changed_source_definitions)
+def test_compare_changed_source_definition(func, basic_parsed_source_definition_object):
+    node, compare = func(basic_parsed_source_definition_object)
+    assert not node.same_contents(compare)
+

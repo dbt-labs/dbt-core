@@ -13,7 +13,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     SeedConfig,
     TestConfig,
-    compare_seeds,
+    same_seeds,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
@@ -104,8 +104,8 @@ class CompiledSeedNode(CompiledNode):
         """ Seeds are never empty"""
         return False
 
-    def _same_body(self, other) -> bool:
-        return compare_seeds(self, other)
+    def same_body(self, other) -> bool:
+        return same_seeds(self, other)
 
 
 @dataclass
@@ -126,8 +126,21 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
-    def _same_body(self, other) -> bool:
-        return self.test_metadata == other.test_metadata
+    def same_config(self, other) -> bool:
+        return self.config.severity == other.config.severity
+
+    def same_column_name(self, other) -> bool:
+        return self.column_name == other.column_name
+
+    def same_contents(self, other) -> bool:
+        if other is None:
+            return False
+
+        return (
+            self.same_config(other) and
+            self.same_fqn(other) and
+            True
+        )
 
 
 CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]

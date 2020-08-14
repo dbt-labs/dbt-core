@@ -224,10 +224,10 @@ unchanged_compiled_models = [
     lambda u: (u, u.replace(description='a description')),
     lambda u: (u, u.replace(tags=['mytag'])),
     lambda u: (u, u.replace(meta={'cool_key': 'cool value'})),
-    # alias configs are ignored, we only care about the final value
-    lambda u: (u, u.replace(config=u.config.replace(alias='nope'))),
-    lambda u: (u, u.replace(config=u.config.replace(database='nope'))),
-    lambda u: (u, u.replace(config=u.config.replace(schema='nope'))),
+    # changing the final alias/schema/datbase isn't a change - could just be target changing!
+    lambda u: (u, u.replace(database='nope')),
+    lambda u: (u, u.replace(schema='nope')),
+    lambda u: (u, u.replace(alias='nope')),
 
     # None -> False is a config change even though it's pretty much the same
     lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': False})), u.replace(config=u.config.replace(persist_docs={'relation': False}))),
@@ -246,9 +246,6 @@ unchanged_compiled_models = [
 changed_compiled_models = [
     lambda u: (u, None),
     lambda u: (u, u.replace(raw_sql='select * from wherever')),
-    lambda u: (u, u.replace(database='other_db')),
-    lambda u: (u, u.replace(schema='other_schema')),
-    lambda u: (u, u.replace(alias='foo')),
     lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
     lambda u: (u, u.replace(config=u.config.replace(full_refresh=True))),
     lambda u: (u, u.replace(config=u.config.replace(post_hook=['select 1 as id']))),
@@ -266,6 +263,11 @@ changed_compiled_models = [
     lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), description='a model description')),
     # persist docs was true for columns and we changed the model description
     lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+
+    # changing alias/schema/database on the config level is a change
+    lambda u: (u, u.replace(config=u.config.replace(database='nope'))),
+    lambda u: (u, u.replace(config=u.config.replace(schema='nope'))),
+    lambda u: (u, u.replace(config=u.config.replace(alias='nope'))),
 ]
 
 
@@ -511,27 +513,28 @@ unchanged_schema_tests = [
     lambda u: u.replace(description='a description'),
     lambda u: u.replace(tags=['mytag']),
     lambda u: u.replace(meta={'cool_key': 'cool value'}),
-    # alias configs are ignored, we only care about the final value
+    # these values don't even mean anything on schema tests!
     lambda u: u.replace(config=u.config.replace(alias='nope')),
     lambda u: u.replace(config=u.config.replace(database='nope')),
     lambda u: u.replace(config=u.config.replace(schema='nope')),
+    lambda u: u.replace(database='other_db'),
+    lambda u: u.replace(schema='other_schema'),
+    lambda u: u.replace(alias='foo'),
+    lambda u: u.replace(config=u.config.replace(full_refresh=True)),
+    lambda u: u.replace(config=u.config.replace(post_hook=['select 1 as id'])),
+    lambda u: u.replace(config=u.config.replace(pre_hook=['select 1 as id'])),
+    lambda u: u.replace(config=u.config.replace(quoting={'database': True, 'schema': False, 'identifier': False})),
 ]
 
 
 changed_schema_tests = [
     lambda u: None,
-    lambda u: u.replace(database='other_db'),
-    lambda u: u.replace(schema='other_schema'),
-    lambda u: u.replace(alias='foo'),
     lambda u: u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql'),
-    lambda u: u.replace(config=u.config.replace(full_refresh=True)),
-    lambda u: u.replace(config=u.config.replace(post_hook=['select 1 as id'])),
-    lambda u: u.replace(config=u.config.replace(pre_hook=['select 1 as id'])),
     lambda u: u.replace(config=u.config.replace(severity='warn')),
-    lambda u: u.replace(config=u.config.replace(quoting={'database': True, 'schema': False, 'identifier': False})),
-    lambda u: u.replace(test_metadata=u.test_metadata.replace(namespace='something')),
-    lambda u: u.replace(test_metadata=u.test_metadata.replace(name='bar')),
-    lambda u: u.replace(test_metadata=u.test_metadata.replace(kwargs={'arg': 'value'})),
+    # If we checked test metadata, these would caount. But we don't, because these changes would all change the unique ID, so it's irrelevant.
+    # lambda u: u.replace(test_metadata=u.test_metadata.replace(namespace='something')),
+    # lambda u: u.replace(test_metadata=u.test_metadata.replace(name='bar')),
+    # lambda u: u.replace(test_metadata=u.test_metadata.replace(kwargs={'arg': 'value'})),
 ]
 
 

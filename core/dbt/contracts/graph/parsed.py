@@ -65,6 +65,9 @@ class ColumnInfo(
 class HasFqn(JsonSchemaMixin, Replaceable):
     fqn: List[str]
 
+    def same_fqn(self, other: 'HasFqn') -> bool:
+        return self.fqn == other.fqn
+
 
 @dataclass
 class HasUniqueID(JsonSchemaMixin, Replaceable):
@@ -189,17 +192,16 @@ T = TypeVar('T', bound='ParsedNode')
 
 @dataclass
 class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
-
     def _persist_column_docs(self) -> bool:
         return bool(self.config.persist_docs.get('columns'))
 
     def _persist_relation_docs(self) -> bool:
         return bool(self.config.persist_docs.get('relation'))
 
-    def _same_body(self: T, other: T) -> bool:
+    def same_body(self: T, other: T) -> bool:
         return self.raw_sql == other.raw_sql
 
-    def _same_description_persisted(self: T, other: T) -> bool:
+    def same_persisted_description(self: T, other: T) -> bool:
         # the check on configs will handle the case where we have different
         # persist settings, so we only have to care about the cases where they
         # are the same..
@@ -220,25 +222,31 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
 
         return True
 
-    def _same_name(self: T, old: T) -> bool:
+    def same_database_representation(self, other: T) -> bool:
+        # compare the config representation, not the node's config value. This
+        # compares the configured value, rather than the ultimate value (so
+        # generate_*_name and unset values derived from the target are
+        # ignored)
         return (
-            self.database == old.database and
-            self.schema == old.schema and
-            self.identifier == old.identifier and
+            self.config.database == other.config.database and
+            self.config.schema == other.config.schema and
+            self.config.alias == other.config.alias and
             True
         )
+
+    def same_config(self, old: T) -> bool:
+        return self.config.same_contents(old.config)
 
     def same_contents(self: T, old: Optional[T]) -> bool:
         if old is None:
             return False
 
         return (
-            self.resource_type == old.resource_type and
-            self._same_body(old) and
-            self.config.same_contents(old.config) and
-            self._same_description_persisted(old) and
-            self._same_name(old) and
-            self.fqn == old.fqn and
+            self.same_body(old) and
+            self.same_config(old) and
+            self.same_persisted_description(old) and
+            self.same_fqn(old) and
+            self.same_database_representation(old) and
             True
         )
 
@@ -266,7 +274,7 @@ class ParsedRPCNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
-def compare_seeds(first: ParsedNode, second: ParsedNode) -> bool:
+def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
     # for seeds, we check the hashes. If the hashes are different types,
     # no match. If the hashes are both the same 'path', log a warning and
     # assume they are the same
@@ -277,27 +285,27 @@ def compare_seeds(first: ParsedNode, second: ParsedNode) -> bool:
         msg: str
         if second.checksum.name != 'path':
             msg = (
-                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
-                f'previous file was <={MAXIMUM_SEED_SIZE_NAME}, so it '
-                f'has changed'
+                f'Found a seed ({first.package_name}.{first.name}) '
+                f'>{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was '
+                f'<={MAXIMUM_SEED_SIZE_NAME}, so it has changed'
             )
         elif result:
             msg = (
-                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size at '
-                f'the same path, dbt cannot tell if it has changed: '
-                f'assuming they are the same'
+                f'Found a seed ({first.package_name}.{first.name}) '
+                f'>{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt '
+                f'cannot tell if it has changed: assuming they are the same'
             )
         elif not result:
             msg = (
-                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
-                f'previous file was in a different location, assuming it '
-                f'has changed'
+                f'Found a seed ({first.package_name}.{first.name}) '
+                f'>{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in '
+                f'a different location, assuming it has changed'
             )
         else:
             msg = (
-                f'Found a seed >{MAXIMUM_SEED_SIZE_NAME} in size. The '
-                f'previous file had a checksum type of '
-                f'{second.checksum.name}, so it has changed'
+                f'Found a seed ({first.package_name}.{first.name}) '
+                f'>{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a '
+                f'checksum type of {second.checksum.name}, so it has changed'
             )
         warn_or_error(msg, node=first)
 
@@ -315,8 +323,8 @@ class ParsedSeedNode(ParsedNode):
         """ Seeds are never empty"""
         return False
 
-    def _same_body(self: T, other: T) -> bool:
-        return compare_seeds(self, other)
+    def same_body(self: T, other: T) -> bool:
+        return same_seeds(self, other)
 
 
 @dataclass
@@ -344,8 +352,21 @@ class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
-    def _same_body(self: HasTestMetadata, other: HasTestMetadata) -> bool:
-        return self.test_metadata == other.test_metadata
+    def same_config(self, other) -> bool:
+        return self.config.severity == other.config.severity
+
+    def same_column_name(self, other) -> bool:
+        return self.column_name == other.column_name
+
+    def same_contents(self, other) -> bool:
+        if other is None:
+            return False
+
+        return (
+            self.same_config(other) and
+            self.same_fqn(other) and
+            True
+        )
 
 
 @dataclass
@@ -524,6 +545,32 @@ class ParsedSourceDefinition(
     config: SourceConfig = field(default_factory=SourceConfig)
     patch_path: Optional[Path] = None
 
+    def same_database_representation(
+        self, other: 'ParsedSourceDefinition'
+    ) -> bool:
+        return (
+            self.database == other.database and
+            self.schema == other.schema and
+            self.identifier == other.identifier and
+            True
+        )
+
+    def same_quoting(self, other: 'ParsedSourceDefinition') -> bool:
+        return self.quoting == other.quoting
+
+    def same_freshness(self, other: 'ParsedSourceDefinition') -> bool:
+        return (
+            self.freshness == other.freshness and
+            self.loaded_at_field == other.loaded_at_field and
+            True
+        )
+
+    def same_external(self, other: 'ParsedSourceDefinition') -> bool:
+        return self.external == other.external
+
+    def same_config(self, old: 'ParsedSourceDefinition') -> bool:
+        return self.config.same_contents(old.config)
+
     def same_contents(self, old: Optional['ParsedSourceDefinition']) -> bool:
         # existing when it didn't before is a change!
         if old is None:
@@ -538,11 +585,13 @@ class ParsedSourceDefinition(
         # metadata/tags changes are not "changes"
         # patching/description changes are not "changes"
         return (
-            old.config == self.config and
-            old.freshness == self.freshness and
-            old.database == self.database and
-            old.schema == self.schema and
-            old.identifier == self.identifier
+            self.same_database_representation(old) and
+            self.same_fqn(old) and
+            self.same_config(old) and
+            self.same_quoting(old) and
+            self.same_freshness(old) and
+            self.same_external(old) and
+            True
         )
 
     def get_full_source_name(self):

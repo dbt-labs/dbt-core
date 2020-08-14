@@ -595,11 +595,11 @@ def test_select_state_nothing(manifest, previous_state):
     method = statemethod(manifest, previous_state)
     with pytest.raises(dbt.exceptions.RuntimeException) as exc:
         search_manifest_using_method(manifest, method, 'modified')
-    assert 'no deferred manifest' in str(exc.value)
+    assert 'no comparison manifest' in str(exc.value)
 
     with pytest.raises(dbt.exceptions.RuntimeException) as exc:
         search_manifest_using_method(manifest, method, 'new')
-    assert 'no deferred manifest' in str(exc.value)
+    assert 'no comparison manifest' in str(exc.value)
 
 
 def test_select_state_added_model(manifest, previous_state):
@@ -645,7 +645,7 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         assert not search_manifest_using_method(manifest, method, 'modified')
         warn_or_error_patch.assert_called_once()
         msg = warn_or_error_patch.call_args[0][0]
-        assert msg.startswith('Found a seed >1MB in size')
+        assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
         warn_or_error_patch.assert_not_called()
@@ -658,7 +658,7 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
         warn_or_error_patch.assert_called_once()
         msg = warn_or_error_patch.call_args[0][0]
-        assert msg.startswith('Found a seed >1MB in size')
+        assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
     with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, 'new')
         warn_or_error_patch.assert_not_called()
