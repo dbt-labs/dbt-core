@@ -480,14 +480,14 @@ def _build_snapshot_subparser(subparsers, base_subparser):
 def _add_defer_argument(*subparsers):
     for sub in subparsers:
         sub.add_optional_argument_inverse(
-            '--defer',
-            enable_help='''
+            "--defer",
+            enable_help="""
             If set, defer to the state variable for resolving unselected nodes.
-            ''',
-            disable_help='''
+            """,
+            disable_help="""
             If set, do not defer to the state variable for resolving unselected
             nodes.
-            ''',
+            """,
             default=flags.DEFER_MODE,
         )
 
