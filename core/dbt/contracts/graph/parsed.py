@@ -73,7 +73,7 @@ class ColumnInfo(
 class HasFqn(dbtClassMixin, Replaceable):
     fqn: List[str]
 
-    def same_fqn(self, other: 'HasFqn') -> bool:
+    def same_fqn(self, other: "HasFqn") -> bool:
         return self.fqn == other.fqn
 
 
@@ -341,11 +341,11 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return False
 
         return (
-            self.same_body(old) and
-            self.same_config(old) and
-            self.same_persisted_description(old) and
-            self.same_fqn(old) and
-            self.same_database_representation(old) and
+            self.same_body(old)
+            and self.same_config(old)
+            and self.same_persisted_description(old)
+            and self.same_fqn(old)
+            and self.same_database_representation(old)
             and True
         )
 
@@ -390,27 +390,27 @@ def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:
         msg: str
         if second.checksum.name != 'path':
             msg = (
-                f'Found a seed ({first.package_name}.{first.name}) '
-                f'>{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was '
-                f'<={MAXIMUM_SEED_SIZE_NAME}, so it has changed'
+                f"Found a seed ({first.package_name}.{first.name}) "
+                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was "
+                f"<={MAXIMUM_SEED_SIZE_NAME}, so it has changed"
             )
         elif result:
             msg = (
-                f'Found a seed ({first.package_name}.{first.name}) '
-                f'>{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt '
-                f'cannot tell if it has changed: assuming they are the same'
+                f"Found a seed ({first.package_name}.{first.name}) "
+                f">{MAXIMUM_SEED_SIZE_NAME} in size at the same path, dbt "
+                f"cannot tell if it has changed: assuming they are the same"
             )
         elif not result:
             msg = (
-                f'Found a seed ({first.package_name}.{first.name}) '
-                f'>{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in '
-                f'a different location, assuming it has changed'
+                f"Found a seed ({first.package_name}.{first.name}) "
+                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file was in "
+                f"a different location, assuming it has changed"
             )
         else:
             msg = (
-                f'Found a seed ({first.package_name}.{first.name}) '
-                f'>{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a '
-                f'checksum type of {second.checksum.name}, so it has changed'
+                f"Found a seed ({first.package_name}.{first.name}) "
+                f">{MAXIMUM_SEED_SIZE_NAME} in size. The previous file had a "
+                f"checksum type of {second.checksum.name}, so it has changed"
             )
         warn_or_error(msg, node=first)
 
@@ -473,11 +473,7 @@ class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
         if other is None:
             return False
 
-        return (
-            self.same_config(other) and
-            self.same_fqn(other) and
-            True
-        )
+        return self.same_config(other) and self.same_fqn(other) and True
 
     @property
     def test_node_type(self):
@@ -672,30 +668,28 @@ class ParsedSourceDefinition(
             del dct['_event_status']
         return dct
 
-    def same_database_representation(
-        self, other: 'ParsedSourceDefinition'
-    ) -> bool:
+    def same_database_representation(self, other: "ParsedSourceDefinition") -> bool:
         return (
-            self.database == other.database and
-            self.schema == other.schema and
-            self.identifier == other.identifier and
-            True
+            self.database == other.database
+            and self.schema == other.schema
+            and self.identifier == other.identifier
+            and True
         )
 
-    def same_quoting(self, other: 'ParsedSourceDefinition') -> bool:
+    def same_quoting(self, other: "ParsedSourceDefinition") -> bool:
         return self.quoting == other.quoting
 
-    def same_freshness(self, other: 'ParsedSourceDefinition') -> bool:
+    def same_freshness(self, other: "ParsedSourceDefinition") -> bool:
         return (
-            self.freshness == other.freshness and
-            self.loaded_at_field == other.loaded_at_field and
-            True
+            self.freshness == other.freshness
+            and self.loaded_at_field == other.loaded_at_field
+            and True
         )
 
-    def same_external(self, other: 'ParsedSourceDefinition') -> bool:
+    def same_external(self, other: "ParsedSourceDefinition") -> bool:
         return self.external == other.external
 
-    def same_config(self, old: 'ParsedSourceDefinition') -> bool:
+    def same_config(self, old: "ParsedSourceDefinition") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
@@ -715,13 +709,13 @@ class ParsedSourceDefinition(
         # metadata/tags changes are not "changes"
         # patching/description changes are not "changes"
         return (
-            self.same_database_representation(old) and
-            self.same_fqn(old) and
-            self.same_config(old) and
-            self.same_quoting(old) and
-            self.same_freshness(old) and
-            self.same_external(old) and
-            True
+            self.same_database_representation(old)
+            and self.same_fqn(old)
+            and self.same_config(old)
+            and self.same_quoting(old)
+            and self.same_freshness(old)
+            and self.same_external(old)
+            and True
         )
 
     def get_full_source_name(self):

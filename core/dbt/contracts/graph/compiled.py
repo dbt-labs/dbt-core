@@ -136,11 +136,7 @@ class CompiledGenericTestNode(CompiledNode, HasTestMetadata):
         if other is None:
             return False
 
-        return (
-            self.same_config(other) and
-            self.same_fqn(other) and
-            True
-        )
+        return self.same_config(other) and self.same_fqn(other) and True
 
 
 CompiledTestNode = Union[CompiledSingularTestNode, CompiledGenericTestNode]

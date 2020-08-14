@@ -14,7 +14,7 @@ from dbt import hooks
 from dbt.node_types import NodeType
 
 
-M = TypeVar('M', bound='Metadata')
+M = TypeVar("M", bound="Metadata")
 
 
 def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
@@ -53,19 +53,17 @@ class Metadata(Enum):
 
         return _get_meta_value(cls, fld, key, default)
 
-    def meta(
-        self, existing: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def meta(self, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         key = self.metadata_key()
         return _set_meta_value(self, key, existing)
 
     @classmethod
-    def default_field(cls) -> 'Metadata':
-        raise NotImplementedError('Not implemented')
+    def default_field(cls) -> "Metadata":
+        raise NotImplementedError("Not implemented")
 
     @classmethod
     def metadata_key(cls) -> str:
-        raise NotImplementedError('Not implemented')
+        raise NotImplementedError("Not implemented")
 
 
 class MergeBehavior(Metadata):
@@ -74,12 +72,12 @@ class MergeBehavior(Metadata):
     Clobber = 3
 
     @classmethod
-    def default_field(cls) -> 'MergeBehavior':
+    def default_field(cls) -> "MergeBehavior":
         return cls.Clobber
 
     @classmethod
     def metadata_key(cls) -> str:
-        return 'merge'
+        return "merge"
 
 
 class ShowBehavior(Metadata):
@@ -87,12 +85,12 @@ class ShowBehavior(Metadata):
     Hide = 2
 
     @classmethod
-    def default_field(cls) -> 'ShowBehavior':
+    def default_field(cls) -> "ShowBehavior":
         return cls.Show
 
     @classmethod
     def metadata_key(cls) -> str:
-        return 'show_hide'
+        return "show_hide"
 
     @classmethod
     def should_show(cls, fld: Field) -> bool:
@@ -104,12 +102,12 @@ class CompareBehavior(Metadata):
     Exclude = 2
 
     @classmethod
-    def default_field(cls) -> 'CompareBehavior':
+    def default_field(cls) -> "CompareBehavior":
         return cls.Include
 
     @classmethod
     def metadata_key(cls) -> str:
-        return 'compare'
+        return "compare"
 
     @classmethod
     def should_include(cls, fld: Field) -> bool:
