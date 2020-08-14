@@ -352,15 +352,20 @@ class StateSelectorMethod(SelectorMethod):
             )
         old_macros = self.previous_state.manifest.macros
         new_macros = self.manifest.macros
-        # macros were added/removed
-        if old_macros.keys() != new_macros.keys():
-            return []
 
         modified = []
-        for uid, new_macro in new_macros.items():
-            old_macro = old_macros[uid]
-            if new_macro.macro_sql != old_macro.macro_sql:
-                modified.append(f'{new_macro.package_name}.{new_macro.name}')
+        for uid, macro in new_macros.items():
+            name = f'{macro.package_name}.{macro.name}'
+            if uid in old_macros:
+                old_macro = old_macros[uid]
+                if macro.macro_sql != old_macro.macro_sql:
+                    modified.append(f'{name} changed')
+            else:
+                modified.append(f'{name} added')
+
+        for uid, macro in old_macros.items():
+            if uid not in new_macros:
+                modified.append(f'{macro.package_name}.{macro.name} removed')
 
         return modified[:3]
 
