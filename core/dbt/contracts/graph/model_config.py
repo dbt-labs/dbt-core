@@ -32,9 +32,7 @@ def _get_meta_value(cls: Type[M], fld: Field, key: str, default: Any) -> M:
         raise InternalException(f"Invalid {cls} value: {value}") from exc
 
 
-def _set_meta_value(
-    obj: M, key: str, existing: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+def _set_meta_value(obj: M, key: str, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if existing is None:
         result = {}
     else:
