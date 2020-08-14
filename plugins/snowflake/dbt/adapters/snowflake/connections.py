@@ -88,6 +88,8 @@ class SnowflakeCredentials(Credentials):
                     )
 
                 result['token'] = token
+            # enable the token cache
+            result['client_store_temporary_credential'] = True
         result['private_key'] = self._get_private_key()
         return result
 
