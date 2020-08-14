@@ -30,6 +30,7 @@ class SnapshotTask(RunTask):
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
+            previous_state=self.previous_state,
             resource_types=[NodeType.Snapshot],
         )
 

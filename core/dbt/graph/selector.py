@@ -1,5 +1,5 @@
 
-from typing import Set, List, Union
+from typing import Set, List, Union, Optional
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
@@ -16,6 +16,7 @@ from dbt.exceptions import (
 from dbt.contracts.graph.compiled import NonSourceNode, CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
+from dbt.contracts.state import PreviousState
 
 
 def get_package_names(nodes):
@@ -37,9 +38,10 @@ class NodeSelector(MethodManager):
         self,
         graph: Graph,
         manifest: Manifest,
+        previous_state: Optional[PreviousState] = None,
     ):
+        super().__init__(manifest, previous_state)
         self.full_graph = graph
-        self.manifest = manifest
 
         # build a subgraph containing only non-empty, enabled nodes and enabled
         # sources.
@@ -195,11 +197,13 @@ class ResourceTypeSelector(NodeSelector):
         self,
         graph: Graph,
         manifest: Manifest,
+        previous_state: Optional[PreviousState],
         resource_types: List[NodeType],
     ):
         super().__init__(
             graph=graph,
             manifest=manifest,
+            previous_state=previous_state,
         )
         self.resource_types: Set[NodeType] = set(resource_types)
 

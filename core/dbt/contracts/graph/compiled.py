@@ -13,6 +13,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     SeedConfig,
     TestConfig,
+    same_seeds,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
@@ -94,6 +95,7 @@ class CompiledRPCNode(CompiledNode):
 
 @dataclass
 class CompiledSeedNode(CompiledNode):
+    # keep this in sync with ParsedSeedNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
     config: SeedConfig = field(default_factory=SeedConfig)
 
@@ -101,6 +103,9 @@ class CompiledSeedNode(CompiledNode):
     def empty(self):
         """ Seeds are never empty"""
         return False
+
+    def same_body(self, other) -> bool:
+        return same_seeds(self, other)
 
 
 @dataclass
@@ -116,9 +121,26 @@ class CompiledDataTestNode(CompiledNode):
 
 @dataclass
 class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
+    # keep this in sync with ParsedSchemaTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
+
+    def same_config(self, other) -> bool:
+        return self.config.severity == other.config.severity
+
+    def same_column_name(self, other) -> bool:
+        return self.column_name == other.column_name
+
+    def same_contents(self, other) -> bool:
+        if other is None:
+            return False
+
+        return (
+            self.same_config(other) and
+            self.same_fqn(other) and
+            True
+        )
 
 
 CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]

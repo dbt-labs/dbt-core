@@ -107,10 +107,11 @@ SCHEMA_TEST_TYPES = (CompiledSchemaTestNode, ParsedSchemaTestNode)
 
 
 class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest):
+    def __init__(self, graph, manifest, previous_state):
         super().__init__(
             graph=graph,
             manifest=manifest,
+            previous_state=previous_state,
             resource_types=[NodeType.Test],
         )
 
@@ -153,6 +154,7 @@ class TestTask(RunTask):
         return TestSelector(
             graph=self.graph,
             manifest=self.manifest,
+            previous_state=self.previous_state,
         )
 
     def get_runner_type(self):

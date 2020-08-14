@@ -18,6 +18,7 @@ from dbt.context.context_config import (
 )
 from dbt.context.configured import generate_schema_yml
 from dbt.context.target import generate_target_context
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.model_config import SourceConfig
 from dbt.contracts.graph.parsed import (
@@ -321,6 +322,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             'config': self.config_dict(config),
             'test_metadata': test_metadata,
             'column_name': column_name,
+            'checksum': FileHash.empty().to_dict(),
         }
         try:
             return self.parse_from_dict(dct)

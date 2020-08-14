@@ -12,7 +12,8 @@ import dbt.parser
 import dbt.config
 import dbt.utils
 import dbt.parser.manifest
-from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash, Manifest
+from dbt.contracts.files import SourceFile, FileHash, FilePath
+from dbt.contracts.graph.manifest import Manifest
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
 from dbt.graph import NodeSelector, parse_difference

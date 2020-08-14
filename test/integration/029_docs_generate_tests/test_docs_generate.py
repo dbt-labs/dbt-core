@@ -912,6 +912,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         second_model_sql_path = os.path.join(models_path, 'second_model.sql')
         model_schema_yml_path = os.path.join(models_path, 'schema.yml')
         seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
+        seed_path = self.dir(os.path.join('seed', 'seed.csv'))
 
         my_schema_name = self.unique_schema()
 
@@ -920,6 +921,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         model_config = {
             'database': model_database,
+            'schema': None,
+            'alias': None,
             'enabled': True,
             'materialized': 'view',
             'pre-hook': [],
@@ -932,7 +935,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             'full_refresh': None,
         }
         second_config = {
+            'database': None,
             'schema': self.alternate_schema[-4:],
+            'alias': None,
             'enabled': True,
             'materialized': 'view',
             'pre-hook': [],
@@ -1013,6 +1018,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(model_sql_path),
                 },
                 'model.test.second_model': {
                     'build_path': Normalized('target/compiled/test/models/second_model.sql'),
@@ -1080,7 +1086,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(second_model_sql_path),
                 },
+
                 'seed.test.seed': {
                     'build_path': None,
                     'compiled': True,
@@ -1097,6 +1105,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'patch_path': seed_schema_yml_path,
                     'path': 'seed.csv',
@@ -1105,8 +1116,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
-                    'original_file_path': self.dir(os.path.join('seed',
-                                                                'seed.csv')),
+                    'original_file_path': seed_path,
                     'refs': [],
                     'sources': [],
                     'depends_on': {'nodes': [], 'macros': []},
@@ -1162,6 +1172,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': '',
+                    'checksum': self._checksum_file(seed_path),
                 },
                 'test.test.not_null_model_id': {
                     'alias': 'not_null_model_id',
@@ -1180,6 +1191,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1217,6 +1231,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'model': "{{ ref('model') }}",
                         },
                     },
+                    'checksum': {'name': 'none', 'checksum': ''},
                 },
                 'test.test.test_nothing_model_': {
                     'alias': 'test_nothing_model_',
@@ -1235,6 +1250,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1271,6 +1289,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'model': "{{ ref('model') }}",
                         },
                     },
+                    'checksum': {'name': 'none', 'checksum': ''},
                 },
                 'test.test.unique_model_id': {
                     'alias': 'unique_model_id',
@@ -1289,6 +1308,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1326,6 +1348,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'model': "{{ ref('model') }}",
                         },
                     },
+                    'checksum': {'name': 'none', 'checksum': ''},
                 },
             },
             'sources': {},
@@ -1368,6 +1391,10 @@ class TestDocsGenerate(DBTIntegrationTest):
             model_database = self.default_database
         my_schema_name = self.unique_schema()
         docs_path = self.dir('ref_models/docs.md')
+        ephemeral_copy_path = self.dir('ref_models/ephemeral_copy.sql')
+        ephemeral_summary_path = self.dir('ref_models/ephemeral_summary.sql')
+        view_summary_path = self.dir('ref_models/view_summary.sql')
+        seed_path = self.dir('seed/seed.csv')
 
         return {
             'nodes': {
@@ -1386,6 +1413,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [['my_source', 'my_table']],
                     'depends_on': {
@@ -1397,7 +1427,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docs': {'show': True},
                     'fqn': ['test', 'ephemeral_copy'],
                     'name': 'ephemeral_copy',
-                    'original_file_path': self.dir('ref_models/ephemeral_copy.sql'),
+                    'original_file_path': ephemeral_copy_path,
                     'package_name': 'test',
                     'patch_path': None,
                     'path': 'ephemeral_copy.sql',
@@ -1418,6 +1448,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(ephemeral_copy_path),
                 },
                 'model.test.ephemeral_summary': {
                     'alias': 'ephemeral_summary',
@@ -1449,6 +1480,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -1460,7 +1494,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docs': {'show': True},
                     'fqn': ['test', 'ephemeral_summary'],
                     'name': 'ephemeral_summary',
-                    'original_file_path': self.dir('ref_models/ephemeral_summary.sql'),
+                    'original_file_path': ephemeral_summary_path,
                     'package_name': 'test',
                     'patch_path': self.dir('ref_models/schema.yml'),
                     'path': 'ephemeral_summary.sql',
@@ -1483,6 +1517,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [ANY],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(ephemeral_summary_path),
                 },
                 'model.test.view_summary': {
                     'alias': 'view_summary',
@@ -1514,6 +1549,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'database': self.default_database,
                     'depends_on': {
@@ -1525,7 +1563,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docs': {'show': True},
                     'fqn': ['test', 'view_summary'],
                     'name': 'view_summary',
-                    'original_file_path': self.dir('ref_models/view_summary.sql'),
+                    'original_file_path': view_summary_path,
                     'package_name': 'test',
                     'patch_path': self.dir('ref_models/schema.yml'),
                     'path': 'view_summary.sql',
@@ -1547,6 +1585,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(view_summary_path),
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
@@ -1600,6 +1639,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -1608,7 +1650,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docs': {'show': True},
                     'fqn': ['test', 'seed'],
                     'name': 'seed',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': seed_path,
                     'package_name': 'test',
                     'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
@@ -1626,6 +1668,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': '',
+                    'checksum': self._checksum_file(seed_path),
                 },
             },
             'sources': {
@@ -1816,7 +1859,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         nested_table_sql_path = self.dir('bq_models/nested_table.sql')
         clustered_sql_path = self.dir('bq_models/clustered.sql')
         multi_clustered_sql_path = self.dir('bq_models/multi_clustered.sql')
+        seed_path = self.dir('seed/seed.csv')
         my_schema_name = self.unique_schema()
+
         return {
             'nodes': {
                 'model.test.clustered': {
@@ -1834,6 +1879,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -1898,6 +1946,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(clustered_sql_path),
                 },
                 'model.test.multi_clustered': {
                     'alias': 'multi_clustered',
@@ -1915,6 +1964,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'vars': {},
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -1978,6 +2030,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(multi_clustered_sql_path),
                 },
                 'model.test.nested_view': {
                     'alias': 'nested_view',
@@ -1993,6 +2046,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars':  {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2059,6 +2115,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(nested_view_sql_path),
                 },
                 'model.test.nested_table': {
                     'alias': 'nested_table',
@@ -2074,6 +2131,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2104,6 +2164,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(nested_table_sql_path),
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -2114,7 +2175,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': seed_path,
                     'refs': [],
                     'sources': [],
                     'depends_on': {
@@ -2137,6 +2198,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2186,6 +2250,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': '',
+                    'checksum': self._checksum_file(seed_path),
                 },
             },
             'sources': {},
@@ -2245,6 +2310,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_redshift_incremental_view_manifest(self):
         model_sql_path = self.dir('rs_models/model.sql')
         my_schema_name = self.unique_schema()
+        seed_path = self.dir('seed/seed.csv')
 
         return {
             'nodes': {
@@ -2279,6 +2345,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'vars': {},
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2329,6 +2398,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(model_sql_path),
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -2339,7 +2409,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': seed_path,
                     'refs': [],
                     'sources': [],
                     'depends_on': {
@@ -2362,6 +2432,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'quote_columns': True,
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'schema': my_schema_name,
                     'database': self.default_database,
@@ -2411,6 +2484,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'injected_sql': ANY,
+                    'checksum': self._checksum_file(seed_path),
                 },
             },
             'sources': {},
@@ -2478,6 +2552,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         model_config = {
             'database': model_database,
+            'schema': None,
+            'alias': None,
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -2490,7 +2566,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             'full_refresh': None,
         }
         second_model_config = {
+            'database': None,
             'schema': self.alternate_schema[-4:],
+            'alias': None,
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -2519,6 +2597,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             compiled_sql = '\n\nselect * from {}.{}.{}'.format(
                 compiled_database, compiled_schema, compiled_seed
             )
+        seed_path = self.dir('seed/seed.csv')
 
         return [
             {
@@ -2531,6 +2610,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized(
                         'target/compiled/test/models/model.sql'
                     ),
+                    'checksum': self._checksum_file(model_sql_path),
                     'columns': {
                         'id': {
                             'description': 'The user ID number',
@@ -2613,6 +2693,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized(
                         'target/compiled/test/models/second_model.sql'
                     ),
+                    'checksum': self._checksum_file(second_model_sql_path),
                     'columns': {
                         'id': {
                             'description': 'The user ID number',
@@ -2693,6 +2774,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'seed',
                     'build_path': None,
+                    'checksum': self._checksum_file(seed_path),
                     'columns': {
                         'id': {
                             'description': 'The user ID number',
@@ -2744,6 +2826,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -2756,7 +2841,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': '',
                     'meta': {},
                     'name': 'seed',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': seed_path,
                     'package_name': 'test',
                     'patch_path': seed_schema_yml_path,
                     'path': 'seed.csv',
@@ -2782,6 +2867,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'not_null_model_id',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/not_null_model_id.sql'),
+                    'checksum': {'name': 'none', 'checksum': ''},
                     'column_name': 'id',
                     'columns': {},
                     'compiled': True,
@@ -2798,6 +2884,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -2847,6 +2936,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'test_nothing_model_',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/test_nothing_model_.sql'),
+                    'checksum': {'name': 'none', 'checksum': ''},
                     'column_name': None,
                     'columns': {},
                     'compiled': True,
@@ -2863,6 +2953,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'database': self.default_database,
                     'depends_on': {
@@ -2911,6 +3004,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'unique_model_id',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/unique_model_id.sql'),
+                    'checksum': {'name': 'none', 'checksum': ''},
                     'column_name': 'id',
                     'columns': {},
                     'compiled': True,
@@ -2927,6 +3021,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'database': self.default_database,
                     'depends_on': {
@@ -2993,6 +3090,10 @@ class TestDocsGenerate(DBTIntegrationTest):
             'order by ct asc'
         ).format(self.default_database, my_schema_name)
 
+        ephemeral_summary_path = self.dir('ref_models/ephemeral_summary.sql')
+        view_summary_path = self.dir('ref_models/view_summary.sql')
+        seed_path = self.dir('seed/seed.csv')
+
         return [
             {
                 'error': None,
@@ -3004,6 +3105,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized(
                         'target/compiled/test/ref_models/ephemeral_summary.sql'
                     ),
+                    'checksum': self._checksum_file(ephemeral_summary_path),
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -3033,6 +3135,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -3052,7 +3157,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': ephemeral_injected_sql,
                     'meta': {},
                     'name': 'ephemeral_summary',
-                    'original_file_path': self.dir('ref_models/ephemeral_summary.sql'),
+                    'original_file_path': ephemeral_summary_path,
                     'package_name': 'test',
                     'patch_path': self.dir('ref_models/schema.yml'),
                     'path': 'ephemeral_summary.sql',
@@ -3086,6 +3191,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'target/compiled/test/ref_models/view_summary.sql'
                     ),
                     'alias': 'view_summary',
+                    'checksum': self._checksum_file(view_summary_path),
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -3115,6 +3221,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {
@@ -3133,7 +3242,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': view_compiled_sql,
                     'meta': {},
                     'name': 'view_summary',
-                    'original_file_path': self.dir('ref_models/view_summary.sql'),
+                    'original_file_path': view_summary_path,
                     'package_name': 'test',
                     'patch_path': self.dir('ref_models/schema.yml'),
                     'path': 'view_summary.sql',
@@ -3163,6 +3272,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'seed',
                     'build_path': None,
+                    'checksum': self._checksum_file(seed_path),
                     'columns': {
                         'id': {
                             'name': 'id',
@@ -3214,6 +3324,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'quote_columns': True,
                         'full_refresh': None,
+                        'database': None,
+                        'schema': None,
+                        'alias': None,
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
@@ -3226,7 +3339,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': '',
                     'meta': {},
                     'name': 'seed',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': seed_path,
                     'package_name': 'test',
                     'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',

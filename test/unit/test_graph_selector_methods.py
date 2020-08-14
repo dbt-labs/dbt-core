@@ -1,7 +1,11 @@
+import copy
 import pytest
+from unittest import mock
 
 from datetime import datetime
+from pathlib import Path
 
+from dbt.contracts.files import FileHash
 from dbt.contracts.graph.parsed import (
     DependsOn,
     NodeConfig,
@@ -13,8 +17,10 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     TestConfig,
     TestMetadata,
+    ColumnInfo,
 )
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
     MethodManager,
@@ -26,7 +32,10 @@ from dbt.graph.selector_methods import (
     ConfigSelectorMethod,
     TestNameSelectorMethod,
     TestTypeSelectorMethod,
+    StateSelectorMethod,
 )
+import dbt.exceptions
+import dbt.contracts.graph.parsed
 
 
 def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, alias=None, config_kwargs=None, fqn_extras=None):
@@ -76,10 +85,11 @@ def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, al
         sources=source_values,
         depends_on=DependsOn(nodes=depends_on_nodes),
         resource_type=NodeType.Model,
+        checksum=FileHash.from_contents(''),
     )
 
 
-def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extras=None):
+def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extras=None, checksum=None):
     if alias is None:
         alias = name
     if tags is None:
@@ -89,6 +99,9 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
 
     if fqn_extras is None:
         fqn_extras = []
+
+    if checksum is None:
+        checksum = FileHash.from_contents('')
 
     fqn = [pkg] + fqn_extras + [name]
     return ParsedSeedNode(
@@ -105,6 +118,7 @@ def make_seed(pkg, name, path=None, loader=None, alias=None, tags=None, fqn_extr
         original_file_path=f'data/{path}',
         tags=tags,
         resource_type=NodeType.Seed,
+        checksum=FileHash.from_contents(''),
     )
 
 
@@ -222,9 +236,10 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
         sources=[],
         depends_on=DependsOn(
             macros=[macro_depends],
-            nodes=['model.minimal.view_model']
+            nodes=depends_on_nodes
         ),
         column_name=column_name,
+        checksum=FileHash.from_contents(''),
     )
 
 
@@ -272,6 +287,7 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
         sources=source_values,
         depends_on=DependsOn(nodes=depends_on_nodes),
         resource_type=NodeType.Test,
+        checksum=FileHash.from_contents(''),
     )
 
 
@@ -438,7 +454,7 @@ def search_manifest_using_method(manifest, method, selection):
 
 
 def test_select_fqn(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('fqn', [])
     assert isinstance(method, QualifiedNameSelectorMethod)
     assert method.arguments == []
@@ -451,7 +467,7 @@ def test_select_fqn(manifest):
 
 
 def test_select_tag(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('tag', [])
     assert isinstance(method, TagSelectorMethod)
     assert method.arguments == []
@@ -461,7 +477,7 @@ def test_select_tag(manifest):
 
 
 def test_select_source(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('source', [])
     assert isinstance(method, SourceSelectorMethod)
     assert method.arguments == []
@@ -486,7 +502,7 @@ def test_select_source(manifest):
 # TODO: this requires writing out files
 @pytest.mark.skip('TODO: write manifest files to disk')
 def test_select_path(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('path', [])
     assert isinstance(method, PathSelectorMethod)
     assert method.arguments == []
@@ -500,7 +516,7 @@ def test_select_path(manifest):
 
 
 def test_select_package(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('package', [])
     assert isinstance(method, PackageSelectorMethod)
     assert method.arguments == []
@@ -512,7 +528,7 @@ def test_select_package(manifest):
 
 
 def test_select_config_materialized(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('config', ['materialized'])
     assert isinstance(method, ConfigSelectorMethod)
     assert method.arguments == ['materialized']
@@ -523,7 +539,7 @@ def test_select_config_materialized(manifest):
 
 
 def test_select_test_name(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('test_name', [])
     assert isinstance(method, TestNameSelectorMethod)
     assert method.arguments == []
@@ -534,10 +550,198 @@ def test_select_test_name(manifest):
 
 
 def test_select_test_type(manifest):
-    methods = MethodManager(manifest)
+    methods = MethodManager(manifest, None)
     method = methods.get_method('test_type', [])
     assert isinstance(method, TestTypeSelectorMethod)
     assert method.arguments == []
     assert search_manifest_using_method(manifest, method, 'schema') == {'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'unique_ext_raw_ext_source_id'}
     assert search_manifest_using_method(manifest, method, 'data') == {'view_test_nothing'}
 
+
+@pytest.fixture
+def previous_state(manifest):
+    writable = copy.deepcopy(manifest).writable_manifest()
+    state = PreviousState(Path('/path/does/not/exist'))
+    state.manifest = writable
+    return state
+
+
+def add_node(manifest, node):
+    manifest.nodes[node.unique_id] = node
+
+
+def change_node(manifest, node, change=None):
+    if change is not None:
+        node = change(node)
+    manifest.nodes[node.unique_id] = node
+
+
+def statemethod(manifest, previous_state):
+    methods = MethodManager(manifest, previous_state)
+    method = methods.get_method('state', [])
+    assert isinstance(method, StateSelectorMethod)
+    assert method.arguments == []
+    return method
+
+
+def test_select_state_no_change(manifest, previous_state):
+    method = statemethod(manifest, previous_state)
+    assert not search_manifest_using_method(manifest, method, 'modified')
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_nothing(manifest, previous_state):
+    previous_state.manifest = None
+    method = statemethod(manifest, previous_state)
+    with pytest.raises(dbt.exceptions.RuntimeException) as exc:
+        search_manifest_using_method(manifest, method, 'modified')
+    assert 'no comparison manifest' in str(exc.value)
+
+    with pytest.raises(dbt.exceptions.RuntimeException) as exc:
+        search_manifest_using_method(manifest, method, 'new')
+    assert 'no comparison manifest' in str(exc.value)
+
+
+def test_select_state_added_model(manifest, previous_state):
+    add_node(manifest, make_model('pkg', 'another_model', 'select 1 as id'))
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'another_model'}
+    assert search_manifest_using_method(manifest, method, 'new') == {'another_model'}
+
+
+def test_select_state_changed_model_sql(manifest, previous_state, view_model):
+    change_node(manifest, view_model.replace(raw_sql='select 1 as id'))
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'view_model'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_model_fqn(manifest, previous_state, view_model):
+    change_node(manifest, view_model.replace(fqn=view_model.fqn[:-1]+['nested']+view_model.fqn[-1:]))
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'view_model'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_added_seed(manifest, previous_state):
+    add_node(manifest, make_seed('pkg', 'another_seed'))
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'another_seed'}
+    assert search_manifest_using_method(manifest, method, 'new') == {'another_seed'}
+
+
+def test_select_state_changed_seed_checksum_sha_to_sha(manifest, previous_state, seed):
+    change_node(manifest, seed.replace(checksum=FileHash.from_contents('changed')))
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_state, seed):
+    change_node(previous_state.manifest, seed.replace(checksum=FileHash(name='path', checksum=seed.original_file_path)))
+    change_node(manifest, seed.replace(checksum=FileHash(name='path', checksum=seed.original_file_path)))
+    method = statemethod(manifest, previous_state)
+    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+        assert not search_manifest_using_method(manifest, method, 'modified')
+        warn_or_error_patch.assert_called_once()
+        msg = warn_or_error_patch.call_args[0][0]
+        assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
+    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+        assert not search_manifest_using_method(manifest, method, 'new')
+        warn_or_error_patch.assert_not_called()
+
+
+def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state, seed):
+    change_node(manifest, seed.replace(checksum=FileHash(name='path', checksum=seed.original_file_path)))
+    method = statemethod(manifest, previous_state)
+    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+        assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+        warn_or_error_patch.assert_called_once()
+        msg = warn_or_error_patch.call_args[0][0]
+        assert msg.startswith('Found a seed (pkg.seed) >1MB in size')
+    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+        assert not search_manifest_using_method(manifest, method, 'new')
+        warn_or_error_patch.assert_not_called()
+
+
+def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state, seed):
+    change_node(previous_state.manifest, seed.replace(checksum=FileHash(name='path', checksum=seed.original_file_path)))
+    method = statemethod(manifest, previous_state)
+    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+        assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+        warn_or_error_patch.assert_not_called()
+    with mock.patch('dbt.contracts.graph.parsed.warn_or_error') as warn_or_error_patch:
+        assert not search_manifest_using_method(manifest, method, 'new')
+        warn_or_error_patch.assert_not_called()
+
+
+def test_select_state_changed_seed_fqn(manifest, previous_state, seed):
+    change_node(manifest, seed.replace(fqn=seed.fqn[:-1]+['nested']+seed.fqn[-1:]))
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_relation_documented(manifest, previous_state, seed):
+    seed_doc_relation = seed.replace(config=seed.config.replace(persist_docs={'relation': True}))
+    change_node(manifest, seed_doc_relation)
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_relation_documented_nodocs(manifest, previous_state, seed):
+    seed_doc_relation = seed.replace(config=seed.config.replace(persist_docs={'relation': True}))
+    seed_doc_relation_documented = seed_doc_relation.replace(description='a description')
+    change_node(previous_state.manifest, seed_doc_relation)
+    change_node(manifest, seed_doc_relation_documented)
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_relation_documented_withdocs(manifest, previous_state, seed):
+    seed_doc_relation = seed.replace(config=seed.config.replace(persist_docs={'relation': True}))
+    seed_doc_relation_documented = seed_doc_relation.replace(description='a description')
+    change_node(previous_state.manifest, seed_doc_relation_documented)
+    change_node(manifest, seed_doc_relation)
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_columns_documented(manifest, previous_state, seed):
+    # changing persist_docs, even without changing the description -> changed
+    seed_doc_columns = seed.replace(config=seed.config.replace(persist_docs={'columns': True}))
+    change_node(manifest, seed_doc_columns)
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_columns_documented_nodocs(manifest, previous_state, seed):
+    seed_doc_columns = seed.replace(config=seed.config.replace(persist_docs={'columns': True}))
+    seed_doc_columns_documented_columns = seed_doc_columns.replace(
+        columns={'a': ColumnInfo(name='a', description='a description')},
+    )
+
+    change_node(previous_state.manifest, seed_doc_columns)
+    change_node(manifest, seed_doc_columns_documented_columns)
+
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')
+
+
+def test_select_state_changed_seed_columns_documented_withdocs(manifest, previous_state, seed):
+    seed_doc_columns = seed.replace(config=seed.config.replace(persist_docs={'columns': True}))
+    seed_doc_columns_documented_columns = seed_doc_columns.replace(
+        columns={'a': ColumnInfo(name='a', description='a description')},
+    )
+
+    change_node(manifest, seed_doc_columns)
+    change_node(previous_state.manifest, seed_doc_columns_documented_columns)
+
+    method = statemethod(manifest, previous_state)
+    assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
+    assert not search_manifest_using_method(manifest, method, 'new')

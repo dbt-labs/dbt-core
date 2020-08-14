@@ -67,6 +67,8 @@ class FakeArgs:
         self.exclude = None
         self.single_threaded = False
         self.selector_name = None
+        self.state = None
+        self.defer = None
 
 
 class TestArgs:

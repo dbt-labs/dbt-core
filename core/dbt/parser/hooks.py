@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Iterable, Iterator, Union, List, Tuple
 
 from dbt.context.context_config import ContextConfigType
-from dbt.contracts.graph.manifest import FilePath
+from dbt.contracts.files import FilePath
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType, RunHookType

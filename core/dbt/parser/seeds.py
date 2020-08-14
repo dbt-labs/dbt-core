@@ -1,5 +1,5 @@
 from dbt.context.context_config import ContextConfigType
-from dbt.contracts.graph.manifest import SourceFile, FilePath
+from dbt.contracts.files import SourceFile, FilePath
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
@@ -28,5 +28,12 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
     ) -> None:
         """Seeds don't need to do any rendering."""
 
-    def load_file(self, match: FilePath) -> SourceFile:
-        return SourceFile.seed(match)
+    def load_file(
+        self, match: FilePath, *, set_contents: bool = False
+    ) -> SourceFile:
+        if match.seed_too_large():
+            # We don't want to calculate a hash of this file. Use the path.
+            return SourceFile.big_seed(match)
+        else:
+            # We want to calculate a hash, but we don't need the contents
+            return super().load_file(match, set_contents=set_contents)
