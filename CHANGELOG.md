@@ -15,9 +15,13 @@
 - Added a `dispatch` method to the context adapter and deprecated `adapter_macro`. ([#2302](https://github.com/fishtown-analytics/dbt/issues/2302), [#2679](https://github.com/fishtown-analytics/dbt/pull/2679))
 - The built-in schema tests now use `adapter.dispatch`, so they can be overridden for adapter plugins ([#2415](https://github.com/fishtown-analytics/dbt/issues/2415), [#2684](https://github.com/fishtown-analytics/dbt/pull/2684))
 
+### Fixes
+- Fix Redshift table size estimation; e.g. 44 GB tables are no longer reported as 44 KB. [#2702](https://github.com/fishtown-analytics/dbt/issues/2702)
+
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))
 - [@kconvey](https://github.com/kconvey) ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694))
+- [@vogt4nick](https://github.com/vogt4nick) ([#2702](https://github.com/fishtown-analytics/dbt/issues/2702))
 
 ## dbt 0.18.0b2 (July 30, 2020)
 
