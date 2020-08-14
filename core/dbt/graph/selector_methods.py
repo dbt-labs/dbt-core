@@ -395,9 +395,7 @@ class StateSelectorMethod(SelectorMethod):
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
         if self.previous_state is None or self.previous_state.manifest is None:
-            raise InternalException(
-                'No comparison manifest in _macros_modified'
-            )
+            raise InternalException("No comparison manifest in _macros_modified")
         old_macros = self.previous_state.manifest.macros
         new_macros = self.manifest.macros
 
@@ -472,9 +470,7 @@ class StateSelectorMethod(SelectorMethod):
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
-            raise RuntimeException(
-                'Got a state selector method, but no comparison manifest'
-            )
+            raise RuntimeException("Got a state selector method, but no comparison manifest")
 
         state_checks = {
             # it's new if there is no old version
