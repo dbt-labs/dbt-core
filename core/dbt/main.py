@@ -446,6 +446,21 @@ def _build_snapshot_subparser(subparsers, base_subparser):
     return sub
 
 
+def _add_defer_argument(*subparsers):
+    for sub in subparsers:
+        sub.add_optional_argument_inverse(
+            '--defer',
+            enable_help='''
+            If set, defer to the state variable for resolving unselected nodes.
+            ''',
+            disable_help='''
+            If set, do not defer to the state variable for resolving unselected
+            nodes.
+            ''',
+            default=flags.DEFER_MODE,
+        )
+
+
 def _build_run_subparser(subparsers, base_subparser):
     run_sub = subparsers.add_parser(
         'run',
@@ -461,19 +476,6 @@ def _build_run_subparser(subparsers, base_subparser):
         help='''
         Stop execution upon a first failure.
         '''
-    )
-
-    # this is a "dbt run"-only thing, for now
-    run_sub.add_optional_argument_inverse(
-        '--defer',
-        enable_help='''
-        If set, defer to the state variable for resolving unselected nodes.
-        ''',
-        disable_help='''
-        If set, do not defer to the state variable for resolving unselected
-        nodes.
-        ''',
-        default=flags.DEFER_MODE,
     )
 
     run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
@@ -1033,6 +1035,8 @@ def parse_args(args, cls=DBTArgumentParser):
     # list_sub sets up its own arguments.
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
+    # --defer
+    _add_defer_argument(run_sub, test_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 
