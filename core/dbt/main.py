@@ -932,28 +932,28 @@ def parse_args(args, cls=DBTArgumentParser):
     )
     colors_flag = p.add_mutually_exclusive_group()
     colors_flag.add_argument(
-        '--use-colors',
-        action='store_const',
+        "--use-colors",
+        action="store_const",
         const=True,
         default=None,
-        dest='use_colors',
-        help='''
+        dest="use_colors",
+        help="""
         Colorize the output DBT prints to the terminal. Output is colorized by
         default and may also be set in a profile or at the command line.
         Mutually exclusive with --no-use-colors
-        '''
+        """,
     )
     colors_flag.add_argument(
-        '--no-use-colors',
-        action='store_const',
+        "--no-use-colors",
+        action="store_const",
         const=False,
-        dest='use_colors',
-        help='''
+        dest="use_colors",
+        help="""
         Do not colorize the output DBT prints to the terminal. Output is
         colorized by default and may also be set in a profile or at the
         command line.
         Mutually exclusive with --use-colors
-        '''
+        """,
     )
 
     p.add_argument(
