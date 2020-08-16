@@ -14,7 +14,6 @@ from typing import Optional, List, Dict, Union, Any, NewType
 
 PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
-DEFAULT_USE_COLORS = True
 
 
 Name = NewType('Name', str)
@@ -259,7 +258,7 @@ def parse_project_config(
 @dataclass
 class UserConfig(ExtensibleJsonSchemaMixin, Replaceable, UserConfigContract):
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-    use_colors: bool = DEFAULT_USE_COLORS
+    use_colors: Optional[bool] = None
     partial_parse: Optional[bool] = None
     printer_width: Optional[int] = None
 
@@ -269,8 +268,8 @@ class UserConfig(ExtensibleJsonSchemaMixin, Replaceable, UserConfigContract):
         else:
             tracking.do_not_track()
 
-        if self.use_colors:
-            ui.use_colors()
+        if self.use_colors is not None:
+            ui.use_colors(self.use_colors)
 
         if self.printer_width:
             ui.printer_width(self.printer_width)

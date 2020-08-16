@@ -160,7 +160,7 @@ class Credentials(
 
 class UserConfigContract(Protocol):
     send_anonymous_usage_stats: bool
-    use_colors: bool
+    use_colors: Optional[bool]
     partial_parse: Optional[bool]
     printer_width: Optional[int]
 
