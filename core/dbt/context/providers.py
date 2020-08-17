@@ -60,9 +60,7 @@ from dbt.exceptions import (
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType
 
-from dbt.utils import (
-    merge, AttrDict, MultiDict
-)
+from dbt.utils import merge, AttrDict, MultiDict
 
 import agate
 
@@ -85,10 +83,7 @@ class RelationProxy:
         return self._relation_type.create_from_source(*args, **kwargs)
 
     def create(self, *args, **kwargs):
-        kwargs['quote_policy'] = merge(
-            self._quoting_config,
-            kwargs.pop('quote_policy', {})
-        )
+        kwargs["quote_policy"] = merge(self._quoting_config, kwargs.pop("quote_policy", {}))
         return self._relation_type.create(*args, **kwargs)
 
 
