@@ -523,37 +523,37 @@ class ModelConfiguredVar(Var):
         config: RuntimeConfig,
         node: CompiledResource,
     ) -> None:
-        self.node: CompiledResource
-        self.config: RuntimeConfig = config
+        self._node: CompiledResource
+        self._config: RuntimeConfig = config
         super().__init__(context, config.cli_vars, node=node)
 
     def packages_for_node(self) -> Iterable[Project]:
-        dependencies = self.config.load_dependencies()
-        package_name = self.node.package_name
+        dependencies = self._config.load_dependencies()
+        package_name = self._node.package_name
 
-        if package_name != self.config.project_name:
+        if package_name != self._config.project_name:
             if package_name not in dependencies:
                 # I don't think this is actually reachable
                 raise_compiler_error(
                     f'Node package named {package_name} not found!',
-                    self.node
+                    self._node
                 )
             yield dependencies[package_name]
-        yield self.config
+        yield self._config
 
     def _generate_merged(self) -> Mapping[str, Any]:
         search_node: IsFQNResource
-        if isinstance(self.node, IsFQNResource):
-            search_node = self.node
+        if isinstance(self._node, IsFQNResource):
+            search_node = self._node
         else:
-            search_node = FQNLookup(self.node.package_name)
+            search_node = FQNLookup(self._node.package_name)
 
-        adapter_type = self.config.credentials.type
+        adapter_type = self._config.credentials.type
 
         merged = MultiDict()
         for project in self.packages_for_node():
             merged.add(project.vars.vars_for(search_node, adapter_type))
-        merged.add(self.cli_vars)
+        merged.add(self._cli_vars)
         return merged
 
 

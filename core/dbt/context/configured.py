@@ -36,23 +36,23 @@ class ConfiguredVar(Var):
         project_name: str,
     ):
         super().__init__(context, config.cli_vars)
-        self.config = config
-        self.project_name = project_name
+        self._config = config
+        self._project_name = project_name
 
     def __call__(self, var_name, default=Var._VAR_NOTSET):
-        my_config = self.config.load_dependencies()[self.project_name]
+        my_config = self._config.load_dependencies()[self._project_name]
 
         # cli vars > active project > local project
-        if var_name in self.config.cli_vars:
-            return self.config.cli_vars[var_name]
+        if var_name in self._config.cli_vars:
+            return self._config.cli_vars[var_name]
 
-        if self.config.config_version == 2 and my_config.config_version == 2:
-            adapter_type = self.config.credentials.type
-            lookup = FQNLookup(self.project_name)
-            active_vars = self.config.vars.vars_for(lookup, adapter_type)
+        if self._config.config_version == 2 and my_config.config_version == 2:
+            adapter_type = self._config.credentials.type
+            lookup = FQNLookup(self._project_name)
+            active_vars = self._config.vars.vars_for(lookup, adapter_type)
             all_vars = MultiDict([active_vars])
 
-            if self.config.project_name != my_config.project_name:
+            if self._config.project_name != my_config.project_name:
                 all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
 
             if var_name in all_vars:

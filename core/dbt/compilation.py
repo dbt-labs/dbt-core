@@ -318,7 +318,7 @@ class Compiler:
 
         return Graph(linker.graph)
 
-    def _write_node(self, node: NonSourceNode) -> NonSourceNode:
+    def _write_node(self, node: NonSourceCompiledNode) -> NonSourceNode:
         if not _is_writable(node):
             return node
         logger.debug(f'Writing injected SQL for node "{node.unique_id}"')

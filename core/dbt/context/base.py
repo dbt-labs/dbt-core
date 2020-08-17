@@ -105,39 +105,39 @@ class Var:
         cli_vars: Mapping[str, Any],
         node: Optional[CompiledResource] = None
     ) -> None:
-        self.context: Mapping[str, Any] = context
-        self.cli_vars: Mapping[str, Any] = cli_vars
-        self.node: Optional[CompiledResource] = node
-        self.merged: Mapping[str, Any] = self._generate_merged()
+        self._context: Mapping[str, Any] = context
+        self._cli_vars: Mapping[str, Any] = cli_vars
+        self._node: Optional[CompiledResource] = node
+        self._merged: Mapping[str, Any] = self._generate_merged()
 
     def _generate_merged(self) -> Mapping[str, Any]:
-        return self.cli_vars
+        return self._cli_vars
 
     @property
     def node_name(self):
-        if self.node is not None:
-            return self.node.name
+        if self._node is not None:
+            return self._node.name
         else:
             return '<Configuration>'
 
     def get_missing_var(self, var_name):
-        dct = {k: self.merged[k] for k in self.merged}
+        dct = {k: self._merged[k] for k in self._merged}
         pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
         msg = self.UndefinedVarError.format(
             var_name, self.node_name, pretty_vars
         )
-        raise_compiler_error(msg, self.node)
+        raise_compiler_error(msg, self._node)
 
     def has_var(self, var_name: str):
-        return var_name in self.merged
+        return var_name in self._merged
 
     def get_rendered_var(self, var_name):
-        raw = self.merged[var_name]
+        raw = self._merged[var_name]
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(raw, str):
             return raw
 
-        return get_rendered(raw, self.context)
+        return get_rendered(raw, self._context)
 
     def __call__(self, var_name, default=_VAR_NOTSET):
         if self.has_var(var_name):

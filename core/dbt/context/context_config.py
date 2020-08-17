@@ -26,16 +26,16 @@ class LegacyContextConfig:
         node_type: NodeType,
     ):
         self._config = None
-        self.active_project: RuntimeConfig = active_project
-        self.own_project: Project = own_project
+        self._active_project: RuntimeConfig = active_project
+        self._own_project: Project = own_project
 
-        self.model = ModelParts(
+        self._model = ModelParts(
             fqn=fqn,
             resource_type=node_type,
-            package_name=self.own_project.project_name,
+            package_name=self._own_project.project_name,
         )
 
-        self.updater = ConfigUpdater(active_project.credentials.type)
+        self._updater = ConfigUpdater(active_project.credentials.type)
 
         # the config options defined within the model
         self.in_model_config: Dict[str, Any] = {}
@@ -43,12 +43,12 @@ class LegacyContextConfig:
     def get_default(self) -> Dict[str, Any]:
         defaults = {"enabled": True, "materialized": "view"}
 
-        if self.model.resource_type == NodeType.Seed:
+        if self._model.resource_type == NodeType.Seed:
             defaults['materialized'] = 'seed'
-        elif self.model.resource_type == NodeType.Snapshot:
+        elif self._model.resource_type == NodeType.Snapshot:
             defaults['materialized'] = 'snapshot'
 
-        if self.model.resource_type == NodeType.Test:
+        if self._model.resource_type == NodeType.Test:
             defaults['severity'] = 'ERROR'
 
         return defaults
@@ -57,31 +57,34 @@ class LegacyContextConfig:
         defaults = self.get_default()
         active_config = self.load_config_from_active_project()
 
-        if self.active_project.project_name == self.own_project.project_name:
-            cfg = self.updater.merge(
+        if self._active_project.project_name == self._own_project.project_name:
+            cfg = self._updater.merge(
                 defaults, active_config, self.in_model_config
             )
         else:
             own_config = self.load_config_from_own_project()
 
-            cfg = self.updater.merge(
+            cfg = self._updater.merge(
                 defaults, own_config, self.in_model_config, active_config
             )
 
         return cfg
 
     def _translate_adapter_aliases(self, config: Dict[str, Any]):
-        return self.active_project.credentials.translate_aliases(config)
+        return self._active_project.credentials.translate_aliases(config)
 
     def update_in_model_config(self, config: Dict[str, Any]) -> None:
         config = self._translate_adapter_aliases(config)
-        self.updater.update_into(self.in_model_config, config)
+        self._updater.update_into(self.in_model_config, config)
 
     def load_config_from_own_project(self) -> Dict[str, Any]:
-        return self.updater.get_project_config(self.model, self.own_project)
+        return self._updater.get_project_config(self._model, self._own_project)
 
     def load_config_from_active_project(self) -> Dict[str, Any]:
-        return self.updater.get_project_config(self.model, self.active_project)
+        return self._updater.get_project_config(
+            self._model,
+            self._active_project,
+        )
 
 
 T = TypeVar('T', bound=BaseConfig)
@@ -89,12 +92,12 @@ T = TypeVar('T', bound=BaseConfig)
 
 class ContextConfigGenerator:
     def __init__(self, active_project: RuntimeConfig):
-        self.active_project = active_project
+        self._active_project = active_project
 
     def get_node_project(self, project_name: str):
-        if project_name == self.active_project.project_name:
-            return self.active_project
-        dependencies = self.active_project.load_dependencies()
+        if project_name == self._active_project.project_name:
+            return self._active_project
+        dependencies = self._active_project.load_dependencies()
         if project_name not in dependencies:
             raise InternalException(
                 f'Project name {project_name} not found in dependencies '
@@ -102,7 +105,7 @@ class ContextConfigGenerator:
             )
         return dependencies[project_name]
 
-    def project_configs(
+    def _project_configs(
         self, project: Project, fqn: List[str], resource_type: NodeType
     ) -> Iterator[Dict[str, Any]]:
         if resource_type == NodeType.Seed:
@@ -123,18 +126,20 @@ class ContextConfigGenerator:
 
             yield result
 
-    def active_project_configs(
+    def _active_project_configs(
         self, fqn: List[str], resource_type: NodeType
     ) -> Iterator[Dict[str, Any]]:
-        return self.project_configs(self.active_project, fqn, resource_type)
+        return self._project_configs(self._active_project, fqn, resource_type)
 
     def _update_from_config(
         self, result: T, partial: Dict[str, Any], validate: bool = False
     ) -> T:
-        translated = self.active_project.credentials.translate_aliases(partial)
+        translated = self._active_project.credentials.translate_aliases(
+            partial
+        )
         return result.update_from(
             translated,
-            self.active_project.credentials.type,
+            self._active_project.credentials.type,
             validate=validate
         )
 
@@ -153,13 +158,16 @@ class ContextConfigGenerator:
         # because it might be invalid in the case of required config members
         # (such as on snapshots!)
         result = config_cls.from_dict({}, validate=False)
-        for fqn_config in self.project_configs(own_config, fqn, resource_type):
+
+        project_configs = self._project_configs(own_config, fqn, resource_type)
+        for fqn_config in project_configs:
             result = self._update_from_config(result, fqn_config)
+
         for config_call in config_calls:
             result = self._update_from_config(result, config_call)
 
-        if own_config.project_name != self.active_project.project_name:
-            for fqn_config in self.active_project_configs(fqn, resource_type):
+        if own_config.project_name != self._active_project.project_name:
+            for fqn_config in self._active_project_configs(fqn, resource_type):
                 result = self._update_from_config(result, fqn_config)
 
         # this is mostly impactful in the snapshot config case
@@ -174,21 +182,21 @@ class ContextConfig:
         resource_type: NodeType,
         project_name: str,
     ) -> None:
-        self.config_calls: List[Dict[str, Any]] = []
-        self.cfg_source = ContextConfigGenerator(active_project)
-        self.fqn = fqn
-        self.resource_type = resource_type
-        self.project_name = project_name
+        self._config_calls: List[Dict[str, Any]] = []
+        self._cfg_source = ContextConfigGenerator(active_project)
+        self._fqn = fqn
+        self._resource_type = resource_type
+        self._project_name = project_name
 
     def update_in_model_config(self, opts: Dict[str, Any]) -> None:
-        self.config_calls.append(opts)
+        self._config_calls.append(opts)
 
     def build_config_dict(self, base: bool = False) -> Dict[str, Any]:
-        return self.cfg_source.calculate_node_config(
-            config_calls=self.config_calls,
-            fqn=self.fqn,
-            resource_type=self.resource_type,
-            project_name=self.project_name,
+        return self._cfg_source.calculate_node_config(
+            config_calls=self._config_calls,
+            fqn=self._fqn,
+            resource_type=self._resource_type,
+            project_name=self._project_name,
             base=base,
         ).to_dict()
 
