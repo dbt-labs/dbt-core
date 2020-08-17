@@ -4,7 +4,7 @@ import textwrap
 import yaml
 
 
-class TestBigqueryDatePartitioning(DBTIntegrationTest):
+class TestBigqueryAdapterSpecific(DBTIntegrationTest):
 
     @property
     def schema(self):
