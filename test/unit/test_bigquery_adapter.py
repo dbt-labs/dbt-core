@@ -25,7 +25,6 @@ import google.cloud.bigquery
 
 from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
 
-
 def _bq_conn():
     conn = MagicMock()
     conn.get.side_effect = lambda x: 'bigquery' if x == 'type' else None
@@ -520,7 +519,8 @@ class TestBigQueryConnectionManager(unittest.TestCase):
 
     
     def test_copy_bq_table_appends(self):
-        self._copy_table(materialization='incremental')
+        self._copy_table(
+            write_disposition=dbt.adapters.bigquery.connections.WRITE_APPEND)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
             self._table_ref('project', 'dataset', 'table1', None),
@@ -532,7 +532,8 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             dbt.adapters.bigquery.connections.WRITE_APPEND)
 
     def test_copy_bq_table_truncates(self):
-        self._copy_table(materialization='table')
+        self._copy_table(
+            write_disposition=dbt.adapters.bigquery.connections.WRITE_TRUNCATE)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
             self._table_ref('project', 'dataset', 'table1', None),
@@ -547,24 +548,33 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         return google.cloud.bigquery.table.TableReference.from_string(
             '{}.{}.{}'.format(proj, ds, table))
 
-    def _copy_table(self, materialization):
+    def _copy_table(self, write_disposition):
 
         self.connections.table_ref = self._table_ref
         source = BigQueryRelation.create(
             database='project', schema='dataset', identifier='table1')
         destination = BigQueryRelation.create(
             database='project', schema='dataset', identifier='table2')
-        self.connections.copy_bq_table(source, destination, materialization)
+        self.connections.copy_bq_table(source, destination, write_disposition)
 
 
 class TestBigQueryAdapter(BaseTestBigQueryAdapter):
 
-    def test_copy_table(self):
+    def test_copy_table_materialization_table(self):
         adapter = self.get_adapter('oauth')
         adapter.connections = MagicMock()
-        adapter.copy_table('source', 'destination', 'materialization')
+        adapter.copy_table('source', 'destination', 'table')
         adapter.connections.copy_bq_table.assert_called_once_with(
-            'source', 'destination', 'materialization')
+            'source', 'destination',
+            dbt.adapters.bigquery.connections.WRITE_TRUNCATE)
+
+    def test_copy_table_materialization_incremental(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections = MagicMock()
+        adapter.copy_table('source', 'destination', 'incremental')
+        adapter.connections.copy_bq_table.assert_called_once_with(
+            'source', 'destination',
+            dbt.adapters.bigquery.connections.WRITE_APPEND)
 
     def test_parse_partition_by(self):
         adapter = self.get_adapter('oauth')

@@ -32,6 +32,10 @@ import time
 import agate
 import json
 
+# Write dispositions for bigquery.
+WRITE_APPEND = google.cloud.bigquery.job.WriteDisposition.WRITE_APPEND
+WRITE_TRUNCATE = google.cloud.bigquery.job.WriteDisposition.WRITE_TRUNCATE
+
 
 def sql_escape(string):
     if not isinstance(string, str):
@@ -418,8 +422,13 @@ class BigQueryAdapter(BaseAdapter):
 
     @available.parse(lambda *a, **k: '')
     def copy_table(self, source, destination, materialization):
+        if materialization is 'incremental':
+            write_disposition = WRITE_APPEND
+        else:
+            write_disposition = WRITE_TRUNCATE
+
         self.connections.copy_bq_table(
-            source, destination, materialization)
+            source, destination, write_disposition)
 
     @classmethod
     def poll_until_job_completes(cls, job, timeout):

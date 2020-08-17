@@ -26,8 +26,6 @@ from hologram.helpers import StrEnum
 
 BQ_QUERY_JOB_SPLIT = '-----Query Job SQL Follows-----'
 
-# Write dispositions for bigquery.
-WRITE_APPEND = google.cloud.bigquery.job.WriteDisposition.WRITE_APPEND
 WRITE_TRUNCATE = google.cloud.bigquery.job.WriteDisposition.WRITE_TRUNCATE
 
 REOPENABLE_ERRORS = (
@@ -356,33 +354,29 @@ class BigQueryConnectionManager(BaseConnectionManager):
         self.create_bigquery_table(database, schema, table_name, callback,
                                    'CREATE DAY PARTITIONED TABLE')
 
-    def copy_bq_table(self, source, destination, materialization):
+    def copy_bq_table(self, source, destination, write_disposition):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        if materialization is 'incremental':
-            write_disposition = WRITE_APPEND
-        else:
-            write_disposition = WRITE_TRUNCATE
-
-        source = self.table_ref(
+        source_ref = self.table_ref(
             source.database, source.schema, source.table, conn)
-        destination = self.table_ref(
+        destination_ref = self.table_ref(
             destination.database, destination.schema, destination.table, conn)
+
         logger.debug(
-            'Copying table "{}" to "{}" with disposition: "{}"', source.path,
-            destination.path, write_disposition)
+            'Copying table "{}" to "{}" with disposition: "{}"',
+            source_ref.path, destination_ref.path, write_disposition)
 
         def copy_and_results():
             job_config = google.cloud.bigquery.CopyJobConfig(
                 write_disposition=write_disposition)
             copy_job = client.copy_table(
-                source, destination, job_config=job_config)
+                source_ref, destination_ref, job_config=job_config)
             iterator = copy_job.result(timeout=self.get_timeout(conn))
             return copy_job, iterator
         self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
-                source.path, destination.path), conn=conn, fn=copy_and_results)
+                source_ref.path, destination_ref.path), conn=conn, fn=copy_and_results)
 
 
     @staticmethod
