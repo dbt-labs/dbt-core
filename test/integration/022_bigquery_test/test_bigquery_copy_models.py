@@ -35,7 +35,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery_copy_table(self):
-        results = self.run_dbt()
+        results = self.run_dbt(expect_pass=False)
         self.assertEqual(len(results), 4)
 
         test_results = self.run_dbt(['test'])
