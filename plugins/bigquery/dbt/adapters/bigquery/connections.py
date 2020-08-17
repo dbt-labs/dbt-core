@@ -376,8 +376,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
             return copy_job, iterator
         self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
-                source_ref.path, destination_ref.path), conn=conn,
-                fn=copy_and_results)
+                source_ref.path, destination_ref.path),
+            conn=conn, fn=copy_and_results)
 
     @staticmethod
     def dataset(database, schema, conn):
