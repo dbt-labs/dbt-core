@@ -520,7 +520,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
     
     def test_copy_bq_table_appends(self):
         self._copy_table(
-            write_disposition=dbt.adapters.bigquery.connections.WRITE_APPEND)
+            write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
             self._table_ref('project', 'dataset', 'table1', None),
@@ -529,11 +529,11 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         args, kwargs = self.mock_client.copy_table.call_args
         self.assertEqual(
             kwargs['job_config'].write_disposition,
-            dbt.adapters.bigquery.connections.WRITE_APPEND)
+            dbt.adapters.bigquery.impl.WRITE_APPEND)
 
     def test_copy_bq_table_truncates(self):
         self._copy_table(
-            write_disposition=dbt.adapters.bigquery.connections.WRITE_TRUNCATE)
+            write_disposition=dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
             self._table_ref('project', 'dataset', 'table1', None),
@@ -542,7 +542,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         args, kwargs = self.mock_client.copy_table.call_args
         self.assertEqual(
             kwargs['job_config'].write_disposition,
-            dbt.adapters.bigquery.connections.WRITE_TRUNCATE)
+            dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
 
     def _table_ref(self, proj, ds, table, conn):
         return google.cloud.bigquery.table.TableReference.from_string(
@@ -566,7 +566,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         adapter.copy_table('source', 'destination', 'table')
         adapter.connections.copy_bq_table.assert_called_once_with(
             'source', 'destination',
-            dbt.adapters.bigquery.connections.WRITE_TRUNCATE)
+            dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
 
     def test_copy_table_materialization_incremental(self):
         adapter = self.get_adapter('oauth')
@@ -574,7 +574,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         adapter.copy_table('source', 'destination', 'incremental')
         adapter.connections.copy_bq_table.assert_called_once_with(
             'source', 'destination',
-            dbt.adapters.bigquery.connections.WRITE_APPEND)
+            dbt.adapters.bigquery.impl.WRITE_APPEND)
 
     def test_parse_partition_by(self):
         adapter = self.get_adapter('oauth')

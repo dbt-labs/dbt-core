@@ -7,7 +7,7 @@
 {% macro copy_table(source) %}
 
   {%- if not execute: -%}
-    {%- set materialized_method = config.source_config['config'].get('materialized', '') -%}
+    {%- set materialized_method = model.get('config', '{}').get('materialized', '') -%}
     {{ config(copy_materialization=materialized_method) }}
     {%- if materialized_method not in ('table', 'incremental') -%}
       {{
