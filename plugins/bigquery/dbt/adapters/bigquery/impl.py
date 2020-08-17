@@ -416,6 +416,11 @@ class BigQueryAdapter(BaseAdapter):
 
         return "CREATE TABLE"
 
+    @available.parse(lambda *a, **k: '')
+    def copy_table(self, source, destination, materialization):
+        self.connections.copy_bq_table(
+            source, destination, materialization)
+
     @classmethod
     def poll_until_job_completes(cls, job, timeout):
         retry_count = timeout
