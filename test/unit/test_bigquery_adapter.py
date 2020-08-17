@@ -589,7 +589,8 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
             'expiration': (
                 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'),
         }
-        actual = adapter.get_table_options(config={}, node={}, temporary=True)
+        actual = adapter.get_table_options(
+            config={'time_to_expiration': 4}, node={}, temporary=True)
         self.assertEqual(expected, actual)
 
 
