@@ -1,0 +1,1 @@
+{{ copy_table(ref('original')) }}

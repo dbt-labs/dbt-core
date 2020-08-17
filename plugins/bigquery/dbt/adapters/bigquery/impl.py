@@ -422,7 +422,7 @@ class BigQueryAdapter(BaseAdapter):
 
     @available.parse(lambda *a, **k: '')
     def copy_table(self, source, destination, materialization):
-        if materialization is 'incremental':
+        if materialization == 'incremental':
             write_disposition = WRITE_APPEND
         else:
             write_disposition = WRITE_TRUNCATE
