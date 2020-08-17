@@ -747,8 +747,9 @@ class BigQueryAdapter(BaseAdapter):
             opts['expiration_timestamp'] = expiration
 
         if (config.get('time_to_expiration') is not None) and (not temporary):
-            expiration = ('TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
-            '{} hour)').format(config.get('time_to_expiration'))
+            expiration = (
+                'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
+                '{} hour)').format(config.get('time_to_expiration'))
             opts['expiration_timestamp'] = expiration
 
         if config.persist_relation_docs() and 'description' in node:
