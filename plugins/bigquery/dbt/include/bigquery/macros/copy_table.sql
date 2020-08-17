@@ -29,3 +29,5 @@
       destination,
       config.get('copy_materialization'))
   }}
+
+{% endmacro %}
