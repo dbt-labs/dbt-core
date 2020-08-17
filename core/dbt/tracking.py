@@ -39,7 +39,7 @@ RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-1"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
-DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
+DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
 LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
 RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
 EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
@@ -367,20 +367,17 @@ def track_package_install(config, args, options):
 
 def track_deprecation_warn(options):
 
-    assert active_user is not None, \
-        'Cannot track deprecation warnings when active user is None'
+    assert active_user is not None, "Cannot track deprecation warnings when active user is None"
 
-    context = [
-        SelfDescribingJson(DEPRECATION_WARN_SPEC, options)
-    ]
+    context = [SelfDescribingJson(DEPRECATION_WARN_SPEC, options)]
 
     track(
         active_user,
         category="dbt",
-        action='deprecation',
+        action="deprecation",
         label=get_invocation_id(),
-        property_='warn',
-        context=context
+        property_="warn",
+        context=context,
     )
 
 
