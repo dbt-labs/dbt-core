@@ -39,10 +39,11 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
 
         test_results = self.run_dbt(['test'])
+        print('test_results is', test_results)
 
         self.assertTrue(len(test_results) > 0)
         for result in test_results:
-            if result.name == 'copy_bad_materialization'
+            if result.name == 'copy_bad_materialization':
                 self.assertTrue(result.error)
             else:
                 self.assertTrue(result.success)
