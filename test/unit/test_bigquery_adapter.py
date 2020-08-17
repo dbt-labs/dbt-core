@@ -571,6 +571,28 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
             }
         )
 
+    def test_time_to_expiration(self):
+        adapter = self.get_adapter('oauth')
+
+        expected = {
+            'expiration': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 4 hour)',
+        }
+        actual = adapter.get_table_options(
+            config={'time_to_expiration': 4}, node={}, temporary=False)
+        self.assertEqual(expected, actual)
+
+
+    def test_time_to_expiration_temporary(self):
+        adapter = self.get_adapter('oauth')
+
+        expected = {
+            'expiration': (
+                'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'),
+        }
+        actual = adapter.get_table_options(config={}, node={}, temporary=True)
+        self.assertEqual(expected, actual)
+
+
 
 class TestBigQueryFilterCatalog(unittest.TestCase):
     def test__catalog_filter_table(self):

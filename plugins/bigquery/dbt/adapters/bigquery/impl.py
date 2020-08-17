@@ -104,6 +104,7 @@ class BigqueryConfig(AdapterConfig):
     labels: Optional[Dict[str, str]] = None
     partitions: Optional[List[str]] = None
     grant_access_to: Optional[List[Dict[str, str]]] = None
+    time_to_expiration: Optional[int] = None
 
 
 class BigQueryAdapter(BaseAdapter):
