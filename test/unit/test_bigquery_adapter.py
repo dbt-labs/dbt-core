@@ -579,7 +579,7 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
         mock_config.get.side_effect = lambda name: config.get(name)
 
         expected = {
-            'expiration': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 4 hour)',
+            'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 4 hour)',
         }
         actual = adapter.get_table_options(mock_config, node={}, temporary=False)
         self.assertEqual(expected, actual)
@@ -593,7 +593,7 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
         mock_config.get.side_effect = lambda name: config.get(name)
 
         expected = {
-            'expiration': (
+            'expiration_timestamp': (
                 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'),
         }
         actual = adapter.get_table_options(mock_config, node={}, temporary=True)
