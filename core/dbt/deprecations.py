@@ -16,6 +16,11 @@ class DBTDeprecation:
             'name not implemented for {}'.format(self)
         )
 
+    def track_deprecation_warn(self) -> None:
+        dbt.tracking.track_deprecation_warn({
+            "deprecation_name": self.name
+        })
+
     @property
     def description(self) -> str:
         if self._description is not None:
@@ -31,6 +36,7 @@ class DBTDeprecation:
                 desc, prefix='* Deprecation Warning: '
             )
             dbt.exceptions.warn_or_error(msg)
+            self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
 

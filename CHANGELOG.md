@@ -7,6 +7,7 @@
 
 ### Under the hood
 - Upgraded snowflake-connector-python dependency to 2.2.10 and enabled the SSO token cache ([#2613](https://github.com/fishtown-analytics/dbt/issues/2613), [#2689](https://github.com/fishtown-analytics/dbt/issues/2689), [#2698](https://github.com/fishtown-analytics/dbt/pull/2698))
+- Add deprecation warnings to anonymous usage tracking ([#2688](https://github.com/fishtown-analytics/dbt/issues/2688), [#2710](https://github.com/fishtown-analytics/dbt/issues/2710))
 
 ### Features
 - Add better retry support when using the BigQuery adapter ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694), follow-up to [#1963](https://github.com/fishtown-analytics/dbt/pull/1963))
