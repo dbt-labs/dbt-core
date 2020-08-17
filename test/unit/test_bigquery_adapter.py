@@ -4,7 +4,7 @@ import re
 import unittest
 from contextlib import contextmanager
 from requests.exceptions import ConnectionError
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock, create_autospec
 
 import hologram
 
@@ -573,24 +573,30 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
 
     def test_time_to_expiration(self):
         adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            dbt.context.providers.RuntimeConfigObject)
+        config = {'time_to_expiration': 4}
+        mock_config.get.side_effect = lambda name: config.get(name)
 
         expected = {
             'expiration': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 4 hour)',
         }
-        actual = adapter.get_table_options(
-            config={'time_to_expiration': 4}, node={}, temporary=False)
+        actual = adapter.get_table_options(mock_config, node={}, temporary=False)
         self.assertEqual(expected, actual)
 
 
     def test_time_to_expiration_temporary(self):
         adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            dbt.context.providers.RuntimeConfigObject)
+        config={'time_to_expiration': 4}
+        mock_config.get.side_effect = lambda name: config.get(name)
 
         expected = {
             'expiration': (
                 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'),
         }
-        actual = adapter.get_table_options(
-            config={'time_to_expiration': 4}, node={}, temporary=True)
+        actual = adapter.get_table_options(mock_config, node={}, temporary=True)
         self.assertEqual(expected, actual)
 
 
