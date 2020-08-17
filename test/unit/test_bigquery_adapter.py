@@ -529,7 +529,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         args, kwargs = self.mock_client.copy_table.call_args
         self.assertEqual(
             kwargs['job_config'].write_disposition,
-            dbt.adapters.bigquery.connections._WRITE_APPEND)
+            dbt.adapters.bigquery.connections.WRITE_APPEND)
 
     def test_copy_bq_table_truncates(self):
         self._copy_table(materialization='table')
@@ -541,7 +541,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         args, kwargs = self.mock_client.copy_table.call_args
         self.assertEqual(
             kwargs['job_config'].write_disposition,
-            dbt.adapters.bigquery.connections._WRITE_TRUNCATE)
+            dbt.adapters.bigquery.connections.WRITE_TRUNCATE)
 
     def _table_ref(self, proj, ds, table, conn):
         return google.cloud.bigquery.table.TableReference.from_string(
