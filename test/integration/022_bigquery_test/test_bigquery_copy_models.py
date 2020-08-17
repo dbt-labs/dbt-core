@@ -11,7 +11,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "dp-models"
+        return "copy-models"
 
     @property
     def profile_config(self):
