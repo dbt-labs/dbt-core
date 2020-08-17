@@ -26,7 +26,6 @@ from dbt.logger import (
     NodeCount,
     print_timestamped_line,
 )
-from dbt.compilation import compile_manifest
 
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
@@ -71,7 +70,9 @@ class ManifestTask(ConfiguredTask):
             raise InternalException(
                 'compile_manifest called before manifest was loaded'
             )
-        self.graph = compile_manifest(self.config, self.manifest)
+        adapter = get_adapter(self.config)
+        compiler = adapter.get_compiler()
+        self.graph = compiler.compile(self.manifest)
 
     def _runtime_initialize(self):
         self.load_manifest()

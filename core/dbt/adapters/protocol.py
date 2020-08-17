@@ -1,18 +1,22 @@
 from dataclasses import dataclass
 from typing import (
     Type, Hashable, Optional, ContextManager, List, Generic, TypeVar, ClassVar,
-    Tuple, Union
+    Tuple, Union, Dict, Any
 )
 from typing_extensions import Protocol
 
 import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig
-from dbt.contracts.graph.compiled import CompiledNode
+from dbt.contracts.graph.compiled import (
+    CompiledNode, NonSourceNode, NonSourceCompiledNode
+)
 from dbt.contracts.graph.parsed import ParsedNode, ParsedSourceDefinition
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.relation import Policy, HasQuoting
+
+from dbt.graph import Graph
 
 
 @dataclass
@@ -45,6 +49,19 @@ class RelationProtocol(Protocol):
         ...
 
 
+class CompilerProtocol(Protocol):
+    def compile(self, manifest: Manifest, write=True) -> Graph:
+        ...
+
+    def compile_node(
+        self,
+        node: NonSourceNode,
+        manifest: Manifest,
+        extra_context: Optional[Dict[str, Any]] = None,
+    ) -> NonSourceCompiledNode:
+        ...
+
+
 AdapterConfig_T = TypeVar(
     'AdapterConfig_T', bound=AdapterConfig
 )
@@ -57,11 +74,18 @@ Relation_T = TypeVar(
 Column_T = TypeVar(
     'Column_T', bound=ColumnProtocol
 )
+Compiler_T = TypeVar('Compiler_T', bound=CompilerProtocol)
 
 
 class AdapterProtocol(
     Protocol,
-    Generic[AdapterConfig_T, ConnectionManager_T, Relation_T, Column_T]
+    Generic[
+        AdapterConfig_T,
+        ConnectionManager_T,
+        Relation_T,
+        Column_T,
+        Compiler_T,
+    ]
 ):
     AdapterSpecificConfigs: ClassVar[Type[AdapterConfig_T]]
     Column: ClassVar[Type[Column_T]]
@@ -131,4 +155,7 @@ class AdapterProtocol(
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> Tuple[str, agate.Table]:
+        ...
+
+    def get_compiler(self) -> Compiler_T:
         ...

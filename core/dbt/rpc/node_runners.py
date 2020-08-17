@@ -2,7 +2,6 @@ from abc import abstractmethod
 from typing import Generic, TypeVar
 
 import dbt.exceptions
-from dbt.compilation import compile_node
 from dbt.contracts.rpc import (
     RemoteCompileResult, RemoteRunResult, ResultTable,
 )
@@ -38,8 +37,8 @@ class GenericRPCRunner(CompileRunner, Generic[RPCSQLResult]):
         pass
 
     def compile(self, manifest):
-        return compile_node(self.adapter, self.config, self.node, manifest, {},
-                            write=False)
+        compiler = self.adapter.get_compiler()
+        return compiler.compile_node(self.node, manifest, {}, write=False)
 
     @abstractmethod
     def execute(self, compiled_node, manifest) -> RPCSQLResult:

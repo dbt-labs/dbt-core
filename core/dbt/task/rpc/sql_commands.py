@@ -7,7 +7,6 @@ from typing import Dict, Any
 from dbt import flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
-from dbt.compilation import compile_manifest
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedRPCNode
@@ -129,7 +128,9 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
         )
 
         # don't write our new, weird manifest!
-        self.graph = compile_manifest(self.config, self.manifest, write=False)
+        adapter = get_adapter(self.config)
+        compiler = adapter.get_compiler()
+        self.graph = compiler.compile(self.manifest, write=False)
         # previously, this compiled the ancestors, but they are compiled at
         # runtime now.
         return rpc_node

@@ -25,7 +25,9 @@ from dbt.adapters.protocol import (
 )
 from dbt.clients.agate_helper import empty_table, merge_tables, table_from_rows
 from dbt.clients.jinja import MacroGenerator
-from dbt.contracts.graph.compiled import CompileResultNode, CompiledSeedNode
+from dbt.contracts.graph.compiled import (
+    CompileResultNode, CompiledSeedNode
+)
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
@@ -289,7 +291,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         return {
             self.Relation.create_from(self.config, node).without_identifier()
             for node in manifest.nodes.values()
-            if node.resource_type in NodeType.executable()
+            if (
+                node.resource_type in NodeType.executable() and
+                not node.is_ephemeral_model
+            )
         }
 
     def _get_catalog_schemas(self, manifest: Manifest) -> SchemaSearchMap:
@@ -1141,6 +1146,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
         return sql
+
+    def get_compiler(self):
+        from dbt.compilation import Compiler
+        return Compiler(self.config)
 
 
 COLUMNS_EQUAL_SQL = '''

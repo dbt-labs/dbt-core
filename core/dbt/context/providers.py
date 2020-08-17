@@ -46,7 +46,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
 from dbt.utils import (
-    add_ephemeral_model_prefix, merge, AttrDict, MultiDict
+    merge, AttrDict, MultiDict
 )
 
 import agate
@@ -58,23 +58,23 @@ _MISSING = object()
 # base classes
 class RelationProxy:
     def __init__(self, adapter):
-        self.quoting_config = adapter.config.quoting
-        self.relation_type = adapter.Relation
+        self._quoting_config = adapter.config.quoting
+        self._relation_type = adapter.Relation
 
     def __getattr__(self, key):
-        return getattr(self.relation_type, key)
+        return getattr(self._relation_type, key)
 
     def create_from_source(self, *args, **kwargs):
         # bypass our create when creating from source so as not to mess up
         # the source quoting
-        return self.relation_type.create_from_source(*args, **kwargs)
+        return self._relation_type.create_from_source(*args, **kwargs)
 
     def create(self, *args, **kwargs):
         kwargs['quote_policy'] = merge(
-            self.quoting_config,
+            self._quoting_config,
             kwargs.pop('quote_policy', {})
         )
-        return self.relation_type.create(*args, **kwargs)
+        return self._relation_type.create(*args, **kwargs)
 
 
 class BaseDatabaseWrapper:
@@ -83,28 +83,28 @@ class BaseDatabaseWrapper:
     via a relation proxy.
     """
     def __init__(self, adapter, namespace: MacroNamespace):
-        self.adapter = adapter
+        self._adapter = adapter
         self.Relation = RelationProxy(adapter)
-        self.namespace = namespace
+        self._namespace = namespace
 
     def __getattr__(self, name):
         raise NotImplementedError('subclasses need to implement this')
 
     @property
     def config(self):
-        return self.adapter.config
+        return self._adapter.config
 
     def type(self):
-        return self.adapter.type()
+        return self._adapter.type()
 
     def commit(self):
-        return self.adapter.commit_if_has_connection()
+        return self._adapter.commit_if_has_connection()
 
     def _get_adapter_macro_prefixes(self) -> List[str]:
         # a future version of this could have plugins automatically call fall
         # back to their dependencies' dependencies by using
         # `get_adapter_type_names` instead of `[self.config.credentials.type]`
-        search_prefixes = [self.adapter.type(), 'default']
+        search_prefixes = [self._adapter.type(), 'default']
         return search_prefixes
 
     def dispatch(
@@ -138,7 +138,7 @@ class BaseDatabaseWrapper:
             for prefix in self._get_adapter_macro_prefixes():
                 search_name = f'{prefix}__{macro_name}'
                 try:
-                    macro = self.namespace.get_from_package(
+                    macro = self._namespace.get_from_package(
                         package_name, search_name
                     )
                 except CompilationException as exc:
@@ -379,13 +379,13 @@ class ParseDatabaseWrapper(BaseDatabaseWrapper):
     parse-time overrides.
     """
     def __getattr__(self, name):
-        override = (name in self.adapter._available_ and
-                    name in self.adapter._parse_replacements_)
+        override = (name in self._adapter._available_ and
+                    name in self._adapter._parse_replacements_)
 
         if override:
-            return self.adapter._parse_replacements_[name]
-        elif name in self.adapter._available_:
-            return getattr(self.adapter, name)
+            return self._adapter._parse_replacements_[name]
+        elif name in self._adapter._available_:
+            return getattr(self._adapter, name)
         else:
             raise AttributeError(
                 "'{}' object has no attribute '{}'".format(
@@ -399,8 +399,8 @@ class RuntimeDatabaseWrapper(BaseDatabaseWrapper):
     available.
     """
     def __getattr__(self, name):
-        if name in self.adapter._available_:
-            return getattr(self.adapter, name)
+        if name in self._adapter._available_:
+            return getattr(self._adapter, name)
         else:
             raise AttributeError(
                 "'{}' object has no attribute '{}'".format(
@@ -443,20 +443,14 @@ class RuntimeRefResolver(BaseRefResolver):
         self.validate(target_model, target_name, target_package)
         return self.create_relation(target_model, target_name)
 
-    def create_ephemeral_relation(
-        self, target_model: NonSourceNode, name: str
-    ) -> RelationProxy:
-        self.model.set_cte(target_model.unique_id, None)
-        return self.Relation.create(
-            type=self.Relation.CTE,
-            identifier=add_ephemeral_model_prefix(name)
-        ).quote(identifier=False)
-
     def create_relation(
         self, target_model: NonSourceNode, name: str
     ) -> RelationProxy:
-        if target_model.get_materialization() == 'ephemeral':
-            return self.create_ephemeral_relation(target_model, name)
+        if target_model.is_ephemeral_model:
+            self.model.set_cte(target_model.unique_id, None)
+            return self.Relation.create_ephemeral_from_node(
+                self.config, target_model
+            )
         else:
             return self.Relation.create_from(self.config, target_model)
 
@@ -480,16 +474,19 @@ class OperationRefResolver(RuntimeRefResolver):
     ) -> None:
         pass
 
-    def create_ephemeral_relation(
+    def create_relation(
         self, target_model: NonSourceNode, name: str
     ) -> RelationProxy:
-        # In operations, we can't ref() ephemeral nodes, because ParsedMacros
-        # do not support set_cte
-        raise_compiler_error(
-            'Operations can not ref() ephemeral nodes, but {} is ephemeral'
-            .format(target_model.name),
-            self.model
-        )
+        if target_model.is_ephemeral_model:
+            # In operations, we can't ref() ephemeral nodes, because
+            # ParsedMacros do not support set_cte
+            raise_compiler_error(
+                'Operations can not ref() ephemeral nodes, but {} is ephemeral'
+                .format(target_model.name),
+                self.model
+            )
+        else:
+            return super().create_relation(target_model, name)
 
 
 # `source` implementations

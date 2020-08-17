@@ -1,10 +1,11 @@
 import os
 from collections import defaultdict
-from typing import List, Dict, Any, Tuple, cast
+from typing import List, Dict, Any, Tuple, cast, Optional
 
 import networkx as nx  # type: ignore
 
 from dbt import flags
+from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
 from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model
@@ -21,7 +22,7 @@ from dbt.exceptions import dependency_not_found, InternalException
 from dbt.graph import Graph
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-from dbt.utils import add_ephemeral_model_prefix, pluralize
+from dbt.utils import pluralize
 
 graph_file_name = 'graph.gpickle'
 
@@ -156,6 +157,11 @@ class Compiler:
 
         return context
 
+    def add_ephemeral_prefix(self, name: str):
+        adapter = get_adapter(self.config)
+        relation_cls = adapter.Relation
+        return relation_cls.add_ephemeral_prefix(name)
+
     def _get_compiled_model(
         self,
         manifest: Manifest,
@@ -213,7 +219,8 @@ class Compiler:
                 cte_model, manifest, extra_context
             )
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
-            new_cte_name = add_ephemeral_model_prefix(cte_model.name)
+
+            new_cte_name = self.add_ephemeral_prefix(cte_model.name)
             sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
@@ -223,8 +230,11 @@ class Compiler:
 
         return model, prepended_ctes
 
-    def compile_node(
-        self, node: NonSourceNode, manifest, extra_context=None
+    def _compile_node(
+        self,
+        node: NonSourceNode,
+        manifest: Manifest,
+        extra_context: Optional[Dict[str, Any]] = None,
     ) -> NonSourceCompiledNode:
         if extra_context is None:
             extra_context = {}
@@ -295,6 +305,7 @@ class Compiler:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
     def compile(self, manifest: Manifest, write=True) -> Graph:
+        self.initialize()
         linker = Linker()
 
         self.link_graph(linker, manifest)
@@ -307,11 +318,38 @@ class Compiler:
 
         return Graph(linker.graph)
 
+    def _write_node(self, node: NonSourceNode) -> NonSourceNode:
+        if not _is_writable(node):
+            return node
+        logger.debug(f'Writing injected SQL for node "{node.unique_id}"')
 
-def compile_manifest(config, manifest, write=True) -> Graph:
-    compiler = Compiler(config)
-    compiler.initialize()
-    return compiler.compile(manifest, write=write)
+        if node.injected_sql is None:
+            # this should not really happen, but it'd be a shame to crash
+            # over it
+            logger.error(
+                f'Compiled node "{node.unique_id}" had no injected_sql, '
+                'cannot write sql!'
+            )
+        else:
+            node.build_path = node.write_node(
+                self.config.target_path,
+                'compiled',
+                node.injected_sql
+            )
+        return node
+
+    def compile_node(
+        self,
+        node: NonSourceNode,
+        manifest: Manifest,
+        extra_context: Optional[Dict[str, Any]] = None,
+        write: bool = True,
+    ) -> NonSourceCompiledNode:
+        node = self._compile_node(node, manifest, extra_context)
+
+        if write and _is_writable(node):
+            self._write_node(node)
+        return node
 
 
 def _is_writable(node):
@@ -322,20 +360,3 @@ def _is_writable(node):
         return False
 
     return True
-
-
-def compile_node(adapter, config, node, manifest, extra_context, write=True):
-    compiler = Compiler(config)
-    node = compiler.compile_node(node, manifest, extra_context)
-
-    if write and _is_writable(node):
-        logger.debug('Writing injected SQL for node "{}"'.format(
-            node.unique_id))
-
-        node.build_path = node.write_node(
-            config.target_path,
-            'compiled',
-            node.injected_sql
-        )
-
-    return node
