@@ -3,6 +3,8 @@ from typing import Optional, Set, List, Dict, ClassVar
 import dbt.exceptions
 from dbt import ui
 
+import dbt.tracking
+
 
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
