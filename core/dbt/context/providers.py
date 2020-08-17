@@ -162,9 +162,7 @@ class BaseDatabaseWrapper:
                 search_name = f"{prefix}__{macro_name}"
                 try:
                     # this uses the namespace from the context
-                    macro = self._namespace.get_from_package(
-                        package_name, search_name
-                    )
+                    macro = self._namespace.get_from_package(package_name, search_name)
                 except CompilationException:
                     # Only raise CompilationException if macro is not found in
                     # any package
