@@ -1,7 +1,17 @@
 from dataclasses import dataclass
 from typing import (
     Type,
-    Tuple, Union, Dict, Any
+    Hashable,
+    Optional,
+    ContextManager,
+    List,
+    Generic,
+    TypeVar,
+    ClassVar,
+    Tuple,
+    Union,
+    Dict,
+    Any,
 )
 from typing_extensions import Protocol
 
@@ -87,7 +97,7 @@ class AdapterProtocol(
         Relation_T,
         Column_T,
         Compiler_T,
-    ]
+    ],
 ):
     AdapterSpecificConfigs: ClassVar[Type[AdapterConfig_T]]
     Column: ClassVar[Type[Column_T]]

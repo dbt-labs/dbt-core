@@ -405,8 +405,7 @@ class ParseDatabaseWrapper(BaseDatabaseWrapper):
     """
 
     def __getattr__(self, name):
-        override = (name in self._adapter._available_ and
-                    name in self._adapter._parse_replacements_)
+        override = name in self._adapter._available_ and name in self._adapter._parse_replacements_
 
         if override:
             return self._adapter._parse_replacements_[name]
@@ -475,9 +474,7 @@ class RuntimeRefResolver(BaseRefResolver):
     ) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from_node(
-                self.config, target_model
-            )
+            return self.Relation.create_ephemeral_from_node(self.config, target_model)
         else:
             return self.Relation.create_from(self.config, target_model)
 
@@ -508,9 +505,10 @@ class OperationRefResolver(RuntimeRefResolver):
             # In operations, we can't ref() ephemeral nodes, because
             # ParsedMacros do not support set_cte
             raise_compiler_error(
-                'Operations can not ref() ephemeral nodes, but {} is ephemeral'
-                .format(target_model.name),
-                self.model
+                "Operations can not ref() ephemeral nodes, but {} is ephemeral".format(
+                    target_model.name
+                ),
+                self.model,
             )
         else:
             return super().create_relation(target_model, name)
