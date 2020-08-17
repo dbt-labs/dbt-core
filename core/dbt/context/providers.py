@@ -528,10 +528,7 @@ class ModelConfiguredVar(Var):
         if package_name != self._config.project_name:
             if package_name not in dependencies:
                 # I don't think this is actually reachable
-                raise_compiler_error(
-                    f'Node package named {package_name} not found!',
-                    self._node
-                )
+                raise_compiler_error(f"Node package named {package_name} not found!", self._node)
             yield dependencies[package_name]
         yield self._config
 
