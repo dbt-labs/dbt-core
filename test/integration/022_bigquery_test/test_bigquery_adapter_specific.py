@@ -30,7 +30,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
         '''))
 
     @use_profile('bigquery')
-    def test_bigquery_location_invalid(self):
+    def test_time_to_expiration(self):
         _, stdout = self.run_dbt_and_capture()
         self.assertIn(
             'expiration_timestamp: TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
