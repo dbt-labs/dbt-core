@@ -17,11 +17,9 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import RuntimeException
 
 from hologram import JsonSchemaMixin
 from dataclasses import dataclass, field
-import sqlparse  # type: ignore
 from typing import Optional, List, Union, Dict, Type
 
 
@@ -44,19 +42,6 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     injected_sql: Optional[str] = None
-
-    def prepend_ctes(self, prepended_ctes: List[InjectedCTE]):
-        self.extra_ctes_injected = True
-        self.extra_ctes = prepended_ctes
-        if self.compiled_sql is None:
-            raise RuntimeException(
-                'Cannot prepend ctes to an unparsed node', self
-            )
-        self.injected_sql = _inject_ctes_into_sql(
-            self.compiled_sql,
-            prepended_ctes,
-        )
-        self.validate(self.to_dict())
 
     def set_cte(self, cte_id: str, sql: str):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
@@ -144,66 +129,6 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
 
 
 CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]
-
-
-def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
-    """
-    `ctes` is a list of InjectedCTEs like:
-
-        [
-            InjectedCTE(
-                id="cte_id_1",
-                sql="__dbt__CTE__ephemeral as (select * from table)",
-            ),
-            InjectedCTE(
-                id="cte_id_2",
-                sql="__dbt__CTE__events as (select id, type from events)",
-            ),
-        ]
-
-    Given `sql` like:
-
-      "with internal_cte as (select * from sessions)
-       select * from internal_cte"
-
-    This will spit out:
-
-      "with __dbt__CTE__ephemeral as (select * from table),
-            __dbt__CTE__events as (select id, type from events),
-            with internal_cte as (select * from sessions)
-       select * from internal_cte"
-
-    (Whitespace enhanced for readability.)
-    """
-    if len(ctes) == 0:
-        return sql
-
-    parsed_stmts = sqlparse.parse(sql)
-    parsed = parsed_stmts[0]
-
-    with_stmt = None
-    for token in parsed.tokens:
-        if token.is_keyword and token.normalized == 'WITH':
-            with_stmt = token
-            break
-
-    if with_stmt is None:
-        # no with stmt, add one, and inject CTEs right at the beginning
-        first_token = parsed.token_first()
-        with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
-        parsed.insert_before(first_token, with_stmt)
-    else:
-        # stmt exists, add a comma (which will come after injected CTEs)
-        trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
-        parsed.insert_after(with_stmt, trailing_comma)
-
-    token = sqlparse.sql.Token(
-        sqlparse.tokens.Keyword,
-        ", ".join(c.sql for c in ctes)
-    )
-    parsed.insert_after(with_stmt, token)
-
-    return str(parsed)
 
 
 PARSED_TYPES: Dict[Type[CompiledNode], Type[ParsedResource]] = {

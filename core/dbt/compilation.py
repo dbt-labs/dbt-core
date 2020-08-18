@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import List, Dict, Any, Tuple, cast, Optional
 
 import networkx as nx  # type: ignore
+import sqlparse
 
 from dbt import flags
 from dbt.adapters.factory import get_adapter
@@ -15,10 +16,15 @@ from dbt.contracts.graph.compiled import (
     COMPILED_TYPES,
     NonSourceNode,
     NonSourceCompiledNode,
+    CompiledDataTestNode,
     CompiledSchemaTestNode,
 )
 from dbt.contracts.graph.parsed import ParsedNode
-from dbt.exceptions import dependency_not_found, InternalException
+from dbt.exceptions import (
+    dependency_not_found,
+    InternalException,
+    RuntimeException,
+)
 from dbt.graph import Graph
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -192,6 +198,90 @@ class Compiler:
                 f'was not an ephemeral model: {cte_id}'
             )
 
+    def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
+        """
+        `ctes` is a list of InjectedCTEs like:
+
+            [
+                InjectedCTE(
+                    id="cte_id_1",
+                    sql="__dbt__CTE__ephemeral as (select * from table)",
+                ),
+                InjectedCTE(
+                    id="cte_id_2",
+                    sql="__dbt__CTE__events as (select id, type from events)",
+                ),
+            ]
+
+        Given `sql` like:
+
+          "with internal_cte as (select * from sessions)
+           select * from internal_cte"
+
+        This will spit out:
+
+          "with __dbt__CTE__ephemeral as (select * from table),
+                __dbt__CTE__events as (select id, type from events),
+                with internal_cte as (select * from sessions)
+           select * from internal_cte"
+
+        (Whitespace enhanced for readability.)
+        """
+        if len(ctes) == 0:
+            return sql
+
+        parsed_stmts = sqlparse.parse(sql)
+        parsed = parsed_stmts[0]
+
+        with_stmt = None
+        for token in parsed.tokens:
+            if token.is_keyword and token.normalized == 'WITH':
+                with_stmt = token
+                break
+
+        if with_stmt is None:
+            # no with stmt, add one, and inject CTEs right at the beginning
+            first_token = parsed.token_first()
+            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+            parsed.insert_before(first_token, with_stmt)
+        else:
+            # stmt exists, add a comma (which will come after injected CTEs)
+            trailing_comma = sqlparse.sql.Token(
+                sqlparse.tokens.Punctuation, ','
+            )
+            parsed.insert_after(with_stmt, trailing_comma)
+
+        token = sqlparse.sql.Token(
+            sqlparse.tokens.Keyword,
+            ", ".join(c.sql for c in ctes)
+        )
+        parsed.insert_after(with_stmt, token)
+
+        return str(parsed)
+
+    def _model_prepend_ctes(
+        self,
+        model: NonSourceCompiledNode,
+        prepended_ctes: List[InjectedCTE]
+    ) -> NonSourceCompiledNode:
+        if model.compiled_sql is None:
+            raise RuntimeException(
+                'Cannot prepend ctes to an unparsed node', model
+            )
+        injected_sql = self._inject_ctes_into_sql(
+            model.compiled_sql,
+            prepended_ctes,
+        )
+
+        model.extra_ctes_injected = True
+        model.extra_ctes = prepended_ctes
+        model.injected_sql = injected_sql
+        model.validate(model.to_dict())
+        return model
+
+    def _get_dbt_test_name(self) -> str:
+        return 'dbt__CTE__INTERNAL_test'
+
     def _recursively_prepend_ctes(
         self,
         model: NonSourceCompiledNode,
@@ -209,26 +299,62 @@ class Compiler:
 
         prepended_ctes: List[InjectedCTE] = []
 
-        for cte in model.extra_ctes:
-            cte_model = self._get_compiled_model(
-                manifest,
-                cte.id,
-                extra_context,
-            )
-            cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
-                cte_model, manifest, extra_context
-            )
-            _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
+        dbt_test_name = self._get_dbt_test_name()
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.name)
-            sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
+        for cte in model.extra_ctes:
+            if cte.id == dbt_test_name:
+                sql = cte.sql
+            else:
+                cte_model = self._get_compiled_model(
+                    manifest,
+                    cte.id,
+                    extra_context,
+                )
+                cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
+                    cte_model, manifest, extra_context
+                )
+                _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
+
+                new_cte_name = self.add_ephemeral_prefix(cte_model.name)
+                sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        model.prepend_ctes(prepended_ctes)
+        model = self._model_prepend_ctes(model, prepended_ctes)
 
         manifest.update_node(model)
 
         return model, prepended_ctes
+
+    def _insert_ctes(
+        self,
+        compiled_node: NonSourceCompiledNode,
+        manifest: Manifest,
+        extra_context: Dict[str, Any],
+    ) -> NonSourceCompiledNode:
+        """Insert the CTEs for the model."""
+
+        # for data tests, we need to insert a special CTE at the end of the
+        # list containing the test query, and then have the "real" query be a
+        # select count(*) from that model.
+        # the benefit of doing it this way is that _insert_ctes() can be
+        # rewritten for different adapters to handle databses that don't
+        # support CTEs, or at least don't have full support.
+        if isinstance(compiled_node, CompiledDataTestNode):
+            # the last prepend (so last in order) should be the data test body.
+            # then we can add our select count(*) from _that_ cte as the "real"
+            # compiled_sql, and do the regular prepend logic from CTEs.
+            name = self._get_dbt_test_name()
+            cte = InjectedCTE(
+                id=name,
+                sql=f' {name} as (\n{compiled_node.compiled_sql}\n)'
+            )
+            compiled_node.extra_ctes.append(cte)
+            compiled_node.compiled_sql = f'\nselect count(*) from {name}'
+
+        injected_node, _ = self._recursively_prepend_ctes(
+            compiled_node, manifest, extra_context
+        )
+        return injected_node
 
     def _compile_node(
         self,
@@ -258,11 +384,12 @@ class Compiler:
         compiled_node.compiled_sql = jinja.get_rendered(
             node.raw_sql,
             context,
-            node)
+            node,
+        )
 
         compiled_node.compiled = True
 
-        injected_node, _ = self._recursively_prepend_ctes(
+        injected_node = self._insert_ctes(
             compiled_node, manifest, extra_context
         )
 
