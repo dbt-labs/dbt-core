@@ -32,6 +32,5 @@ class TestBigqueryCopyTableFails(DBTIntegrationTest):
     @use_profile('bigquery')
     def test__bigquery_copy_table_fails(self):
         results = self.run_dbt(expect_pass=False)
-        # Copy SQL macro raises a NotImplementedException, which gives None
-        # as results.
-        self.assertEqual(results, None)
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].error)
