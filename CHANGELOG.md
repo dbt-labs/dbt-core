@@ -3,11 +3,14 @@
 ### Breaking changes
 - `adapter_macro` is no longer a macro, instead it is a builtin context method. Any custom macros that intercepted it by going through `context['dbt']` will need to instead access it via `context['builtins']` ([#2302](https://github.com/fishtown-analytics/dbt/issues/2302), [#2673](https://github.com/fishtown-analytics/dbt/pull/2673))
 - `adapter_macro` is now deprecated. Use `adapter.dispatch` instead.
+- Data tests are now written as CTEs instead of subqueries. Adapter plugins for adapters that don't support CTEs may require modification. ([#2712](https://github.com/fishtown-analytics/dbt/pull/2712))
 
 
 ### Under the hood
 - Upgraded snowflake-connector-python dependency to 2.2.10 and enabled the SSO token cache ([#2613](https://github.com/fishtown-analytics/dbt/issues/2613), [#2689](https://github.com/fishtown-analytics/dbt/issues/2689), [#2698](https://github.com/fishtown-analytics/dbt/pull/2698))
 - Add deprecation warnings to anonymous usage tracking ([#2688](https://github.com/fishtown-analytics/dbt/issues/2688), [#2710](https://github.com/fishtown-analytics/dbt/issues/2710))
+- Data tests now behave like dbt CTEs ([#2609](https://github.com/fishtown-analytics/dbt/issues/2609), [#2712](https://github.com/fishtown-analytics/dbt/pull/2712))
+- Adapter plugins can now override the CTE prefix by overriding their `Relation` attribute with a class that has a custom `add_ephemeral_prefix` implementation. ([#2660](https://github.com/fishtown-analytics/dbt/issues/2660), [#2712](https://github.com/fishtown-analytics/dbt/pull/2712))
 
 ### Features
 - Add better retry support when using the BigQuery adapter ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694), follow-up to [#1963](https://github.com/fishtown-analytics/dbt/pull/1963))
@@ -16,6 +19,7 @@
 - Add support for impersonating a service account using `impersonate_service_account` in the BigQuery profile configuration ([#2677](https://github.com/fishtown-analytics/dbt/issues/2677)) ([docs](https://docs.getdbt.com/reference/warehouse-profiles/bigquery-profile#service-account-impersonation))
 - Macros in the current project can override internal dbt macros that are called through `execute_macros`. ([#2301](https://github.com/fishtown-analytics/dbt/issues/2301), [#2686](https://github.com/fishtown-analytics/dbt/pull/2686))
 - Add state:modified and state:new selectors ([#2641](https://github.com/fishtown-analytics/dbt/issues/2641), [#2695](https://github.com/fishtown-analytics/dbt/pull/2695))
+
 
 ### Fixes
 - Fix Redshift table size estimation; e.g. 44 GB tables are no longer reported as 44 KB. [#2702](https://github.com/fishtown-analytics/dbt/issues/2702)
