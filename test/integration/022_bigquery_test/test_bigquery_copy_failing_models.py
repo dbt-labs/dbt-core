@@ -11,7 +11,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "copy-models"
+        return "copy-failing-models"
 
     @property
     def profile_config(self):
@@ -23,18 +23,13 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
         config-version: 2
         models:
             test:
-                original:
-                    materialized: table
-                copy_as_table:
-                    materialized: table
-                copy_as_incremental:
-                    materialized: incremental
+                copy_bad_materialization:
+                    materialized: view
         '''))
 
     @use_profile('bigquery')
     def test__bigquery_copy_table(self):
-        results = self.run_dbt()
-        self.assertEqual(len(results), 3)
-        for result in results:
-            self.assertTrue(result.success)
-
+        results = self.run_dbt(expect_pass=False)
+        # Copy SQL macro raises a NotImplementedException, which gives None
+        # as results.
+        self.assertEqual(results, None)
