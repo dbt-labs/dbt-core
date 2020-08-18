@@ -375,7 +375,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
             iterator = copy_job.result(timeout=self.get_timeout(conn))
             return copy_job, iterator
 
-        return self._retry_and_handle(
+        self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
                 source_ref.path, destination_ref.path),
             conn=conn, fn=copy_and_results)

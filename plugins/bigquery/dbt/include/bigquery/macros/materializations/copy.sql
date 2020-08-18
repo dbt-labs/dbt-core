@@ -24,10 +24,12 @@
     {% set src =  source(*model.sources[0]) %}
   {% endif %}
 
-  {{ adapter.copy_table(
+  {%- set result_str = adapter.copy_table(
       src,
       destination,
-      config.get('copy_materialization')) }}
+      config.get('copy_materialization')) -%}
+
+  {{ store_result('main', status=result_str) }}
 
   {# Clean up #}
   {{ run_hooks(post_hooks) }}

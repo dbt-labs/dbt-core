@@ -430,7 +430,7 @@ class BigQueryAdapter(BaseAdapter):
         self.connections.copy_bq_table(
             source, destination, write_disposition)
 
-        return "COPY TABLE"
+        return "COPY TABLE with materialization: {}".format(materialization)
 
     @classmethod
     def poll_until_job_completes(cls, job, timeout):
