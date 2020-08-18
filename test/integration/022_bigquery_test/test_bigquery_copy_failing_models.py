@@ -3,7 +3,7 @@ import textwrap
 import yaml
 
 
-class TestBigqueryDatePartitioning(DBTIntegrationTest):
+class TestBigqueryCopyTableFails(DBTIntegrationTest):
 
     @property
     def schema(self):
@@ -24,11 +24,11 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
         models:
             test:
                 copy_bad_materialization:
-                    materialized: view
+                    materialized: copy
         '''))
 
     @use_profile('bigquery')
-    def test__bigquery_copy_table(self):
+    def test__bigquery_copy_table_fails(self):
         results = self.run_dbt(expect_pass=False)
         # Copy SQL macro raises a NotImplementedException, which gives None
         # as results.

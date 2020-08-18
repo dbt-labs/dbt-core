@@ -1,1 +1,2 @@
-{{ copy_table(ref('original')) }}
+{{ config(copy_materialization='table') }}
+{{ ref('original') }}

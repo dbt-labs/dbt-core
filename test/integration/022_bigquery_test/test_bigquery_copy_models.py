@@ -3,7 +3,7 @@ import textwrap
 import yaml
 
 
-class TestBigqueryDatePartitioning(DBTIntegrationTest):
+class TestBigqueryCopyTable(DBTIntegrationTest):
 
     @property
     def schema(self):
@@ -26,9 +26,9 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
                 original:
                     materialized: table
                 copy_as_table:
-                    materialized: table
+                    materialized: copy
                 copy_as_incremental:
-                    materialized: incremental
+                    materialized: copy
         '''))
 
     @use_profile('bigquery')

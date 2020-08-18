@@ -430,6 +430,8 @@ class BigQueryAdapter(BaseAdapter):
         self.connections.copy_bq_table(
             source, destination, write_disposition)
 
+        return "COPY TABLE"
+
     @classmethod
     def poll_until_job_completes(cls, job, timeout):
         retry_count = timeout
