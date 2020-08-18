@@ -239,26 +239,21 @@ class Compiler:
 
         with_stmt = None
         for token in parsed.tokens:
-            if token.is_keyword and token.normalized == 'WITH':
+            if token.is_keyword and token.normalized == "WITH":
                 with_stmt = token
                 break
 
         if with_stmt is None:
             # no with stmt, add one, and inject CTEs right at the beginning
             first_token = parsed.token_first()
-            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, "with")
             parsed.insert_before(first_token, with_stmt)
         else:
             # stmt exists, add a comma (which will come after injected CTEs)
-            trailing_comma = sqlparse.sql.Token(
-                sqlparse.tokens.Punctuation, ','
-            )
+            trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ",")
             parsed.insert_after(with_stmt, trailing_comma)
 
-        token = sqlparse.sql.Token(
-            sqlparse.tokens.Keyword,
-            ", ".join(c.sql for c in ctes)
-        )
+        token = sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(c.sql for c in ctes))
         parsed.insert_after(with_stmt, token)
 
         return str(parsed)
