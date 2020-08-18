@@ -41,9 +41,6 @@ class TestRunner(CompileRunner):
         print_start_line(description, self.node_index, self.num_nodes)
 
     def execute_data_test(self, test: CompiledDataTestNode):
-        # sql = (
-        #     f'select count(*) as errors from (\n{test.injected_sql}\n) sbq'
-        # )
         res, table = self.adapter.execute(
             test.injected_sql, auto_begin=True, fetch=True
         )
