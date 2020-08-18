@@ -23,6 +23,8 @@ class TestBigqueryCopyTableFails(DBTIntegrationTest):
         config-version: 2
         models:
             test:
+                original:
+                    materialized: table
                 copy_bad_materialization:
                     materialized: copy
         '''))
