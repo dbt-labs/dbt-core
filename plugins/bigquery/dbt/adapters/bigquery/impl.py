@@ -424,8 +424,13 @@ class BigQueryAdapter(BaseAdapter):
     def copy_table(self, source, destination, materialization):
         if materialization == 'incremental':
             write_disposition = WRITE_APPEND
-        else:
+        elif materialization == 'table':
             write_disposition = WRITE_TRUNCATE
+        else:
+            dbt.exceptions.raise_compiler_error(
+                'Copy table materialization must be "copy" or "table", but '
+                f"config.get('copy_materialization', 'table') was "
+                f'{materialization}')
 
         self.connections.copy_bq_table(
             source, destination, write_disposition)

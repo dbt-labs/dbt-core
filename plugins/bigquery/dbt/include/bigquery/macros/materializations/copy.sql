@@ -27,7 +27,7 @@
   {%- set result_str = adapter.copy_table(
       src,
       destination,
-      config.get('copy_materialization')) -%}
+      config.get('copy_materialization', 'table')) -%}
 
   {{ store_result('main', status=result_str) }}
 
