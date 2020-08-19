@@ -353,6 +353,17 @@ jinja_tests = [
         returns('None'),
         returns(None),
     ),
+    # make sure we don't include comments in the output (see #2707)
+    (
+        '''foo: "{# #}hello"''',
+        returns('hello'),
+        returns('hello'),
+    ),
+    (
+        '''foo: "{% if false %}{% endif %}hello"''',
+        returns('hello'),
+        returns('hello'),
+    ),
 ]
 
 

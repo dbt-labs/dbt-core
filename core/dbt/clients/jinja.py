@@ -545,7 +545,7 @@ def _requote_result(raw_value: str, rendered: str) -> str:
 # checking two separate patterns, but the standard deviation is smaller with
 # one pattern. The time difference between the two was ~2 std deviations, which
 # is small enough that I've just chosen the more readable option.
-_HAS_RENDER_CHARS_PAT = re.compile(r'({[{%]|[}%]})')
+_HAS_RENDER_CHARS_PAT = re.compile(r'({[{%#]|[#}%]})')
 
 
 def get_rendered(
