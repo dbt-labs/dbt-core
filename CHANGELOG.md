@@ -21,6 +21,7 @@
 
 ### Fixes
 - Fix Redshift table size estimation; e.g. 44 GB tables are no longer reported as 44 KB. [#2702](https://github.com/fishtown-analytics/dbt/issues/2702)
+- Fix issue where jinja that only contained jinja comments wasn't rendered. ([#2707](https://github.com/fishtown-analytics/dbt/issues/2707), [#2178](https://github.com/fishtown-analytics/dbt/pull/2178))
 
 ### Docs
 - Add "Referenced By" and "Depends On" sections for each node ([docs#106](https://github.com/fishtown-analytics/dbt-docs/pull/106))
