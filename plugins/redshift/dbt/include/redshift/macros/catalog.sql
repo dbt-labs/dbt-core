@@ -147,7 +147,7 @@
         (sortkey_num > 0) as "stats:sortkey_num:include",
 
         'Approximate Size' as "stats:size:label",
-        size / 1000000.0 as "stats:size:value",
+        size * 1000000 as "stats:size:value",
         'Approximate size of the table, calculated from a count of 1MB blocks'::text as "stats:size:description",
         true as "stats:size:include",
 

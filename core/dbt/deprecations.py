@@ -3,6 +3,8 @@ from typing import Optional, Set, List, Dict, ClassVar
 import dbt.exceptions
 from dbt import ui
 
+import dbt.tracking
+
 
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
@@ -15,6 +17,11 @@ class DBTDeprecation:
         raise NotImplementedError(
             'name not implemented for {}'.format(self)
         )
+
+    def track_deprecation_warn(self) -> None:
+        dbt.tracking.track_deprecation_warn({
+            "deprecation_name": self.name
+        })
 
     @property
     def description(self) -> str:
@@ -31,6 +38,7 @@ class DBTDeprecation:
                 desc, prefix='* Deprecation Warning: '
             )
             dbt.exceptions.warn_or_error(msg)
+            self.track_deprecation_warn()
             active_deprecations.add(self.name)
 
 
