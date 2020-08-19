@@ -1,3 +1,4 @@
+import dbt.flags as flags
 import textwrap
 from typing import Dict
 
@@ -11,8 +12,6 @@ COLORS: Dict[str, str] = {
 }
 
 
-USE_COLORS = False
-
 COLOR_FG_RED = COLORS['red']
 COLOR_FG_GREEN = COLORS['green']
 COLOR_FG_YELLOW = COLORS['yellow']
@@ -21,9 +20,8 @@ COLOR_RESET_ALL = COLORS['reset_all']
 PRINTER_WIDTH = 80
 
 
-def use_colors():
-    global USE_COLORS
-    USE_COLORS = True
+def use_colors(use_colors_val=True):
+    flags.USE_COLORS = use_colors_val
 
 
 def printer_width(printer_width):
@@ -32,7 +30,7 @@ def printer_width(printer_width):
 
 
 def color(text: str, color_code: str):
-    if USE_COLORS:
+    if flags.USE_COLORS:
         return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text

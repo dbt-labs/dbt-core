@@ -902,6 +902,30 @@ def parse_args(args, cls=DBTArgumentParser):
         If set, skip writing the manifest and run_results.json files to disk
         '''
     )
+    colors_flag = p.add_mutually_exclusive_group()
+    colors_flag.add_argument(
+        '--use-colors',
+        action='store_const',
+        const=True,
+        dest='use_colors',
+        help='''
+        Colorize the output DBT prints to the terminal. Output is colorized by
+        default and may also be set in a profile or at the command line.
+        Mutually exclusive with --no-use-colors
+        '''
+    )
+    colors_flag.add_argument(
+        '--no-use-colors',
+        action='store_const',
+        const=False,
+        dest='use_colors',
+        help='''
+        Do not colorize the output DBT prints to the terminal. Output is
+        colorized by default and may also be set in a profile or at the
+        command line.
+        Mutually exclusive with --use-colors
+        '''
+    )
 
     p.add_argument(
         '-S',

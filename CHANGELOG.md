@@ -16,6 +16,7 @@
 - Add support for impersonating a service account using `impersonate_service_account` in the BigQuery profile configuration ([#2677](https://github.com/fishtown-analytics/dbt/issues/2677)) ([docs](https://docs.getdbt.com/reference/warehouse-profiles/bigquery-profile#service-account-impersonation))
 - Macros in the current project can override internal dbt macros that are called through `execute_macros`. ([#2301](https://github.com/fishtown-analytics/dbt/issues/2301), [#2686](https://github.com/fishtown-analytics/dbt/pull/2686))
 - Add state:modified and state:new selectors ([#2641](https://github.com/fishtown-analytics/dbt/issues/2641), [#2695](https://github.com/fishtown-analytics/dbt/pull/2695))
+- Add two new flags `--use-colors` and `--no-use-colors` to `dbt run` command to enable or disable log colorization from the command line ([#2708](https://github.com/fishtown-analytics/dbt/pull/2708))
 
 ### Fixes
 - Fix Redshift table size estimation; e.g. 44 GB tables are no longer reported as 44 KB. [#2702](https://github.com/fishtown-analytics/dbt/issues/2702)
@@ -31,6 +32,8 @@ Contributors:
 - [@kconvey](https://github.com/kconvey) ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694))
 - [@vogt4nick](https://github.com/vogt4nick) ([#2702](https://github.com/fishtown-analytics/dbt/issues/2702))
 - [@stephen8chang](https://github.com/stephen8chang) ([docs#106](https://github.com/fishtown-analytics/dbt-docs/pull/106), [docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108), [docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
+- [@rsenseman](https://github.com/rsenseman) ([#2708](https://github.com/fishtown-analytics/dbt/pull/2708))
+
 
 ## dbt 0.18.0b2 (July 30, 2020)
 

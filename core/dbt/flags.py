@@ -2,6 +2,7 @@ import os
 import multiprocessing
 from pathlib import Path
 from typing import Optional
+
 # initially all flags are set to None, the on-load call of reset() will set
 # them for their first time.
 STRICT_MODE = None
@@ -11,6 +12,7 @@ WARN_ERROR = None
 TEST_NEW_PARSER = None
 WRITE_JSON = None
 PARTIAL_PARSE = None
+USE_COLORS = None
 
 
 def env_set_truthy(key: str) -> Optional[str]:
@@ -48,7 +50,7 @@ MP_CONTEXT = _get_context()
 
 def reset():
     global STRICT_MODE, FULL_REFRESH, USE_CACHE, WARN_ERROR, TEST_NEW_PARSER, \
-        WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT
+        WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS
 
     STRICT_MODE = False
     FULL_REFRESH = False
@@ -58,11 +60,12 @@ def reset():
     WRITE_JSON = True
     PARTIAL_PARSE = False
     MP_CONTEXT = _get_context()
+    USE_COLORS = True
 
 
 def set_from_args(args):
     global STRICT_MODE, FULL_REFRESH, USE_CACHE, WARN_ERROR, TEST_NEW_PARSER, \
-        WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT
+        WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS
 
     USE_CACHE = getattr(args, 'use_cache', USE_CACHE)
 
@@ -77,6 +80,13 @@ def set_from_args(args):
     WRITE_JSON = getattr(args, 'write_json', WRITE_JSON)
     PARTIAL_PARSE = getattr(args, 'partial_parse', None)
     MP_CONTEXT = _get_context()
+
+    # The use_colors attribute will always have a value because it is assigned
+    # None by default from the add_mutually_exclusive_group function
+    use_colors_override = getattr(args, 'use_colors')
+
+    if use_colors_override is not None:
+        USE_COLORS = use_colors_override
 
 
 # initialize everything to the defaults on module load
