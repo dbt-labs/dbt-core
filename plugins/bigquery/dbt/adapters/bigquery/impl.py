@@ -32,6 +32,10 @@ import time
 import agate
 import json
 
+# Write dispositions for bigquery.
+WRITE_APPEND = google.cloud.bigquery.job.WriteDisposition.WRITE_APPEND
+WRITE_TRUNCATE = google.cloud.bigquery.job.WriteDisposition.WRITE_TRUNCATE
+
 
 def sql_escape(string):
     if not isinstance(string, str):
@@ -416,6 +420,23 @@ class BigQueryAdapter(BaseAdapter):
         )
 
         return "CREATE TABLE"
+
+    @available.parse(lambda *a, **k: '')
+    def copy_table(self, source, destination, materialization):
+        if materialization == 'incremental':
+            write_disposition = WRITE_APPEND
+        elif materialization == 'table':
+            write_disposition = WRITE_TRUNCATE
+        else:
+            dbt.exceptions.raise_compiler_error(
+                'Copy table materialization must be "copy" or "table", but '
+                f"config.get('copy_materialization', 'table') was "
+                f'{materialization}')
+
+        self.connections.copy_bq_table(
+            source, destination, write_disposition)
+
+        return "COPY TABLE with materialization: {}".format(materialization)
 
     @classmethod
     def poll_until_job_completes(cls, job, timeout):

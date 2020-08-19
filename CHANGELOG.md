@@ -10,6 +10,7 @@
 - Add deprecation warnings to anonymous usage tracking ([#2688](https://github.com/fishtown-analytics/dbt/issues/2688), [#2710](https://github.com/fishtown-analytics/dbt/issues/2710))
 
 ### Features
+- Add a BigQuery adapter macro to enable usage of CopyJobs ([#2709](https://github.com/fishtown-analytics/dbt/pull/2709))
 - Support TTL for BigQuery tables([#2711](https://github.com/fishtown-analytics/dbt/pull/2711))
 - Add better retry support when using the BigQuery adapter ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694), follow-up to [#1963](https://github.com/fishtown-analytics/dbt/pull/1963))
 - Added a `dispatch` method to the context adapter and deprecated `adapter_macro`. ([#2302](https://github.com/fishtown-analytics/dbt/issues/2302), [#2679](https://github.com/fishtown-analytics/dbt/pull/2679))
@@ -30,7 +31,7 @@
 
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))
-- [@kconvey](https://github.com/kconvey) ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694), [#2711], (https://github.com/fishtown-analytics/dbt/pull/2711))
+- [@kconvey](https://github.com/kconvey) ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694), [#2709](https://github.com/fishtown-analytics/dbt/pull/2709)), [#2711](https://github.com/fishtown-analytics/dbt/pull/2711))
 - [@vogt4nick](https://github.com/vogt4nick) ([#2702](https://github.com/fishtown-analytics/dbt/issues/2702))
 - [@stephen8chang](https://github.com/stephen8chang) ([docs#106](https://github.com/fishtown-analytics/dbt-docs/pull/106), [docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108), [docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
 - [@rsenseman](https://github.com/rsenseman) ([#2708](https://github.com/fishtown-analytics/dbt/pull/2708))

@@ -4,7 +4,7 @@ import re
 import unittest
 from contextlib import contextmanager
 from requests.exceptions import ConnectionError
-from unittest.mock import patch, MagicMock, Mock, create_autospec
+from unittest.mock import patch, MagicMock, Mock, create_autospec, ANY
 
 import hologram
 
@@ -21,8 +21,9 @@ from dbt.clients import agate_helper
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
+import google.cloud.bigquery
 
+from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
 
 def _bq_conn():
     conn = MagicMock()
@@ -516,8 +517,65 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         self.mock_client.query.assert_called_once_with(
           'sql', job_config=mock_bq.QueryJobConfig())
 
+    
+    def test_copy_bq_table_appends(self):
+        self._copy_table(
+            write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.mock_client.copy_table.assert_called_once_with(
+            self._table_ref('project', 'dataset', 'table1', None),
+            self._table_ref('project', 'dataset', 'table2', None),
+            job_config=ANY)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.assertEqual(
+            kwargs['job_config'].write_disposition,
+            dbt.adapters.bigquery.impl.WRITE_APPEND)
 
-class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
+    def test_copy_bq_table_truncates(self):
+        self._copy_table(
+            write_disposition=dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.mock_client.copy_table.assert_called_once_with(
+            self._table_ref('project', 'dataset', 'table1', None),
+            self._table_ref('project', 'dataset', 'table2', None),
+            job_config=ANY)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.assertEqual(
+            kwargs['job_config'].write_disposition,
+            dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
+
+    def _table_ref(self, proj, ds, table, conn):
+        return google.cloud.bigquery.table.TableReference.from_string(
+            '{}.{}.{}'.format(proj, ds, table))
+
+    def _copy_table(self, write_disposition):
+
+        self.connections.table_ref = self._table_ref
+        source = BigQueryRelation.create(
+            database='project', schema='dataset', identifier='table1')
+        destination = BigQueryRelation.create(
+            database='project', schema='dataset', identifier='table2')
+        self.connections.copy_bq_table(source, destination, write_disposition)
+
+
+class TestBigQueryAdapter(BaseTestBigQueryAdapter):
+
+    def test_copy_table_materialization_table(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections = MagicMock()
+        adapter.copy_table('source', 'destination', 'table')
+        adapter.connections.copy_bq_table.assert_called_once_with(
+            'source', 'destination',
+            dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
+
+    def test_copy_table_materialization_incremental(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections = MagicMock()
+        adapter.copy_table('source', 'destination', 'incremental')
+        adapter.connections.copy_bq_table.assert_called_once_with(
+            'source', 'destination',
+            dbt.adapters.bigquery.impl.WRITE_APPEND)
+
     def test_parse_partition_by(self):
         adapter = self.get_adapter('oauth')
 
