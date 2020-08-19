@@ -20,10 +20,17 @@
 ### Fixes
 - Fix Redshift table size estimation; e.g. 44 GB tables are no longer reported as 44 KB. [#2702](https://github.com/fishtown-analytics/dbt/issues/2702)
 
+### Docs
+- Add "Referenced By" and "Depends On" sections for each node ([docs#106](https://github.com/fishtown-analytics/dbt-docs/pull/106))
+- Add Name, Description, Column, SQL, Tags filters to site search ([docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108))
+- Add relevance criteria to site search ([docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
+- Support new selector methods, intersection, and arbitrary parent/child depth in DAG selection syntax ([docs#118](https://github.com/fishtown-analytics/dbt-docs/pull/118))
+
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))
 - [@kconvey](https://github.com/kconvey) ([#2694](https://github.com/fishtown-analytics/dbt/pull/2694))
 - [@vogt4nick](https://github.com/vogt4nick) ([#2702](https://github.com/fishtown-analytics/dbt/issues/2702))
+- [@stephen8chang](https://github.com/stephen8chang) ([docs#106](https://github.com/fishtown-analytics/dbt-docs/pull/106), [docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108), [docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
 
 ## dbt 0.18.0b2 (July 30, 2020)
 
