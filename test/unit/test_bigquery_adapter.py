@@ -571,11 +571,11 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
             }
         )
 
-    def test_time_to_expiration(self):
+    def test_hours_to_expiration(self):
         adapter = self.get_adapter('oauth')
         mock_config = create_autospec(
             dbt.context.providers.RuntimeConfigObject)
-        config = {'time_to_expiration': 4}
+        config = {'hours_to_expiration': 4}
         mock_config.get.side_effect = lambda name: config.get(name)
 
         expected = {
@@ -585,11 +585,11 @@ class TestBigQueryTableOptions(BaseTestBigQueryAdapter):
         self.assertEqual(expected, actual)
 
 
-    def test_time_to_expiration_temporary(self):
+    def test_hours_to_expiration_temporary(self):
         adapter = self.get_adapter('oauth')
         mock_config = create_autospec(
             dbt.context.providers.RuntimeConfigObject)
-        config={'time_to_expiration': 4}
+        config={'hours_to_expiration': 4}
         mock_config.get.side_effect = lambda name: config.get(name)
 
         expected = {

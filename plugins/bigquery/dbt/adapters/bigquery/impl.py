@@ -104,7 +104,7 @@ class BigqueryConfig(AdapterConfig):
     labels: Optional[Dict[str, str]] = None
     partitions: Optional[List[str]] = None
     grant_access_to: Optional[List[Dict[str, str]]] = None
-    time_to_expiration: Optional[int] = None
+    hours_to_expiration: Optional[int] = None
 
 
 class BigQueryAdapter(BaseAdapter):
@@ -746,10 +746,10 @@ class BigQueryAdapter(BaseAdapter):
             expiration = 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'
             opts['expiration_timestamp'] = expiration
 
-        if (config.get('time_to_expiration') is not None) and (not temporary):
+        if (config.get('hours_to_expiration') is not None) and (not temporary):
             expiration = (
                 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
-                '{} hour)').format(config.get('time_to_expiration'))
+                '{} hour)').format(config.get('hours_to_expiration'))
             opts['expiration_timestamp'] = expiration
 
         if config.persist_relation_docs() and 'description' in node:

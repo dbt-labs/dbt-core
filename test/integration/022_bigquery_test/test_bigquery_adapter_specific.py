@@ -26,11 +26,11 @@ class TestBigqueryAdapterSpecific(DBTIntegrationTest):
             test:
                 materialized: table
                 expiring_table:
-                    time_to_expiration: 4    
+                    hours_to_expiration: 4    
         '''))
 
     @use_profile('bigquery')
-    def test_bigquery_time_to_expiration(self):
+    def test_bigquery_hours_to_expiration(self):
         _, stdout = self.run_dbt_and_capture(['--debug', 'run'])
         
         self.assertIn(
