@@ -33,4 +33,4 @@ class TestBigqueryCopyTableFails(DBTIntegrationTest):
     def test__bigquery_copy_table_fails(self):
         results = self.run_dbt(expect_pass=False)
         self.assertEqual(len(results), 2)
-        self.assertTrue(results[0].error)
+        self.assertTrue(results[1].error)
