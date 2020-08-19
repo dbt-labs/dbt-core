@@ -367,7 +367,6 @@ def get_include_paths():
 def config():
     return config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
 
-
 @pytest.fixture
 def manifest_fx(config):
     return mock_manifest(config)

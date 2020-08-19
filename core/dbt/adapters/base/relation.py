@@ -201,6 +201,23 @@ class BaseRelation(FakeAPIObject, Hashable):
             **kwargs
         )
 
+    @staticmethod
+    def add_ephemeral_prefix(name: str):
+        return f'__dbt__CTE__{name}'
+
+    @classmethod
+    def create_ephemeral_from_node(
+        cls: Type[Self],
+        config: HasQuoting,
+        node: Union[ParsedNode, CompiledNode],
+    ) -> Self:
+        # Note that ephemeral models are based on the name.
+        identifier = cls.add_ephemeral_prefix(node.name)
+        return cls.create(
+            type=cls.CTE,
+            identifier=identifier,
+        ).quote(identifier=False)
+
     @classmethod
     def create_from_node(
         cls: Type[Self],

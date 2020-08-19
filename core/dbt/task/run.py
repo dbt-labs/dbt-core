@@ -18,7 +18,6 @@ from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
-from dbt.compilation import compile_node
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
@@ -254,8 +253,8 @@ class RunTask(CompileTask):
         return False
 
     def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
-        compiled = compile_node(adapter, self.config, hook, self.manifest,
-                                extra_context)
+        compiler = adapter.get_compiler()
+        compiled = compiler.compile_node(hook, self.manifest, extra_context)
         statement = compiled.injected_sql
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)

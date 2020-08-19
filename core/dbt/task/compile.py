@@ -1,7 +1,6 @@
 from .runnable import GraphRunnableTask
 from .base import BaseRunner
 
-from dbt.compilation import compile_node
 from dbt.contracts.results import RunModelResult
 from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector, SelectionSpec, parse_difference
@@ -20,7 +19,8 @@ class CompileRunner(BaseRunner):
         return RunModelResult(compiled_node)
 
     def compile(self, manifest):
-        return compile_node(self.adapter, self.config, self.node, manifest, {})
+        compiler = self.adapter.get_compiler()
+        return compiler.compile_node(self.node, manifest, {})
 
 
 class CompileTask(GraphRunnableTask):

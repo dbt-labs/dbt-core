@@ -16,7 +16,7 @@ from dbt.parser.results import ParseResult
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError
 
-from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions, load_internal_manifest_macros
+from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions, load_internal_manifest_macros, clear_plugin
 
 
 class TestPostgresAdapter(unittest.TestCase):
@@ -297,6 +297,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.qh_patch.stop()
         self.patcher.stop()
         self.load_patch.stop()
+        clear_plugin(PostgresPlugin)
 
     def test_quoting_on_drop_schema(self):
         relation = self.adapter.Relation.create(

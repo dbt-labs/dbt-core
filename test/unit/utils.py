@@ -112,6 +112,14 @@ def inject_plugin(plugin):
     FACTORY.plugins[key] = plugin
 
 
+def inject_plugin_for(config):
+    # from dbt.adapters.postgres import Plugin, PostgresAdapter
+    from dbt.adapters.factory import FACTORY
+    FACTORY.load_plugin(config.credentials.type)
+    adapter = FACTORY.get_adapter(config)
+    return adapter
+
+
 def inject_adapter(value, plugin):
     """Inject the given adapter into the adapter factory, so your hand-crafted
     artisanal adapter will be available from get_adapter() as if dbt loaded it.

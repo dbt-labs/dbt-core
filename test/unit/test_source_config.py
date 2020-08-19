@@ -172,6 +172,6 @@ class LegacyContextConfigTest(TestCase):
         model = mock.MagicMock(resource_type=NodeType.Model, fqn=['root', 'x'], project_name='root')
 
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            cfg.updater.get_project_config(model, self.root_project_config)
+            cfg._updater.get_project_config(model, self.root_project_config)
 
         self.assertIn('must be a dict', str(exc.exception))
