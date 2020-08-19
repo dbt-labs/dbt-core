@@ -7,7 +7,6 @@ from unittest import mock
 import yaml
 
 from dbt import main
-import dbt.tracking
 
 
 class FakeArgs:
@@ -50,7 +49,6 @@ class TestInitializeConfig(unittest.TestCase):
     def set_up_config_options(self, **kwargs):
         config = self._base_config()
         config.update(config=kwargs)
-
         with open(self.profiles_path, 'w') as f:
             f.write(yaml.dump(config))
 
@@ -65,7 +63,7 @@ class TestInitializeConfig(unittest.TestCase):
 
         initialize_tracking.assert_called_once_with(self.base_dir)
         do_not_track.assert_not_called()
-        use_colors.assert_called_once_with()
+        use_colors.assert_not_called()
 
     def test__implicit_opt_in_colors(self, initialize_tracking, do_not_track, use_colors):
         self.set_up_empty_config()
@@ -73,7 +71,7 @@ class TestInitializeConfig(unittest.TestCase):
 
         initialize_tracking.assert_called_once_with(self.base_dir)
         do_not_track.assert_not_called()
-        use_colors.assert_called_once_with()
+        use_colors.assert_not_called()
 
     def test__explicit_opt_out(self, initialize_tracking, do_not_track, use_colors):
         self.set_up_config_options(send_anonymous_usage_stats=False)
@@ -81,7 +79,7 @@ class TestInitializeConfig(unittest.TestCase):
 
         initialize_tracking.assert_not_called()
         do_not_track.assert_called_once_with()
-        use_colors.assert_called_once_with()
+        use_colors.assert_not_called()
 
     def test__explicit_opt_in(self, initialize_tracking, do_not_track, use_colors):
         self.set_up_config_options(send_anonymous_usage_stats=True)
@@ -89,7 +87,7 @@ class TestInitializeConfig(unittest.TestCase):
 
         initialize_tracking.assert_called_once_with(self.base_dir)
         do_not_track.assert_not_called()
-        use_colors.assert_called_once_with()
+        use_colors.assert_not_called()
 
     def test__explicit_no_colors(self, initialize_tracking, do_not_track, use_colors):
         self.set_up_config_options(use_colors=False)
@@ -97,12 +95,12 @@ class TestInitializeConfig(unittest.TestCase):
 
         initialize_tracking.assert_called_once_with(self.base_dir)
         do_not_track.assert_not_called()
-        use_colors.assert_not_called()
+        use_colors.assert_called_once_with(False)
 
-    def test__explicit_opt_in(self, initialize_tracking, do_not_track, use_colors):
+    def test__explicit_yes_colors(self, initialize_tracking, do_not_track, use_colors):
         self.set_up_config_options(use_colors=True)
         main.initialize_config_values(self.args)
 
         initialize_tracking.assert_called_once_with(self.base_dir)
         do_not_track.assert_not_called()
-        use_colors.assert_called_once_with()
+        use_colors.assert_called_once_with(True)

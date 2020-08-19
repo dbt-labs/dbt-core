@@ -241,7 +241,7 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'postgres-db-hostname')
@@ -254,7 +254,7 @@ class TestProfile(BaseConfigTest):
     def test_config_override(self):
         self.default_profile_data['config'] = {
             'send_anonymous_usage_stats': False,
-            'use_colors': False
+            'use_colors': False,
         }
         profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
@@ -271,7 +271,7 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertFalse(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertEqual(profile.config.printer_width, 60)
 
     def test_missing_type(self):
@@ -404,7 +404,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'postgres-db-hostname')
@@ -429,7 +429,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.target_name, 'other-postgres')
         self.assertEqual(profile.threads, 3)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'other-postgres-db-hostname')
@@ -451,7 +451,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.target_name, 'redshift')
         self.assertEqual(profile.threads, 1)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, RedshiftCredentials))
         self.assertEqual(profile.credentials.type, 'redshift')
         self.assertEqual(profile.credentials.host, 'redshift-db-hostname')
@@ -460,7 +460,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.password, 'db_pass')
         self.assertEqual(profile.credentials.schema, 'redshift-schema')
         self.assertEqual(profile.credentials.database, 'redshift-db-name')
-        self.assertEqual(profile, from_raw)
+        self.assertEqual(profile, from_raw)        
 
     def test_env_vars(self):
         self.args.target = 'with-vars'
@@ -474,7 +474,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.target_name, 'with-vars')
         self.assertEqual(profile.threads, 1)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'env-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -496,7 +496,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.target_name, 'with-vars')
         self.assertEqual(profile.threads, 1)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'env-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -528,7 +528,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.target_name, 'cli-and-env-vars')
         self.assertEqual(profile.threads, 1)
         self.assertTrue(profile.config.send_anonymous_usage_stats)
-        self.assertTrue(profile.config.use_colors)
+        self.assertIsNone(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'cli-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
