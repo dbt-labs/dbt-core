@@ -18,9 +18,7 @@ class DBTDeprecation:
 
     def track_deprecation_warn(self) -> None:
         if dbt.tracking.active_user is not None:
-            dbt.tracking.track_deprecation_warn({
-                "deprecation_name": self.name
-            })
+            dbt.tracking.track_deprecation_warn({"deprecation_name": self.name})
 
     @property
     def description(self) -> str:
