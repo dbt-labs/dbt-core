@@ -1,5 +1,10 @@
 ## dbt 0.18.0 (Release TBD)
 
+
+### Under the hood
+- Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
+
+
 ## dbt 0.18.0rc1 (August 19, 2020)
 
 
