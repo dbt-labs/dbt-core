@@ -1118,6 +1118,44 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         pass
 
+    def get_compiler(self):
+        from dbt.compilation import Compiler
+        return Compiler(self.config)
+
+    # Methods used in adapter tests
+    def update_column_sql(
+        self,
+        dst_name: str,
+        dst_column: str,
+        clause: str,
+        where_clause: Optional[str] = None,
+    ) -> str:
+        clause = f'update {dst_name} set {dst_column} = {clause}'
+        if where_clause is not None:
+            clause += f' where {where_clause}'
+        return clause
+
+    def timestamp_add_sql(
+        self, add_to: str, number: int = 1, interval: str = 'hour'
+    ) -> str:
+        # for backwards compatibility, we're compelled to set some sort of
+        # default. A lot of searching has lead me to believe that the
+        # '+ interval' syntax used in postgres/redshift is relatively common
+        # and might even be the SQL standard's intention.
+        return f"{add_to} + interval '{number} {interval}'"
+
+    def string_add_sql(
+        self, add_to: str, value: str, location='append',
+    ) -> str:
+        if location == 'append':
+            return f"{add_to} || '{value}'"
+        elif location == 'prepend':
+            return f"'{value}' || {add_to}"
+        else:
+            raise RuntimeException(
+                f'Got an unexpected location value of "{location}"'
+            )
+
     def get_rows_different_sql(
         self,
         relation_a: BaseRelation,
@@ -1146,10 +1184,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
         return sql
-
-    def get_compiler(self):
-        from dbt.compilation import Compiler
-        return Compiler(self.config)
 
 
 COLUMNS_EQUAL_SQL = '''

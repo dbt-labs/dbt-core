@@ -161,3 +161,8 @@ class SnowflakeAdapter(SQLAdapter):
             ))
 
         return relations
+
+    def timestamp_add_sql(
+        self, add_to: str, number: int = 1, interval: str = 'hour'
+    ) -> str:
+        return f'DATEADD({interval}, {number}, {add_to})'

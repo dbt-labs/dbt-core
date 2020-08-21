@@ -831,3 +831,20 @@ class BigQueryAdapter(BaseAdapter):
             column_names=column_names,
             except_operator=except_operator,
         )
+
+    def timestamp_add_sql(
+        self, add_to: str, number: int = 1, interval: str = 'hour'
+    ) -> str:
+        return f'timestamp_add({add_to}, interval {number} {interval})'
+
+    def string_add_sql(
+        self, add_to: str, value: str, location='append',
+    ) -> str:
+        if location == 'append':
+            return f"concat({add_to}, '{value}')"
+        elif location == 'prepend':
+            return f"concat('{value}', {add_to})"
+        else:
+            raise dbt.exceptions.RuntimeException(
+                f'Got an unexpected location value of "{location}"'
+            )
