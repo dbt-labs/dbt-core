@@ -3,6 +3,7 @@
 
 ### Under the hood
 - Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
+- It is now an error to attempt installing `dbt` with a Python version less than 3.6. (resolves [#2347](https://github.com/fishtown-analytics/dbt/issues/2347))
 
 
 ## dbt 0.18.0rc1 (August 19, 2020)
