@@ -30,6 +30,7 @@
 - Macros in the current project can override internal dbt macros that are called through `execute_macros`. ([#2301](https://github.com/fishtown-analytics/dbt/issues/2301), [#2686](https://github.com/fishtown-analytics/dbt/pull/2686))
 - Add state:modified and state:new selectors ([#2641](https://github.com/fishtown-analytics/dbt/issues/2641), [#2695](https://github.com/fishtown-analytics/dbt/pull/2695))
 - Add two new flags `--use-colors` and `--no-use-colors` to `dbt run` command to enable or disable log colorization from the command line ([#2708](https://github.com/fishtown-analytics/dbt/pull/2708))
+- Specify all three logging levels (`INFO`, `WARNING`, `ERROR`) in result logs for commands `test`, `seed`, `run`, `snapshot` and `source snapshot-freshness`
 
 
 ### Fixes
