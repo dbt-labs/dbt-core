@@ -96,7 +96,8 @@ def print_cancel_line(model) -> None:
         msg, ui.red('CANCEL'), logger.error, index=None, total=None)
 
 
-def get_printable_result(result, success: str, error: str) -> Tuple[str, str]:
+def get_printable_result(
+        result, success: str, error: str) -> Tuple[str, str, Callable]:
     if result.error is not None:
         info = 'ERROR {}'.format(error)
         status = ui.red(result.status)
