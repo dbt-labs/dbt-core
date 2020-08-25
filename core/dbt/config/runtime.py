@@ -191,10 +191,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
         version_check = bool(flags.VERSION_CHECK)
-        partial = Project.partial_load(
-            project_root,
-            verify_version=version_check
-        )
+        partial = Project.partial_load(project_root, verify_version=version_check)
 
         # build the profile using the base renderer and the one fact we know
         # Note: only the named profile section is rendered. The rest of the

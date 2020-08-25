@@ -641,14 +641,14 @@ def _add_table_mutability_arguments(*subparsers):
 
 def _add_version_check(sub):
     sub.add_argument(
-        '--no-version-check',
+        "--no-version-check",
         dest="sub_version_check",  # main cli arg precedes subcommands
-        action='store_false',
+        action="store_false",
         default=None,
-        help='''
+        help="""
         If set, skip ensuring dbt's version matches the one specified in
         the dbt_project.yml file ('require-dbt-version')
-        '''
+        """,
     )
 
 
