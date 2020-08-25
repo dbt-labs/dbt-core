@@ -138,7 +138,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # load the new project and its packages. Don't pass cli variables.
         renderer = DbtProjectYamlRenderer(generate_target_context(profile, {}))
 
-        project = Project.from_project_root(project_root, renderer)
+        project = Project.from_project_root(
+            project_root,
+            renderer,
+            verify_version=getattr(self.args, 'version_check', False),
+        )
 
         cfg = self.from_parts(
             project=project,
@@ -173,9 +177,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
-        if getattr(self.args, 'version_check', False):
-            self.validate_version()
-
     @classmethod
     def _get_rendered_profile(
         cls,
@@ -193,7 +194,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     ) -> Tuple[Project, Profile]:
         # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
-        partial = Project.partial_load(project_root)
+        version_check = getattr(args, 'version_check', False)
+        partial = Project.partial_load(
+            project_root,
+            verify_version=version_check
+        )
 
         # build the profile using the base renderer and the one fact we know
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
