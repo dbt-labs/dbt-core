@@ -1,7 +1,7 @@
 from dbt.adapters.redshift.connections import RedshiftConnectionManager  # noqa
 from dbt.adapters.redshift.connections import RedshiftCredentials
 from dbt.adapters.redshift.relation import RedshiftColumn  # noqa
-from dbt.adapters.redshift.relation import RedshiftRelation
+from dbt.adapters.redshift.relation import RedshiftRelation  # noqa: F401
 from dbt.adapters.redshift.impl import RedshiftAdapter
 
 

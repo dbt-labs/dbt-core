@@ -15,11 +15,8 @@ class PostgresRelation(BaseRelation):
             and len(self.identifier) > self.relation_max_name_length()
         ):
             raise RuntimeException(
-                "Postgres relation name '"
-                + self.identifier
-                + "' is longer than "
-                + str(self.relation_max_name_length())
-                + " characters"
+               f"Postgres relation name '{self.identifier}' is longer than "
+               f"{self.relation_max_name_length()} characters"
             )
 
     def relation_max_name_length(self):

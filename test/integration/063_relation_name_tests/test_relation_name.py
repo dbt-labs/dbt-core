@@ -5,8 +5,7 @@ class TestAdapterDDL(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-
-        self.run_sql_file("seed.sql")
+        self.run_dbt(['seed'])
 
     @property
     def schema(self):
@@ -15,6 +14,15 @@ class TestAdapterDDL(DBTIntegrationTest):
     @property
     def models(self):
         return "models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'seeds': {
+                'quote_columns': False,
+            },
+        }
 
     @use_profile('postgres')
     def test_postgres_long_name_fails(self):
