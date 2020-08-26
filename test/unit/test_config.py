@@ -1045,6 +1045,12 @@ class TestRuntimeConfig(BaseConfigTest):
         raised = self.from_parts(dbt.exceptions.DbtProjectError)
         self.assertIn('This version of dbt is not supported', str(raised.exception))
 
+    def test_unsupported_version_range_bad_config(self):
+        self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
+        self.default_project_data['some-extra-field-not-allowed'] = True
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('This version of dbt is not supported', str(raised.exception))
+
     def test_unsupported_version_range_no_check(self):
         self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
         self.args.version_check = False
@@ -1055,6 +1061,11 @@ class TestRuntimeConfig(BaseConfigTest):
         self.default_project_data['require-dbt-version'] = ['>99999.0.0', '<=0.0.1']
         raised = self.from_parts(dbt.exceptions.DbtProjectError)
         self.assertIn('The package version requirement can never be satisfied', str(raised.exception))
+
+    def test_unsupported_version_extra_config(self):
+        self.default_project_data['some-extra-field-not-allowed'] = True
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('Additional properties are not allowed', str(raised.exception))
 
     def test_archive_not_allowed(self):
         self.default_project_data['archive'] = [{
