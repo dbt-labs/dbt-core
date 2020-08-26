@@ -3,6 +3,7 @@
 
 ### Under the hood
 - Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
+- Check for Postgres relation names longer than 63 and throw exception. ([#2197](https://github.com/fishtown-analytics/dbt/issues/2197))
 
 
 ## dbt 0.18.0rc1 (August 19, 2020)
