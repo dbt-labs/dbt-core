@@ -1,4 +1,14 @@
 from dbt.adapters.base import Column
+from dataclasses import dataclass
+from dbt.adapters.base.relation import BaseRelation
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class RedshiftRelation(BaseRelation):
+    # Override the method in the Postgres Relation
+    # because Redshift allows longer names
+    def relation_max_name_length(self):
+        return 127
 
 
 class RedshiftColumn(Column):
