@@ -9,14 +9,11 @@ class PostgresRelation(BaseRelation):
     def __post_init__(self):
         # Check for length of Postgres table/view names.
         # Check self.type to exclude test relation identifiers
-        if (
-            self.identifier is not None
-            and self.type is not None
-            and len(self.identifier) > self.relation_max_name_length()
-        ):
+        if (self.identifier is not None and self.type is not None and
+                len(self.identifier) > self.relation_max_name_length()):
             raise RuntimeException(
-               f"Postgres relation name '{self.identifier}' is longer than "
-               f"{self.relation_max_name_length()} characters"
+                f"Relation name '{self.identifier}' "
+                f"is longer than {self.relation_max_name_length()} characters"
             )
 
     def relation_max_name_length(self):
