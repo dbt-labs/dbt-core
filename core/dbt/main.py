@@ -406,6 +406,7 @@ def _build_debug_subparser(subparsers, base_subparser):
         If specified, DBT will show path information for this project
         '''
     )
+    _add_version_check(sub)
     sub.set_defaults(cls=debug_task.DebugTask, which='debug', rpc_method=None)
     return sub
 
@@ -597,6 +598,18 @@ def _add_table_mutability_arguments(*subparsers):
         )
 
 
+def _add_version_check(sub):
+    sub.add_argument(
+        '--no-version-check',
+        dest='version_check',
+        action='store_false',
+        help='''
+        If set, skip ensuring dbt's version matches the one specified in
+        the dbt_project.yml file ('require-dbt-version')
+        '''
+    )
+
+
 def _add_common_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
@@ -608,15 +621,7 @@ def _add_common_arguments(*subparsers):
             settings in profiles.yml.
             '''
         )
-        sub.add_argument(
-            '--no-version-check',
-            dest='version_check',
-            action='store_false',
-            help='''
-            If set, skip ensuring dbt's version matches the one specified in
-            the dbt_project.yml file ('require-dbt-version')
-            '''
-        )
+        _add_version_check(sub)
 
 
 def _build_seed_subparser(subparsers, base_subparser):
