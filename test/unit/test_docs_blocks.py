@@ -114,6 +114,7 @@ class DocumentationParserTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': self.root_path,
+            'config-version': 2,
         }
 
         subdir_project = {
@@ -122,6 +123,7 @@ class DocumentationParserTest(unittest.TestCase):
             'profile': 'test',
             'project-root': self.subdir_path,
             'quoting': {},
+            'config-version': 2,
         }
         self.root_project_config = config_from_parts_or_dicts(
             project=root_project, profile=profile_data

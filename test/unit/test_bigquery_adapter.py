@@ -14,7 +14,6 @@ from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery import Plugin as BigQueryPlugin
-from dbt.adapters.bigquery.relation import BigQueryInformationSchema
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
@@ -24,6 +23,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 import google.cloud.bigquery
 
 from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
+
 
 def _bq_conn():
     conn = MagicMock()
@@ -80,6 +80,7 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
             'version': '0.1',
             'project-root': '/tmp/dbt/does-not-exist',
             'profile': 'default',
+            'config-version': 2,
         }
         self.qh_patch = None
 
@@ -517,7 +518,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         self.mock_client.query.assert_called_once_with(
           'sql', job_config=mock_bq.QueryJobConfig())
 
-    
+
     def test_copy_bq_table_appends(self):
         self._copy_table(
             write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)

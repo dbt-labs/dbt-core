@@ -14,7 +14,7 @@ from dbt.clients.jinja import get_rendered, MacroGenerator
 from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
-from .context_config import ContextConfigType
+from .context_config import ContextConfig
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.graph.manifest import Manifest, Disabled
@@ -41,7 +41,7 @@ from dbt.exceptions import (
     source_target_not_found,
     wrapped_exports,
 )
-from dbt.legacy_config_updater import IsFQNResource
+from dbt.config import IsFQNResource
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
@@ -252,13 +252,13 @@ class BaseSourceResolver(BaseResolver):
 
 
 class Config(Protocol):
-    def __init__(self, model, context_config: Optional[ContextConfigType]):
+    def __init__(self, model, context_config: Optional[ContextConfig]):
         ...
 
 
 # `config` implementations
 class ParseConfigObject(Config):
-    def __init__(self, model, context_config: Optional[ContextConfigType]):
+    def __init__(self, model, context_config: Optional[ContextConfig]):
         self.model = model
         self.context_config = context_config
 
@@ -314,7 +314,7 @@ class ParseConfigObject(Config):
 
 class RuntimeConfigObject(Config):
     def __init__(
-        self, model, context_config: Optional[ContextConfigType] = None
+        self, model, context_config: Optional[ContextConfig] = None
     ):
         self.model = model
         # we never use or get a config, only the parser cares
@@ -619,7 +619,7 @@ class ProviderContext(ManifestContext):
         config: RuntimeConfig,
         manifest: Manifest,
         provider: Provider,
-        context_config: Optional[ContextConfigType],
+        context_config: Optional[ContextConfig],
     ) -> None:
         if provider is None:
             raise InternalException(
@@ -630,7 +630,7 @@ class ProviderContext(ManifestContext):
         self.model: Union[ParsedMacro, NonSourceNode] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
-        self.context_config: Optional[ContextConfigType] = context_config
+        self.context_config: Optional[ContextConfig] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
         self.db_wrapper = self.provider.DatabaseWrapper(
@@ -1270,7 +1270,7 @@ def generate_parser_model(
     model: NonSourceNode,
     config: RuntimeConfig,
     manifest: Manifest,
-    context_config: ContextConfigType,
+    context_config: ContextConfig,
 ) -> Dict[str, Any]:
     ctx = ModelContext(
         model, config, manifest, ParseProvider(), context_config

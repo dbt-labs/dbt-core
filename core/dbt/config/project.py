@@ -3,9 +3,8 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import (
     List, Dict, Any, Optional, TypeVar, Union, Tuple, Callable, Mapping,
-    Iterable, Set
 )
-from typing_extensions import Protocol
+from typing_extensions import Protocol, runtime_checkable
 
 import hashlib
 import os
@@ -26,12 +25,10 @@ from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import deep_map, MultiDict
-from dbt.legacy_config_updater import ConfigUpdater, IsFQNResource
+from dbt.node_types import NodeType
 
 from dbt.contracts.project import (
-    ProjectV1 as ProjectV1Contract,
-    ProjectV2 as ProjectV2Contract,
-    parse_project_config,
+    Project as ProjectContract,
     SemverString,
 )
 from dbt.contracts.project import PackageConfig
@@ -73,6 +70,13 @@ https://docs.getdbt.com/docs/package-management
 Validator Error:
 {error}
 """
+
+
+@runtime_checkable
+class IsFQNResource(Protocol):
+    fqn: List[str]
+    resource_type: NodeType
+    package_name: str
 
 
 def _list_if_none(value):
@@ -239,47 +243,8 @@ class PartialProject:
         return renderer.render_value(self.profile_name)
 
 
-class VarProvider(Protocol):
+class VarProvider:
     """Var providers are tied to a particular Project."""
-    def vars_for(
-        self, node: IsFQNResource, adapter_type: str
-    ) -> Mapping[str, Any]:
-        raise NotImplementedError(
-            f'vars_for not implemented for {type(self)}!'
-        )
-
-    def to_dict(self):
-        raise NotImplementedError(
-            f'to_dict not implemented for {type(self)}!'
-        )
-
-
-class V1VarProvider(VarProvider):
-    def __init__(
-        self,
-        models: Dict[str, Any],
-        seeds: Dict[str, Any],
-        snapshots: Dict[str, Any],
-    ) -> None:
-        self.models = models
-        self.seeds = seeds
-        self.snapshots = snapshots
-        self.sources: Dict[str, Any] = {}
-
-    def vars_for(
-        self, node: IsFQNResource, adapter_type: str
-    ) -> Mapping[str, Any]:
-        updater = ConfigUpdater(adapter_type)
-        return updater.get_project_config(node, self).get('vars', {})
-
-    def to_dict(self):
-        raise ValidationError(
-            'to_dict was called on a v1 vars, but it should only be called '
-            'on v2 vars'
-        )
-
-
-class V2VarProvider(VarProvider):
     def __init__(
         self,
         vars: Dict[str, Dict[str, Any]]
@@ -420,7 +385,7 @@ class Project:
                 project=project_dict
             )
         try:
-            cfg = parse_project_config(project_dict)
+            cfg = ProjectContract.from_dict(project_dict)
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
@@ -469,31 +434,20 @@ class Project:
         sources: Dict[str, Any]
         vars_value: VarProvider
 
-        if cfg.config_version == 1:
-            assert isinstance(cfg, ProjectV1Contract)
-            # extract everything named 'vars'
-            models = cfg.models
-            seeds = cfg.seeds
-            snapshots = cfg.snapshots
-            sources = {}
-            vars_value = V1VarProvider(
-                models=models, seeds=seeds, snapshots=snapshots
-            )
-        elif cfg.config_version == 2:
-            assert isinstance(cfg, ProjectV2Contract)
-            models = cfg.models
-            seeds = cfg.seeds
-            snapshots = cfg.snapshots
-            sources = cfg.sources
-            if cfg.vars is None:
-                vars_dict: Dict[str, Any] = {}
-            else:
-                vars_dict = cfg.vars
-            vars_value = V2VarProvider(vars_dict)
-        else:
+        if cfg.config_version != 2:
             raise ValidationError(
                 f'Got unsupported config_version={cfg.config_version}'
             )
+
+        models = cfg.models
+        seeds = cfg.seeds
+        snapshots = cfg.snapshots
+        sources = cfg.sources
+        if cfg.vars is None:
+            vars_dict: Dict[str, Any] = {}
+        else:
+            vars_dict = cfg.vars
+        vars_value = VarProvider(vars_dict)
 
         on_run_start: List[str] = value_or(cfg.on_run_start, [])
         on_run_end: List[str] = value_or(cfg.on_run_end, [])
@@ -586,6 +540,8 @@ class Project:
             'on-run-end': self.on_run_end,
             'seeds': self.seeds,
             'snapshots': self.snapshots,
+            'sources': self.sources,
+            'vars': self.vars.to_dict(),
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
@@ -597,17 +553,11 @@ class Project:
         if with_packages:
             result.update(self.packages.to_dict())
 
-        if self.config_version == 2:
-            result.update({
-                'sources': self.sources,
-                'vars': self.vars.to_dict()
-            })
-
         return result
 
     def validate(self):
         try:
-            ProjectV2Contract.from_dict(self.to_project_config())
+            ProjectContract.from_dict(self.to_project_config())
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
@@ -679,6 +629,11 @@ class Project:
         project_name = project_dict.get('name')
         profile_name = project_dict.get('profile')
         config_version = project_dict.get('config-version', 1)
+        if config_version != 2:
+            raise DbtProjectError(
+                f'Invalid config version: {config_version}, expected 2',
+                path=os.path.join(project_root, 'dbt_project.yml')
+            )
 
         return PartialProject(
             config_version=config_version,
@@ -704,32 +659,6 @@ class Project:
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
 
-    def as_v1(self, all_projects: Iterable[str]):
-        if self.config_version == 1:
-            return self
-
-        dct = self.to_project_config()
-
-        mutated = deepcopy(dct)
-        # remove sources, it doesn't exist
-        mutated.pop('sources', None)
-
-        common_config_keys = ['models', 'seeds', 'snapshots']
-
-        if 'vars' in dct and isinstance(dct['vars'], dict):
-            v2_vars_to_v1(mutated, dct['vars'], set(all_projects))
-        # ok, now we want to look through all the existing cfgkeys and mirror
-        # it, except expand the '+' prefix.
-        for cfgkey in common_config_keys:
-            if cfgkey not in dct:
-                continue
-
-            mutated[cfgkey] = _flatten_config(dct[cfgkey])
-        mutated['config-version'] = 1
-        project = Project.from_project_config(mutated)
-        project.packages = self.packages
-        return project
-
     def get_selector(self, name: str) -> SelectionSpec:
         if name not in self.selectors:
             raise RuntimeException(
@@ -737,45 +666,3 @@ class Project:
                 f'{list(self.selectors)}'
             )
         return self.selectors[name]
-
-
-def v2_vars_to_v1(
-    dst: Dict[str, Any], src_vars: Dict[str, Any], project_names: Set[str]
-) -> None:
-    # stuff any 'vars' entries into the old-style
-    # models/seeds/snapshots dicts
-    common_config_keys = ['models', 'seeds', 'snapshots']
-    for project_name in project_names:
-        for cfgkey in common_config_keys:
-            if cfgkey not in dst:
-                dst[cfgkey] = {}
-            if project_name not in dst[cfgkey]:
-                dst[cfgkey][project_name] = {}
-            project_type_cfg = dst[cfgkey][project_name]
-
-            if 'vars' not in project_type_cfg:
-                project_type_cfg['vars'] = {}
-            project_type_vars = project_type_cfg['vars']
-
-            project_type_vars.update({
-                k: v for k, v in src_vars.items()
-                if not isinstance(v, dict)
-            })
-
-            items = src_vars.get(project_name, None)
-            if isinstance(items, dict):
-                project_type_vars.update(items)
-    # remove this from the v1 form
-    dst.pop('vars')
-
-
-def _flatten_config(dct: Dict[str, Any]):
-    result = {}
-    for key, value in dct.items():
-        if isinstance(value, dict) and not key.startswith('+'):
-            result[key] = _flatten_config(value)
-        else:
-            if key.startswith('+'):
-                key = key[1:]
-            result[key] = value
-    return result

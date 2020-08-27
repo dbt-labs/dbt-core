@@ -169,7 +169,6 @@ class TestVarDependencyInheritance(DBTIntegrationTest):
         return {
             "packages": [
                 {'local': 'first_dependency'},
-                {'local': 'second_dependency_v1'},
             ]
         }
 
@@ -186,20 +185,16 @@ class TestVarDependencyInheritance(DBTIntegrationTest):
                 'first_dep': {
                     'from_root_to_first': 'root_first_value',
                 },
-                'second_dep': {
-                    'from_root_to_second': 'root_second_value',
-                },
             },
         }
 
     @use_profile('postgres')
     def test_postgres_var_mutual_overrides_v1_conversion(self):
         self.run_dbt(['deps'], strict=False)
-        assert len(self.run_dbt(['seed'], strict=False)) == 3
-        assert len(self.run_dbt(['run'], strict=False)) == 3
+        assert len(self.run_dbt(['seed'], strict=False)) == 2
+        assert len(self.run_dbt(['run'], strict=False)) == 2
         self.assertTablesEqual('root_model_expected', 'model')
         self.assertTablesEqual('first_dep_expected', 'first_dep_model')
-        self.assertTablesEqual('second_dep_expected', 'second_dep_model')
 
 
 class TestMissingVarGenerateNameMacro(DBTIntegrationTest):

@@ -99,23 +99,6 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     '''
 
 
-class DbtProjectYamlDeprecation(DBTDeprecation):
-    _name = 'dbt-project-yaml-v1'
-    _description = '''\
-    dbt v0.17.0 introduces a new config format for the dbt_project.yml file.
-    Support for the existing version 1 format will be removed in a future
-    release of dbt. The following packages are currently configured with
-    config version 1:{project_names}
-
-
-
-    For upgrading instructions, consult the documentation:
-
-      https://docs.getdbt.com/docs/guides/migration-guide/upgrading-to-0-17-0
-
-    '''
-
-
 class ExecuteMacrosReleaseDeprecation(DBTDeprecation):
     _name = 'execute-macro-release'
     _description = '''\
@@ -176,7 +159,6 @@ deprecations_list: List[DBTDeprecation] = [
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),
     ModelsKeyNonModelDeprecation(),
-    DbtProjectYamlDeprecation(),
     ExecuteMacrosReleaseDeprecation(),
     AdapterMacroDeprecation(),
 ]

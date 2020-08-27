@@ -13,7 +13,7 @@ from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
-    ContextConfigType,
+    ContextConfig,
     ContextConfigGenerator,
 )
 from dbt.context.configured import generate_schema_yml
@@ -296,7 +296,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         self,
         target: Union[UnpatchedSourceDefinition, UnparsedNodeUpdate],
         path: str,
-        config: ContextConfigType,
+        config: ContextConfig,
         tags: List[str],
         fqn: List[str],
         name: str,
@@ -452,9 +452,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         return node
 
     def render_with_context(
-        self, node: ParsedSchemaTestNode, config: ContextConfigType,
+        self, node: ParsedSchemaTestNode, config: ContextConfig,
     ) -> None:
-        """Given the parsed node and a ContextConfigType to use during
+        """Given the parsed node and a ContextConfig to use during
         parsing, collect all the refs that might be squirreled away in the test
         arguments. This includes the implicit "model" argument.
         """

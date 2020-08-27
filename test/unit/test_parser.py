@@ -92,6 +92,7 @@ class BaseParserTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': normalize('/usr/src/app'),
+            'config-version': 2,
         }
 
         self.root_project_config = config_from_parts_or_dicts(
@@ -105,6 +106,7 @@ class BaseParserTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': get_abs_os_path('./dbt_modules/snowplow'),
+            'config-version': 2,
         }
 
         self.snowplow_project_config = config_from_parts_or_dicts(

@@ -14,7 +14,7 @@ from dbt.clients.jinja import MacroStack
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, NodeConfig, DependsOn, ParsedMacro
 )
-from dbt.config.project import V1VarProvider
+from dbt.config.project import VarProvider
 from dbt.context import base, target, configured, providers, docs, manifest, macros
 from dbt.contracts.files import FileHash
 from dbt.node_types import NodeType
@@ -58,49 +58,43 @@ class TestVar(unittest.TestCase):
             checksum=FileHash.from_contents(''),
         )
         self.context = mock.MagicMock()
-        self.provider = V1VarProvider({}, {}, {})
+        self.provider = VarProvider({})
         self.config = mock.MagicMock(
-            config_version=1, vars=self.provider, cli_vars={}, project_name='root'
+            config_version=2, vars=self.provider, cli_vars={}, project_name='root'
         )
 
-    @mock.patch('dbt.legacy_config_updater.get_config_class_by_name', return_value=AdapterConfig)
-    def test_var_default_something(self, mock_get_cls):
+    def test_var_default_something(self):
         self.config.cli_vars = {'foo': 'baz'}
         var = providers.RuntimeVar(self.context, self.config, self.model)
         self.assertEqual(var('foo'), 'baz')
         self.assertEqual(var('foo', 'bar'), 'baz')
 
-    @mock.patch('dbt.legacy_config_updater.get_config_class_by_name', return_value=AdapterConfig)
-    def test_var_default_none(self, mock_get_cls):
+    def test_var_default_none(self):
         self.config.cli_vars = {'foo': None}
         var = providers.RuntimeVar(self.context, self.config, self.model)
         self.assertEqual(var('foo'), None)
         self.assertEqual(var('foo', 'bar'), None)
 
-    @mock.patch('dbt.legacy_config_updater.get_config_class_by_name', return_value=AdapterConfig)
-    def test_var_not_defined(self, mock_get_cls):
+    def test_var_not_defined(self):
         var = providers.RuntimeVar(self.context, self.config, self.model)
 
         self.assertEqual(var('foo', 'bar'), 'bar')
         with self.assertRaises(dbt.exceptions.CompilationException):
             var('foo')
 
-    @mock.patch('dbt.legacy_config_updater.get_config_class_by_name', return_value=AdapterConfig)
-    def test_parser_var_default_something(self, mock_get_cls):
+    def test_parser_var_default_something(self):
         self.config.cli_vars = {'foo': 'baz'}
         var = providers.ParseVar(self.context, self.config, self.model)
         self.assertEqual(var('foo'), 'baz')
         self.assertEqual(var('foo', 'bar'), 'baz')
 
-    @mock.patch('dbt.legacy_config_updater.get_config_class_by_name', return_value=AdapterConfig)
-    def test_parser_var_default_none(self, mock_get_cls):
+    def test_parser_var_default_none(self):
         self.config.cli_vars = {'foo': None}
         var = providers.ParseVar(self.context, self.config, self.model)
         self.assertEqual(var('foo'), None)
         self.assertEqual(var('foo', 'bar'), None)
 
-    @mock.patch('dbt.legacy_config_updater.get_config_class_by_name', return_value=AdapterConfig)
-    def test_parser_var_not_defined(self, mock_get_cls):
+    def test_parser_var_not_defined(self):
         # at parse-time, we should not raise if we encounter a missing var
         # that way disabled models don't get parse errors
         var = providers.ParseVar(self.context, self.config, self.model)
@@ -247,6 +241,7 @@ PROJECT_DATA = {
     'version': '0.1',
     'profile': 'test',
     'project-root': os.getcwd(),
+    'config-version': 2,
 }
 
 

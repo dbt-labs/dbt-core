@@ -46,17 +46,16 @@ class ConfiguredVar(Var):
         if var_name in self._config.cli_vars:
             return self._config.cli_vars[var_name]
 
-        if self._config.config_version == 2 and my_config.config_version == 2:
-            adapter_type = self._config.credentials.type
-            lookup = FQNLookup(self._project_name)
-            active_vars = self._config.vars.vars_for(lookup, adapter_type)
-            all_vars = MultiDict([active_vars])
+        adapter_type = self._config.credentials.type
+        lookup = FQNLookup(self._project_name)
+        active_vars = self._config.vars.vars_for(lookup, adapter_type)
+        all_vars = MultiDict([active_vars])
 
-            if self._config.project_name != my_config.project_name:
-                all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
+        if self._config.project_name != my_config.project_name:
+            all_vars.add(my_config.vars.vars_for(lookup, adapter_type))
 
-            if var_name in all_vars:
-                return all_vars[var_name]
+        if var_name in all_vars:
+            return all_vars[var_name]
 
         if default is not Var._VAR_NOTSET:
             return default

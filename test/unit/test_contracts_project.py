@@ -2,10 +2,11 @@ from .utils import ContractTestCase
 
 from hologram import ValidationError
 
-from dbt.contracts.project import ProjectV1
+from dbt.contracts.project import Project
 
-class TestProjectV1(ContractTestCase):
-    ContractType = ProjectV1
+
+class TestProject(ContractTestCase):
+    ContractType = Project
 
     def test_minimal(self):
         dct = {
@@ -13,12 +14,14 @@ class TestProjectV1(ContractTestCase):
             'version': '1.0',
             'profile': 'test',
             'project-root': '/usr/src/app',
+            'config-version': 2,
         }
-        project = ProjectV1(
+        project = self.ContractType(
             name='test',
             version='1.0',
             profile='test',
             project_root='/usr/src/app',
+            config_version=2,
         )
         self.assert_from_dict(project, dct)
 
@@ -28,6 +31,17 @@ class TestProjectV1(ContractTestCase):
             'version': '1.0',
             'profile': 'test',
             'project-root': '/usr/src/app',
+            'config-version': 2,
         }
         with self.assertRaises(ValidationError):
-            ProjectV1.from_dict(dct)
+            self.ContractType.from_dict(dct)
+
+    def test_unsupported_version(self):
+        dct = {
+            'name': 'test',
+            'version': '1.0',
+            'profile': 'test',
+            'project-root': '/usr/src/app',
+        }
+        with self.assertRaises(ValidationError):
+            self.ContractType.from_dict(dct)

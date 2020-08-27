@@ -18,7 +18,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import (
-    LegacyContextConfig, ContextConfig, ContextConfigType
+    ContextConfig
 )
 from dbt.contracts.files import (
     SourceFile, FilePath, FileHash
@@ -223,7 +223,7 @@ class ConfiguredParser(
         self,
         block: ConfiguredBlockType,
         path: str,
-        config: ContextConfigType,
+        config: ContextConfig,
         fqn: List[str],
         name=None,
         **kwargs,
@@ -266,16 +266,16 @@ class ConfiguredParser(
             raise CompilationException(msg, node=node)
 
     def _context_for(
-        self, parsed_node: IntermediateNode, config: ContextConfigType
+        self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> Dict[str, Any]:
         return generate_parser_model(
             parsed_node, self.root_project, self.macro_manifest, config
         )
 
     def render_with_context(
-        self, parsed_node: IntermediateNode, config: ContextConfigType
+        self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> None:
-        """Given the parsed node and a ContextConfigType to use during parsing,
+        """Given the parsed node and a ContextConfig to use during parsing,
         render the node's sql wtih macro capture enabled.
 
         Note: this mutates the config object when config() calls are rendered.
@@ -307,9 +307,9 @@ class ConfiguredParser(
         self._update_node_alias(parsed_node, config_dict)
 
     def update_parsed_node(
-        self, parsed_node: IntermediateNode, config: ContextConfigType
+        self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> None:
-        """Given the ContextConfigType used for parsing and the parsed node,
+        """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
@@ -337,20 +337,11 @@ class ConfiguredParser(
         for hook in hooks:
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
-    def initial_config(self, fqn: List[str]) -> ContextConfigType:
+    def initial_config(self, fqn: List[str]) -> ContextConfig:
         config_version = min(
             [self.project.config_version, self.root_project.config_version]
         )
-        # grab a list of the existing project names. This is for var conversion
-        all_projects = self.root_project.load_dependencies()
-        if config_version == 1:
-            return LegacyContextConfig(
-                self.root_project.as_v1(all_projects),
-                self.project.as_v1(all_projects),
-                fqn,
-                self.resource_type,
-            )
-        elif config_version == 2:
+        if config_version == 2:
             return ContextConfig(
                 self.root_project,
                 fqn,
@@ -360,18 +351,18 @@ class ConfiguredParser(
         else:
             raise InternalException(
                 f'Got an unexpected project version={config_version}, '
-                f'expected 1 or 2'
+                f'expected 2'
             )
 
     def config_dict(
-        self, config: ContextConfigType,
+        self, config: ContextConfig,
     ) -> Dict[str, Any]:
         config_dict = config.build_config_dict(base=True)
         self._mangle_hooks(config_dict)
         return config_dict
 
     def render_update(
-        self, node: IntermediateNode, config: ContextConfigType
+        self, node: IntermediateNode, config: ContextConfig
     ) -> None:
         try:
             self.render_with_context(node, config)
@@ -391,7 +382,7 @@ class ConfiguredParser(
         compiled_path: str = self.get_compiled_path(block)
         fqn = self.get_fqn(compiled_path, block.name)
 
-        config: ContextConfigType = self.initial_config(fqn)
+        config: ContextConfig = self.initial_config(fqn)
 
         node = self._create_parsetime_node(
             block=block,

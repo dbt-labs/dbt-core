@@ -109,6 +109,7 @@ class BaseConfigTest(unittest.TestCase):
             'version': '0.0.1',
             'name': 'my_test_project',
             'profile': 'default',
+            'config-version': 2,
         }
         self.default_profile_data = {
             'default': {
@@ -1287,7 +1288,7 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.seeds['bar']['materialized'], 'default')  # rendered!
 
 
-class TestV2V1Conversion(unittest.TestCase):
+class TestVarLookups(unittest.TestCase):
     def setUp(self):
         self.initial_src_vars = {
             # globals
@@ -1311,43 +1312,8 @@ class TestV2V1Conversion(unittest.TestCase):
         self.other_var_search = mock.MagicMock(fqn=['other_project', 'model'], resource_type=NodeType.Model, package_name='other_project')
         self.third_var_search = mock.MagicMock(fqn=['third_project', 'third_model'], resource_type=NodeType.Model, package_name='third_project')
 
-    def test_v2_v1_dict(self):
-        dbt.config.project.v2_vars_to_v1(self.dst, self.src_vars, self.projects)
-        # make sure the input didn't get mutated. That would be bad!
-        assert self.src_vars == self.initial_src_vars
-        # conversion sould remove top-level 'vars'
-        assert 'vars' not in self.dst
-
-        # when we convert, all of models/seeds/snapshots will have the same vars
-        for key in ['models', 'seeds', 'snapshots']:
-            assert key in self.dst
-            for project in self.projects:
-                assert project in self.dst[key]
-                assert 'vars' in self.dst[key][project]
-                if project == 'my_project':
-                    assert self.dst[key][project]['vars'] == {
-                        'foo': 123,  # override
-                        'bar': 'goodbye',
-                        'baz': True,  # only in my-project
-                    }
-                elif project == 'other_project':
-                    assert self.dst[key][project]['vars'] == {
-                        'foo': 456,  # override
-                        'bar': 'hello',
-                    }
-                elif project == 'third_project':
-                    assert self.dst[key][project]['vars'] == {
-                        'foo': 123,
-                        'bar': 'hello',
-                    }
-                else:
-                    assert False, f'extra project: {project}'
-
-    def test_v2_v1_lookups(self):
-        dbt.config.project.v2_vars_to_v1(self.dst, self.src_vars, self.projects)
-
-        v1_vars = dbt.config.project.V1VarProvider(**self.dst)
-        v2_vars = dbt.config.project.V2VarProvider(self.initial_src_vars)
+    def test_lookups(self):
+        vars_provider = dbt.config.project.VarProvider(self.initial_src_vars)
 
         expected = [
             (self.local_var_search, 'foo', 123),
@@ -1361,5 +1327,5 @@ class TestV2V1Conversion(unittest.TestCase):
             (self.third_var_search, 'baz', None),
         ]
         for node, key, expected_value in expected:
-            assert v1_vars.vars_for(node, 'postgres').get(key) == expected_value
-            assert v2_vars.vars_for(node, 'postgres').get(key) == expected_value
+            value = vars_provider.vars_for(node, 'postgres').get(key)
+            assert value == expected_value

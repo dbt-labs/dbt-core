@@ -43,6 +43,7 @@ class CompilerTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': '/tmp/dbt/does-not-exist',
+            'config-version': 2,
         }
         profile_cfg = {
             'outputs': {

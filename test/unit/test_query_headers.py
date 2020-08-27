@@ -27,6 +27,7 @@ class TestQueryHeaders(TestCase):
             'name': 'query_headers',
             'version': '0.1',
             'profile': 'test',
+            'config-version': 2,
         }
         self.query = "SELECT 1;"
 

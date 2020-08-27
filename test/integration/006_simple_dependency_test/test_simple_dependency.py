@@ -110,10 +110,6 @@ class TestSimpleDependencyUnpinned(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
-        # hack: insert the config version warning into the active deprecations,
-        # to avoid triggering on that, since the unpinned branch also should
-        # warn about the version.
-        deprecations.active_deprecations.add('dbt-project-yaml-v1')
         with self.assertRaises(CompilationException) as exc:
             self.run_dbt(["deps"])
         assert 'is not pinned' in str(exc.exception)
@@ -161,17 +157,18 @@ class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
 
     @property
     def packages_config(self):
-        # dbt-event-logging@0.1.5 requires dbt-utils.git@0.1.12, which the
+        # this revision of dbt-integration-project requires dbt-utils.git@0.5.0, which the
         # package config handling should detect
         return {
             'packages': [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-utils',
-                    'revision': '0.1.12',
+
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'config-version-2-deps'
                 },
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-event-logging.git',
-                    'revision': '0.1.5',
+                    'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+                    'revision': '0.5.0',
                 }
             ]
         }

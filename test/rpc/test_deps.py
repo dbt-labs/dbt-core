@@ -76,11 +76,11 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
 def test_rpc_deps_packages(project_root, profiles_root, dbt_profile, unique_schema):
     packages = [{
         'package': 'fishtown-analytics/dbt_utils',
-        'version': '0.2.1',
+        'version': '0.5.0',
     }]
     bad_packages = [{
         'package': 'fishtown-analytics/dbt_util',
-        'version': '0.2.1',
+        'version': '0.5.0',
     }]
     deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
 
@@ -89,7 +89,7 @@ def test_rpc_deps_packages(project_root, profiles_root, dbt_profile, unique_sche
 def test_rpc_deps_git(project_root, profiles_root, dbt_profile, unique_schema):
     packages = [{
         'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-        'revision': '0.2.1'
+        'revision': '0.5.0'
     }]
     # if you use a bad URL, git thinks it's a private repo and prompts for auth
     bad_packages = [{
