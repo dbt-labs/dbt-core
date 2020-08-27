@@ -363,7 +363,8 @@ class ConfiguredParser(
             )
 
     def config_dict(
-        self, config: ContextConfig,
+        self,
+        config: ContextConfig,
     ) -> Dict[str, Any]:
         config_dict = config.build_config_dict(base=True)
         self._mangle_hooks(config_dict)
