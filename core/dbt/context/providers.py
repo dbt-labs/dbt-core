@@ -322,9 +322,7 @@ class ParseConfigObject(Config):
 
 
 class RuntimeConfigObject(Config):
-    def __init__(
-        self, model, context_config: Optional[ContextConfig] = None
-    ):
+    def __init__(self, model, context_config: Optional[ContextConfig] = None):
         self.model = model
         # we never use or get a config, only the parser cares
 

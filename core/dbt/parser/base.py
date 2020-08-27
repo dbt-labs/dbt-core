@@ -16,9 +16,7 @@ from dbt.context.providers import (
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
-from dbt.context.context_config import (
-    ContextConfig
-)
+from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
 from dbt.contracts.graph.unparsed import UnparsedNode
@@ -358,8 +356,7 @@ class ConfiguredParser(
             )
         else:
             raise InternalException(
-                f'Got an unexpected project version={config_version}, '
-                f'expected 2'
+                f"Got an unexpected project version={config_version}, " f"expected 2"
             )
 
     def config_dict(
