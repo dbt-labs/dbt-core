@@ -19,7 +19,5 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def render_with_context(
-        self, parsed_node: ParsedSeedNode, config: ContextConfig
-    ) -> None:
+    def render_with_context(self, parsed_node: ParsedSeedNode, config: ContextConfig) -> None:
         """Seeds don't need to do any rendering."""

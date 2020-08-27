@@ -335,9 +335,7 @@ class ConfiguredParser(
         self._mangle_hooks(config_dict)
         return config_dict
 
-    def render_update(
-        self, node: IntermediateNode, config: ContextConfig
-    ) -> None:
+    def render_update(self, node: IntermediateNode, config: ContextConfig) -> None:
         try:
             context = self.render_with_context(node, config)
             self.update_parsed_node_config(node, config, context=context)
