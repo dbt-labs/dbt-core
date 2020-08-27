@@ -245,9 +245,7 @@ class PartialProject(RenderComponents):
         metadata=dict(description="The root directory of the project"),
     )
     verify_version: bool = field(
-        metadata=dict(description=(
-            'If True, verify the dbt version matches the required version'
-        ))
+        metadata=dict(description=("If True, verify the dbt version matches the required version"))
     )
 
     def render_profile_name(self, renderer) -> Optional[str]:
