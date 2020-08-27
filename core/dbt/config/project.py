@@ -217,7 +217,7 @@ class PartialProject:
     project_dict: Dict[str, Any]
     verify_version: bool = field(
         metadata=dict(description=(
-            'If True, verify the dbt version matches the rquired version'
+            'If True, verify the dbt version matches the required version'
         ))
     )
 
