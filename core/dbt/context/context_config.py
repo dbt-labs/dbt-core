@@ -1,6 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import List, Iterator, Dict, Any, TypeVar
+from typing_extensions import Protocol
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import BaseConfig, get_config_for
@@ -19,9 +20,55 @@ class ModelParts(IsFQNResource):
 T = TypeVar('T', bound=BaseConfig)
 
 
+class ConfigSource:
+    def __init__(self, project):
+        self.project = project
+
+    def get_config_dict(self, resource_type: NodeType): ...
+
+
+class UnrenderedConfig(ConfigSource):
+    def __init__(self, project: Project):
+        self.project = project
+
+    def get_config_dict(self, resource_type: NodeType) -> Dict[str, Any]:
+        if resource_type == NodeType.Seed:
+            model_configs = self.project.unrendered.get('seeds')
+        elif resource_type == NodeType.Snapshot:
+            model_configs = self.project.unrendered.get('snapshots')
+        elif resource_type == NodeType.Source:
+            model_configs = self.project.unrendered.get('sources')
+        else:
+            model_configs = self.project.unrendered.get('models')
+
+        if model_configs is None:
+            return {}
+        else:
+            return model_configs
+
+
+class RenderedConfig(ConfigSource):
+    def __init__(self, project: Project):
+        self.project = project
+
+    def get_config_dict(self, resource_type: NodeType) -> Dict[str, Any]:
+        if resource_type == NodeType.Seed:
+            model_configs = self.project.seeds
+        elif resource_type == NodeType.Snapshot:
+            model_configs = self.project.snapshots
+        elif resource_type == NodeType.Source:
+            model_configs = self.project.sources
+        else:
+            model_configs = self.project.models
+        return model_configs
+
+
 class ContextConfigGenerator:
     def __init__(self, active_project: RuntimeConfig):
         self._active_project = active_project
+
+    def get_config_source(self, project: Project) -> ConfigSource:
+        return RenderedConfig(project)
 
     def get_node_project(self, project_name: str):
         if project_name == self._active_project.project_name:
@@ -37,14 +84,8 @@ class ContextConfigGenerator:
     def _project_configs(
         self, project: Project, fqn: List[str], resource_type: NodeType
     ) -> Iterator[Dict[str, Any]]:
-        if resource_type == NodeType.Seed:
-            model_configs = project.seeds
-        elif resource_type == NodeType.Snapshot:
-            model_configs = project.snapshots
-        elif resource_type == NodeType.Source:
-            model_configs = project.sources
-        else:
-            model_configs = project.models
+        src = self.get_config_source(project)
+        model_configs = src.get_config_dict(resource_type)
         for level_config in fqn_search(model_configs, fqn):
             result = {}
             for key, value in level_config.items():
@@ -103,6 +144,11 @@ class ContextConfigGenerator:
         return result.finalize_and_validate()
 
 
+class UnrenderedConfigGenerator(ContextConfigGenerator):
+    def get_config_source(self, project: Project) -> ConfigSource:
+        return UnrenderedConfig(project)
+
+
 class ContextConfig:
     def __init__(
         self,
@@ -112,7 +158,7 @@ class ContextConfig:
         project_name: str,
     ) -> None:
         self._config_calls: List[Dict[str, Any]] = []
-        self._cfg_source = ContextConfigGenerator(active_project)
+        self._active_project = active_project
         self._fqn = fqn
         self._resource_type = resource_type
         self._project_name = project_name
@@ -120,11 +166,23 @@ class ContextConfig:
     def update_in_model_config(self, opts: Dict[str, Any]) -> None:
         self._config_calls.append(opts)
 
-    def build_config_dict(self, base: bool = False) -> Dict[str, Any]:
-        return self._cfg_source.calculate_node_config(
+    def build_config_dict(
+        self,
+        base: bool = False,
+        *,
+        rendered: bool = True,
+    ) -> Dict[str, Any]:
+        if rendered:
+            src = ContextConfigGenerator(self._active_project)
+        else:
+            src = UnrenderedConfigGenerator(self._active_project)
+
+        return src.calculate_node_config(
             config_calls=self._config_calls,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,
             base=base,
         ).to_dict()
+
+

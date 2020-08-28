@@ -170,6 +170,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     patch_path: Optional[str] = None
     build_path: Optional[str] = None
     deferred: bool = False
+    unrendered_config: Dict[str, Any] = field(default_factory=dict)
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if (os.path.basename(self.path) ==

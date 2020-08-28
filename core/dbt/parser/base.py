@@ -319,6 +319,10 @@ class ConfiguredParser(
         model_tags = config_dict.get('tags', [])
         parsed_node.tags.extend(model_tags)
 
+        parsed_node.unrendered_config = config.build_config_dict(
+            rendered=False
+        )
+
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config(parsed_node, config_dict)
