@@ -73,15 +73,15 @@ class ProjectPostprocessor(Dict[Keypath, Callable[[Any], Any]]):
     def __init__(self):
         super().__init__()
 
-        self[('on-run-start',)] = _list_if_none_or_string
-        self[('on-run-end',)] = _list_if_none_or_string
+        self[("on-run-start",)] = _list_if_none_or_string
+        self[("on-run-end",)] = _list_if_none_or_string
 
-        for k in ('models', 'seeds', 'snapshots'):
+        for k in ("models", "seeds", "snapshots"):
             self[(k,)] = _dict_if_none
-            self[(k, 'vars')] = _dict_if_none
-            self[(k, 'pre-hook')] = _list_if_none_or_string
-            self[(k, 'post-hook')] = _list_if_none_or_string
-        self[('seeds', 'column_types')] = _dict_if_none
+            self[(k, "vars")] = _dict_if_none
+            self[(k, "pre-hook")] = _list_if_none_or_string
+            self[(k, "post-hook")] = _list_if_none_or_string
+        self[("seeds", "column_types")] = _dict_if_none
 
     def postprocess(self, value: Any, key: Keypath) -> Any:
         if key in self:
@@ -128,7 +128,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
     ) -> Dict[str, Any]:
         """Render the project and insert the project root after rendering."""
         rendered_project = self.render_data(project)
-        rendered_project['project-root'] = project_root
+        rendered_project["project-root"] = project_root
         return rendered_project
 
     def render_packages(self, packages: Dict[str, Any]):
