@@ -100,9 +100,7 @@ def selector_data_from_root(project_root: str) -> Dict[str, Any]:
     return selectors_dict
 
 
-def selector_config_from_data(
-    selectors_data: Dict[str, Any]
-) -> SelectorConfig:
+def selector_config_from_data(selectors_data: Dict[str, Any]) -> SelectorConfig:
     if not selectors_data:
         selectors_data = {"selectors": []}
 
