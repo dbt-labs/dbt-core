@@ -95,12 +95,18 @@ class ParserRef:
     ):
         tags: List[str] = []
         tags.extend(getattr(column, 'tags', ()))
+        quote: Optional[bool]
+        if isinstance(column, UnparsedColumn):
+            quote = column.quote
+        else:
+            quote = None
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
             description=description,
             data_type=data_type,
             meta=meta,
             tags=tags,
+            quote=quote,
             _extra=column.extra
         )
 

@@ -980,6 +980,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -987,6 +988,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -994,6 +996,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -1001,6 +1004,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -1008,6 +1012,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1048,6 +1053,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -1055,6 +1061,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -1062,6 +1069,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -1069,6 +1077,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -1076,6 +1085,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1135,6 +1145,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -1142,6 +1153,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -1149,6 +1161,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -1156,6 +1169,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -1163,6 +1177,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1459,6 +1474,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ct': {
@@ -1466,6 +1482,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ct',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1528,6 +1545,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ct': {
@@ -1535,6 +1553,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ct',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1596,6 +1615,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -1603,6 +1623,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -1610,6 +1631,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -1617,6 +1639,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -1624,6 +1647,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1679,6 +1703,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         }
                     },
@@ -1906,6 +1931,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'email',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -1913,6 +1939,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'id': {
@@ -1920,6 +1947,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -1927,6 +1955,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ip_address',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -1934,6 +1963,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'updated_at',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -1990,6 +2020,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'email',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -1997,6 +2028,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'id': {
@@ -2004,6 +2036,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2011,6 +2044,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ip_address',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2018,6 +2052,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'updated_at',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -2075,6 +2110,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The first field',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'field_2': {
@@ -2082,6 +2118,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The second field',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'field_3': {
@@ -2089,6 +2126,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The third field',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'nested_field.field_4': {
@@ -2096,6 +2134,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The first nested field',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'nested_field.field_5': {
@@ -2103,6 +2142,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The second nested field',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -2211,6 +2251,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -2218,6 +2259,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -2225,6 +2267,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2232,6 +2275,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2239,6 +2283,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -2360,6 +2405,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -2367,6 +2413,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -2374,6 +2421,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2381,6 +2429,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2388,6 +2437,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -2445,6 +2495,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -2452,6 +2503,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -2459,6 +2511,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2466,6 +2519,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2473,6 +2527,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -2617,6 +2672,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -2624,6 +2680,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -2631,6 +2688,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'email',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2638,6 +2696,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ip_address',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2645,6 +2704,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'updated_at',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         }
                     },
@@ -2700,6 +2760,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -2707,6 +2768,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -2714,6 +2776,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'email',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2721,6 +2784,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ip_address',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2728,6 +2792,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'updated_at',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         }
                     },
@@ -2781,6 +2846,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -2788,6 +2854,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -2795,6 +2862,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'email',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -2802,6 +2870,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ip_address',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -2809,6 +2878,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'updated_at',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         }
                     },
@@ -3112,6 +3182,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ct': {
@@ -3119,6 +3190,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ct',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -3198,6 +3270,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'first_name',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ct': {
@@ -3205,6 +3278,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'ct',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
@@ -3279,6 +3353,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': 'The user ID number',
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'first_name': {
@@ -3286,6 +3361,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's first name",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'email': {
@@ -3293,6 +3369,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's email",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'ip_address': {
@@ -3300,6 +3377,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The user's IP address",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                         'updated_at': {
@@ -3307,6 +3385,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                             'data_type': None,
                             'meta': {},
+                            'quote': None,
                             'tags': [],
                         },
                     },
