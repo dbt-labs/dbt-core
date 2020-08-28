@@ -288,9 +288,7 @@ class ConfiguredParser(
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
-        parsed_node.unrendered_config = config.build_config_dict(
-            rendered=False
-        )
+        parsed_node.unrendered_config = config.build_config_dict(rendered=False)
 
         parsed_node.config_call_dict = config._config_call_dict
 
