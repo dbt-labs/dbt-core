@@ -89,9 +89,9 @@ def selector_data_from_root(project_root: str) -> Dict[str, Any]:
 
 
 def selector_config_from_data(
-    selectors_data: Optional[Dict[str, Any]]
+    selectors_data: Dict[str, Any]
 ) -> SelectorConfig:
-    if selectors_data is None:
+    if not selectors_data:
         selectors_data = {'selectors': []}
 
     try:

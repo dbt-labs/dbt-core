@@ -111,6 +111,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             sources=project.sources,
             vars=project.vars,
             config_version=project.config_version,
+            unrendered=project.unrendered,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             config=profile.config,
@@ -211,7 +212,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # get a new renderer using our target information and render the
         # project
         ctx = generate_target_context(profile, cli_vars)
-        project_renderer = DbtProjectYamlRenderer(ctx, partial.config_version)
+        project_renderer = DbtProjectYamlRenderer(ctx)
         project = partial.render(project_renderer)
         return (project, profile)
 
@@ -487,6 +488,7 @@ class UnsetProfileConfig(RuntimeConfig):
             sources=project.sources,
             vars=project.vars,
             config_version=project.config_version,
+            unrendered=project.unrendered,
             profile_name='',
             target_name='',
             config=UnsetConfig(),

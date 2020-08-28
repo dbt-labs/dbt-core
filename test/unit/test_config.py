@@ -570,6 +570,38 @@ class TestProfileFile(BaseFileTest):
         )
 
 
+def project_from_config_norender(cfg, packages=None, path='/invalid-root-path', verify_version=False):
+    if packages is None:
+        packages = {}
+    partial = dbt.config.project.PartialProject.from_dicts(
+        path,
+        project_dict=cfg,
+        packages_dict=packages,
+        selectors_dict={},
+        verify_version=verify_version,
+    )
+    # no rendering
+    rendered = dbt.config.project.RenderComponents(
+        project_dict=partial.project_dict,
+        packages_dict=partial.packages_dict,
+        selectors_dict=partial.selectors_dict,
+    )
+    return partial.create_project(rendered)
+
+
+def project_from_config_rendered(cfg, packages=None, path='/invalid-root-path', verify_version=False):
+    if packages is None:
+        packages = {}
+    partial = dbt.config.project.PartialProject.from_dicts(
+        path,
+        project_dict=cfg,
+        packages_dict=packages,
+        selectors_dict={},
+        verify_version=verify_version,
+    )
+    return partial.render(empty_project_renderer())
+
+
 class TestProject(BaseConfigTest):
     def setUp(self):
         self.profiles_dir = '/invalid-profiles-path'
@@ -578,9 +610,7 @@ class TestProject(BaseConfigTest):
         self.default_project_data['project-root'] = self.project_dir
 
     def test_defaults(self):
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.project_name, 'my_test_project')
         self.assertEqual(project.version, '0.0.1')
         self.assertEqual(project.profile_name, 'default')
@@ -609,18 +639,12 @@ class TestProject(BaseConfigTest):
         str(project)
 
     def test_eq(self):
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
-        other = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_norender(self.default_project_data)
+        other = project_from_config_norender(self.default_project_data)
         self.assertEqual(project, other)
 
     def test_neq(self):
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_norender(self.default_project_data)
         self.assertNotEqual(project, object())
 
     def test_implicit_overrides(self):
@@ -628,16 +652,12 @@ class TestProject(BaseConfigTest):
             'source-paths': ['other-models'],
             'target-path': 'other-target',
         })
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.docs_paths, ['other-models', 'data', 'snapshots', 'macros'])
         self.assertEqual(project.clean_targets, ['other-target'])
 
     def test_hashed_name(self):
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.hashed_name(), '754cd47eac1d6f50a5f7cd399ec43da4')
 
     def test_all_overrides(self):
@@ -700,8 +720,8 @@ class TestProject(BaseConfigTest):
                 },
             ],
         }
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, packages
+        project = project_from_config_norender(
+            self.default_project_data, packages=packages
         )
         self.assertEqual(project.project_name, 'my_test_project')
         self.assertEqual(project.version, '0.0.1')
@@ -764,9 +784,7 @@ class TestProject(BaseConfigTest):
             'on-run-start': '{{ logging.log_run_start_event() }}',
             'on-run-end': '{{ logging.log_run_end_event() }}',
         })
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_rendered(self.default_project_data)
         self.assertEqual(
             project.on_run_start,
             ['{{ logging.log_run_start_event() }}']
@@ -779,7 +797,7 @@ class TestProject(BaseConfigTest):
     def test_invalid_project_name(self):
         self.default_project_data['name'] = 'invalid-project-name'
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
-            dbt.config.Project.from_project_config(self.default_project_data, None)
+            project_from_config_norender(self.default_project_data)
 
         self.assertIn('invalid-project-name', str(exc.exception))
 
@@ -793,12 +811,12 @@ class TestProject(BaseConfigTest):
     def test_invalid_version(self):
         self.default_project_data['require-dbt-version'] = 'hello!'
         with self.assertRaises(dbt.exceptions.DbtProjectError):
-            dbt.config.Project.from_project_config(self.default_project_data, None)
+            project_from_config_norender(self.default_project_data)
 
     def test_unsupported_version(self):
         self.default_project_data['require-dbt-version'] = '>99999.0.0'
         # allowed, because the RuntimeConfig checks, not the Project itself
-        dbt.config.Project.from_project_config(self.default_project_data, None)
+        project_from_config_norender(self.default_project_data)
 
     def test_none_values(self):
         self.default_project_data.update({
@@ -807,9 +825,7 @@ class TestProject(BaseConfigTest):
             'on-run-end': None,
             'on-run-start': None,
         })
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_rendered(self.default_project_data)
         self.assertEqual(project.models, {})
         self.assertEqual(project.on_run_start, [])
         self.assertEqual(project.on_run_end, [])
@@ -820,9 +836,7 @@ class TestProject(BaseConfigTest):
             'models': {'vars': None, 'pre-hook': None, 'post-hook': None},
             'seeds': {'vars': None, 'pre-hook': None, 'post-hook': None, 'column_types': None},
         })
-        project = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        project = project_from_config_rendered(self.default_project_data)
         self.assertEqual(project.models, {'vars': {}, 'pre-hook': [], 'post-hook': []})
         self.assertEqual(project.seeds, {'vars': {}, 'pre-hook': [], 'post-hook': [], 'column_types': {}})
 
@@ -832,28 +846,28 @@ class TestProject(BaseConfigTest):
         self.default_project_data.update({
             'models': models,
         })
-        with self.assertRaises(dbt.exceptions.DbtProjectError):
-            dbt.config.Project.from_project_config(
-                self.default_project_data, None
-            )
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+            project_from_config_rendered(self.default_project_data)
+
+        assert 'Cycle detected' in str(exc.exception)
 
     def test_query_comment_disabled(self):
         self.default_project_data.update({
             'query-comment': None,
         })
-        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.query_comment.comment, '')
         self.assertEqual(project.query_comment.append, False)
 
         self.default_project_data.update({
             'query-comment': '',
         })
-        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.query_comment.comment, '')
         self.assertEqual(project.query_comment.append, False)
 
     def test_default_query_comment(self):
-        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.query_comment, QueryComment())
 
     def test_default_query_comment_append(self):
@@ -862,7 +876,7 @@ class TestProject(BaseConfigTest):
                 'append': True
             },
         })
-        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.query_comment.comment, DEFAULT_QUERY_COMMENT)
         self.assertEqual(project.query_comment.append, True)
 
@@ -873,7 +887,7 @@ class TestProject(BaseConfigTest):
                 'append': True
             },
         })
-        project = dbt.config.Project.from_project_config(self.default_project_data, None)
+        project = project_from_config_norender(self.default_project_data)
         self.assertEqual(project.query_comment.comment, 'run by user test')
         self.assertEqual(project.query_comment.append, True)
 
@@ -888,9 +902,7 @@ class TestProjectFile(BaseFileTest):
     def test_from_project_root(self):
         renderer = empty_project_renderer()
         project = dbt.config.Project.from_project_root(self.project_dir, renderer)
-        from_config = dbt.config.Project.from_project_config(
-            self.default_project_data, None
-        )
+        from_config = project_from_config_norender(self.default_project_data)
         self.assertEqual(project, from_config)
         self.assertEqual(project.version, "0.0.1")
         self.assertEqual(project.project_name, 'my_test_project')
@@ -958,13 +970,7 @@ class TestRuntimeConfig(BaseConfigTest):
         self.default_project_data['project-root'] = self.project_dir
 
     def get_project(self):
-        version = dbt.config.Project._get_required_version(
-            self.default_project_data,
-            verify_version=bool(self.args.version_check)
-        )
-        return dbt.config.Project.from_project_config(
-            self.default_project_data, None, required_dbt_version=version
-        )
+        return project_from_config_norender(self.default_project_data, verify_version=self.args.version_check)
 
     def get_profile(self):
         renderer = empty_profile_renderer()
@@ -1152,12 +1158,7 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
         ))}
 
     def get_project(self):
-        version = dbt.config.Project._get_required_version(
-            self.default_project_data, verify_version=True
-        )
-        return dbt.config.Project.from_project_config(
-            self.default_project_data, None, required_dbt_version=version
-        )
+        return project_from_config_norender(self.default_project_data, verify_version=True)
 
     def get_profile(self):
         renderer = empty_profile_renderer()
