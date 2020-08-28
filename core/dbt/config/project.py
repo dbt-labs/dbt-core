@@ -258,9 +258,7 @@ class PartialProject(RenderComponents):
         renderer: DbtProjectYamlRenderer,
     ) -> RenderComponents:
 
-        rendered_project = renderer.render_project(
-            self.project_dict, self.project_root
-        )
+        rendered_project = renderer.render_project(self.project_dict, self.project_root)
         rendered_packages = renderer.render_packages(self.packages_dict)
         rendered_selectors = renderer.render_selectors(self.selectors_dict)
 
