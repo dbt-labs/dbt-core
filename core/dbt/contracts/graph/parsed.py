@@ -228,15 +228,19 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
         # ignored)
-        return (
-            self.config.database == other.config.database and
-            self.config.schema == other.config.schema and
-            self.config.alias == other.config.alias and
-            True
-        )
+        keys = ('database', 'schema', 'alias')
+        for key in keys:
+            mine = self.unrendered_config.get(key)
+            others = other.unrendered_config.get(key)
+            if mine != others:
+                return False
+        return True
 
     def same_config(self, old: T) -> bool:
-        return self.config.same_contents(old.config)
+        return self.config.same_contents(
+            self.unrendered_config,
+            old.unrendered_config,
+        )
 
     def same_contents(self: T, old: Optional[T]) -> bool:
         if old is None:
@@ -354,7 +358,10 @@ class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     config: TestConfig = field(default_factory=TestConfig)
 
     def same_config(self, other) -> bool:
-        return self.config.severity == other.config.severity
+        return (
+            self.unrendered_config.get('severity') ==
+            other.unrendered_config.get('severity')
+        )
 
     def same_column_name(self, other) -> bool:
         return self.column_name == other.column_name
@@ -571,7 +578,10 @@ class ParsedSourceDefinition(
         return self.external == other.external
 
     def same_config(self, old: 'ParsedSourceDefinition') -> bool:
-        return self.config.same_contents(old.config)
+        return self.config.same_contents(
+            self.unrendered_config,
+            old.unrendered_config,
+        )
 
     def same_contents(self, old: Optional['ParsedSourceDefinition']) -> bool:
         # existing when it didn't before is a change!

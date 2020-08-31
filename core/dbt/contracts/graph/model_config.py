@@ -1,5 +1,6 @@
 from dataclasses import field, Field, dataclass
 from enum import Enum
+from itertools import chain
 from typing import (
     Any, List, Optional, Dict, MutableMapping, Union, Type, NewType, Tuple,
     TypeVar, Callable
@@ -242,16 +243,39 @@ class BaseConfig(
     def __len__(self):
         return len(self._get_fields()) + len(self._extra)
 
-    def same_contents(self: T, other: T) -> bool:
+    @staticmethod
+    def compare_key(
+        unrendered: Dict[str, Any],
+        other: Dict[str, Any],
+        key: str,
+    ) -> bool:
+        if key not in unrendered and key not in other:
+            return True
+        elif key not in unrendered and key in other:
+            return False
+        elif key in unrendered and key not in other:
+            return False
+        else:
+            return unrendered[key] == other[key]
+
+    @classmethod
+    def same_contents(
+        cls, unrendered: Dict[str, Any], other: Dict[str, Any]
+    ) -> bool:
         """This is like __eq__, except it ignores some fields."""
-        for key in self._content_iterator(
-            include_condition=CompareBehavior.should_include
-        ):
-            try:
-                if self[key] != other[key]:
+        seen = set()
+        for fld, target_name in cls._get_fields():
+            key = target_name
+            seen.add(key)
+            if CompareBehavior.should_include(fld):
+                if not cls.compare_key(unrendered, other, key):
                     return False
-            except KeyError:
-                return False
+
+        for key in chain(unrendered, other):
+            if key not in seen:
+                seen.add(key)
+                if not cls.compare_key(unrendered, other, key):
+                    return False
         return True
 
     @classmethod

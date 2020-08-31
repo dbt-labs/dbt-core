@@ -327,3 +327,18 @@ def load_internal_manifest_macros(config, macro_hook = lambda m: None):
     projects = {k: v for k, v in config.load_dependencies().items() if k.startswith('dbt')}
     loader = ManifestLoader(config, projects, macro_hook)
     return loader.load_only_macros()
+
+
+
+def dict_replace(dct, **kwargs):
+    dct = dct.copy()
+    dct.update(kwargs)
+    return dct
+
+
+def replace_config(n, **kwargs):
+    return n.replace(
+        config=n.config.replace(**kwargs),
+        unrendered_config=dict_replace(n.unrendered_config, **kwargs),
+    )
+

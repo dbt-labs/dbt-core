@@ -881,19 +881,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return result
 
     def unrendered_model_config(self, **updates):
-        result = {
-            'enabled': True,
-            'materialized': 'view',
-            'pre-hook': [],
-            'post-hook': [],
-            'vars': {},
-            'column_types': {},
-            'quoting': {},
-            'tags': [],
-            'persist_docs': {},
-        }
-        result.update(updates)
-        return result
+        return updates
 
     def rendered_seed_config(self, **updates):
         result = {
@@ -916,18 +904,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return result
 
     def unrendered_seed_config(self, **updates):
-        result = {
-            'enabled': True,
-            'materialized': 'seed',
-            'persist_docs': {},
-            'pre-hook': [],
-            'post-hook': [],
-            'vars': {},
-            'column_types': {},
-            'quoting': {},
-            'tags': [],
-            'quote_columns': True,
-        }
+        result = {'quote_columns': True}
         result.update(updates)
         return result
 
@@ -953,15 +930,6 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     def unrendered_tst_config(self, **updates):
         result = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'vars': {},
-            'tags': [],
             'severity': 'ERROR',
         }
         result.update(updates)
@@ -1028,8 +996,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         model_config = self.rendered_model_config(database=model_database)
         second_config = self.rendered_model_config(schema=self.alternate_schema[-4:])
 
-        unrendered_model_config = self.unrendered_model_config(database=model_database)
-        unrendered_second_config = self.unrendered_model_config(schema=self.alternate_schema[-4:])
+        unrendered_model_config = self.unrendered_model_config(database=model_database, materialized='view')
+        unrendered_second_config = self.unrendered_model_config(schema=self.alternate_schema[-4:], materialized='view')
 
         seed_config = self.rendered_seed_config()
         unrendered_seed_config = self.unrendered_seed_config()
@@ -1578,7 +1546,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': ANY,
                     'checksum': self._checksum_file(view_summary_path),
-                    'unrendered_config': self.unrendered_model_config(),
+                    'unrendered_config': self.unrendered_model_config(materialized='view'),
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
@@ -1692,9 +1660,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': [],
                     'unique_id': 'source.test.my_source.my_table',
                     'fqn': ['test', 'my_source', 'my_table'],
-                    'unrendered_config': {
-                        'enabled': True,
-                    }
+                    'unrendered_config': {}
                 },
             },
             'docs': {
@@ -2070,7 +2036,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': ANY,
                     'checksum': self._checksum_file(nested_view_sql_path),
-                    'unrendered_config': self.unrendered_model_config(),
+                    'unrendered_config': self.unrendered_model_config(materialized='view'),
                 },
                 'model.test.nested_table': {
                     'alias': 'nested_table',
@@ -2312,7 +2278,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': ANY,
                     'checksum': self._checksum_file(model_sql_path),
-                    'unrendered_config': self.unrendered_model_config(bind=False),
+                    'unrendered_config': self.unrendered_model_config(bind=False, materialized='view'),
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -2452,8 +2418,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         model_config = self.rendered_model_config(database=model_database)
         second_model_config = self.rendered_model_config(schema=self.alternate_schema[-4:])
-        unrendered_model_config = self.unrendered_model_config(database=model_database)
-        unrendered_second_model_config = self.unrendered_model_config(schema=self.alternate_schema[-4:])
+        unrendered_model_config = self.unrendered_model_config(database=model_database, materialized='view')
+        unrendered_second_model_config = self.unrendered_model_config(schema=self.alternate_schema[-4:], materialized='view')
         schema = self.unique_schema()
 
         # we are selecting from the seed, which is always in the default db
@@ -3051,7 +3017,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'model.test.view_summary',
-                    'unrendered_config': self.unrendered_model_config(),
+                    'unrendered_config': self.unrendered_model_config(materialized='view'),
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],

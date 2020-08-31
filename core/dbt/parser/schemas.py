@@ -13,6 +13,7 @@ from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
+    BaseContextConfigGenerator,
     ContextConfig,
     ContextConfigGenerator,
     UnrenderedConfigGenerator,
@@ -154,10 +155,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             )
 
         self.raw_renderer = SchemaYamlRenderer(ctx)
-        self.config_generator = ContextConfigGenerator(self.root_project)
-        self.unrendered_generator = UnrenderedConfigGenerator(
-            self.root_project
-        )
 
     @classmethod
     def get_compiled_path(cls, block: FileBlock) -> str:
@@ -235,10 +232,13 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             self.parse_test(block, test, column)
 
     def _generate_source_config(self, fqn: List[str], rendered: bool):
+        generator: BaseContextConfigGenerator
         if rendered:
-            generator = self.config_generator
+            generator = ContextConfigGenerator(self.root_project)
         else:
-            generator = self.unrendered_generator
+            generator = UnrenderedConfigGenerator(
+                self.root_project
+            )
 
         return generator.calculate_node_config(
             config_calls=[],

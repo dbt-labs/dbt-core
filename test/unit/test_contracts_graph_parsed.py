@@ -36,7 +36,7 @@ from dbt.contracts.graph.unparsed import Quoting, Time, TimePeriod, FreshnessThr
 from dbt import flags
 
 from hologram import ValidationError
-from .utils import ContractTestCase, assert_symmetric, assert_from_dict, assert_fails_validation
+from .utils import ContractTestCase, assert_symmetric, assert_from_dict, assert_fails_validation, dict_replace, replace_config
 
 
 @pytest.fixture(autouse=True)
@@ -78,34 +78,43 @@ def test_config_populated(populated_node_config_object, populated_node_config_di
     pickle.loads(pickle.dumps(populated_node_config_object))
 
 
+@pytest.fixture
+def unrendered_node_config_dict():
+    return {
+        'column_types': {'a': 'text'},
+        'materialized': 'table',
+        'post_hook': 'insert into blah(a, b) select "1", 1',
+    }
+
+
 different_node_configs = [
-    lambda c: c.replace(post_hook=[]),
-    lambda c: c.replace(materialized='view'),
-    lambda c: c.replace(quoting={'database': True}),
-    lambda c: c.replace(extra='different extra'),
-    lambda c: c.replace(column_types={'a': 'varchar(256)'}),
+    lambda c: dict_replace(c, post_hook=[]),
+    lambda c: dict_replace(c, materialized='view'),
+    lambda c: dict_replace(c, quoting={'database': True}),
+    lambda c: dict_replace(c, extra='different extra'),
+    lambda c: dict_replace(c, column_types={'a': 'varchar(256)'}),
 ]
 
 
 same_node_configs = [
-    lambda c: c.replace(tags=['mytag']),
-    lambda c: c.replace(alias='changed'),
-    lambda c: c.replace(schema='changed'),
-    lambda c: c.replace(database='changed'),
+    lambda c: dict_replace(c, tags=['mytag']),
+    lambda c: dict_replace(c, alias='changed'),
+    lambda c: dict_replace(c, schema='changed'),
+    lambda c: dict_replace(c, database='changed'),
 ]
 
 
 @pytest.mark.parametrize('func', different_node_configs)
-def test_config_different(populated_node_config_object, func):
-    value = func(populated_node_config_object)
-    assert not populated_node_config_object.same_contents(value)
+def test_config_different(unrendered_node_config_dict, func):
+    value = func(unrendered_node_config_dict)
+    assert not NodeConfig.same_contents(unrendered_node_config_dict, value)
 
 
 @pytest.mark.parametrize('func', same_node_configs)
-def test_config_same(populated_node_config_object, func):
-    value = func(populated_node_config_object)
-    assert populated_node_config_object != value
-    assert populated_node_config_object.same_contents(value)
+def test_config_same(unrendered_node_config_dict, func):
+    value = func(unrendered_node_config_dict)
+    assert unrendered_node_config_dict != value
+    assert NodeConfig.same_contents(unrendered_node_config_dict, value)
 
 
 @pytest.fixture
@@ -144,6 +153,7 @@ def base_parsed_model_dict():
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {},
     }
 
 
@@ -189,6 +199,7 @@ def minimal_parsed_model_dict():
         'schema': 'test_schema',
         'alias': 'bar',
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {},
     }
 
 
@@ -235,6 +246,12 @@ def complex_parsed_model_dict():
             },
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {
+            'column_types': {'a': 'text'},
+            'materialized': 'ephemeral',
+            'post_hook': ['insert into blah(a, b) select "1", 1'],
+            'vars': {'foo': 100},
+        },
     }
 
 
@@ -268,6 +285,12 @@ def complex_parsed_model_object():
         ),
         columns={'a': ColumnInfo('a', 'a text field', {})},
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'column_types': {'a': 'text'},
+            'materialized': 'ephemeral',
+            'post_hook': ['insert into blah(a, b) select "1", 1'],
+            'vars': {'foo': 100},
+        },
     )
 
 
@@ -313,13 +336,24 @@ unchanged_nodes = [
     lambda u: (u, u.replace(tags=['mytag'])),
     lambda u: (u, u.replace(meta={'something': 1000})),
     # True -> True
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}))),
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}))),
-
+    lambda u: (
+        replace_config(u, persist_docs={'relation': True}),
+        replace_config(u, persist_docs={'relation': True}),
+    ),
+    lambda u: (
+        replace_config(u, persist_docs={'columns': True}),
+        replace_config(u, persist_docs={'columns': True}),
+    ),
     # only columns docs enabled, but description changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), description='a model description')),
+    lambda u: (
+        replace_config(u, persist_docs={'columns': True}),
+        replace_config(u, persist_docs={'columns': True}).replace(description='a model description'),
+    ),
     # only relation docs eanbled, but columns changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+    lambda u: (
+        replace_config(u, persist_docs={'relation': True}),
+        replace_config(u, persist_docs={'relation': True}).replace(columns={'a': ColumnInfo(name='a', description='a column description')}),
+    ),
 
     # not tracked, we track config.alias/config.schema/config.database
     lambda u: (u, u.replace(alias='other')),
@@ -332,18 +366,24 @@ changed_nodes = [
     lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
 
     # None -> False is a config change even though it's pretty much the same
-    lambda u: (u, u.replace(config=u.config.replace(persist_docs={'relation': False}))),
-    lambda u: (u, u.replace(config=u.config.replace(persist_docs={'columns': False}))),
+    lambda u: (u, replace_config(u, persist_docs={'relation': False})),
+    lambda u: (u, replace_config(u, persist_docs={'columns': False})),
 
     # persist docs was true for the relation and we changed the model description
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), description='a model description')),
+    lambda u: (
+        replace_config(u, persist_docs={'relation': True}),
+        replace_config(u, persist_docs={'relation': True}).replace(description='a model description'),
+    ),
     # persist docs was true for columns and we changed the model description
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+    lambda u: (
+        replace_config(u, persist_docs={'columns': True}),
+        replace_config(u, persist_docs={'columns': True}).replace(columns={'a': ColumnInfo(name='a', description='a column description')}),
+    ),
 
     # not tracked, we track config.alias/config.schema/config.database
-    lambda u: (u, u.replace(config=u.config.replace(alias='other'))),
-    lambda u: (u, u.replace(config=u.config.replace(schema='other'))),
-    lambda u: (u, u.replace(config=u.config.replace(database='other'))),
+    lambda u: (u, replace_config(u, alias='other')),
+    lambda u: (u, replace_config(u, schema='other')),
+    lambda u: (u, replace_config(u, database='other')),
 ]
 
 
@@ -395,6 +435,7 @@ def basic_parsed_seed_dict():
         'columns': {},
         'meta': {},
         'checksum': {'name': 'path', 'checksum': '/root/seeds/seed.csv'},
+        'unrendered_config': {},
     }
 
 
@@ -425,6 +466,7 @@ def basic_parsed_seed_object():
         columns={},
         meta={},
         checksum=FileHash(name='path', checksum='/root/seeds/seed.csv'),
+        unrendered_config={},
     )
 
 
@@ -484,6 +526,9 @@ def complex_parsed_seed_dict():
         'columns': {'a': {'name': 'a', 'description': 'a column description', 'meta': {}, 'tags': []}},
         'meta': {'foo': 1000},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {
+            'persist_docs': {'relation': True, 'columns': True},
+        },
     }
 
 
@@ -516,6 +561,9 @@ def complex_parsed_seed_object():
         columns={'a': ColumnInfo(name='a', description='a column description')},
         meta={'foo': 1000},
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'persist_docs': {'relation': True, 'columns': True},
+        },
     )
 
 
@@ -535,13 +583,24 @@ unchanged_seeds = [
     lambda u: (u, u.replace(tags=['mytag'])),
     lambda u: (u, u.replace(meta={'something': 1000})),
     # True -> True
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}))),
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}))),
-
+    lambda u: (
+        replace_config(u, persist_docs={'relation': True}),
+        replace_config(u, persist_docs={'relation': True}),
+    ),
+    lambda u: (
+        replace_config(u, persist_docs={'columns': True}),
+        replace_config(u, persist_docs={'columns': True}),
+    ),
     # only columns docs enabled, but description changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), description='a model description')),
+    lambda u: (
+        replace_config(u, persist_docs={'columns': True}),
+        replace_config(u, persist_docs={'columns': True}).replace(description='a model description'),
+    ),
     # only relation docs eanbled, but columns changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
+    lambda u: (
+        replace_config(u, persist_docs={'relation': True}),
+        replace_config(u, persist_docs={'relation': True}).replace(columns={'a': ColumnInfo(name='a', description='a column description')}),
+    ),
 
     lambda u: (u, u.replace(alias='other')),
     lambda u: (u, u.replace(schema='other')),
@@ -553,17 +612,22 @@ changed_seeds = [
     lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
 
     # None -> False is a config change even though it's pretty much the same
-    lambda u: (u, u.replace(config=u.config.replace(persist_docs={'relation': False}))),
-    lambda u: (u, u.replace(config=u.config.replace(persist_docs={'columns': False}))),
+    lambda u: (u, replace_config(u, persist_docs={'relation': False})),
+    lambda u: (u, replace_config(u, persist_docs={'columns': False})),
 
     # persist docs was true for the relation and we changed the model description
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), description='a model description')),
+    lambda u: (
+        replace_config(u, persist_docs={'relation': True}),
+        replace_config(u, persist_docs={'relation': True}).replace(description='a model description'),
+    ),
     # persist docs was true for columns and we changed the model description
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), columns={'a': ColumnInfo(name='a', description='a column description')})),
-
-    lambda u: (u, u.replace(config=u.config.replace(alias='other'))),
-    lambda u: (u, u.replace(config=u.config.replace(schema='other'))),
-    lambda u: (u, u.replace(config=u.config.replace(database='other'))),
+    lambda u: (
+        replace_config(u, persist_docs={'columns': True}),
+        replace_config(u, persist_docs={'columns': True}).replace(columns={'a': ColumnInfo(name='a', description='a column description')}),
+    ),
+    lambda u: (u, replace_config(u, alias='other')),
+    lambda u: (u, replace_config(u, schema='other')),
+    lambda u: (u, replace_config(u, database='other')),
 ]
 
 
@@ -577,7 +641,6 @@ def test_compare_unchanged_parsed_seed(func, basic_parsed_seed_object):
 def test_compare_changed_seed(func, basic_parsed_seed_object):
     node, compare = func(basic_parsed_seed_object)
     assert not node.same_contents(compare)
-
 
 
 @pytest.fixture
@@ -641,6 +704,7 @@ def patched_model_object():
         columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
         docs=Docs(),
         checksum=FileHash.from_contents(''),
+        unrendered_config={},
     )
 
 
@@ -712,6 +776,7 @@ def base_parsed_hook_dict():
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {},
     }
 
 
@@ -739,6 +804,7 @@ def base_parsed_hook_object():
         config=NodeConfig(),
         index=None,
         checksum=FileHash.from_contents(''),
+        unrendered_config={},
     )
 
 
@@ -786,6 +852,10 @@ def complex_parsed_hook_dict():
         },
         'index': 13,
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {
+            'column_types': {'a': 'text'},
+            'materialized': 'table',
+        },
     }
 
 
@@ -819,6 +889,10 @@ def complex_parsed_hook_object():
         columns={'a': ColumnInfo('a', 'a text field', {})},
         index=13,
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'column_types': {'a': 'text'},
+            'materialized': 'table',
+        },
     )
 
 
@@ -915,6 +989,7 @@ def basic_parsed_schema_test_dict():
             'kwargs': {},
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {},
     }
 
 
@@ -995,6 +1070,11 @@ def complex_parsed_schema_test_dict():
             'kwargs': {},
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {
+            'column_types': {'a': 'text'},
+            'materialized': 'table',
+            'severity': 'WARN'
+        },
     }
 
 
@@ -1031,6 +1111,11 @@ def complex_parsed_schema_test_object():
         docs=Docs(show=False),
         test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'column_types': {'a': 'text'},
+            'materialized': 'table',
+            'severity': 'WARN'
+        },
     )
 
 
@@ -1304,6 +1389,13 @@ def basic_timestamp_snapshot_dict():
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {
+            'strategy': 'timestamp',
+            'unique_key': 'id',
+            'updated_at': 'last_update',
+            'target_database': 'some_snapshot_db',
+            'target_schema': 'some_snapshot_schema',
+        },
     }
 
 
@@ -1335,11 +1427,18 @@ def basic_timestamp_snapshot_object():
             target_schema='some_snapshot_schema',
         ),
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'strategy': 'timestamp',
+            'unique_key': 'id',
+            'updated_at': 'last_update',
+            'target_database': 'some_snapshot_db',
+            'target_schema': 'some_snapshot_schema',
+        },
     )
 
 
 @pytest.fixture
-def basic_intermedaite_timestamp_snapshot_object():
+def basic_intermediate_timestamp_snapshot_object():
     cfg = EmptySnapshotConfig()
     cfg._extra.update({
         'strategy': 'timestamp',
@@ -1369,6 +1468,13 @@ def basic_intermedaite_timestamp_snapshot_object():
         tags=[],
         config=cfg,
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'strategy': 'timestamp',
+            'unique_key': 'id',
+            'updated_at': 'last_update',
+            'target_database': 'some_snapshot_db',
+            'target_schema': 'some_snapshot_schema',
+        },
     )
 
 
@@ -1413,6 +1519,13 @@ def basic_check_snapshot_dict():
         'columns': {},
         'meta': {},
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
+        'unrendered_config': {
+            'target_database': 'some_snapshot_db',
+            'target_schema': 'some_snapshot_schema',
+            'unique_key': 'id',
+            'strategy': 'check',
+            'check_cols': 'all',
+        },
     }
 
 
@@ -1444,6 +1557,13 @@ def basic_check_snapshot_object():
             target_schema='some_snapshot_schema',
         ),
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'target_database': 'some_snapshot_db',
+            'target_schema': 'some_snapshot_schema',
+            'unique_key': 'id',
+            'strategy': 'check',
+            'check_cols': 'all',
+        },
     )
 
 
@@ -1478,13 +1598,20 @@ def basic_intermedaite_check_snapshot_object():
         tags=[],
         config=cfg,
         checksum=FileHash.from_contents(''),
+        unrendered_config={
+            'target_database': 'some_snapshot_db',
+            'target_schema': 'some_snapshot_schema',
+            'unique_key': 'id',
+            'strategy': 'check',
+            'check_cols': 'all',
+        },
     )
 
 
-def test_timestamp_snapshot_ok(basic_timestamp_snapshot_dict, basic_timestamp_snapshot_object, basic_intermedaite_timestamp_snapshot_object):
+def test_timestamp_snapshot_ok(basic_timestamp_snapshot_dict, basic_timestamp_snapshot_object, basic_intermediate_timestamp_snapshot_object):
     node_dict = basic_timestamp_snapshot_dict
     node = basic_timestamp_snapshot_object
-    inter = basic_intermedaite_timestamp_snapshot_object
+    inter = basic_intermediate_timestamp_snapshot_object
 
     assert_symmetric(node, node_dict, ParsedSnapshotNode)
     assert_symmetric(inter, node_dict, IntermediateSnapshotNode)
@@ -1693,7 +1820,8 @@ def basic_parsed_source_definition_dict():
         'tags': [],
         'config': {
             'enabled': True,
-        }
+        },
+        'unrendered_config': {},
     }
 
 
@@ -1752,6 +1880,7 @@ def complex_parsed_source_definition_dict():
             'warn_after': {'period': 'hour', 'count': 1},
         },
         'loaded_at_field': 'loaded_at',
+        'unrendered_config': {},
     }
 
 
@@ -1862,4 +1991,3 @@ def test_compare_unchanged_parsed_source_definition(func, basic_parsed_source_de
 def test_compare_changed_source_definition(func, basic_parsed_source_definition_object):
     node, compare = func(basic_parsed_source_definition_object)
     assert not node.same_contents(compare)
-

@@ -1,7 +1,7 @@
+from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar
-from typing_extensions import Protocol
+from typing import List, Iterator, Dict, Any, TypeVar, Generic
 
 from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import BaseConfig, get_config_for
@@ -17,14 +17,16 @@ class ModelParts(IsFQNResource):
     package_name: str
 
 
-T = TypeVar('T', bound=BaseConfig)
+T = TypeVar('T')  # any old type
+C = TypeVar('C', bound=BaseConfig)
 
 
 class ConfigSource:
     def __init__(self, project):
         self.project = project
 
-    def get_config_dict(self, resource_type: NodeType): ...
+    def get_config_dict(self, resource_type: NodeType):
+        ...
 
 
 class UnrenderedConfig(ConfigSource):
@@ -64,7 +66,7 @@ class RenderedConfig(ConfigSource):
         return model_configs
 
 
-class ContextConfigGenerator:
+class BaseContextConfigGenerator(Generic[T]):
     def __init__(self, active_project: RuntimeConfig):
         self._active_project = active_project
 
@@ -102,20 +104,15 @@ class ContextConfigGenerator:
     ) -> Iterator[Dict[str, Any]]:
         return self._project_configs(self._active_project, fqn, resource_type)
 
+    @abstractmethod
     def _update_from_config(
         self, result: T, partial: Dict[str, Any], validate: bool = False
     ) -> T:
-        translated = self._active_project.credentials.translate_aliases(
-            partial
-        )
-        return result.update_from(
-            translated,
-            self._active_project.credentials.type,
-            validate=validate
-        )
+        ...
 
-    def finalize_and_validate(self, result):
-        return result.finalize_and_validate()
+    @abstractmethod
+    def initial_result(self, resource_type: NodeType, base: bool) -> T:
+        ...
 
     def calculate_node_config(
         self,
@@ -126,12 +123,8 @@ class ContextConfigGenerator:
         base: bool,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
-        # defaults, own_config, config calls, active_config (if != own_config)
-        config_cls = get_config_for(resource_type, base=base)
-        # Calculate the defaults. We don't want to validate the defaults,
-        # because it might be invalid in the case of required config members
-        # (such as on snapshots!)
-        result = config_cls.from_dict({}, validate=False)
+
+        result = self.initial_result(resource_type=resource_type, base=base)
 
         project_configs = self._project_configs(own_config, fqn, resource_type)
         for fqn_config in project_configs:
@@ -145,14 +138,104 @@ class ContextConfigGenerator:
                 result = self._update_from_config(result, fqn_config)
 
         # this is mostly impactful in the snapshot config case
-        return self.finalize_and_validate(result)
+        return result
+
+    @abstractmethod
+    def calculate_node_config_dict(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> Dict[str, Any]:
+        ...
 
 
-class UnrenderedConfigGenerator(ContextConfigGenerator):
+class ContextConfigGenerator(BaseContextConfigGenerator[C]):
+    def __init__(self, active_project: RuntimeConfig):
+        self._active_project = active_project
+
+    def get_config_source(self, project: Project) -> ConfigSource:
+        return RenderedConfig(project)
+
+    def initial_result(self, resource_type: NodeType, base: bool) -> C:
+        # defaults, own_config, config calls, active_config (if != own_config)
+        config_cls = get_config_for(resource_type, base=base)
+        # Calculate the defaults. We don't want to validate the defaults,
+        # because it might be invalid in the case of required config members
+        # (such as on snapshots!)
+        result = config_cls.from_dict({}, validate=False)
+        return result
+
+    def _update_from_config(
+        self, result: C, partial: Dict[str, Any], validate: bool = False
+    ) -> C:
+        translated = self._active_project.credentials.translate_aliases(
+            partial
+        )
+        return result.update_from(
+            translated,
+            self._active_project.credentials.type,
+            validate=validate
+        )
+
+    def calculate_node_config_dict(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> Dict[str, Any]:
+        config = self.calculate_node_config(
+            config_calls=config_calls,
+            fqn=fqn,
+            resource_type=resource_type,
+            project_name=project_name,
+            base=base,
+        )
+        finalized = config.finalize_and_validate()
+        return finalized.to_dict()
+
+
+class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
     def get_config_source(self, project: Project) -> ConfigSource:
         return UnrenderedConfig(project)
 
-    def finalize_and_validate(self, result):
+    def calculate_node_config_dict(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> Dict[str, Any]:
+        return self.calculate_node_config(
+            config_calls=config_calls,
+            fqn=fqn,
+            resource_type=resource_type,
+            project_name=project_name,
+            base=base,
+        )
+
+    def initial_result(
+        self,
+        resource_type: NodeType,
+        base: bool
+    ) -> Dict[str, Any]:
+        return {}
+
+    def _update_from_config(
+        self,
+        result: Dict[str, Any],
+        partial: Dict[str, Any],
+        validate: bool = False,
+    ) -> Dict[str, Any]:
+        translated = self._active_project.credentials.translate_aliases(
+            partial
+        )
+        result.update(translated)
         return result
 
 
@@ -184,12 +267,10 @@ class ContextConfig:
         else:
             src = UnrenderedConfigGenerator(self._active_project)
 
-        return src.calculate_node_config(
+        return src.calculate_node_config_dict(
             config_calls=self._config_calls,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,
             base=base,
-        ).to_dict()
-
-
+        )

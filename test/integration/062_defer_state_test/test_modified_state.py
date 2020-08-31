@@ -122,6 +122,18 @@ class TestModifiedState(DBTIntegrationTest):
         assert results[0] == 'test.seed'
 
     @use_profile('postgres')
+    def test_postgres_unrendered_config_same(self):
+        results = self.run_dbt(['ls', '--resource-type', 'model', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=False)
+        assert len(results) == 0
+
+        # although this is the default value, dbt will recognize it as a change
+        # for previously-unconfigured models, because it's been explicitly set
+        self.use_default_project({'models': {'test': {'materialized': 'view'}}})
+        results = self.run_dbt(['ls', '--resource-type', 'model', '--select', 'state:modified', '--state', './state'])
+        assert len(results) == 1
+        assert results[0] == 'test.view_model'
+
+    @use_profile('postgres')
     def test_postgres_changed_model_contents(self):
         results = self.run_dbt(['run', '--models', 'state:modified', '--state', './state'], strict=False)
         assert len(results) == 0
