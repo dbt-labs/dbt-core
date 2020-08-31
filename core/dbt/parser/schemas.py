@@ -15,6 +15,7 @@ from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfig,
     ContextConfigGenerator,
+    UnrenderedConfigGenerator,
 )
 from dbt.context.configured import generate_schema_yml
 from dbt.context.target import generate_target_context
@@ -154,6 +155,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
 
         self.raw_renderer = SchemaYamlRenderer(ctx)
         self.config_generator = ContextConfigGenerator(self.root_project)
+        self.unrendered_generator = UnrenderedConfigGenerator(
+            self.root_project
+        )
 
     @classmethod
     def get_compiled_path(cls, block: FileBlock) -> str:
@@ -230,6 +234,20 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         for test in column.tests:
             self.parse_test(block, test, column)
 
+    def _generate_source_config(self, fqn: List[str], rendered: bool):
+        if rendered:
+            generator = self.config_generator
+        else:
+            generator = self.unrendered_generator
+
+        return generator.calculate_node_config(
+            config_calls=[],
+            fqn=fqn,
+            resource_type=NodeType.Source,
+            project_name=self.project.project_name,
+            base=False,
+        )
+
     def parse_source(
         self, target: UnpatchedSourceDefinition
     ) -> ParsedSourceDefinition:
@@ -250,13 +268,16 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         # make sure we don't do duplicate tags from source + table
         tags = sorted(set(itertools.chain(source.tags, table.tags)))
 
-        config = self.config_generator.calculate_node_config(
-            config_calls=[],
+        config = self._generate_source_config(
             fqn=target.fqn,
-            resource_type=NodeType.Source,
-            project_name=self.project.project_name,
-            base=False,
+            rendered=True,
         )
+
+        unrendered_config = self._generate_source_config(
+            fqn=target.fqn,
+            rendered=False,
+        )
+
         if not isinstance(config, SourceConfig):
             raise InternalException(
                 f'Calculated a {type(config)} for a source, but expected '
@@ -290,6 +311,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             fqn=target.fqn,
             tags=tags,
             config=config,
+            unrendered_config=unrendered_config,
         )
 
     def create_test_node(

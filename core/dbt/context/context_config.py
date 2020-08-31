@@ -32,14 +32,15 @@ class UnrenderedConfig(ConfigSource):
         self.project = project
 
     def get_config_dict(self, resource_type: NodeType) -> Dict[str, Any]:
+        unrendered = self.project.unrendered.project_dict
         if resource_type == NodeType.Seed:
-            model_configs = self.project.unrendered.get('seeds')
+            model_configs = unrendered.get('seeds')
         elif resource_type == NodeType.Snapshot:
-            model_configs = self.project.unrendered.get('snapshots')
+            model_configs = unrendered.get('snapshots')
         elif resource_type == NodeType.Source:
-            model_configs = self.project.unrendered.get('sources')
+            model_configs = unrendered.get('sources')
         else:
-            model_configs = self.project.unrendered.get('models')
+            model_configs = unrendered.get('models')
 
         if model_configs is None:
             return {}
@@ -113,6 +114,9 @@ class ContextConfigGenerator:
             validate=validate
         )
 
+    def finalize_and_validate(self, result):
+        return result.finalize_and_validate()
+
     def calculate_node_config(
         self,
         config_calls: List[Dict[str, Any]],
@@ -141,12 +145,15 @@ class ContextConfigGenerator:
                 result = self._update_from_config(result, fqn_config)
 
         # this is mostly impactful in the snapshot config case
-        return result.finalize_and_validate()
+        return self.finalize_and_validate(result)
 
 
 class UnrenderedConfigGenerator(ContextConfigGenerator):
     def get_config_source(self, project: Project) -> ConfigSource:
         return UnrenderedConfig(project)
+
+    def finalize_and_validate(self, result):
+        return result
 
 
 class ContextConfig:
