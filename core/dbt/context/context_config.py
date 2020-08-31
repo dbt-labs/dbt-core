@@ -36,15 +36,15 @@ class UnrenderedConfig(ConfigSource):
     def get_config_dict(self, resource_type: NodeType) -> Dict[str, Any]:
         unrendered = self.project.unrendered.project_dict
         if resource_type == NodeType.Seed:
-            model_configs = unrendered.get('seeds')
+            model_configs = unrendered.get("seeds")
         elif resource_type == NodeType.Snapshot:
-            model_configs = unrendered.get('snapshots')
+            model_configs = unrendered.get("snapshots")
         elif resource_type == NodeType.Source:
-            model_configs = unrendered.get('sources')
+            model_configs = unrendered.get("sources")
         elif resource_type == NodeType.Test:
             model_configs = unrendered.get("tests")
         else:
-            model_configs = unrendered.get('models')
+            model_configs = unrendered.get("models")
 
         if model_configs is None:
             return {}
