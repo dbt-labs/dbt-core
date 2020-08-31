@@ -327,7 +327,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
         # ignored)
-        keys = ('database', 'schema', 'alias')
+        keys = ("database", "schema", "alias")
         for key in keys:
             mine = self.unrendered_config.get(key)
             others = other.unrendered_config.get(key)

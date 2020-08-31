@@ -250,9 +250,7 @@ class BaseConfig(
             return unrendered[key] == other[key]
 
     @classmethod
-    def same_contents(
-        cls, unrendered: Dict[str, Any], other: Dict[str, Any]
-    ) -> bool:
+    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
         """This is like __eq__, except it ignores some fields."""
         seen = set()
         for fld, target_name in cls._get_fields():

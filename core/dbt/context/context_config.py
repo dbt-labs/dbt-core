@@ -17,8 +17,8 @@ class ModelParts(IsFQNResource):
     package_name: str
 
 
-T = TypeVar('T')  # any old type
-C = TypeVar('C', bound=BaseConfig)
+T = TypeVar("T")  # any old type
+C = TypeVar("C", bound=BaseConfig)
 
 
 class ConfigSource:
@@ -181,16 +181,10 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         result = config_cls.from_dict({})
         return result
 
-    def _update_from_config(
-        self, result: C, partial: Dict[str, Any], validate: bool = False
-    ) -> C:
-        translated = self._active_project.credentials.translate_aliases(
-            partial
-        )
+    def _update_from_config(self, result: C, partial: Dict[str, Any], validate: bool = False) -> C:
+        translated = self._active_project.credentials.translate_aliases(partial)
         return result.update_from(
-            translated,
-            self._active_project.credentials.type,
-            validate=validate
+            translated, self._active_project.credentials.type, validate=validate
         )
 
     def calculate_node_config_dict(
@@ -236,11 +230,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
             patch_config_dict=patch_config_dict
         )
 
-    def initial_result(
-        self,
-        resource_type: NodeType,
-        base: bool
-    ) -> Dict[str, Any]:
+    def initial_result(self, resource_type: NodeType, base: bool) -> Dict[str, Any]:
         return {}
 
     def _update_from_config(
@@ -249,9 +239,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         partial: Dict[str, Any],
         validate: bool = False,
     ) -> Dict[str, Any]:
-        translated = self._active_project.credentials.translate_aliases(
-            partial
-        )
+        translated = self._active_project.credentials.translate_aliases(partial)
         result.update(translated)
         return result
 
