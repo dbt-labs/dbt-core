@@ -215,6 +215,11 @@ class PartialProject:
         metadata=dict(description='The root directory of the project'),
     )
     project_dict: Dict[str, Any]
+    verify_version: bool = field(
+        metadata=dict(description=(
+            'If True, verify the dbt version matches the required version'
+        ))
+    )
 
     def render(self, renderer):
         packages_dict = package_data_from_root(self.project_root)
@@ -225,6 +230,7 @@ class PartialProject:
             packages_dict,
             selectors_dict,
             renderer,
+            verify_version=self.verify_version,
         )
 
     def render_profile_name(self, renderer) -> Optional[str]:
@@ -290,6 +296,32 @@ class V2VarProvider(VarProvider):
 
     def to_dict(self):
         return self.vars
+
+
+def validate_version(
+    required: List[VersionSpecifier],
+    project_name: str,
+) -> None:
+    """Ensure this package works with the installed version of dbt."""
+    installed = get_installed_version()
+    if not versions_compatible(*required):
+        msg = IMPOSSIBLE_VERSION_ERROR.format(
+            package=project_name,
+            version_spec=[
+                x.to_version_string() for x in required
+            ]
+        )
+        raise DbtProjectError(msg)
+
+    if not versions_compatible(installed, *required):
+        msg = INVALID_VERSION_ERROR.format(
+            package=project_name,
+            installed=installed.to_version_string(),
+            version_spec=[
+                x.to_version_string() for x in required
+            ]
+        )
+        raise DbtProjectError(msg)
 
 
 @dataclass
@@ -363,6 +395,7 @@ class Project:
         project_dict: Dict[str, Any],
         packages_dict: Optional[Dict[str, Any]] = None,
         selectors_dict: Optional[Dict[str, Any]] = None,
+        required_dbt_version: Optional[List[VersionSpecifier]] = None,
     ) -> 'Project':
         """Create a project from its project and package configuration, as read
         by yaml.safe_load().
@@ -374,6 +407,11 @@ class Project:
             the packages file exists and is invalid.
         :returns: The project, with defaults populated.
         """
+        if required_dbt_version is None:
+            dbt_version = cls._get_required_version(project_dict)
+        else:
+            dbt_version = required_dbt_version
+
         try:
             project_dict = cls._preprocess(project_dict)
         except RecursionException:
@@ -460,17 +498,7 @@ class Project:
         on_run_start: List[str] = value_or(cfg.on_run_start, [])
         on_run_end: List[str] = value_or(cfg.on_run_end, [])
 
-        # weird type handling: no value_or use
-        dbt_raw_version: Union[List[str], str] = '>=0.0.0'
-        if cfg.require_dbt_version is not None:
-            dbt_raw_version = cfg.require_dbt_version
-
         query_comment = _query_comment_from_cfg(cfg.query_comment)
-
-        try:
-            dbt_version = _parse_versions(dbt_raw_version)
-        except SemverException as e:
-            raise DbtProjectError(str(e)) from e
 
         try:
             packages = package_config_from_data(packages_dict)
@@ -584,6 +612,30 @@ class Project:
             raise DbtProjectError(validator_error_message(e)) from e
 
     @classmethod
+    def _get_required_version(
+        cls, rendered_project: Dict[str, Any], verify_version: bool = False
+    ) -> List[VersionSpecifier]:
+        dbt_raw_version: Union[List[str], str] = '>=0.0.0'
+        required = rendered_project.get('require-dbt-version')
+        if required is not None:
+            dbt_raw_version = required
+
+        try:
+            dbt_version = _parse_versions(dbt_raw_version)
+        except SemverException as e:
+            raise DbtProjectError(str(e)) from e
+
+        if verify_version:
+            # no name is also an error that we want to raise
+            if 'name' not in rendered_project:
+                raise DbtProjectError(
+                    'Required "name" field not present in project',
+                )
+            validate_version(dbt_version, rendered_project['name'])
+
+        return dbt_version
+
+    @classmethod
     def render_from_dict(
         cls,
         project_root: str,
@@ -591,6 +643,8 @@ class Project:
         packages_dict: Dict[str, Any],
         selectors_dict: Dict[str, Any],
         renderer: DbtProjectYamlRenderer,
+        *,
+        verify_version: bool = False
     ) -> 'Project':
         rendered_project = renderer.render_data(project_dict)
         rendered_project['project-root'] = project_root
@@ -598,11 +652,17 @@ class Project:
         rendered_packages = package_renderer.render_data(packages_dict)
         selectors_renderer = renderer.get_selector_renderer()
         rendered_selectors = selectors_renderer.render_data(selectors_dict)
+
         try:
+            dbt_version = cls._get_required_version(
+                rendered_project, verify_version=verify_version
+            )
+
             return cls.from_project_config(
                 rendered_project,
                 rendered_packages,
                 rendered_selectors,
+                dbt_version,
             )
         except DbtProjectError as exc:
             if exc.path is None:
@@ -611,7 +671,7 @@ class Project:
 
     @classmethod
     def partial_load(
-        cls, project_root: str
+        cls, project_root: str, *, verify_version: bool = False
     ) -> PartialProject:
         project_root = os.path.normpath(project_root)
         project_dict = _raw_project_from(project_root)
@@ -626,40 +686,23 @@ class Project:
             project_name=project_name,
             project_root=project_root,
             project_dict=project_dict,
+            verify_version=verify_version,
         )
 
     @classmethod
     def from_project_root(
-        cls, project_root: str, renderer: DbtProjectYamlRenderer
+        cls,
+        project_root: str,
+        renderer: DbtProjectYamlRenderer,
+        *,
+        verify_version: bool = False,
     ) -> 'Project':
-        partial = cls.partial_load(project_root)
+        partial = cls.partial_load(project_root, verify_version=verify_version)
         renderer.version = partial.config_version
         return partial.render(renderer)
 
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
-
-    def validate_version(self):
-        """Ensure this package works with the installed version of dbt."""
-        installed = get_installed_version()
-        if not versions_compatible(*self.dbt_version):
-            msg = IMPOSSIBLE_VERSION_ERROR.format(
-                package=self.project_name,
-                version_spec=[
-                    x.to_version_string() for x in self.dbt_version
-                ]
-            )
-            raise DbtProjectError(msg)
-
-        if not versions_compatible(installed, *self.dbt_version):
-            msg = INVALID_VERSION_ERROR.format(
-                package=self.project_name,
-                installed=installed.to_version_string(),
-                version_spec=[
-                    x.to_version_string() for x in self.dbt_version
-                ]
-            )
-            raise DbtProjectError(msg)
 
     def as_v1(self, all_projects: Iterable[str]):
         if self.config_version == 1:

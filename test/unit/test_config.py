@@ -35,6 +35,10 @@ def temp_cd(path):
     finally:
         os.chdir(current_path)
 
+@contextmanager
+def raises_nothing():
+    yield
+
 
 def empty_profile_renderer():
     return dbt.config.renderer.ProfileRenderer(generate_base_context({}))
@@ -178,6 +182,12 @@ class BaseConfigTest(unittest.TestCase):
             'env_value_schema': 'env-postgres-schema',
             'env_value_profile': 'default',
         }
+
+    def assertRaisesOrReturns(self, exc):
+        if exc is None:
+            return raises_nothing()
+        else:
+            return self.assertRaises(exc)
 
 
 class BaseFileTest(BaseConfigTest):
@@ -460,7 +470,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.password, 'db_pass')
         self.assertEqual(profile.credentials.schema, 'redshift-schema')
         self.assertEqual(profile.credentials.database, 'redshift-db-name')
-        self.assertEqual(profile, from_raw)        
+        self.assertEqual(profile, from_raw)
 
     def test_env_vars(self):
         self.args.target = 'with-vars'
@@ -947,8 +957,12 @@ class TestRuntimeConfig(BaseConfigTest):
         self.default_project_data['project-root'] = self.project_dir
 
     def get_project(self):
+        version = dbt.config.Project._get_required_version(
+            self.default_project_data,
+            verify_version=bool(self.args.version_check)
+        )
         return dbt.config.Project.from_project_config(
-            self.default_project_data, None
+            self.default_project_data, None, required_dbt_version=version
         )
 
     def get_profile(self):
@@ -958,14 +972,16 @@ class TestRuntimeConfig(BaseConfigTest):
         )
 
     def from_parts(self, exc=None):
-        project = self.get_project()
-        profile = self.get_profile()
-        if exc is None:
-            return dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+        with self.assertRaisesOrReturns(exc) as err:
+            project = self.get_project()
+            profile = self.get_profile()
 
-        with self.assertRaises(exc) as err:
-            dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-        return err
+            result = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+
+        if exc is None:
+            return result
+        else:
+            return err
 
     def test_from_parts(self):
         project = self.get_project()
@@ -1029,6 +1045,12 @@ class TestRuntimeConfig(BaseConfigTest):
         raised = self.from_parts(dbt.exceptions.DbtProjectError)
         self.assertIn('This version of dbt is not supported', str(raised.exception))
 
+    def test_unsupported_version_range_bad_config(self):
+        self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
+        self.default_project_data['some-extra-field-not-allowed'] = True
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('This version of dbt is not supported', str(raised.exception))
+
     def test_unsupported_version_range_no_check(self):
         self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
         self.args.version_check = False
@@ -1039,6 +1061,11 @@ class TestRuntimeConfig(BaseConfigTest):
         self.default_project_data['require-dbt-version'] = ['>99999.0.0', '<=0.0.1']
         raised = self.from_parts(dbt.exceptions.DbtProjectError)
         self.assertIn('The package version requirement can never be satisfied', str(raised.exception))
+
+    def test_unsupported_version_extra_config(self):
+        self.default_project_data['some-extra-field-not-allowed'] = True
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('Additional properties are not allowed', str(raised.exception))
 
     def test_archive_not_allowed(self):
         self.default_project_data['archive'] = [{
@@ -1124,8 +1151,11 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
         ))}
 
     def get_project(self):
+        version = dbt.config.Project._get_required_version(
+            self.default_project_data, verify_version=True
+        )
         return dbt.config.Project.from_project_config(
-            self.default_project_data, None
+            self.default_project_data, None, required_dbt_version=version
         )
 
     def get_profile(self):
@@ -1135,15 +1165,16 @@ class TestRuntimeConfigWithConfigs(BaseConfigTest):
         )
 
     def from_parts(self, exc=None):
-        project = self.get_project()
-        profile = self.get_profile()
+        with self.assertRaisesOrReturns(exc) as err:
+            project = self.get_project()
+            profile = self.get_profile()
+
+            result = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+
         if exc is None:
-            return dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-
-        with self.assertRaises(exc) as err:
-            dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-        return err
-
+            return result
+        else:
+            return err
 
     def test__get_unused_resource_config_paths(self):
         project = self.from_parts()
