@@ -1,3 +1,8 @@
+## dbt 0.19.0 (Release TBD)
+
+### Features
+- dbt will compare configurations using the un-rendered form of the config block in dbt_project.yml ([#2713](https://github.com/fishtown-analytics/dbt/issues/2713), [#2735](https://github.com/fishtown-analytics/dbt/pull/2735))
+
 ## dbt 0.18.0 (Release TBD)
 
 
