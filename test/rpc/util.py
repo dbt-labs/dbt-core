@@ -215,6 +215,7 @@ class Querier:
         exclude: Optional[Union[str, List[str]]] = None,
         threads: Optional[int] = None,
         request_id: int = 1,
+        state: Optional[bool] = None,
     ):
         params = {}
         if models is not None:
@@ -223,6 +224,8 @@ class Querier:
             params['exclude'] = exclude
         if threads is not None:
             params['threads'] = threads
+        if state is not None:
+            params['state'] = state
         return self.request(
             method='compile', params=params, request_id=request_id
         )
@@ -233,6 +236,8 @@ class Querier:
         exclude: Optional[Union[str, List[str]]] = None,
         threads: Optional[int] = None,
         request_id: int = 1,
+        defer: Optional[bool] = None,
+        state: Optional[str] = None,
     ):
         params = {}
         if models is not None:
@@ -241,6 +246,10 @@ class Querier:
             params['exclude'] = exclude
         if threads is not None:
             params['threads'] = threads
+        if defer is not None:
+            params['defer'] = defer
+        if state is not None:
+            params['state'] = state
         return self.request(
             method='run', params=params, request_id=request_id
         )
@@ -265,6 +274,7 @@ class Querier:
         show: bool = None,
         threads: Optional[int] = None,
         request_id: int = 1,
+        state: Optional[bool] = None,
     ):
         params = {}
         if select is not None:
@@ -275,6 +285,8 @@ class Querier:
             params['show'] = show
         if threads is not None:
             params['threads'] = threads
+        if state is not None:
+            params['state'] = state
         return self.request(
             method='seed', params=params, request_id=request_id
         )
@@ -285,6 +297,7 @@ class Querier:
         exclude: Optional[Union[str, List[str]]] = None,
         threads: Optional[int] = None,
         request_id: int = 1,
+        state: Optional[bool] = None,
     ):
         params = {}
         if select is not None:
@@ -293,6 +306,8 @@ class Querier:
             params['exclude'] = exclude
         if threads is not None:
             params['threads'] = threads
+        if state is not None:
+            params['state'] = state
         return self.request(
             method='snapshot', params=params, request_id=request_id
         )
@@ -320,6 +335,7 @@ class Querier:
         data: bool = None,
         schema: bool = None,
         request_id: int = 1,
+        state: Optional[bool] = None,
     ):
         params = {}
         if models is not None:
@@ -332,6 +348,8 @@ class Querier:
             params['schema'] = schema
         if threads is not None:
             params['threads'] = threads
+        if state is not None:
+            params['state'] = state
         return self.request(
             method='test', params=params, request_id=request_id
         )
@@ -638,3 +656,11 @@ def assert_has_threads(results, num_threads):
         f'Got invalid number of concurrency logs ({len(c_logs)})'
     assert 'message' in c_logs[0]
     assert f'Concurrency: {num_threads} threads' in c_logs[0]['message']
+
+
+def get_write_manifest(querier, dest):
+    result = querier.async_wait_for_result(querier.get_manifest())
+    manifest = result['manifest']
+
+    with open(dest, 'w') as fp:
+        json.dump(manifest, fp)

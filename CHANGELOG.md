@@ -1,3 +1,9 @@
+## dbt 0.19.0 (Release TBD)
+
+### Features
+- Added state and defer arguments to the RPC client, matching the CLI ([#2678](https://github.com/fishtown-analytics/dbt/issues/2678), [#2736](https://github.com/fishtown-analytics/dbt/pull/2736))
+
+
 ## dbt 0.18.0 (Release TBD)
 
 

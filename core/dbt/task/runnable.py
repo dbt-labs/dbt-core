@@ -91,6 +91,9 @@ class GraphRunnableTask(ManifestTask):
         self._skipped_children = {}
         self._raise_next_tick = None
         self.previous_state: Optional[PreviousState] = None
+        self.set_previous_state()
+
+    def set_previous_state(self):
         if self.args.state is not None:
             self.previous_state = PreviousState(self.args.state)
 

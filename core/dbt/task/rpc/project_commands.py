@@ -1,12 +1,15 @@
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional, Union
 
+from dbt import flags
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.rpc import (
     GetManifestParameters,
     GetManifestResult,
     RPCCompileParameters,
     RPCDocsGenerateParameters,
+    RPCRunParameters,
     RPCRunOperationParameters,
     RPCSeedParameters,
     RPCTestParameters,
@@ -54,6 +57,15 @@ class RPCCommandTask(
         return self.run()
 
 
+def state_path(state: Optional[str]) -> Optional[Path]:
+    if state is not None:
+        return Path(state)
+    elif flags.ARTIFACT_STATE_PATH is not None:
+        return Path(flags.ARTIFACT_STATE_PATH)
+    else:
+        return None
+
+
 class RemoteCompileProjectTask(
     RPCCommandTask[RPCCompileParameters], CompileTask
 ):
@@ -66,16 +78,28 @@ class RemoteCompileProjectTask(
         if params.threads is not None:
             self.args.threads = params.threads
 
+        self.args.state = state_path(params.state)
 
-class RemoteRunProjectTask(RPCCommandTask[RPCCompileParameters], RunTask):
+        self.set_previous_state()
+
+
+class RemoteRunProjectTask(RPCCommandTask[RPCRunParameters], RunTask):
     METHOD_NAME = 'run'
 
-    def set_args(self, params: RPCCompileParameters) -> None:
+    def set_args(self, params: RPCRunParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
+
         if params.threads is not None:
             self.args.threads = params.threads
+        if params.defer is None:
+            self.args.defer = flags.DEFER_MODE
+        else:
+            self.args.defer = params.defer
+
+        self.args.state = state_path(params.state)
+        self.set_previous_state()
 
 
 class RemoteSeedProjectTask(RPCCommandTask[RPCSeedParameters], SeedTask):
@@ -90,6 +114,9 @@ class RemoteSeedProjectTask(RPCCommandTask[RPCSeedParameters], SeedTask):
             self.args.threads = params.threads
         self.args.show = params.show
 
+        self.args.state = state_path(params.state)
+        self.set_previous_state()
+
 
 class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
     METHOD_NAME = 'test'
@@ -103,6 +130,9 @@ class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
         if params.threads is not None:
             self.args.threads = params.threads
 
+        self.args.state = state_path(params.state)
+        self.set_previous_state()
+
 
 class RemoteDocsGenerateProjectTask(
     RPCCommandTask[RPCDocsGenerateParameters],
@@ -115,6 +145,8 @@ class RemoteDocsGenerateProjectTask(
         self.args.exclude = None
         self.args.selector_name = None
         self.args.compile = params.compile
+
+        self.args.state = state_path(params.state)
 
     def get_catalog_results(
         self, nodes, sources, generated_at, compile_results, errors
@@ -184,6 +216,9 @@ class RemoteSnapshotTask(RPCCommandTask[RPCSnapshotParameters], SnapshotTask):
         self.args.selector_name = params.selector
         if params.threads is not None:
             self.args.threads = params.threads
+
+        self.args.state = state_path(params.state)
+        self.set_previous_state()
 
 
 class RemoteSourceFreshnessTask(
