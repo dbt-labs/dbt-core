@@ -10,6 +10,9 @@
 ### Fixes
 - dbt now validates the require-dbt-version field before it validates the dbt_project.yml schema ([#2638](https://github.com/fishtown-analytics/dbt/issues/2638), [#2726](https://github.com/fishtown-analytics/dbt/pull/2726))
 
+Contributors:
+- [@genos](https://github.com/genos) ([#2722](https://github.com/fishtown-analytics/dbt/pull/2722))
+
 
 ## dbt 0.18.0rc1 (August 19, 2020)
 
