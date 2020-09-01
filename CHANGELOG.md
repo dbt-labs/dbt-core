@@ -50,6 +50,7 @@ Contributors:
 - Add Name, Description, Column, SQL, Tags filters to site search ([docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108))
 - Add relevance criteria to site search ([docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
 - Support new selector methods, intersection, and arbitrary parent/child depth in DAG selection syntax ([docs#118](https://github.com/fishtown-analytics/dbt-docs/pull/118))
+- Revise anonymous event tracking: simpler URL fuzzing; differentiate between Cloud-hosted and non-Cloud docs ([docs#121](https://github.com/fishtown-analytics/dbt-docs/pull/121))
 
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))
