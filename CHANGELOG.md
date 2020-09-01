@@ -10,8 +10,12 @@
 ### Fixes
 - dbt now validates the require-dbt-version field before it validates the dbt_project.yml schema ([#2638](https://github.com/fishtown-analytics/dbt/issues/2638), [#2726](https://github.com/fishtown-analytics/dbt/pull/2726))
 
+### Docs
+- Add project level overviews ([docs#127](https://github.com/fishtown-analytics/dbt-docs/issues/127))
+
 Contributors:
 - [@genos](https://github.com/genos) ([#2722](https://github.com/fishtown-analytics/dbt/pull/2722))
+- [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([docs#129](https://github.com/fishtown-analytics/dbt-docs/pull/129))
 
 
 ## dbt 0.18.0rc1 (August 19, 2020)
@@ -50,6 +54,7 @@ Contributors:
 - Add Name, Description, Column, SQL, Tags filters to site search ([docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108))
 - Add relevance criteria to site search ([docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
 - Support new selector methods, intersection, and arbitrary parent/child depth in DAG selection syntax ([docs#118](https://github.com/fishtown-analytics/dbt-docs/pull/118))
+- Revise anonymous event tracking: simpler URL fuzzing; differentiate between Cloud-hosted and non-Cloud docs ([docs#121](https://github.com/fishtown-analytics/dbt-docs/pull/121))
 
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))
