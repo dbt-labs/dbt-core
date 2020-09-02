@@ -128,22 +128,6 @@ class DbtProjectYamlRenderer(BaseRenderer):
         selector_renderer = self.get_selector_renderer()
         return selector_renderer.render_data(selectors)
 
-    def post_render_data(self, value: Any, key: Keypath) -> Any:
-        if len(key) == 1 and key[0] in {'on-run-start', 'on-run-end'}:
-            return _list_if_none_or_string(value)
-
-        if len(key) > 1 and key[0] in {'models', 'seeds', 'snapshots'}:
-            if len(key) == 1:
-                return _dict_if_none(value)
-            elif len(key) == 2:
-                if key[1] == 'vars':
-                    return _dict_if_none(value)
-                elif key[1] in {'pre-hook', 'post-hook'}:
-                    return _list_if_none_or_string(value)
-        if key == ('seeds', 'column_types'):
-            return _dict_if_none(value)
-        return value
-
     def render_entry(self, value: Any, keypath: Keypath) -> Any:
         result = super().render_entry(value, keypath)
         return self._KEYPATH_HANDLERS.postprocess(result, keypath)
