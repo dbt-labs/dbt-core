@@ -469,9 +469,7 @@ class OperationRefResolver(RuntimeRefResolver):
     ) -> None:
         pass
 
-    def create_relation(
-        self, target_model: ManifestNode, name: str
-    ) -> RelationProxy:
+    def create_relation(self, target_model: ManifestNode, name: str) -> RelationProxy:
         if target_model.is_ephemeral_model:
             # In operations, we can't ref() ephemeral nodes, because
             # ParsedMacros do not support set_cte
