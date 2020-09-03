@@ -389,9 +389,7 @@ class Compiler:
         if flags.WRITE_JSON:
             linker.write_graph(graph_path, manifest)
 
-    def link_node(
-        self, linker: Linker, node: GraphMemberNode, manifest: Manifest
-    ):
+    def link_node(self, linker: Linker, node: GraphMemberNode, manifest: Manifest):
         linker.add_node(node.unique_id)
 
         for dependency in node.depends_on_nodes:
