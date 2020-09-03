@@ -359,3 +359,63 @@ class UnparsedDocumentation(JsonSchemaMixin, Replaceable):
 @dataclass
 class UnparsedDocumentationFile(UnparsedDocumentation):
     file_contents: str
+
+
+# can't use total_ordering decorator here, as str provides an ordering already
+# and it's not the one we want.
+class Maturity(StrEnum):
+    low = 'low'
+    medium = 'medium'
+    high = 'high'
+
+    def __lt__(self, other):
+        if not isinstance(other, Maturity):
+            return NotImplemented
+        order = (Maturity.low, Maturity.medium, Maturity.high)
+        return order.index(self) < order.index(other)
+
+    def __gt__(self, other):
+        if not isinstance(other, Maturity):
+            return NotImplemented
+        return self != other and not (self < other)
+
+    def __ge__(self, other):
+        if not isinstance(other, Maturity):
+            return NotImplemented
+        return self == other or not (self < other)
+
+    def __le__(self, other):
+        if not isinstance(other, Maturity):
+            return NotImplemented
+        return self == other or self < other
+
+
+class ExposureType(StrEnum):
+    Dashboard = 'dashboard'
+    Notebook = 'notebook'
+    Analysis = 'analysis'
+    ML = 'ml'
+    Application = 'application'
+
+
+class MaturityType(StrEnum):
+    Low = 'low'
+    Medium = 'medium'
+    High = 'high'
+
+
+@dataclass
+class ReportOwner(JsonSchemaMixin, Replaceable):
+    email: str
+    name: Optional[str] = None
+
+
+@dataclass
+class UnparsedReport(JsonSchemaMixin, Replaceable):
+    name: str
+    type: ExposureType
+    owner: ReportOwner
+    maturity: Optional[MaturityType] = None
+    url: Optional[str] = None
+    description: Optional[str] = None
+    depends_on: List[str] = field(default_factory=list)

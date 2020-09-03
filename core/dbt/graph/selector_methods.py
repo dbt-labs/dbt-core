@@ -10,12 +10,14 @@ from .graph import UniqueId
 from dbt.contracts.graph.compiled import (
     CompiledDataTestNode,
     CompiledSchemaTestNode,
-    NonSourceNode,
+    CompileResultNode,
+    ManifestNode,
 )
 from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.parsed import (
     HasTestMetadata,
     ParsedDataTestNode,
+    ParsedReport,
     ParsedSchemaTestNode,
     ParsedSourceDefinition,
 )
@@ -72,7 +74,7 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-SelectorTarget = Union[ParsedSourceDefinition, NonSourceNode]
+SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedReport]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -89,7 +91,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def parsed_nodes(
         self,
         included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, NonSourceNode]]:
+    ) -> Iterator[Tuple[UniqueId, ManifestNode]]:
 
         for key, node in self.manifest.nodes.items():
             unique_id = UniqueId(key)
@@ -108,12 +110,38 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, source
 
+    def report_nodes(
+        self,
+        included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, ParsedReport]]:
+
+        for key, report in self.manifest.reports.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, report
+
     def all_nodes(
         self,
         included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
         yield from chain(self.parsed_nodes(included_nodes),
+                         self.source_nodes(included_nodes),
+                         self.report_nodes(included_nodes))
+
+    def configurable_nodes(
+        self,
+        included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, CompileResultNode]]:
+        yield from chain(self.parsed_nodes(included_nodes),
                          self.source_nodes(included_nodes))
+
+    def non_source_nodes(
+        self,
+        included_nodes: Set[UniqueId],
+    ) -> Iterator[Tuple[UniqueId, Union[ParsedReport, ManifestNode]]]:
+        yield from chain(self.parsed_nodes(included_nodes),
+                         self.report_nodes(included_nodes))
 
     @abc.abstractmethod
     def search(
@@ -161,7 +189,7 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         :param str selector: The selector or node name
         """
         qualified_name = selector.split(".")
-        parsed_nodes = list(self.parsed_nodes(included_nodes))
+        parsed_nodes = list(self.non_source_nodes(included_nodes))
         package_names = {n.package_name for _, n in parsed_nodes}
         for node, real_node in parsed_nodes:
             if self.node_is_match(
@@ -284,7 +312,7 @@ class ConfigSelectorMethod(SelectorMethod):
         # search sources is kind of useless now source configs only have
         # 'enabled', which you can't really filter on anyway, but maybe we'll
         # add more someday, so search them anyway.
-        for node, real_node in self.all_nodes(included_nodes):
+        for node, real_node in self.configurable_nodes(included_nodes):
             try:
                 value = _getattr_descend(real_node.config, parts)
             except AttributeError:

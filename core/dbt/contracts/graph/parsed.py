@@ -22,7 +22,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition, UnparsedColumn, TestDef
+    UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
+    ReportOwner, ExposureType, MaturityType
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -634,6 +635,34 @@ class ParsedSourceDefinition(
         return f'{self.source_name}.{self.name}'
 
 
+@dataclass
+class ParsedReport(UnparsedBaseNode, HasUniqueID):
+    name: str
+    type: ExposureType
+    fqn: List[str]
+    owner: ReportOwner
+    resource_type: NodeType = NodeType.Report
+    maturity: Optional[MaturityType] = None
+    url: Optional[str] = None
+    description: Optional[str] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[List[str]] = field(default_factory=list)
+    sources: List[List[str]] = field(default_factory=list)
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    # no tags for now, but we could definitely add them
+    @property
+    def tags(self):
+        return []
+
+
 ParsedResource = Union[
-    ParsedMacro, ParsedNode, ParsedDocumentation, ParsedSourceDefinition
+    ParsedDocumentation,
+    ParsedMacro,
+    ParsedNode,
+    ParsedReport,
+    ParsedSourceDefinition,
 ]

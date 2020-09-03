@@ -14,11 +14,11 @@ from uuid import UUID
 from hologram import JsonSchemaMixin
 
 from dbt.contracts.graph.compiled import (
-    CompileResultNode, NonSourceNode, NonSourceCompiledNode
+    CompileResultNode, ManifestNode, NonSourceCompiledNode, GraphMemberNode
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
-    ParsedSourceDefinition
+    ParsedSourceDefinition, ParsedReport
 )
 from dbt.contracts.files import SourceFile
 from dbt.contracts.util import (
@@ -130,7 +130,7 @@ class SourceCache(PackageAwareCache[SourceKey, ParsedSourceDefinition]):
         return self._manifest.sources[unique_id]
 
 
-class RefableCache(PackageAwareCache[RefName, NonSourceNode]):
+class RefableCache(PackageAwareCache[RefName, ManifestNode]):
     # refables are actually unique, so the Dict[PackageName, UniqueID] will
     # only ever have exactly one value, but doing 3 dict lookups instead of 1
     # is not a big deal at all and retains consistency
@@ -138,7 +138,7 @@ class RefableCache(PackageAwareCache[RefName, NonSourceNode]):
         self._cached_types = set(NodeType.refable())
         super().__init__(manifest)
 
-    def add_node(self, node: NonSourceNode):
+    def add_node(self, node: ManifestNode):
         if node.resource_type in self._cached_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
@@ -150,7 +150,7 @@ class RefableCache(PackageAwareCache[RefName, NonSourceNode]):
 
     def perform_lookup(
         self, unique_id: UniqueID
-    ) -> NonSourceNode:
+    ) -> ManifestNode:
         if unique_id not in self._manifest.nodes:
             raise dbt.exceptions.InternalException(
                 f'Node {unique_id} found in cache but not found in manifest'
@@ -217,7 +217,7 @@ def _sort_values(dct):
     return {k: sorted(v) for k, v in dct.items()}
 
 
-def build_edges(nodes: List[NonSourceNode]):
+def build_edges(nodes: List[ManifestNode]):
     """Build the forward and backward edges on the given list of ParsedNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
@@ -393,12 +393,12 @@ MaybeParsedSource = Optional[Union[
 
 
 MaybeNonSource = Optional[Union[
-    NonSourceNode,
-    Disabled[NonSourceNode]
+    ManifestNode,
+    Disabled[ManifestNode]
 ]]
 
 
-T = TypeVar('T', bound=CompileResultNode)
+T = TypeVar('T', bound=GraphMemberNode)
 
 
 def _update_into(dest: MutableMapping[str, T], new_item: T):
@@ -425,10 +425,11 @@ def _update_into(dest: MutableMapping[str, T], new_item: T):
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
-    nodes: MutableMapping[str, NonSourceNode]
+    nodes: MutableMapping[str, ManifestNode]
     sources: MutableMapping[str, ParsedSourceDefinition]
     macros: MutableMapping[str, ParsedMacro]
     docs: MutableMapping[str, ParsedDocumentation]
+    reports: MutableMapping[str, ParsedReport]
     generated_at: datetime
     disabled: List[CompileResultNode]
     files: MutableMapping[str, SourceFile]
@@ -454,6 +455,7 @@ class Manifest:
             sources={},
             macros=macros,
             docs={},
+            reports={},
             generated_at=datetime.utcnow(),
             disabled=[],
             files=files,
@@ -479,7 +481,10 @@ class Manifest:
             _update_into(self.nodes, new_node)
             return new_node
 
-    def update_node(self, new_node: NonSourceNode):
+    def update_report(self, new_report: ParsedReport):
+        _update_into(self.reports, new_report)
+
+    def update_node(self, new_node: ManifestNode):
         _update_into(self.nodes, new_node)
 
     def update_source(self, new_source: ParsedSourceDefinition):
@@ -502,7 +507,7 @@ class Manifest:
 
     def find_disabled_by_name(
         self, name: str, package: Optional[str] = None
-    ) -> Optional[NonSourceNode]:
+    ) -> Optional[ManifestNode]:
         searcher: NameSearcher = NameSearcher(
             name, package, NodeType.refable()
         )
@@ -632,7 +637,7 @@ class Manifest:
             resource_fqns[resource_type_plural].add(tuple(resource.fqn))
         return resource_fqns
 
-    def add_nodes(self, new_nodes: Mapping[str, NonSourceNode]):
+    def add_nodes(self, new_nodes: Mapping[str, ManifestNode]):
         """Add the given dict of new nodes to the manifest."""
         for unique_id, node in new_nodes.items():
             if unique_id in self.nodes:
@@ -720,6 +725,7 @@ class Manifest:
             sources={k: _deepcopy(v) for k, v in self.sources.items()},
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
+            reports={k: _deepcopy(v) for k, v in self.reports.items()},
             generated_at=self.generated_at,
             disabled=[_deepcopy(n) for n in self.disabled],
             metadata=self.metadata,
@@ -727,7 +733,11 @@ class Manifest:
         )
 
     def writable_manifest(self):
-        edge_members = list(chain(self.nodes.values(), self.sources.values()))
+        edge_members = list(chain(
+            self.nodes.values(),
+            self.sources.values(),
+            self.reports.values(),
+        ))
         forward_edges, backward_edges = build_edges(edge_members)
 
         return WritableManifest(
@@ -735,6 +745,7 @@ class Manifest:
             sources=self.sources,
             macros=self.macros,
             docs=self.docs,
+            reports=self.reports,
             generated_at=self.generated_at,
             metadata=self.metadata,
             disabled=self.disabled,
@@ -750,11 +761,13 @@ class Manifest:
     def write(self, path):
         self.writable_manifest().write(path)
 
-    def expect(self, unique_id: str) -> CompileResultNode:
+    def expect(self, unique_id: str) -> GraphMemberNode:
         if unique_id in self.nodes:
             return self.nodes[unique_id]
         elif unique_id in self.sources:
             return self.sources[unique_id]
+        elif unique_id in self.reports:
+            return self.reports[unique_id]
         else:
             # something terrible has happened
             raise dbt.exceptions.InternalException(
@@ -793,8 +806,8 @@ class Manifest:
         node_package: str,
     ) -> MaybeNonSource:
 
-        node: Optional[NonSourceNode] = None
-        disabled: Optional[NonSourceNode] = None
+        node: Optional[ManifestNode] = None
+        disabled: Optional[ManifestNode] = None
 
         candidates = _search_packages(
             current_project, node_package, target_model_package
@@ -897,6 +910,7 @@ class Manifest:
             self.sources,
             self.macros,
             self.docs,
+            self.reports,
             self.generated_at,
             self.disabled,
             self.files,
@@ -911,7 +925,7 @@ class Manifest:
 
 @dataclass
 class WritableManifest(JsonSchemaMixin, Writable, Readable):
-    nodes: Mapping[UniqueID, NonSourceNode] = field(
+    nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=(
             'The nodes defined in the dbt project and its dependencies'
         ))
@@ -929,6 +943,11 @@ class WritableManifest(JsonSchemaMixin, Writable, Readable):
     docs: Mapping[UniqueID, ParsedDocumentation] = field(
         metadata=dict(description=(
             'The docs defined in the dbt project and its dependencies'
+        ))
+    )
+    reports: Mapping[UniqueID, ParsedReport] = field(
+        metadata=dict(description=(
+            'The reports defined in the dbt project and its dependencies'
         ))
     )
     disabled: Optional[List[CompileResultNode]] = field(metadata=dict(

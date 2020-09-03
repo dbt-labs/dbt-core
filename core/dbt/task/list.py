@@ -20,6 +20,7 @@ class ListTask(GraphRunnableTask):
         NodeType.Seed,
         NodeType.Test,
         NodeType.Source,
+        NodeType.Report,
     ))
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((
         NodeType.Analysis,
@@ -71,6 +72,8 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.nodes[node]
             elif node in self.manifest.sources:
                 yield self.manifest.sources[node]
+            elif node in self.manifest.reports:
+                yield self.manifest.reports[node]
             else:
                 raise RuntimeException(
                     f'Got an unexpected result from node selection: "{node}"'
