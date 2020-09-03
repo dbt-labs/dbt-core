@@ -445,9 +445,7 @@ class RuntimeRefResolver(BaseRefResolver):
         self.validate(target_model, target_name, target_package)
         return self.create_relation(target_model, target_name)
 
-    def create_relation(
-        self, target_model: ManifestNode, name: str
-    ) -> RelationProxy:
+    def create_relation(self, target_model: ManifestNode, name: str) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
             return self.Relation.create_ephemeral_from_node(self.config, target_model)
@@ -455,10 +453,7 @@ class RuntimeRefResolver(BaseRefResolver):
             return self.Relation.create_from(self.config, target_model)
 
     def validate(
-        self,
-        resolved: ManifestNode,
-        target_name: str,
-        target_package: Optional[str]
+        self, resolved: ManifestNode, target_name: str, target_package: Optional[str]
     ) -> None:
         if resolved.unique_id not in self.model.depends_on.nodes:
             args = self._repack_args(target_name, target_package)

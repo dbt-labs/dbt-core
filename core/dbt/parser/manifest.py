@@ -1111,9 +1111,7 @@ def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: P
         manifest.update_metric(metric)
 
 
-def _process_refs_for_node(
-    manifest: Manifest, current_project: str, node: ManifestNode
-):
+def _process_refs_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
     """Given a manifest and a node in that manifest, process its refs"""
     for ref in node.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
@@ -1202,9 +1200,7 @@ def _process_sources_for_metric(manifest: Manifest, current_project: str, metric
         manifest.update_metric(metric)
 
 
-def _process_sources_for_node(
-    manifest: Manifest, current_project: str, node: ManifestNode
-):
+def _process_sources_for_node(manifest: Manifest, current_project: str, node: ManifestNode):
     target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
     for source_name, table_name in node.sources:
         target_source = manifest.resolve_source(
@@ -1243,9 +1239,7 @@ def process_macro(config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro)
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
 # created in the manifest, in 'add_refs'
-def process_node(
-    config: RuntimeConfig, manifest: Manifest, node: ManifestNode
-):
+def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
 
     _process_sources_for_node(manifest, config.project_name, node)
     _process_refs_for_node(manifest, config.project_name, node)
