@@ -1,4 +1,4 @@
-## dbt 0.18.0 (Release TBD)
+## dbt 0.18.0 (September 03, 2020)
 
 ## dbt 0.18.0rc2 (September 03, 2020)
 
