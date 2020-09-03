@@ -445,10 +445,7 @@ MaybeParsedSource = Optional[
 ]
 
 
-MaybeNonSource = Optional[Union[
-    ManifestNode,
-    Disabled[ManifestNode]
-]]
+MaybeNonSource = Optional[Union[ManifestNode, Disabled[ManifestNode]]]
 
 
 T = TypeVar("T", bound=GraphMemberNode)
