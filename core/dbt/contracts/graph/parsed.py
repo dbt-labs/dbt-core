@@ -23,7 +23,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
+    Docs,
     UnparsedBaseNode,
     FreshnessThreshold,
     ExternalTable,

@@ -108,8 +108,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             yield unique_id, source
 
     def exposure_nodes(
-        self,
-        included_nodes: Set[UniqueId]
+        self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, ParsedExposure]]:
 
         for key, exposure in self.manifest.exposures.items():
@@ -132,16 +131,15 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         self,
         included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
-        yield from chain(self.parsed_nodes(included_nodes),
-                         self.source_nodes(included_nodes),
+        yield from chain(
+            self.parsed_nodes(included_nodes),
             self.source_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),
         )
 
     def configurable_nodes(
-        self,
-        included_nodes: Set[UniqueId]
+        self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, CompileResultNode]]:
         yield from chain(self.parsed_nodes(included_nodes),
                          self.source_nodes(included_nodes))
@@ -150,7 +148,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         self,
         included_nodes: Set[UniqueId],
     ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode, ParsedMetric]]]:
-        yield from chain(self.parsed_nodes(included_nodes),
+        yield from chain(
             self.parsed_nodes(included_nodes),
             self.exposure_nodes(included_nodes),
             self.metric_nodes(included_nodes),

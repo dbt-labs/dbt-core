@@ -1283,18 +1283,17 @@ class ExposureRefResolver(BaseResolver):
         if len(args) not in (1, 2):
             ref_invalid_args(self.model, args)
         self.model.refs.append(list(args))
-        return ''
+        return ""
 
 
 class ExposureSourceResolver(BaseResolver):
     def __call__(self, *args) -> str:
         if len(args) != 2:
             raise_compiler_error(
-                f"source() takes exactly two arguments ({len(args)} given)",
-                self.model
+                f"source() takes exactly two arguments ({len(args)} given)", self.model
             )
         self.model.sources.append(list(args))
-        return ''
+        return ""
 
 
 def generate_parse_exposure(
@@ -1316,7 +1315,7 @@ def generate_parse_exposure(
             exposure,
             project,
             manifest,
-        )
+        ),
     }
 
 

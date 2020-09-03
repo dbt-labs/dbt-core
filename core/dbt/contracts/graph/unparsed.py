@@ -387,9 +387,9 @@ class UnparsedDocumentationFile(UnparsedDocumentation):
 # can't use total_ordering decorator here, as str provides an ordering already
 # and it's not the one we want.
 class Maturity(StrEnum):
-    low = 'low'
-    medium = 'medium'
-    high = 'high'
+    low = "low"
+    medium = "medium"
+    high = "high"
 
     def __lt__(self, other):
         if not isinstance(other, Maturity):
@@ -414,17 +414,17 @@ class Maturity(StrEnum):
 
 
 class ExposureType(StrEnum):
-    Dashboard = 'dashboard'
-    Notebook = 'notebook'
-    Analysis = 'analysis'
-    ML = 'ml'
-    Application = 'application'
+    Dashboard = "dashboard"
+    Notebook = "notebook"
+    Analysis = "analysis"
+    ML = "ml"
+    Application = "application"
 
 
 class MaturityType(StrEnum):
-    Low = 'low'
-    Medium = 'medium'
-    High = 'high'
+    Low = "low"
+    Medium = "medium"
+    High = "high"
 
 
 @dataclass

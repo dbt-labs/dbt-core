@@ -1044,7 +1044,7 @@ def _process_refs_for_exposure(
             target_model_package, target_model_name = ref
         else:
             raise dbt.exceptions.InternalException(
-                f'Refs should always be 1 or 2 arguments - got {len(ref)}'
+                f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
         target_model = manifest.resolve_ref(
@@ -1059,7 +1059,9 @@ def _process_refs_for_exposure(
             # this exposure to the graph b/c there is no destination exposure
             invalid_ref_fail_unless_test(
                 exposure, target_model_name, target_model_package,
-                disabled=(isinstance(target_model, Disabled))
+                target_model_name,
+                target_model_package,
+                disabled=(isinstance(target_model, Disabled)),
             )
 
             continue

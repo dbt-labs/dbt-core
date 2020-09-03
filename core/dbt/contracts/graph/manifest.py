@@ -11,7 +11,10 @@ from typing_extensions import Protocol
 from uuid import UUID
 
 from dbt.contracts.graph.compiled import (
-    CompileResultNode, ManifestNode, NonSourceCompiledNode, GraphMemberNode
+    CompileResultNode,
+    ManifestNode,
+    NonSourceCompiledNode,
+    GraphMemberNode,
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro,
@@ -443,7 +446,7 @@ MaybeNonSource = Optional[Union[
 ]]
 
 
-T = TypeVar('T', bound=GraphMemberNode)
+T = TypeVar("T", bound=GraphMemberNode)
 
 
 def _update_into(dest: MutableMapping[str, T], new_item: T):
@@ -762,12 +765,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
 
     def build_parent_and_child_maps(self):
-        edge_members = list(chain(
-            self.nodes.values(),
-            self.sources.values(),
+        edge_members = list(
+            chain(
+                self.nodes.values(),
             self.exposures.values(),
                 self.exposures.values(),
-        ))
+                self.metrics.values(),
+            )
+        )
         forward_edges, backward_edges = build_node_edges(edge_members)
         self.child_map = forward_edges
         self.parent_map = backward_edges
@@ -1129,9 +1134,9 @@ class WritableManifest(ArtifactMixin):
         ))
     )
     exposures: Mapping[UniqueID, ParsedExposure] = field(
-        metadata=dict(description=(
+        metadata=dict(
             'The exposures defined in the dbt project and its dependencies'
-        ))
+        )
     )
     metrics: Mapping[UniqueID, ParsedMetric] = field(
         metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
