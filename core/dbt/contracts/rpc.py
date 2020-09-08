@@ -45,6 +45,17 @@ class RPCCompileParameters(RPCParameters):
     models: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
     selector: Optional[str] = None
+    state: Optional[str] = None
+
+
+@dataclass
+class RPCRunParameters(RPCParameters):
+    threads: Optional[int] = None
+    models: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
+    state: Optional[str] = None
+    defer: Optional[bool] = None
 
 
 @dataclass
@@ -53,12 +64,14 @@ class RPCSnapshotParameters(RPCParameters):
     select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
     selector: Optional[str] = None
+    state: Optional[str] = None
 
 
 @dataclass
 class RPCTestParameters(RPCCompileParameters):
     data: bool = False
     schema: bool = False
+    state: Optional[str] = None
 
 
 @dataclass
@@ -68,11 +81,13 @@ class RPCSeedParameters(RPCParameters):
     exclude: Union[None, str, List[str]] = None
     selector: Optional[str] = None
     show: bool = False
+    state: Optional[str] = None
 
 
 @dataclass
 class RPCDocsGenerateParameters(RPCParameters):
     compile: bool = True
+    state: Optional[str] = None
 
 
 @dataclass

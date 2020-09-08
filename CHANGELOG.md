@@ -2,9 +2,9 @@
 
 ### Features
 - dbt will compare configurations using the un-rendered form of the config block in dbt_project.yml ([#2713](https://github.com/fishtown-analytics/dbt/issues/2713), [#2735](https://github.com/fishtown-analytics/dbt/pull/2735))
+- Added state and defer arguments to the RPC client, matching the CLI ([#2678](https://github.com/fishtown-analytics/dbt/issues/2678), [#2736](https://github.com/fishtown-analytics/dbt/pull/2736))
 
-## dbt 0.18.0 (Release TBD)
-
+## dbt 0.18.0 (September 03, 2020)
 
 ### Under the hood
 - Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
@@ -15,8 +15,12 @@
 ### Fixes
 - dbt now validates the require-dbt-version field before it validates the dbt_project.yml schema ([#2638](https://github.com/fishtown-analytics/dbt/issues/2638), [#2726](https://github.com/fishtown-analytics/dbt/pull/2726))
 
+### Docs
+- Add project level overviews ([docs#127](https://github.com/fishtown-analytics/dbt-docs/issues/127))
+
 Contributors:
 - [@genos](https://github.com/genos) ([#2722](https://github.com/fishtown-analytics/dbt/pull/2722))
+- [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([docs#129](https://github.com/fishtown-analytics/dbt-docs/pull/129))
 
 
 ## dbt 0.18.0rc1 (August 19, 2020)
@@ -55,6 +59,7 @@ Contributors:
 - Add Name, Description, Column, SQL, Tags filters to site search ([docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108))
 - Add relevance criteria to site search ([docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
 - Support new selector methods, intersection, and arbitrary parent/child depth in DAG selection syntax ([docs#118](https://github.com/fishtown-analytics/dbt-docs/pull/118))
+- Revise anonymous event tracking: simpler URL fuzzing; differentiate between Cloud-hosted and non-Cloud docs ([docs#121](https://github.com/fishtown-analytics/dbt-docs/pull/121))
 
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))
