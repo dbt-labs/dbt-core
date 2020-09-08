@@ -32,7 +32,6 @@ from dbt.exceptions import (
     warn_or_error,
     raise_compiler_error
 )
-from dbt.legacy_config_updater import ConfigUpdater
 
 from hologram import ValidationError
 
@@ -112,6 +111,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             sources=project.sources,
             vars=project.vars,
             config_version=project.config_version,
+            unrendered=project.unrendered,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             config=profile.config,
@@ -212,7 +212,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # get a new renderer using our target information and render the
         # project
         ctx = generate_target_context(profile, cli_vars)
-        project_renderer = DbtProjectYamlRenderer(ctx, partial.config_version)
+        project_renderer = DbtProjectYamlRenderer(ctx)
         project = partial.render(project_renderer)
         return (project, profile)
 
@@ -254,27 +254,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 paths.add(path)
         return frozenset(paths)
 
-    def _get_v1_config_paths(
-        self,
-        config: Dict[str, Any],
-        path: FQNPath,
-        paths: MutableSet[FQNPath],
-    ) -> PathSet:
-        keys = ConfigUpdater(self.credentials.type).ConfigKeys
-
-        for key, value in config.items():
-            if isinstance(value, dict):
-                if key in keys:
-                    if path not in paths:
-                        paths.add(path)
-                else:
-                    self._get_v1_config_paths(value, path + (key,), paths)
-            else:
-                if path not in paths:
-                    paths.add(path)
-
-        return frozenset(paths)
-
     def _get_config_paths(
         self,
         config: Dict[str, Any],
@@ -284,10 +263,12 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         if paths is None:
             paths = set()
 
-        if self.config_version == 2:
-            return self._get_v2_config_paths(config, path, paths)
-        else:
-            return self._get_v1_config_paths(config, path, paths)
+        for key, value in config.items():
+            if isinstance(value, dict) and not key.startswith('+'):
+                self._get_v2_config_paths(value, path + (key,), paths)
+            else:
+                paths.add(path)
+        return frozenset(paths)
 
     def get_resource_config_paths(self) -> Dict[str, PathSet]:
         """Return a dictionary with 'seeds' and 'models' keys whose values are
@@ -385,17 +366,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             for path in root.iterdir():
                 if path.is_dir() and not path.name.startswith('__'):
                     yield path
-
-    def as_v1(self, all_projects: Iterable[str]):
-        if self.config_version == 1:
-            return self
-
-        return self.from_parts(
-            project=Project.as_v1(self, all_projects),
-            profile=self,
-            args=self.args,
-            dependencies=self.dependencies,
-        )
 
 
 class UnsetCredentials(Credentials):
@@ -518,6 +488,7 @@ class UnsetProfileConfig(RuntimeConfig):
             sources=project.sources,
             vars=project.vars,
             config_version=project.config_version,
+            unrendered=project.unrendered,
             profile_name='',
             target_name='',
             config=UnsetConfig(),

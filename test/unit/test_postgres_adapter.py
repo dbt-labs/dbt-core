@@ -28,6 +28,7 @@ class TestPostgresAdapter(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': '/tmp/dbt/does-not-exist',
+            'config-version': 2,
         }
         profile_cfg = {
             'outputs': {
@@ -266,6 +267,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
                 'identifier': False,
                 'schema': True,
             },
+            'config-version': 2,
         }
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
@@ -397,6 +399,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
                 'identifier': False,
                 'schema': True,
             },
+            'config-version': 2,
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
         self.adapter.cleanup_connections()

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Iterable, Iterator, Union, List, Tuple
 
-from dbt.context.context_config import ContextConfigType
+from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
 from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.exceptions import InternalException
@@ -89,7 +89,7 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         self,
         block: HookBlock,
         path: str,
-        config: ContextConfigType,
+        config: ContextConfig,
         fqn: List[str],
         name=None,
         **kwargs,

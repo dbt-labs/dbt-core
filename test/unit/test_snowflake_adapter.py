@@ -45,6 +45,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 'schema': True,
             },
             'query-comment': 'dbt',
+            'config-version': 2,
         }
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
         self.assertEqual(self.config.query_comment.comment, 'dbt')

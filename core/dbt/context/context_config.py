@@ -1,11 +1,11 @@
+from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar, Union
+from typing import List, Iterator, Dict, Any, TypeVar, Generic
 
-from dbt.config import RuntimeConfig, Project
+from dbt.config import RuntimeConfig, Project, IsFQNResource
 from dbt.contracts.graph.model_config import BaseConfig, get_config_for
 from dbt.exceptions import InternalException
-from dbt.legacy_config_updater import ConfigUpdater, IsFQNResource
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
 
@@ -17,82 +17,61 @@ class ModelParts(IsFQNResource):
     package_name: str
 
 
-class LegacyContextConfig:
-    def __init__(
-        self,
-        active_project: RuntimeConfig,
-        own_project: Project,
-        fqn: List[str],
-        node_type: NodeType,
-    ):
-        self._config = None
-        self._active_project: RuntimeConfig = active_project
-        self._own_project: Project = own_project
+T = TypeVar('T')  # any old type
+C = TypeVar('C', bound=BaseConfig)
 
-        self._model = ModelParts(
-            fqn=fqn,
-            resource_type=node_type,
-            package_name=self._own_project.project_name,
-        )
 
-        self._updater = ConfigUpdater(active_project.credentials.type)
+class ConfigSource:
+    def __init__(self, project):
+        self.project = project
 
-        # the config options defined within the model
-        self.in_model_config: Dict[str, Any] = {}
+    def get_config_dict(self, resource_type: NodeType):
+        ...
 
-    def get_default(self) -> Dict[str, Any]:
-        defaults = {"enabled": True, "materialized": "view"}
 
-        if self._model.resource_type == NodeType.Seed:
-            defaults['materialized'] = 'seed'
-        elif self._model.resource_type == NodeType.Snapshot:
-            defaults['materialized'] = 'snapshot'
+class UnrenderedConfig(ConfigSource):
+    def __init__(self, project: Project):
+        self.project = project
 
-        if self._model.resource_type == NodeType.Test:
-            defaults['severity'] = 'ERROR'
-
-        return defaults
-
-    def build_config_dict(self, base: bool = False) -> Dict[str, Any]:
-        defaults = self.get_default()
-        active_config = self.load_config_from_active_project()
-
-        if self._active_project.project_name == self._own_project.project_name:
-            cfg = self._updater.merge(
-                defaults, active_config, self.in_model_config
-            )
+    def get_config_dict(self, resource_type: NodeType) -> Dict[str, Any]:
+        unrendered = self.project.unrendered.project_dict
+        if resource_type == NodeType.Seed:
+            model_configs = unrendered.get('seeds')
+        elif resource_type == NodeType.Snapshot:
+            model_configs = unrendered.get('snapshots')
+        elif resource_type == NodeType.Source:
+            model_configs = unrendered.get('sources')
         else:
-            own_config = self.load_config_from_own_project()
+            model_configs = unrendered.get('models')
 
-            cfg = self._updater.merge(
-                defaults, own_config, self.in_model_config, active_config
-            )
-
-        return cfg
-
-    def _translate_adapter_aliases(self, config: Dict[str, Any]):
-        return self._active_project.credentials.translate_aliases(config)
-
-    def update_in_model_config(self, config: Dict[str, Any]) -> None:
-        config = self._translate_adapter_aliases(config)
-        self._updater.update_into(self.in_model_config, config)
-
-    def load_config_from_own_project(self) -> Dict[str, Any]:
-        return self._updater.get_project_config(self._model, self._own_project)
-
-    def load_config_from_active_project(self) -> Dict[str, Any]:
-        return self._updater.get_project_config(
-            self._model,
-            self._active_project,
-        )
+        if model_configs is None:
+            return {}
+        else:
+            return model_configs
 
 
-T = TypeVar('T', bound=BaseConfig)
+class RenderedConfig(ConfigSource):
+    def __init__(self, project: Project):
+        self.project = project
+
+    def get_config_dict(self, resource_type: NodeType) -> Dict[str, Any]:
+        if resource_type == NodeType.Seed:
+            model_configs = self.project.seeds
+        elif resource_type == NodeType.Snapshot:
+            model_configs = self.project.snapshots
+        elif resource_type == NodeType.Source:
+            model_configs = self.project.sources
+        else:
+            model_configs = self.project.models
+        return model_configs
 
 
-class ContextConfigGenerator:
+class BaseContextConfigGenerator(Generic[T]):
     def __init__(self, active_project: RuntimeConfig):
         self._active_project = active_project
+
+    def get_config_source(self, project: Project) -> ConfigSource:
+        return RenderedConfig(project)
 
     def get_node_project(self, project_name: str):
         if project_name == self._active_project.project_name:
@@ -108,14 +87,8 @@ class ContextConfigGenerator:
     def _project_configs(
         self, project: Project, fqn: List[str], resource_type: NodeType
     ) -> Iterator[Dict[str, Any]]:
-        if resource_type == NodeType.Seed:
-            model_configs = project.seeds
-        elif resource_type == NodeType.Snapshot:
-            model_configs = project.snapshots
-        elif resource_type == NodeType.Source:
-            model_configs = project.sources
-        else:
-            model_configs = project.models
+        src = self.get_config_source(project)
+        model_configs = src.get_config_dict(resource_type)
         for level_config in fqn_search(model_configs, fqn):
             result = {}
             for key, value in level_config.items():
@@ -131,17 +104,15 @@ class ContextConfigGenerator:
     ) -> Iterator[Dict[str, Any]]:
         return self._project_configs(self._active_project, fqn, resource_type)
 
+    @abstractmethod
     def _update_from_config(
         self, result: T, partial: Dict[str, Any], validate: bool = False
     ) -> T:
-        translated = self._active_project.credentials.translate_aliases(
-            partial
-        )
-        return result.update_from(
-            translated,
-            self._active_project.credentials.type,
-            validate=validate
-        )
+        ...
+
+    @abstractmethod
+    def initial_result(self, resource_type: NodeType, base: bool) -> T:
+        ...
 
     def calculate_node_config(
         self,
@@ -152,12 +123,8 @@ class ContextConfigGenerator:
         base: bool,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
-        # defaults, own_config, config calls, active_config (if != own_config)
-        config_cls = get_config_for(resource_type, base=base)
-        # Calculate the defaults. We don't want to validate the defaults,
-        # because it might be invalid in the case of required config members
-        # (such as on snapshots!)
-        result = config_cls.from_dict({}, validate=False)
+
+        result = self.initial_result(resource_type=resource_type, base=base)
 
         project_configs = self._project_configs(own_config, fqn, resource_type)
         for fqn_config in project_configs:
@@ -171,7 +138,105 @@ class ContextConfigGenerator:
                 result = self._update_from_config(result, fqn_config)
 
         # this is mostly impactful in the snapshot config case
-        return result.finalize_and_validate()
+        return result
+
+    @abstractmethod
+    def calculate_node_config_dict(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> Dict[str, Any]:
+        ...
+
+
+class ContextConfigGenerator(BaseContextConfigGenerator[C]):
+    def __init__(self, active_project: RuntimeConfig):
+        self._active_project = active_project
+
+    def get_config_source(self, project: Project) -> ConfigSource:
+        return RenderedConfig(project)
+
+    def initial_result(self, resource_type: NodeType, base: bool) -> C:
+        # defaults, own_config, config calls, active_config (if != own_config)
+        config_cls = get_config_for(resource_type, base=base)
+        # Calculate the defaults. We don't want to validate the defaults,
+        # because it might be invalid in the case of required config members
+        # (such as on snapshots!)
+        result = config_cls.from_dict({}, validate=False)
+        return result
+
+    def _update_from_config(
+        self, result: C, partial: Dict[str, Any], validate: bool = False
+    ) -> C:
+        translated = self._active_project.credentials.translate_aliases(
+            partial
+        )
+        return result.update_from(
+            translated,
+            self._active_project.credentials.type,
+            validate=validate
+        )
+
+    def calculate_node_config_dict(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> Dict[str, Any]:
+        config = self.calculate_node_config(
+            config_calls=config_calls,
+            fqn=fqn,
+            resource_type=resource_type,
+            project_name=project_name,
+            base=base,
+        )
+        finalized = config.finalize_and_validate()
+        return finalized.to_dict()
+
+
+class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
+    def get_config_source(self, project: Project) -> ConfigSource:
+        return UnrenderedConfig(project)
+
+    def calculate_node_config_dict(
+        self,
+        config_calls: List[Dict[str, Any]],
+        fqn: List[str],
+        resource_type: NodeType,
+        project_name: str,
+        base: bool,
+    ) -> Dict[str, Any]:
+        return self.calculate_node_config(
+            config_calls=config_calls,
+            fqn=fqn,
+            resource_type=resource_type,
+            project_name=project_name,
+            base=base,
+        )
+
+    def initial_result(
+        self,
+        resource_type: NodeType,
+        base: bool
+    ) -> Dict[str, Any]:
+        return {}
+
+    def _update_from_config(
+        self,
+        result: Dict[str, Any],
+        partial: Dict[str, Any],
+        validate: bool = False,
+    ) -> Dict[str, Any]:
+        translated = self._active_project.credentials.translate_aliases(
+            partial
+        )
+        result.update(translated)
+        return result
 
 
 class ContextConfig:
@@ -183,7 +248,7 @@ class ContextConfig:
         project_name: str,
     ) -> None:
         self._config_calls: List[Dict[str, Any]] = []
-        self._cfg_source = ContextConfigGenerator(active_project)
+        self._active_project = active_project
         self._fqn = fqn
         self._resource_type = resource_type
         self._project_name = project_name
@@ -191,14 +256,21 @@ class ContextConfig:
     def update_in_model_config(self, opts: Dict[str, Any]) -> None:
         self._config_calls.append(opts)
 
-    def build_config_dict(self, base: bool = False) -> Dict[str, Any]:
-        return self._cfg_source.calculate_node_config(
+    def build_config_dict(
+        self,
+        base: bool = False,
+        *,
+        rendered: bool = True,
+    ) -> Dict[str, Any]:
+        if rendered:
+            src = ContextConfigGenerator(self._active_project)
+        else:
+            src = UnrenderedConfigGenerator(self._active_project)
+
+        return src.calculate_node_config_dict(
             config_calls=self._config_calls,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,
             base=base,
-        ).to_dict()
-
-
-ContextConfigType = Union[LegacyContextConfig, ContextConfig]
+        )

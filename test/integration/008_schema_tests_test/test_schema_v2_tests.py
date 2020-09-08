@@ -218,8 +218,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         return {
             'packages': [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-utils',
-                    'revision': '0.13-support',
+                    "local": "./local_dependency",
                 },
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
@@ -251,7 +250,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_schema_tests(self):
         self.run_dbt(["deps"])
-        results = self.run_dbt(strict=False)  # dbt-utils 0.13-support is config version 1
+        results = self.run_dbt()
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()

@@ -127,7 +127,7 @@ def resolve_packages(
     final = PackageListing()
 
     ctx = generate_target_context(config, config.cli_vars)
-    renderer = DbtProjectYamlRenderer(ctx, config.config_version)
+    renderer = DbtProjectYamlRenderer(ctx)
 
     while pending:
         next_pending = PackageListing()

@@ -141,6 +141,7 @@ class GraphTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': os.path.abspath('.'),
+            'config-version': 2,
         }
         cfg.update(extra_cfg)
 

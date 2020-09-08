@@ -36,6 +36,7 @@ from dbt.graph.selector_methods import (
 )
 import dbt.exceptions
 import dbt.contracts.graph.parsed
+from .utils import replace_config
 
 
 def make_model(pkg, name, sql, refs=None, sources=None, tags=None, path=None, alias=None, config_kwargs=None, fqn_extras=None):
@@ -683,7 +684,7 @@ def test_select_state_changed_seed_fqn(manifest, previous_state, seed):
 
 
 def test_select_state_changed_seed_relation_documented(manifest, previous_state, seed):
-    seed_doc_relation = seed.replace(config=seed.config.replace(persist_docs={'relation': True}))
+    seed_doc_relation = replace_config(seed, persist_docs={'relation': True})
     change_node(manifest, seed_doc_relation)
     method = statemethod(manifest, previous_state)
     assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
@@ -691,7 +692,7 @@ def test_select_state_changed_seed_relation_documented(manifest, previous_state,
 
 
 def test_select_state_changed_seed_relation_documented_nodocs(manifest, previous_state, seed):
-    seed_doc_relation = seed.replace(config=seed.config.replace(persist_docs={'relation': True}))
+    seed_doc_relation = replace_config(seed, persist_docs={'relation': True})
     seed_doc_relation_documented = seed_doc_relation.replace(description='a description')
     change_node(previous_state.manifest, seed_doc_relation)
     change_node(manifest, seed_doc_relation_documented)
@@ -701,7 +702,7 @@ def test_select_state_changed_seed_relation_documented_nodocs(manifest, previous
 
 
 def test_select_state_changed_seed_relation_documented_withdocs(manifest, previous_state, seed):
-    seed_doc_relation = seed.replace(config=seed.config.replace(persist_docs={'relation': True}))
+    seed_doc_relation = replace_config(seed, persist_docs={'relation': True})
     seed_doc_relation_documented = seed_doc_relation.replace(description='a description')
     change_node(previous_state.manifest, seed_doc_relation_documented)
     change_node(manifest, seed_doc_relation)
@@ -712,7 +713,7 @@ def test_select_state_changed_seed_relation_documented_withdocs(manifest, previo
 
 def test_select_state_changed_seed_columns_documented(manifest, previous_state, seed):
     # changing persist_docs, even without changing the description -> changed
-    seed_doc_columns = seed.replace(config=seed.config.replace(persist_docs={'columns': True}))
+    seed_doc_columns = replace_config(seed, persist_docs={'columns': True})
     change_node(manifest, seed_doc_columns)
     method = statemethod(manifest, previous_state)
     assert search_manifest_using_method(manifest, method, 'modified') == {'seed'}
@@ -720,7 +721,7 @@ def test_select_state_changed_seed_columns_documented(manifest, previous_state, 
 
 
 def test_select_state_changed_seed_columns_documented_nodocs(manifest, previous_state, seed):
-    seed_doc_columns = seed.replace(config=seed.config.replace(persist_docs={'columns': True}))
+    seed_doc_columns = replace_config(seed, persist_docs={'columns': True})
     seed_doc_columns_documented_columns = seed_doc_columns.replace(
         columns={'a': ColumnInfo(name='a', description='a description')},
     )
@@ -734,7 +735,7 @@ def test_select_state_changed_seed_columns_documented_nodocs(manifest, previous_
 
 
 def test_select_state_changed_seed_columns_documented_withdocs(manifest, previous_state, seed):
-    seed_doc_columns = seed.replace(config=seed.config.replace(persist_docs={'columns': True}))
+    seed_doc_columns = replace_config(seed, persist_docs={'columns': True})
     seed_doc_columns_documented_columns = seed_doc_columns.replace(
         columns={'a': ColumnInfo(name='a', description='a description')},
     )

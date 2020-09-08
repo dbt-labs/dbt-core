@@ -17,4 +17,4 @@ models:
           - rejected_values: { values: ['orange', 'purple'] }
     # passes
     tests:
-      - dbt_utils.equality: { compare_model: ref('table_copy') }
+      - local_dep.equality: { compare_model: ref('table_copy') }

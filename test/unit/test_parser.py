@@ -92,6 +92,7 @@ class BaseParserTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': normalize('/usr/src/app'),
+            'config-version': 2,
         }
 
         self.root_project_config = config_from_parts_or_dicts(
@@ -105,6 +106,7 @@ class BaseParserTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': get_abs_os_path('./dbt_modules/snowplow'),
+            'config-version': 2,
         }
 
         self.snowplow_project_config = config_from_parts_or_dicts(
@@ -483,6 +485,7 @@ class ModelParserTest(BaseParserTest):
             path=normalize('nested/model_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
+            unrendered_config={'materialized': 'table'},
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/models/nested/model_1.sql')
@@ -552,6 +555,13 @@ class SnapshotParserTest(BaseParserTest):
             path=normalize('nested/snap_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
+            unrendered_config={
+                'unique_key': 'id',
+                'target_schema': 'analytics',
+                'target_database': 'dbt',
+                'strategy': 'timestamp',
+                'updated_at': 'last_update',
+            },
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
@@ -605,6 +615,13 @@ class SnapshotParserTest(BaseParserTest):
             path=normalize('nested/snap_1.sql'),
             raw_sql=raw_1,
             checksum=block.file.checksum,
+            unrendered_config={
+                'unique_key': 'id',
+                'target_schema': 'analytics',
+                'target_database': 'dbt',
+                'strategy': 'timestamp',
+                'updated_at': 'last_update',
+            },
         )
         expect_bar = ParsedSnapshotNode(
             alias='bar',
@@ -628,6 +645,13 @@ class SnapshotParserTest(BaseParserTest):
             path=normalize('nested/snap_1.sql'),
             raw_sql=raw_2,
             checksum=block.file.checksum,
+            unrendered_config={
+                'unique_key': 'id',
+                'target_schema': 'analytics',
+                'target_database': 'dbt',
+                'strategy': 'timestamp',
+                'updated_at': 'last_update',
+            },
         )
         self.assertEqual(nodes[0], expect_bar)
         self.assertEqual(nodes[1], expect_foo)
@@ -740,6 +764,7 @@ class DataTestParserTest(BaseParserTest):
             path=normalize('data_test/test_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
+            unrendered_config={},
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/tests/test_1.sql')
@@ -782,6 +807,7 @@ class AnalysisParserTest(BaseParserTest):
             path=normalize('analysis/nested/analysis_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
+            unrendered_config={},
         )
         self.assertEqual(node, expected)
         path = get_abs_os_path('./dbt_modules/snowplow/analyses/nested/analysis_1.sql')
