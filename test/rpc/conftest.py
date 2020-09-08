@@ -75,6 +75,16 @@ def postgres_profile_data(unique_schema):
                     'dbname': 'dbt',
                     'schema': unique_schema,
                 },
+                'other_schema': {
+                    'type': 'postgres',
+                    'threads': 4,
+                    'host': 'database',
+                    'port': 5432,
+                    'user': 'root',
+                    'pass': 'password',
+                    'dbname': 'dbt',
+                    'schema': unique_schema+'_alt',
+                }
             },
             'target': 'default'
         }
