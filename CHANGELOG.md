@@ -1,3 +1,8 @@
+## dbt 0.18.1 (Release TBD)
+
+### Under the hood
+- If column config says quote, use quoting in SQL for adding a comment. ([#2539](https://github.com/fishtown-analytics/dbt/issues/2539), [#2733](https://github.com/fishtown-analytics/dbt/pull/2733))
+
 ## dbt 0.18.0 (September 03, 2020)
 
 ## dbt 0.18.0rc2 (September 03, 2020)
@@ -7,7 +12,7 @@
 ### Under the hood
 - Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
 - It is now an error to attempt installing `dbt` with a Python version less than 3.6. (resolves [#2347](https://github.com/fishtown-analytics/dbt/issues/2347))
-- Check for Postgres relation names longer than 63 and throw exception. ([#2197](https://github.com/fishtown-analytics/dbt/issues/2197))
+- Check for Postgres relation names longer than 63 and throw exception. ([#2197](https://github.com/fishtown-analytics/dbt/issues/2197), [#2727](https://github.com/fishtown-analytics/dbt/pull/2727))
 
 
 ### Fixes
