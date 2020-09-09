@@ -5,6 +5,7 @@ from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres import PostgresColumn
+from dbt.adapters.postgres import PostgresRelation
 import dbt.exceptions
 
 
@@ -18,6 +19,7 @@ class PostgresConfig(AdapterConfig):
 
 
 class PostgresAdapter(SQLAdapter):
+    Relation = PostgresRelation
     ConnectionManager = PostgresConnectionManager
     Column = PostgresColumn
 

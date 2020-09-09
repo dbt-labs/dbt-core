@@ -1,8 +1,29 @@
-## dbt 0.18.0 (Release TBD)
+## dbt 0.18.1 (Release TBD)
+
+### Under the hood
+- If column config says quote, use quoting in SQL for adding a comment. ([#2539](https://github.com/fishtown-analytics/dbt/issues/2539), [#2733](https://github.com/fishtown-analytics/dbt/pull/2733))
+
+## dbt 0.18.0 (September 03, 2020)
+
+## dbt 0.18.0rc2 (September 03, 2020)
+
 
 
 ### Under the hood
 - Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
+- It is now an error to attempt installing `dbt` with a Python version less than 3.6. (resolves [#2347](https://github.com/fishtown-analytics/dbt/issues/2347))
+- Check for Postgres relation names longer than 63 and throw exception. ([#2197](https://github.com/fishtown-analytics/dbt/issues/2197), [#2727](https://github.com/fishtown-analytics/dbt/pull/2727))
+
+
+### Fixes
+- dbt now validates the require-dbt-version field before it validates the dbt_project.yml schema ([#2638](https://github.com/fishtown-analytics/dbt/issues/2638), [#2726](https://github.com/fishtown-analytics/dbt/pull/2726))
+
+### Docs
+- Add project level overviews ([docs#127](https://github.com/fishtown-analytics/dbt-docs/issues/127))
+
+Contributors:
+- [@genos](https://github.com/genos) ([#2722](https://github.com/fishtown-analytics/dbt/pull/2722))
+- [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([docs#129](https://github.com/fishtown-analytics/dbt-docs/pull/129))
 
 
 ## dbt 0.18.0rc1 (August 19, 2020)
@@ -42,6 +63,7 @@
 - Add Name, Description, Column, SQL, Tags filters to site search ([docs#108](https://github.com/fishtown-analytics/dbt-docs/pull/108))
 - Add relevance criteria to site search ([docs#113](https://github.com/fishtown-analytics/dbt-docs/pull/113))
 - Support new selector methods, intersection, and arbitrary parent/child depth in DAG selection syntax ([docs#118](https://github.com/fishtown-analytics/dbt-docs/pull/118))
+- Revise anonymous event tracking: simpler URL fuzzing; differentiate between Cloud-hosted and non-Cloud docs ([docs#121](https://github.com/fishtown-analytics/dbt-docs/pull/121))
 
 Contributors:
 - [@bbhoss](https://github.com/bbhoss) ([#2677](https://github.com/fishtown-analytics/dbt/pull/2677))

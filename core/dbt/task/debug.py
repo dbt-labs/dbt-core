@@ -143,7 +143,9 @@ class DebugTask(BaseTask):
 
         try:
             self.project = Project.from_project_root(
-                self.project_dir, renderer
+                self.project_dir,
+                renderer,
+                verify_version=getattr(self.args, 'version_check', False),
             )
         except dbt.exceptions.DbtConfigError as exc:
             self.project_fail_details = str(exc)
@@ -181,7 +183,8 @@ class DebugTask(BaseTask):
         if os.path.exists(self.project_path):
             try:
                 partial = Project.partial_load(
-                    os.path.dirname(self.project_path)
+                    os.path.dirname(self.project_path),
+                    verify_version=getattr(self.args, 'version_check', False),
                 )
                 renderer = DbtProjectYamlRenderer(
                     generate_base_context(self.cli_vars)

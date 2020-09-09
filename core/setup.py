@@ -2,6 +2,12 @@
 import os
 import sys
 
+if sys.version_info < (3, 6):
+    print('Error: dbt does not support this version of Python.')
+    print('Please upgrade to Python 3.6 or higher.')
+    sys.exit(1)
+
+
 from setuptools import setup
 try:
     from setuptools import find_namespace_packages
@@ -18,7 +24,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.18.0rc1"
+package_version = "0.18.0"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 

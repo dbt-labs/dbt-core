@@ -2,6 +2,12 @@
 import os
 import sys
 
+if sys.version_info < (3, 6):
+    print('Error: dbt does not support this version of Python.')
+    print('Please upgrade to Python 3.6 or higher.')
+    sys.exit(1)
+
+
 from setuptools import setup
 try:
     from setuptools import find_namespace_packages
@@ -14,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-bigquery"
-package_version = "0.18.0rc1"
+package_version = "0.18.0"
 description = """The bigquery adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))

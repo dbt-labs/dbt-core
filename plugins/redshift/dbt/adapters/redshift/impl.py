@@ -4,6 +4,7 @@ from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.redshift import RedshiftConnectionManager
 from dbt.adapters.redshift import RedshiftColumn
+from dbt.adapters.redshift import RedshiftRelation
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
@@ -16,6 +17,7 @@ class RedshiftConfig(AdapterConfig):
 
 
 class RedshiftAdapter(PostgresAdapter):
+    Relation = RedshiftRelation
     ConnectionManager = RedshiftConnectionManager
     Column = RedshiftColumn
 

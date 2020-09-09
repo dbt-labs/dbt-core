@@ -7,6 +7,7 @@
               table_schema as "table_schema",
               table_name as "table_name",
               table_type as "table_type",
+              comment as "table_comment",
 
               -- note: this is the _role_ that owns the table
               table_owner as "table_owner",
@@ -36,12 +37,11 @@
               table_catalog as "table_database",
               table_schema as "table_schema",
               table_name as "table_name",
-              null as "table_comment",
 
               column_name as "column_name",
               ordinal_position as "column_index",
               data_type as "column_type",
-              null as "column_comment"
+              comment as "column_comment"
 
           from {{ information_schema }}.columns
       )
