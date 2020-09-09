@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Callable
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
     DbtStatusMessage,
@@ -13,8 +13,9 @@ from dbt import utils
 
 
 def print_fancy_output_line(
-        msg: str, status: str, index: Optional[int], total: Optional[int],
-        execution_time: Optional[float] = None, truncate: bool = False
+        msg: str, status: str, logger_fn: Callable, index: Optional[int],
+        total: Optional[int], execution_time: Optional[float] = None,
+        truncate: bool = False
 ) -> None:
     if index is None or total is None:
         progress = ''
@@ -39,7 +40,7 @@ def print_fancy_output_line(
     output = "{justified} [{status}{status_time}]".format(
         justified=justified, status=status, status_time=status_time)
 
-    logger.info(output)
+    logger_fn(output)
 
 
 def get_counts(flat_nodes) -> str:
@@ -63,12 +64,13 @@ def get_counts(flat_nodes) -> str:
 
 def print_start_line(description: str, index: int, total: int) -> None:
     msg = "START {}".format(description)
-    print_fancy_output_line(msg, 'RUN', index, total)
+    print_fancy_output_line(msg, 'RUN', logger.info, index, total)
 
 
 def print_hook_start_line(statement: str, index: int, total: int) -> None:
     msg = 'START hook: {}'.format(statement)
-    print_fancy_output_line(msg, 'RUN', index, total, truncate=True)
+    print_fancy_output_line(
+        msg, 'RUN', logger.info, index, total, truncate=True)
 
 
 def print_hook_end_line(
@@ -76,7 +78,7 @@ def print_hook_end_line(
 ) -> None:
     msg = 'OK hook: {}'.format(statement)
     # hooks don't fail into this path, so always green
-    print_fancy_output_line(msg, ui.green(status), index, total,
+    print_fancy_output_line(msg, ui.green(status), logger.info, index, total,
                             execution_time=execution_time, truncate=True)
 
 
@@ -84,23 +86,28 @@ def print_skip_line(
     model, schema: str, relation: str, index: int, num_models: int
 ) -> None:
     msg = 'SKIP relation {}.{}'.format(schema, relation)
-    print_fancy_output_line(msg, ui.yellow('SKIP'), index, num_models)
+    print_fancy_output_line(
+        msg, ui.yellow('SKIP'), logger.info, index, num_models)
 
 
 def print_cancel_line(model) -> None:
     msg = 'CANCEL query {}'.format(model)
-    print_fancy_output_line(msg, ui.red('CANCEL'), index=None, total=None)
+    print_fancy_output_line(
+        msg, ui.red('CANCEL'), logger.error, index=None, total=None)
 
 
-def get_printable_result(result, success: str, error: str) -> Tuple[str, str]:
+def get_printable_result(
+        result, success: str, error: str) -> Tuple[str, str, Callable]:
     if result.error is not None:
         info = 'ERROR {}'.format(error)
         status = ui.red(result.status)
+        logger_fn = logger.error
     else:
         info = 'OK {}'.format(success)
         status = ui.green(result.status)
+        logger_fn = logger.info
 
-    return info, status
+    return info, status, logger_fn
 
 
 def print_test_result_line(
@@ -111,24 +118,26 @@ def print_test_result_line(
     if result.error is not None:
         info = "ERROR"
         color = ui.red
+        logger_fn = logger.error
     elif result.status == 0:
         info = 'PASS'
         color = ui.green
-
+        logger_fn = logger.info
     elif result.warn:
         info = 'WARN {}'.format(result.status)
         color = ui.yellow
-
+        logger_fn = logger.warning
     elif result.fail:
         info = 'FAIL {}'.format(result.status)
         color = ui.red
-
+        logger_fn = logger.error
     else:
         raise RuntimeError("unexpected status: {}".format(result.status))
 
     print_fancy_output_line(
         "{info} {name}".format(info=info, name=model.name),
         color(info),
+        logger_fn,
         index,
         total,
         result.execution_time)
@@ -137,11 +146,13 @@ def print_test_result_line(
 def print_model_result_line(
     result, description: str, index: int, total: int
 ) -> None:
-    info, status = get_printable_result(result, 'created', 'creating')
+    info, status, logger_fn = get_printable_result(
+        result, 'created', 'creating')
 
     print_fancy_output_line(
         "{info} {description}".format(info=info, description=description),
         status,
+        logger_fn,
         index,
         total,
         result.execution_time)
@@ -152,7 +163,8 @@ def print_snapshot_result_line(
 ) -> None:
     model = result.node
 
-    info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
+    info, status, logger_fn = get_printable_result(
+        result, 'snapshotted', 'snapshotting')
     cfg = model.config.to_dict()
 
     msg = "{info} {description}".format(
@@ -160,6 +172,7 @@ def print_snapshot_result_line(
     print_fancy_output_line(
         msg,
         status,
+        logger_fn,
         index,
         total,
         result.execution_time)
@@ -168,7 +181,7 @@ def print_snapshot_result_line(
 def print_seed_result_line(result, schema_name: str, index: int, total: int):
     model = result.node
 
-    info, status = get_printable_result(result, 'loaded', 'loading')
+    info, status, logger_fn = get_printable_result(result, 'loaded', 'loading')
 
     print_fancy_output_line(
         "{info} seed file {schema}.{relation}".format(
@@ -176,6 +189,7 @@ def print_seed_result_line(result, schema_name: str, index: int, total: int):
             schema=schema_name,
             relation=model.alias),
         status,
+        logger_fn,
         index,
         total,
         result.execution_time)
@@ -185,15 +199,19 @@ def print_freshness_result_line(result, index: int, total: int) -> None:
     if result.error:
         info = 'ERROR'
         color = ui.red
+        logger_fn = logger.error
     elif result.status == 'error':
         info = 'ERROR STALE'
         color = ui.red
+        logger_fn = logger.error
     elif result.status == 'warn':
         info = 'WARN'
         color = ui.yellow
+        logger_fn = logger.warning
     else:
         info = 'PASS'
         color = ui.green
+        logger_fn = logger.info
 
     if hasattr(result, 'node'):
         source_name = result.node.source_name
@@ -211,6 +229,7 @@ def print_freshness_result_line(result, index: int, total: int) -> None:
     print_fancy_output_line(
         msg,
         color(info),
+        logger_fn,
         index,
         total,
         execution_time=result.execution_time
@@ -297,7 +316,8 @@ def print_skip_caused_by_error(
 ) -> None:
     msg = ('SKIP relation {}.{} due to ephemeral model error'
            .format(schema, relation))
-    print_fancy_output_line(msg, ui.red('ERROR SKIP'), index, num_models)
+    print_fancy_output_line(
+        msg, ui.red('ERROR SKIP'), logger.error, index, num_models)
     print_run_result_error(result, newline=False)
 
 
