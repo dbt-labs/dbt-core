@@ -93,7 +93,9 @@ class SelectionCriteria:
         try:
             method_name = MethodName(method_parts[0])
         except ValueError as exc:
-            raise InvalidSelectorException(method_parts[0]) from exc
+            raise InvalidSelectorException(
+                f"'{method_parts[0]}' is not a valid method name"
+            ) from exc
 
         method_arguments: List[str] = method_parts[1:]
 
