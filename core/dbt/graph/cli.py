@@ -91,9 +91,7 @@ def _get_list_dicts(dct: Dict[str, Any], key: str) -> List[RawDefinition]:
         raise InternalException(f"Expected to find key {key} in dict, only found {list(dct)}")
     values = dct[key]
     if not isinstance(values, list):
-        raise ValidationException(
-            f'Invalid value for key "{key}". Expected a list.'
-        )
+        raise ValidationException(f'Invalid value for key "{key}". Expected a list.')
     for value in values:
         if isinstance(value, dict):
             for value_key in value:
