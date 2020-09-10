@@ -43,7 +43,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
                 f"union, intersection, string, dictionary. No lists. "
                 f"\nhttps://docs.getdbt.com/reference/node-selection/"
                 f"yaml-selectors",
-                result_type='invalid_selector'
+                result_type="invalid_selector",
             ) from exc
         except RuntimeException as exc:
             raise DbtSelectorsError(

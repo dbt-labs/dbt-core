@@ -222,13 +222,14 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
         return SelectionDifference(components=[base, diff_arg])
 
 
-def parse_from_definition(
-    definition: RawDefinition, rootlevel=False
-) -> SelectionSpec:
+def parse_from_definition(definition: RawDefinition, rootlevel=False) -> SelectionSpec:
 
-    if (isinstance(definition, dict) and
-            ('union' in definition or 'intersection' in definition) and
-            rootlevel and len(definition) > 1):
+    if (
+        isinstance(definition, dict)
+        and ("union" in definition or "intersection" in definition)
+        and rootlevel
+        and len(definition) > 1
+    ):
         keys = ",".join(definition.keys())
         raise ValidationException(
             f"Only a single 'union' or 'intersection' key is allowed "
@@ -244,8 +245,8 @@ def parse_from_definition(
         return parse_dict_definition(definition)
     else:
         raise ValidationException(
-            f'Expected to find union, intersection, str or dict, instead '
-            f'found {type(definition)}: {definition}'
+            f"Expected to find union, intersection, str or dict, instead "
+            f"found {type(definition)}: {definition}"
         )
 
 
