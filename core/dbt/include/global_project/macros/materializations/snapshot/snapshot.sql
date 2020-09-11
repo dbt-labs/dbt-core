@@ -65,6 +65,14 @@
         from snapshot_query
     ),
 
+    deletes_source_data as (
+
+        select 
+            *,
+            {{ strategy.unique_key }} as dbt_unique_key
+        from snapshot_query
+    ),
+
     insertions as (
 
         select
@@ -97,11 +105,29 @@
         and (
             {{ strategy.row_changed }}
         )
+    ),
+
+    deletes as (
+    
+        select
+            'delete' as dbt_change_type,
+            source_data.*,
+            {{ snapshot_get_time() }} as dbt_valid_from,
+            {{ snapshot_get_time() }} as dbt_updated_at,
+            {{ snapshot_get_time() }} as dbt_valid_to,
+            snapshotted_data.dbt_scd_id
+    
+        from snapshotted_data
+        left join deletes_source_data as source_data on snapshotted_data.dbt_unique_key = source_data.dbt_unique_key
+        where snapshotted_data.dbt_valid_to is null
+        and source_data.dbt_unique_key is null
     )
 
     select * from insertions
     union all
     select * from updates
+    union all
+    select * from deletes
 
 {%- endmacro %}
 
