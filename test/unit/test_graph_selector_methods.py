@@ -441,6 +441,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source,
         macros={},
         docs={},
         files={},
+        reports={},
         generated_at=datetime.utcnow(),
         disabled=[],
     )

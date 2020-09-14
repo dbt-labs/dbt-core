@@ -95,6 +95,12 @@ class TestDocsGenerateEscapes(DBTIntegrationTest):
 class TestDocsGenerate(DBTIntegrationTest):
     setup_alternate_db = True
 
+    def adapter_case(self, value):
+        if self.adapter_type == 'snowflake':
+            return value.upper()
+        else:
+            return value.lower()
+
     def setUp(self):
         super().setUp()
         self.maxDiff = None
@@ -404,7 +410,21 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': expected_cols,
                 },
             },
-            'sources': {}
+            'sources': {
+                'source.test.my_source.my_table': {
+                    'unique_id': 'source.test.my_source.my_table',
+                    'metadata': {
+                        'schema': my_schema_name,
+                        'database': self.default_database,
+                        'name': case('seed'),
+                        'type': table_type,
+                        'comment': None,
+                        'owner': role,
+                    },
+                    'stats': seed_stats,
+                    'columns': expected_cols,
+                },
+            },
         }
 
     def expected_postgres_catalog(self):
@@ -1098,7 +1118,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'injected_sql': ANY,
                     'checksum': self._checksum_file(second_model_sql_path),
                 },
-
                 'seed.test.seed': {
                     'build_path': None,
                     'compiled': True,
@@ -1366,23 +1385,128 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': {'name': 'none', 'checksum': ''},
                 },
             },
-            'sources': {},
+            'sources': {
+                'source.test.my_source.my_table': {
+                    'columns': {
+                        'id': {
+                            'description': 'An ID field',
+                            'name': 'id',
+                            'data_type': None,
+                            'meta': {},
+                            'quote': None,
+                            'tags': [],
+                        }
+                    },
+                    'config': {
+                        'enabled': True,
+                    },
+                    'quoting': {
+                        'database': None,
+                        'schema': None,
+                        'identifier': True,
+                        'column': None,
+                    },
+                    'database': self.default_database,
+                    'description': 'My table',
+                    'external': None,
+                    'freshness': {'error_after': None, 'warn_after': None, 'filter': None},
+                    'identifier': 'seed',
+                    'loaded_at_field': None,
+                    'loader': 'a_loader',
+                    'meta': {},
+                    'name': 'my_table',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': self.dir('models/schema.yml'),
+                    'patch_path': None,
+                    'resource_type': 'source',
+                    'root_path': self.test_root_realpath,
+                    'schema': my_schema_name,
+                    'source_description': 'My source',
+                    'source_name': 'my_source',
+                    'source_meta': {},
+                    'tags': [],
+                    'unique_id': 'source.test.my_source.my_table',
+                    'fqn': ['test', 'my_source', 'my_table'],
+                },
+            },
+            'reports': {
+                'report.test.notebook_report': {
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['model.test.model', 'model.test.second_model']
+                    },
+                    'description': 'A description of the complex report',
+                    'fqn': ['test', 'reports', 'notebook_report'],
+                    'maturity': 'medium',
+                    'name': 'notebook_report',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'owner': {
+                        'email': 'something@example.com',
+                        'name': 'Some name'
+                    },
+                    'package_name': 'test',
+                    'path': 'schema.yml',
+                    'refs': [['model'], ['second_model']],
+                    'resource_type': 'report',
+                    'root_path': self.test_root_realpath,
+                    'sources': [],
+                    'type': 'notebook',
+                    'unique_id': 'report.test.notebook_report',
+                    'url': 'http://example.com/notebook/1'
+                },
+                'report.test.simple_report': {
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': [
+                            'source.test.my_source.my_table',
+                            'model.test.model'
+                        ],
+                    },
+                    'description': None,
+                    'fqn': ['test', 'reports', 'simple_report'],
+                    'name': 'simple_report',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'owner': {
+                        'email': 'something@example.com',
+                        'name': None,
+                    },
+                    'package_name': 'test',
+                    'path': 'schema.yml',
+                    'refs': [['model']],
+                    'resource_type': 'report',
+                    'root_path': self.test_root_realpath,
+                    'sources': [['my_source', 'my_table']],
+                    'type': 'dashboard',
+                    'unique_id': 'report.test.simple_report',
+                    'url': None,
+                    'maturity': None,
+                }
+            },
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'model.test.second_model': ['seed.test.seed'],
+                'report.test.notebook_report': ['model.test.model', 'model.test.second_model'],
+                'report.test.simple_report': ['model.test.model', 'source.test.my_source.my_table'],
                 'seed.test.seed': [],
+                'source.test.my_source.my_table': [],
                 'test.test.not_null_model_id': ['model.test.model'],
                 'test.test.test_nothing_model_': ['model.test.model'],
                 'test.test.unique_model_id': ['model.test.model'],
             },
             'child_map': {
                 'model.test.model': [
+                    'report.test.notebook_report',
+                    'report.test.simple_report',
                     'test.test.not_null_model_id',
                     'test.test.test_nothing_model_',
                     'test.test.unique_model_id',
                 ],
-                'model.test.second_model': [],
+                'model.test.second_model': ['report.test.notebook_report'],
+                'report.test.notebook_report': [],
+                'report.test.simple_report': [],
                 'seed.test.seed': ['model.test.model', 'model.test.second_model'],
+                'source.test.my_source.my_table': ['report.test.simple_report'],
                 'test.test.not_null_model_id': [],
                 'test.test.test_nothing_model_': [],
                 'test.test.unique_model_id': [],
@@ -1740,6 +1864,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'fqn': ['test', 'my_source', 'my_table'],
                 },
             },
+            'reports': {},
             'docs': {
                 'dbt.__overview__': ANY,
                 'test.column_info': {
@@ -2299,6 +2424,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
             },
             'sources': {},
+            'reports': {},
             'child_map': {
                 'model.test.clustered': [],
                 'model.test.multi_clustered': [],
@@ -2543,6 +2669,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
             },
             'sources': {},
+            'reports': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': []
@@ -2572,7 +2699,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         manifest_keys = frozenset({
             'nodes', 'sources', 'macros', 'parent_map', 'child_map', 'generated_at',
-            'docs', 'metadata', 'docs', 'disabled'
+            'docs', 'metadata', 'docs', 'disabled', 'reports'
         })
 
         self.assertEqual(frozenset(manifest), manifest_keys)
