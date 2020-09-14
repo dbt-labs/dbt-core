@@ -1,4 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+from datetime import datetime
 import dbt.exceptions
 
 
@@ -754,3 +755,43 @@ class TestChangingStrategy(DBTIntegrationTest):
 
         results = self.run_dbt(['test'])
         self.assertEqual(len(results), 1)
+
+
+class TestSnapshotHardDelete(BaseSimpleSnapshotTest):
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-pg'],
+            'macro-paths': ['macros'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__snapshot_hard_delete(self):
+        # This test uses the same seed data, containing 20 records of which we hard delete the last 10.
+        # These deleted records set the dbt_valid_to to time the snapshot was ran.
+
+        self.dbt_run_seed_snapshot()
+        self.assert_expected()
+
+        database = self.default_database
+        self.run_sql(
+            'delete from {}.{}.seed where id >= 10;'.format(database, self.unique_schema())
+        )
+
+        begin_snapshot_datetime = datetime.utcnow()
+
+        results = self.run_snapshot()
+        self.assertEqual(len(results), self.NUM_SNAPSHOT_MODELS)
+
+        results = self.run_sql(
+            'select * from {}.{}.snapshot_actual'.format(database, self.unique_schema()),
+            fetch='all'
+        )
+
+        self.assertEqual(len(results), 20)
+        for result in results[10:]:
+            # result is a tuple, the dbt_valid_to column is the latest
+            self.assertGreaterEqual(result[-1], begin_snapshot_datetime)
