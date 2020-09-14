@@ -202,7 +202,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             "diststyle": {
               "id": "diststyle",
               "label": "Dist Style",
-              "value": AnyStringWith(None),
+              "value": AnyStringWith('AUTO'),
               "description": "Distribution style or distribution key column, if key distribution is defined.",
               "include": True
             },
@@ -219,6 +219,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "value": AnyFloat(),
                 "description": "Approximate size of the table, calculated from a count of 1MB blocks",
                 "include": True
+            },
+            'sortkey1': {
+                'id': 'sortkey1',
+                'label': 'Sort Key 1',
+                'value': AnyStringWith('AUTO'),
+                'description': 'First column in the sort key.',
+                'include': True,
             },
             "pct_used": {
                 "id": "pct_used",
