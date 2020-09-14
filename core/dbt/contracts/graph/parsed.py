@@ -788,14 +788,14 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
             return True
 
         return (
-            self.same_fqn(old) and
-            self.same_exposure_type(old) and
-            self.same_owner(old) and
-            self.same_maturity(old) and
-            self.same_url(old) and
-            self.same_description(old) and
-            self.same_depends_on(old) and
-            True
+            self.same_fqn(old)
+            and self.same_exposure_type(old)
+            and self.same_owner(old)
+            and self.same_maturity(old)
+            and self.same_url(old)
+            and self.same_description(old)
+            and self.same_depends_on(old)
+            and True
         )
 
 
