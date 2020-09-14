@@ -451,6 +451,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.nodes[node]
             elif node in manifest.sources:
                 previous_node = manifest.sources[node]
+            elif node in manifest.reports:
+                previous_node = manifest.reports[node]
 
             if checker(previous_node, real_node):
                 yield node

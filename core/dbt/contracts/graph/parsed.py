@@ -636,10 +636,9 @@ class ParsedSourceDefinition(
 
 
 @dataclass
-class ParsedReport(UnparsedBaseNode, HasUniqueID):
+class ParsedReport(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
     type: ExposureType
-    fqn: List[str]
     owner: ReportOwner
     resource_type: NodeType = NodeType.Report
     maturity: Optional[MaturityType] = None
@@ -657,6 +656,40 @@ class ParsedReport(UnparsedBaseNode, HasUniqueID):
     @property
     def tags(self):
         return []
+
+    def same_depends_on(self, old: 'ParsedReport') -> bool:
+        return set(self.depends_on.nodes) == set(old.depends_on.nodes)
+
+    def same_description(self, old: 'ParsedReport') -> bool:
+        return self.description == old.description
+
+    def same_maturity(self, old: 'ParsedReport') -> bool:
+        return self.maturity == old.maturity
+
+    def same_owner(self, old: 'ParsedReport') -> bool:
+        return self.owner == old.owner
+
+    def same_exposure_type(self, old: 'ParsedReport') -> bool:
+        return self.type == old.type
+
+    def same_url(self, old: 'ParsedReport') -> bool:
+        return self.url == old.url
+
+    def same_contents(self, old: Optional['ParsedReport']) -> bool:
+        # existing when it didn't before is a change!
+        if old is None:
+            return True
+
+        return (
+            self.same_fqn(old) and
+            self.same_exposure_type(old) and
+            self.same_owner(old) and
+            self.same_maturity(old) and
+            self.same_url(old) and
+            self.same_description(old) and
+            self.same_depends_on(old) and
+            True
+        )
 
 
 ParsedResource = Union[
