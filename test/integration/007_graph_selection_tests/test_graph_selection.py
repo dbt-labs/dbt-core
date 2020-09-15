@@ -358,15 +358,15 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__report_parents(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['ls', '--select', '+test.reports.seed_ml_report'])
+        results = self.run_dbt(['ls', '--select', '+report:seed_ml_report'])
         assert len(results) == 2
-        assert sorted(results) == ['source:test.raw.seed', 'test.reports.seed_ml_report']
+        assert sorted(results) == ['report:test.seed_ml_report', 'source:test.raw.seed']
 
-        results = self.run_dbt(['ls', '--select', '1+test.reports.user_report'])
+        results = self.run_dbt(['ls', '--select', '1+report:user_report'])
         assert len(results) == 3
-        assert sorted(results) == ['test.reports.user_report', 'test.users', 'test.users_rollup']
+        assert sorted(results) == ['report:test.user_report', 'test.users', 'test.users_rollup']
 
-        self.run_dbt(['run', '-m', '+test.reports.user_report'])
+        self.run_dbt(['run', '-m', '+report:user_report'])
         # users, users_rollup
         assert len(results) == 3
 

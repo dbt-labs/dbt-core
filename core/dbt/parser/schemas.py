@@ -792,13 +792,15 @@ class ReportParser(YamlReader):
     def parse_report(self, unparsed: UnparsedReport) -> ParsedReport:
         package_name = self.project.project_name
         unique_id = f'{NodeType.Report}.{package_name}.{unparsed.name}'
-        fqn_path = os.path.join('reports', self.yaml.path.relative_path)
-        fqn = self.schema_parser.get_fqn_prefix(fqn_path)
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
+
         parsed = ParsedReport(
             package_name=package_name,
             root_path=self.project.project_root,
-            path=self.yaml.file.path.relative_path,
+            path=path,
             original_file_path=self.yaml.path.original_file_path,
             unique_id=unique_id,
             fqn=fqn,

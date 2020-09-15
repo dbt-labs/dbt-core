@@ -652,6 +652,10 @@ class ParsedReport(UnparsedBaseNode, HasUniqueID, HasFqn):
     def depends_on_nodes(self):
         return self.depends_on.nodes
 
+    @property
+    def search_name(self):
+        return self.name
+
     # no tags for now, but we could definitely add them
     @property
     def tags(self):

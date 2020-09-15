@@ -1,6 +1,10 @@
 import json
 from typing import Type
 
+from dbt.contracts.graph.parsed import (
+    ParsedReport,
+    ParsedSourceDefinition,
+)
 from dbt.graph import (
     parse_difference,
     ResourceTypeSelector,
@@ -82,18 +86,25 @@ class ListTask(GraphRunnableTask):
 
     def generate_selectors(self):
         for node in self._iterate_selected_nodes():
-            selector = '.'.join(node.fqn)
             if node.resource_type == NodeType.Source:
-                yield 'source:{}'.format(selector)
+                assert isinstance(node, ParsedSourceDefinition)
+                # sources are searched for by pkg.source_name.table_name
+                source_selector = '.'.join([
+                    node.package_name, node.source_name, node.name
+                ])
+                yield f'source:{source_selector}'
+            elif node.resource_type == NodeType.Report:
+                assert isinstance(node, ParsedReport)
+                # reports are searched for by pkg.report_name
+                report_selector = '.'.join([node.package_name, node.name])
+                yield f'report:{report_selector}'
             else:
-                yield selector
+                # everything else is from `fqn`
+                yield '.'.join(node.fqn)
 
     def generate_names(self):
         for node in self._iterate_selected_nodes():
-            if node.resource_type == NodeType.Source:
-                yield '{0.source_name}.{0.name}'.format(node)
-            else:
-                yield node.name
+            yield node.search_name
 
     def generate_json(self):
         for node in self._iterate_selected_nodes():

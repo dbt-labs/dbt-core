@@ -1444,7 +1444,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'nodes': ['model.test.model', 'model.test.second_model']
                     },
                     'description': 'A description of the complex report',
-                    'fqn': ['test', 'reports', 'notebook_report'],
+                    'fqn': ['test', 'notebook_report'],
                     'maturity': 'medium',
                     'name': 'notebook_report',
                     'original_file_path': self.dir('models/schema.yml'),
@@ -1471,7 +1471,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         ],
                     },
                     'description': None,
-                    'fqn': ['test', 'reports', 'simple_report'],
+                    'fqn': ['test', 'simple_report'],
                     'name': 'simple_report',
                     'original_file_path': self.dir('models/schema.yml'),
                     'owner': {
