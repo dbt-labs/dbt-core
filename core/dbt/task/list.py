@@ -98,10 +98,8 @@ class ListTask(GraphRunnableTask):
             if node.resource_type == NodeType.Source:
                 assert isinstance(node, ParsedSourceDefinition)
                 # sources are searched for by pkg.source_name.table_name
-                source_selector = '.'.join([
-                    node.package_name, node.source_name, node.name
-                ])
-                yield f'source:{source_selector}'
+                source_selector = ".".join([node.package_name, node.source_name, node.name])
+                yield f"source:{source_selector}"
             elif node.resource_type == NodeType.Exposure:
                 assert isinstance(node, ParsedExposure)
                 # exposures are searched for by pkg.exposure_name
@@ -114,7 +112,7 @@ class ListTask(GraphRunnableTask):
                 yield f"metric:{metric_selector}"
             else:
                 # everything else is from `fqn`
-                yield '.'.join(node.fqn)
+                yield ".".join(node.fqn)
 
     def generate_names(self):
         for node in self._iterate_selected_nodes():

@@ -228,10 +228,8 @@ class SourceSelectorMethod(SelectorMethod):
 
 
 class ExposureSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
-        parts = selector.split('.')
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
         target_package = SELECTOR_GLOB
         if len(parts) == 1:
             target_name = parts[0]
