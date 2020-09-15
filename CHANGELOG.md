@@ -6,8 +6,12 @@
 ### Features
 - Specify all three logging levels (`INFO`, `WARNING`, `ERROR`) in result logs for commands `test`, `seed`, `run`, `snapshot` and `source snapshot-freshness` ([#2680](https://github.com/fishtown-analytics/dbt/pull/2680), [#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
 
+### Fixes
+- Fix Redshift adapter to include columns from external tables when using the get_columns_in_relation macro ([#2753](https://github.com/fishtown-analytics/dbt/issues/2753))
+
 Contributors:
 - [@tpilewicz](https://github.com/tpilewicz) ([#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
+- [@aiguofer](https://github.com/aiguofer) ([#2754](https://github.com/fishtown-analytics/dbt/pull/2754))
 
 
 ## dbt 0.18.0 (September 03, 2020)
