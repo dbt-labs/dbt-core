@@ -783,7 +783,7 @@ class TestSnapshotHardDelete(BaseSimpleSnapshotTest):
 
         begin_snapshot_datetime = datetime.utcnow()
 
-        results = self.run_snapshot()
+        results = self.run_dbt(['snapshot', '--vars', '{invalidate_hard_deletes: true}'])
         self.assertEqual(len(results), self.NUM_SNAPSHOT_MODELS)
 
         results = self.run_sql(
@@ -794,4 +794,5 @@ class TestSnapshotHardDelete(BaseSimpleSnapshotTest):
         self.assertEqual(len(results), 20)
         for result in results[10:]:
             # result is a tuple, the dbt_valid_to column is the latest
+            self.assertIsInstance(result[-1], datetime)
             self.assertGreaterEqual(result[-1], begin_snapshot_datetime)

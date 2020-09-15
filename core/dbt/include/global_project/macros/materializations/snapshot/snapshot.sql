@@ -65,6 +65,7 @@
         from snapshot_query
     ),
 
+    {%- if strategy.invalidate_hard_deletes %}
     deletes_source_data as (
 
         select 
@@ -72,6 +73,7 @@
             {{ strategy.unique_key }} as dbt_unique_key
         from snapshot_query
     ),
+    {% endif %}
 
     insertions as (
 
@@ -105,7 +107,10 @@
         and (
             {{ strategy.row_changed }}
         )
-    ),
+    )
+
+    {%- if strategy.invalidate_hard_deletes -%}
+    ,
 
     deletes as (
     
@@ -122,12 +127,15 @@
         where snapshotted_data.dbt_valid_to is null
         and source_data.dbt_unique_key is null
     )
+    {%- endif %}
 
     select * from insertions
     union all
     select * from updates
+    {%- if strategy.invalidate_hard_deletes %}
     union all
     select * from deletes
+    {%- endif %}
 
 {%- endmacro %}
 
