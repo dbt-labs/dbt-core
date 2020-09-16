@@ -66,7 +66,7 @@
 {% macro snapshot_timestamp_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = config['updated_at'] %}
-    {% set invalidate_hard_deletes = config['invalidate_hard_deletes'] %}
+    {% set invalidate_hard_deletes = config.get('invalidate_hard_deletes', false) %}
 
     {#/*
         The snapshot relation might not have an {{ updated_at }} value if the
@@ -133,7 +133,7 @@
 {% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set check_cols_config = config['check_cols'] %}
     {% set primary_key = config['unique_key'] %}
-    {% set invalidate_hard_deletes = config['invalidate_hard_deletes'] %}
+    {% set invalidate_hard_deletes = config.get('invalidate_hard_deletes', false) %}
     
     {% set select_current_time -%}
         select {{ snapshot_get_time() }} as snapshot_start
