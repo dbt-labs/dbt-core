@@ -136,7 +136,7 @@ class SchemaVersion:
         return BASE_SCHEMAS_URL + self.path
 
 
-SCHEMA_VERSION_KEY = 'dbt_schema_version'
+SCHEMA_VERSION_KEY = "dbt_schema_version"
 
 
 METADATA_ENV_PREFIX = 'DBT_ENV_CUSTOM_ENV_'

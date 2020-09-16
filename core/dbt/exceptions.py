@@ -268,7 +268,7 @@ class IncompatibleSchemaException(RuntimeException):
     def __init__(self, expected: str, found: Optional[str]):
         self.expected = expected
         self.found = found
-        self.filename = 'input file'
+        self.filename = "input file"
 
         super().__init__(self.get_message())
 
@@ -277,7 +277,7 @@ class IncompatibleSchemaException(RuntimeException):
         self.msg = self.get_message()
 
     def get_message(self) -> str:
-        found_str = 'nothing'
+        found_str = "nothing"
         if self.found is not None:
             found_str = f'"{self.found}"'
 
