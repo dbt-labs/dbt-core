@@ -66,6 +66,7 @@
     ),
 
     {%- if strategy.invalidate_hard_deletes %}
+
     deletes_source_data as (
 
         select 
