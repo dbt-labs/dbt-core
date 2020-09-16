@@ -10,6 +10,7 @@ from dbt.contracts.graph.parsed import (
     DependsOn,
     NodeConfig,
     ParsedModelNode,
+    ParsedReport,
     ParsedSeedNode,
     ParsedSnapshotNode,
     ParsedDataTestNode,
@@ -20,6 +21,7 @@ from dbt.contracts.graph.parsed import (
     ColumnInfo,
 )
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.unparsed import ExposureType, ReportOwner
 from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
@@ -33,6 +35,7 @@ from dbt.graph.selector_methods import (
     TestNameSelectorMethod,
     TestTypeSelectorMethod,
     StateSelectorMethod,
+    ReportSelectorMethod,
 )
 import dbt.exceptions
 import dbt.contracts.graph.parsed
@@ -292,6 +295,30 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
     )
 
 
+def make_report(pkg, name, path=None, fqn_extras=None, owner=None):
+    if path is None:
+        path = 'schema.yml'
+
+    if fqn_extras is None:
+        fqn_extras = []
+
+    if owner is None:
+        owner = ReportOwner(email='test@example.com')
+
+    fqn = [pkg, 'reports'] + fqn_extras + [name]
+    return ParsedReport(
+        name=name,
+        type=ExposureType.Notebook,
+        fqn=fqn,
+        unique_id=f'report.{pkg}.{name}',
+        package_name=pkg,
+        path=path,
+        root_path='/usr/src/app',
+        original_file_path=path,
+        owner=owner,
+    )
+
+
 @pytest.fixture
 def seed():
     return make_seed(
@@ -442,6 +469,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source,
         macros={},
         docs={},
         files={},
+        reports={},
         generated_at=datetime.utcnow(),
         disabled=[],
     )
@@ -449,7 +477,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source,
 
 
 def search_manifest_using_method(manifest, method, selection):
-    selected = method.search(set(manifest.nodes) | set(manifest.sources), selection)
+    selected = method.search(set(manifest.nodes) | set(manifest.sources) | set(manifest.reports), selection)
     results = {manifest.expect(uid).search_name for uid in selected}
     return results
 
@@ -557,6 +585,16 @@ def test_select_test_type(manifest):
     assert method.arguments == []
     assert search_manifest_using_method(manifest, method, 'schema') == {'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'unique_ext_raw_ext_source_id'}
     assert search_manifest_using_method(manifest, method, 'data') == {'view_test_nothing'}
+
+
+def test_select_report(manifest):
+    report = make_report('test', 'my_report')
+    manifest.reports[report.unique_id] = report
+    methods = MethodManager(manifest, None)
+    method = methods.get_method('report', [])
+    assert isinstance(method, ReportSelectorMethod)
+    assert search_manifest_using_method(manifest, method, 'my_report') == {'my_report'}
+    assert not search_manifest_using_method(manifest, method, 'not_my_report')
 
 
 @pytest.fixture

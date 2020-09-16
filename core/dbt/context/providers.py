@@ -21,10 +21,11 @@ from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
     CompiledResource,
     CompiledSeedNode,
-    NonSourceNode,
+    ManifestNode,
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro,
+    ParsedReport,
     ParsedSeedNode,
     ParsedSourceDefinition,
 )
@@ -419,7 +420,7 @@ class ParseRefResolver(BaseRefResolver):
         return self.Relation.create_from(self.config, self.model)
 
 
-ResolveRef = Union[Disabled, NonSourceNode]
+ResolveRef = Union[Disabled, ManifestNode]
 
 
 class RuntimeRefResolver(BaseRefResolver):
@@ -444,7 +445,7 @@ class RuntimeRefResolver(BaseRefResolver):
         return self.create_relation(target_model, target_name)
 
     def create_relation(
-        self, target_model: NonSourceNode, name: str
+        self, target_model: ManifestNode, name: str
     ) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
@@ -456,7 +457,7 @@ class RuntimeRefResolver(BaseRefResolver):
 
     def validate(
         self,
-        resolved: NonSourceNode,
+        resolved: ManifestNode,
         target_name: str,
         target_package: Optional[str]
     ) -> None:
@@ -468,14 +469,14 @@ class RuntimeRefResolver(BaseRefResolver):
 class OperationRefResolver(RuntimeRefResolver):
     def validate(
         self,
-        resolved: NonSourceNode,
+        resolved: ManifestNode,
         target_name: str,
         target_package: Optional[str],
     ) -> None:
         pass
 
     def create_relation(
-        self, target_model: NonSourceNode, name: str
+        self, target_model: ManifestNode, name: str
     ) -> RelationProxy:
         if target_model.is_ephemeral_model:
             # In operations, we can't ref() ephemeral nodes, because
@@ -627,7 +628,7 @@ class ProviderContext(ManifestContext):
             )
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
-        self.model: Union[ParsedMacro, NonSourceNode] = model
+        self.model: Union[ParsedMacro, ManifestNode] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, AttrDict] = {}
         self.context_config: Optional[ContextConfig] = context_config
@@ -1196,7 +1197,7 @@ class MacroContext(ProviderContext):
 
 
 class ModelContext(ProviderContext):
-    model: NonSourceNode
+    model: ManifestNode
 
     @contextproperty
     def pre_hooks(self) -> List[Dict[str, Any]]:
@@ -1267,7 +1268,7 @@ class ModelContext(ProviderContext):
 
 
 def generate_parser_model(
-    model: NonSourceNode,
+    model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
     context_config: ContextConfig,
@@ -1302,7 +1303,7 @@ def generate_generate_component_name_macro(
 
 
 def generate_runtime_model(
-    model: NonSourceNode,
+    model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
 ) -> Dict[str, Any]:
@@ -1322,3 +1323,45 @@ def generate_runtime_macro(
         macro, config, manifest, OperationProvider(), package_name
     )
     return ctx.to_dict()
+
+
+class ReportRefResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        if len(args) not in (1, 2):
+            ref_invalid_args(self.model, args)
+        self.model.refs.append(list(args))
+        return ''
+
+
+class ReportSourceResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        if len(args) != 2:
+            raise_compiler_error(
+                f"source() takes exactly two arguments ({len(args)} given)",
+                self.model
+            )
+        self.model.sources.append(list(args))
+        return ''
+
+
+def generate_parse_report(
+    report: ParsedReport,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    package_name: str,
+) -> Dict[str, Any]:
+    project = config.load_dependencies()[package_name]
+    return {
+        'ref': ReportRefResolver(
+            None,
+            report,
+            project,
+            manifest,
+        ),
+        'source': ReportSourceResolver(
+            None,
+            report,
+            project,
+            manifest,
+        )
+    }

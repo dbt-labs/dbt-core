@@ -131,7 +131,7 @@ class HasRPCServer(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "rpc_048"
+        return "rpc_100"
 
     @property
     def models(self):

@@ -22,7 +22,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
-    UnparsedSourceTableDefinition, UnparsedColumn, TestDef
+    UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
+    ReportOwner, ExposureType, MaturityType
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -57,6 +58,7 @@ class ColumnInfo(
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
+    quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -645,6 +647,71 @@ class ParsedSourceDefinition(
         return f'{self.source_name}.{self.name}'
 
 
+@dataclass
+class ParsedReport(UnparsedBaseNode, HasUniqueID, HasFqn):
+    name: str
+    type: ExposureType
+    owner: ReportOwner
+    resource_type: NodeType = NodeType.Report
+    maturity: Optional[MaturityType] = None
+    url: Optional[str] = None
+    description: Optional[str] = None
+    depends_on: DependsOn = field(default_factory=DependsOn)
+    refs: List[List[str]] = field(default_factory=list)
+    sources: List[List[str]] = field(default_factory=list)
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def search_name(self):
+        return self.name
+
+    # no tags for now, but we could definitely add them
+    @property
+    def tags(self):
+        return []
+
+    def same_depends_on(self, old: 'ParsedReport') -> bool:
+        return set(self.depends_on.nodes) == set(old.depends_on.nodes)
+
+    def same_description(self, old: 'ParsedReport') -> bool:
+        return self.description == old.description
+
+    def same_maturity(self, old: 'ParsedReport') -> bool:
+        return self.maturity == old.maturity
+
+    def same_owner(self, old: 'ParsedReport') -> bool:
+        return self.owner == old.owner
+
+    def same_exposure_type(self, old: 'ParsedReport') -> bool:
+        return self.type == old.type
+
+    def same_url(self, old: 'ParsedReport') -> bool:
+        return self.url == old.url
+
+    def same_contents(self, old: Optional['ParsedReport']) -> bool:
+        # existing when it didn't before is a change!
+        if old is None:
+            return True
+
+        return (
+            self.same_fqn(old) and
+            self.same_exposure_type(old) and
+            self.same_owner(old) and
+            self.same_maturity(old) and
+            self.same_url(old) and
+            self.same_description(old) and
+            self.same_depends_on(old) and
+            True
+        )
+
+
 ParsedResource = Union[
-    ParsedMacro, ParsedNode, ParsedDocumentation, ParsedSourceDefinition
+    ParsedDocumentation,
+    ParsedMacro,
+    ParsedNode,
+    ParsedReport,
+    ParsedSourceDefinition,
 ]

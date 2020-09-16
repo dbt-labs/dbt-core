@@ -4,12 +4,30 @@
 - dbt will compare configurations using the un-rendered form of the config block in dbt_project.yml ([#2713](https://github.com/fishtown-analytics/dbt/issues/2713), [#2735](https://github.com/fishtown-analytics/dbt/pull/2735))
 - Added state and defer arguments to the RPC client, matching the CLI ([#2678](https://github.com/fishtown-analytics/dbt/issues/2678), [#2736](https://github.com/fishtown-analytics/dbt/pull/2736))
 
+## dbt 0.18.1 (Release TBD)
+
+### Under the hood
+- If column config says quote, use quoting in SQL for adding a comment. ([#2539](https://github.com/fishtown-analytics/dbt/issues/2539), [#2733](https://github.com/fishtown-analytics/dbt/pull/2733))
+- Added support for running docker-based tests under Linux. ([#2739](https://github.com/fishtown-analytics/dbt/issues/2739))
+
+### Features
+- Specify all three logging levels (`INFO`, `WARNING`, `ERROR`) in result logs for commands `test`, `seed`, `run`, `snapshot` and `source snapshot-freshness` ([#2680](https://github.com/fishtown-analytics/dbt/pull/2680), [#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
+- Added "reports" ([#2730](https://github.com/fishtown-analytics/dbt/issues/2730), [#2752](https://github.com/fishtown-analytics/dbt/pull/2752))
+
+### Docs
+- Add Report nodes ([docs#135](https://github.com/fishtown-analytics/dbt-docs/issues/135), [docs#136](https://github.com/fishtown-analytics/dbt-docs/pull/136))
+
+Contributors:
+- [@tpilewicz](https://github.com/tpilewicz) ([#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
+- [@heisencoder](https://github.com/heisencoder) ([#2739](https://github.com/fishtown-analytics/dbt/issues/2739))
+
+
 ## dbt 0.18.0 (September 03, 2020)
 
 ### Under the hood
 - Added 3 more adapter methods that the new dbt-adapter-test suite can use for testing. ([#2492](https://github.com/fishtown-analytics/dbt/issues/2492), [#2721](https://github.com/fishtown-analytics/dbt/pull/2721))
 - It is now an error to attempt installing `dbt` with a Python version less than 3.6. (resolves [#2347](https://github.com/fishtown-analytics/dbt/issues/2347))
-- Check for Postgres relation names longer than 63 and throw exception. ([#2197](https://github.com/fishtown-analytics/dbt/issues/2197))
+- Check for Postgres relation names longer than 63 and throw exception. ([#2197](https://github.com/fishtown-analytics/dbt/issues/2197), [#2727](https://github.com/fishtown-analytics/dbt/pull/2727))
 
 
 ### Fixes
@@ -48,7 +66,6 @@ Contributors:
 - Macros in the current project can override internal dbt macros that are called through `execute_macros`. ([#2301](https://github.com/fishtown-analytics/dbt/issues/2301), [#2686](https://github.com/fishtown-analytics/dbt/pull/2686))
 - Add state:modified and state:new selectors ([#2641](https://github.com/fishtown-analytics/dbt/issues/2641), [#2695](https://github.com/fishtown-analytics/dbt/pull/2695))
 - Add two new flags `--use-colors` and `--no-use-colors` to `dbt run` command to enable or disable log colorization from the command line ([#2708](https://github.com/fishtown-analytics/dbt/pull/2708))
-
 
 ### Fixes
 - Fix Redshift table size estimation; e.g. 44 GB tables are no longer reported as 44 KB. [#2702](https://github.com/fishtown-analytics/dbt/issues/2702)

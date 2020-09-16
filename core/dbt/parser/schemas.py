@@ -20,6 +20,7 @@ from dbt.context.context_config import (
 )
 from dbt.context.configured import generate_schema_yml
 from dbt.context.target import generate_target_context
+from dbt.context.providers import generate_parse_report
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.model_config import SourceConfig
@@ -30,11 +31,20 @@ from dbt.contracts.graph.parsed import (
     ParsedSchemaTestNode,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
+    ParsedReport,
 )
 from dbt.contracts.graph.unparsed import (
-    UnparsedSourceDefinition, UnparsedNodeUpdate, UnparsedColumn,
-    UnparsedMacroUpdate, UnparsedAnalysisUpdate, SourcePatch,
-    HasDocs, HasColumnDocs, HasColumnTests, FreshnessThreshold,
+    FreshnessThreshold,
+    HasColumnDocs,
+    HasColumnTests,
+    HasDocs,
+    SourcePatch,
+    UnparsedAnalysisUpdate,
+    UnparsedColumn,
+    UnparsedMacroUpdate,
+    UnparsedNodeUpdate,
+    UnparsedReport,
+    UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
@@ -97,12 +107,18 @@ class ParserRef:
     ):
         tags: List[str] = []
         tags.extend(getattr(column, 'tags', ()))
+        quote: Optional[bool]
+        if isinstance(column, UnparsedColumn):
+            quote = column.quote
+        else:
+            quote = None
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
             description=description,
             data_type=data_type,
             meta=meta,
             tags=tags,
+            quote=quote,
             _extra=column.extra
         )
 
@@ -527,6 +543,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         for test in block.tests:
             self.parse_test(block, test, None)
 
+    def parse_reports(self, block: YamlBlock) -> None:
+        parser = ReportParser(self, block)
+        for node in parser.parse():
+            self.results.add_report(block.file, node)
+
     def parse_file(self, block: FileBlock) -> None:
         dct = self._yaml_from_file(block.file)
         # mark the file as seen, even if there are no macros in it
@@ -557,6 +578,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                     parser = TestablePatchParser(self, yaml_block, plural)
                 for test_block in parser.parse():
                     self.parse_tests(test_block)
+            self.parse_reports(yaml_block)
 
 
 Parsed = TypeVar(
@@ -573,7 +595,7 @@ NonSourceTarget = TypeVar(
 )
 
 
-class YamlDocsReader(metaclass=ABCMeta):
+class YamlReader(metaclass=ABCMeta):
     def __init__(
         self, schema_parser: SchemaParser, yaml: YamlBlock, key: str
     ) -> None:
@@ -615,6 +637,8 @@ class YamlDocsReader(metaclass=ABCMeta):
                 )
                 raise CompilationException(msg)
 
+
+class YamlDocsReader(YamlReader):
     @abstractmethod
     def parse(self) -> List[TestBlock]:
         raise NotImplementedError('parse is abstract')
@@ -779,3 +803,57 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             docs=block.target.docs,
         )
         self.results.add_macro_patch(self.yaml.file, result)
+
+
+class ReportParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock):
+        super().__init__(schema_parser, yaml, NodeType.Report.pluralize())
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_report(self, unparsed: UnparsedReport) -> ParsedReport:
+        package_name = self.project.project_name
+        unique_id = f'{NodeType.Report}.{package_name}.{unparsed.name}'
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+
+        parsed = ParsedReport(
+            package_name=package_name,
+            root_path=self.project.project_root,
+            path=path,
+            original_file_path=self.yaml.path.original_file_path,
+            unique_id=unique_id,
+            fqn=fqn,
+            name=unparsed.name,
+            type=unparsed.type,
+            url=unparsed.url,
+            description=unparsed.description,
+            owner=unparsed.owner,
+            maturity=unparsed.maturity,
+        )
+        ctx = generate_parse_report(
+            parsed,
+            self.root_project,
+            self.schema_parser.macro_manifest,
+            package_name,
+        )
+        depends_on_jinja = '\n'.join(
+            '{{ ' + line + '}}' for line in unparsed.depends_on
+        )
+        get_rendered(
+            depends_on_jinja, ctx, parsed, capture_macros=True
+        )
+        # parsed now has a populated refs/sources
+        return parsed
+
+    def parse(self) -> Iterable[ParsedReport]:
+        for data in self.get_key_dicts():
+            try:
+                unparsed = UnparsedReport.from_dict(data)
+            except (ValidationError, JSONValidationException) as exc:
+                msg = error_context(self.yaml.path, self.key, data, exc)
+                raise CompilationException(msg) from exc
+            parsed = self.parse_report(unparsed)
+            yield parsed

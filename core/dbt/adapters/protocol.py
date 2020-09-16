@@ -9,7 +9,7 @@ import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig
 from dbt.contracts.graph.compiled import (
-    CompiledNode, NonSourceNode, NonSourceCompiledNode
+    CompiledNode, ManifestNode, NonSourceCompiledNode
 )
 from dbt.contracts.graph.parsed import ParsedNode, ParsedSourceDefinition
 from dbt.contracts.graph.model_config import BaseConfig
@@ -55,7 +55,7 @@ class CompilerProtocol(Protocol):
 
     def compile_node(
         self,
-        node: NonSourceNode,
+        node: ManifestNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
     ) -> NonSourceCompiledNode:

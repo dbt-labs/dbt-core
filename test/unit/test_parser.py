@@ -860,7 +860,7 @@ class ProcessingTest(BaseParserTest):
             self.doc.unique_id: self.doc,
         }
         self.manifest = Manifest(
-            nodes=nodes, sources=sources, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
+            nodes=nodes, sources=sources, macros={}, docs=docs, disabled=[], files={}, reports={}, generated_at=mock.MagicMock()
         )
 
     def test_process_docs(self):
