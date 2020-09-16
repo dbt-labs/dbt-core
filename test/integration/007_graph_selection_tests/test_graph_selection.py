@@ -355,3 +355,24 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         assert results[0].node.name == 'unique_users_id'
 
+    @use_profile('postgres')
+    def test__postgres__report_parents(self):
+        self.run_sql_file("seed.sql")
+        results = self.run_dbt(['ls', '--select', '+report:seed_ml_report'])
+        assert len(results) == 2
+        assert sorted(results) == ['report:test.seed_ml_report', 'source:test.raw.seed']
+
+        results = self.run_dbt(['ls', '--select', '1+report:user_report'])
+        assert len(results) == 3
+        assert sorted(results) == ['report:test.user_report', 'test.users', 'test.users_rollup']
+
+        self.run_dbt(['run', '-m', '+report:user_report'])
+        # users, users_rollup
+        assert len(results) == 3
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('users_rollup', created_models)
+        self.assertIn('users', created_models)
+        self.assertNotIn('emails_alt', created_models)
+        self.assertNotIn('subdir', created_models)
+        self.assertNotIn('nested_users', created_models)
