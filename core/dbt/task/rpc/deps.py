@@ -2,7 +2,7 @@ import os
 import shutil
 
 from dbt.contracts.rpc import (
-    RPCNoParameters, RemoteEmptyResult, RemoteMethodFlags,
+    RPCDepsParameters, RemoteDepsResult, RemoteMethodFlags,
 )
 from dbt.rpc.method import RemoteMethod
 from dbt.task.deps import DepsTask
@@ -15,7 +15,7 @@ def _clean_deps(config):
 
 
 class RemoteDepsTask(
-    RemoteMethod[RPCNoParameters, RemoteEmptyResult],
+    RemoteMethod[RPCDepsParameters, RemoteDepsResult],
     DepsTask,
 ):
     METHOD_NAME = 'deps'
@@ -26,10 +26,10 @@ class RemoteDepsTask(
             RemoteMethodFlags.RequiresManifestReloadAfter
         )
 
-    def set_args(self, params: RPCNoParameters):
+    def set_args(self, params: RPCDepsParameters):
         pass
 
-    def handle_request(self) -> RemoteEmptyResult:
+    def handle_request(self) -> RemoteDepsResult:
         _clean_deps(self.config)
         self.run()
-        return RemoteEmptyResult([])
+        return RemoteDepsResult([])

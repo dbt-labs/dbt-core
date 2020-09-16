@@ -22,7 +22,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.files import SourceFile
 from dbt.contracts.util import (
-    Readable, Writable, Replaceable, MacroKey, SourceKey
+    VersionedSchema, Replaceable, MacroKey, SourceKey, SchemaVersion
 )
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_compiler_error, warn_or_error,
@@ -924,7 +924,9 @@ class Manifest:
 
 
 @dataclass
-class WritableManifest(JsonSchemaMixin, Writable, Readable):
+class WritableManifest(VersionedSchema):
+    dbt_schema_version = SchemaVersion('manifest', 1)
+
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=(
             'The nodes defined in the dbt project and its dependencies'
