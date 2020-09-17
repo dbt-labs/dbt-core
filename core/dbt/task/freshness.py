@@ -12,9 +12,10 @@ from .printer import (
 from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
-    FreshnessExecutionResult,
-    SourceFreshnessResult,
+    FreshnessExecutionResultArtifact,
+    FreshnessResult,
     PartialResult,
+    SourceFreshnessResult,
 )
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import print_timestamped_line
@@ -146,8 +147,12 @@ class FreshnessTask(GraphRunnableTask):
     def get_runner_type(self):
         return FreshnessRunner
 
+    def write_result(self, result):
+        artifact = FreshnessExecutionResultArtifact.from_result(result)
+        artifact.write(self.result_path())
+
     def get_result(self, results, elapsed_time, generated_at):
-        return FreshnessExecutionResult(
+        return FreshnessResult.from_node_results(
             elapsed_time=elapsed_time,
             generated_at=generated_at,
             results=results

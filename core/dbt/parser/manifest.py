@@ -1,6 +1,5 @@
 import os
 import pickle
-from datetime import datetime
 from typing import (
     Dict, Optional, Mapping, Callable, Any, List, Type, Union, MutableMapping
 )
@@ -316,7 +315,6 @@ class ManifestLoader:
             macros=self.results.macros,
             docs=self.results.docs,
             reports=self.results.reports,
-            generated_at=datetime.utcnow(),
             metadata=self.root_project.get_metadata(),
             disabled=disabled,
             files=self.results.files,

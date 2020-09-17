@@ -1,7 +1,6 @@
 import abc
 import enum
 from dataclasses import dataclass, field
-from datetime import datetime
 from itertools import chain, islice
 from multiprocessing.synchronize import Lock
 from typing import (
@@ -10,8 +9,6 @@ from typing import (
 )
 from typing_extensions import Protocol
 from uuid import UUID
-
-from hologram import JsonSchemaMixin
 
 from dbt.contracts.graph.compiled import (
     CompileResultNode, ManifestNode, NonSourceCompiledNode, GraphMemberNode
@@ -22,7 +19,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.files import SourceFile
 from dbt.contracts.util import (
-    VersionedSchema, Replaceable, MacroKey, SourceKey, SchemaVersion
+    BaseArtifactMetadata, MacroKey, SourceKey, ArtifactMixin, schema_version
 )
 from dbt.exceptions import (
     raise_duplicate_resource_name, raise_compiler_error, warn_or_error,
@@ -172,8 +169,11 @@ def _search_packages(
 
 
 @dataclass
-class ManifestMetadata(JsonSchemaMixin, Replaceable):
+class ManifestMetadata(BaseArtifactMetadata):
     """Metadata for the manifest."""
+    dbt_schema_version: str = field(
+        default_factory=lambda: str(WritableManifest.dbt_schema_version)
+    )
     project_id: Optional[str] = field(
         default=None,
         metadata={
@@ -208,6 +208,12 @@ class ManifestMetadata(JsonSchemaMixin, Replaceable):
             self.send_anonymous_usage_stats = (
                 not tracking.active_user.do_not_track
             )
+
+    @classmethod
+    def default(cls):
+        return cls(
+            dbt_schema_version=str(WritableManifest.dbt_schema_version),
+        )
 
 
 def _sort_values(dct):
@@ -430,7 +436,6 @@ class Manifest:
     macros: MutableMapping[str, ParsedMacro]
     docs: MutableMapping[str, ParsedDocumentation]
     reports: MutableMapping[str, ParsedReport]
-    generated_at: datetime
     disabled: List[CompileResultNode]
     files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
@@ -456,7 +461,6 @@ class Manifest:
             macros=macros,
             docs={},
             reports={},
-            generated_at=datetime.utcnow(),
             disabled=[],
             files=files,
         )
@@ -726,7 +730,6 @@ class Manifest:
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             reports={k: _deepcopy(v) for k, v in self.reports.items()},
-            generated_at=self.generated_at,
             disabled=[_deepcopy(n) for n in self.disabled],
             metadata=self.metadata,
             files={k: _deepcopy(v) for k, v in self.files.items()},
@@ -746,7 +749,6 @@ class Manifest:
             macros=self.macros,
             docs=self.docs,
             reports=self.reports,
-            generated_at=self.generated_at,
             metadata=self.metadata,
             disabled=self.disabled,
             child_map=forward_edges,
@@ -911,7 +913,6 @@ class Manifest:
             self.macros,
             self.docs,
             self.reports,
-            self.generated_at,
             self.disabled,
             self.files,
             self.metadata,
@@ -924,9 +925,8 @@ class Manifest:
 
 
 @dataclass
-class WritableManifest(VersionedSchema):
-    dbt_schema_version = SchemaVersion('manifest', 1)
-
+@schema_version('manifest', 1)
+class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=(
             'The nodes defined in the dbt project and its dependencies'
@@ -954,9 +954,6 @@ class WritableManifest(VersionedSchema):
     )
     disabled: Optional[List[CompileResultNode]] = field(metadata=dict(
         description='A list of the disabled nodes in the target'
-    ))
-    generated_at: datetime = field(metadata=dict(
-        description='The time at which the manifest was generated',
     ))
     parent_map: Optional[NodeEdgeMap] = field(metadata=dict(
         description='A mapping from child nodes to their dependencies',

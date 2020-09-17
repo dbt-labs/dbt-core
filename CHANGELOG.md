@@ -1,5 +1,8 @@
 ## dbt 0.19.0 (Release TBD)
 
+### Breaking changes
+- The format for sources.json, run-results.json, manifest.json, and catalog.json has changed to include a common metadata field ([#2761](https://github.com/fishtown-analytics/dbt/issues/2761), [#2778](https://github.com/fishtown-analytics/dbt/pull/2778))
+
 ### Features
 - dbt will compare configurations using the un-rendered form of the config block in dbt_project.yml ([#2713](https://github.com/fishtown-analytics/dbt/issues/2713), [#2735](https://github.com/fishtown-analytics/dbt/pull/2735))
 - Added state and defer arguments to the RPC client, matching the CLI ([#2678](https://github.com/fishtown-analytics/dbt/issues/2678), [#2736](https://github.com/fishtown-analytics/dbt/pull/2736))

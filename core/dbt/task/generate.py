@@ -12,7 +12,7 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     TableMetadata, CatalogTable, CatalogResults, Primitive, CatalogKey,
-    StatsItem, StatsDict, ColumnMetadata
+    StatsItem, StatsDict, ColumnMetadata, CatalogArtifact
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
@@ -207,7 +207,7 @@ class GenerateTask(CompileTask):
             )
         return self.manifest
 
-    def run(self) -> CatalogResults:
+    def run(self) -> CatalogArtifact:
         compile_results = None
         if self.args.compile:
             compile_results = CompileTask.run(self)
@@ -215,12 +215,12 @@ class GenerateTask(CompileTask):
                 print_timestamped_line(
                     'compile failed, cannot generate docs'
                 )
-                return CatalogResults(
+                return CatalogArtifact.from_results(
                     nodes={},
                     sources={},
                     generated_at=datetime.utcnow(),
                     errors=None,
-                    _compile_results=compile_results
+                    compile_results=compile_results
                 )
         else:
             self.manifest = get_full_manifest(self.config)
@@ -294,12 +294,12 @@ class GenerateTask(CompileTask):
         generated_at: datetime,
         compile_results: Optional[Any],
         errors: Optional[List[str]]
-    ) -> CatalogResults:
-        return CatalogResults(
+    ) -> CatalogArtifact:
+        return CatalogArtifact.from_results(
+            generated_at=generated_at,
             nodes=nodes,
             sources=sources,
-            generated_at=generated_at,
-            _compile_results=compile_results,
+            compile_results=compile_results,
             errors=errors,
         )
 

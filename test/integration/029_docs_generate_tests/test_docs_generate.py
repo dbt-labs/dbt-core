@@ -377,8 +377,6 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         return {
-            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
-            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
                     'unique_id': 'model.test.model',
@@ -879,13 +877,13 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         catalog = _read_json('./target/catalog.json')
 
-        self.assertIn('generated_at', catalog)
-        self.assertBetween(
-            catalog.pop('generated_at'),
-            start=self.generate_start_time,
-        )
+        assert set(catalog) == {'errors', 'metadata', 'nodes', 'sources'}
+
+        self.verify_metadata(catalog['metadata'], 'https://schemas.getdbt.com/dbt/catalog/v1.json')
+        assert not catalog['errors']
+
         for key in 'nodes', 'sources':
-            self.assertEqual(catalog[key], expected[key])
+            assert catalog[key] == expected[key]
 
     def verify_manifest_macros(self, manifest, expected=None):
         self.assertIn('macros', manifest)
@@ -1536,12 +1534,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.macro_info': ANY,
                 'test.macro_arg_info': ANY,
             },
-            'metadata': {
-                'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'send_anonymous_usage_stats': False,
-                'user_id': None,
-                'adapter_type': self.adapter_type,
-            },
             'disabled': [],
         }
 
@@ -1937,12 +1929,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.view_summary': ['model.test.ephemeral_summary'],
                 'seed.test.seed': [],
                 'source.test.my_source.my_table': [],
-            },
-            'metadata': {
-                'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'send_anonymous_usage_stats': False,
-                'user_id': None,
-                'adapter_type': self.adapter_type,
             },
             'disabled': [],
             'macros': {
@@ -2362,12 +2348,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.macro_info': ANY,
                 'test.macro_arg_info': ANY,
             },
-            'metadata': {
-                'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'send_anonymous_usage_stats': False,
-                'user_id': None,
-                'adapter_type': self.adapter_type,
-            },
             'disabled': [],
         }
 
@@ -2575,14 +2555,17 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.macro_info': ANY,
                 'test.macro_arg_info': ANY,
             },
-            'metadata': {
-                'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'send_anonymous_usage_stats': False,
-                'user_id': None,
-                'adapter_type': self.adapter_type,
-            },
             'disabled': [],
         }
+
+    def verify_metadata(self, metadata, dbt_schema_version):
+        assert 'generated_at' in metadata
+        self.assertBetween(metadata['generated_at'],
+                           start=self.generate_start_time)
+        assert 'dbt_version' in metadata
+        assert metadata['dbt_version'] == dbt.version.__version__
+        assert 'dbt_schema_version' in metadata
+        assert metadata['dbt_schema_version'] == dbt_schema_version
 
     def verify_manifest(self, expected_manifest):
         self.assertTrue(os.path.exists('./target/manifest.json'))
@@ -2590,8 +2573,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         manifest = _read_json('./target/manifest.json')
 
         manifest_keys = frozenset({
-            'nodes', 'sources', 'macros', 'parent_map', 'child_map', 'generated_at',
-            'docs', 'metadata', 'docs', 'disabled', 'reports', 'dbt_schema_version', 'dbt_version',
+            'nodes', 'sources', 'macros', 'parent_map', 'child_map',
+            'docs', 'metadata', 'docs', 'disabled', 'reports'
         })
 
         self.assertEqual(frozenset(manifest), manifest_keys)
@@ -2599,9 +2582,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         for key in manifest_keys:
             if key == 'macros':
                 self.verify_manifest_macros(manifest, expected_manifest.get('macros'))
-            elif key == 'generated_at':
-                self.assertBetween(manifest['generated_at'],
-                                   start=self.generate_start_time)
+            elif key == 'metadata':
+                metadata = manifest['metadata']
+                self.verify_metadata(metadata, 'https://schemas.getdbt.com/dbt/manifest/v1.json')
+                assert 'project_id' in metadata and metadata['project_id'] == '098f6bcd4621d373cade4e832627b4f6'
+                assert 'send_anonymous_usage_stats' in metadata and metadata['send_anonymous_usage_stats'] is False
+                assert 'user_id' in metadata and metadata['user_id'] is None
+                assert 'adapter_type' in metadata and metadata['adapter_type'] == self.adapter_type
             else:
                 self.assertIn(key, expected_manifest)  # sanity check
                 self.assertEqual(manifest[key], expected_manifest[key])
@@ -3340,12 +3327,9 @@ class TestDocsGenerate(DBTIntegrationTest):
     def verify_run_results(self, expected_run_results):
         run_result = _read_json('./target/run_results.json')
 
-        self.assertIn('generated_at', run_result)
+        assert 'metadata' in run_result
+        self.verify_metadata(run_result['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v1.json')
         self.assertIn('elapsed_time', run_result)
-        self.assertBetween(
-            run_result['generated_at'],
-            start=self.generate_start_time
-        )
         self.assertGreater(run_result['elapsed_time'], 0)
         self.assertTrue(
             isinstance(run_result['elapsed_time'], float),
@@ -3355,12 +3339,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         # sort the results so we can make reasonable assertions
         run_result['results'].sort(key=lambda r: r['node']['unique_id'])
         assert run_result['results'] == expected_run_results
-        assert run_result['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/run-results/v1.json'
-        assert run_result['dbt_version'] == dbt.version.__version__
-        set(run_result) == {
-            'generated_at', 'elapsed_time', 'results', 'dbt_schema_version',
-            'dbt_version'
-        }
+        set(run_result) == {'elapsed_time', 'results', 'metadata'}
 
     @use_profile('postgres')
     def test__postgres__run_and_generate_no_compile(self):

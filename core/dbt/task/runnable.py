@@ -30,7 +30,7 @@ from dbt.logger import (
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.results import ExecutionResult
+from dbt.contracts.results import RunResultsArtifact
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     InternalException,
@@ -395,6 +395,9 @@ class GraphRunnableTask(ManifestTask):
         )
         return result
 
+    def write_result(self, result):
+        result.write(self.result_path())
+
     def run(self):
         """
         Run dbt for the query, based on the graph.
@@ -422,7 +425,7 @@ class GraphRunnableTask(ManifestTask):
         result = self.execute_with_hooks(selected_uids)
 
         if flags.WRITE_JSON:
-            result.write(self.result_path())
+            self.write_result(result)
 
         self.task_end_messages(result.results)
         return result
@@ -526,7 +529,7 @@ class GraphRunnableTask(ManifestTask):
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
-        return ExecutionResult(
+        return RunResultsArtifact.from_node_results(
             results=results,
             elapsed_time=elapsed_time,
             generated_at=generated_at

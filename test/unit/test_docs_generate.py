@@ -30,7 +30,6 @@ class GenerateTest(unittest.TestCase):
         result = generate.CatalogResults(
             nodes=nodes,
             sources=sources,
-            generated_at=datetime.utcnow(),
             errors=None,
         )
         return result.to_dict(omit_none=False)['nodes']
