@@ -1,5 +1,8 @@
 ## dbt 0.18.1 (Release TBD)
 
+## dbt 0.18.1b1 (September 17, 2020)
+
+
 ### Under the hood
 - If column config says quote, use quoting in SQL for adding a comment. ([#2539](https://github.com/fishtown-analytics/dbt/issues/2539), [#2733](https://github.com/fishtown-analytics/dbt/pull/2733))
 - Added support for running docker-based tests under Linux. ([#2739](https://github.com/fishtown-analytics/dbt/issues/2739))
