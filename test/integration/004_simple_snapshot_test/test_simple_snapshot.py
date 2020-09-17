@@ -821,7 +821,13 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
             database = self.adapter.quote(database)
 
         results = self.run_sql(
-            'select id, dbt_valid_to from {}.{}.snapshot_actual'.format(database, self.unique_schema()),
+            '''
+            select
+                id,
+                dbt_valid_to
+            from {}.{}.snapshot_actual
+            order by id
+            '''.format(database, self.unique_schema()),
             fetch='all'
         )
 
