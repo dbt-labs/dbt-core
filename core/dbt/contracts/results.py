@@ -225,15 +225,14 @@ class RunOperationResult(ExecutionResult):
 
 @dataclass
 class RunOperationResultMetadata(BaseArtifactMetadata):
-    dbt_schema_version: str = field(default_factory=lambda: str(
-        RunOperationResultsArtifact.dbt_schema_version
-    ))
+    dbt_schema_version: str = field(
+        default_factory=lambda: str(RunOperationResultsArtifact.dbt_schema_version)
+    )
 
 
 @dataclass
-@schema_version('run-operation-result', 1)
+@schema_version("run-operation-result", 1)
 class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
-
     @classmethod
     def from_success(
         cls,
@@ -251,6 +250,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
             elapsed_time=elapsed_time,
             success=success,
         )
+
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
@@ -307,9 +307,7 @@ FreshnessNodeResult = Union[PartialSourceFreshnessResult, SourceFreshnessResult]
 FreshnessNodeOutput = Union[SourceFreshnessRuntimeError, SourceFreshnessOutput]
 
 
-def process_freshness_result(
-    result: FreshnessNodeResult
-) -> FreshnessNodeOutput:
+def process_freshness_result(result: FreshnessNodeResult) -> FreshnessNodeOutput:
     unique_id = result.node.unique_id
     if result.status == FreshnessStatus.RuntimeErr:
         return SourceFreshnessRuntimeError(
@@ -321,16 +319,14 @@ def process_freshness_result(
     # we know that this must be a SourceFreshnessResult
     if not isinstance(result, SourceFreshnessResult):
         raise InternalException(
-            'Got {} instead of a SourceFreshnessResult for a '
-            'non-error result in freshness execution!'
-            .format(type(result))
+            "Got {} instead of a SourceFreshnessResult for a "
+            "non-error result in freshness execution!".format(type(result))
         )
     # if we're here, we must have a non-None freshness threshold
     criteria = result.node.freshness
     if criteria is None:
         raise InternalException(
-            'Somehow evaluated a freshness result for a source '
-            'that has no freshness criteria!'
+            "Somehow evaluated a freshness result for a source " "that has no freshness criteria!"
         )
     return SourceFreshnessOutput(
         unique_id=unique_id,
@@ -349,9 +345,7 @@ def process_freshness_result(
 @dataclass
 class FreshnessMetadata(BaseArtifactMetadata):
     dbt_schema_version: str = field(
-        default_factory=lambda: str(
-            FreshnessExecutionResultArtifact.dbt_schema_version
-        )
+        default_factory=lambda: str(FreshnessExecutionResultArtifact.dbt_schema_version)
     )
 
 
@@ -471,7 +465,7 @@ class CatalogResults(dbtClassMixin):
 
 
 @dataclass
-@schema_version('catalog', 1)
+@schema_version("catalog", 1)
 class CatalogArtifact(CatalogResults, ArtifactMixin):
     metadata: CatalogMetadata
 
@@ -482,8 +476,8 @@ class CatalogArtifact(CatalogResults, ArtifactMixin):
         nodes: Dict[str, CatalogTable],
         sources: Dict[str, CatalogTable],
         compile_results: Optional[Any],
-        errors: Optional[List[str]]
-    ) -> 'CatalogArtifact':
+        errors: Optional[List[str]],
+    ) -> "CatalogArtifact":
         meta = CatalogMetadata(generated_at=generated_at)
         return cls(
             metadata=meta,

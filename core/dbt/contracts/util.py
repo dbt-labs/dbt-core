@@ -166,7 +166,7 @@ def get_metadata_env() -> Dict[str, str]:
 class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
-    generated_at: datetime = dataclasses.field(
+    generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
         default_factory=datetime.utcnow
     )
     invocation_id: Optional[str] = dataclasses.field(
@@ -199,6 +199,7 @@ def schema_version(name: str, version: int):
             version=version,
         )
         return cls
+
     return inner
 
 
@@ -211,7 +212,7 @@ class VersionedSchema(dbtClassMixin):
     def json_schema(cls, embeddable: bool = False) -> Dict[str, Any]:
         result = super().json_schema(embeddable=embeddable)
         if not embeddable:
-            result['$id'] = str(cls.dbt_schema_version)
+            result["$id"] = str(cls.dbt_schema_version)
         return result
 
     @classmethod
@@ -239,7 +240,7 @@ class VersionedSchema(dbtClassMixin):
         return cls.from_dict(data)  # type: ignore
 
 
-T = TypeVar('T', bound='ArtifactMixin')
+T = TypeVar("T", bound="ArtifactMixin")
 
 
 # metadata should really be a Generic[T_M] where T_M is a TypeVar bound to
@@ -255,6 +256,4 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
     def validate(cls, data):
         super().validate(data)
         if cls.dbt_schema_version is None:
-            raise InternalException(
-                'Cannot call from_dict with no schema version!'
-            )
+            raise InternalException("Cannot call from_dict with no schema version!")

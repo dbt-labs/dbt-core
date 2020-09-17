@@ -207,7 +207,7 @@ class GenerateTask(CompileTask):
                     sources={},
                     generated_at=datetime.utcnow(),
                     errors=None,
-                    compile_results=compile_results
+                    compile_results=compile_results,
                 )
         else:
             self.manifest = ManifestLoader.get_full_manifest(self.config)
