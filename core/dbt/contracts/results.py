@@ -3,7 +3,9 @@ from dbt.contracts.graph.unparsed import (
     Time, FreshnessStatus, FreshnessThreshold
 )
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.util import Writable, Replaceable
+from dbt.contracts.util import (
+    Writable, VersionedSchema, Replaceable, SchemaVersion
+)
 from dbt.exceptions import InternalException
 from dbt.logger import (
     TimingProcessor,
@@ -86,7 +88,8 @@ class RunModelResult(WritableRunModelResult):
 
 
 @dataclass
-class ExecutionResult(JsonSchemaMixin, Writable):
+class ExecutionResult(VersionedSchema):
+    dbt_schema_version = SchemaVersion('run-results', 1)
     results: List[Union[WritableRunModelResult, PartialResult]]
     generated_at: datetime
     elapsed_time: float
@@ -140,7 +143,8 @@ class FreshnessMetadata(JsonSchemaMixin):
 
 
 @dataclass
-class FreshnessExecutionResult(FreshnessMetadata):
+class FreshnessExecutionResult(VersionedSchema, FreshnessMetadata):
+    dbt_schema_version = SchemaVersion('sources', 1)
     results: List[Union[PartialResult, SourceFreshnessResult]]
 
     def write(self, path, omit_none=True):
@@ -293,7 +297,8 @@ class CatalogTable(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class CatalogResults(JsonSchemaMixin, Writable):
+class CatalogResults(VersionedSchema):
+    dbt_schema_version = SchemaVersion('catalog', 1)
     nodes: Dict[str, CatalogTable]
     sources: Dict[str, CatalogTable]
     generated_at: datetime

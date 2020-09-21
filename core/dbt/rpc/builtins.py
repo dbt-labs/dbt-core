@@ -21,7 +21,7 @@ from dbt.contracts.rpc import (
     RemoteRunResult,
     RemoteCompileResult,
     RemoteCatalogResults,
-    RemoteEmptyResult,
+    RemoteDepsResult,
     RemoteRunOperationResult,
     PollParameters,
     PollResult,
@@ -158,7 +158,7 @@ def poll_complete(
         cls = PollCompileCompleteResult
     elif isinstance(result, RemoteCatalogResults):
         cls = PollCatalogCompleteResult
-    elif isinstance(result, RemoteEmptyResult):
+    elif isinstance(result, RemoteDepsResult):
         cls = PollRemoteEmptyCompleteResult
     elif isinstance(result, RemoteRunOperationResult):
         cls = PollRunOperationCompleteResult

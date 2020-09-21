@@ -12,6 +12,7 @@ from pytest import mark
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyString, AnyStringWith, normalize, Normalized
 
+import dbt.version
 from dbt.exceptions import CompilationException
 
 
@@ -376,6 +377,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
                     'unique_id': 'model.test.model',
@@ -507,6 +510,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'seed.test.seed': {
                     'unique_id': 'seed.test.seed',
@@ -686,6 +691,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.clustered': {
                     'unique_id': 'model.test.clustered',
@@ -771,6 +778,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         role = self.get_role()
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
                     'unique_id': 'model.test.model',
@@ -1033,6 +1042,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         unrendered_test_config = self.unrendered_tst_config()
 
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
                     'build_path': Normalized('target/compiled/test/models/model.sql'),
@@ -1436,6 +1447,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': [],
                     'unique_id': 'source.test.my_source.my_table',
                     'fqn': ['test', 'my_source', 'my_table'],
+                    'unrendered_config': {},
                 },
             },
             'reports': {
@@ -1544,6 +1556,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         seed_path = self.dir('seed/seed.csv')
 
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.ephemeral_copy': {
                     'alias': 'ephemeral_copy',
@@ -1969,6 +1983,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
 
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.clustered': {
                     'alias': 'clustered',
@@ -2386,6 +2402,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         seed_path = self.dir('seed/seed.csv')
 
         return {
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
                     'build_path': Normalized('target/compiled/test/rs_models/model.sql'),
@@ -2573,7 +2591,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         manifest_keys = frozenset({
             'nodes', 'sources', 'macros', 'parent_map', 'child_map', 'generated_at',
-            'docs', 'metadata', 'docs', 'disabled', 'reports'
+            'docs', 'metadata', 'docs', 'disabled', 'reports', 'dbt_schema_version', 'dbt_version',
         })
 
         self.assertEqual(frozenset(manifest), manifest_keys)
@@ -3336,7 +3354,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
         # sort the results so we can make reasonable assertions
         run_result['results'].sort(key=lambda r: r['node']['unique_id'])
-        self.assertEqual(run_result['results'], expected_run_results)
+        assert run_result['results'] == expected_run_results
+        assert run_result['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/run-results/v1.json'
+        assert run_result['dbt_version'] == dbt.version.__version__
+        set(run_result) == {
+            'generated_at', 'elapsed_time', 'results', 'dbt_schema_version',
+            'dbt_version'
+        }
 
     @use_profile('postgres')
     def test__postgres__run_and_generate_no_compile(self):
