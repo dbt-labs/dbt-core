@@ -9,6 +9,7 @@ from datetime import datetime
 import pytest
 
 import dbt.flags
+import dbt.version
 from dbt import tracking
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
@@ -219,6 +220,8 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
+                'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+                'dbt_version': dbt.version.__version__,
                 'nodes': {},
                 'sources': {},
                 'macros': {},
@@ -347,6 +350,8 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
+                'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+                'dbt_version': dbt.version.__version__,
                 'nodes': {},
                 'sources': {},
                 'macros': {},
@@ -581,6 +586,8 @@ class MixedManifestTest(unittest.TestCase):
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
+                'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+                'dbt_version': dbt.version.__version__,
                 'nodes': {},
                 'macros': {},
                 'sources': {},
