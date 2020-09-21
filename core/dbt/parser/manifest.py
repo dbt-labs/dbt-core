@@ -1034,9 +1034,7 @@ def _process_docs_for_metrics(context: Dict[str, Any], metric: ParsedMetric) -> 
     metric.description = get_rendered(metric.description, context)
 
 
-def _process_refs_for_exposure(
-    manifest: Manifest, current_project: str, exposure: ParsedExposure
-):
+def _process_refs_for_exposure(manifest: Manifest, current_project: str, exposure: ParsedExposure):
     """Given a manifest and a exposure in that manifest, process its refs"""
     for ref in exposure.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
@@ -1177,10 +1175,7 @@ def _process_sources_for_exposure(
         )
         if target_source is None or isinstance(target_source, Disabled):
             invalid_source_fail_unless_test(
-                exposure,
-                source_name,
-                table_name,
-                disabled=(isinstance(target_source, Disabled))
+                exposure, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )
             continue
         target_source_id = target_source.unique_id
