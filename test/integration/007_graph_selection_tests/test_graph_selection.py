@@ -356,17 +356,17 @@ class TestGraphSelection(DBTIntegrationTest):
         assert results[0].node.name == 'unique_users_id'
 
     @use_profile('postgres')
-    def test__postgres__report_parents(self):
+    def test__postgres__exposure_parents(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['ls', '--select', '+report:seed_ml_report'])
+        results = self.run_dbt(['ls', '--select', '+exposure:seed_ml_exposure'])
         assert len(results) == 2
-        assert sorted(results) == ['report:test.seed_ml_report', 'source:test.raw.seed']
+        assert sorted(results) == ['exposure:test.seed_ml_exposure', 'source:test.raw.seed']
 
-        results = self.run_dbt(['ls', '--select', '1+report:user_report'])
+        results = self.run_dbt(['ls', '--select', '1+exposure:user_exposure'])
         assert len(results) == 3
-        assert sorted(results) == ['report:test.user_report', 'test.users', 'test.users_rollup']
+        assert sorted(results) == ['exposure:test.user_exposure', 'test.users', 'test.users_rollup']
 
-        self.run_dbt(['run', '-m', '+report:user_report'])
+        self.run_dbt(['run', '-m', '+exposure:user_exposure'])
         # users, users_rollup
         assert len(results) == 3
 

@@ -1437,16 +1437,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'fqn': ['test', 'my_source', 'my_table'],
                 },
             },
-            'reports': {
-                'report.test.notebook_report': {
+            'exposures': {
+                'exposure.test.notebook_exposure': {
                     'depends_on': {
                         'macros': [],
                         'nodes': ['model.test.model', 'model.test.second_model']
                     },
-                    'description': 'A description of the complex report',
-                    'fqn': ['test', 'notebook_report'],
+                    'description': 'A description of the complex exposure',
+                    'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
-                    'name': 'notebook_report',
+                    'name': 'notebook_exposure',
                     'original_file_path': self.dir('models/schema.yml'),
                     'owner': {
                         'email': 'something@example.com',
@@ -1455,14 +1455,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'schema.yml',
                     'refs': [['model'], ['second_model']],
-                    'resource_type': 'report',
+                    'resource_type': 'exposure',
                     'root_path': self.test_root_realpath,
                     'sources': [],
                     'type': 'notebook',
-                    'unique_id': 'report.test.notebook_report',
+                    'unique_id': 'exposure.test.notebook_exposure',
                     'url': 'http://example.com/notebook/1'
                 },
-                'report.test.simple_report': {
+                'exposure.test.simple_exposure': {
                     'depends_on': {
                         'macros': [],
                         'nodes': [
@@ -1471,8 +1471,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         ],
                     },
                     'description': None,
-                    'fqn': ['test', 'simple_report'],
-                    'name': 'simple_report',
+                    'fqn': ['test', 'simple_exposure'],
+                    'name': 'simple_exposure',
                     'original_file_path': self.dir('models/schema.yml'),
                     'owner': {
                         'email': 'something@example.com',
@@ -1481,11 +1481,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'schema.yml',
                     'refs': [['model']],
-                    'resource_type': 'report',
+                    'resource_type': 'exposure',
                     'root_path': self.test_root_realpath,
                     'sources': [['my_source', 'my_table']],
                     'type': 'dashboard',
-                    'unique_id': 'report.test.simple_report',
+                    'unique_id': 'exposure.test.simple_exposure',
                     'url': None,
                     'maturity': None,
                 }
@@ -1493,8 +1493,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'model.test.second_model': ['seed.test.seed'],
-                'report.test.notebook_report': ['model.test.model', 'model.test.second_model'],
-                'report.test.simple_report': ['model.test.model', 'source.test.my_source.my_table'],
+                'exposure.test.notebook_exposure': ['model.test.model', 'model.test.second_model'],
+                'exposure.test.simple_exposure': ['model.test.model', 'source.test.my_source.my_table'],
                 'seed.test.seed': [],
                 'source.test.my_source.my_table': [],
                 'test.test.not_null_model_id': ['model.test.model'],
@@ -1503,17 +1503,17 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'child_map': {
                 'model.test.model': [
-                    'report.test.notebook_report',
-                    'report.test.simple_report',
+                    'exposure.test.notebook_exposure',
+                    'exposure.test.simple_exposure',
                     'test.test.not_null_model_id',
                     'test.test.test_nothing_model_',
                     'test.test.unique_model_id',
                 ],
-                'model.test.second_model': ['report.test.notebook_report'],
-                'report.test.notebook_report': [],
-                'report.test.simple_report': [],
+                'model.test.second_model': ['exposure.test.notebook_exposure'],
+                'exposure.test.notebook_exposure': [],
+                'exposure.test.simple_exposure': [],
                 'seed.test.seed': ['model.test.model', 'model.test.second_model'],
-                'source.test.my_source.my_table': ['report.test.simple_report'],
+                'source.test.my_source.my_table': ['exposure.test.simple_exposure'],
                 'test.test.not_null_model_id': [],
                 'test.test.test_nothing_model_': [],
                 'test.test.unique_model_id': [],
@@ -1871,7 +1871,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'fqn': ['test', 'my_source', 'my_table'],
                 },
             },
-            'reports': {},
+            'exposures': {},
             'docs': {
                 'dbt.__overview__': ANY,
                 'test.column_info': {
@@ -2431,7 +2431,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
             },
             'sources': {},
-            'reports': {},
+            'exposures': {},
             'child_map': {
                 'model.test.clustered': [],
                 'model.test.multi_clustered': [],
@@ -2676,7 +2676,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
             },
             'sources': {},
-            'reports': {},
+            'exposures': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': []
@@ -2706,7 +2706,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         manifest_keys = frozenset({
             'nodes', 'sources', 'macros', 'parent_map', 'child_map', 'generated_at',
-            'docs', 'metadata', 'docs', 'disabled', 'reports'
+            'docs', 'metadata', 'docs', 'disabled', 'exposures'
         })
 
         self.assertEqual(frozenset(manifest), manifest_keys)

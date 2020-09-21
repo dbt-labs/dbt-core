@@ -2,7 +2,7 @@ import json
 from typing import Type
 
 from dbt.contracts.graph.parsed import (
-    ParsedReport,
+    ParsedExposure,
     ParsedSourceDefinition,
 )
 from dbt.graph import (
@@ -24,7 +24,7 @@ class ListTask(GraphRunnableTask):
         NodeType.Seed,
         NodeType.Test,
         NodeType.Source,
-        NodeType.Report,
+        NodeType.Exposure,
     ))
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((
         NodeType.Analysis,
@@ -76,8 +76,8 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.nodes[node]
             elif node in self.manifest.sources:
                 yield self.manifest.sources[node]
-            elif node in self.manifest.reports:
-                yield self.manifest.reports[node]
+            elif node in self.manifest.exposures:
+                yield self.manifest.exposures[node]
             else:
                 raise RuntimeException(
                     f'Got an unexpected result from node selection: "{node}"'
@@ -93,11 +93,11 @@ class ListTask(GraphRunnableTask):
                     node.package_name, node.source_name, node.name
                 ])
                 yield f'source:{source_selector}'
-            elif node.resource_type == NodeType.Report:
-                assert isinstance(node, ParsedReport)
-                # reports are searched for by pkg.report_name
-                report_selector = '.'.join([node.package_name, node.name])
-                yield f'report:{report_selector}'
+            elif node.resource_type == NodeType.Exposure:
+                assert isinstance(node, ParsedExposure)
+                # exposures are searched for by pkg.exposure_name
+                exposure_selector = '.'.join([node.package_name, node.name])
+                yield f'exposure:{exposure_selector}'
             else:
                 # everything else is from `fqn`
                 yield '.'.join(node.fqn)
