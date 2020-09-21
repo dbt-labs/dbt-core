@@ -23,7 +23,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
-    ReportOwner, ExposureType, MaturityType
+    ExposureOwner, ExposureType, MaturityType
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -636,11 +636,11 @@ class ParsedSourceDefinition(
 
 
 @dataclass
-class ParsedReport(UnparsedBaseNode, HasUniqueID, HasFqn):
+class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     name: str
     type: ExposureType
-    owner: ReportOwner
-    resource_type: NodeType = NodeType.Report
+    owner: ExposureOwner
+    resource_type: NodeType = NodeType.Exposure
     maturity: Optional[MaturityType] = None
     url: Optional[str] = None
     description: Optional[str] = None
@@ -661,25 +661,25 @@ class ParsedReport(UnparsedBaseNode, HasUniqueID, HasFqn):
     def tags(self):
         return []
 
-    def same_depends_on(self, old: 'ParsedReport') -> bool:
+    def same_depends_on(self, old: 'ParsedExposure') -> bool:
         return set(self.depends_on.nodes) == set(old.depends_on.nodes)
 
-    def same_description(self, old: 'ParsedReport') -> bool:
+    def same_description(self, old: 'ParsedExposure') -> bool:
         return self.description == old.description
 
-    def same_maturity(self, old: 'ParsedReport') -> bool:
+    def same_maturity(self, old: 'ParsedExposure') -> bool:
         return self.maturity == old.maturity
 
-    def same_owner(self, old: 'ParsedReport') -> bool:
+    def same_owner(self, old: 'ParsedExposure') -> bool:
         return self.owner == old.owner
 
-    def same_exposure_type(self, old: 'ParsedReport') -> bool:
+    def same_exposure_type(self, old: 'ParsedExposure') -> bool:
         return self.type == old.type
 
-    def same_url(self, old: 'ParsedReport') -> bool:
+    def same_url(self, old: 'ParsedExposure') -> bool:
         return self.url == old.url
 
-    def same_contents(self, old: Optional['ParsedReport']) -> bool:
+    def same_contents(self, old: Optional['ParsedExposure']) -> bool:
         # existing when it didn't before is a change!
         if old is None:
             return True
@@ -700,6 +700,6 @@ ParsedResource = Union[
     ParsedDocumentation,
     ParsedMacro,
     ParsedNode,
-    ParsedReport,
+    ParsedExposure,
     ParsedSourceDefinition,
 ]

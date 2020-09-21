@@ -10,7 +10,7 @@ from dbt.contracts.graph.parsed import (
     DependsOn,
     NodeConfig,
     ParsedModelNode,
-    ParsedReport,
+    ParsedExposure,
     ParsedSeedNode,
     ParsedSnapshotNode,
     ParsedDataTestNode,
@@ -21,7 +21,7 @@ from dbt.contracts.graph.parsed import (
     ColumnInfo,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.unparsed import ExposureType, ReportOwner
+from dbt.contracts.graph.unparsed import ExposureType, ExposureOwner
 from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt.graph.selector_methods import (
@@ -35,7 +35,7 @@ from dbt.graph.selector_methods import (
     TestNameSelectorMethod,
     TestTypeSelectorMethod,
     StateSelectorMethod,
-    ReportSelectorMethod,
+    ExposureSelectorMethod,
 )
 import dbt.exceptions
 import dbt.contracts.graph.parsed
@@ -294,7 +294,7 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
     )
 
 
-def make_report(pkg, name, path=None, fqn_extras=None, owner=None):
+def make_exposure(pkg, name, path=None, fqn_extras=None, owner=None):
     if path is None:
         path = 'schema.yml'
 
@@ -302,14 +302,14 @@ def make_report(pkg, name, path=None, fqn_extras=None, owner=None):
         fqn_extras = []
 
     if owner is None:
-        owner = ReportOwner(email='test@example.com')
+        owner = ExposureOwner(email='test@example.com')
 
-    fqn = [pkg, 'reports'] + fqn_extras + [name]
-    return ParsedReport(
+    fqn = [pkg, 'exposures'] + fqn_extras + [name]
+    return ParsedExposure(
         name=name,
         type=ExposureType.Notebook,
         fqn=fqn,
-        unique_id=f'report.{pkg}.{name}',
+        unique_id=f'exposure.{pkg}.{name}',
         package_name=pkg,
         path=path,
         root_path='/usr/src/app',
@@ -468,7 +468,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source,
         macros={},
         docs={},
         files={},
-        reports={},
+        exposures={},
         generated_at=datetime.utcnow(),
         disabled=[],
     )
@@ -476,7 +476,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source,
 
 
 def search_manifest_using_method(manifest, method, selection):
-    selected = method.search(set(manifest.nodes) | set(manifest.sources) | set(manifest.reports), selection)
+    selected = method.search(set(manifest.nodes) | set(manifest.sources) | set(manifest.exposures), selection)
     results = {manifest.expect(uid).search_name for uid in selected}
     return results
 
@@ -586,14 +586,14 @@ def test_select_test_type(manifest):
     assert search_manifest_using_method(manifest, method, 'data') == {'view_test_nothing'}
 
 
-def test_select_report(manifest):
-    report = make_report('test', 'my_report')
-    manifest.reports[report.unique_id] = report
+def test_select_exposure(manifest):
+    exposure = make_exposure('test', 'my_exposure')
+    manifest.exposures[exposure.unique_id] = exposure
     methods = MethodManager(manifest, None)
-    method = methods.get_method('report', [])
-    assert isinstance(method, ReportSelectorMethod)
-    assert search_manifest_using_method(manifest, method, 'my_report') == {'my_report'}
-    assert not search_manifest_using_method(manifest, method, 'not_my_report')
+    method = methods.get_method('exposure', [])
+    assert isinstance(method, ExposureSelectorMethod)
+    assert search_manifest_using_method(manifest, method, 'my_exposure') == {'my_exposure'}
+    assert not search_manifest_using_method(manifest, method, 'not_my_exposure')
 
 
 @pytest.fixture

@@ -426,9 +426,9 @@ class Compiler:
             linker.add_node(source.unique_id)
         for node in manifest.nodes.values():
             self.link_node(linker, node, manifest)
-        for report in manifest.reports.values():
-            self.link_node(linker, report, manifest)
-            # linker.add_node(report.unique_id)
+        for exposure in manifest.exposures.values():
+            self.link_node(linker, exposure, manifest)
+            # linker.add_node(exposure.unique_id)
 
         cycle = linker.find_cycles()
 
