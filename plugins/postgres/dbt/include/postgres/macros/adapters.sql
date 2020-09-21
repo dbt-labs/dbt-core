@@ -155,6 +155,6 @@
   {% for column_name in column_dict %}
     {% set comment = column_dict[column_name]['description'] %}
     {% set escaped_comment = postgres_escape_comment(comment) %}
-    comment on column {{ relation }}.{{ column_name }} is {{ escaped_comment }};
+    comment on column {{ relation }}.{{ adapter.quote(column_name) if column_dict[column_name]['quote'] else column_name }} is {{ escaped_comment }};
   {% endfor %}
 {% endmacro %}

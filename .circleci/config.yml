@@ -2,7 +2,7 @@ version: 2.1
 jobs:
   unit:
     docker: &test_only
-      - image: fishtownanalytics/test-container:7
+      - image: fishtownanalytics/test-container:9
         environment:
           DBT_INVOCATION_ENV: circle
     steps:
@@ -30,7 +30,7 @@ jobs:
           destination: dist
   integration-postgres-py36:
     docker: &test_and_postgres
-      - image: fishtownanalytics/test-container:7
+      - image: fishtownanalytics/test-container:9
         environment:
           DBT_INVOCATION_ENV: circle
       - image: postgres

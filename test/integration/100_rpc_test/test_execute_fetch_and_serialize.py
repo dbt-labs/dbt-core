@@ -7,7 +7,7 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "rpc_test_048"
+        return "rpc_test_100"
 
     @property
     def models(self):

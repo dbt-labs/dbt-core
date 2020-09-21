@@ -1,5 +1,5 @@
 
-from typing import Set, List, Union, Optional
+from typing import Set, List, Optional
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
@@ -13,9 +13,8 @@ from dbt.exceptions import (
     InvalidSelectorException,
     warn_or_error,
 )
-from dbt.contracts.graph.compiled import NonSourceNode, CompileResultNode
+from dbt.contracts.graph.compiled import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.state import PreviousState
 
 
@@ -130,24 +129,25 @@ class NodeSelector(MethodManager):
         if unique_id in self.manifest.sources:
             source = self.manifest.sources[unique_id]
             return source.config.enabled
+        elif unique_id in self.manifest.reports:
+            return True
         node = self.manifest.nodes[unique_id]
         return not node.empty and node.config.enabled
 
-    def node_is_match(
-        self,
-        node: Union[ParsedSourceDefinition, NonSourceNode],
-    ) -> bool:
+    def node_is_match(self, node: GraphMemberNode) -> bool:
         """Determine if a node is a match for the selector. Non-match nodes
         will be excluded from results during filtering.
         """
         return True
 
     def _is_match(self, unique_id: UniqueId) -> bool:
-        node: CompileResultNode
+        node: GraphMemberNode
         if unique_id in self.manifest.nodes:
             node = self.manifest.nodes[unique_id]
         elif unique_id in self.manifest.sources:
             node = self.manifest.sources[unique_id]
+        elif unique_id in self.manifest.reports:
+            node = self.manifest.reports[unique_id]
         else:
             raise InternalException(
                 f'Node {unique_id} not found in the manifest!'
