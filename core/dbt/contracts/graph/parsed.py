@@ -791,25 +791,25 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     def search_name(self):
         return self.name
 
-    def same_depends_on(self, old: 'ParsedExposure') -> bool:
+    def same_depends_on(self, old: "ParsedExposure") -> bool:
         return set(self.depends_on.nodes) == set(old.depends_on.nodes)
 
-    def same_description(self, old: 'ParsedExposure') -> bool:
+    def same_description(self, old: "ParsedExposure") -> bool:
         return self.description == old.description
 
-    def same_maturity(self, old: 'ParsedExposure') -> bool:
+    def same_maturity(self, old: "ParsedExposure") -> bool:
         return self.maturity == old.maturity
 
-    def same_owner(self, old: 'ParsedExposure') -> bool:
+    def same_owner(self, old: "ParsedExposure") -> bool:
         return self.owner == old.owner
 
-    def same_exposure_type(self, old: 'ParsedExposure') -> bool:
+    def same_exposure_type(self, old: "ParsedExposure") -> bool:
         return self.type == old.type
 
-    def same_url(self, old: 'ParsedExposure') -> bool:
+    def same_url(self, old: "ParsedExposure") -> bool:
         return self.url == old.url
 
-    def same_contents(self, old: Optional['ParsedExposure']) -> bool:
+    def same_contents(self, old: Optional["ParsedExposure"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:

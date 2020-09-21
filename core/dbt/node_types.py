@@ -16,7 +16,7 @@ class NodeType(StrEnum):
     Documentation = "docs"
     Source = 'source'
     Macro = "macro"
-    Exposure = 'exposure'
+    Exposure = "exposure"
     Metric = "metric"
 
     @classmethod

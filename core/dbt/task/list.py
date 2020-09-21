@@ -22,7 +22,7 @@ class ListTask(GraphRunnableTask):
         NodeType.Seed,
         NodeType.Test,
         NodeType.Source,
-        NodeType.Exposure,
+            NodeType.Source,
             NodeType.Exposure,
     ))
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((
@@ -105,8 +105,8 @@ class ListTask(GraphRunnableTask):
             elif node.resource_type == NodeType.Exposure:
                 assert isinstance(node, ParsedExposure)
                 # exposures are searched for by pkg.exposure_name
-                exposure_selector = '.'.join([node.package_name, node.name])
-                yield f'exposure:{exposure_selector}'
+                exposure_selector = ".".join([node.package_name, node.name])
+                yield f"exposure:{exposure_selector}"
             elif node.resource_type == NodeType.Metric:
                 assert isinstance(node, ParsedMetric)
                 # metrics are searched for by pkg.metric_name

@@ -45,7 +45,7 @@ class MethodName(StrEnum):
     TestType = 'test_type'
     ResourceType = 'resource_type'
     State = "state"
-    Exposure = 'exposure'
+    Exposure = "exposure"
     Metric = "metric"
     Result = 'result'
 
@@ -250,8 +250,8 @@ class ExposureSelectorMethod(SelectorMethod):
         else:
             msg = (
                 'Invalid exposure selector value "{}". Exposures must be of '
-                'the form ${{exposure_name}} or '
-                '${{exposure_package.exposure_name}}'
+                "the form ${{exposure_name}} or "
+                "${{exposure_package.exposure_name}}"
             ).format(selector)
             raise RuntimeException(msg)
 

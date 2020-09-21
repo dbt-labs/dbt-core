@@ -1304,13 +1304,13 @@ def generate_parse_exposure(
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
     return {
-        'ref': ExposureRefResolver(
+        "ref": ExposureRefResolver(
             None,
             exposure,
             project,
             manifest,
         ),
-        'source': ExposureSourceResolver(
+        "source": ExposureSourceResolver(
             None,
             exposure,
             project,

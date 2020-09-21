@@ -981,7 +981,7 @@ class ExposureParser(YamlReader):
 
     def parse_exposure(self, unparsed: UnparsedExposure) -> ParsedExposure:
         package_name = self.project.project_name
-        unique_id = f'{NodeType.Exposure}.{package_name}.{unparsed.name}'
+        unique_id = f"{NodeType.Exposure}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
 
         fqn = self.schema_parser.get_fqn_prefix(path)

@@ -768,7 +768,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         edge_members = list(
             chain(
                 self.nodes.values(),
-            self.exposures.values(),
+                self.sources.values(),
                 self.exposures.values(),
                 self.metrics.values(),
             )
@@ -1135,7 +1135,7 @@ class WritableManifest(ArtifactMixin):
     )
     exposures: Mapping[UniqueID, ParsedExposure] = field(
         metadata=dict(
-            'The exposures defined in the dbt project and its dependencies'
+            description=("The exposures defined in the dbt project and its dependencies")
         )
     )
     metrics: Mapping[UniqueID, ParsedMetric] = field(

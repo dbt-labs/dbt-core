@@ -1058,7 +1058,7 @@ def _process_refs_for_exposure(
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
             invalid_ref_fail_unless_test(
-                exposure, target_model_name, target_model_package,
+                exposure,
                 target_model_name,
                 target_model_package,
                 disabled=(isinstance(target_model, Disabled)),
