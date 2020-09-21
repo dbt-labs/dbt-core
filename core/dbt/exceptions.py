@@ -276,7 +276,8 @@ class IncompatibleSchemaException(RuntimeException):
 
         msg = (
             f'Expected a schema version of "{self.expected}" in '
-            f'{self.filename}, but found {found_str}'
+            f'{self.filename}, but found {found_str}. Are you running with a '
+            f'different version of dbt?'
         )
         return msg
 
