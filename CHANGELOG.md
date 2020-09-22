@@ -1,5 +1,8 @@
 ## dbt 0.18.1 (Release TBD)
 
+## dbt 0.18.1b2 (September 22, 2020)
+
+
 ## dbt 0.18.1b1 (September 17, 2020)
 
 
