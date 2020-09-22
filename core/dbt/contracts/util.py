@@ -1,9 +1,7 @@
 import dataclasses
 import os
 from datetime import datetime
-from typing import (
-    List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
-)
+from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 
 from dbt.clients.system import write_json, read_json
 from dbt.exceptions import (
@@ -167,11 +165,7 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
-        default_factory=datetime.utcnow
-    )
-    invocation_id: Optional[str] = dataclasses.field(
-        default_factory=get_invocation_id
-    )
+    invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_env)
 
     def __post_serialize__(self, dct):
