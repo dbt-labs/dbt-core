@@ -30,7 +30,7 @@
               'Last Modified' as "stats:last_modified:label",
               to_varchar(convert_timezone('UTC', last_altered), 'yyyy-mm-dd HH24:MI'||'UTC') as "stats:last_modified:value",
               'The timestamp for last update/change' as "stats:last_modified:description",
-              (last_altered is not null and table_type='BASE_TABLE') as "stats:last_modified:include"
+              (last_altered is not null and table_type='BASE TABLE') as "stats:last_modified:include"
 
           from {{ information_schema }}.tables
 
