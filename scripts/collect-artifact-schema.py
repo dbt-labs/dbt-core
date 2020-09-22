@@ -7,7 +7,9 @@ from typing import Type, Dict, Any
 
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
-    CatalogArtifact, RunResultsArtifact, FreshnessExecutionResultArtifact
+    CatalogArtifact,
+    RunResultsArtifact,
+    FreshnessExecutionResultArtifact,
 )
 from dbt.contracts.util import VersionedSchema
 from dbt.clients.system import write_file
