@@ -15,6 +15,8 @@ from dbt.contracts.results import (
     CatalogArtifact,
     CatalogResults,
     ExecutionResult,
+    FreshnessExecutionResultArtifact,
+    FreshnessResult,
     RunOperationResult,
     RunOperationResultsArtifact,
     RunResult,
@@ -283,6 +285,28 @@ class RemoteRunOperationResult(RunOperationResult, RemoteResult):
 
 
 @dataclass
+@schema_version('remote-freshness-result', 1)
+class RemoteFreshnessResult(FreshnessResult, RemoteResult):
+
+    @classmethod
+    def from_local_result(
+        cls,
+        base: FreshnessResult,
+        logs: List[LogMessage],
+    ) -> 'RemoteFreshnessResult':
+        return cls(
+            metadata=base.metadata,
+            results=base.results,
+            elapsed_time=base.elapsed_time,
+            logs=logs,
+        )
+
+    def write(self, path: str):
+        writable = FreshnessExecutionResultArtifact.from_result(base=self)
+        writable.write(path)
+
+
+@dataclass
 @schema_version('remote-run-result', 1)
 class RemoteRunResult(RemoteCompileResultMixin):
     table: ResultTable
@@ -292,6 +316,7 @@ class RemoteRunResult(RemoteCompileResultMixin):
 RPCResult = Union[
     RemoteCompileResult,
     RemoteExecutionResult,
+    RemoteFreshnessResult,
     RemoteCatalogResults,
     RemoteDepsResult,
     RemoteRunOperationResult,
@@ -299,7 +324,6 @@ RPCResult = Union[
 
 
 # GC types
-
 
 class GCResultState(StrEnum):
     Deleted = 'deleted'  # successful GC
@@ -680,6 +704,35 @@ class PollGetManifestResult(GetManifestResult, PollResult):
             start=timing.start,
             end=timing.end,
             elapsed=timing.elapsed,
+        )
+
+
+@dataclass
+@schema_version('poll-remote-freshness-result', 1)
+class PollFreshnessResult(RemoteFreshnessResult, PollResult):
+    state: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
+    )
+
+    @classmethod
+    def from_result(
+        cls: Type['PollFreshnessResult'],
+        base: RemoteFreshnessResult,
+        tags: TaskTags,
+        timing: TaskTiming,
+        logs: List[LogMessage],
+    ) -> 'PollFreshnessResult':
+        return cls(
+            logs=logs,
+            tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
+            metadata=base.metadata,
+            results=base.results,
+            elapsed_time=base.elapsed_time,
         )
 
 # Manifest parsing types

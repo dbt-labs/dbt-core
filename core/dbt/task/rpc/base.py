@@ -1,7 +1,22 @@
-from dbt.contracts.results import RunResultsArtifact
-from dbt.contracts.rpc import RemoteExecutionResult
+from dbt.contracts.results import (
+    RunResult,
+    RunOperationResult,
+    FreshnessResult,
+)
+from dbt.contracts.rpc import (
+    RemoteExecutionResult,
+    RemoteFreshnessResult,
+    RemoteRunOperationResult,
+)
 from dbt.task.runnable import GraphRunnableTask
 from dbt.rpc.method import RemoteManifestMethod, Parameters
+
+
+RESULT_TYPE_MAP = {
+    RunResult: RemoteExecutionResult,
+    RunOperationResult: RemoteRunOperationResult,
+    FreshnessResult: RemoteFreshnessResult,
+}
 
 
 class RPCTask(
@@ -21,10 +36,7 @@ class RPCTask(
     def get_result(
         self, results, elapsed_time, generated_at
     ) -> RemoteExecutionResult:
-        base = RunResultsArtifact.from_node_results(
-            results=results,
-            elapsed_time=elapsed_time,
-            generated_at=generated_at,
-        )
-        rpc_result = RemoteExecutionResult.from_local_result(base, logs=[])
+        base = super().get_result(results, elapsed_time, generated_at)
+        cls = RESULT_TYPE_MAP.get(type(base), RemoteExecutionResult)
+        rpc_result = cls.from_local_result(base, logs=[])
         return rpc_result
