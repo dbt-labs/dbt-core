@@ -421,6 +421,13 @@ def initialize_tracking(cookie_dir):
         active_user = User(None)
 
 
+def get_invocation_id() -> Optional[str]:
+    if active_user is None:
+        return None
+    else:
+        return active_user.invocation_id
+
+
 class InvocationProcessor(logbook.Processor):
     def __init__(self):
         super().__init__()

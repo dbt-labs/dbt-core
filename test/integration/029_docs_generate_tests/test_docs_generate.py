@@ -5,6 +5,7 @@ import random
 import shutil
 import tempfile
 import time
+import uuid
 from datetime import datetime
 from unittest.mock import ANY, patch
 
@@ -12,6 +13,7 @@ from pytest import mark
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyString, AnyStringWith, normalize, Normalized
 
+import dbt.tracking
 import dbt.version
 from dbt.exceptions import CompilationException
 
@@ -508,8 +510,6 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         return {
-            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
-            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'seed.test.seed': {
                     'unique_id': 'seed.test.seed',
@@ -689,8 +689,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
         return {
-            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
-            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.clustered': {
                     'unique_id': 'model.test.clustered',
@@ -776,8 +774,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         role = self.get_role()
         return {
-            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/catalog/v1.json',
-            'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
                     'unique_id': 'model.test.model',
@@ -2566,6 +2562,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         assert metadata['dbt_version'] == dbt.version.__version__
         assert 'dbt_schema_version' in metadata
         assert metadata['dbt_schema_version'] == dbt_schema_version
+        assert metadata['invocation_id'] == dbt.tracking.active_user.invocation_id
 
     def verify_manifest(self, expected_manifest):
         self.assertTrue(os.path.exists('./target/manifest.json'))
