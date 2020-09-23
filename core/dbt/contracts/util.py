@@ -139,12 +139,13 @@ class SchemaVersion:
 SCHEMA_VERSION_KEY = "dbt_schema_version"
 
 
-METADATA_ENV_PREFIX = 'DBT_ENV_CUSTOM_ENV_'
+METADATA_ENV_PREFIX = "DBT_ENV_CUSTOM_ENV_"
 
 
 def get_metadata_env() -> Dict[str, str]:
     return {
-        k[len(METADATA_ENV_PREFIX):]: v for k, v in os.environ.items()
+        k[len(METADATA_ENV_PREFIX) :]: v
+        for k, v in os.environ.items()
         if k.startswith(METADATA_ENV_PREFIX)
     }
 
