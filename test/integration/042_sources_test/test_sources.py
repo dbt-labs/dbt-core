@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import yaml
 
 from dbt.exceptions import CompilationException
+import dbt.tracking
 import dbt.version
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyStringWith
@@ -242,6 +243,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
                            self.freshness_start_time)
         assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v1.json'
         assert data['metadata']['dbt_version'] == dbt.version.__version__
+        assert data['metadata']['invocation_id'] == dbt.tracking.active_user.invocation_id
 
 
         last_inserted_time = self.last_inserted_time

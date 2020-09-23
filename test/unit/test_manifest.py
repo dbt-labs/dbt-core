@@ -231,6 +231,7 @@ class ManifestTest(unittest.TestCase):
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
                     'dbt_version': dbt.version.__version__,
+                    # invocation_id is None, so it will not be present
                 },
                 'docs': {},
                 'disabled': [],
@@ -322,6 +323,7 @@ class ManifestTest(unittest.TestCase):
     @mock.patch.object(tracking, 'active_user')
     def test_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
+        mock_user.invocation_id = '01234567-0123-0123-0123-0123456789ab'
         mock_user.do_not_track = True
         now = datetime.utcnow()
         self.assertEqual(
@@ -336,6 +338,7 @@ class ManifestTest(unittest.TestCase):
                 send_anonymous_usage_stats=False,
                 adapter_type='postgres',
                 generated_at=now,
+                invocation_id='01234567-0123-0123-0123-0123456789ab',
             )
         )
 
@@ -343,6 +346,7 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
+        mock_user.invocation_id = '01234567-0123-0123-0123-0123456789ab'
         mock_user.do_not_track = True
         metadata = ManifestMetadata(
             project_id='098f6bcd4621d373cade4e832627b4f6',
@@ -371,6 +375,7 @@ class ManifestTest(unittest.TestCase):
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
                     'send_anonymous_usage_stats': False,
                     'adapter_type': 'postgres',
+                    'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                 },
                 'disabled': [],
             }
@@ -584,9 +589,10 @@ class MixedManifestTest(unittest.TestCase):
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
+        metadata = ManifestMetadata(generated_at=datetime.utcnow(), invocation_id='01234567-0123-0123-0123-0123456789ab')
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
                             disabled=[], files={}, reports={},
-                            metadata=ManifestMetadata(generated_at=datetime.utcnow()))
+                            metadata=metadata)
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
@@ -600,6 +606,7 @@ class MixedManifestTest(unittest.TestCase):
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
                     'dbt_version': dbt.version.__version__,
+                    'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                 },
                 'docs': {},
                 'disabled': [],
@@ -696,6 +703,7 @@ class TestManifestSearch(unittest.TestCase):
     _macros = []
     _models = []
     _docs = []
+
     @property
     def macros(self):
         return self._macros

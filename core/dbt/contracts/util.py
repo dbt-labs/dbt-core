@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime
 from typing import (
-    List, Tuple, ClassVar, Type, TypeVar, Dict, Any
+    List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 )
 
 from dbt.clients.system import write_json, read_json
@@ -11,6 +11,7 @@ from dbt.exceptions import (
     RuntimeException,
 )
 from dbt.version import __version__
+from dbt.tracking import get_invocation_id
 from hologram import JsonSchemaMixin
 
 MacroKey = Tuple[str, str]
@@ -128,6 +129,9 @@ class BaseArtifactMetadata(JsonSchemaMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(
         default_factory=datetime.utcnow
+    )
+    invocation_id: Optional[str] = dataclasses.field(
+        default_factory=get_invocation_id
     )
 
 
