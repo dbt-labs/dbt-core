@@ -9,6 +9,13 @@
       and DBT_INTERNAL_SOURCE.dbt_change_type::text = 'update'::text
       and {{ target }}.dbt_valid_to is null;
 
+    update {{ target }}
+    set dbt_valid_to = DBT_INTERNAL_SOURCE.dbt_valid_to
+    from {{ source }} as DBT_INTERNAL_SOURCE
+    where DBT_INTERNAL_SOURCE.dbt_scd_id::text = {{ target }}.dbt_scd_id::text
+      and DBT_INTERNAL_SOURCE.dbt_change_type::text = 'delete'::text
+      and {{ target }}.dbt_valid_to is null;
+
     insert into {{ target }} ({{ insert_cols_csv }})
     select {% for column in insert_cols -%}
         DBT_INTERNAL_SOURCE.{{ column }} {%- if not loop.last %}, {%- endif %}

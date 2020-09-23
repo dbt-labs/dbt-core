@@ -19,7 +19,7 @@ snapshot_data = '''
             updated_at='updated_at',
         )
     }}
-    select 1 as id, '2019-10-31 23:59:40' as updated_at
+    select 1 as id, cast('2019-10-31 23:59:40' as timestamp) as updated_at
 
 {% endsnapshot %}
 '''
@@ -36,7 +36,7 @@ snapshot_data_2 = '''
             updated_at='updated_at',
         )
     }}
-    select 2 as id, '2019-10-31 23:59:40' as updated_at
+    select 2 as id, cast('2019-10-31 23:59:40' as timestamp) as updated_at
 
 {% endsnapshot %}
 '''
