@@ -1,16 +1,20 @@
 from abc import abstractmethod
+from datetime import datetime
 from typing import Generic, TypeVar
 
 import dbt.exceptions
 from dbt.contracts.rpc import (
-    RemoteCompileResult, RemoteRunResult, ResultTable,
+    RemoteCompileResult,
+    RemoteCompileResultMixin,
+    RemoteRunResult,
+    ResultTable,
 )
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.task.compile import CompileRunner
 from dbt.rpc.error import dbt_error, RPCException, server_error
 
 
-RPCSQLResult = TypeVar('RPCSQLResult', bound=RemoteCompileResult)
+RPCSQLResult = TypeVar('RPCSQLResult', bound=RemoteCompileResultMixin)
 
 
 class GenericRPCRunner(CompileRunner, Generic[RPCSQLResult]):
@@ -65,6 +69,7 @@ class RPCCompileRunner(GenericRPCRunner[RemoteCompileResult]):
             node=compiled_node,
             timing=[],  # this will get added later
             logs=[],
+            generated_at=datetime.utcnow(),
         )
 
     def from_run_result(
@@ -76,6 +81,7 @@ class RPCCompileRunner(GenericRPCRunner[RemoteCompileResult]):
             node=result.node,
             timing=timing_info,
             logs=[],
+            generated_at=datetime.utcnow(),
         )
 
 
@@ -97,6 +103,7 @@ class RPCExecuteRunner(GenericRPCRunner[RemoteRunResult]):
             table=table,
             timing=[],
             logs=[],
+            generated_at=datetime.utcnow(),
         )
 
     def from_run_result(
@@ -109,4 +116,5 @@ class RPCExecuteRunner(GenericRPCRunner[RemoteRunResult]):
             table=result.table,
             timing=timing_info,
             logs=[],
+            generated_at=datetime.utcnow(),
         )

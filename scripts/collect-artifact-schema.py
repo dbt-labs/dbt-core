@@ -6,7 +6,7 @@ import json
 from hologram import JsonSchemaMixin
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
-    CatalogResults, ExecutionResult, FreshnessExecutionResult
+    CatalogArtifact, RunResultsArtifact, FreshnessExecutionResultArtifact
 )
 
 
@@ -21,9 +21,9 @@ class Schemas(JsonSchemaMixin):
 def main():
     schemas = Schemas(
         manifest=WritableManifest.json_schema(),
-        catalog=CatalogResults.json_schema(),
-        run_results=ExecutionResult.json_schema(),
-        freshness_results=FreshnessExecutionResult.json_schema(),
+        catalog=CatalogArtifact.json_schema(),
+        run_results=RunResultsArtifact.json_schema(),
+        freshness_results=FreshnessExecutionResultArtifact.json_schema(),
     )
     print(json.dumps(schemas.to_dict()))
 

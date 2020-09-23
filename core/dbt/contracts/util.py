@@ -1,8 +1,15 @@
 import dataclasses
-from typing import List, Tuple, ClassVar, Type, TypeVar, Dict, Any
+from datetime import datetime
+from typing import (
+    List, Tuple, ClassVar, Type, TypeVar, Dict, Any
+)
 
 from dbt.clients.system import write_json, read_json
-from dbt.exceptions import RuntimeException, IncompatibleSchemaException
+from dbt.exceptions import (
+    IncompatibleSchemaException,
+    InternalException,
+    RuntimeException,
+)
 from dbt.version import __version__
 from hologram import JsonSchemaMixin
 
@@ -97,9 +104,6 @@ class Readable:
         return cls.from_dict(data)  # type: ignore
 
 
-T = TypeVar('T', bound='VersionedSchema')
-
-
 BASE_SCHEMAS_URL = 'https://schemas.getdbt.com/dbt/{name}/v{version}.json'
 
 
@@ -115,51 +119,63 @@ class SchemaVersion:
         )
 
 
-DBT_VERSION_KEY = 'dbt_version'
 SCHEMA_VERSION_KEY = 'dbt_schema_version'
 
 
 @dataclasses.dataclass
-class VersionedSchema(JsonSchemaMixin, Readable, Writable):
+class BaseArtifactMetadata(JsonSchemaMixin):
+    dbt_schema_version: str
+    dbt_version: str = __version__
+    generated_at: datetime = dataclasses.field(
+        default_factory=datetime.utcnow
+    )
+
+
+def schema_version(name: str, version: int):
+    def inner(cls: Type[VersionedSchema]):
+        cls.dbt_schema_version = SchemaVersion(
+            name=name,
+            version=version,
+        )
+        return cls
+    return inner
+
+
+@dataclasses.dataclass
+class VersionedSchema(JsonSchemaMixin):
     dbt_schema_version: ClassVar[SchemaVersion]
 
-    def to_dict(
-        self, omit_none: bool = True, validate: bool = False
-    ) -> Dict[str, Any]:
-        dct = super().to_dict(omit_none=omit_none, validate=validate)
-        dct[SCHEMA_VERSION_KEY] = str(self.dbt_schema_version)
-        dct[DBT_VERSION_KEY] = __version__
-        return dct
+    @classmethod
+    def json_schema(cls, embeddable: bool = False) -> Dict[str, Any]:
+        result = super().json_schema(embeddable=embeddable)
+        if not embeddable:
+            result['$id'] = str(cls.dbt_schema_version)
+        return result
+
+
+T = TypeVar('T', bound='ArtifactMixin')
+
+
+# metadata should really be a Generic[T_M] where T_M is a TypeVar bound to
+# BaseArtifactMetadata. Unfortunately this isn't possible due to a mypy issue:
+# https://github.com/python/mypy/issues/7520
+@dataclasses.dataclass(init=False)
+class ArtifactMixin(VersionedSchema, Writable, Readable):
+    metadata: BaseArtifactMetadata
 
     @classmethod
     def from_dict(
         cls: Type[T], data: Dict[str, Any], validate: bool = True
     ) -> T:
+        if cls.dbt_schema_version is None:
+            raise InternalException(
+                'Cannot call from_dict with no schema version!'
+            )
+
         if validate:
             expected = str(cls.dbt_schema_version)
-            found = data.get(SCHEMA_VERSION_KEY)
+            found = data.get('metadata', {}).get(SCHEMA_VERSION_KEY)
             if found != expected:
                 raise IncompatibleSchemaException(expected, found)
 
         return super().from_dict(data=data, validate=validate)
-
-    @classmethod
-    def _collect_json_schema(
-        cls, definitions: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        result = super()._collect_json_schema(definitions)
-        result['properties'][SCHEMA_VERSION_KEY] = {
-            'const': str(cls.dbt_schema_version)
-        }
-        result['properties'][DBT_VERSION_KEY] = {'type': 'string'}
-        result['required'].extend([SCHEMA_VERSION_KEY, DBT_VERSION_KEY])
-        return result
-
-    @classmethod
-    def json_schema(cls, embeddable: bool = False) -> Dict[str, Any]:
-        result = super().json_schema(embeddable=embeddable)
-        # it would be nice to do this in hologram!
-        # in the schema itself, include the version url as $id
-        if not embeddable:
-            result['$id'] = str(cls.dbt_schema_version)
-        return result

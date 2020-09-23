@@ -3,7 +3,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional, Union, List, Any, Dict, Type
+from typing import Optional, Union, List, Any, Dict, Type, Sequence
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import StrEnum
@@ -12,10 +12,17 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
     TimingInfo,
+    CatalogArtifact,
     CatalogResults,
     ExecutionResult,
+    FreshnessExecutionResultArtifact,
+    FreshnessResult,
+    RunOperationResult,
+    RunOperationResultsArtifact,
+    RunResult,
+    RunResultsArtifact,
 )
-from dbt.contracts.util import SchemaVersion, VersionedSchema
+from dbt.contracts.util import VersionedSchema, schema_version
 from dbt.exceptions import InternalException
 from dbt.logger import LogMessage
 from dbt.utils import restrict_to
@@ -176,22 +183,39 @@ class RemoteResult(VersionedSchema):
 
 
 @dataclass
+@schema_version('remote-deps-result', 1)
 class RemoteDepsResult(RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-deps-result', 1)
+    generated_at: datetime = field(default_factory=datetime.utcnow)
 
 
 @dataclass
+@schema_version('remote-catalog-result', 1)
 class RemoteCatalogResults(CatalogResults, RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-catalog-result', 1)
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+
+    def write(self, path: str):
+        artifact = CatalogArtifact.from_results(
+            generated_at=self.generated_at,
+            nodes=self.nodes,
+            sources=self.sources,
+            compile_results=self._compile_results,
+            errors=self.errors,
+        )
+        artifact.write(path)
 
 
 @dataclass
-class RemoteCompileResult(RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-compile-result', 1)
+class RemoteCompileResultMixin(RemoteResult):
     raw_sql: str
     compiled_sql: str
     node: CompileResultNode
     timing: List[TimingInfo]
+
+
+@dataclass
+@schema_version('remote-compile-result', 1)
+class RemoteCompileResult(RemoteCompileResultMixin):
+    generated_at: datetime = field(default_factory=datetime.utcnow)
 
     @property
     def error(self):
@@ -199,8 +223,31 @@ class RemoteCompileResult(RemoteResult):
 
 
 @dataclass
+@schema_version('remote-execution-result', 1)
 class RemoteExecutionResult(ExecutionResult, RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-execution-result', 1)
+    results: Sequence[RunResult]
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+
+    def write(self, path: str):
+        writable = RunResultsArtifact.from_node_results(
+            generated_at=self.generated_at,
+            results=self.results,
+            elapsed_time=self.elapsed_time,
+        )
+        writable.write(path)
+
+    @classmethod
+    def from_local_result(
+        cls,
+        base: RunResultsArtifact,
+        logs: List[LogMessage],
+    ) -> 'RemoteExecutionResult':
+        return cls(
+            generated_at=base.metadata.generated_at,
+            results=base.results,
+            elapsed_time=base.elapsed_time,
+            logs=logs,
+        )
 
 
 @dataclass
@@ -210,20 +257,66 @@ class ResultTable(JsonSchemaMixin):
 
 
 @dataclass
-class RemoteRunOperationResult(ExecutionResult, RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-run-operation-result', 1)
-    success: bool
+@schema_version('remote-run-operation-result', 1)
+class RemoteRunOperationResult(RunOperationResult, RemoteResult):
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+
+    @classmethod
+    def from_local_result(
+        cls,
+        base: RunOperationResultsArtifact,
+        logs: List[LogMessage],
+    ) -> 'RemoteRunOperationResult':
+        return cls(
+            generated_at=base.metadata.generated_at,
+            results=base.results,
+            elapsed_time=base.elapsed_time,
+            success=base.success,
+            logs=logs,
+        )
+
+    def write(self, path: str):
+        writable = RunOperationResultsArtifact.from_success(
+            success=self.success,
+            generated_at=self.generated_at,
+            elapsed_time=self.elapsed_time,
+        )
+        writable.write(path)
 
 
 @dataclass
-class RemoteRunResult(RemoteCompileResult):
-    dbt_schema_version = SchemaVersion('remote-run-result', 1)
+@schema_version('remote-freshness-result', 1)
+class RemoteFreshnessResult(FreshnessResult, RemoteResult):
+
+    @classmethod
+    def from_local_result(
+        cls,
+        base: FreshnessResult,
+        logs: List[LogMessage],
+    ) -> 'RemoteFreshnessResult':
+        return cls(
+            metadata=base.metadata,
+            results=base.results,
+            elapsed_time=base.elapsed_time,
+            logs=logs,
+        )
+
+    def write(self, path: str):
+        writable = FreshnessExecutionResultArtifact.from_result(base=self)
+        writable.write(path)
+
+
+@dataclass
+@schema_version('remote-run-result', 1)
+class RemoteRunResult(RemoteCompileResultMixin):
     table: ResultTable
+    generated_at: datetime = field(default_factory=datetime.utcnow)
 
 
 RPCResult = Union[
     RemoteCompileResult,
     RemoteExecutionResult,
+    RemoteFreshnessResult,
     RemoteCatalogResults,
     RemoteDepsResult,
     RemoteRunOperationResult,
@@ -232,7 +325,6 @@ RPCResult = Union[
 
 # GC types
 
-
 class GCResultState(StrEnum):
     Deleted = 'deleted'  # successful GC
     Missing = 'missing'  # nothing to GC
@@ -240,8 +332,8 @@ class GCResultState(StrEnum):
 
 
 @dataclass
+@schema_version('remote-gc-result', 1)
 class GCResult(RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-gc-result', 1)
     logs: List[LogMessage] = field(default_factory=list)
     deleted: List[TaskID] = field(default_factory=list)
     missing: List[TaskID] = field(default_factory=list)
@@ -334,8 +426,8 @@ class TaskRow(TaskTiming):
 
 
 @dataclass
+@schema_version('remote-ps-result', 1)
 class PSResult(RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-ps-result', 1)
     rows: List[TaskRow]
 
 
@@ -347,15 +439,15 @@ class KillResultStatus(StrEnum):
 
 
 @dataclass
+@schema_version('remote-kill-result', 1)
 class KillResult(RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-kill-result', 1)
     state: KillResultStatus = KillResultStatus.Missing
     logs: List[LogMessage] = field(default_factory=list)
 
 
 @dataclass
+@schema_version('remote-manifest-result', 1)
 class GetManifestResult(RemoteResult):
-    dbt_schema_version = SchemaVersion('remote-manifest-result', 1)
     manifest: Optional[WritableManifest]
 
 
@@ -382,12 +474,13 @@ class PollResult(RemoteResult, TaskTiming):
 
 
 @dataclass
-class PollRemoteEmptyCompleteResult(PollResult, RemoteDepsResult):
-    dbt_schema_version = SchemaVersion('poll-remote-deps-result', 1)
+@schema_version('poll-remote-deps-result', 1)
+class PollRemoteEmptyCompleteResult(PollResult, RemoteResult):
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
     )
+    generated_at: datetime = field(default_factory=datetime.utcnow)
 
     @classmethod
     def from_result(
@@ -404,21 +497,24 @@ class PollRemoteEmptyCompleteResult(PollResult, RemoteDepsResult):
             start=timing.start,
             end=timing.end,
             elapsed=timing.elapsed,
+            generated_at=base.generated_at
         )
 
 
 @dataclass
+@schema_version('poll-remote-killed-result', 1)
 class PollKilledResult(PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-killed-result', 1)
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Killed),
     )
 
 
 @dataclass
-class PollExecuteCompleteResult(RemoteExecutionResult, PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-execution-result', 1)
-
+@schema_version('poll-remote-execution-result', 1)
+class PollExecuteCompleteResult(
+    RemoteExecutionResult,
+    PollResult,
+):
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
@@ -434,7 +530,6 @@ class PollExecuteCompleteResult(RemoteExecutionResult, PollResult):
     ) -> 'PollExecuteCompleteResult':
         return cls(
             results=base.results,
-            generated_at=base.generated_at,
             elapsed_time=base.elapsed_time,
             logs=logs,
             tags=tags,
@@ -442,12 +537,16 @@ class PollExecuteCompleteResult(RemoteExecutionResult, PollResult):
             start=timing.start,
             end=timing.end,
             elapsed=timing.elapsed,
+            generated_at=base.generated_at,
         )
 
 
 @dataclass
-class PollCompileCompleteResult(RemoteCompileResult, PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-compile-result', 1)
+@schema_version('poll-remote-compile-result', 1)
+class PollCompileCompleteResult(
+    RemoteCompileResult,
+    PollResult,
+):
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
@@ -472,12 +571,16 @@ class PollCompileCompleteResult(RemoteCompileResult, PollResult):
             start=timing.start,
             end=timing.end,
             elapsed=timing.elapsed,
+            generated_at=base.generated_at
         )
 
 
 @dataclass
-class PollRunCompleteResult(RemoteRunResult, PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-run-result', 1)
+@schema_version('poll-remote-run-result', 1)
+class PollRunCompleteResult(
+    RemoteRunResult,
+    PollResult,
+):
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
@@ -503,12 +606,16 @@ class PollRunCompleteResult(RemoteRunResult, PollResult):
             start=timing.start,
             end=timing.end,
             elapsed=timing.elapsed,
+            generated_at=base.generated_at
         )
 
 
 @dataclass
-class PollRunOperationCompleteResult(RemoteRunOperationResult, PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-run-operation-result', 1)
+@schema_version('poll-remote-run-operation-result', 1)
+class PollRunOperationCompleteResult(
+    RemoteRunOperationResult,
+    PollResult,
+):
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
@@ -537,8 +644,8 @@ class PollRunOperationCompleteResult(RemoteRunOperationResult, PollResult):
 
 
 @dataclass
+@schema_version('poll-remote-catalog-result', 1)
 class PollCatalogCompleteResult(RemoteCatalogResults, PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-catalog-result', 1)
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
@@ -568,13 +675,14 @@ class PollCatalogCompleteResult(RemoteCatalogResults, PollResult):
 
 
 @dataclass
+@schema_version('poll-remote-in-progress-result', 1)
 class PollInProgressResult(PollResult):
-    dbt_schema_version = SchemaVersion('poll-in-progress-result', 1)
+    pass
 
 
 @dataclass
+@schema_version('poll-remote-get-manifest-result', 1)
 class PollGetManifestResult(GetManifestResult, PollResult):
-    dbt_schema_version = SchemaVersion('poll-remote-get-manifest-result', 1)
     state: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success,
                              TaskHandlerState.Failed),
@@ -598,6 +706,35 @@ class PollGetManifestResult(GetManifestResult, PollResult):
             elapsed=timing.elapsed,
         )
 
+
+@dataclass
+@schema_version('poll-remote-freshness-result', 1)
+class PollFreshnessResult(RemoteFreshnessResult, PollResult):
+    state: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success,
+                             TaskHandlerState.Failed),
+    )
+
+    @classmethod
+    def from_result(
+        cls: Type['PollFreshnessResult'],
+        base: RemoteFreshnessResult,
+        tags: TaskTags,
+        timing: TaskTiming,
+        logs: List[LogMessage],
+    ) -> 'PollFreshnessResult':
+        return cls(
+            logs=logs,
+            tags=tags,
+            state=timing.state,
+            start=timing.start,
+            end=timing.end,
+            elapsed=timing.elapsed,
+            metadata=base.metadata,
+            results=base.results,
+            elapsed_time=base.elapsed_time,
+        )
+
 # Manifest parsing types
 
 
@@ -609,8 +746,8 @@ class ManifestStatus(StrEnum):
 
 
 @dataclass
+@schema_version('remote-status-result', 1)
 class LastParse(RemoteResult):
-    dbt_schema_version = SchemaVersion('status-result', 1)
     state: ManifestStatus = ManifestStatus.Init
     logs: List[LogMessage] = field(default_factory=list)
     error: Optional[Dict[str, Any]] = None

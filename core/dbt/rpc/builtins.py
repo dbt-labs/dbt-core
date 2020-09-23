@@ -18,6 +18,7 @@ from dbt.contracts.rpc import (
     TaskRow,
     PSResult,
     RemoteExecutionResult,
+    RemoteFreshnessResult,
     RemoteRunResult,
     RemoteCompileResult,
     RemoteCatalogResults,
@@ -32,6 +33,7 @@ from dbt.contracts.rpc import (
     PollRunCompleteResult,
     PollCompileCompleteResult,
     PollCatalogCompleteResult,
+    PollFreshnessResult,
     PollRemoteEmptyCompleteResult,
     PollRunOperationCompleteResult,
     TaskHandlerState,
@@ -146,7 +148,8 @@ def poll_complete(
         PollCatalogCompleteResult,
         PollRemoteEmptyCompleteResult,
         PollRunOperationCompleteResult,
-        PollGetManifestResult
+        PollGetManifestResult,
+        PollFreshnessResult,
     ]]
 
     if isinstance(result, RemoteExecutionResult):
@@ -164,6 +167,8 @@ def poll_complete(
         cls = PollRunOperationCompleteResult
     elif isinstance(result, GetManifestResult):
         cls = PollGetManifestResult
+    elif isinstance(result, RemoteFreshnessResult):
+        cls = PollFreshnessResult
     else:
         raise dbt.exceptions.InternalException(
             'got invalid result in poll_complete: {}'.format(result)

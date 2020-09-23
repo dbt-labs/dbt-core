@@ -214,23 +214,25 @@ class ManifestTest(unittest.TestCase):
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
-        manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+        manifest = Manifest(
+            nodes={}, sources={}, macros={}, docs={}, disabled=[], files={}, reports={},
+            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+        )
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
-                'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
-                'dbt_version': dbt.version.__version__,
                 'nodes': {},
                 'sources': {},
                 'macros': {},
                 'reports': {},
                 'parent_map': {},
                 'child_map': {},
-                'generated_at': '2018-02-14T09:15:13Z',
+                'metadata': {
+                    'generated_at': '2018-02-14T09:15:13Z',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+                    'dbt_version': dbt.version.__version__,
+                },
                 'docs': {},
-                'metadata': {},
                 'disabled': [],
             }
         )
@@ -238,11 +240,12 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+        manifest = Manifest(
+            nodes=nodes, sources={}, macros={}, docs={}, disabled=[], files={}, reports={},
+            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+        )
         serialized = manifest.writable_manifest().to_dict()
-        self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
+        self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['docs'], {})
         self.assertEqual(serialized['disabled'], [])
         parent_map = serialized['parent_map']
@@ -305,8 +308,7 @@ class ManifestTest(unittest.TestCase):
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+                            disabled=[], files={}, reports={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
@@ -321,16 +323,19 @@ class ManifestTest(unittest.TestCase):
     def test_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.do_not_track = True
+        now = datetime.utcnow()
         self.assertEqual(
             ManifestMetadata(
                 project_id='098f6bcd4621d373cade4e832627b4f6',
                 adapter_type='postgres',
+                generated_at=now,
             ),
             ManifestMetadata(
                 project_id='098f6bcd4621d373cade4e832627b4f6',
                 user_id='cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
                 send_anonymous_usage_stats=False,
                 adapter_type='postgres',
+                generated_at=now,
             )
         )
 
@@ -342,25 +347,26 @@ class ManifestTest(unittest.TestCase):
         metadata = ManifestMetadata(
             project_id='098f6bcd4621d373cade4e832627b4f6',
             adapter_type='postgres',
+            generated_at=datetime.utcnow(),
         )
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            metadata=metadata, files={}, reports={})
+                            disabled=[], metadata=metadata, files={},
+                            reports={})
 
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
-                'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
-                'dbt_version': dbt.version.__version__,
                 'nodes': {},
                 'sources': {},
                 'macros': {},
                 'reports': {},
                 'parent_map': {},
                 'child_map': {},
-                'generated_at': '2018-02-14T09:15:13Z',
                 'docs': {},
                 'metadata': {
+                    'generated_at': '2018-02-14T09:15:13Z',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+                    'dbt_version': dbt.version.__version__,
                     'project_id': '098f6bcd4621d373cade4e832627b4f6',
                     'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
                     'send_anonymous_usage_stats': False,
@@ -372,8 +378,7 @@ class ManifestTest(unittest.TestCase):
 
     def test_get_resource_fqns_empty(self):
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+                            disabled=[], files={}, reports={})
         self.assertEqual(manifest.get_resource_fqns(), {})
 
     def test_get_resource_fqns(self):
@@ -399,8 +404,7 @@ class ManifestTest(unittest.TestCase):
             checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+                            disabled=[], files={}, reports={})
         expect = {
             'models': frozenset([
                 ('snowplow', 'events'),
@@ -581,22 +585,23 @@ class MixedManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+                            disabled=[], files={}, reports={},
+                            metadata=ManifestMetadata(generated_at=datetime.utcnow()))
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
-                'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
-                'dbt_version': dbt.version.__version__,
                 'nodes': {},
                 'macros': {},
                 'sources': {},
                 'reports': {},
                 'parent_map': {},
                 'child_map': {},
-                'generated_at': '2018-02-14T09:15:13Z',
+                'metadata': {
+                    'generated_at': '2018-02-14T09:15:13Z',
+                    'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
+                    'dbt_version': dbt.version.__version__,
+                },
                 'docs': {},
-                'metadata': {},
                 'disabled': [],
             }
         )
@@ -605,10 +610,10 @@ class MixedManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+                            disabled=[], files={}, reports={},
+                            metadata=ManifestMetadata(generated_at=datetime.utcnow()))
         serialized = manifest.writable_manifest().to_dict()
-        self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
+        self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['disabled'], [])
         parent_map = serialized['parent_map']
         child_map = serialized['child_map']
@@ -669,8 +674,7 @@ class MixedManifestTest(unittest.TestCase):
     def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[],
-                            files={}, reports={})
+                            disabled=[], files={}, reports={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
@@ -715,7 +719,6 @@ class TestManifestSearch(unittest.TestCase):
             docs={
                 d.unique_id: d for d in self.docs
             },
-            generated_at=datetime.utcnow(),
             disabled=[],
             files={},
             reports={},
@@ -736,7 +739,6 @@ def make_manifest(nodes=[], sources=[], macros=[], docs=[]):
         docs={
             d.unique_id: d for d in docs
         },
-        generated_at=datetime.utcnow(),
         disabled=[],
         files={},
         reports={},

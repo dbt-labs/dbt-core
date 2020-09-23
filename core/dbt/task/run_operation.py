@@ -8,7 +8,7 @@ from .runnable import ManifestTask
 import dbt.exceptions
 from dbt.adapters.factory import get_adapter
 from dbt.config.utils import parse_cli_vars
-from dbt.contracts.results import RunOperationResult
+from dbt.contracts.results import RunOperationResultsArtifact
 from dbt.exceptions import InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -47,7 +47,7 @@ class RunOperationTask(ManifestTask):
 
         return res
 
-    def run(self) -> RunOperationResult:
+    def run(self) -> RunOperationResultsArtifact:
         start = datetime.utcnow()
         self._runtime_initialize()
         try:
@@ -69,11 +69,10 @@ class RunOperationTask(ManifestTask):
         else:
             success = True
         end = datetime.utcnow()
-        return RunOperationResult(
-            results=[],
+        return RunOperationResultsArtifact.from_success(
             generated_at=end,
             elapsed_time=(end - start).total_seconds(),
-            success=success
+            success=success,
         )
 
     def interpret_results(self, results):

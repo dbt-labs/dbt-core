@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import yaml
 
 from dbt.exceptions import CompilationException
+import dbt.version
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyStringWith
 
@@ -234,29 +235,33 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         with open(path) as fp:
             data = json.load(fp)
 
-        self.assertEqual(set(data), {'meta', 'sources'})
-        self.assertIn('generated_at', data['meta'])
-        self.assertIn('elapsed_time', data['meta'])
-        self.assertTrue(isinstance(data['meta']['elapsed_time'], float))
-        self.assertBetween(data['meta']['generated_at'],
+        assert set(data) == {'metadata', 'results', 'elapsed_time'}
+        assert 'generated_at' in data['metadata']
+        assert isinstance(data['elapsed_time'], float)
+        self.assertBetween(data['metadata']['generated_at'],
                            self.freshness_start_time)
+        assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v1.json'
+        assert data['metadata']['dbt_version'] == dbt.version.__version__
+
 
         last_inserted_time = self.last_inserted_time
 
-        self.assertEqual(len(data['sources']), 1)
+        self.assertEqual(len(data['results']), 1)
 
-        self.assertEqual(data['sources'], {
-            'source.test.test_source.test_table': {
+        self.assertEqual(data['results'], [
+            {
+                'unique_id': 'source.test.test_source.test_table',
                 'max_loaded_at': last_inserted_time,
                 'snapshotted_at': AnyStringWith(),
                 'max_loaded_at_time_ago_in_s': AnyFloat(),
                 'state': state,
                 'criteria': {
+                    'filter': None,
                     'warn_after': {'count': 10, 'period': 'hour'},
                     'error_after': {'count': 18, 'period': 'hour'},
                 },
             }
-        })
+        ])
 
     def _run_source_freshness(self):
         # test_source.test_table should have a loaded_at field of `updated_at`
