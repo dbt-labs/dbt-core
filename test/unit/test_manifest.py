@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest import mock
 
@@ -39,6 +40,9 @@ REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
     'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
     'injected_sql',
 })
+
+
+ENV_KEY_NAME = 'KEY' if os.name == 'nt' else 'key'
 
 
 class ManifestTest(unittest.TestCase):
@@ -212,6 +216,11 @@ class ManifestTest(unittest.TestCase):
         for source in self.sources.values():
             source.validate(source.to_dict())
 
+        os.environ['DBT_ENV_CUSTOM_ENV_key'] = 'value'
+
+    def tearDown(self):
+        del os.environ['DBT_ENV_CUSTOM_ENV_key']
+
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(
@@ -231,6 +240,7 @@ class ManifestTest(unittest.TestCase):
                     'generated_at': '2018-02-14T09:15:13Z',
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
                     'dbt_version': dbt.version.__version__,
+                    'env': {ENV_KEY_NAME: 'value'},
                     # invocation_id is None, so it will not be present
                 },
                 'docs': {},
@@ -376,6 +386,7 @@ class ManifestTest(unittest.TestCase):
                     'send_anonymous_usage_stats': False,
                     'adapter_type': 'postgres',
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
+                    'env': {ENV_KEY_NAME: 'value'},
                 },
                 'disabled': [],
             }
@@ -586,6 +597,10 @@ class MixedManifestTest(unittest.TestCase):
                 checksum=FileHash.empty(),
             ),
         }
+        os.environ['DBT_ENV_CUSTOM_ENV_key'] = 'value'
+
+    def tearDown(self):
+        del os.environ['DBT_ENV_CUSTOM_ENV_key']
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
@@ -607,6 +622,7 @@ class MixedManifestTest(unittest.TestCase):
                     'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
                     'dbt_version': dbt.version.__version__,
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
+                    'env': {ENV_KEY_NAME: 'value'},
                 },
                 'docs': {},
                 'disabled': [],

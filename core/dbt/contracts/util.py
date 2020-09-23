@@ -1,4 +1,5 @@
 import dataclasses
+import os
 from datetime import datetime
 from typing import (
     List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
@@ -123,6 +124,16 @@ class SchemaVersion:
 SCHEMA_VERSION_KEY = 'dbt_schema_version'
 
 
+METADATA_ENV_PREFIX = 'DBT_ENV_CUSTOM_ENV_'
+
+
+def get_metadata_env() -> Dict[str, str]:
+    return {
+        k[len(METADATA_ENV_PREFIX):]: v for k, v in os.environ.items()
+        if k.startswith(METADATA_ENV_PREFIX)
+    }
+
+
 @dataclasses.dataclass
 class BaseArtifactMetadata(JsonSchemaMixin):
     dbt_schema_version: str
@@ -133,6 +144,7 @@ class BaseArtifactMetadata(JsonSchemaMixin):
     invocation_id: Optional[str] = dataclasses.field(
         default_factory=get_invocation_id
     )
+    env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_env)
 
 
 def schema_version(name: str, version: int):

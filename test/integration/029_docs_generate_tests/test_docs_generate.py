@@ -5,7 +5,6 @@ import random
 import shutil
 import tempfile
 import time
-import uuid
 from datetime import datetime
 from unittest.mock import ANY, patch
 
@@ -112,6 +111,12 @@ class TestDocsGenerate(DBTIntegrationTest):
             self.alternate_schema = self.alternate_schema.upper()
 
         self._created_schemas.add(self.alternate_schema)
+        os.environ['DBT_ENV_CUSTOM_ENV_env_key'] = 'env_value'
+
+    def tearDown(self):
+        super().tearDown()
+        del os.environ['DBT_ENV_CUSTOM_ENV_env_key']
+
 
     @property
     def schema(self):
@@ -2563,6 +2568,12 @@ class TestDocsGenerate(DBTIntegrationTest):
         assert 'dbt_schema_version' in metadata
         assert metadata['dbt_schema_version'] == dbt_schema_version
         assert metadata['invocation_id'] == dbt.tracking.active_user.invocation_id
+        key = 'env_key'
+        if os.name == 'nt':
+            key = key.upper()
+        assert metadata['env'] == {
+            key: 'env_value'
+        }
 
     def verify_manifest(self, expected_manifest):
         self.assertTrue(os.path.exists('./target/manifest.json'))
