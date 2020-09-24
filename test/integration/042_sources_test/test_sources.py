@@ -56,6 +56,11 @@ class SuccessfulSourcesTest(BaseSourcesTest):
         self._id = 101
         # this is the db initial value
         self.last_inserted_time = "2016-09-19T14:45:51+00:00"
+        os.environ['DBT_ENV_CUSTOM_ENV_key'] = 'value'
+
+    def tearDown(self):
+        super().tearDown()
+        del os.environ['DBT_ENV_CUSTOM_ENV_key']
 
     def _set_updated_at_to(self, delta):
         insert_time = datetime.utcnow() + delta
@@ -244,6 +249,10 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v1.json'
         assert data['metadata']['dbt_version'] == dbt.version.__version__
         assert data['metadata']['invocation_id'] == dbt.tracking.active_user.invocation_id
+        key = 'key'
+        if os.name == 'nt':
+            key = key.upper()
+        assert data['metadata']['env'] == {key: 'value'}
 
 
         last_inserted_time = self.last_inserted_time
