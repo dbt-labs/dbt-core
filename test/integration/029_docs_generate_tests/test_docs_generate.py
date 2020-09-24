@@ -266,13 +266,20 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'description': 'Approximate size of the table as reported by Snowflake',
                 'include': True,
             },
+            'last_modified': {
+                'id': 'last_modified',
+                'label': 'Last Modified',
+                'value': AnyString(),
+                'description': 'The timestamp for last update/change',
+                'include': True,
+            },
             'row_count': {
                 'id': 'row_count',
                 'label': 'Row Count',
                 'value': 1.0,
                 'description': 'An approximate count of rows in this table',
                 'include': True,
-            },
+            }
         }
 
     def _bigquery_stats(self, is_table, partition=None, cluster=None):
