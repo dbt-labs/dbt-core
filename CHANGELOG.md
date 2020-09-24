@@ -3,6 +3,9 @@
 ### Feature
 - Added 'Last Modified' stat in snowflake catalog macro. Now should be available in docs. ([#2728](https://github.com/fishtown-analytics/dbt/issues/2728))
 
+### Under the hood
+- Require extra `snowflake-connector-python[secure-local-storage]` on all dbt-snowflake installations ([#2779](https://github.com/fishtown-analytics/dbt/issues/2779), [#2789](https://github.com/fishtown-analytics/dbt/pull/2789))
+
 Contributors:
 - [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([#2732](https://github.com/fishtown-analytics/dbt/pull/2732))
 
