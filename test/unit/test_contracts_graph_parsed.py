@@ -24,14 +24,14 @@ from dbt.contracts.graph.parsed import (
     IntermediateSnapshotNode,
     ParsedNodePatch,
     ParsedMacro,
-    ParsedReport,
+    ParsedExposure,
     ParsedSeedNode,
     Docs,
     MacroDependsOn,
     ParsedSourceDefinition,
     ParsedDocumentation,
     ParsedHookNode,
-    ReportOwner,
+    ExposureOwner,
     TestMetadata,
 )
 from dbt.contracts.graph.unparsed import (
@@ -1873,15 +1873,15 @@ def test_compare_changed_source_definition(func, basic_parsed_source_definition_
 
 
 @pytest.fixture
-def minimal_parsed_report_dict():
+def minimal_parsed_exposure_dict():
     return {
-        'name': 'my_report',
+        'name': 'my_exposure',
         'type': 'notebook',
         'owner': {
             'email': 'test@example.com',
         },
-        'fqn': ['test', 'reports', 'my_report'],
-        'unique_id': 'report.test.my_report',
+        'fqn': ['test', 'exposures', 'my_exposure'],
+        'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
@@ -1890,22 +1890,22 @@ def minimal_parsed_report_dict():
 
 
 @pytest.fixture
-def basic_parsed_report_dict():
+def basic_parsed_exposure_dict():
     return {
-        'name': 'my_report',
+        'name': 'my_exposure',
         'type': 'notebook',
         'owner': {
             'email': 'test@example.com',
         },
-        'resource_type': 'report',
+        'resource_type': 'exposure',
         'depends_on': {
             'nodes': [],
             'macros': [],
         },
         'refs': [],
         'sources': [],
-        'fqn': ['test', 'reports', 'my_report'],
-        'unique_id': 'report.test.my_report',
+        'fqn': ['test', 'exposures', 'my_exposure'],
+        'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
@@ -1914,30 +1914,30 @@ def basic_parsed_report_dict():
 
 
 @pytest.fixture
-def basic_parsed_report_object():
-    return ParsedReport(
-        name='my_report',
+def basic_parsed_exposure_object():
+    return ParsedExposure(
+        name='my_exposure',
         type=ExposureType.Notebook,
-        fqn=['test', 'reports', 'my_report'],
-        unique_id='report.test.my_report',
+        fqn=['test', 'exposures', 'my_exposure'],
+        unique_id='exposure.test.my_exposure',
         package_name='test',
         path='models/something.yml',
         root_path='/usr/src/app',
         original_file_path='models/something.yml',
-        owner=ReportOwner(email='test@example.com'),
+        owner=ExposureOwner(email='test@example.com'),
     )
 
 
 @pytest.fixture
-def complex_parsed_report_dict():
+def complex_parsed_exposure_dict():
     return {
-        'name': 'my_report',
+        'name': 'my_exposure',
         'type': 'analysis',
         'owner': {
             'email': 'test@example.com',
             'name': 'A Name',
         },
-        'resource_type': 'report',
+        'resource_type': 'exposure',
         'maturity': 'low',
         'url': 'https://example.com/analyses/1',
         'description': 'my description',
@@ -1947,8 +1947,8 @@ def complex_parsed_report_dict():
         },
         'refs': [],
         'sources': [],
-        'fqn': ['test', 'reports', 'my_report'],
-        'unique_id': 'report.test.my_report',
+        'fqn': ['test', 'exposures', 'my_exposure'],
+        'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
@@ -1957,17 +1957,17 @@ def complex_parsed_report_dict():
 
 
 @pytest.fixture
-def complex_parsed_report_object():
-    return ParsedReport(
-        name='my_report',
+def complex_parsed_exposure_object():
+    return ParsedExposure(
+        name='my_exposure',
         type=ExposureType.Analysis,
-        owner=ReportOwner(email='test@example.com', name='A Name'),
+        owner=ExposureOwner(email='test@example.com', name='A Name'),
         maturity=MaturityType.Low,
         url='https://example.com/analyses/1',
         description='my description',
         depends_on=DependsOn(nodes=['models.test.my_model']),
-        fqn=['test', 'reports', 'my_report'],
-        unique_id='report.test.my_report',
+        fqn=['test', 'exposures', 'my_exposure'],
+        unique_id='exposure.test.my_exposure',
         package_name='test',
         path='models/something.yml',
         root_path='/usr/src/app',
@@ -1975,22 +1975,22 @@ def complex_parsed_report_object():
     )
 
 
-def test_basic_parsed_report(minimal_parsed_report_dict, basic_parsed_report_dict, basic_parsed_report_object):
-    assert_symmetric(basic_parsed_report_object, basic_parsed_report_dict, ParsedReport)
-    assert_from_dict(basic_parsed_report_object, minimal_parsed_report_dict, ParsedReport)
-    pickle.loads(pickle.dumps(basic_parsed_report_object))
+def test_basic_parsed_exposure(minimal_parsed_exposure_dict, basic_parsed_exposure_dict, basic_parsed_exposure_object):
+    assert_symmetric(basic_parsed_exposure_object, basic_parsed_exposure_dict, ParsedExposure)
+    assert_from_dict(basic_parsed_exposure_object, minimal_parsed_exposure_dict, ParsedExposure)
+    pickle.loads(pickle.dumps(basic_parsed_exposure_object))
 
 
-def test_complex_parsed_report(complex_parsed_report_dict, complex_parsed_report_object):
-    assert_symmetric(complex_parsed_report_object, complex_parsed_report_dict, ParsedReport)
+def test_complex_parsed_exposure(complex_parsed_exposure_dict, complex_parsed_exposure_object):
+    assert_symmetric(complex_parsed_exposure_object, complex_parsed_exposure_dict, ParsedExposure)
 
 
-unchanged_parsed_reports = [
+unchanged_parsed_exposures = [
     lambda u: (u, u),
 ]
 
 
-changed_parsed_reports = [
+changed_parsed_exposures = [
     lambda u: (u, u.replace(fqn=u.fqn[:-1]+['something', u.fqn[-1]])),
     lambda u: (u, u.replace(type=ExposureType.ML)),
     lambda u: (u, u.replace(owner=u.owner.replace(name='My Name'))),
@@ -2001,13 +2001,13 @@ changed_parsed_reports = [
 ]
 
 
-@pytest.mark.parametrize('func', unchanged_parsed_reports)
-def test_compare_unchanged_parsed_report(func, basic_parsed_report_object):
-    node, compare = func(basic_parsed_report_object)
+@pytest.mark.parametrize('func', unchanged_parsed_exposures)
+def test_compare_unchanged_parsed_exposure(func, basic_parsed_exposure_object):
+    node, compare = func(basic_parsed_exposure_object)
     assert node.same_contents(compare)
 
 
-@pytest.mark.parametrize('func', changed_parsed_reports)
-def test_compare_changed_report(func, basic_parsed_report_object):
-    node, compare = func(basic_parsed_report_object)
+@pytest.mark.parametrize('func', changed_parsed_exposures)
+def test_compare_changed_exposure(func, basic_parsed_exposure_object):
+    node, compare = func(basic_parsed_exposure_object)
     assert not node.same_contents(compare)

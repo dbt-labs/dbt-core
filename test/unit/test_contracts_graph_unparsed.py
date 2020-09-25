@@ -6,7 +6,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedRunHook, UnparsedMacro, Time, TimePeriod,
     FreshnessStatus, FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
-    UnparsedNodeUpdate, Docs, UnparsedReport, MaturityType, ReportOwner,
+    UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
     ExposureType
 )
 from dbt.node_types import NodeType
@@ -571,19 +571,19 @@ class TestUnparsedNodeUpdate(ContractTestCase):
         self.assert_fails_validation(dct)
 
 
-class TestUnparsedReport(ContractTestCase):
-    ContractType = UnparsedReport
+class TestUnparsedExposure(ContractTestCase):
+    ContractType = UnparsedExposure
 
     def get_ok_dict(self):
         return {
-            'name': 'my_report',
+            'name': 'my_exposure',
             'type': 'dashboard',
             'owner': {
                 'email': 'name@example.com',
             },
             'maturity': 'medium',
             'url': 'https://example.com/dashboards/1',
-            'description': 'A report',
+            'description': 'A exposure',
             'depends_on': [
                 'ref("my_model")',
                 'source("raw", "source_table")',
@@ -591,18 +591,18 @@ class TestUnparsedReport(ContractTestCase):
         }
 
     def test_ok(self):
-        report = self.ContractType(
-            name='my_report',
+        exposure = self.ContractType(
+            name='my_exposure',
             type=ExposureType.Dashboard,
-            owner=ReportOwner(email='name@example.com'),
+            owner=ExposureOwner(email='name@example.com'),
             maturity=MaturityType.Medium,
             url='https://example.com/dashboards/1',
-            description='A report',
+            description='A exposure',
             depends_on=['ref("my_model")', 'source("raw", "source_table")'],
         )
         dct = self.get_ok_dict()
-        self.assert_symmetric(report, dct)
-        pickle.loads(pickle.dumps(report))
+        self.assert_symmetric(exposure, dct)
+        pickle.loads(pickle.dumps(exposure))
 
     def test_ok_exposures(self):
         for exposure_allowed in ('dashboard', 'notebook', 'analysis', 'ml', 'application'):

@@ -1,10 +1,16 @@
 ## dbt 0.18.1 (Release TBD)
 
+### Feature
+- Added 'Last Modified' stat in snowflake catalog macro. Now should be available in docs. ([#2728](https://github.com/fishtown-analytics/dbt/issues/2728))
+
 ### Fixes
 - `dbt compile` and `dbt run` failed with `KeyError: 'endpoint_resolver'` when threads > 1 and `method: iam` had been specified in the profiles.yaml ([#2756](https://github.com/fishtown-analytics/dbt/issues/2756), [#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
 
 Contributors:
+- [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([#2732](https://github.com/fishtown-analytics/dbt/pull/2732))
 - [@jweibel22](https://github.com/jweibel22) ([#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
+
+## dbt 0.18.1b2 (September 22, 2020)
 
 
 ## dbt 0.18.1b1 (September 17, 2020)
@@ -16,10 +22,10 @@ Contributors:
 
 ### Features
 - Specify all three logging levels (`INFO`, `WARNING`, `ERROR`) in result logs for commands `test`, `seed`, `run`, `snapshot` and `source snapshot-freshness` ([#2680](https://github.com/fishtown-analytics/dbt/pull/2680), [#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
-- Added "reports" ([#2730](https://github.com/fishtown-analytics/dbt/issues/2730), [#2752](https://github.com/fishtown-analytics/dbt/pull/2752))
+- Added "exposures" ([#2730](https://github.com/fishtown-analytics/dbt/issues/2730), [#2752](https://github.com/fishtown-analytics/dbt/pull/2752), [#2777](https://github.com/fishtown-analytics/dbt/issues/2777))
 
 ### Docs
-- Add Report nodes ([docs#135](https://github.com/fishtown-analytics/dbt-docs/issues/135), [docs#136](https://github.com/fishtown-analytics/dbt-docs/pull/136))
+- Add Exposure nodes ([docs#135](https://github.com/fishtown-analytics/dbt-docs/issues/135), [docs#136](https://github.com/fishtown-analytics/dbt-docs/pull/136), [docs#137](https://github.com/fishtown-analytics/dbt-docs/pull/137))
 
 Contributors:
 - [@tpilewicz](https://github.com/tpilewicz) ([#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
