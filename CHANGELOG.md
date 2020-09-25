@@ -1,5 +1,8 @@
 ## dbt 0.18.1 (Release TBD)
 
+## dbt 0.18.1b3 (September 25, 2020)
+
+
 ### Feature
 - Added 'Last Modified' stat in snowflake catalog macro. Now should be available in docs. ([#2728](https://github.com/fishtown-analytics/dbt/issues/2728))
 
