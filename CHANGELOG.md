@@ -17,6 +17,7 @@ Contributors:
 ### Under the hood
 - If column config says quote, use quoting in SQL for adding a comment. ([#2539](https://github.com/fishtown-analytics/dbt/issues/2539), [#2733](https://github.com/fishtown-analytics/dbt/pull/2733))
 - Added support for running docker-based tests under Linux. ([#2739](https://github.com/fishtown-analytics/dbt/issues/2739))
+- Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 
 ### Features
 - Specify all three logging levels (`INFO`, `WARNING`, `ERROR`) in result logs for commands `test`, `seed`, `run`, `snapshot` and `source snapshot-freshness` ([#2680](https://github.com/fishtown-analytics/dbt/pull/2680), [#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
@@ -28,7 +29,7 @@ Contributors:
 Contributors:
 - [@tpilewicz](https://github.com/tpilewicz) ([#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
 - [@heisencoder](https://github.com/heisencoder) ([#2739](https://github.com/fishtown-analytics/dbt/issues/2739))
-
+- [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 
 ## dbt 0.18.0 (September 03, 2020)
 
