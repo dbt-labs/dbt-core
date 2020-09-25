@@ -15,6 +15,7 @@ from dbt.contracts.graph.parsed import (
     ParsedMacroPatch,
     ParsedModelNode,
     ParsedNodePatch,
+    ParsedExposure,
     ParsedRPCNode,
     ParsedSeedNode,
     ParsedSchemaTestNode,
@@ -69,6 +70,7 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     sources: MutableMapping[str, UnpatchedSourceDefinition] = dict_field()
     docs: MutableMapping[str, ParsedDocumentation] = dict_field()
     macros: MutableMapping[str, ParsedMacro] = dict_field()
+    exposures: MutableMapping[str, ParsedExposure] = dict_field()
     macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = dict_field()
     patches: MutableMapping[str, ParsedNodePatch] = dict_field()
     source_patches: MutableMapping[SourceKey, SourcePatch] = dict_field()
@@ -100,6 +102,11 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
     def add_node(self, source_file: SourceFile, node: ManifestNodes):
         self.add_node_nofile(node)
         self.get_file(source_file).nodes.append(node.unique_id)
+
+    def add_exposure(self, source_file: SourceFile, exposure: ParsedExposure):
+        _check_duplicates(exposure, self.exposures)
+        self.exposures[exposure.unique_id] = exposure
+        self.get_file(source_file).exposures.append(exposure.unique_id)
 
     def add_disabled_nofile(self, node: CompileResultNode):
         if node.unique_id in self.disabled:
@@ -261,6 +268,12 @@ class ParseResult(JsonSchemaMixin, Writable, Replaceable):
             if resource_type != node_id.split('.')[0]:
                 continue
             self._process_node(node_id, source_file, old_file, old_result)
+
+        for exposure_id in old_file.exposures:
+            exposure = _expect_value(
+                exposure_id, old_result.exposures, old_file, "exposures"
+            )
+            self.add_exposure(source_file, exposure)
 
         patched = False
         for name in old_file.patches:

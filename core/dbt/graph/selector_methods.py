@@ -10,12 +10,14 @@ from .graph import UniqueId
 from dbt.contracts.graph.compiled import (
     CompiledDataTestNode,
     CompiledSchemaTestNode,
-    NonSourceNode,
+    CompileResultNode,
+    ManifestNode,
 )
 from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.parsed import (
     HasTestMetadata,
     ParsedDataTestNode,
+    ParsedExposure,
     ParsedSchemaTestNode,
     ParsedSourceDefinition,
 )
@@ -44,6 +46,7 @@ class MethodName(StrEnum):
     TestType = 'test_type'
     ResourceType = 'resource_type'
     State = 'state'
+    Exposure = 'exposure'
 
 
 def is_selected_node(real_node, node_selector):
@@ -72,7 +75,7 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-SelectorTarget = Union[ParsedSourceDefinition, NonSourceNode]
+SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -89,7 +92,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def parsed_nodes(
         self,
         included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, NonSourceNode]]:
+    ) -> Iterator[Tuple[UniqueId, ManifestNode]]:
 
         for key, node in self.manifest.nodes.items():
             unique_id = UniqueId(key)
@@ -108,12 +111,38 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, source
 
+    def exposure_nodes(
+        self,
+        included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, ParsedExposure]]:
+
+        for key, exposure in self.manifest.exposures.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, exposure
+
     def all_nodes(
         self,
         included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
         yield from chain(self.parsed_nodes(included_nodes),
+                         self.source_nodes(included_nodes),
+                         self.exposure_nodes(included_nodes))
+
+    def configurable_nodes(
+        self,
+        included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, CompileResultNode]]:
+        yield from chain(self.parsed_nodes(included_nodes),
                          self.source_nodes(included_nodes))
+
+    def non_source_nodes(
+        self,
+        included_nodes: Set[UniqueId],
+    ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode]]]:
+        yield from chain(self.parsed_nodes(included_nodes),
+                         self.exposure_nodes(included_nodes))
 
     @abc.abstractmethod
     def search(
@@ -209,8 +238,37 @@ class SourceSelectorMethod(SelectorMethod):
                 continue
             if target_source not in (real_node.source_name, SELECTOR_GLOB):
                 continue
-            if target_table in (None, real_node.name, SELECTOR_GLOB):
-                yield node
+            if target_table not in (None, real_node.name, SELECTOR_GLOB):
+                continue
+
+            yield node
+
+
+class ExposureSelectorMethod(SelectorMethod):
+    def search(
+        self, included_nodes: Set[UniqueId], selector: str
+    ) -> Iterator[UniqueId]:
+        parts = selector.split('.')
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid exposure selector value "{}". Exposures must be of '
+                'the form ${{exposure_name}} or '
+                '${{exposure_package.exposure_name}}'
+            ).format(selector)
+            raise RuntimeException(msg)
+
+        for node, real_node in self.exposure_nodes(included_nodes):
+            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+                continue
+            if target_name not in (real_node.name, SELECTOR_GLOB):
+                continue
+
+            yield node
 
 
 class PathSelectorMethod(SelectorMethod):
@@ -284,7 +342,7 @@ class ConfigSelectorMethod(SelectorMethod):
         # search sources is kind of useless now source configs only have
         # 'enabled', which you can't really filter on anyway, but maybe we'll
         # add more someday, so search them anyway.
-        for node, real_node in self.all_nodes(included_nodes):
+        for node, real_node in self.configurable_nodes(included_nodes):
             try:
                 value = _getattr_descend(real_node.config, parts)
             except AttributeError:
@@ -423,6 +481,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.nodes[node]
             elif node in manifest.sources:
                 previous_node = manifest.sources[node]
+            elif node in manifest.exposures:
+                previous_node = manifest.exposures[node]
 
             if checker(previous_node, real_node):
                 yield node
@@ -439,6 +499,7 @@ class MethodManager:
         MethodName.TestName: TestNameSelectorMethod,
         MethodName.TestType: TestTypeSelectorMethod,
         MethodName.State: StateSelectorMethod,
+        MethodName.Exposure: ExposureSelectorMethod,
     }
 
     def __init__(

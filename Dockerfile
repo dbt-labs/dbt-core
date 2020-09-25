@@ -1,7 +1,6 @@
 FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND noninteractive
-ARG DOCKERIZE_VERSION=v0.6.1
 
 RUN apt-get update && \
     apt-get dist-upgrade -y && \
@@ -19,19 +18,32 @@ RUN apt-get update && \
         python3.9 python3.9-dev python3.9-venv && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN useradd -mU dbt_test_user
-RUN mkdir /usr/app && chown dbt_test_user /usr/app
-RUN mkdir /home/tox && chown dbt_test_user /home/tox
+ARG DOCKERIZE_VERSION=v0.6.1
 RUN curl -LO https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && \
     tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && \
     rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
-WORKDIR /usr/app
-VOLUME /usr/app
-
 RUN pip3 install -U "tox==3.14.4" wheel "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" setuptools
 # tox fails if the 'python' interpreter (python2) doesn't have `tox` installed
 RUN pip install -U "tox==3.14.4" "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" setuptools
+
+# These args are passed in via docker-compose, which reads then from the .env file.
+# On Linux, run `make .env` to create the .env file for the current user.
+# On MacOS and Windows, these can stay unset.
+ARG USER_ID
+ARG GROUP_ID
+
+RUN if [ ${USER_ID:-0} -ne 0 ] && [ ${GROUP_ID:-0} -ne 0 ]; then \
+        groupadd -g ${GROUP_ID} dbt_test_user && \
+        useradd -m -l -u ${USER_ID} -g ${GROUP_ID} dbt_test_user; \
+    else \
+        useradd -mU -l dbt_test_user; \
+    fi
+RUN mkdir /usr/app && chown dbt_test_user /usr/app
+RUN mkdir /home/tox && chown dbt_test_user /home/tox
+
+WORKDIR /usr/app
+VOLUME /usr/app
 
 USER dbt_test_user
 

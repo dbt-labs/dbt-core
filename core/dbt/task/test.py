@@ -115,10 +115,14 @@ class TestSelector(ResourceTypeSelector):
         )
 
     def expand_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
-        selected_tests = {
-            n for n in self.graph.select_successors(selected)
-            if self.manifest.nodes[n].resource_type == NodeType.Test
-        }
+        # exposures can't have tests, so this is relatively easy
+        selected_tests = set()
+        for unique_id in self.graph.select_successors(selected):
+            if unique_id in self.manifest.nodes:
+                node = self.manifest.nodes[unique_id]
+                if node.resource_type == NodeType.Test:
+                    selected_tests.add(unique_id)
+
         return selected | selected_tests
 
 

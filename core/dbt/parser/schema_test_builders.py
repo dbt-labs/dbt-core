@@ -9,7 +9,11 @@ from typing import (
 from dbt.clients.jinja import get_rendered, SCHEMA_TEST_KWARGS_NAME
 from dbt.contracts.graph.parsed import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
-    UnparsedNodeUpdate, UnparsedMacroUpdate, UnparsedAnalysisUpdate, TestDef,
+    TestDef,
+    UnparsedAnalysisUpdate,
+    UnparsedMacroUpdate,
+    UnparsedNodeUpdate,
+    UnparsedExposure,
 )
 from dbt.exceptions import raise_compiler_error
 from dbt.parser.search import FileBlock
@@ -78,6 +82,7 @@ Target = TypeVar(
     UnparsedMacroUpdate,
     UnparsedAnalysisUpdate,
     UnpatchedSourceDefinition,
+    UnparsedExposure,
 )
 
 

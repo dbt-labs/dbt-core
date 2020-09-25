@@ -5,25 +5,38 @@ changed_tests := `git status --porcelain | grep '^\(M\| M\|A\| A\)' | awk '{ pri
 install:
 	pip install -e .
 
-test:
+test: .env
 	@echo "Full test run starting..."
 	@time docker-compose run test tox
 
-test-unit:
+test-unit: .env
 	@echo "Unit test run starting..."
 	@time docker-compose run test tox -e unit-py36,flake8
 
-test-integration:
+test-integration: .env
 	@echo "Integration test run starting..."
 	@time docker-compose run test tox -e integration-postgres-py36,integration-redshift-py36,integration-snowflake-py36,integration-bigquery-py36
 
-test-quick:
+test-quick: .env
 	@echo "Integration test run starting..."
 	@time docker-compose run test tox -e integration-postgres-py36 -- -x
+
+# This rule creates a file named .env that is used by docker-compose for passing
+# the USER_ID and GROUP_ID arguments to the Docker image.
+.env:
+	@touch .env
+ifneq ($(OS),Windows_NT)
+ifneq ($(shell uname -s), Darwin)
+	@echo USER_ID=$(shell id -u) > .env
+	@echo GROUP_ID=$(shell id -g) >> .env
+endif
+endif
+	@time docker-compose build
 
 clean:
 	rm -f .coverage
 	rm -rf .eggs/
+	rm -f .env
 	rm -rf .tox/
 	rm -rf build/
 	rm -rf dbt.egg-info/

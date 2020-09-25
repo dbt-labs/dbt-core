@@ -1,0 +1,8 @@
+version: 2
+exposures:
+  - name: my_exposure
+    type: application
+    depends_on:
+      - ref('view_model')
+    owner:
+      email: test@example.com

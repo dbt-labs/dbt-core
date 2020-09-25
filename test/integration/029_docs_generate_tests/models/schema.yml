@@ -37,3 +37,41 @@ models:
         description: The user's IP address
       - name: updated_at
         description: The last time this user's email was updated
+
+
+sources:
+  - name: my_source
+    description: "My source"
+    loader: a_loader
+    schema: "{{ var('test_schema') }}"
+    tables:
+      - name: my_table
+        description: "My table"
+        identifier: seed
+        quoting:
+          identifier: True
+        columns:
+          - name: id
+            description: "An ID field"
+
+
+exposures:
+  - name: simple_exposure
+    type: dashboard
+    depends_on:
+      - ref('model')
+      - source('my_source', 'my_table')
+    owner:
+      email: something@example.com
+  - name: notebook_exposure
+    type: notebook
+    depends_on:
+      - ref('model')
+      - ref('second_model')
+    owner:
+      email: something@example.com
+      name: Some name
+    description: >
+      A description of the complex exposure
+    maturity: medium
+    url: http://example.com/notebook/1

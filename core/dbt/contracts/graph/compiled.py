@@ -5,6 +5,7 @@ from dbt.contracts.graph.parsed import (
     ParsedDataTestNode,
     ParsedHookNode,
     ParsedModelNode,
+    ParsedExposure,
     ParsedResource,
     ParsedRPCNode,
     ParsedSchemaTestNode,
@@ -202,7 +203,7 @@ NonSourceParsedNode = Union[
 
 
 # This is anything that can be in manifest.nodes.
-NonSourceNode = Union[
+ManifestNode = Union[
     NonSourceCompiledNode,
     NonSourceParsedNode,
 ]
@@ -211,6 +212,12 @@ NonSourceNode = Union[
 # 'compile()' calls in the runner actually just return the original parsed
 # node they were given.
 CompileResultNode = Union[
-    NonSourceNode,
+    ManifestNode,
     ParsedSourceDefinition,
+]
+
+# anything that participates in the graph: sources, exposures, manifest nodes
+GraphMemberNode = Union[
+    CompileResultNode,
+    ParsedExposure,
 ]

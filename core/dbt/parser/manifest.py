@@ -20,10 +20,10 @@ from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
 from dbt.contracts.files import FilePath, FileHash
-from dbt.contracts.graph.compiled import NonSourceNode
+from dbt.contracts.graph.compiled import ManifestNode
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo,
+    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
 )
 from dbt.exceptions import (
     ref_target_not_found,
@@ -307,7 +307,7 @@ class ManifestLoader:
         for value in self.results.disabled.values():
             disabled.extend(value)
 
-        nodes: MutableMapping[str, NonSourceNode] = {
+        nodes: MutableMapping[str, ManifestNode] = {
             k: v for k, v in self.results.nodes.items()
         }
 
@@ -316,6 +316,7 @@ class ManifestLoader:
             sources=sources,
             macros=self.results.macros,
             docs=self.results.docs,
+            exposures=self.results.exposures,
             generated_at=datetime.utcnow(),
             metadata=self.root_project.get_metadata(),
             disabled=disabled,
@@ -414,8 +415,8 @@ def _check_resource_uniqueness(
     manifest: Manifest,
     config: RuntimeConfig,
 ) -> None:
-    names_resources: Dict[str, NonSourceNode] = {}
-    alias_resources: Dict[str, NonSourceNode] = {}
+    names_resources: Dict[str, ManifestNode] = {}
+    alias_resources: Dict[str, ManifestNode] = {}
 
     for resource, node in manifest.nodes.items():
         if node.resource_type not in NodeType.refable():
@@ -493,7 +494,7 @@ DocsContextCallback = Callable[
 
 def _process_docs_for_node(
     context: Dict[str, Any],
-    node: NonSourceNode,
+    node: ManifestNode,
 ):
     node.description = get_rendered(node.description, context)
     for column_name, column in node.columns.items():
@@ -552,12 +553,53 @@ def process_docs(manifest: Manifest, config: RuntimeConfig):
         _process_docs_for_macro(ctx, macro)
 
 
+def _process_refs_for_exposure(
+    manifest: Manifest, current_project: str, exposure: ParsedExposure
+):
+    """Given a manifest and a exposure in that manifest, process its refs"""
+    for ref in exposure.refs:
+        target_model: Optional[Union[Disabled, ManifestNode]] = None
+        target_model_name: str
+        target_model_package: Optional[str] = None
+
+        if len(ref) == 1:
+            target_model_name = ref[0]
+        elif len(ref) == 2:
+            target_model_package, target_model_name = ref
+        else:
+            raise dbt.exceptions.InternalException(
+                f'Refs should always be 1 or 2 arguments - got {len(ref)}'
+            )
+
+        target_model = manifest.resolve_ref(
+            target_model_name,
+            target_model_package,
+            current_project,
+            exposure.package_name,
+        )
+
+        if target_model is None or isinstance(target_model, Disabled):
+            # This may raise. Even if it doesn't, we don't want to add
+            # this exposure to the graph b/c there is no destination exposure
+            invalid_ref_fail_unless_test(
+                exposure, target_model_name, target_model_package,
+                disabled=(isinstance(target_model, Disabled))
+            )
+
+            continue
+
+        target_model_id = target_model.unique_id
+
+        exposure.depends_on.nodes.append(target_model_id)
+        manifest.update_exposure(exposure)
+
+
 def _process_refs_for_node(
-    manifest: Manifest, current_project: str, node: NonSourceNode
+    manifest: Manifest, current_project: str, node: ManifestNode
 ):
     """Given a manifest and a node in that manifest, process its refs"""
     for ref in node.refs:
-        target_model: Optional[Union[Disabled, NonSourceNode]] = None
+        target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str
         target_model_package: Optional[str] = None
 
@@ -600,11 +642,37 @@ def _process_refs_for_node(
 def process_refs(manifest: Manifest, current_project: str):
     for node in manifest.nodes.values():
         _process_refs_for_node(manifest, current_project, node)
+    for exposure in manifest.exposures.values():
+        _process_refs_for_exposure(manifest, current_project, exposure)
     return manifest
 
 
+def _process_sources_for_exposure(
+    manifest: Manifest, current_project: str, exposure: ParsedExposure
+):
+    target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
+    for source_name, table_name in exposure.sources:
+        target_source = manifest.resolve_source(
+            source_name,
+            table_name,
+            current_project,
+            exposure.package_name,
+        )
+        if target_source is None or isinstance(target_source, Disabled):
+            invalid_source_fail_unless_test(
+                exposure,
+                source_name,
+                table_name,
+                disabled=(isinstance(target_source, Disabled))
+            )
+            continue
+        target_source_id = target_source.unique_id
+        exposure.depends_on.nodes.append(target_source_id)
+        manifest.update_exposure(exposure)
+
+
 def _process_sources_for_node(
-    manifest: Manifest, current_project: str, node: NonSourceNode
+    manifest: Manifest, current_project: str, node: ManifestNode
 ):
     target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
     for source_name, table_name in node.sources:
@@ -636,6 +704,8 @@ def process_sources(manifest: Manifest, current_project: str):
             continue
         assert not isinstance(node, ParsedSourceDefinition)
         _process_sources_for_node(manifest, current_project, node)
+    for exposure in manifest.exposures.values():
+        _process_sources_for_exposure(manifest, current_project, exposure)
     return manifest
 
 
@@ -652,7 +722,7 @@ def process_macro(
 
 
 def process_node(
-    config: RuntimeConfig, manifest: Manifest, node: NonSourceNode
+    config: RuntimeConfig, manifest: Manifest, node: ManifestNode
 ):
 
     _process_sources_for_node(

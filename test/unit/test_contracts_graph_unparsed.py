@@ -1,3 +1,4 @@
+import copy
 import pickle
 from datetime import timedelta
 
@@ -5,7 +6,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedRunHook, UnparsedMacro, Time, TimePeriod,
     FreshnessStatus, FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
-    UnparsedNodeUpdate, Docs
+    UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
+    ExposureType
 )
 from dbt.node_types import NodeType
 from .utils import ContractTestCase
@@ -567,3 +569,78 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'docs': {'show': True},
         }
         self.assert_fails_validation(dct)
+
+
+class TestUnparsedExposure(ContractTestCase):
+    ContractType = UnparsedExposure
+
+    def get_ok_dict(self):
+        return {
+            'name': 'my_exposure',
+            'type': 'dashboard',
+            'owner': {
+                'email': 'name@example.com',
+            },
+            'maturity': 'medium',
+            'url': 'https://example.com/dashboards/1',
+            'description': 'A exposure',
+            'depends_on': [
+                'ref("my_model")',
+                'source("raw", "source_table")',
+            ]
+        }
+
+    def test_ok(self):
+        exposure = self.ContractType(
+            name='my_exposure',
+            type=ExposureType.Dashboard,
+            owner=ExposureOwner(email='name@example.com'),
+            maturity=MaturityType.Medium,
+            url='https://example.com/dashboards/1',
+            description='A exposure',
+            depends_on=['ref("my_model")', 'source("raw", "source_table")'],
+        )
+        dct = self.get_ok_dict()
+        self.assert_symmetric(exposure, dct)
+        pickle.loads(pickle.dumps(exposure))
+
+    def test_ok_exposures(self):
+        for exposure_allowed in ('dashboard', 'notebook', 'analysis', 'ml', 'application'):
+            tst = self.get_ok_dict()
+            tst['type'] = exposure_allowed
+            assert self.ContractType.from_dict(tst).type == exposure_allowed
+
+    def test_bad_exposure(self):
+        # bad exposure: None isn't allowed
+        for exposure_not_allowed in (None, 'not an exposure'):
+            tst = self.get_ok_dict()
+            tst['type'] = exposure_not_allowed
+            self.assert_fails_validation(tst)
+
+    def test_no_exposure(self):
+        tst = self.get_ok_dict()
+        del tst['type']
+        self.assert_fails_validation(tst)
+
+    def test_ok_maturities(self):
+        for maturity_allowed in (None, 'low', 'medium', 'high'):
+            tst = self.get_ok_dict()
+            tst['maturity'] = maturity_allowed
+            assert self.ContractType.from_dict(tst).maturity == maturity_allowed
+
+        tst = self.get_ok_dict()
+        del tst['maturity']
+        assert self.ContractType.from_dict(tst).maturity is None
+
+    def test_bad_maturity(self):
+        tst = self.get_ok_dict()
+        tst['maturity'] = 'invalid maturity'
+        self.assert_fails_validation(tst)
+
+    def test_bad_owner_missing_things(self):
+        tst = self.get_ok_dict()
+        del tst['owner']['email']
+        self.assert_fails_validation(tst)
+
+        del tst['owner']
+        self.assert_fails_validation(tst)

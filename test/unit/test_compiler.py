@@ -156,6 +156,7 @@ class CompilerTest(unittest.TestCase):
             generated_at=datetime(2018, 2, 14, 9, 15, 13),
             disabled=[],
             files={},
+            exposures={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -240,6 +241,7 @@ class CompilerTest(unittest.TestCase):
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],
             files={},
+            exposures={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -333,6 +335,7 @@ class CompilerTest(unittest.TestCase):
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],
             files={},
+            exposures={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -437,6 +440,7 @@ class CompilerTest(unittest.TestCase):
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],
             files={},
+            exposures={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -542,6 +546,7 @@ class CompilerTest(unittest.TestCase):
             generated_at='2018-02-14T09:15:13Z',
             disabled=[],
             files={},
+            exposures={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)

@@ -7,8 +7,8 @@ from typing import (
 import networkx as nx  # type: ignore
 
 from .graph import UniqueId
-from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedExposure
+from dbt.contracts.graph.compiled import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
 
@@ -50,8 +50,8 @@ class GraphQueue:
         node = self.manifest.expect(node_id)
         if node.resource_type != NodeType.Model:
             return False
-        # must be a Model - tell mypy this won't be a Source
-        assert not isinstance(node, ParsedSourceDefinition)
+        # must be a Model - tell mypy this won't be a Source or Exposure
+        assert not isinstance(node, (ParsedSourceDefinition, ParsedExposure))
         if node.is_ephemeral:
             return False
         return True
@@ -84,7 +84,7 @@ class GraphQueue:
 
     def get(
         self, block: bool = True, timeout: Optional[float] = None
-    ) -> CompileResultNode:
+    ) -> GraphMemberNode:
         """Get a node off the inner priority queue. By default, this blocks.
 
         This takes the lock, but only for part of it.

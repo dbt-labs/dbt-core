@@ -12,12 +12,13 @@ from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.compiled import (
-    InjectedCTE,
-    COMPILED_TYPES,
-    NonSourceNode,
-    NonSourceCompiledNode,
     CompiledDataTestNode,
     CompiledSchemaTestNode,
+    COMPILED_TYPES,
+    GraphMemberNode,
+    InjectedCTE,
+    ManifestNode,
+    NonSourceCompiledNode,
 )
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.exceptions import (
@@ -64,7 +65,7 @@ def print_compile_stats(stats):
     logger.info("Found {}".format(stat_line))
 
 
-def _node_enabled(node: NonSourceNode):
+def _node_enabled(node: ManifestNode):
     # Disabled models are already excluded from the manifest
     if node.resource_type == NodeType.Test and not node.config.enabled:
         return False
@@ -358,7 +359,7 @@ class Compiler:
 
     def _compile_node(
         self,
-        node: NonSourceNode,
+        node: ManifestNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
     ) -> NonSourceCompiledNode:
@@ -402,7 +403,7 @@ class Compiler:
             linker.write_graph(graph_path, manifest)
 
     def link_node(
-        self, linker: Linker, node: NonSourceNode, manifest: Manifest
+        self, linker: Linker, node: GraphMemberNode, manifest: Manifest
     ):
         linker.add_node(node.unique_id)
 
@@ -425,6 +426,9 @@ class Compiler:
             linker.add_node(source.unique_id)
         for node in manifest.nodes.values():
             self.link_node(linker, node, manifest)
+        for exposure in manifest.exposures.values():
+            self.link_node(linker, exposure, manifest)
+            # linker.add_node(exposure.unique_id)
 
         cycle = linker.find_cycles()
 
@@ -445,7 +449,7 @@ class Compiler:
 
         return Graph(linker.graph)
 
-    def _write_node(self, node: NonSourceCompiledNode) -> NonSourceNode:
+    def _write_node(self, node: NonSourceCompiledNode) -> ManifestNode:
         if not _is_writable(node):
             return node
         logger.debug(f'Writing injected SQL for node "{node.unique_id}"')
@@ -467,7 +471,7 @@ class Compiler:
 
     def compile_node(
         self,
-        node: NonSourceNode,
+        node: ManifestNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]] = None,
         write: bool = True,
