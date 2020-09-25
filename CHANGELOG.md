@@ -5,10 +5,12 @@
 
 ### Fixes
 - `dbt compile` and `dbt run` failed with `KeyError: 'endpoint_resolver'` when threads > 1 and `method: iam` had been specified in the profiles.yaml ([#2756](https://github.com/fishtown-analytics/dbt/issues/2756), [#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
+- Fix Redshift adapter to include columns from external tables when using the get_columns_in_relation macro ([#2753](https://github.com/fishtown-analytics/dbt/issues/2753), [#2754](https://github.com/fishtown-analytics/dbt/pull/2754))
 
 Contributors:
 - [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([#2732](https://github.com/fishtown-analytics/dbt/pull/2732))
 - [@jweibel22](https://github.com/jweibel22) ([#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
+- [@aiguofer](https://github.com/aiguofer) ([#2754](https://github.com/fishtown-analytics/dbt/pull/2754))
 
 ## dbt 0.18.1b2 (September 22, 2020)
 
