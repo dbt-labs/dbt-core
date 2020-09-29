@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any
+import yaml
 
 from hologram import ValidationError
 
@@ -33,7 +34,17 @@ class SelectorConfig(Dict[str, SelectionSpec]):
         try:
             selector_file = SelectorFile.from_dict(data)
             selectors = parse_from_selectors_definition(selector_file)
-        except (ValidationError, RuntimeException) as exc:
+        except ValidationError as exc:
+            yaml_sel_cfg = yaml.dump(exc.instance)
+            raise DbtSelectorsError(
+                f"Could not parse selector file data: \n{yaml_sel_cfg}\n"
+                f"Valid root-level selector definitions: "
+                f"union, intersection, string, dictionary. No lists. "
+                f"\nhttps://docs.getdbt.com/reference/node-selection/"
+                f"yaml-selectors",
+                result_type='invalid_selector'
+            ) from exc
+        except RuntimeException as exc:
             raise DbtSelectorsError(
                 f'Could not read selector file data: {exc}',
                 result_type='invalid_selector',

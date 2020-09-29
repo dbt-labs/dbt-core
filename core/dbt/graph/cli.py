@@ -1,5 +1,6 @@
 # special support for CLI argument parsing.
 import itertools
+import yaml
 
 from typing import (
     Dict, List, Optional, Tuple, Any, Union
@@ -116,8 +117,7 @@ def _get_list_dicts(
     values = dct[key]
     if not isinstance(values, list):
         raise ValidationException(
-            f'Invalid value type {type(values)} in key "{key}" '
-            f'(value "{values}")'
+            f'Invalid value for key "{key}". Expected a list.'
         )
     for value in values:
         if isinstance(value, dict):
@@ -165,9 +165,10 @@ def _parse_include_exclude_subdefs(
         if isinstance(definition, dict) and 'exclude' in definition:
             # do not allow multiple exclude: defs at the same level
             if diff_arg is not None:
+                yaml_sel_cfg = yaml.dump(definition)
                 raise ValidationException(
-                    f'Got multiple exclusion definitions in definition list '
-                    f'{definitions}'
+                    f"You cannot provide multiple exclude arguments to the "
+                    f"same selector set operator:\n{yaml_sel_cfg}"
                 )
             diff_arg = _parse_exclusions(definition)
         else:
@@ -198,6 +199,7 @@ def parse_intersection_definition(
     intersection_def_parts = _get_list_dicts(definition, 'intersection')
     include, exclude = _parse_include_exclude_subdefs(intersection_def_parts)
     intersection = SelectionIntersection(components=include)
+
     if exclude is None:
         intersection.raw = definition
         return intersection
@@ -210,7 +212,6 @@ def parse_intersection_definition(
 
 def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
     diff_arg: Optional[SelectionSpec] = None
-
     if len(definition) == 1:
         key = list(definition)[0]
         value = definition[key]
@@ -230,7 +231,7 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
             dct = {k: v for k, v in dct.items() if k != 'exclude'}
     else:
         raise ValidationException(
-            f'Expected exactly 1 key in the selection definition or "method" '
+            f'Expected either 1 key or else "method" '
             f'and "value" keys, but got {list(definition)}'
         )
 
@@ -242,7 +243,18 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
         return SelectionDifference(components=[base, diff_arg])
 
 
-def parse_from_definition(definition: RawDefinition) -> SelectionSpec:
+def parse_from_definition(
+    definition: RawDefinition, rootlevel=False
+) -> SelectionSpec:
+
+    if (isinstance(definition, dict) and
+            ('union' in definition or 'intersection' in definition) and
+            rootlevel and len(definition) > 1):
+        keys = ",".join(definition.keys())
+        raise ValidationException(
+            f"Only a single 'union' or 'intersection' key is allowed "
+            f"in a root level selector definition; found {keys}."
+        )
     if isinstance(definition, str):
         return SelectionCriteria.from_single_spec(definition)
     elif 'union' in definition:
@@ -253,8 +265,8 @@ def parse_from_definition(definition: RawDefinition) -> SelectionSpec:
         return parse_dict_definition(definition)
     else:
         raise ValidationException(
-            f'Expected to find str or dict, instead found '
-            f'{type(definition)}: {definition}'
+            f'Expected to find union, intersection, str or dict, instead '
+            f'found {type(definition)}: {definition}'
         )
 
 
@@ -264,5 +276,6 @@ def parse_from_selectors_definition(
     result: Dict[str, SelectionSpec] = {}
     selector: SelectorDefinition
     for selector in source.selectors:
-        result[selector.name] = parse_from_definition(selector.definition)
+        result[selector.name] = parse_from_definition(selector.definition,
+                                                      rootlevel=True)
     return result
