@@ -481,12 +481,27 @@ class SnapshotWrapper(JsonSchemaMixin):
 
     @classmethod
     def validate(cls, data: Any):
-        schema = _validate_schema(cls)
+        config = data.get('config', {})
+
+        if config.get('strategy') == 'check':
+            schema = _validate_schema(CheckSnapshotConfig)
+            to_validate = config
+
+        elif config.get('strategy') == 'timestamp':
+            schema = _validate_schema(TimestampSnapshotConfig)
+            to_validate = config
+
+        else:
+            schema = _validate_schema(cls)
+            to_validate = data
+
         validator = jsonschema.Draft7Validator(schema)
+
         error = jsonschema.exceptions.best_match(
-            validator.iter_errors(data),
+            validator.iter_errors(to_validate),
             key=_relevance_without_strategy,
         )
+
         if error is not None:
             raise ValidationError.create_from(error) from error
 

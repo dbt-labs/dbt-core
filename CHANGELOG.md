@@ -10,8 +10,12 @@
 - Added ability to snapshot hard-deleted records (opt-in with `invalidate_hard_deletes` config option). ([#249](https://github.com/fishtown-analytics/dbt/issues/249), [#2749](https://github.com/fishtown-analytics/dbt/pull/2749))
 - Improved error messages for YAML selectors ([#2700](https://github.com/fishtown-analytics/dbt/issues/2700), [#2781](https://github.com/fishtown-analytics/dbt/pull/2781))
 
+### Under the hood
+- Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
+
 Contributors:
 - [@joelluijmes](https://github.com/joelluijmes) ([#2749](https://github.com/fishtown-analytics/dbt/pull/2749))
+- [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 
 ## dbt 0.18.1 (Release TBD)
 
@@ -29,7 +33,6 @@ Contributors:
 Contributors:
 - [@tpilewicz](https://github.com/tpilewicz) ([#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
 - [@heisencoder](https://github.com/heisencoder) ([#2739](https://github.com/fishtown-analytics/dbt/issues/2739))
-
 
 ## dbt 0.18.0 (September 03, 2020)
 

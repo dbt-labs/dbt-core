@@ -1348,7 +1348,8 @@ def test_invalid_check_wrong_strategy(basic_check_snapshot_config_dict):
 def test_invalid_missing_check_cols(basic_check_snapshot_config_dict):
     wrong_fields = basic_check_snapshot_config_dict
     del wrong_fields['check_cols']
-    assert_fails_validation(wrong_fields, CheckSnapshotConfig)
+    with pytest.raises(ValidationError, match=r"'check_cols' is a required property"):
+        CheckSnapshotConfig.from_dict(wrong_fields)
 
 
 def test_invalid_check_value(basic_check_snapshot_config_dict):
