@@ -1,5 +1,11 @@
 ## dbt 0.18.1 (Release TBD)
 
+### Features
+- Added retry support for rateLimitExceeded error from BigQuery, ([#2795](https://github.com/fishtown-analytics/dbt/issues/2795), [#2796](https://github.com/fishtown-analytics/dbt/issues/2796))
+
+Contributors:
+- [@championj-foxtel](https://github.com/championj-foxtel) ([#2796](https://github.com/fishtown-analytics/dbt/issues/2796))
+
 ## dbt 0.18.1b3 (September 25, 2020)
 
 
