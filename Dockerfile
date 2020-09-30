@@ -33,12 +33,14 @@ RUN pip install -U "tox==3.14.4" "six>=1.14.0,<1.15.0" "virtualenv==20.0.3" setu
 ARG USER_ID
 ARG GROUP_ID
 
-RUN if [ ${USER_ID:-0} -ne 0 ] && [ ${GROUP_ID:-0} -ne 0 ]; then \
-        groupadd -g ${GROUP_ID} dbt_test_user && \
-        useradd -m -l -u ${USER_ID} -g ${GROUP_ID} dbt_test_user; \
-    else \
-        useradd -mU -l dbt_test_user; \
-    fi
+# RUN if [ ${USER_ID:-0} -ne 0 ] && [ ${GROUP_ID:-0} -ne 0 ]; then \
+#         groupadd -g ${GROUP_ID} dbt_test_user && \
+#         useradd -m -l -u ${USER_ID} -g ${GROUP_ID} dbt_test_user; \
+#     else \
+#         useradd -mU -l dbt_test_user; \
+#     fi
+RUN useradd -mU -l dbt_test_user
+
 RUN mkdir /usr/app && chown dbt_test_user /usr/app
 RUN mkdir /home/tox && chown dbt_test_user /home/tox
 
