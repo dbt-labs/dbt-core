@@ -9,7 +9,10 @@ import google.cloud.bigquery
 import google.cloud.exceptions
 from google.api_core import retry, client_info
 from google.auth import impersonated_credentials
-from google.oauth2 import service_account
+from google.oauth2 import (
+    credentials as GoogleCredentials,
+    service_account as GoogleServiceAccountCredentials
+)
 
 from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
@@ -50,19 +53,29 @@ class BigQueryConnectionMethod(StrEnum):
     OAUTH = 'oauth'
     SERVICE_ACCOUNT = 'service-account'
     SERVICE_ACCOUNT_JSON = 'service-account-json'
+    BEARER = 'bearer'
 
 
 @dataclass
 class BigQueryCredentials(Credentials):
     method: BigQueryConnectionMethod
-    keyfile: Optional[str] = None
-    keyfile_json: Optional[Dict[str, Any]] = None
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
     priority: Optional[Priority] = None
     retries: Optional[int] = 1
     maximum_bytes_billed: Optional[int] = None
     impersonate_service_account: Optional[str] = None
+
+    # Keyfile json creds
+    keyfile: Optional[str] = None
+    keyfile_json: Optional[Dict[str, Any]] = None
+
+    # Bearer token creds
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
+
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
@@ -110,12 +123,13 @@ class BigQueryConnectionManager(BaseConnectionManager):
             message = "Access denied while running query"
             self.handle_error(e, message)
 
-        except google.auth.exceptions.RefreshError:
+        except google.auth.exceptions.RefreshError as e:
             message = "Unable to generate access token, if you're using " \
                       "impersonate_service_account, make sure your " \
                       'initial account has the "roles/' \
                       'iam.serviceAccountTokenCreator" role on the ' \
-                      'account you are trying to impersonate.'
+                      'account you are trying to impersonate.\n\n' \
+                      f'{str(e)}'
             raise RuntimeException(message)
 
         except Exception as e:
@@ -151,7 +165,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
     @classmethod
     def get_bigquery_credentials(cls, profile_credentials):
         method = profile_credentials.method
-        creds = service_account.Credentials
+        creds = GoogleServiceAccountCredentials.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
             credentials, project_id = google.auth.default(scopes=cls.SCOPE)
@@ -164,6 +178,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
         elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT_JSON:
             details = profile_credentials.keyfile_json
             return creds.from_service_account_info(details, scopes=cls.SCOPE)
+
+        elif method == BigQueryConnectionMethod.BEARER:
+            return GoogleCredentials.Credentials(
+                token=None,
+                refresh_token=profile_credentials.refresh_token,
+                client_id=profile_credentials.client_id,
+                client_secret=profile_credentials.client_secret,
+                token_uri=profile_credentials.token_uri,
+                scopes=cls.SCOPE
+            )
 
         error = ('Invalid `method` in profile: "{}"'.format(method))
         raise FailedToConnectException(error)
