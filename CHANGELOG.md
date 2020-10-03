@@ -9,6 +9,7 @@
 - Added schema and dbt versions to JSON artifacts ([#2670](https://github.com/fishtown-analytics/dbt/issues/2670), [#2767](https://github.com/fishtown-analytics/dbt/pull/2767))
 - Added ability to snapshot hard-deleted records (opt-in with `invalidate_hard_deletes` config option). ([#249](https://github.com/fishtown-analytics/dbt/issues/249), [#2749](https://github.com/fishtown-analytics/dbt/pull/2749))
 - Improved error messages for YAML selectors ([#2700](https://github.com/fishtown-analytics/dbt/issues/2700), [#2781](https://github.com/fishtown-analytics/dbt/pull/2781))
+- Added dbt_invocation_id for each BigQuery job to enable performance analysis ([#2483](https://github.com/fishtown-analytics/dbt/issues/2483))
 
 ### Under the hood
 - Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
