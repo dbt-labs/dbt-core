@@ -13,11 +13,11 @@ for SUBPATH in core plugins/postgres plugins/redshift plugins/bigquery plugins/s
 do
     rm -rf "$DBT_PATH"/"$SUBPATH"/dist
     cd "$DBT_PATH"/"$SUBPATH"
-    python3 setup.py sdist
+    python setup.py sdist
     cp -r "$DBT_PATH"/"$SUBPATH"/dist/* "$DBT_PATH"/dist/
 done
 
 cd "$DBT_PATH"
-python3 setup.py sdist
+python setup.py sdist
 
 set +x
