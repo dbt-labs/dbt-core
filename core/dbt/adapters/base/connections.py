@@ -30,6 +30,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         - commit
         - clear_transaction
         - execute
+        - debug_query
 
     You must also set the 'TYPE' class attribute with a class-unique constant
     string.
@@ -287,6 +288,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             return sql
         return self.query_header.add(sql)
 
+    def debug_query(self, sql: str):
+        if sql is None:
+            self.execute('select 1 as id')
+        else:
+            self.execute(sql)
+        
+
+
     @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -303,3 +312,4 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         raise dbt.exceptions.NotImplementedException(
             '`execute` is not implemented for this adapter!'
         )
+
