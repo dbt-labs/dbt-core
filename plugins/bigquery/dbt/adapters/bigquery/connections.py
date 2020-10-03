@@ -252,10 +252,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         job_params = {
             'use_legacy_sql': False,
-            'labels': {
-                'dbt_invocation_id': active_user.invocation_id,
-            },
         }
+
+        if active_user:
+            job_params['labels'] = {
+                'dbt_invocation_id': active_user.invocation_id
+            }
 
         priority = conn.credentials.priority
         if priority == Priority.Batch:
