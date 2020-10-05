@@ -1217,7 +1217,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def sql(self) -> Optional[str]:
-        return getattr(self.model, 'injected_sql', None)
+        return getattr(self.model, 'compiled_sql', None)
 
     @contextproperty
     def database(self) -> str:

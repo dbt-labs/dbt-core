@@ -38,7 +38,6 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
     'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
-    'injected_sql',
 })
 
 
@@ -482,7 +481,6 @@ class MixedManifestTest(unittest.TestCase):
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
-                injected_sql=None,
                 extra_ctes=[],
                 checksum=FileHash.empty(),
             ),
@@ -508,7 +506,6 @@ class MixedManifestTest(unittest.TestCase):
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
-                injected_sql='and this also does not matter',
                 extra_ctes=[],
                 checksum=FileHash.empty(),
             ),

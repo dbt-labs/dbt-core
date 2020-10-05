@@ -276,7 +276,7 @@ class Compiler:
 
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
-        model.injected_sql = injected_sql
+        model.compiled_sql = injected_sql
         model.validate(model.to_dict())
         return model
 
@@ -374,7 +374,6 @@ class Compiler:
             'compiled_sql': None,
             'extra_ctes_injected': False,
             'extra_ctes': [],
-            'injected_sql': None,
         })
         compiled_node = _compiled_type_for(node).from_dict(data)
 
@@ -454,19 +453,11 @@ class Compiler:
             return node
         logger.debug(f'Writing injected SQL for node "{node.unique_id}"')
 
-        if node.injected_sql is None:
-            # this should not really happen, but it'd be a shame to crash
-            # over it
-            logger.error(
-                f'Compiled node "{node.unique_id}" had no injected_sql, '
-                'cannot write sql!'
-            )
-        else:
-            node.build_path = node.write_node(
-                self.config.target_path,
-                'compiled',
-                node.injected_sql
-            )
+        node.build_path = node.write_node(
+            self.config.target_path,
+            'compiled',
+            node.compiled_sql
+        )
         return node
 
     def compile_node(
@@ -484,7 +475,7 @@ class Compiler:
 
 
 def _is_writable(node):
-    if not node.injected_sql:
+    if not node.compiled_sql:
         return False
 
     if node.resource_type == NodeType.Snapshot:

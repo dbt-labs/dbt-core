@@ -216,7 +216,7 @@
 
   {% if not target_relation_exists %}
 
-      {% set build_sql = build_snapshot_table(strategy, model['injected_sql']) %}
+      {% set build_sql = build_snapshot_table(strategy, model['compiled_sql']) %}
       {% set final_sql = create_table_as(False, target_relation, build_sql) %}
 
   {% else %}

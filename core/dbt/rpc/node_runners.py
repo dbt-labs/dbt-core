@@ -65,7 +65,7 @@ class RPCCompileRunner(GenericRPCRunner[RemoteCompileResult]):
     def execute(self, compiled_node, manifest) -> RemoteCompileResult:
         return RemoteCompileResult(
             raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql,
+            compiled_sql=compiled_node.compiled_sql,
             node=compiled_node,
             timing=[],  # this will get added later
             logs=[],
@@ -88,7 +88,7 @@ class RPCCompileRunner(GenericRPCRunner[RemoteCompileResult]):
 class RPCExecuteRunner(GenericRPCRunner[RemoteRunResult]):
     def execute(self, compiled_node, manifest) -> RemoteRunResult:
         _, execute_result = self.adapter.execute(
-            compiled_node.injected_sql, fetch=True
+            compiled_node.compiled_sql, fetch=True
         )
 
         table = ResultTable(
@@ -98,7 +98,7 @@ class RPCExecuteRunner(GenericRPCRunner[RemoteRunResult]):
 
         return RemoteRunResult(
             raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql,
+            compiled_sql=compiled_node.compiled_sql,
             node=compiled_node,
             table=table,
             timing=[],

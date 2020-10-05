@@ -74,10 +74,9 @@ def basic_compiled_model():
         config=NodeConfig(),
         meta={},
         compiled=True,
-        compiled_sql='select * from whatever',
         extra_ctes=[InjectedCTE('whatever', 'select * from other')],
         extra_ctes_injected=True,
-        injected_sql='with whatever as (select * from other) select * from whatever',
+        compiled_sql='with whatever as (select * from other) select * from whatever',
         checksum=FileHash.from_contents(''),
         unrendered_config={}
     )
@@ -183,10 +182,9 @@ def basic_compiled_dict():
         'columns': {},
         'meta': {},
         'compiled': True,
-        'compiled_sql': 'select * from whatever',
         'extra_ctes': [{'id': 'whatever', 'sql': 'select * from other'}],
         'extra_ctes_injected': True,
-        'injected_sql': 'with whatever as (select * from other) select * from whatever',
+        'compiled_sql': 'with whatever as (select * from other) select * from whatever',
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {}
     }
@@ -375,10 +373,9 @@ def basic_compiled_schema_test_node():
         config=TestConfig(severity='warn'),
         meta={},
         compiled=True,
-        compiled_sql='select * from whatever',
         extra_ctes=[InjectedCTE('whatever', 'select * from other')],
         extra_ctes_injected=True,
-        injected_sql='with whatever as (select * from other) select * from whatever',
+        compiled_sql='with whatever as (select * from other) select * from whatever',
         column_name='id',
         test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         checksum=FileHash.from_contents(''),
@@ -474,10 +471,9 @@ def basic_compiled_schema_test_dict():
         'columns': {},
         'meta': {},
         'compiled': True,
-        'compiled_sql': 'select * from whatever',
         'extra_ctes': [{'id': 'whatever', 'sql': 'select * from other'}],
         'extra_ctes_injected': True,
-        'injected_sql': 'with whatever as (select * from other) select * from whatever',
+        'compiled_sql': 'with whatever as (select * from other) select * from whatever',
         'column_name': 'id',
         'test_metadata': {
             'name': 'foo',
