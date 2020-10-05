@@ -129,6 +129,7 @@ class RunResultsArtifact(
     ArtifactMixin,
 ):
     results: Sequence[RunResult]
+    args: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_node_results(
@@ -136,6 +137,7 @@ class RunResultsArtifact(
         results: Sequence[RunResult],
         elapsed_time: float,
         generated_at: datetime,
+        args: Dict,
     ):
         meta = RunResultsMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
@@ -145,6 +147,7 @@ class RunResultsArtifact(
             metadata=meta,
             results=results,
             elapsed_time=elapsed_time,
+            args=args
         )
 
 

@@ -225,6 +225,7 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 @dataclass
 @schema_version('remote-execution-result', 1)
 class RemoteExecutionResult(ExecutionResult, RemoteResult):
+    args: Dict[str, Any] = field(default_factory=dict)
     results: Sequence[RunResult]
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -233,6 +234,7 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
             generated_at=self.generated_at,
             results=self.results,
             elapsed_time=self.elapsed_time,
+            args=self.args,
         )
         writable.write(path)
 
@@ -246,6 +248,7 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
             generated_at=base.metadata.generated_at,
             results=base.results,
             elapsed_time=base.elapsed_time,
+            args=base.args,
             logs=logs,
         )
 

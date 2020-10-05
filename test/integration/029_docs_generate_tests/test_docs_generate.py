@@ -3333,21 +3333,23 @@ class TestDocsGenerate(DBTIntegrationTest):
         ]
 
     def verify_run_results(self, expected_run_results):
-        run_result = _read_json('./target/run_results.json')
+        run_results = _read_json('./target/run_results.json')
 
-        assert 'metadata' in run_result
-        self.verify_metadata(run_result['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v1.json')
-        self.assertIn('elapsed_time', run_result)
-        self.assertGreater(run_result['elapsed_time'], 0)
+        assert 'metadata' in run_results
+        self.verify_metadata(run_results['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v1.json')
+        self.assertIn('elapsed_time', run_results)
+        self.assertGreater(run_results['elapsed_time'], 0)
         self.assertTrue(
-            isinstance(run_result['elapsed_time'], float),
-            "run_result['elapsed_time'] is of type {}, expected float".format(
-                str(type(run_result['elapsed_time'])))
+            isinstance(run_results['elapsed_time'], float),
+            "run_results['elapsed_time'] is of type {}, expected float".format(
+                str(type(run_results['elapsed_time'])))
         )
+
+        assert 'args' in run_results
         # sort the results so we can make reasonable assertions
-        run_result['results'].sort(key=lambda r: r['node']['unique_id'])
-        assert run_result['results'] == expected_run_results
-        set(run_result) == {'elapsed_time', 'results', 'metadata'}
+        run_results['results'].sort(key=lambda r: r['node']['unique_id'])
+        assert run_results['results'] == expected_run_results
+        set(run_results) == {'elapsed_time', 'results', 'metadata'}
 
     @use_profile('postgres')
     def test__postgres__run_and_generate_no_compile(self):

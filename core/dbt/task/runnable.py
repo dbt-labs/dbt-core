@@ -5,6 +5,7 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 from typing import Optional, Dict, List, Set, Tuple, Iterable, AbstractSet
+from pathlib import PosixPath, WindowsPath
 
 from .printer import (
     print_run_result_error,
@@ -530,11 +531,38 @@ class GraphRunnableTask(ManifestTask):
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
+
         return RunResultsArtifact.from_node_results(
             results=results,
             elapsed_time=elapsed_time,
-            generated_at=generated_at
+            generated_at=generated_at,
+            args=self.args_to_dict(),
         )
+
+    def args_to_dict(self):
+        var_args = vars(self.args)
+        dict_args = {}
+        # remove args keys that clutter up the dictionary
+        for key in var_args:
+            if key == 'cls':
+                continue
+            if var_args[key] is None:
+                continue
+            default_false_keys = (
+                'debug', 'full_refresh', 'fail_fast', 'warn_error',
+                'single_threaded', 'test_new_parser', 'log_cache_events',
+                'strict'
+            )
+            if key in default_false_keys and var_args[key] is False:
+                continue
+            if key == 'vars' and var_args[key] == '{}':
+                continue
+            # this was required for a test case
+            if (isinstance(var_args[key], PosixPath) or
+                    isinstance(var_args[key], WindowsPath)):
+                var_args[key] = str(var_args[key])
+            dict_args[key] = var_args[key]
+        return dict_args
 
     def task_end_messages(self, results):
         print_run_end_messages(results)
