@@ -53,7 +53,7 @@ class BigQueryConnectionMethod(StrEnum):
     OAUTH = 'oauth'
     SERVICE_ACCOUNT = 'service-account'
     SERVICE_ACCOUNT_JSON = 'service-account-json'
-    BEARER = 'bearer'
+    OAUTH_SECRETS = 'oauth-secrets'
 
 
 @dataclass
@@ -70,7 +70,8 @@ class BigQueryCredentials(Credentials):
     keyfile: Optional[str] = None
     keyfile_json: Optional[Dict[str, Any]] = None
 
-    # Bearer token creds
+    # oauth-secrets
+    token: Optional[str] = None
     refresh_token: Optional[str] = None
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
@@ -179,9 +180,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
             details = profile_credentials.keyfile_json
             return creds.from_service_account_info(details, scopes=cls.SCOPE)
 
-        elif method == BigQueryConnectionMethod.BEARER:
+        elif method == BigQueryConnectionMethod.OAUTH_SECRETS:
             return GoogleCredentials.Credentials(
-                token=None,
+                token=profile_credentials.token,
                 refresh_token=profile_credentials.refresh_token,
                 client_id=profile_credentials.client_id,
                 client_secret=profile_credentials.client_secret,

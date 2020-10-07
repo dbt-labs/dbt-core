@@ -71,9 +71,20 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
                     'threads': 1,
                     'impersonate_service_account': 'dummyaccount@dbt.iam.gserviceaccount.com'
                 },
+                'oauth-credentials-token': {
+                    'type': 'bigquery',
+                    'method': 'oauth-secrets',
+                    'token': 'abc',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Luna Station',
+                    'priority': 'batch',
+                    'maximum_bytes_billed': 0,
+                },
                 'oauth-credentials': {
                     'type': 'bigquery',
-                    'method': 'bearer',
+                    'method': 'oauth-secrets',
                     'client_id': 'abc',
                     'client_secret': 'def',
                     'refresh_token': 'ghi',
@@ -160,7 +171,24 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         mock_open_connection.assert_called_once()
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
-    def test_acquire_connection_service_account_validations(self, mock_open_connection):
+    def test_acquire_connection_oauth_token_validations(self, mock_open_connection):
+        adapter = self.get_adapter('oauth-credentials-token')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_oauth_credentials_validations(self, mock_open_connection):
         adapter = self.get_adapter('oauth-credentials')
         try:
             connection = adapter.acquire_connection('dummy')
