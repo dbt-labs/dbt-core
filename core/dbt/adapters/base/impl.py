@@ -191,7 +191,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.connections.commit_if_has_connection()
 
     def debug_query(self) -> None:
-        self.execute('select 1 as id')
+        self.execute("select 1 as id")
 
     def nice_connection_name(self) -> str:
         conn = self.connections.get_if_exists()
