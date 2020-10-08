@@ -303,4 +303,3 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         raise dbt.exceptions.NotImplementedException(
             '`execute` is not implemented for this adapter!'
         )
-
