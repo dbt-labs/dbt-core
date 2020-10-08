@@ -37,6 +37,7 @@
             {{ strategy.unique_key }} as dbt_unique_key
 
         from {{ target_relation }}
+        where dbt_valid_to is null
 
     ),
 

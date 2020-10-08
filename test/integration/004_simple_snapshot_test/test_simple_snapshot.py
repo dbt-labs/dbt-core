@@ -813,8 +813,13 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
         else:
             self.assertTablesEqual("snapshot_expected", "snapshot_actual")
 
+        self._invalidated_snapshot_datetime = None
+        self._revived_snapshot_datetime = None
+
         self._delete_records()
-        self._invalidate_and_assert_records()
+        self._snapshot_and_assert_invalidated()
+        self._revive_records()
+        self._snapshot_and_assert_revived()
 
     def _snapshot(self):
         begin_snapshot_datetime = datetime.now(pytz.UTC)
@@ -832,14 +837,14 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
             'delete from {}.{}.seed where id >= 10;'.format(database, self.unique_schema())
         )
 
-    def _invalidate_and_assert_records(self):
-        begin_snapshot_datetime = self._snapshot()
+    def _snapshot_and_assert_invalidated(self):
+        self._invalidated_snapshot_datetime = self._snapshot()
 
         database = self.default_database
         if self.adapter_type == 'bigquery':
             database = self.adapter.quote(database)
 
-        results = self.run_sql(
+        snapshotted = self.run_sql(
             '''
             select
                 id,
@@ -850,8 +855,69 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
             fetch='all'
         )
 
-        self.assertEqual(len(results), 20)
-        for result in results[10:]:
+        self.assertEqual(len(snapshotted), 20)
+        for result in snapshotted[10:]:
             # result is a tuple, the dbt_valid_to column is the latest
             self.assertIsInstance(result[-1], datetime)
-            self.assertGreaterEqual(result[-1].replace(tzinfo=pytz.UTC), begin_snapshot_datetime)
+            self.assertGreaterEqual(result[-1].replace(tzinfo=pytz.UTC), self._invalidated_snapshot_datetime)
+
+    def _revive_records(self):
+        database = self.default_database
+        if self.adapter_type == 'bigquery':
+            database = self.adapter.quote(database)
+
+        revival_timestamp = datetime.now(pytz.UTC).strftime(r'%Y-%m-%d %H:%M:%S')
+        self.run_sql(
+            '''
+            insert into {}.{}.seed (id, first_name, last_name, email, gender, ip_address, updated_at) values
+            (10, 'Rachel', 'Lopez', 'rlopez9@themeforest.net', 'Female', '237.165.82.71', '{}'),
+            (11, 'Donna', 'Welch', 'dwelcha@shutterfly.com', 'Female', '103.33.110.138', '{}')
+            '''.format(database, self.unique_schema(), revival_timestamp, revival_timestamp)
+        )
+
+    def _snapshot_and_assert_revived(self):
+        self._revived_snapshot_datetime = self._snapshot()
+
+        database = self.default_database
+        if self.adapter_type == 'bigquery':
+            database = self.adapter.quote(database)
+
+        # records which weren't revived (id != 10, 11)
+        invalidated_records = self.run_sql(
+            '''
+            select
+                id,
+                dbt_valid_to
+            from {}.{}.snapshot_actual
+            where dbt_valid_to is not null
+            order by id
+            '''.format(database, self.unique_schema()),
+            fetch='all'
+        )
+
+        self.assertEqual(len(invalidated_records), 11)
+        for result in invalidated_records:
+            # result is a tuple, the dbt_valid_to column is the latest
+            self.assertIsInstance(result[1], datetime)
+            self.assertGreaterEqual(result[1].replace(tzinfo=pytz.UTC), self._invalidated_snapshot_datetime)
+
+        # records which weren't revived (id != 10, 11)
+        revived_records = self.run_sql(
+            '''
+            select
+                id,
+                dbt_valid_from,
+                dbt_valid_to
+            from {}.{}.snapshot_actual
+            where dbt_valid_to is null
+            and id IN (10, 11)
+            '''.format(database, self.unique_schema()),
+            fetch='all'
+        )
+
+        self.assertEqual(len(revived_records), 2)
+        for result in revived_records:
+            # result is a tuple, the dbt_valid_from is second and dbt_valid_to is latest
+            self.assertIsInstance(result[1], datetime)
+            self.assertGreaterEqual(result[1].replace(tzinfo=pytz.UTC), self._invalidated_snapshot_datetime)
+            self.assertIsNone(result[2])
