@@ -30,7 +30,6 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         - commit
         - clear_transaction
         - execute
-        - debug_query
 
     You must also set the 'TYPE' class attribute with a class-unique constant
     string.
