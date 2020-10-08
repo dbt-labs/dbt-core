@@ -88,7 +88,6 @@
         where snapshotted_data.dbt_unique_key is null
            or (
                 snapshotted_data.dbt_unique_key is not null
-            and snapshotted_data.dbt_valid_to is null
             and (
                 {{ strategy.row_changed }}
             )
@@ -105,8 +104,7 @@
 
         from updates_source_data as source_data
         join snapshotted_data on snapshotted_data.dbt_unique_key = source_data.dbt_unique_key
-        where snapshotted_data.dbt_valid_to is null
-        and (
+        where (
             {{ strategy.row_changed }}
         )
     )
@@ -126,8 +124,7 @@
     
         from snapshotted_data
         left join deletes_source_data as source_data on snapshotted_data.dbt_unique_key = source_data.dbt_unique_key
-        where snapshotted_data.dbt_valid_to is null
-        and source_data.dbt_unique_key is null
+        where source_data.dbt_unique_key is null
     )
     {%- endif %}
 
