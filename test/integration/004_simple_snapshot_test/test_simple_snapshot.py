@@ -785,21 +785,43 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
             'macro-paths': ['macros'],
         }
 
-    def _seed_and_snapshot(self):
-        if self.adapter_type == 'bigquery':
-            self.run_sql_file('seed_bq.sql')
-        elif self.adapter_type == 'postgres':
-            self.run_sql_file('seed_pg.sql')
-        else:
-            self.run_sql_file('seed.sql')
+    @use_profile('postgres')
+    def test__postgres__snapshot_hard_delete(self):
+        self.run_sql_file('seed_pg.sql')
+        self._test_snapshot_hard_delete()
 
-        results = self.run_dbt(['snapshot'])
-        self.assertEqual(len(results), self.NUM_SNAPSHOT_MODELS)
+    @use_profile('bigquery')
+    def test__bigquery__snapshot_hard_delete(self):
+        self.run_sql_file('seed_bq.sql')
+        self._test_snapshot_hard_delete()
+
+    @use_profile('snowflake')
+    def test__snowflake__snapshot_hard_delete(self):
+        self.run_sql_file('seed.sql')
+        self._test_snapshot_hard_delete()
+
+    @use_profile('redshift')
+    def test__redshift__snapshot_hard_delete(self):
+        self.run_sql_file('seed.sql')
+        self._test_snapshot_hard_delete()
+
+    def _test_snapshot_hard_delete(self):
+        self._snapshot()
 
         if self.adapter_type == 'snowflake':
             self.assertTablesEqual("SNAPSHOT_EXPECTED", "SNAPSHOT_ACTUAL")
         else:
             self.assertTablesEqual("snapshot_expected", "snapshot_actual")
+
+        self._delete_records()
+        self._invalidate_and_assert_records()
+
+    def _snapshot(self):
+        begin_snapshot_datetime = datetime.now(pytz.UTC)
+        results = self.run_dbt(['snapshot', '--vars', '{invalidate_hard_deletes: true}'])
+        self.assertEqual(len(results), self.NUM_SNAPSHOT_MODELS)
+
+        return begin_snapshot_datetime
 
     def _delete_records(self):
         database = self.default_database
@@ -811,10 +833,7 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
         )
 
     def _invalidate_and_assert_records(self):
-        begin_snapshot_datetime = datetime.now(pytz.UTC)
-
-        results = self.run_dbt(['snapshot', '--vars', '{invalidate_hard_deletes: true}'])
-        self.assertEqual(len(results), self.NUM_SNAPSHOT_MODELS)
+        begin_snapshot_datetime = self._snapshot()
 
         database = self.default_database
         if self.adapter_type == 'bigquery':
@@ -836,27 +855,3 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
             # result is a tuple, the dbt_valid_to column is the latest
             self.assertIsInstance(result[-1], datetime)
             self.assertGreaterEqual(result[-1].replace(tzinfo=pytz.UTC), begin_snapshot_datetime)
-
-    @use_profile('postgres')
-    def test__postgres__snapshot_hard_delete(self):
-        self._seed_and_snapshot()
-        self._delete_records()
-        self._invalidate_and_assert_records()
-
-    @use_profile('bigquery')
-    def test__bigquery__snapshot_hard_delete(self):
-        self._seed_and_snapshot()
-        self._delete_records()
-        self._invalidate_and_assert_records()
-
-    @use_profile('snowflake')
-    def test__snowflake__snapshot_hard_delete(self):
-        self._seed_and_snapshot()
-        self._delete_records()
-        self._invalidate_and_assert_records()
-
-    @use_profile('redshift')
-    def test__redshift__snapshot_hard_delete(self):
-        self._seed_and_snapshot()
-        self._delete_records()
-        self._invalidate_and_assert_records()
