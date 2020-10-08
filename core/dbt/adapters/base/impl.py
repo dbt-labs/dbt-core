@@ -180,6 +180,9 @@ class BaseAdapter(metaclass=AdapterMeta):
     def commit_if_has_connection(self) -> None:
         self.connections.commit_if_has_connection()
 
+    def debug_query(self):
+        self.execute('select 1 as id')
+
     def nice_connection_name(self) -> str:
         conn = self.connections.get_if_exists()
         if conn is None or conn.name is None:
