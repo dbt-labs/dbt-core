@@ -875,6 +875,7 @@ class TestRPCServerProjects(HasRPCServer):
     @use_profile('postgres')
     def test_run_project_postgres(self):
         result = self.async_query('run').json()
+        assert 'args' in result['result']
         self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
