@@ -16,6 +16,7 @@ from google.oauth2 import (
 
 from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
+from dbt.tracking import active_user
 from dbt.contracts.connection import ConnectionState
 from dbt.exceptions import (
     FailedToConnectException, RuntimeException, DatabaseException
@@ -274,7 +275,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_params = {'use_legacy_sql': False}
+        job_params = {
+            'use_legacy_sql': False,
+        }
+
+        if active_user:
+            job_params['labels'] = {
+                'dbt_invocation_id': active_user.invocation_id
+            }
 
         priority = conn.credentials.priority
         if priority == Priority.Batch:

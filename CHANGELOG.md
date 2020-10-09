@@ -8,15 +8,21 @@
 - Added state and defer arguments to the RPC client, matching the CLI ([#2678](https://github.com/fishtown-analytics/dbt/issues/2678), [#2736](https://github.com/fishtown-analytics/dbt/pull/2736))
 - Added schema and dbt versions to JSON artifacts ([#2670](https://github.com/fishtown-analytics/dbt/issues/2670), [#2767](https://github.com/fishtown-analytics/dbt/pull/2767))
 - Added ability to snapshot hard-deleted records (opt-in with `invalidate_hard_deletes` config option). ([#249](https://github.com/fishtown-analytics/dbt/issues/249), [#2749](https://github.com/fishtown-analytics/dbt/pull/2749))
+- Added revival for snapshotting hard-deleted records. ([#2819](https://github.com/fishtown-analytics/dbt/issues/2819), [#2821](https://github.com/fishtown-analytics/dbt/pull/2821))
 - Improved error messages for YAML selectors ([#2700](https://github.com/fishtown-analytics/dbt/issues/2700), [#2781](https://github.com/fishtown-analytics/dbt/pull/2781))
+- Save manifest at the same time we save the run_results at the end of a run ([#2765](https://github.com/fishtown-analytics/dbt/issues/2765), [#2799](https://github.com/fishtown-analytics/dbt/pull/2799))
+- Added dbt_invocation_id for each BigQuery job to enable performance analysis ([#2808](https://github.com/fishtown-analytics/dbt/issues/2808), [#2809](https://github.com/fishtown-analytics/dbt/pull/2809))
 - Added support for BigQuery connections using refresh tokens ([#2344](https://github.com/fishtown-analytics/dbt/issues/2344), [#2805](https://github.com/fishtown-analytics/dbt/pull/2805))
 
 ### Under the hood
 - Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
+- Changed rpc test timeouts to avoid locally run test failures ([#2803](https://github.com/fishtown-analytics/dbt/issues/2803),[#2804](https://github.com/fishtown-analytics/dbt/pull/2804))
+- Added a debug_query on the base adapter that will allow plugin authors to create custom debug queries ([#2751](https://github.com/fishtown-analytics/dbt/issues/2751),[#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
 
 Contributors:
-- [@joelluijmes](https://github.com/joelluijmes) ([#2749](https://github.com/fishtown-analytics/dbt/pull/2749))
+- [@joelluijmes](https://github.com/joelluijmes) ([#2749](https://github.com/fishtown-analytics/dbt/pull/2749), [#2821](https://github.com/fishtown-analytics/dbt/pull/2821))
 - [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
+- [@zmac12](https://github.com/zmac12) ([#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
 
 ## dbt 0.18.1 (Release TBD)
 

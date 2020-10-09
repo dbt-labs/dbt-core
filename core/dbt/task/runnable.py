@@ -425,6 +425,7 @@ class GraphRunnableTask(ManifestTask):
         result = self.execute_with_hooks(selected_uids)
 
         if flags.WRITE_JSON:
+            self.write_manifest()
             self.write_result(result)
 
         self.task_end_messages(result.results)

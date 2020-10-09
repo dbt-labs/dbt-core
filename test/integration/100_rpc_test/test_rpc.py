@@ -66,7 +66,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
 
     def start(self):
         super().start()
-        for _ in range(60):
+        for _ in range(180):
             if self.is_up():
                 break
             time.sleep(0.5)
@@ -113,7 +113,7 @@ class HasRPCServer(DBTIntegrationTest):
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
         if self.should_seed:
             self.run_dbt_with_vars(['seed'], strict=False)
-        port = random.randint(20000, 65535)
+        port = random.randint(49152, 61000)
         self._server = self.ServerProcess(
             cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema()),
             profiles_dir=self.test_root_dir,
@@ -178,7 +178,7 @@ class HasRPCServer(DBTIntegrationTest):
     def url(self):
         return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
-    def poll_for_result(self, request_token, request_id=1, timeout=60, state='success', logs=None):
+    def poll_for_result(self, request_token, request_id=1, timeout=180, state='success', logs=None):
         start = time.time()
         kwargs = {
             'request_token': request_token,
@@ -204,7 +204,7 @@ class HasRPCServer(DBTIntegrationTest):
                     .format(delta, state, result)
                 )
 
-    def async_query(self, _method, _sql=None, _test_request_id=1, _poll_timeout=60, macros=None, **kwargs):
+    def async_query(self, _method, _sql=None, _test_request_id=1, _poll_timeout=180, macros=None, **kwargs):
         response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
         result = self.assertIsResult(response, _test_request_id)
         self.assertIn('request_token', result)
@@ -346,7 +346,7 @@ class HasRPCServer(DBTIntegrationTest):
         return request_token, request_id
 
     def wait_for_state(
-        self, state, timestamp, timeout=25, raise_on_timeout=True
+        self, state, timestamp, timeout=180, raise_on_timeout=True
     ):
         started = time.time()
         time.sleep(0.5)
@@ -994,7 +994,7 @@ class TestRPCTaskManagement(HasRPCServer):
         self.assertIsResult(done_query)
         sleepers = []
 
-        sleepers.append(self.get_sleep_query(duration=60, request_id=1000))
+        sleepers.append(self.get_sleep_query(duration=180, request_id=1000))
         self.assertRunning(sleepers)
 
         self.run_command_with_id('seed', 20)
@@ -1135,7 +1135,7 @@ class TestRPCServerDeps(HasRPCServer):
         status = self._check_start_predeps()
 
         # do a dbt deps, wait for the result
-        self.assertIsResult(self.async_query('deps', _poll_timeout=120).json())
+        self.assertIsResult(self.async_query('deps', _poll_timeout=180).json())
 
         self._check_deps_ok(status)
 
@@ -1145,6 +1145,6 @@ class TestRPCServerDeps(HasRPCServer):
         status = self._check_start_predeps()
 
         # do a dbt deps, wait for the result
-        self.assertIsResult(self.async_query('cli_args', cli='deps', _poll_timeout=120).json())
+        self.assertIsResult(self.async_query('cli_args', cli='deps', _poll_timeout=180).json())
 
         self._check_deps_ok(status)
