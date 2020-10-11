@@ -341,14 +341,15 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
     def get_partitions_metadata(self, table):
         def standard_to_legacy(table):
-            # table_ref = google.cloud.bigquery.table.TableReference.from_string(table)
-            return (table.project + ':' + table.dataset + '.' + table.identifier).replace('`','')
-        
-        legacy_sql = 'SELECT * FROM [' + standard_to_legacy(table) + '$__PARTITIONS_SUMMARY__]'
+            return table.project + ':' + table.dataset + '.' + table.identifier
+
+        legacy_sql = 'SELECT * FROM ['\
+            + standard_to_legacy(table) + '$__PARTITIONS_SUMMARY__]'
 
         sql = self._add_query_comment(legacy_sql)
         # auto_begin is ignored on bigquery, and only included for consistency
-        _, iterator = self.raw_execute(sql, fetch='fetch_result', use_legacy_sql=True)
+        _, iterator =\
+            self.raw_execute(sql, fetch='fetch_result', use_legacy_sql=True)
         return self.get_table_from_response(iterator)
 
     def create_bigquery_table(self, database, schema, table_name, callback,

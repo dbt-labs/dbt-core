@@ -237,7 +237,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Obtain partitions metadata for a BigQuery partitioned table.
 
         :param str table_id: a partitioned table id, in standard SQL format.
-        :return: a partition metadata tuple, as described in https://cloud.google.com/bigquery/docs/creating-partitioned-tables#getting_partition_metadata_using_meta_tables.
+        :return: a partition metadata tuple, as described in
+            https://cloud.google.com/bigquery/docs/creating-partitioned-tables#getting_partition_metadata_using_meta_tables.
         :rtype: agate.Table
         """
         return self.connections.get_partitions_metadata(
