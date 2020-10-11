@@ -232,7 +232,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @available.parse(lambda *a, **k: ('', empty_table()))
     def get_partitions_metadata(
-        self, table_id: str
+        self, table: str
     ) -> Tuple[agate.Table]:
         """Obtain partitions metadata for a BigQuery partitioned table.
 
@@ -241,7 +241,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :rtype: agate.Table
         """
         return self.connections.get_partitions_metadata(
-            table_id=table_id
+            table=table
         )
 
     ###

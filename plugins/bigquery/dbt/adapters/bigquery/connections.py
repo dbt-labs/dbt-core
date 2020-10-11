@@ -269,15 +269,13 @@ class BigQueryConnectionManager(BaseConnectionManager):
         column_names = [field.name for field in resp.schema]
         return agate_helper.table_from_data_flat(resp, column_names)
 
-    def raw_execute(self, sql, fetch=False):
+    def raw_execute(self, sql, fetch=False, *, use_legacy_sql=False):
         conn = self.get_thread_connection()
         client = conn.handle
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_params = {
-            'use_legacy_sql': False,
-        }
+        job_params = {'use_legacy_sql': use_legacy_sql}
 
         if active_user:
             job_params['labels'] = {
@@ -341,48 +339,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         return status, res
 
-    # The following method intentionaly violates DRY, in that it is mostly
-    # copy-pasted from raw_execute().  This is done in order to discorage
-    # use of legacySQL queries in DBT, except to obtain partition metadata.
-    # the method would be removed when partition metadata becomes available
-    # from standardSQL.
-    def _raw_execute_legacy_sql(self, sql, fetch=False):
-        conn = self.get_thread_connection()
-        client = conn.handle
-
-        logger.debug('On {}: {}', conn.name, sql)
-
-        job_params = {'use_legacy_sql': True}
-
-        priority = conn.credentials.priority
-        if priority == Priority.Batch:
-            job_params['priority'] = google.cloud.bigquery.QueryPriority.BATCH
-        else:
-            job_params[
-                'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
-
-        maximum_bytes_billed = conn.credentials.maximum_bytes_billed
-        if maximum_bytes_billed is not None and maximum_bytes_billed != 0:
-            job_params['maximum_bytes_billed'] = maximum_bytes_billed
-
-        def fn():
-            return self._query_and_results(client, sql, conn, job_params)
-
-        query_job, iterator = self._retry_and_handle(msg=sql, conn=conn, fn=fn)
-
-        return query_job, iterator
-
-    def get_partitions_metadata(self, table_id):
-        def standard_to_legacy(table_id):
-            table_ref = google.cloud.bigquery.table.TableReference.from_string(table_id)
-            return (table_ref.project + ':' + table_ref.dataset_id + '.' + table_ref.table_id).replace('`','')
+    def get_partitions_metadata(self, table):
+        def standard_to_legacy(table):
+            # table_ref = google.cloud.bigquery.table.TableReference.from_string(table)
+            return (table.project + ':' + table.dataset + '.' + table.identifier).replace('`','')
         
-        legacy_sql = 'SELECT * FROM [' + standard_to_legacy(table_id) + '$__PARTITIONS_SUMMARY__]'
+        legacy_sql = 'SELECT * FROM [' + standard_to_legacy(table) + '$__PARTITIONS_SUMMARY__]'
 
         sql = self._add_query_comment(legacy_sql)
         # auto_begin is ignored on bigquery, and only included for consistency
-        _, iterator = self._raw_execute_legacy_sql(sql, fetch='fetch_result')
-
+        _, iterator = self.raw_execute(sql, fetch='fetch_result', use_legacy_sql=True)
         return self.get_table_from_response(iterator)
 
     def create_bigquery_table(self, database, schema, table_name, callback,
