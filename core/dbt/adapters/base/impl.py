@@ -230,6 +230,20 @@ class BaseAdapter(metaclass=AdapterMeta):
             fetch=fetch
         )
 
+    @available.parse(lambda *a, **k: ('', empty_table()))
+    def get_partitions_metadata(
+        self, table_id: str
+    ) -> Tuple[agate.Table]:
+        """Obtain partitions metadata for a BigQuery partitioned table.
+
+        :param str table_id: a partitioned table id, in standard SQL format.
+        :return: a partition metadata tuple, as described in https://cloud.google.com/bigquery/docs/creating-partitioned-tables#getting_partition_metadata_using_meta_tables.
+        :rtype: agate.Table
+        """
+        return self.connections.get_partitions_metadata(
+            table_id=table_id
+        )
+
     ###
     # Methods that should never be overridden
     ###
