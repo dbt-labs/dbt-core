@@ -234,7 +234,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
 
-    @available.parse(lambda *a, **k: ('', empty_table()))
+    @available.parse(lambda *a, **k: ("", empty_table()))
     def get_partitions_metadata(
         self, table: str
     ) -> Tuple[agate.Table]:
