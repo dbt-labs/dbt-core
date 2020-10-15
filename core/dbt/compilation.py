@@ -493,9 +493,7 @@ class Compiler:
 
         if node.compiled_sql:
             node.compiled_path = node.write_node(
-                self.config.target_path,
-                'compiled',
-                node.compiled_sql
+                self.config.target_path, "compiled", node.compiled_sql
             )
         return node
 
