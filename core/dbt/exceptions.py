@@ -130,7 +130,7 @@ class RuntimeException(RuntimeError, Exception):
         result.update({
             {
                 "raw_sql": self.node.raw_sql,
-            'compiled_sql': getattr(self.node, 'compiled_sql', None),
+                # the node isn't always compiled, but if it is, include that!
         })
         return result
 

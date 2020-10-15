@@ -272,9 +272,7 @@ class Compiler:
         inserting CTEs into the SQL.
         """
         if model.compiled_sql is None:
-            raise RuntimeException(
-                'Cannot inject ctes into an unparsed node', model
-            )
+            raise RuntimeException("Cannot inject ctes into an unparsed node", model)
         if model.extra_ctes_injected:
             return (model, model.extra_ctes)
 
@@ -500,8 +498,7 @@ class Compiler:
 
     # writes the "compiled_sql" into the target/compiled directory
     def _write_node(self, node: NonSourceCompiledNode) -> ManifestNode:
-        if (not node.extra_ctes_injected or
-                node.resource_type == NodeType.Snapshot):
+        if not node.extra_ctes_injected or node.resource_type == NodeType.Snapshot:
             return node
         fire_event(WritingInjectedSQLForNode(unique_id=node.unique_id))
 
@@ -528,9 +525,7 @@ class Compiler:
         """
         node = self._compile_node(node, manifest, extra_context)
 
-        node, _ = self._recursively_prepend_ctes(
-            node, manifest, extra_context
-        )
+        node, _ = self._recursively_prepend_ctes(node, manifest, extra_context)
         if write:
             self._write_node(node)
         return node
