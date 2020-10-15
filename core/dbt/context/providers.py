@@ -1217,7 +1217,9 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def sql(self) -> Optional[str]:
-        return getattr(self.model, 'injected_sql', None)
+        if getattr(self.model, 'extra_ctes_injected', None):
+            return self.model.compiled_sql
+        return None
 
     @contextproperty
     def database(self) -> str:

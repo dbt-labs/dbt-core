@@ -42,7 +42,7 @@ class TestRunner(CompileRunner):
 
     def execute_data_test(self, test: CompiledDataTestNode):
         res, table = self.adapter.execute(
-            test.injected_sql, auto_begin=True, fetch=True
+            test.compiled_sql, auto_begin=True, fetch=True
         )
 
         num_rows = len(table.rows)
@@ -59,7 +59,7 @@ class TestRunner(CompileRunner):
 
     def execute_schema_test(self, test: CompiledSchemaTestNode):
         res, table = self.adapter.execute(
-            test.injected_sql,
+            test.compiled_sql,
             auto_begin=True,
             fetch=True,
         )

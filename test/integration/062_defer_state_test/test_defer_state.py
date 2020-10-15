@@ -64,8 +64,8 @@ class TestDeferState(DBTIntegrationTest):
 
         # with state it should work though
         results = self.run_dbt(['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'])
-        assert self.other_schema not in results[0].node.injected_sql
-        assert self.unique_schema() in results[0].node.injected_sql
+        assert self.other_schema not in results[0].node.compiled_sql
+        assert self.unique_schema() in results[0].node.compiled_sql
 
         with open('target/manifest.json') as fp:
             data = json.load(fp)
