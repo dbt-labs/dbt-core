@@ -169,6 +169,11 @@ class Compiler:
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
 
+    def _get_relation_name(self, node: ParsedNode):
+        adapter = get_adapter(self.config)
+        relation_cls = adapter.Relation
+        return str(relation_cls.create_from(self.config, node))
+
     def _get_compiled_model(
         self,
         manifest: Manifest,
@@ -387,6 +392,8 @@ class Compiler:
             context,
             node,
         )
+
+        compiled_node.relation_name = self._get_relation_name(node)
 
         compiled_node.compiled = True
 

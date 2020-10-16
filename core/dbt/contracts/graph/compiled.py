@@ -43,6 +43,7 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     injected_sql: Optional[str] = None
+    relation_name: Optional[str] = None
 
     def set_cte(self, cte_id: str, sql: str):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
