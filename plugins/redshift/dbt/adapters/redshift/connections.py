@@ -99,7 +99,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         must already exist in the database, or else an error will occur"""
 
         if iam_profile is None:
-            boto_client = boto3.client('redshift')
+            session = boto3.Session()
+            boto_client = session.client("redshift")
         else:
             logger.debug("Connecting to Redshift using 'IAM'" +
                          f"with profile {iam_profile}")

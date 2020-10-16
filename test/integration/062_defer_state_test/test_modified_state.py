@@ -72,7 +72,7 @@ class TestModifiedState(DBTIntegrationTest):
 
         results = self.run_dbt(['ls', '--select', 'state:modified+', '--state', './state'])
         assert len(results) == 7
-        assert set(results) == {'test.seed', 'test.table_model', 'test.view_model', 'test.ephemeral_model', 'test.schema_test.not_null_view_model_id', 'test.schema_test.unique_view_model_id', 'report:test.my_report'}
+        assert set(results) == {'test.seed', 'test.table_model', 'test.view_model', 'test.ephemeral_model', 'test.schema_test.not_null_view_model_id', 'test.schema_test.unique_view_model_id', 'exposure:test.my_exposure'}
 
         shutil.rmtree('./state')
         self.copy_state()
@@ -197,8 +197,8 @@ class TestModifiedState(DBTIntegrationTest):
         assert 'detected a change in macros' in stdout
 
     @use_profile('postgres')
-    def test_postgres_changed_report(self):
-        with open('models/reports.yml', 'a') as fp:
+    def test_postgres_changed_exposure(self):
+        with open('models/exposures.yml', 'a') as fp:
             fp.write('      name: John Doe\n')
 
         results, stdout = self.run_dbt_and_capture(['run', '--models', '+state:modified', '--state', './state'])

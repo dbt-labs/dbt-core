@@ -5,7 +5,7 @@ from dbt.contracts.graph.parsed import (
     ParsedDataTestNode,
     ParsedHookNode,
     ParsedModelNode,
-    ParsedReport,
+    ParsedExposure,
     ParsedResource,
     ParsedRPCNode,
     ParsedSchemaTestNode,
@@ -219,8 +219,8 @@ CompileResultNode = Union[
     ParsedSourceDefinition,
 ]
 
-# anything that participates in the graph: sources, reports, manifest nodes
+# anything that participates in the graph: sources, exposures, manifest nodes
 GraphMemberNode = Union[
     CompileResultNode,
-    ParsedReport,
+    ParsedExposure,
 ]

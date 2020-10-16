@@ -24,8 +24,13 @@ test-quick: .env
 # This rule creates a file named .env that is used by docker-compose for passing
 # the USER_ID and GROUP_ID arguments to the Docker image.
 .env:
+	@touch .env
+ifneq ($(OS),Windows_NT)
+ifneq ($(shell uname -s), Darwin)
 	@echo USER_ID=$(shell id -u) > .env
 	@echo GROUP_ID=$(shell id -g) >> .env
+endif
+endif
 	@time docker-compose build
 
 clean:

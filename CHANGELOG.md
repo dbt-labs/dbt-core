@@ -25,7 +25,38 @@ Contributors:
 - [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 - [@zmac12](https://github.com/zmac12) ([#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
 
-## dbt 0.18.1 (Release TBD)
+
+## dbt 0.18.1 (October 13, 2020)
+
+## dbt 0.18.1rc1 (October 01, 2020)
+
+
+### Features
+- Added retry support for rateLimitExceeded error from BigQuery, ([#2795](https://github.com/fishtown-analytics/dbt/issues/2795), [#2796](https://github.com/fishtown-analytics/dbt/issues/2796))
+
+Contributors:
+- [@championj-foxtel](https://github.com/championj-foxtel) ([#2796](https://github.com/fishtown-analytics/dbt/issues/2796))
+
+## dbt 0.18.1b3 (September 25, 2020)
+
+
+### Feature
+- Added 'Last Modified' stat in snowflake catalog macro. Now should be available in docs. ([#2728](https://github.com/fishtown-analytics/dbt/issues/2728))
+
+### Fixes
+- `dbt compile` and `dbt run` failed with `KeyError: 'endpoint_resolver'` when threads > 1 and `method: iam` had been specified in the profiles.yaml ([#2756](https://github.com/fishtown-analytics/dbt/issues/2756), [#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
+- Fix Redshift adapter to include columns from external tables when using the get_columns_in_relation macro ([#2753](https://github.com/fishtown-analytics/dbt/issues/2753), [#2754](https://github.com/fishtown-analytics/dbt/pull/2754))
+
+### Under the hood
+- Require extra `snowflake-connector-python[secure-local-storage]` on all dbt-snowflake installations ([#2779](https://github.com/fishtown-analytics/dbt/issues/2779), [#2789](https://github.com/fishtown-analytics/dbt/pull/2789))
+
+Contributors:
+- [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([#2732](https://github.com/fishtown-analytics/dbt/pull/2732))
+- [@jweibel22](https://github.com/jweibel22) ([#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
+- [@aiguofer](https://github.com/aiguofer) ([#2754](https://github.com/fishtown-analytics/dbt/pull/2754))
+
+
+## dbt 0.18.1b1 (September 17, 2020)
 
 ### Under the hood
 - If column config says quote, use quoting in SQL for adding a comment. ([#2539](https://github.com/fishtown-analytics/dbt/issues/2539), [#2733](https://github.com/fishtown-analytics/dbt/pull/2733))
@@ -33,10 +64,10 @@ Contributors:
 
 ### Features
 - Specify all three logging levels (`INFO`, `WARNING`, `ERROR`) in result logs for commands `test`, `seed`, `run`, `snapshot` and `source snapshot-freshness` ([#2680](https://github.com/fishtown-analytics/dbt/pull/2680), [#2723](https://github.com/fishtown-analytics/dbt/pull/2723))
-- Added "reports" ([#2730](https://github.com/fishtown-analytics/dbt/issues/2730), [#2752](https://github.com/fishtown-analytics/dbt/pull/2752))
+- Added "exposures" ([#2730](https://github.com/fishtown-analytics/dbt/issues/2730), [#2752](https://github.com/fishtown-analytics/dbt/pull/2752), [#2777](https://github.com/fishtown-analytics/dbt/issues/2777))
 
 ### Docs
-- Add Report nodes ([docs#135](https://github.com/fishtown-analytics/dbt-docs/issues/135), [docs#136](https://github.com/fishtown-analytics/dbt-docs/pull/136))
+- Add Exposure nodes ([docs#135](https://github.com/fishtown-analytics/dbt-docs/issues/135), [docs#136](https://github.com/fishtown-analytics/dbt-docs/pull/136), [docs#137](https://github.com/fishtown-analytics/dbt-docs/pull/137))
 
 Contributors:
 - [@tpilewicz](https://github.com/tpilewicz) ([#2723](https://github.com/fishtown-analytics/dbt/pull/2723))

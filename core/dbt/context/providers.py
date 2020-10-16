@@ -25,7 +25,7 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro,
-    ParsedReport,
+    ParsedExposure,
     ParsedSeedNode,
     ParsedSourceDefinition,
 )
@@ -1325,7 +1325,7 @@ def generate_runtime_macro(
     return ctx.to_dict()
 
 
-class ReportRefResolver(BaseResolver):
+class ExposureRefResolver(BaseResolver):
     def __call__(self, *args) -> str:
         if len(args) not in (1, 2):
             ref_invalid_args(self.model, args)
@@ -1333,7 +1333,7 @@ class ReportRefResolver(BaseResolver):
         return ''
 
 
-class ReportSourceResolver(BaseResolver):
+class ExposureSourceResolver(BaseResolver):
     def __call__(self, *args) -> str:
         if len(args) != 2:
             raise_compiler_error(
@@ -1344,23 +1344,23 @@ class ReportSourceResolver(BaseResolver):
         return ''
 
 
-def generate_parse_report(
-    report: ParsedReport,
+def generate_parse_exposure(
+    exposure: ParsedExposure,
     config: RuntimeConfig,
     manifest: Manifest,
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
     return {
-        'ref': ReportRefResolver(
+        'ref': ExposureRefResolver(
             None,
-            report,
+            exposure,
             project,
             manifest,
         ),
-        'source': ReportSourceResolver(
+        'source': ExposureSourceResolver(
             None,
-            report,
+            exposure,
             project,
             manifest,
         )
