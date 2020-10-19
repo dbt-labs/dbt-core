@@ -1,6 +1,9 @@
 import unittest
 from unittest import mock
+from unittest.mock import Mock
+
 import agate
+import boto3
 
 import dbt.adapters  # noqa
 import dbt.flags as flags
@@ -128,6 +131,23 @@ class TestRedshiftAdapter(unittest.TestCase):
                 RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
 
         self.assertTrue("'cluster_id' must be provided" in context.exception.msg)
+
+    def test_default_session_is_not_used_when_iam_used(self):
+        boto3.DEFAULT_SESSION = Mock()
+        self.config.credentials = self.config.credentials.replace(method='iam')
+        self.config.credentials.cluster_id = 'clusterid'
+        with mock.patch('dbt.adapters.redshift.connections.boto3.Session'):
+            RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
+            self.assertEquals(boto3.DEFAULT_SESSION.client.call_count, 0,
+                              "The redshift client should not be created using the default session because the session object is not thread-safe")
+
+    def test_default_session_is_not_used_when_iam_not_used(self):
+        boto3.DEFAULT_SESSION = Mock()
+        self.config.credentials = self.config.credentials.replace(method=None)
+        with mock.patch('dbt.adapters.redshift.connections.boto3.Session'):
+            RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
+            self.assertEquals(boto3.DEFAULT_SESSION.client.call_count, 0,
+                              "The redshift client should not be created using the default session because the session object is not thread-safe")
 
     def test_cancel_open_connections_empty(self):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)

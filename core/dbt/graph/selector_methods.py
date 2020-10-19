@@ -17,7 +17,7 @@ from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.parsed import (
     HasTestMetadata,
     ParsedDataTestNode,
-    ParsedReport,
+    ParsedExposure,
     ParsedSchemaTestNode,
     ParsedSourceDefinition,
 )
@@ -46,7 +46,7 @@ class MethodName(StrEnum):
     TestType = 'test_type'
     ResourceType = 'resource_type'
     State = 'state'
-    Report = 'report'
+    Exposure = 'exposure'
 
 
 def is_selected_node(real_node, node_selector):
@@ -75,7 +75,7 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedReport]
+SelectorTarget = Union[ParsedSourceDefinition, ManifestNode, ParsedExposure]
 
 
 class SelectorMethod(metaclass=abc.ABCMeta):
@@ -111,16 +111,16 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, source
 
-    def report_nodes(
+    def exposure_nodes(
         self,
         included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ParsedReport]]:
+    ) -> Iterator[Tuple[UniqueId, ParsedExposure]]:
 
-        for key, report in self.manifest.reports.items():
+        for key, exposure in self.manifest.exposures.items():
             unique_id = UniqueId(key)
             if unique_id not in included_nodes:
                 continue
-            yield unique_id, report
+            yield unique_id, exposure
 
     def all_nodes(
         self,
@@ -128,7 +128,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
         yield from chain(self.parsed_nodes(included_nodes),
                          self.source_nodes(included_nodes),
-                         self.report_nodes(included_nodes))
+                         self.exposure_nodes(included_nodes))
 
     def configurable_nodes(
         self,
@@ -140,9 +140,9 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
-    ) -> Iterator[Tuple[UniqueId, Union[ParsedReport, ManifestNode]]]:
+    ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode]]]:
         yield from chain(self.parsed_nodes(included_nodes),
-                         self.report_nodes(included_nodes))
+                         self.exposure_nodes(included_nodes))
 
     @abc.abstractmethod
     def search(
@@ -244,7 +244,7 @@ class SourceSelectorMethod(SelectorMethod):
             yield node
 
 
-class ReportSelectorMethod(SelectorMethod):
+class ExposureSelectorMethod(SelectorMethod):
     def search(
         self, included_nodes: Set[UniqueId], selector: str
     ) -> Iterator[UniqueId]:
@@ -256,13 +256,13 @@ class ReportSelectorMethod(SelectorMethod):
             target_package, target_name = parts
         else:
             msg = (
-                'Invalid report selector value "{}". Reports must be of '
-                'the form ${{report_name}} or '
-                '${{report_package.report_name}}'
+                'Invalid exposure selector value "{}". Exposures must be of '
+                'the form ${{exposure_name}} or '
+                '${{exposure_package.exposure_name}}'
             ).format(selector)
             raise RuntimeException(msg)
 
-        for node, real_node in self.report_nodes(included_nodes):
+        for node, real_node in self.exposure_nodes(included_nodes):
             if target_package not in (real_node.package_name, SELECTOR_GLOB):
                 continue
             if target_name not in (real_node.name, SELECTOR_GLOB):
@@ -481,8 +481,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = manifest.nodes[node]
             elif node in manifest.sources:
                 previous_node = manifest.sources[node]
-            elif node in manifest.reports:
-                previous_node = manifest.reports[node]
+            elif node in manifest.exposures:
+                previous_node = manifest.exposures[node]
 
             if checker(previous_node, real_node):
                 yield node
@@ -499,7 +499,7 @@ class MethodManager:
         MethodName.TestName: TestNameSelectorMethod,
         MethodName.TestType: TestTypeSelectorMethod,
         MethodName.State: StateSelectorMethod,
-        MethodName.Report: ReportSelectorMethod,
+        MethodName.Exposure: ExposureSelectorMethod,
     }
 
     def __init__(

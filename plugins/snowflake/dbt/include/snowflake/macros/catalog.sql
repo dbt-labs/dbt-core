@@ -25,7 +25,12 @@
               'Approximate Size' as "stats:bytes:label",
               bytes as "stats:bytes:value",
               'Approximate size of the table as reported by Snowflake' as "stats:bytes:description",
-              (bytes is not null) as "stats:bytes:include"
+              (bytes is not null) as "stats:bytes:include",
+
+              'Last Modified' as "stats:last_modified:label",
+              to_varchar(convert_timezone('UTC', last_altered), 'yyyy-mm-dd HH24:MI'||'UTC') as "stats:last_modified:value",
+              'The timestamp for last update/change' as "stats:last_modified:description",
+              (last_altered is not null and table_type='BASE TABLE') as "stats:last_modified:include"
 
           from {{ information_schema }}.tables
 
