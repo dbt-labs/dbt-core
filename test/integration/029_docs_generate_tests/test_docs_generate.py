@@ -1132,7 +1132,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
                     'relation_name': '"{0}"."{1}".second_model'.format(
-                        model_database, my_schema_name
+                        model_database, self.alternate_schema
                     ),
                     'resource_type': 'model',
                     'path': 'second_model.sql',
@@ -3242,6 +3242,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "{{ref('ephemeral_summary')}}\norder by ct asc"
                     ),
                     'refs': [['ephemeral_summary']],
+                    'relation_name': '"{0}"."{1}".view_summary'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
