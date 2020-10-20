@@ -385,7 +385,7 @@ class BigQueryAdapter(BaseAdapter):
         model_database = model.get('database')
         model_schema = model.get('schema')
         model_alias = model.get('alias')
-        model_sql = model.get('injected_sql')
+        model_sql = model.get('compiled_sql')
 
         logger.debug("Model SQL ({}):\n{}".format(model_alias, model_sql))
         self.connections.create_view(
@@ -505,7 +505,7 @@ class BigQueryAdapter(BaseAdapter):
                       decorator=None):
 
         if sql_override is None:
-            sql_override = model.get('injected_sql')
+            sql_override = model.get('compiled_sql')
 
         if flags.STRICT_MODE:
             connection = self.connections.get_thread_connection()

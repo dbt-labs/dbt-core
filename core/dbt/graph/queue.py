@@ -7,7 +7,7 @@ from typing import (
 import networkx as nx  # type: ignore
 
 from .graph import UniqueId
-from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedReport
+from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedExposure
 from dbt.contracts.graph.compiled import GraphMemberNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
@@ -50,8 +50,8 @@ class GraphQueue:
         node = self.manifest.expect(node_id)
         if node.resource_type != NodeType.Model:
             return False
-        # must be a Model - tell mypy this won't be a Source or Report
-        assert not isinstance(node, (ParsedSourceDefinition, ParsedReport))
+        # must be a Model - tell mypy this won't be a Source or Exposure
+        assert not isinstance(node, (ParsedSourceDefinition, ParsedExposure))
         if node.is_ephemeral:
             return False
         return True

@@ -11,7 +11,7 @@
         {{ log(table_start_time ~ ' | -> Running for day ' ~ date, info=True) }}
     {% endif %}
 
-    {% set fixed_sql = model['injected_sql'] | replace('[DBT__PARTITION_DATE]', date) %}
+    {% set fixed_sql = model['compiled_sql'] | replace('[DBT__PARTITION_DATE]', date) %}
     {% set _ = adapter.execute_model(model, 'table', fixed_sql, decorator=date) %}
   {% endfor %}
 
