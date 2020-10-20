@@ -21,10 +21,17 @@
 - Changed rpc test timeouts to avoid locally run test failures ([#2803](https://github.com/fishtown-analytics/dbt/issues/2803),[#2804](https://github.com/fishtown-analytics/dbt/pull/2804))
 - Added a debug_query on the base adapter that will allow plugin authors to create custom debug queries ([#2751](https://github.com/fishtown-analytics/dbt/issues/2751),[#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
 
+### Docs
+- Add select/deselect option in DAG view dropups. ([docs#98](https://github.com/fishtown-analytics/dbt-docs/issues/98), [docs#138](https://github.com/fishtown-analytics/dbt-docs/pull/138))
+- Fixed issue where sources with tags were not showing up in graph viz ([docs#93](https://github.com/fishtown-analytics/dbt-docs/issues/93), [docs#139](https://github.com/fishtown-analytics/dbt-docs/pull/139))
+- Use `compiled_sql` instead of `injected_sql` for "Compiled" ([docs#146](https://github.com/fishtown-analytics/dbt-docs/issues/146), [docs#148](https://github.com/fishtown-analytics/dbt-docs/issues/148))
+
 Contributors:
 - [@joelluijmes](https://github.com/joelluijmes) ([#2749](https://github.com/fishtown-analytics/dbt/pull/2749), [#2821](https://github.com/fishtown-analytics/dbt/pull/2821))
 - [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 - [@zmac12](https://github.com/zmac12) ([#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
+- [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([docs#138](https://github.com/fishtown-analytics/dbt-docs/pull/138))
+- [@jplynch77](https://github.com/jplynch77) ([docs#139](https://github.com/fishtown-analytics/dbt-docs/pull/139))
 
 
 ## dbt 0.18.1 (October 13, 2020)
