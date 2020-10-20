@@ -121,7 +121,7 @@ class SourceFile(JsonSchemaMixin):
     docs: List[str] = field(default_factory=list)
     macros: List[str] = field(default_factory=list)
     sources: List[str] = field(default_factory=list)
-    reports: List[str] = field(default_factory=list)
+    exposures: List[str] = field(default_factory=list)
     # any node patches in this file. The entries are names, not unique ids!
     patches: List[str] = field(default_factory=list)
     # any macro patches in this file. The entries are package, name pairs.

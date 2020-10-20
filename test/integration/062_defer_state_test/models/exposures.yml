@@ -1,6 +1,6 @@
 version: 2
-reports:
-  - name: my_report
+exposures:
+  - name: my_exposure
     type: application
     depends_on:
       - ref('view_model')

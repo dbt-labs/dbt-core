@@ -55,15 +55,15 @@ sources:
             description: "An ID field"
 
 
-reports:
-  - name: simple_report
+exposures:
+  - name: simple_exposure
     type: dashboard
     depends_on:
       - ref('model')
       - source('my_source', 'my_table')
     owner:
       email: something@example.com
-  - name: notebook_report
+  - name: notebook_exposure
     type: notebook
     depends_on:
       - ref('model')
@@ -72,6 +72,6 @@ reports:
       email: something@example.com
       name: Some name
     description: >
-      A description of the complex report
+      A description of the complex exposure
     maturity: medium
     url: http://example.com/notebook/1

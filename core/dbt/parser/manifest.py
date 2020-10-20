@@ -21,7 +21,7 @@ from dbt.contracts.files import FilePath, FileHash
 from dbt.contracts.graph.compiled import ManifestNode
 from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedReport
+    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
 )
 from dbt.exceptions import (
     ref_target_not_found,
@@ -314,7 +314,7 @@ class ManifestLoader:
             sources=sources,
             macros=self.results.macros,
             docs=self.results.docs,
-            reports=self.results.reports,
+            exposures=self.results.exposures,
             metadata=self.root_project.get_metadata(),
             disabled=disabled,
             files=self.results.files,
@@ -541,11 +541,11 @@ def process_docs(manifest: Manifest, config: RuntimeConfig):
         _process_docs_for_macro(ctx, macro)
 
 
-def _process_refs_for_report(
-    manifest: Manifest, current_project: str, report: ParsedReport
+def _process_refs_for_exposure(
+    manifest: Manifest, current_project: str, exposure: ParsedExposure
 ):
-    """Given a manifest and a report in that manifest, process its refs"""
-    for ref in report.refs:
+    """Given a manifest and a exposure in that manifest, process its refs"""
+    for ref in exposure.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
         target_model_name: str
         target_model_package: Optional[str] = None
@@ -563,14 +563,14 @@ def _process_refs_for_report(
             target_model_name,
             target_model_package,
             current_project,
-            report.package_name,
+            exposure.package_name,
         )
 
         if target_model is None or isinstance(target_model, Disabled):
             # This may raise. Even if it doesn't, we don't want to add
-            # this report to the graph b/c there is no destination report
+            # this exposure to the graph b/c there is no destination exposure
             invalid_ref_fail_unless_test(
-                report, target_model_name, target_model_package,
+                exposure, target_model_name, target_model_package,
                 disabled=(isinstance(target_model, Disabled))
             )
 
@@ -578,8 +578,8 @@ def _process_refs_for_report(
 
         target_model_id = target_model.unique_id
 
-        report.depends_on.nodes.append(target_model_id)
-        manifest.update_report(report)
+        exposure.depends_on.nodes.append(target_model_id)
+        manifest.update_exposure(exposure)
 
 
 def _process_refs_for_node(
@@ -630,33 +630,33 @@ def _process_refs_for_node(
 def process_refs(manifest: Manifest, current_project: str):
     for node in manifest.nodes.values():
         _process_refs_for_node(manifest, current_project, node)
-    for report in manifest.reports.values():
-        _process_refs_for_report(manifest, current_project, report)
+    for exposure in manifest.exposures.values():
+        _process_refs_for_exposure(manifest, current_project, exposure)
     return manifest
 
 
-def _process_sources_for_report(
-    manifest: Manifest, current_project: str, report: ParsedReport
+def _process_sources_for_exposure(
+    manifest: Manifest, current_project: str, exposure: ParsedExposure
 ):
     target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
-    for source_name, table_name in report.sources:
+    for source_name, table_name in exposure.sources:
         target_source = manifest.resolve_source(
             source_name,
             table_name,
             current_project,
-            report.package_name,
+            exposure.package_name,
         )
         if target_source is None or isinstance(target_source, Disabled):
             invalid_source_fail_unless_test(
-                report,
+                exposure,
                 source_name,
                 table_name,
                 disabled=(isinstance(target_source, Disabled))
             )
             continue
         target_source_id = target_source.unique_id
-        report.depends_on.nodes.append(target_source_id)
-        manifest.update_report(report)
+        exposure.depends_on.nodes.append(target_source_id)
+        manifest.update_exposure(exposure)
 
 
 def _process_sources_for_node(
@@ -692,8 +692,8 @@ def process_sources(manifest: Manifest, current_project: str):
             continue
         assert not isinstance(node, ParsedSourceDefinition)
         _process_sources_for_node(manifest, current_project, node)
-    for report in manifest.reports.values():
-        _process_sources_for_report(manifest, current_project, report)
+    for exposure in manifest.exposures.values():
+        _process_sources_for_exposure(manifest, current_project, exposure)
     return manifest
 
 

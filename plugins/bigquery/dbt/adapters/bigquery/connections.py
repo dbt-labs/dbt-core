@@ -510,4 +510,7 @@ def _is_retryable(error):
     """Return true for errors that are unlikely to occur again if retried."""
     if isinstance(error, RETRYABLE_ERRORS):
         return True
+    elif isinstance(error, google.api_core.exceptions.Forbidden) and any(
+            e['reason'] == 'rateLimitExceeded' for e in error.errors):
+        return True
     return False

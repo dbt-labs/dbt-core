@@ -19,7 +19,7 @@ from .selector_spec import (
 
 INTERSECTION_DELIMITER = ','
 
-DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'report:*']
+DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*']
 DEFAULT_EXCLUDES: List[str] = []
 DATA_TEST_SELECTOR: str = 'test_type:data'
 SCHEMA_TEST_SELECTOR: str = 'test_type:schema'
