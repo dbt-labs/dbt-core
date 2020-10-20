@@ -1048,6 +1048,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_realpath,
+                    'relation_name': '"{0}"."{1}".model'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
@@ -1122,6 +1125,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/second_model.sql'),
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
+                    'relation_name': '"{0}"."{1}".second_model'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'path': 'second_model.sql',
                     'original_file_path': second_model_sql_path,
@@ -1201,6 +1207,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
+                    'relation_name': '"{0}"."{1}".seed'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -1289,6 +1298,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': '"{0}"."{1}".not_null_model_id'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1334,6 +1346,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': normalize('schema_test/test_nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': '"{0}"."{1}".test_nothing_model_'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1378,6 +1393,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': '"{0}"."{1}".unique_model_id'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1576,6 +1594,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         '\n\nselect * from {{ source("my_source", "my_table") }}'
                     ),
                     'refs': [],
+                    'relation_name': '"{0}"."{1}".ephemeral_copy'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1634,6 +1655,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'order by first_name asc'
                     ),
                     'refs': [['ephemeral_copy']],
+                    'relation_name': '"{0}"."{1}".ephemeral_summary'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1765,6 +1789,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
+                    'relation_name': '"{0}"."{1}".seed'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'seed',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
