@@ -1,5 +1,8 @@
 ## dbt 0.19.0 (Release TBD)
 
+## dbt 0.19.0b1 (October 21, 2020)
+
+
 ### Breaking changes
 - The format for sources.json, run-results.json, manifest.json, and catalog.json has changed to include a common metadata field ([#2761](https://github.com/fishtown-analytics/dbt/issues/2761), [#2778](https://github.com/fishtown-analytics/dbt/pull/2778), [#2763](https://github.com/fishtown-analytics/dbt/issues/2763), [#2784](https://github.com/fishtown-analytics/dbt/pull/2784), [#2764](https://github.com/fishtown-analytics/dbt/issues/2764), [#2785](https://github.com/fishtown-analytics/dbt/pull/2785))
 
