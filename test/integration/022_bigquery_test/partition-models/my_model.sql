@@ -9,3 +9,5 @@
 }}
 
 select 1 as id, 'dr. bigquery' as name, current_timestamp() as cur_time, current_date() as cur_date
+union all
+select 2 as id, 'prof. bigquery' as name, current_timestamp() as cur_time, current_date() as cur_date

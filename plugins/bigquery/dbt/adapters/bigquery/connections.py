@@ -269,7 +269,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         column_names = [field.name for field in resp.schema]
         return agate_helper.table_from_data_flat(resp, column_names)
 
-    def raw_execute(self, sql, fetch=False, use_legacy_sql=False):
+    def raw_execute(self, sql, fetch=False, *, use_legacy_sql=False):
         conn = self.get_thread_connection()
         client = conn.handle
 
