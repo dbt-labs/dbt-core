@@ -1,7 +1,12 @@
 ## dbt 0.19.0 (Release TBD)
 
-## dbt 0.19.0b1 (October 21, 2020)
+### Fixes
+- Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
 
+Contributors:
+- [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
+
+## dbt 0.19.0b1 (October 21, 2020)
 
 ### Breaking changes
 - The format for sources.json, run-results.json, manifest.json, and catalog.json has changed to include a common metadata field ([#2761](https://github.com/fishtown-analytics/dbt/issues/2761), [#2778](https://github.com/fishtown-analytics/dbt/pull/2778), [#2763](https://github.com/fishtown-analytics/dbt/issues/2763), [#2784](https://github.com/fishtown-analytics/dbt/pull/2784), [#2764](https://github.com/fishtown-analytics/dbt/issues/2764), [#2785](https://github.com/fishtown-analytics/dbt/pull/2785))
@@ -32,10 +37,9 @@
 Contributors:
 - [@joelluijmes](https://github.com/joelluijmes) ([#2749](https://github.com/fishtown-analytics/dbt/pull/2749), [#2821](https://github.com/fishtown-analytics/dbt/pull/2821))
 - [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
-- [@zmac12](https://github.com/zmac12) ([#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
+- [@zmac12](https://github.com/zmac12) ([#2817](https://github.com/fishtown-analytics/dbt/pull/2817))
 - [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([docs#138](https://github.com/fishtown-analytics/dbt-docs/pull/138))
 - [@jplynch77](https://github.com/jplynch77) ([docs#139](https://github.com/fishtown-analytics/dbt-docs/pull/139))
-
 
 ## dbt 0.18.1 (October 13, 2020)
 
