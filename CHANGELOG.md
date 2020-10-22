@@ -14,6 +14,7 @@
 - Added dbt_invocation_id for each BigQuery job to enable performance analysis ([#2808](https://github.com/fishtown-analytics/dbt/issues/2808), [#2809](https://github.com/fishtown-analytics/dbt/pull/2809))
 - Save cli and rpc arguments in run_results.json ([#2510](https://github.com/fishtown-analytics/dbt/issues/2510), [#2813](https://github.com/fishtown-analytics/dbt/pull/2813))
 - Added support for BigQuery connections using refresh tokens ([#2344](https://github.com/fishtown-analytics/dbt/issues/2344), [#2805](https://github.com/fishtown-analytics/dbt/pull/2805))
+- Added macro get_partitions_metadata(table) to return partition metadata for partitioned table [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
 
 ### Under the hood
 - Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
@@ -24,6 +25,7 @@ Contributors:
 - [@joelluijmes](https://github.com/joelluijmes) ([#2749](https://github.com/fishtown-analytics/dbt/pull/2749), [#2821](https://github.com/fishtown-analytics/dbt/pull/2821))
 - [@kingfink](https://github.com/kingfink) ([#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 - [@zmac12](https://github.com/zmac12) ([#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
+- [ran-eh](https://github.com/ran-eh) [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
 
 ## dbt 0.18.1 (Release TBD)
 
