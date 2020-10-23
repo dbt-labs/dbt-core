@@ -269,15 +269,13 @@ class BigQueryConnectionManager(BaseConnectionManager):
         column_names = [field.name for field in resp.schema]
         return agate_helper.table_from_data_flat(resp, column_names)
 
-    def raw_execute(self, sql, fetch=False):
+    def raw_execute(self, sql, fetch=False, *, use_legacy_sql=False):
         conn = self.get_thread_connection()
         client = conn.handle
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_params = {
-            'use_legacy_sql': False,
-        }
+        job_params = {'use_legacy_sql': use_legacy_sql}
 
         if active_user:
             job_params['labels'] = {
@@ -340,6 +338,19 @@ class BigQueryConnectionManager(BaseConnectionManager):
             status = 'OK'
 
         return status, res
+
+    def get_partitions_metadata(self, table):
+        def standard_to_legacy(table):
+            return table.project + ':' + table.dataset + '.' + table.identifier
+
+        legacy_sql = 'SELECT * FROM ['\
+            + standard_to_legacy(table) + '$__PARTITIONS_SUMMARY__]'
+
+        sql = self._add_query_comment(legacy_sql)
+        # auto_begin is ignored on bigquery, and only included for consistency
+        _, iterator =\
+            self.raw_execute(sql, fetch='fetch_result', use_legacy_sql=True)
+        return self.get_table_from_response(iterator)
 
     def create_bigquery_table(self, database, schema, table_name, callback,
                               sql):

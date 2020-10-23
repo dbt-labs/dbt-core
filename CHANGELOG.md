@@ -1,10 +1,14 @@
 ## dbt 0.19.0 (Release TBD)
 
+### Features
+- Added macro get_partitions_metadata(table) to return partition metadata for partitioned table [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
+
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
+- [ran-eh](https://github.com/ran-eh) [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
@@ -69,7 +73,6 @@ Contributors:
 - [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([#2732](https://github.com/fishtown-analytics/dbt/pull/2732))
 - [@jweibel22](https://github.com/jweibel22) ([#2766](https://github.com/fishtown-analytics/dbt/pull/2766))
 - [@aiguofer](https://github.com/aiguofer) ([#2754](https://github.com/fishtown-analytics/dbt/pull/2754))
-
 
 ## dbt 0.18.1b1 (September 17, 2020)
 

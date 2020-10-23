@@ -1,0 +1,6 @@
+version: 2
+models:
+- name: my_model
+  tests:
+  - number_partitions:
+      expected: "{{ var('expected', 1) }}"
