@@ -405,16 +405,16 @@ class MaturityType(StrEnum):
 
 
 @dataclass
-class ReportOwner(JsonSchemaMixin, Replaceable):
+class ExposureOwner(JsonSchemaMixin, Replaceable):
     email: str
     name: Optional[str] = None
 
 
 @dataclass
-class UnparsedReport(JsonSchemaMixin, Replaceable):
+class UnparsedExposure(JsonSchemaMixin, Replaceable):
     name: str
     type: ExposureType
-    owner: ReportOwner
+    owner: ExposureOwner
     maturity: Optional[MaturityType] = None
     url: Optional[str] = None
     description: Optional[str] = None

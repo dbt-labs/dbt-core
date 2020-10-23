@@ -919,5 +919,7 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
         for result in revived_records:
             # result is a tuple, the dbt_valid_from is second and dbt_valid_to is latest
             self.assertIsInstance(result[1], datetime)
-            self.assertGreaterEqual(result[1].replace(tzinfo=pytz.UTC), self._invalidated_snapshot_datetime)
+            # there are milliseconds (part of microseconds in datetime objects) in the
+            # invalidated_snapshot_datetime and not in result datetime so set the microseconds to 0
+            self.assertGreaterEqual(result[1].replace(tzinfo=pytz.UTC), self._invalidated_snapshot_datetime.replace(microsecond=0))
             self.assertIsNone(result[2])

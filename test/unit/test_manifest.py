@@ -38,7 +38,6 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
     'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
-    'injected_sql',
 })
 
 
@@ -224,7 +223,8 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(
-            nodes={}, sources={}, macros={}, docs={}, disabled=[], files={}, reports={},
+            nodes={}, sources={}, macros={}, docs={}, disabled=[], files={},
+            exposures={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         self.assertEqual(
@@ -233,7 +233,7 @@ class ManifestTest(unittest.TestCase):
                 'nodes': {},
                 'sources': {},
                 'macros': {},
-                'reports': {},
+                'exposures': {},
                 'parent_map': {},
                 'child_map': {},
                 'metadata': {
@@ -252,7 +252,8 @@ class ManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(
-            nodes=nodes, sources={}, macros={}, docs={}, disabled=[], files={}, reports={},
+            nodes=nodes, sources={}, macros={}, docs={}, disabled=[], files={},
+            exposures={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict()
@@ -319,7 +320,7 @@ class ManifestTest(unittest.TestCase):
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
-                            disabled=[], files={}, reports={})
+                            disabled=[], files={}, exposures={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
@@ -364,8 +365,8 @@ class ManifestTest(unittest.TestCase):
             generated_at=datetime.utcnow(),
         )
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            disabled=[], metadata=metadata, files={},
-                            reports={})
+                            disabled=[],
+                            metadata=metadata, files={}, exposures={})
 
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
@@ -373,7 +374,7 @@ class ManifestTest(unittest.TestCase):
                 'nodes': {},
                 'sources': {},
                 'macros': {},
-                'reports': {},
+                'exposures': {},
                 'parent_map': {},
                 'child_map': {},
                 'docs': {},
@@ -394,7 +395,7 @@ class ManifestTest(unittest.TestCase):
 
     def test_get_resource_fqns_empty(self):
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            disabled=[], files={}, reports={})
+                            disabled=[], files={}, exposures={})
         self.assertEqual(manifest.get_resource_fqns(), {})
 
     def test_get_resource_fqns(self):
@@ -420,7 +421,7 @@ class ManifestTest(unittest.TestCase):
             checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
-                            disabled=[], files={}, reports={})
+                            disabled=[], files={}, exposures={})
         expect = {
             'models': frozenset([
                 ('snowplow', 'events'),
@@ -482,7 +483,6 @@ class MixedManifestTest(unittest.TestCase):
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
-                injected_sql=None,
                 extra_ctes=[],
                 checksum=FileHash.empty(),
             ),
@@ -508,7 +508,6 @@ class MixedManifestTest(unittest.TestCase):
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
-                injected_sql='and this also does not matter',
                 extra_ctes=[],
                 checksum=FileHash.empty(),
             ),
@@ -606,15 +605,14 @@ class MixedManifestTest(unittest.TestCase):
     def test__no_nodes(self):
         metadata = ManifestMetadata(generated_at=datetime.utcnow(), invocation_id='01234567-0123-0123-0123-0123456789ab')
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            disabled=[], files={}, reports={},
-                            metadata=metadata)
+                            disabled=[], metadata=metadata, files={}, exposures={})
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
                 'nodes': {},
                 'macros': {},
                 'sources': {},
-                'reports': {},
+                'exposures': {},
                 'parent_map': {},
                 'child_map': {},
                 'metadata': {
@@ -633,8 +631,9 @@ class MixedManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            disabled=[], files={}, reports={},
-                            metadata=ManifestMetadata(generated_at=datetime.utcnow()))
+                            disabled=[],
+                            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+                            files={}, exposures={})
         serialized = manifest.writable_manifest().to_dict()
         self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['disabled'], [])
@@ -697,7 +696,8 @@ class MixedManifestTest(unittest.TestCase):
     def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            disabled=[], files={}, reports={})
+                            disabled=[],
+                            files={}, exposures={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
@@ -745,7 +745,7 @@ class TestManifestSearch(unittest.TestCase):
             },
             disabled=[],
             files={},
-            reports={},
+            exposures={},
         )
 
 
@@ -765,7 +765,7 @@ def make_manifest(nodes=[], sources=[], macros=[], docs=[]):
         },
         disabled=[],
         files={},
-        reports={},
+        exposures={},
     )
 
 

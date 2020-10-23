@@ -15,7 +15,7 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
-    ParsedSourceDefinition, ParsedReport
+    ParsedSourceDefinition, ParsedExposure
 )
 from dbt.contracts.files import SourceFile
 from dbt.contracts.util import (
@@ -435,7 +435,7 @@ class Manifest:
     sources: MutableMapping[str, ParsedSourceDefinition]
     macros: MutableMapping[str, ParsedMacro]
     docs: MutableMapping[str, ParsedDocumentation]
-    reports: MutableMapping[str, ParsedReport]
+    exposures: MutableMapping[str, ParsedExposure]
     disabled: List[CompileResultNode]
     files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
@@ -460,7 +460,7 @@ class Manifest:
             sources={},
             macros=macros,
             docs={},
-            reports={},
+            exposures={},
             disabled=[],
             files=files,
         )
@@ -485,8 +485,8 @@ class Manifest:
             _update_into(self.nodes, new_node)
             return new_node
 
-    def update_report(self, new_report: ParsedReport):
-        _update_into(self.reports, new_report)
+    def update_exposure(self, new_exposure: ParsedExposure):
+        _update_into(self.exposures, new_exposure)
 
     def update_node(self, new_node: ManifestNode):
         _update_into(self.nodes, new_node)
@@ -729,7 +729,7 @@ class Manifest:
             sources={k: _deepcopy(v) for k, v in self.sources.items()},
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
-            reports={k: _deepcopy(v) for k, v in self.reports.items()},
+            exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
             disabled=[_deepcopy(n) for n in self.disabled],
             metadata=self.metadata,
             files={k: _deepcopy(v) for k, v in self.files.items()},
@@ -739,7 +739,7 @@ class Manifest:
         edge_members = list(chain(
             self.nodes.values(),
             self.sources.values(),
-            self.reports.values(),
+            self.exposures.values(),
         ))
         forward_edges, backward_edges = build_edges(edge_members)
 
@@ -748,7 +748,7 @@ class Manifest:
             sources=self.sources,
             macros=self.macros,
             docs=self.docs,
-            reports=self.reports,
+            exposures=self.exposures,
             metadata=self.metadata,
             disabled=self.disabled,
             child_map=forward_edges,
@@ -768,8 +768,8 @@ class Manifest:
             return self.nodes[unique_id]
         elif unique_id in self.sources:
             return self.sources[unique_id]
-        elif unique_id in self.reports:
-            return self.reports[unique_id]
+        elif unique_id in self.exposures:
+            return self.exposures[unique_id]
         else:
             # something terrible has happened
             raise dbt.exceptions.InternalException(
@@ -912,7 +912,7 @@ class Manifest:
             self.sources,
             self.macros,
             self.docs,
-            self.reports,
+            self.exposures,
             self.disabled,
             self.files,
             self.metadata,
@@ -947,9 +947,9 @@ class WritableManifest(ArtifactMixin):
             'The docs defined in the dbt project and its dependencies'
         ))
     )
-    reports: Mapping[UniqueID, ParsedReport] = field(
+    exposures: Mapping[UniqueID, ParsedExposure] = field(
         metadata=dict(description=(
-            'The reports defined in the dbt project and its dependencies'
+            'The exposures defined in the dbt project and its dependencies'
         ))
     )
     disabled: Optional[List[CompileResultNode]] = field(metadata=dict(

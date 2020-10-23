@@ -14,7 +14,7 @@ class NodeType(StrEnum):
     Documentation = 'docs'
     Source = 'source'
     Macro = 'macro'
-    Report = 'report'
+    Exposure = 'exposure'
 
     @classmethod
     def executable(cls) -> List['NodeType']:

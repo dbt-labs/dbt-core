@@ -130,7 +130,7 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
         # make sure the test runs against `custom_schema`
         for test_result in res:
-            self.assertTrue(self.custom_schema, test_result.node.injected_sql)
+            self.assertTrue(self.custom_schema, test_result.node.compiled_sql)
 
 
 class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
@@ -168,3 +168,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
         self.run_dbt(['seed', '--project-dir', project_dir])
         self.run_dbt(['run', '--project-dir', project_dir])
         self.run_dbt(['test', '--project-dir', project_dir])
+        self.run_dbt(['clean', '--project-dir', project_dir])
+        # In case of 'dbt clean' also test that the clean-targets directories were deleted.
+        for target in self.config.clean_targets:
+            assert not os.path.isdir(target)

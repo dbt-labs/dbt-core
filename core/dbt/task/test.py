@@ -42,7 +42,7 @@ class TestRunner(CompileRunner):
 
     def execute_data_test(self, test: CompiledDataTestNode):
         res, table = self.adapter.execute(
-            test.injected_sql, auto_begin=True, fetch=True
+            test.compiled_sql, auto_begin=True, fetch=True
         )
 
         num_rows = len(table.rows)
@@ -59,7 +59,7 @@ class TestRunner(CompileRunner):
 
     def execute_schema_test(self, test: CompiledSchemaTestNode):
         res, table = self.adapter.execute(
-            test.injected_sql,
+            test.compiled_sql,
             auto_begin=True,
             fetch=True,
         )
@@ -115,7 +115,7 @@ class TestSelector(ResourceTypeSelector):
         )
 
     def expand_selection(self, selected: Set[UniqueId]) -> Set[UniqueId]:
-        # reports can't have tests, so this is relatively easy
+        # exposures can't have tests, so this is relatively easy
         selected_tests = set()
         for unique_id in self.graph.select_successors(selected):
             if unique_id in self.manifest.nodes:

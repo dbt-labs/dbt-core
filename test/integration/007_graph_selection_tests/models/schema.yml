@@ -23,15 +23,15 @@ sources:
     tables:
       - name: seed
 
-reports:
-  - name: user_report
+exposures:
+  - name: user_exposure
     type: dashboard
     depends_on:
       - ref('users')
       - ref('users_rollup')
     owner:
       email: nope@example.com
-  - name: seed_ml_report
+  - name: seed_ml_exposure
     type: ml
     depends_on:
       - source('raw', 'seed')

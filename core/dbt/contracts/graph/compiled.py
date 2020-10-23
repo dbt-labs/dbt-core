@@ -5,7 +5,7 @@ from dbt.contracts.graph.parsed import (
     ParsedDataTestNode,
     ParsedHookNode,
     ParsedModelNode,
-    ParsedReport,
+    ParsedExposure,
     ParsedResource,
     ParsedRPCNode,
     ParsedSchemaTestNode,
@@ -42,7 +42,6 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
     compiled_sql: Optional[str] = None
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
-    injected_sql: Optional[str] = None
 
     def set_cte(self, cte_id: str, sql: str):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
@@ -219,8 +218,8 @@ CompileResultNode = Union[
     ParsedSourceDefinition,
 ]
 
-# anything that participates in the graph: sources, reports, manifest nodes
+# anything that participates in the graph: sources, exposures, manifest nodes
 GraphMemberNode = Union[
     CompileResultNode,
-    ParsedReport,
+    ParsedExposure,
 ]
