@@ -2421,7 +2421,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/rs_models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_realpath,
-                    'relation_name': '"{0}"."{1}".view_summary'.format(
+                    'relation_name': '"{0}"."{1}".model'.format(
                         self.default_database, my_schema_name
                     ),
                     'resource_type': 'model',
@@ -2753,7 +2753,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'model.sql',
                     'raw_sql': LineIndifferent(_read_file(model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
-                    'relation_name': '"{0}"."{1}".view_summary'.format(
+                    'relation_name': '"{0}"."{1}".model'.format(
                         model_database, schema
                     ),
                     'resource_type': 'model',
@@ -2930,7 +2930,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
-                    'relation_name': '"{0}"."{1}".view_summary'.format(
+                    'relation_name': '"{0}"."{1}".seed'.format(
                         model_database, schema
                     ),
                     'resource_type': 'seed',
@@ -2979,6 +2979,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': '"{0}"."{1}".not_null_model_id'.format(
+                        model_database, schema
+                    ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -3033,6 +3036,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/test_nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': '"{0}"."{1}".test_nothing_model_'.format(
+                        model_database, schema
+                    ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -3086,6 +3092,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': '"{0}"."{1}".unique_model_id'.format(
+                        model_database, schema
+                    ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
