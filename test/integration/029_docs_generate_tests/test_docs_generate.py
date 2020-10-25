@@ -1047,6 +1047,10 @@ class TestDocsGenerate(DBTIntegrationTest):
         test_config = self.rendered_tst_config()
         unrendered_test_config = self.unrendered_tst_config()
 
+        relation_name_format = (
+            '{0}.{1}."{2}"' if self.adapter_type == 'snowflake'
+            else '.'.join((self._quote("{0}"), self._quote("{1}"), "{2}")))
+
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
             'dbt_version': dbt.version.__version__,
@@ -1055,8 +1059,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_realpath,
-                    'relation_name': '"{0}"."{1}".model'.format(
-                        model_database, my_schema_name
+                    'relation_name': relation_name_format.format(
+                        model_database, my_schema_name, 'model'
                     ),
                     'resource_type': 'model',
                     'path': 'model.sql',
@@ -1131,8 +1135,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/second_model.sql'),
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
-                    'relation_name': '"{0}"."{1}".second_model'.format(
-                        model_database, self.alternate_schema
+                    'relation_name': relation_name_format.format(
+                        model_database, self.alternate_schema, 'second_model'
                     ),
                     'resource_type': 'model',
                     'path': 'second_model.sql',
@@ -1212,8 +1216,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
-                    'relation_name': '"{0}"."{1}".seed'.format(
-                        model_database, my_schema_name
+                    'relation_name': relation_name_format.format(
+                        model_database, my_schema_name, 'seed'
                     ),
                     'resource_type': 'seed',
                     'raw_sql': '',
@@ -1302,8 +1306,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
-                    'relation_name': '"{0}"."{1}".not_null_model_id'.format(
-                        model_database, my_schema_name
+                    'relation_name': relation_name_format.format(
+                        model_database, my_schema_name, 'not_null_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -1349,8 +1353,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': normalize('schema_test/test_nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
-                    'relation_name': '"{0}"."{1}".test_nothing_model_'.format(
-                        model_database, my_schema_name
+                    'relation_name': relation_name_format.format(
+                        model_database, my_schema_name, 'test_nothing_model_'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -1395,8 +1399,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
-                    'relation_name': '"{0}"."{1}".unique_model_id'.format(
-                        model_database, my_schema_name
+                    'relation_name': relation_name_format.format(
+                        model_database, my_schema_name, 'unique_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
