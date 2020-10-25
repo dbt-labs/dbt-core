@@ -1022,7 +1022,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             without_sql,
         )
 
-    def expected_seeded_manifest(self, model_database=None):
+    def expected_seeded_manifest(self, model_database=None, quote_model=False):
         models_path = self.dir('models')
         model_sql_path = os.path.join(models_path, 'model.sql')
         second_model_sql_path = os.path.join(models_path, 'second_model.sql')
@@ -1047,9 +1047,12 @@ class TestDocsGenerate(DBTIntegrationTest):
         test_config = self.rendered_tst_config()
         unrendered_test_config = self.unrendered_tst_config()
 
-        relation_name_format = (
-            '{0}.{1}."{2}"' if self.adapter_type == 'snowflake'
-            else '.'.join((self._quote("{0}"), self._quote("{1}"), "{2}")))
+        quote_database = quote_schema = self.adapter_type != 'snowflake'
+        relation_name_format = ".".join((
+            self._quote("{0}") if quote_database else '{0}',
+            self._quote("{1}") if quote_schema else '{1}',
+            self._quote("{2}") if quote_model else '{2}',
+        ))
 
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
@@ -3495,7 +3498,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             })
 
         self.verify_catalog(self.expected_snowflake_catalog(case_columns=True))
-        self.verify_manifest(self.expected_seeded_manifest())
+        self.verify_manifest(self.expected_seeded_manifest(quote_model=True))
         self.verify_run_results(self.expected_run_results(quote_schema=False, quote_model=True))
 
     @use_profile('bigquery')
