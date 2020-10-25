@@ -1048,7 +1048,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         unrendered_test_config = self.unrendered_tst_config()
 
         relation_name_format = (
-            '{0}.{1}."{2}"' if self.adapter_type == 'snowflake'
+            '{0}.{1}.{2}' if self.adapter_type == 'snowflake'
             else '.'.join((self._quote("{0}"), self._quote("{1}"), "{2}")))
 
         return {
@@ -2674,11 +2674,16 @@ class TestDocsGenerate(DBTIntegrationTest):
         schema = self.unique_schema()
 
         # we are selecting from the seed, which is always in the default db
-        compiled_database = self.default_database
-        if self.adapter_type != 'snowflake':
-            compiled_database = self._quote(compiled_database)
+        quote_database = self.adapter_type != 'snowflake'
+        compiled_database = (self._quote(self.default_database)
+                             if quote_database else self.default_database)
         compiled_schema = self._quote(schema) if quote_schema else schema
         compiled_seed = self._quote('seed') if quote_model else 'seed'
+        relation_name_format = ".".join((
+            self._quote("{0}") if quote_database else '{0}',
+            self._quote("{1}") if quote_schema else '{1}',
+            self._quote("{2}") if quote_model else '{2}',
+        ))
 
         if self.adapter_type == 'bigquery':
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
@@ -2766,8 +2771,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'model.sql',
                     'raw_sql': LineIndifferent(_read_file(model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
-                    'relation_name': '"{0}"."{1}".model'.format(
-                        model_database, schema
+                    'relation_name': relation_name_format.format(
+                        model_database, schema, 'model'
                     ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
@@ -2857,8 +2862,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'second_model.sql',
                     'raw_sql': LineIndifferent(_read_file(second_model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
-                    'relation_name': '"{0}"."{1}".second_model'.format(
-                        self.default_database, self.alternate_schema
+                    'relation_name': relation_name_format.format(
+                        self.default_database, self.alternate_schema,
+                        'second_model'
                     ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
@@ -2943,8 +2949,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
-                    'relation_name': '"{0}"."{1}".seed'.format(
-                        model_database, schema
+                    'relation_name': relation_name_format.format(
+                        model_database, schema, 'seed'
                     ),
                     'resource_type': 'seed',
                     'root_path': self.test_root_realpath,
@@ -2992,8 +2998,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
-                    'relation_name': '"{0}"."{1}".not_null_model_id'.format(
-                        model_database, schema
+                    'relation_name': relation_name_format.format(
+                        model_database, schema, 'not_null_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -3049,8 +3055,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/test_nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
-                    'relation_name': '"{0}"."{1}".test_nothing_model_'.format(
-                        model_database, schema
+                    'relation_name': relation_name_format.format(
+                        model_database, schema, 'test_nothing_model_'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -3105,8 +3111,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
-                    'relation_name': '"{0}"."{1}".unique_model_id'.format(
-                        model_database, schema
+                    'relation_name': relation_name_format.format(
+                        model_database, schema, 'unique_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
