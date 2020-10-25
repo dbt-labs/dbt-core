@@ -80,7 +80,7 @@ def get_context_modules() -> Dict[str, Dict[str, Any]]:
     return {
         "pytz": get_pytz_module_context(),
         "datetime": get_datetime_module_context(),
-        're': get_re_module_context(),
+        "re": get_re_module_context(),
     }
 
 
