@@ -1136,7 +1136,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
                     'relation_name': relation_name_format.format(
-                        model_database, self.alternate_schema, 'second_model'
+                        self.default_database, self.alternate_schema,
+                        'second_model'
                     ),
                     'resource_type': 'model',
                     'path': 'second_model.sql',
@@ -1217,7 +1218,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
                     'relation_name': relation_name_format.format(
-                        model_database, my_schema_name, 'seed'
+                        self.default_database, my_schema_name, 'seed'
                     ),
                     'resource_type': 'seed',
                     'raw_sql': '',
@@ -1307,7 +1308,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': relation_name_format.format(
-                        model_database, my_schema_name, 'not_null_model_id'
+                        self.default_database, my_schema_name,
+                        'not_null_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -1354,7 +1356,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': relation_name_format.format(
-                        model_database, my_schema_name, 'test_nothing_model_'
+                        self.default_database, my_schema_name,
+                        'test_nothing_model_'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -1400,7 +1403,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': relation_name_format.format(
-                        model_database, my_schema_name, 'unique_model_id'
+                        self.default_database, my_schema_name, 'unique_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -2021,6 +2024,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'clustered.sql',
                     'raw_sql': LineIndifferent(_read_file(clustered_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
+                    'relation_name': '`{0}`.`{1}`.clustered'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2102,6 +2108,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'multi_clustered.sql',
                     'raw_sql': LineIndifferent(_read_file(multi_clustered_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
+                    'relation_name': '`{0}`.`{1}`.multi_clustered'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2182,7 +2191,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'nested_view.sql',
                     'raw_sql': LineIndifferent(_read_file(nested_view_sql_path).rstrip('\r\n')),
                     'refs': [['nested_table']],
-                    'relation_name': '"{0}"."{1}".nested_view'.format(
+                    'relation_name': '`{0}`.`{1}`.nested_view'.format(
                         self.default_database, my_schema_name
                     ),
                     'resource_type': 'model',
@@ -2262,7 +2271,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'nested_table.sql',
                     'raw_sql': LineIndifferent(_read_file(nested_table_sql_path).rstrip('\r\n')),
                     'refs': [],
-                    'relation_name': '"{0}"."{1}".nested_table'.format(
+                    'relation_name': '`{0}`.`{1}`.nested_table'.format(
                         self.default_database, my_schema_name
                     ),
                     'resource_type': 'model',
@@ -2289,7 +2298,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
-                    'relation_name': '"{0}"."{1}".seed'.format(
+                    'relation_name': '`{0}`.`{1}`.seed'.format(
                         self.default_database, my_schema_name
                     ),
                     'resource_type': 'seed',
