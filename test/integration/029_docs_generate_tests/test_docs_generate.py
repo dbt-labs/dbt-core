@@ -1048,7 +1048,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         unrendered_test_config = self.unrendered_tst_config()
 
         relation_name_format = (
-            '{0}.{1}.{2}' if self.adapter_type == 'snowflake'
+            '{0}.{1}."{2}"' if self.adapter_type == 'snowflake'
             else '.'.join((self._quote("{0}"), self._quote("{1}"), "{2}")))
 
         return {
@@ -2950,7 +2950,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': '',
                     'refs': [],
                     'relation_name': relation_name_format.format(
-                        model_database, schema, 'seed'
+                        self.default_database, schema, 'seed'
                     ),
                     'resource_type': 'seed',
                     'root_path': self.test_root_realpath,
@@ -2999,7 +2999,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': relation_name_format.format(
-                        model_database, schema, 'not_null_model_id'
+                        self.default_database, schema, 'not_null_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -3056,7 +3056,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': relation_name_format.format(
-                        model_database, schema, 'test_nothing_model_'
+                        self.default_database, schema, 'test_nothing_model_'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
@@ -3112,7 +3112,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': relation_name_format.format(
-                        model_database, schema, 'unique_model_id'
+                        self.default_database, schema, 'unique_model_id'
                     ),
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
