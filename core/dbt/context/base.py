@@ -18,6 +18,7 @@ import yaml
 # approaches which will extend well to potentially many modules
 import pytz
 import datetime
+import re
 
 
 def get_pytz_module_context() -> Dict[str, Any]:
@@ -42,10 +43,19 @@ def get_datetime_module_context() -> Dict[str, Any]:
     }
 
 
+def get_re_module_context() -> Dict[str, Any]:
+    context_exports = re.__all__
+
+    return {
+        name: getattr(re, name) for name in context_exports
+    }
+
+
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
     return {
         'pytz': get_pytz_module_context(),
         'datetime': get_datetime_module_context(),
+        're': get_re_module_context(),
     }
 
 
