@@ -2,6 +2,7 @@
 
 ### Features
 - Added macro get_partitions_metadata(table) to return partition metadata for partitioned table [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
+- Added native python 're' module for regex in jinja templates [#2851](https://github.com/fishtown-analytics/dbt/pull/2851)
 
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
@@ -9,6 +10,7 @@
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
 - [ran-eh](https://github.com/ran-eh) [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
+- [@hochoy](https://github.com/hochoy) [#2851](https://github.com/fishtown-analytics/dbt/pull/2851)
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
