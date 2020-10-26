@@ -117,8 +117,21 @@
   {{ current_timestamp() }}::timestamp without time zone
 {%- endmacro %}
 
+{#
+  Postgres tables have a maximum length off 63 characters, anything longer is silently truncated.
+  Temp relations add a lot of extra characters to the end of table namers to ensure uniqueness.
+  To prevent this going over the character limit, the base_relation name is truncated to ensure
+  that name + suffix + uniquestring is < 63 characters.  
+#}
 {% macro postgres__make_temp_relation(base_relation, suffix) %}
-    {% set tmp_identifier = base_relation.identifier ~ suffix ~ py_current_timestring() %}
+    {% set dt = modules.datetime.datetime.now() %}
+    {% set dtstring = dt.strftime("%H%M%S%f") %}
+    {% set suffix_length = suffix|length + dtstring|length %}
+    {% set relation_max_name_length = 63 %}
+    {% if suffix_length > relation_max_name_length %}
+        {% do exceptions.raise_compiler_error('Temp relation suffix is too long (' ~ suffix|length ~ ' characters). Maximum length is ' ~ (relation_max_name_length - dtstring|length) ~ ' characters.') %}
+    {% endif %}
+    {% set tmp_identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix ~ dtstring %}
     {% do return(base_relation.incorporate(
                                   path={
                                     "identifier": tmp_identifier,
