@@ -47,7 +47,7 @@ def get_re_module_context() -> Dict[str, Any]:
     context_exports = re.__all__
 
     return {
-      name: getattr(re, name) for name in context_exports
+        name: getattr(re, name) for name in context_exports
     }
 
 
