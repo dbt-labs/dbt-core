@@ -1383,7 +1383,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'compiled': True,
                     'compiled_sql': ANY,
                     'config': snapshot_config,
-                    'database': model_database,
+                    'database':  self.default_database,
                     'deferred': False,
                     'depends_on': {
                         'macros': [],
@@ -1406,7 +1406,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             .replace('{% endsnapshot %}', '')),
                     'refs': [['seed']],
                     'relation_name': relation_name_format.format(
-                        model_database, self.alternate_schema, 'snapshot_seed'
+                        self.default_database, self.alternate_schema, 'snapshot_seed'
                     ),
                     'resource_type': 'snapshot',
                     'root_path': self.test_root_realpath,
@@ -3731,7 +3731,8 @@ class TestDocsGenerate(DBTIntegrationTest):
     @use_profile('bigquery')
     def test__bigquery__complex_models(self):
         self.run_and_generate(
-            extra={'source-paths': [self.dir('bq_models')]},
+            extra={'source-paths': [self.dir('bq_models')],
+                   'snapshot-paths': []},
             model_count=4
         )
 
@@ -3752,7 +3753,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     @use_profile('redshift')
     def test__redshift__incremental_view(self):
         self.run_and_generate(
-            {'source-paths': [self.dir('rs_models')]},
+            {'source-paths': [self.dir('rs_models')], 'snapshot-paths': []},
             alternate_db=self.default_database,
             model_count=1,
         )
