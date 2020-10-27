@@ -174,8 +174,8 @@ class Compiler:
 
     def _get_relation_name(self, node: ParsedNode):
         relation_name = None
-        if (node.resource_type in NodeType.refable()
-                and node.config.materialized != "ephemeral"):
+        if (node.resource_type in NodeType.refable() and
+                node.config.materialized != "ephemeral"):
             adapter = get_adapter(self.config)
             relation_cls = adapter.Relation
             relation_name = str(relation_cls.create_from(self.config, node))
