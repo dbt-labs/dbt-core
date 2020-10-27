@@ -164,7 +164,8 @@
       from
         pg_catalog.svv_external_columns
       where
-        tablename = '{{ relation.identifier }}'
+        schemaname = '{{ relation.schema }}'
+        and tablename = '{{ relation.identifier }}'
 
     ),
 
