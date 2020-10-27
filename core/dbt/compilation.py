@@ -173,9 +173,13 @@ class Compiler:
         return relation_cls.add_ephemeral_prefix(name)
 
     def _get_relation_name(self, node: ParsedNode):
-        adapter = get_adapter(self.config)
-        relation_cls = adapter.Relation
-        return str(relation_cls.create_from(self.config, node))
+        relation_name = None
+        if (node.resource_type in NodeType.refable()
+                and node.config.materialized != "ephemeral"):
+            adapter = get_adapter(self.config)
+            relation_cls = adapter.Relation
+            relation_name = str(relation_cls.create_from(self.config, node))
+        return relation_name
 
     def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
         """
