@@ -6,6 +6,7 @@
 
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
+- Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2855](https://github.com/fishtown-analytics/dbt/issues/2854))
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
@@ -35,7 +36,6 @@ Contributors:
 - Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 - Changed rpc test timeouts to avoid locally run test failures ([#2803](https://github.com/fishtown-analytics/dbt/issues/2803),[#2804](https://github.com/fishtown-analytics/dbt/pull/2804))
 - Added a debug_query on the base adapter that will allow plugin authors to create custom debug queries ([#2751](https://github.com/fishtown-analytics/dbt/issues/2751),[#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
-- Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2855](https://github.com/fishtown-analytics/dbt/issues/2854))
 
 ### Docs
 - Add select/deselect option in DAG view dropups. ([docs#98](https://github.com/fishtown-analytics/dbt-docs/issues/98), [docs#138](https://github.com/fishtown-analytics/dbt-docs/pull/138))
