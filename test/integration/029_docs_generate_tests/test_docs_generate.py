@@ -156,7 +156,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         project = {
             "data-paths": [self.dir("seed")],
             'macro-paths': [self.dir('macros')],
-            'snapshot-paths': [self.dir('snapshots')],
+            'snapshot-paths': [self.dir('snapshot')],
             'vars': {
                 'alternate_db': alternate_db,
                 'alternate_schema': self.alternate_schema,
@@ -1063,7 +1063,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         model_schema_yml_path = os.path.join(models_path, 'schema.yml')
         seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
         seed_path = self.dir(os.path.join('seed', 'seed.csv'))
-        snapshot_path = self.dir(os.path.join('snapshots', 'snapshot_seed.sql'))
+        snapshot_path = self.dir(os.path.join('snapshot', 'snapshot_seed.sql'))
 
         my_schema_name = self.unique_schema()
 
@@ -1654,7 +1654,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ephemeral_summary_path = self.dir('ref_models/ephemeral_summary.sql')
         view_summary_path = self.dir('ref_models/view_summary.sql')
         seed_path = self.dir('seed/seed.csv')
-        snapshot_path = self.dir('snapshots/snapshot_seed.sql')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
@@ -2814,7 +2814,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 compiled_database, compiled_schema, compiled_seed
             )
         seed_path = self.dir('seed/seed.csv')
-        snapshot_path = self.dir('snapshots/snapshot_seed.sql')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return [
             {
@@ -3332,7 +3332,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ephemeral_summary_path = self.dir('ref_models/ephemeral_summary.sql')
         view_summary_path = self.dir('ref_models/view_summary.sql')
         seed_path = self.dir('seed/seed.csv')
-        snapshot_path = self.dir('snapshots/snapshot_seed.sql')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return [
             {
@@ -3820,10 +3820,6 @@ class TestDocsGenerateOverride(DBTIntegrationTest):
         return {
             'config-version': 2,
             'macro-paths': [self.dir('fail_macros')],
-            'data-paths': [self.dir("seed")],
-            'vars': {
-                'alternate_schema': self.schema,
-            },
         }
 
     @use_profile('postgres')
