@@ -2553,6 +2553,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.clustered': ['seed.test.seed'],
                 'model.test.multi_clustered': ['seed.test.seed'],
                 'seed.test.seed': [],
+                'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'model.test.nested_table': [],
                 'model.test.nested_view': ['model.test.nested_table'],
             },
@@ -2813,7 +2814,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'child_map': {
                 'model.test.model': [],
-                'seed.test.seed': ['model.test.model']
+                'seed.test.seed': ['model.test.model',
+                                   'snapshot.test.snapshot_seed'],
+                'snapshot.test.snapshot_seed': []
             },
             'docs': {
                 'dbt.__overview__': ANY,
