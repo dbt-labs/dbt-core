@@ -2129,6 +2129,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         clustered_sql_path = self.dir('bq_models/clustered.sql')
         multi_clustered_sql_path = self.dir('bq_models/multi_clustered.sql')
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
         my_schema_name = self.unique_schema()
 
         return {
@@ -2499,6 +2500,45 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': self._checksum_file(seed_path),
                     'unrendered_config': self.unrendered_seed_config(),
                 },
+                'snapshot.test.snapshot_seed': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': self.default_database,
+                    'deferred': False,
+                    'depends_on': {'macros': [],
+                                   'nodes': ['seed.test.seed']},
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': 'snapshot_seed.sql',
+                    'raw_sql': ANY,
+                    'refs': [['seed']],
+                    'relation_name': '`{0}`.`{1}`.snapshot_seed'.format(
+                        self.default_database, self.alternate_schema
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    )}
             },
             'sources': {},
             'exposures': {},
@@ -2561,6 +2601,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         model_sql_path = self.dir('rs_models/model.sql')
         my_schema_name = self.unique_schema()
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
@@ -2724,6 +2765,45 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': self._checksum_file(seed_path),
                     'unrendered_config': self.unrendered_seed_config(),
                 },
+                'snapshot.test.snapshot_seed': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': self.default_database,
+                    'deferred': False,
+                    'depends_on': {'macros': [],
+                                   'nodes': ['seed.test.seed']},
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': 'snapshot_seed.sql',
+                    'raw_sql': ANY,
+                    'refs': [['seed']],
+                    'relation_name': '"{0}"."{1}".snapshot_seed'.format(
+                        self.default_database, self.alternate_schema
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    )}
             },
             'sources': {},
             'exposures': {},
@@ -3745,8 +3825,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     @use_profile('bigquery')
     def test__bigquery__complex_models(self):
         self.run_and_generate(
-            extra={'source-paths': [self.dir('bq_models')],
-                   'snapshot-paths': []},
+            extra={'source-paths': [self.dir('bq_models')]},
             model_count=4
         )
 
@@ -3767,7 +3846,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     @use_profile('redshift')
     def test__redshift__incremental_view(self):
         self.run_and_generate(
-            {'source-paths': [self.dir('rs_models')], 'snapshot-paths': []},
+            {'source-paths': [self.dir('rs_models')]},
             alternate_db=self.default_database,
             model_count=1,
         )
