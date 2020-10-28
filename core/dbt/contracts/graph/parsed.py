@@ -555,6 +555,7 @@ class ParsedSourceDefinition(
     config: SourceConfig = field(default_factory=SourceConfig)
     patch_path: Optional[Path] = None
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    relation_name: Optional[str] = None
 
     def same_database_representation(
         self, other: 'ParsedSourceDefinition'

@@ -1089,11 +1089,12 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         quote_database = quote_schema = self.adapter_type != 'snowflake'
-        relation_name_format = ".".join((
-            self._quote("{0}") if quote_database else '{0}',
-            self._quote("{1}") if quote_schema else '{1}',
-            self._quote("{2}") if quote_model else '{2}',
-        ))
+        relation_name_node_format = self._relation_name_format(
+            quote_database, quote_schema, quote_model
+        )
+        relation_name_source_format = self._relation_name_format(
+            quote_database, quote_schema, quote_identifier=True
+        )
 
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
@@ -1103,7 +1104,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_realpath,
-                    'relation_name': relation_name_format.format(
+                    'relation_name': relation_name_node_format.format(
                         model_database, my_schema_name, 'model'
                     ),
                     'resource_type': 'model',
@@ -1179,7 +1180,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/second_model.sql'),
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
-                    'relation_name': relation_name_format.format(
+                    'relation_name': relation_name_node_format.format(
                         self.default_database, self.alternate_schema,
                         'second_model'
                     ),
@@ -1261,7 +1262,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
-                    'relation_name': relation_name_format.format(
+                    'relation_name': relation_name_node_format.format(
                         self.default_database, my_schema_name, 'seed'
                     ),
                     'resource_type': 'seed',
@@ -1405,8 +1406,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                             .replace('{% snapshot snapshot_seed %}', '')
                             .replace('{% endsnapshot %}', '')),
                     'refs': [['seed']],
-                    'relation_name': relation_name_format.format(
-                        self.default_database, self.alternate_schema, 'snapshot_seed'
+                    'relation_name': relation_name_node_format.format(
+                        self.default_database, self.alternate_schema,
+                        'snapshot_seed'
                     ),
                     'resource_type': 'snapshot',
                     'root_path': self.test_root_realpath,
@@ -1540,6 +1542,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': self.dir('models/schema.yml'),
                     'patch_path': None,
+                    'relation_name': relation_name_source_format.format(
+                        self.default_database, my_schema_name, 'seed'
+                    ),
                     'resource_type': 'source',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1967,6 +1972,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': self.dir('ref_models/schema.yml'),
                     'patch_path': None,
+                    'relation_name': '{0}."{1}"."seed"'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'source',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2541,6 +2549,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             normalize(relative_path)
         )
 
+    def _relation_name_format(self, quote_database: bool, quote_schema: bool,
+                              quote_identifier: bool):
+        return ".".join((
+            self._quote("{0}") if quote_database else '{0}',
+            self._quote("{1}") if quote_schema else '{1}',
+            self._quote("{2}") if quote_identifier else '{2}',
+        ))
+
     def expected_redshift_incremental_view_manifest(self):
         model_sql_path = self.dir('rs_models/model.sql')
         my_schema_name = self.unique_schema()
@@ -2799,11 +2815,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                              if quote_database else self.default_database)
         compiled_schema = self._quote(schema) if quote_schema else schema
         compiled_seed = self._quote('seed') if quote_model else 'seed'
-        relation_name_format = ".".join((
-            self._quote("{0}") if quote_database else '{0}',
-            self._quote("{1}") if quote_schema else '{1}',
-            self._quote("{2}") if quote_model else '{2}',
-        ))
+        relation_name_format = self._relation_name_format(
+            quote_database, quote_schema, quote_model
+        )
 
         if self.adapter_type == 'bigquery':
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(

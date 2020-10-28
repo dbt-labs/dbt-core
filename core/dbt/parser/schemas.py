@@ -264,6 +264,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             base=False,
         )
 
+    def _get_relation_name(self, node: ParsedSourceDefinition):
+        adapter = get_adapter(self.root_project)
+        relation_cls = adapter.Relation
+        return str(relation_cls.create_from(self.root_project, node))
+
     def parse_source(
         self, target: UnpatchedSourceDefinition
     ) -> ParsedSourceDefinition:
@@ -302,7 +307,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
 
         default_database = self.root_project.credentials.database
 
-        return ParsedSourceDefinition(
+        parsed_source = ParsedSourceDefinition(
             package_name=target.package_name,
             database=(source.database or default_database),
             schema=(source.schema or source.name),
@@ -329,6 +334,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             config=config,
             unrendered_config=unrendered_config,
         )
+
+        # relation name is added after instantiation because the adapter does
+        # not provide the relation name for a UnpatchedSourceDefinition object
+        parsed_source.relation_name = self._get_relation_name(parsed_source)
+        return parsed_source
 
     def create_test_node(
         self,
