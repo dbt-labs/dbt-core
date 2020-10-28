@@ -2547,7 +2547,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.multi_clustered': [],
                 'model.test.nested_table': ['model.test.nested_view'],
                 'model.test.nested_view': [],
-                'seed.test.seed': ['model.test.clustered', 'model.test.multi_clustered']
+                'seed.test.seed': ['model.test.clustered',
+                                   'model.test.multi_clustered',
+                                   'snapshot.test.snapshot_seed']
             },
             'parent_map': {
                 'model.test.clustered': ['seed.test.seed'],
@@ -2810,7 +2812,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             'exposures': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
-                'seed.test.seed': []
+                'seed.test.seed': [],
+                'snapshot.test.snapshot_seed': ['seed.test.seed']
             },
             'child_map': {
                 'model.test.model': [],
