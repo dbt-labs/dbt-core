@@ -2549,7 +2549,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.nested_view': [],
                 'seed.test.seed': ['model.test.clustered',
                                    'model.test.multi_clustered',
-                                   'snapshot.test.snapshot_seed']
+                                   'snapshot.test.snapshot_seed'],
+                'snapshot.test.snapshot_seed': []
             },
             'parent_map': {
                 'model.test.clustered': ['seed.test.seed'],
