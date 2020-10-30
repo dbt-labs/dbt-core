@@ -7,6 +7,7 @@
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
 - Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2855](https://github.com/fishtown-analytics/dbt/issues/2854))
+- Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
