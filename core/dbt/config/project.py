@@ -369,6 +369,14 @@ class PartialProject(RenderComponents):
         query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         packages = package_config_from_data(rendered.packages_dict)
+        manifest_selectors: Dict[str, Any] = {}
+        if rendered.selectors_dict:
+            # this is a dict with a single key 'selectors' pointing to a list
+            # of dicts.
+            if rendered.selectors_dict['selectors']:
+                # for each selector dict, transform into 'name': { }
+                for sel in rendered.selectors_dict['selectors']:
+                    manifest_selectors[sel['name']] = sel
         selectors = selector_config_from_data(rendered.selectors_dict)
 
         project = Project(
@@ -396,6 +404,7 @@ class PartialProject(RenderComponents):
             snapshots=snapshots,
             dbt_version=dbt_version,
             packages=packages,
+            manifest_selectors=manifest_selectors,
             selectors=selectors,
             query_comment=query_comment,
             sources=sources,
@@ -458,6 +467,7 @@ class PartialProject(RenderComponents):
 
 class VarProvider:
     """Var providers are tied to a particular Project."""
+
     def __init__(
         self,
         vars: Dict[str, Dict[str, Any]]
@@ -476,6 +486,8 @@ class VarProvider:
         return self.vars
 
 
+# The Project class is included in RuntimeConfig, so any attribute
+# additions must also be set where the RuntimeConfig class is created
 @dataclass
 class Project:
     project_name: str
@@ -504,6 +516,7 @@ class Project:
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
+    manifest_selectors: Dict[str, Any]
     selectors: SelectorConfig
     query_comment: QueryComment
     config_version: int

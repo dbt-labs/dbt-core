@@ -81,6 +81,8 @@ def read_user_config(directory: str) -> UserConfig:
     return UserConfig()
 
 
+# The Profile class is included in RuntimeConfig, so any attribute
+# additions must also be set where the RuntimeConfig class is created
 @dataclass
 class Profile(HasCredentials):
     profile_name: str

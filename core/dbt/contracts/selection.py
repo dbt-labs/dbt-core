@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Union
 class SelectorDefinition(JsonSchemaMixin):
     name: str
     definition: Union[str, Dict[str, Any]]
+    description: str = ''
 
 
 @dataclass
