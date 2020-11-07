@@ -1114,9 +1114,15 @@ class WritableManifest(ArtifactMixin):
         metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
     )
     selectors: Mapping[UniqueID, Any] = field(
-        metadata=dict(description=(
-            'The selectors defined in selectors.yml'
-        ))
+        metadata=dict(description=("The selectors defined in selectors.yml"))
+    )
+    disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(
+        metadata=dict(description="A mapping of the disabled nodes in the target")
+    )
+    parent_map: Optional[NodeEdgeMap] = field(
+        metadata=dict(
+            description="A mapping from child nodes to their dependencies",
+        )
     )
     disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(metadata=dict(
         description='A mapping of the disabled nodes in the target'
