@@ -156,6 +156,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         project = {
             "data-paths": [self.dir("seed")],
             'macro-paths': [self.dir('macros')],
+            'snapshot-paths': [self.dir('snapshot')],
             'vars': {
                 'alternate_db': alternate_db,
                 'alternate_schema': self.alternate_schema,
@@ -950,6 +951,39 @@ class TestDocsGenerate(DBTIntegrationTest):
         result.update(updates)
         return result
 
+    def rendered_snapshot_config(self, **updates):
+        result = {
+            'database': None,
+            'schema': None,
+            'alias': None,
+            'enabled': True,
+            'materialized': 'snapshot',
+            'pre-hook': [],
+            'post-hook': [],
+            'vars': {},
+            'column_types': {},
+            'quoting': {},
+            'tags': [],
+            'persist_docs': {},
+            'full_refresh': None,
+            'strategy': 'check',
+            'check_cols': 'all',
+            'unique_key': 'id',
+            'target_schema': None
+        }
+        result.update(updates)
+        return result
+
+    def unrendered_snapshot_config(self, **updates):
+        result = {
+            'check_cols': 'all',
+            'strategy': 'check',
+            'target_schema': None,
+            'unique_key': 'id'
+        }
+        result.update(updates)
+        return result
+
     def rendered_tst_config(self, **updates):
         result = {
             'column_types': {},
@@ -1022,13 +1056,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             without_sql,
         )
 
-    def expected_seeded_manifest(self, model_database=None):
+    def expected_seeded_manifest(self, model_database=None, quote_model=False):
         models_path = self.dir('models')
         model_sql_path = os.path.join(models_path, 'model.sql')
         second_model_sql_path = os.path.join(models_path, 'second_model.sql')
         model_schema_yml_path = os.path.join(models_path, 'schema.yml')
         seed_schema_yml_path = os.path.join(self.dir('seed'), 'schema.yml')
         seed_path = self.dir(os.path.join('seed', 'seed.csv'))
+        snapshot_path = self.dir(os.path.join('snapshot', 'snapshot_seed.sql'))
 
         my_schema_name = self.unique_schema()
 
@@ -1047,6 +1082,20 @@ class TestDocsGenerate(DBTIntegrationTest):
         test_config = self.rendered_tst_config()
         unrendered_test_config = self.unrendered_tst_config()
 
+        snapshot_config = self.rendered_snapshot_config(
+            target_schema=self.alternate_schema)
+        unrendered_snapshot_config = self.unrendered_snapshot_config(
+            target_schema=self.alternate_schema
+        )
+
+        quote_database = quote_schema = self.adapter_type != 'snowflake'
+        relation_name_node_format = self._relation_name_format(
+            quote_database, quote_schema, quote_model
+        )
+        relation_name_source_format = self._relation_name_format(
+            quote_database, quote_schema, quote_identifier=True
+        )
+
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
             'dbt_version': dbt.version.__version__,
@@ -1055,6 +1104,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_realpath,
+                    'relation_name': relation_name_node_format.format(
+                        model_database, my_schema_name, 'model'
+                    ),
                     'resource_type': 'model',
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
@@ -1128,6 +1180,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/models/second_model.sql'),
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
+                    'relation_name': relation_name_node_format.format(
+                        self.default_database, self.alternate_schema,
+                        'second_model'
+                    ),
                     'resource_type': 'model',
                     'path': 'second_model.sql',
                     'original_file_path': second_model_sql_path,
@@ -1206,6 +1262,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
+                    'relation_name': relation_name_node_format.format(
+                        self.default_database, my_schema_name, 'seed'
+                    ),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -1293,6 +1352,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': None,
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1316,6 +1376,48 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': {'name': 'none', 'checksum': ''},
                     'unrendered_config': unrendered_test_config,
                 },
+                'snapshot.test.snapshot_seed': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'config': snapshot_config,
+                    'database':  self.default_database,
+                    'deferred': False,
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['seed.test.seed'],
+                    },
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': normalize('snapshot_seed.sql'),
+                    'raw_sql': LineIndifferent(
+                        _read_file(snapshot_path)
+                            .replace('{% snapshot snapshot_seed %}', '')
+                            .replace('{% endsnapshot %}', '')),
+                    'refs': [['seed']],
+                    'relation_name': relation_name_node_format.format(
+                        self.default_database, self.alternate_schema,
+                        'snapshot_seed'
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': unrendered_snapshot_config,
+                },
                 'test.test.test_nothing_model_': {
                     'alias': 'test_nothing_model_',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/test_nothing_model_.sql'),
@@ -1337,6 +1439,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': normalize('schema_test/test_nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': None,
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1380,6 +1483,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': None,
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1438,6 +1542,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': self.dir('models/schema.yml'),
                     'patch_path': None,
+                    'relation_name': relation_name_source_format.format(
+                        self.default_database, my_schema_name, 'seed'
+                    ),
                     'resource_type': 'source',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1509,6 +1616,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'exposure.test.notebook_exposure': ['model.test.model', 'model.test.second_model'],
                 'exposure.test.simple_exposure': ['model.test.model', 'source.test.my_source.my_table'],
                 'seed.test.seed': [],
+                'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'source.test.my_source.my_table': [],
                 'test.test.not_null_model_id': ['model.test.model'],
                 'test.test.test_nothing_model_': ['model.test.model'],
@@ -1525,7 +1633,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.second_model': ['exposure.test.notebook_exposure'],
                 'exposure.test.notebook_exposure': [],
                 'exposure.test.simple_exposure': [],
-                'seed.test.seed': ['model.test.model', 'model.test.second_model'],
+                'seed.test.seed': ['model.test.model',
+                                   'model.test.second_model',
+                                   'snapshot.test.snapshot_seed'],
+                'snapshot.test.snapshot_seed': [],
                 'source.test.my_source.my_table': ['exposure.test.simple_exposure'],
                 'test.test.not_null_model_id': [],
                 'test.test.test_nothing_model_': [],
@@ -1548,6 +1659,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ephemeral_summary_path = self.dir('ref_models/ephemeral_summary.sql')
         view_summary_path = self.dir('ref_models/view_summary.sql')
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
@@ -1577,6 +1689,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         '\n\nselect * from {{ source("my_source", "my_table") }}'
                     ),
                     'refs': [],
+                    'relation_name': None,
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1634,6 +1747,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'order by first_name asc'
                     ),
                     'refs': [['ephemeral_copy']],
+                    'relation_name': '"{0}"."{1}".ephemeral_summary'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1690,6 +1806,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "{{ref('ephemeral_summary')}}\norder by ct asc"
                     ),
                     'refs': [['ephemeral_summary']],
+                    'relation_name': '"{0}"."{1}".view_summary'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1763,6 +1882,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
+                    'relation_name': '"{0}"."{1}".seed'.format(
+                        model_database, my_schema_name
+                    ),
                     'resource_type': 'seed',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1777,6 +1899,44 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': self._checksum_file(seed_path),
                     'unrendered_config': self.unrendered_seed_config(),
                 },
+                'snapshot.test.snapshot_seed': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': model_database,
+                    'deferred': False,
+                    'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': 'snapshot_seed.sql',
+                    'raw_sql': ANY,
+                    'refs': [['seed']],
+                    'relation_name': '"{0}"."{1}".snapshot_seed'.format(
+                        model_database, self.alternate_schema
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    )}
             },
             'sources': {
                 'source.test.my_source.my_table': {
@@ -1812,6 +1972,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': self.dir('ref_models/schema.yml'),
                     'patch_path': None,
+                    'relation_name': '{0}."{1}"."seed"'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'source',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -1918,7 +2081,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.ephemeral_copy': ['model.test.ephemeral_summary'],
                 'model.test.ephemeral_summary': ['model.test.view_summary'],
                 'model.test.view_summary': [],
-                'seed.test.seed': [],
+                'seed.test.seed': ['snapshot.test.snapshot_seed'],
+                'snapshot.test.snapshot_seed': [],
                 'source.test.my_source.my_table': ['model.test.ephemeral_copy'],
             },
             'parent_map': {
@@ -1926,6 +2090,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.ephemeral_summary': ['model.test.ephemeral_copy'],
                 'model.test.view_summary': ['model.test.ephemeral_summary'],
                 'seed.test.seed': [],
+                'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'source.test.my_source.my_table': [],
             },
             'disabled': [],
@@ -1964,6 +2129,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         clustered_sql_path = self.dir('bq_models/clustered.sql')
         multi_clustered_sql_path = self.dir('bq_models/multi_clustered.sql')
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
         my_schema_name = self.unique_schema()
 
         return {
@@ -1987,6 +2153,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'clustered.sql',
                     'raw_sql': LineIndifferent(_read_file(clustered_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
+                    'relation_name': '`{0}`.`{1}`.clustered'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2068,6 +2237,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'multi_clustered.sql',
                     'raw_sql': LineIndifferent(_read_file(multi_clustered_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
+                    'relation_name': '`{0}`.`{1}`.multi_clustered'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2148,6 +2320,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'nested_view.sql',
                     'raw_sql': LineIndifferent(_read_file(nested_view_sql_path).rstrip('\r\n')),
                     'refs': [['nested_table']],
+                    'relation_name': '`{0}`.`{1}`.nested_view'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2225,6 +2400,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'nested_table.sql',
                     'raw_sql': LineIndifferent(_read_file(nested_table_sql_path).rstrip('\r\n')),
                     'refs': [],
+                    'relation_name': '`{0}`.`{1}`.nested_table'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -2249,6 +2427,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
+                    'relation_name': '`{0}`.`{1}`.seed'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -2319,6 +2500,45 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': self._checksum_file(seed_path),
                     'unrendered_config': self.unrendered_seed_config(),
                 },
+                'snapshot.test.snapshot_seed': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': self.default_database,
+                    'deferred': False,
+                    'depends_on': {'macros': [],
+                                   'nodes': ['seed.test.seed']},
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': 'snapshot_seed.sql',
+                    'raw_sql': ANY,
+                    'refs': [['seed']],
+                    'relation_name': '`{0}`.`{1}`.snapshot_seed'.format(
+                        self.default_database, self.alternate_schema
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    )}
             },
             'sources': {},
             'exposures': {},
@@ -2327,12 +2547,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.multi_clustered': [],
                 'model.test.nested_table': ['model.test.nested_view'],
                 'model.test.nested_view': [],
-                'seed.test.seed': ['model.test.clustered', 'model.test.multi_clustered']
+                'seed.test.seed': ['model.test.clustered',
+                                   'model.test.multi_clustered',
+                                   'snapshot.test.snapshot_seed'],
+                'snapshot.test.snapshot_seed': []
             },
             'parent_map': {
                 'model.test.clustered': ['seed.test.seed'],
                 'model.test.multi_clustered': ['seed.test.seed'],
                 'seed.test.seed': [],
+                'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'model.test.nested_table': [],
                 'model.test.nested_view': ['model.test.nested_table'],
             },
@@ -2369,10 +2593,19 @@ class TestDocsGenerate(DBTIntegrationTest):
             normalize(relative_path)
         )
 
+    def _relation_name_format(self, quote_database: bool, quote_schema: bool,
+                              quote_identifier: bool):
+        return ".".join((
+            self._quote("{0}") if quote_database else '{0}',
+            self._quote("{1}") if quote_schema else '{1}',
+            self._quote("{2}") if quote_identifier else '{2}',
+        ))
+
     def expected_redshift_incremental_view_manifest(self):
         model_sql_path = self.dir('rs_models/model.sql')
         my_schema_name = self.unique_schema()
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return {
             'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v1.json',
@@ -2382,6 +2615,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': Normalized('target/compiled/test/rs_models/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_realpath,
+                    'relation_name': '"{0}"."{1}".model'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
@@ -2460,6 +2696,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': self.test_root_realpath,
+                    'relation_name': '"{0}"."{1}".seed'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'seed',
                     'raw_sql': '',
                     'package_name': 'test',
@@ -2530,16 +2769,58 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': self._checksum_file(seed_path),
                     'unrendered_config': self.unrendered_seed_config(),
                 },
+                'snapshot.test.snapshot_seed': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': self.default_database,
+                    'deferred': False,
+                    'depends_on': {'macros': [],
+                                   'nodes': ['seed.test.seed']},
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': 'snapshot_seed.sql',
+                    'raw_sql': ANY,
+                    'refs': [['seed']],
+                    'relation_name': '"{0}"."{1}".snapshot_seed'.format(
+                        self.default_database, self.alternate_schema
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    )}
             },
             'sources': {},
             'exposures': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
-                'seed.test.seed': []
+                'seed.test.seed': [],
+                'snapshot.test.snapshot_seed': ['seed.test.seed']
             },
             'child_map': {
                 'model.test.model': [],
-                'seed.test.seed': ['model.test.model']
+                'seed.test.seed': ['model.test.model',
+                                   'snapshot.test.snapshot_seed'],
+                'snapshot.test.snapshot_seed': []
             },
             'docs': {
                 'dbt.__overview__': ANY,
@@ -2616,11 +2897,14 @@ class TestDocsGenerate(DBTIntegrationTest):
         schema = self.unique_schema()
 
         # we are selecting from the seed, which is always in the default db
-        compiled_database = self.default_database
-        if self.adapter_type != 'snowflake':
-            compiled_database = self._quote(compiled_database)
+        quote_database = self.adapter_type != 'snowflake'
+        compiled_database = (self._quote(self.default_database)
+                             if quote_database else self.default_database)
         compiled_schema = self._quote(schema) if quote_schema else schema
         compiled_seed = self._quote('seed') if quote_model else 'seed'
+        relation_name_format = self._relation_name_format(
+            quote_database, quote_schema, quote_model
+        )
 
         if self.adapter_type == 'bigquery':
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
@@ -2631,6 +2915,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 compiled_database, compiled_schema, compiled_seed
             )
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return [
             {
@@ -2708,6 +2993,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'model.sql',
                     'raw_sql': LineIndifferent(_read_file(model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
+                    'relation_name': relation_name_format.format(
+                        model_database, schema, 'model'
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -2796,6 +3084,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'second_model.sql',
                     'raw_sql': LineIndifferent(_read_file(second_model_sql_path).rstrip('\r\n')),
                     'refs': [['seed']],
+                    'relation_name': relation_name_format.format(
+                        self.default_database, self.alternate_schema,
+                        'second_model'
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': self.alternate_schema,
@@ -2879,6 +3171,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
+                    'relation_name': relation_name_format.format(
+                        self.default_database, schema, 'seed'
+                    ),
                     'resource_type': 'seed',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -2886,6 +3181,61 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': [],
                     'unique_id': 'seed.test.seed',
                     'unrendered_config': self.unrendered_seed_config(),
+                },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
+                'skip': False,
+                'status': None,
+            },
+            {
+                'error': None,
+                'warn': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': compiled_sql,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': self.default_database,
+                    'deferred': False,
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['seed.test.seed'],
+                    },
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': Normalized('snapshot_seed.sql'),
+                    'raw_sql': LineIndifferent(
+                        _read_file(snapshot_path)
+                            .replace('{% snapshot snapshot_seed %}', '')
+                            .replace('{% endsnapshot %}', '')),
+                    'refs': [['seed']],
+                    'relation_name': relation_name_format.format(
+                        self.default_database, self.alternate_schema,
+                        'snapshot_seed'),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2925,6 +3275,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': None,
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -2979,6 +3330,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/test_nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': None,
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -3032,6 +3384,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': Normalized('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
+                    'relation_name': None,
                     'resource_type': 'test',
                     'root_path': self.test_root_realpath,
                     'schema': schema,
@@ -3057,11 +3410,6 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     def expected_postgres_references_run_results(self):
         my_schema_name = self.unique_schema()
-        ephemeral_compiled_sql = (
-            '\n\nselect first_name, count(*) as ct from '
-            '__dbt__CTE__ephemeral_copy\ngroup by first_name\n'
-            'order by first_name asc'
-        )
 
         cte_sql = (
             ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from {}."{}"."seed"\n)'
@@ -3078,9 +3426,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             'order by ct asc'
         ).format(self.default_database, my_schema_name)
 
+        snapshot_compiled_sql = (
+            '\n\nselect * from "{}"."{}".seed'
+        ).format(self.default_database, my_schema_name)
+
         ephemeral_summary_path = self.dir('ref_models/ephemeral_summary.sql')
         view_summary_path = self.dir('ref_models/view_summary.sql')
         seed_path = self.dir('seed/seed.csv')
+        snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return [
             {
@@ -3143,6 +3496,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'order by first_name asc'
                     ),
                     'refs': [['ephemeral_copy']],
+                    'relation_name': '"{0}"."{1}".ephemeral_summary'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -3215,6 +3571,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "{{ref('ephemeral_summary')}}\norder by ct asc"
                     ),
                     'refs': [['ephemeral_summary']],
+                    'relation_name': '"{0}"."{1}".view_summary'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'model',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -3298,6 +3657,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'seed.csv',
                     'raw_sql': '',
                     'refs': [],
+                    'relation_name': '"{0}"."{1}".seed'.format(
+                        self.default_database, my_schema_name
+                    ),
                     'resource_type': 'seed',
                     'root_path': self.test_root_realpath,
                     'schema': my_schema_name,
@@ -3305,6 +3667,58 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': [],
                     'unique_id': 'seed.test.seed',
                     'unrendered_config': self.unrendered_seed_config(),
+                },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
+                'skip': False,
+                'status': None,
+            },
+            {
+                'error': None,
+                'warn': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'snapshot_seed',
+                    'build_path': None,
+                    'checksum': self._checksum_file(snapshot_path),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': snapshot_compiled_sql,
+                    'config': self.rendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
+                    'database': self.default_database,
+                    'deferred': False,
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['seed.test.seed'],
+                    },
+                    'description': '',
+                    'docs': {'show': True},
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'snapshot_seed', 'snapshot_seed'],
+                    'meta': {},
+                    'name': 'snapshot_seed',
+                    'original_file_path': snapshot_path,
+                    'package_name': 'test',
+                    'patch_path': None,
+                    'path': Normalized('snapshot_seed.sql'),
+                    'raw_sql': ANY,
+                    'refs': [['seed']],
+                    'relation_name': '"{0}"."{1}".snapshot_seed'.format(
+                        self.default_database, self.alternate_schema
+                    ),
+                    'resource_type': 'snapshot',
+                    'root_path': self.test_root_realpath,
+                    'schema': self.alternate_schema,
+                    'sources': [],
+                    'tags': [],
+                    'unique_id': 'snapshot.test.snapshot_seed',
+                    'unrendered_config': self.unrendered_snapshot_config(
+                        target_schema=self.alternate_schema
+                    ),
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -3404,7 +3818,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             })
 
         self.verify_catalog(self.expected_snowflake_catalog(case_columns=True))
-        self.verify_manifest(self.expected_seeded_manifest())
+        self.verify_manifest(self.expected_seeded_manifest(quote_model=True))
         self.verify_run_results(self.expected_run_results(quote_schema=False, quote_model=True))
 
     @use_profile('bigquery')

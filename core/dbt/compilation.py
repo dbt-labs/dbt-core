@@ -172,6 +172,15 @@ class Compiler:
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
 
+    def _get_relation_name(self, node: ParsedNode):
+        relation_name = None
+        if (node.resource_type in NodeType.refable() and
+                not node.is_ephemeral_model):
+            adapter = get_adapter(self.config)
+            relation_cls = adapter.Relation
+            relation_name = str(relation_cls.create_from(self.config, node))
+        return relation_name
+
     def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
         """
         `ctes` is a list of InjectedCTEs like:
@@ -394,6 +403,8 @@ class Compiler:
             context,
             node,
         )
+
+        compiled_node.relation_name = self._get_relation_name(node)
 
         compiled_node.compiled = True
 
