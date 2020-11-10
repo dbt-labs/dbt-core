@@ -4,6 +4,7 @@
 - Added macro get_partitions_metadata(table) to return partition metadata for partitioned table [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
 - Added native python 're' module for regex in jinja templates [#2851](https://github.com/fishtown-analytics/dbt/pull/2851)
 - Store resolved node names in manifest ([#2647](https://github.com/fishtown-analytics/dbt/issues/2647), [#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
+- Save selectors dictionary to manifest, allow descriptions ([#2693](https://github.com/fishtown-analytics/dbt/issues/2693), [#2866](https://github.com/fishtown-analytics/dbt/pull/2866))
 
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))

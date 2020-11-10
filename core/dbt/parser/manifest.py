@@ -318,6 +318,7 @@ class ManifestLoader:
             metadata=self.root_project.get_metadata(),
             disabled=disabled,
             files=self.results.files,
+            selectors=self.root_project.manifest_selectors,
         )
         manifest.patch_nodes(self.results.patches)
         manifest.patch_macros(self.results.macro_patches)
