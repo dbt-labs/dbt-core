@@ -3,6 +3,7 @@ import pickle
 from typing import (
     Dict, Optional, Mapping, Callable, Any, List, Type, Union, MutableMapping
 )
+import time
 
 import dbt.exceptions
 import dbt.flags as flags
@@ -119,6 +120,10 @@ class ManifestLoader:
             root_project, all_projects,
         )
         self._loaded_file_cache: Dict[str, FileBlock] = {}
+        partial_parse = self._partial_parse_enabled()
+        self._perf_info: Dict[str, Any] = {
+            'path_count': 0, 'projects': [],
+            'is_partial_parse_enabled': partial_parse}
 
     def parse_with_cache(
         self,
@@ -170,9 +175,34 @@ class ManifestLoader:
         # per-project cache.
         self._loaded_file_cache.clear()
 
+        project_info: Dict[str, Any] = {'parsers': []}
+        start_timer = time.perf_counter()
+        total_path_count = 0
         for parser in parsers:
+            parser_path_count = 0
+            parser_start_timer = time.perf_counter()
             for path in parser.search():
                 self.parse_with_cache(path, parser, old_results)
+                parser_path_count = parser_path_count + 1
+                if parser_path_count % 100 == 0:
+                    print("..", end='', flush=True)
+
+            if parser_path_count > 0:
+                parser_elapsed = time.perf_counter() - parser_start_timer
+                project_info['parsers'].append({'parser': type(
+                    parser).__name__, 'path_count': parser_path_count,
+                    'elapsed': '{:.2f}'.format(parser_elapsed)})
+                total_path_count = total_path_count + parser_path_count
+        if total_path_count > 100:
+            print("..")
+
+        elapsed = time.perf_counter() - start_timer
+        project_info['project_name'] = project.project_name
+        project_info['path_count'] = total_path_count
+        project_info['elapsed'] = '{:.2f}'.format(elapsed)
+        self._perf_info['projects'].append(project_info)
+        self._perf_info['path_count'] = self._perf_info['path_count'] + \
+            total_path_count
 
     def load_only_macros(self) -> Manifest:
         old_results = self.read_parse_results()
@@ -197,9 +227,12 @@ class ManifestLoader:
         self.results.macros.update(macro_manifest.macros)
         self.results.files.update(macro_manifest.files)
 
+        start_timer = time.perf_counter()
         for project in self.all_projects.values():
             # parse a single project
             self.parse_project(project, macro_manifest, old_results)
+        self._perf_info['parse_project_elapsed'] = '{:.2f}'.format(
+            time.perf_counter() - start_timer)
 
     def write_parse_results(self):
         path = os.path.join(self.root_project.target_path,
@@ -300,7 +333,10 @@ class ManifestLoader:
         # before we do anything else, patch the sources. This mutates
         # results.disabled, so it needs to come before the final 'disabled'
         # list is created
+        start_patch = time.perf_counter()
         sources = patch_sources(self.results, self.root_project)
+        self._perf_info['patch_sources_elapsed'] = '{:.2f}'.format(
+            time.perf_counter() - start_patch)
         disabled = []
         for value in self.results.disabled.values():
             disabled.extend(value)
@@ -322,7 +358,10 @@ class ManifestLoader:
         )
         manifest.patch_nodes(self.results.patches)
         manifest.patch_macros(self.results.macro_patches)
+        start_process = time.perf_counter()
         self.process_manifest(manifest)
+        self._perf_info['process_manifest_elapsed'] = '{:.2f}'.format(
+            time.perf_counter() - start_process)
         return manifest
 
     @classmethod
@@ -333,6 +372,7 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
     ) -> Manifest:
         with PARSING_STATE:
+            start_load_all = time.perf_counter()
             projects = root_config.load_dependencies()
             loader = cls(root_config, projects, macro_hook)
             loader.load(macro_manifest=macro_manifest)
@@ -340,6 +380,8 @@ class ManifestLoader:
             manifest = loader.create_manifest()
             _check_manifest(manifest, root_config)
             manifest.build_flat_graph()
+            loader._perf_info['load_all_elapsed'] = '{:.2f}'.format(
+                time.perf_counter() - start_load_all)
             return manifest
 
     @classmethod

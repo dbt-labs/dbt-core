@@ -168,6 +168,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
         self.run_dbt(['seed', '--project-dir', project_dir])
         self.run_dbt(['run', '--project-dir', project_dir])
         self.run_dbt(['test', '--project-dir', project_dir])
+        self.run_dbt(['parse', '--project-dir', project_dir])
         self.run_dbt(['clean', '--project-dir', project_dir])
         # In case of 'dbt clean' also test that the clean-targets directories were deleted.
         for target in self.config.clean_targets:
