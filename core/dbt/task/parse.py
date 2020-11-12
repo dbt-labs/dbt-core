@@ -24,9 +24,9 @@ import os
 import json
 import dbt.utils
 
-MANIFEST_FILE_NAME = 'manifest.json'
-PERF_INFO_FILE_NAME = 'perf_info.json'
-PARSING_STATE = DbtProcessState('parsing')
+MANIFEST_FILE_NAME = "manifest.json"
+PERF_INFO_FILE_NAME = "perf_info.json"
+PARSING_STATE = DbtProcessState("parsing")
 
 
 class ParseTask(ConfiguredTask):

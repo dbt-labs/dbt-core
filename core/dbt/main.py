@@ -530,16 +530,15 @@ def _build_compile_subparser(subparsers, base_subparser):
 
 def _build_parse_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'parse',
+        "parse",
         parents=[base_subparser],
-        help='''
+        help="""
         Parsed the project and provides information on performance
-        '''
+        """,
     )
-    sub.set_defaults(cls=parse_task.ParseTask, which='parse',
-                     rpc_method='parse')
-    sub.add_argument('--write-manifest', action='store_true')
-    sub.add_argument('--compile', action='store_true')
+    sub.set_defaults(cls=parse_task.ParseTask, which="parse", rpc_method="parse")
+    sub.add_argument("--write-manifest", action="store_true")
+    sub.add_argument("--compile", action="store_true")
     return sub
 
 
