@@ -54,7 +54,7 @@ class TestModifiedState(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_changed_seed_contents_state(self):
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=False)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
         assert len(results) == 0
         with open('data/seed.csv') as fp:
             fp.readline()
@@ -106,12 +106,12 @@ class TestModifiedState(DBTIntegrationTest):
         with open('data/seed.csv', 'a') as fp:
             fp.write(f'{random},test{newline}')
 
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=False)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
         assert len(results) == 0
 
     @use_profile('postgres')
     def test_postgres_changed_seed_config(self):
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=False)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
         assert len(results) == 0
 
         self.use_default_project({'seeds': {'test': {'quote_columns': False}}})
@@ -123,7 +123,7 @@ class TestModifiedState(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_unrendered_config_same(self):
-        results = self.run_dbt(['ls', '--resource-type', 'model', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=False)
+        results = self.run_dbt(['ls', '--resource-type', 'model', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
         assert len(results) == 0
 
         # although this is the default value, dbt will recognize it as a change
