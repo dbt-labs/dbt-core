@@ -36,8 +36,7 @@ class ParseTask(ConfiguredTask):
 
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
-        write_file(path, json.dumps(self.loader._perf_info,
-                                    cls=dbt.utils.JSONEncoder, indent=4))
+        self.loader._perf_info.write(path)
         print_timestamped_line(f"Performance info: {path}")
 
     # This method takes code that normally exists in other files
@@ -71,8 +70,9 @@ class ParseTask(ConfiguredTask):
             print_timestamped_line("Manifest checked")
             manifest.build_flat_graph()
             print_timestamped_line("Flat graph built")
-            loader._perf_info['load_all_elapsed'] = '{:.2f}'.format(
-                time.perf_counter() - start_load_all)
+            loader._perf_info.load_all_elapsed = (
+                time.perf_counter() - start_load_all
+            )
 
         self.loader = loader
         self.manifest = manifest
