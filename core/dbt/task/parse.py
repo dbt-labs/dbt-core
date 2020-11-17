@@ -10,10 +10,7 @@ from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.parser.manifest import Manifest, ManifestLoader, _check_manifest
 from dbt.logger import DbtProcessState, print_timestamped_line
-from dbt.clients.system import write_file
 from dbt.graph import Graph
-import dbt.utils
-import json
 import time
 from typing import Optional
 import os
