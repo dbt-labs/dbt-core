@@ -16,7 +16,7 @@
 
 ### Under the hood
 - Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
-- TODO
+- Add event tracking for project parser/load times ([#2823](https://github.com/fishtown-analytics/dbt/issues/2823),[#2893](https://github.com/fishtown-analytics/dbt/pull/2893))
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
