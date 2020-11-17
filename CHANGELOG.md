@@ -11,6 +11,7 @@
 - Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2855](https://github.com/fishtown-analytics/dbt/issues/2854))
 - Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
 - Increased the supported relation name length in postgres from 29 to 51 ([#2850](https://github.com/fishtown-analytics/dbt/pull/2850))
+- dbt list command always return 0 as exit code ([#2866](https://github.com/fishtown-analytics/dbt/issues/2886))
 
 ### Under the hood
 - Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
