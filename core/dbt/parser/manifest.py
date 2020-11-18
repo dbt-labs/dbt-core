@@ -8,6 +8,7 @@ from typing import (
 import time
 
 import dbt.exceptions
+import dbt.tracking
 import dbt.flags as flags
 
 from dbt.adapters.factory import (
@@ -49,9 +50,8 @@ from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import patch_sources
 from dbt.ui import warning_tag
 from dbt.version import __version__
-from hologram import JsonSchemaMixin
-import dbt.tracking
 
+from hologram import JsonSchemaMixin
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
 PARSING_STATE = DbtProcessState('parsing')
@@ -155,9 +155,9 @@ class ManifestLoader:
             is_partial_parse_enabled=self._partial_parse_enabled()
         )
 
-    def track_loading_time(self):
+    def track_project_load(self):
         invocation_id = dbt.tracking.active_user.invocation_id
-        dbt.tracking.track_loading_time({
+        dbt.tracking.track_project_load({
             "invocation_id": invocation_id,
             "project_id": self.root_project.hashed_name(),
             "path_count": self._perf_info.path_count,
@@ -445,7 +445,7 @@ class ManifestLoader:
                 time.perf_counter() - start_load_all
             )
 
-            loader.track_loading_time()
+            loader.track_project_load()
 
             return manifest
 

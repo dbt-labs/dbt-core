@@ -274,7 +274,7 @@ def track_invocation_start(config=None, args=None):
     )
 
 
-def track_loading_time(options):
+def track_project_load(options):
     context = [SelfDescribingJson(LOAD_ALL_TIMING_SPEC, options)]
     assert active_user is not None, \
         'Cannot track project loading time when active user is None'
@@ -282,7 +282,7 @@ def track_loading_time(options):
     track(
         active_user,
         category='dbt',
-        action='load_all_timing',
+        action='load_project',
         label=active_user.invocation_id,
         context=context
     )
