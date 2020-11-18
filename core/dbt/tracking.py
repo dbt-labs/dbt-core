@@ -283,7 +283,7 @@ def track_project_load(options):
     track(
         active_user,
         category="dbt",
-        action='load_project',
+        action="load_project",
         label=get_invocation_id(),
         context=context,
     )
