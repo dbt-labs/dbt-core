@@ -25,6 +25,7 @@ from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict
 from dbt.node_types import NodeType
+from dbt.config.selectors import SelectorDict
 
 from dbt.contracts.project import (
     Project as ProjectContract,
@@ -369,15 +370,13 @@ class PartialProject(RenderComponents):
         query_comment = _query_comment_from_cfg(cfg.query_comment)
 
         packages = package_config_from_data(rendered.packages_dict)
+        selectors = selector_config_from_data(rendered.selectors_dict)
         manifest_selectors: Dict[str, Any] = {}
-        if rendered.selectors_dict:
+        if rendered.selectors_dict and rendered.selectors_dict['selectors']:
             # this is a dict with a single key 'selectors' pointing to a list
             # of dicts.
-            if rendered.selectors_dict['selectors']:
-                # for each selector dict, transform into 'name': { }
-                for sel in rendered.selectors_dict['selectors']:
-                    manifest_selectors[sel['name']] = sel
-        selectors = selector_config_from_data(rendered.selectors_dict)
+            manifest_selectors = SelectorDict.parse_from_selectors_list(
+                rendered.selectors_dict['selectors'])
 
         project = Project(
             project_name=name,
