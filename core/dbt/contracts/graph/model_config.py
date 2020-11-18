@@ -438,7 +438,7 @@ class TestConfig(NodeAndTestConfig):
         default="dbt_test__audit",
         metadata=CompareBehavior.Exclude.meta(),
     )
-    materialized: str = 'test'
+    materialized: str = "test"
     severity: Severity = Severity("ERROR")
     store_failures: Optional[bool] = None
     where: Optional[str] = None
