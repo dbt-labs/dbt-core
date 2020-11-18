@@ -393,11 +393,12 @@ class PartialProject(RenderComponents):
         packages = package_config_from_data(rendered.packages_dict)
         selectors = selector_config_from_data(rendered.selectors_dict)
         manifest_selectors: Dict[str, Any] = {}
-        if rendered.selectors_dict and rendered.selectors_dict['selectors']:
+        if rendered.selectors_dict and rendered.selectors_dict["selectors"]:
             # this is a dict with a single key 'selectors' pointing to a list
             # of dicts.
             manifest_selectors = SelectorDict.parse_from_selectors_list(
-                rendered.selectors_dict['selectors'])
+                rendered.selectors_dict["selectors"]
+            )
         project = Project(
             project_name=name,
             version=version,

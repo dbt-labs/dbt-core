@@ -141,7 +141,6 @@ def validate_selector_default(selector_file: SelectorFile) -> None:
 # be necessary to make changes here. Ideally it would be
 # good to combine the two flows into one at some point.
 class SelectorDict:
-
     @classmethod
     def parse_dict_definition(cls, definition):
         key = list(definition)[0]
@@ -152,10 +151,10 @@ class SelectorDict:
                 new_value = cls.parse_from_definition(sel_def)
                 new_values.append(new_value)
             value = new_values
-        if key == 'exclude':
+        if key == "exclude":
             definition = {key: value}
         elif len(definition) == 1:
-            definition = {'method': key, 'value': value}
+            definition = {"method": key, "value": value}
         return definition
 
     @classmethod
@@ -177,10 +176,10 @@ class SelectorDict:
     def parse_from_definition(cls, definition):
         if isinstance(definition, str):
             definition = SelectionCriteria.dict_from_single_spec(definition)
-        elif 'union' in definition:
-            definition = cls.parse_a_definition('union', definition)
-        elif 'intersection' in definition:
-            definition = cls.parse_a_definition('intersection', definition)
+        elif "union" in definition:
+            definition = cls.parse_a_definition("union", definition)
+        elif "intersection" in definition:
+            definition = cls.parse_a_definition("intersection", definition)
         elif isinstance(definition, dict):
             definition = cls.parse_dict_definition(definition)
         return definition
@@ -191,8 +190,8 @@ class SelectorDict:
     def parse_from_selectors_list(cls, selectors):
         selector_dict = {}
         for selector in selectors:
-            sel_name = selector['name']
+            sel_name = selector["name"]
             selector_dict[sel_name] = selector
-            definition = cls.parse_from_definition(selector['definition'])
-            selector_dict[sel_name]['definition'] = definition
+            definition = cls.parse_from_definition(selector["definition"])
+            selector_dict[sel_name]["definition"] = definition
         return selector_dict
