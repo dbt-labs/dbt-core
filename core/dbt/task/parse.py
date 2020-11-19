@@ -10,10 +10,7 @@ from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.parser.manifest import Manifest, ManifestLoader, _check_manifest
 from dbt.logger import DbtProcessState, print_timestamped_line
-from dbt.clients.system import write_file
 from dbt.graph import Graph
-import dbt.utils
-import json
 import time
 from typing import Optional
 import os
@@ -36,8 +33,7 @@ class ParseTask(ConfiguredTask):
 
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
-        write_file(path, json.dumps(self.loader._perf_info,
-                                    cls=dbt.utils.JSONEncoder, indent=4))
+        self.loader._perf_info.write(path)
         print_timestamped_line(f"Performance info: {path}")
 
     # This method takes code that normally exists in other files
@@ -71,8 +67,9 @@ class ParseTask(ConfiguredTask):
             print_timestamped_line("Manifest checked")
             manifest.build_flat_graph()
             print_timestamped_line("Flat graph built")
-            loader._perf_info['load_all_elapsed'] = '{:.2f}'.format(
-                time.perf_counter() - start_load_all)
+            loader._perf_info.load_all_elapsed = (
+                time.perf_counter() - start_load_all
+            )
 
         self.loader = loader
         self.manifest = manifest
