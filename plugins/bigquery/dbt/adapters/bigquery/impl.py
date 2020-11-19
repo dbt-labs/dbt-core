@@ -57,13 +57,11 @@ class PartitionConfig(JsonSchemaMixin):
         column: str = self.field
         if alias:
             column = f'{alias}.{self.field}'
-        logger.debug(f'Render and field"{self.field}"')
-        logger.debug(f'Granularity is "{self.granularity}"')
+
         if self.data_type == 'timestamp':
-            logger.debug(f'timestamp_trunc({column},{self.granularity}')
-            return f'timestamp_trunc({column},{self.granularity})'
+            return f'timestamp_trunc({column}, {self.granularity})'
         elif self.data_type == 'datetime':
-            return f'datetime_trunc({column},{self.granularity})'
+            return f'datetime_trunc({column}, {self.granularity})'
         else:
             return column
 
