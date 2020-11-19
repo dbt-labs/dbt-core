@@ -50,16 +50,13 @@ def sql_escape(string):
 class PartitionConfig(JsonSchemaMixin):
     field: str
     data_type: str = 'date'
+    granularity: str = 'DAY'
     range: Optional[Dict[str, Any]] = None
 
     def render(self, alias: Optional[str] = None):
         column: str = self.field
         if alias:
             column = f'{alias}.{self.field}'
-
-        granularity: str = 'DAY'
-        if self.granularity:
-            granularity = self.granularity
 
         if self.data_type == 'timestamp':
             return f'timestamp_trunc({column}, {self.granularity})'
