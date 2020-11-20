@@ -671,6 +671,32 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         self.assertEqual(
             adapter.parse_partition_by({
                 "field": "ts",
+                "data_type": "date",
+                "granularity": "MONTH"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "MONTH"
+            }
+        )
+        
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "YEAR"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "YEAR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
                 "data_type": "timestamp",
                 "granularity": "HOUR"
 

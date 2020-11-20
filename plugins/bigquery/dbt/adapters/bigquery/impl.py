@@ -62,6 +62,8 @@ class PartitionConfig(JsonSchemaMixin):
             return f'timestamp_trunc({column}, {self.granularity})'
         elif self.data_type == 'datetime':
             return f'datetime_trunc({column}, {self.granularity})'
+        elif self.data_type == 'date' and self.granularity in ('MONTH','YEAR'):
+            return f'date_trunc({column}, {self.granularity})'
         else:
             return column
 
@@ -550,7 +552,9 @@ class BigQueryAdapter(BaseAdapter):
             return True
         elif conf_partition and table.time_partitioning is not None:
             table_field = table.time_partitioning.field
-            return table_field == conf_partition.field
+            table_granularity = table.partitioning.type
+            return table_field == conf_partition.field \
+                and table_granularity == conf_partition.granularity
         elif conf_partition and table.range_partitioning is not None:
             dest_part = table.range_partitioning
             conf_part = conf_partition.range or {}
