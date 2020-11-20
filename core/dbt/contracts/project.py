@@ -225,9 +225,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     def validate(cls, data):
         super().validate(data)
         if data["name"] in BANNED_PROJECT_NAMES:
-            raise ValidationError(
-                f"Invalid project name: {data['name']} is a reserved word"
-            )
+            raise ValidationError(f"Invalid project name: {data['name']} is a reserved word")
         # validate dispatch config
         if "dispatch" in data and data["dispatch"]:
             entries = data["dispatch"]
