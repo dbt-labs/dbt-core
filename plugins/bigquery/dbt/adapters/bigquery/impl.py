@@ -552,7 +552,7 @@ class BigQueryAdapter(BaseAdapter):
             return True
         elif conf_partition and table.time_partitioning is not None:
             table_field = table.time_partitioning.field
-            table_granularity = table.partitioning.type
+            table_granularity = table.partitioning_type
             return table_field == conf_partition.field \
                 and table_granularity == conf_partition.granularity
         elif conf_partition and table.range_partitioning is not None:
