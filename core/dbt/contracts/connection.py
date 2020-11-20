@@ -121,11 +121,7 @@ class LazyHandle:
 # for why we have type: ignore. Maybe someday dataclasses + abstract classes
 # will work.
 @dataclass  # type: ignore
-class Credentials(
-    ExtensibleDbtClassMixin,
-    Replaceable,
-    metaclass=abc.ABCMeta
-):
+class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
     database: str
     schema: str
     _ALIASES: ClassVar[Dict[str, str]] = field(default={}, init=False)
