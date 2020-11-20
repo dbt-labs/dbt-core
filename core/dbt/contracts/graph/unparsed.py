@@ -204,10 +204,7 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
 
 @dataclass
-class AdditionalPropertiesAllowed(
-    AdditionalPropertiesMixin,
-    ExtensibleDbtClassMixin
-):
+class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     _extra: Dict[str, Any] = field(default_factory=dict)
 
 
