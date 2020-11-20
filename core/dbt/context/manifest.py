@@ -39,9 +39,7 @@ class ManifestContext(ConfiguredContext):
         # this takes all the macros in the manifest and adds them
         # to the MacroNamespaceBuilder stored in self.namespace
         builder = self._get_namespace_builder()
-        return builder.build_namespace(
-            self.manifest.macros.values(), self._ctx
-        )
+        return builder.build_namespace(self.manifest.macros.values(), self._ctx)
 
     def _get_namespace_builder(self) -> MacroNamespaceBuilder:
         # avoid an import loop
