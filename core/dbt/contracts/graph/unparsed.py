@@ -83,8 +83,7 @@ class Docs(dbtClassMixin, Replaceable):
 
 
 @dataclass
-class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin,
-              Replaceable):
+class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
