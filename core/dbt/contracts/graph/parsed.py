@@ -15,9 +15,7 @@ from typing import (
     TypeVar,
 )
 
-from dbt.dataclass_schema import (
-    dbtClassMixin, ExtensibleDbtClassMixin
-)
+from dbt.dataclass_schema import dbtClassMixin, ExtensibleDbtClassMixin
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
@@ -102,8 +100,8 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
-        if 'database' not in data:
-            data['database'] = None
+        if "database" not in data:
+            data["database"] = None
         return data
 
 

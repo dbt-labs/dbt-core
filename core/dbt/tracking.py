@@ -1,7 +1,10 @@
 from typing import Optional
 
 from dbt.clients.yaml_helper import (  # noqa:F401
-    yaml, safe_load, Loader, Dumper,
+    yaml,
+    safe_load,
+    Loader,
+    Dumper,
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (

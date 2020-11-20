@@ -112,7 +112,7 @@ class SelectionCriteria:
     def selection_criteria_from_dict(
         cls, raw: Any, dct: Dict[str, Any],
         indirect_selection: IndirectSelection = IndirectSelection.Eager
-    ) -> 'SelectionCriteria':
+        dct: Dict[str, Any],
         if 'value' not in dct:
             raise RuntimeException(
                 f'Invalid node spec "{raw}" - no search value!'

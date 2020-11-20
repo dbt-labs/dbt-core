@@ -25,7 +25,13 @@ import agate
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
-    Union, Dict, List, Optional, Any, NamedTuple, Sequence,
+    Union,
+    Dict,
+    List,
+    Optional,
+    Any,
+    NamedTuple,
+    Sequence,
 )
 
 from dbt.clients.system import write_json
@@ -108,8 +114,8 @@ class BaseResult(dbtClassMixin):
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
-        if 'message' not in data:
-            data['message'] = None
+        if "message" not in data:
+            data["message"] = None
         if 'failures' not in data:
             data['failures'] = None
         return data
@@ -123,9 +129,7 @@ class NodeResult(BaseResult):
 @dataclass
 class RunResult(NodeResult):
     agate_table: Optional[agate.Table] = field(
-        default=None, metadata={
-            'serialize': lambda x: None, 'deserialize': lambda x: None
-        }
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
 
     @property
@@ -469,8 +473,8 @@ class CatalogResults(dbtClassMixin):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if '_compile_results' in dct:
-            del dct['_compile_results']
+        if "_compile_results" in dct:
+            del dct["_compile_results"]
         return dct
 
 

@@ -8,9 +8,7 @@ from dbt.contracts.util import (
 import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException
 
-from dbt.dataclass_schema import (
-    dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
-)
+from dbt.dataclass_schema import dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -258,7 +256,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
         if 'freshness' not in dct and self.freshness is None:
-            dct['freshness'] = None
+            dct["freshness"] = None
         return dct
 
 
@@ -286,7 +284,7 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
         if 'freshness' not in dct and self.freshness is None:
-            dct['freshness'] = None
+            dct["freshness"] = None
         return dct
 
 

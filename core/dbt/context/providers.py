@@ -1506,12 +1506,9 @@ def generate_test_context(
     config: RuntimeConfig,
     manifest: Manifest,
     context_config: ContextConfig,
-    macro_resolver: MacroResolver
+    macro_resolver: MacroResolver,
 ) -> Dict[str, Any]:
-    ctx = TestContext(
-        model, config, manifest, ParseProvider(), context_config,
-        macro_resolver
-    )
+    ctx = TestContext(model, config, manifest, ParseProvider(), context_config, macro_resolver)
     # The 'to_dict' method in ManifestContext moves all of the macro names
     # in the macro 'namespace' up to top level keys
     return ctx.to_dict()

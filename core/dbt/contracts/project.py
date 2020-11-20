@@ -2,10 +2,12 @@ from dbt.contracts.util import Replaceable, Mergeable, list_str
 from dbt.contracts.connection import QueryComment, UserConfigContract
 from dbt.helper_types import NoValue
 from dbt.dataclass_schema import (
-    dbtClassMixin, ValidationError,
+    dbtClassMixin,
+    ValidationError,
     HyphenatedDbtClassMixin,
     ExtensibleDbtClassMixin,
-    register_pattern, ValidatedStringMixin
+    register_pattern,
+    ValidatedStringMixin,
 )
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any
@@ -18,7 +20,7 @@ DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
 
 class Name(ValidatedStringMixin):
-    ValidationRegex = r'^[^\d\W]\w*$'
+    ValidationRegex = r"^[^\d\W]\w*$"
 
     @classmethod
     def is_valid(cls, value: Any) -> bool:
@@ -41,7 +43,7 @@ class SemverString(str, SerializableType):
         return self
 
     @classmethod
-    def _deserialize(cls, value: str) -> 'SemverString':
+    def _deserialize(cls, value: str) -> "SemverString":
         return SemverString(value)
 
 
@@ -222,7 +224,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     @classmethod
     def validate(cls, data):
         super().validate(data)
-        if data['name'] in BANNED_PROJECT_NAMES:
+        if data["name"] in BANNED_PROJECT_NAMES:
             raise ValidationError(
                 f"Invalid project name: {data['name']} is a reserved word"
             )

@@ -1,8 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any, Union
-from dbt.clients.yaml_helper import (  # noqa: F401
-    yaml, Loader, Dumper, load_yaml_text
-)
+from dbt.clients.yaml_helper import yaml, Loader, Dumper, load_yaml_text  # noqa: F401
 from dbt.dataclass_schema import ValidationError
 
 from .renderer import SelectorRenderer
@@ -30,9 +28,8 @@ Validator Error:
 
 
 class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
-
     @classmethod
-    def selectors_from_dict(cls, data: Dict[str, Any]) -> 'SelectorConfig':
+    def selectors_from_dict(cls, data: Dict[str, Any]) -> "SelectorConfig":
         try:
             SelectorFile.validate(data)
             selector_file = SelectorFile.from_dict(data)

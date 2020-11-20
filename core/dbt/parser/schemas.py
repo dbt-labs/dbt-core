@@ -181,6 +181,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         internal_package_names = get_adapter_package_names(
             self.root_project.credentials.type
         )
+        internal_package_names = get_adapter_package_names(self.root_project.credentials.type)
         self.macro_resolver = MacroResolver(
             self.manifest.macros,
             self.root_project.project_name,
@@ -375,12 +376,12 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
     # parsing to avoid jinja overhead.
     def render_test_update(self, node, config, builder, schema_file_id):
         macro_unique_id = self.macro_resolver.get_macro_id(
-            node.package_name, 'test_' + builder.name)
+            node.package_name, "test_" + builder.name
+        )
         # Add the depends_on here so we can limit the macros added
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
-        if (macro_unique_id in
-                ['macro.dbt.test_not_null', 'macro.dbt.test_unique']):
+        if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
             config_call_dict = builder.get_static_config()
             config._config_call_dict = config_call_dict
             # This sets the config from dbt_project
@@ -406,9 +407,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 # values. That happens in compilation.
                 add_rendered_test_kwargs(context, node, capture_macros=True)
                 # the parsed node is not rendered in the native context.
-                get_rendered(
-                    node.raw_sql, context, node, capture_macros=True
-                )
+                get_rendered(node.raw_sql, context, node, capture_macros=True)
                 self.update_parsed_node_config(node, config)
                 # env_vars should have been updated in the context env_var method
             except ValidationError as exc:
@@ -505,42 +504,42 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
             # NonSourceParser.parse(), TestablePatchParser is a variety of
             # NodePatchParser
-            if 'models' in dct:
-                parser = TestablePatchParser(self, yaml_block, 'models')
+            if "models" in dct:
+                parser = TestablePatchParser(self, yaml_block, "models")
                 for test_block in parser.parse():
                     self.parse_tests(test_block)
 
             # NonSourceParser.parse()
-            if 'seeds' in dct:
-                parser = TestablePatchParser(self, yaml_block, 'seeds')
+            if "seeds" in dct:
+                parser = TestablePatchParser(self, yaml_block, "seeds")
                 for test_block in parser.parse():
                     self.parse_tests(test_block)
 
             # NonSourceParser.parse()
-            if 'snapshots' in dct:
-                parser = TestablePatchParser(self, yaml_block, 'snapshots')
+            if "snapshots" in dct:
+                parser = TestablePatchParser(self, yaml_block, "snapshots")
                 for test_block in parser.parse():
                     self.parse_tests(test_block)
 
             # This parser uses SourceParser.parse() which doesn't return
             # any test blocks. Source tests are handled at a later point
             # in the process.
-            if 'sources' in dct:
-                parser = SourceParser(self, yaml_block, 'sources')
+            if "sources" in dct:
+                parser = SourceParser(self, yaml_block, "sources")
                 parser.parse()
 
             # NonSourceParser.parse() (but never test_blocks)
-            if 'macros' in dct:
-                parser = MacroPatchParser(self, yaml_block, 'macros')
+            if "macros" in dct:
+                parser = MacroPatchParser(self, yaml_block, "macros")
                 parser.parse()
 
             # NonSourceParser.parse() (but never test_blocks)
-            if 'analyses' in dct:
-                parser = AnalysisPatchParser(self, yaml_block, 'analyses')
+            if "analyses" in dct:
+                parser = AnalysisPatchParser(self, yaml_block, "analyses")
                 parser.parse()
 
             # parse exposures
-            if 'exposures' in dct:
+            if "exposures" in dct:
                 exp_parser = ExposureParser(self, yaml_block)
                 for exposure_node in exp_parser.parse():
                     self.manifest.add_exposure(yaml_block.file, exposure_node)
@@ -676,7 +675,7 @@ class YamlDocsReader(YamlReader):
         raise NotImplementedError('parse is abstract')
 
 
-T = TypeVar('T', bound=dbtClassMixin)
+T = TypeVar("T", bound=dbtClassMixin)
 
 
 # This parses the 'sources' keys in yaml files.
@@ -751,7 +750,7 @@ class SourceParser(YamlDocsReader):
 class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
     @abstractmethod
     def _target_type(self) -> Type[NonSourceTarget]:
-        raise NotImplementedError('_target_type not implemented')
+        raise NotImplementedError("_target_type not implemented")
 
     @abstractmethod
     def get_block(self, node: NonSourceTarget) -> TargetBlock:

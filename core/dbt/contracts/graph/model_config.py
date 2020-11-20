@@ -5,7 +5,9 @@ from typing import (
     Any, List, Optional, Dict, Union, Type, TypeVar, Callable
 )
 from dbt.dataclass_schema import (
-    dbtClassMixin, ValidationError, register_pattern,
+    dbtClassMixin,
+    ValidationError,
+    register_pattern,
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
 from dbt.exceptions import InternalException, CompilationException
@@ -166,7 +168,7 @@ class Severity(str):
     pass
 
 
-register_pattern(Severity, insensitive_patterns('warn', 'error'))
+register_pattern(Severity, insensitive_patterns("warn", "error"))
 
 
 @dataclass
@@ -416,7 +418,7 @@ class NodeConfig(NodeAndTestConfig):
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
-        field_map = {'post-hook': 'post_hook', 'pre-hook': 'pre_hook'}
+        field_map = {"post-hook": "post_hook", "pre-hook": "pre_hook"}
         # create a new dict because otherwise it gets overwritten in
         # tests
         new_dict = {}
@@ -434,7 +436,7 @@ class NodeConfig(NodeAndTestConfig):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        field_map = {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
+        field_map = {"post_hook": "post-hook", "pre_hook": "pre-hook"}
         for field_name in field_map:
             if field_name in dct:
                 dct[field_map[field_name]] = dct.pop(field_name)
@@ -516,25 +518,27 @@ class SnapshotConfig(EmptySnapshotConfig):
             raise ValidationError(
                 "Snapshots must be configured with a 'strategy', 'unique_key', "
                 "and 'target_schema'.")
-        if data.get('strategy') == 'check':
-            if not data.get('check_cols'):
+            )
+        if data.get("strategy") == "check":
+            if not data.get("check_cols"):
                 raise ValidationError(
                     "A snapshot configured with the check strategy must "
-                    "specify a check_cols configuration.")
-            if (isinstance(data['check_cols'], str) and
-                    data['check_cols'] != 'all'):
+                    "specify a check_cols configuration."
+                )
+            if isinstance(data["check_cols"], str) and data["check_cols"] != "all":
                 raise ValidationError(
                     f"Invalid value for 'check_cols': {data['check_cols']}. "
-                    "Expected 'all' or a list of strings.")
+                    "Expected 'all' or a list of strings."
+                )
 
-        elif data.get('strategy') == 'timestamp':
-            if not data.get('updated_at'):
+        elif data.get("strategy") == "timestamp":
+            if not data.get("updated_at"):
                 raise ValidationError(
                     "A snapshot configured with the timestamp strategy "
-                    "must specify an updated_at configuration.")
-            if data.get('check_cols'):
-                raise ValidationError(
-                    "A 'timestamp' snapshot should not have 'check_cols'")
+                    "must specify an updated_at configuration."
+                )
+            if data.get("check_cols"):
+                raise ValidationError("A 'timestamp' snapshot should not have 'check_cols'")
         # If the strategy is not 'check' or 'timestamp' it's a custom strategy,
         # formerly supported with GenericSnapshotConfig
 

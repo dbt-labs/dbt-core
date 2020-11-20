@@ -323,9 +323,7 @@ class PartialProject(RenderComponents):
 
         try:
             ProjectContract.validate(rendered.project_dict)
-            cfg = ProjectContract.from_dict(
-                rendered.project_dict
-            )
+            cfg = ProjectContract.from_dict(rendered.project_dict)
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
         # name/version are required in the Project definition, so we can assume

@@ -1,7 +1,8 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import (
-    Optional, Dict,
+    Optional,
+    Dict,
 )
 from typing_extensions import Protocol
 
@@ -110,8 +111,7 @@ class Path(FakeAPIObject):
             return self.identifier
         else:
             raise ValueError(
-                'Got a key of {}, expected one of {}'
-                .format(key, list(ComponentName))
+                "Got a key of {}, expected one of {}".format(key, list(ComponentName))
             )
 
     def replace_dict(self, dct: Dict[ComponentName, str]):

@@ -86,10 +86,10 @@ class AdditionalPropertiesMixin:
         cls_keys = cls._get_field_names()
         new_dict = {}
         for key, value in data.items():
-            if key not in cls_keys and key != '_extra':
-                if '_extra' not in new_dict:
-                    new_dict['_extra'] = {}
-                new_dict['_extra'][key] = value
+            if key not in cls_keys and key != "_extra":
+                if "_extra" not in new_dict:
+                    new_dict["_extra"] = {}
+                new_dict["_extra"][key] = value
             else:
                 new_dict[key] = value
         data = new_dict
@@ -99,8 +99,8 @@ class AdditionalPropertiesMixin:
     def __post_serialize__(self, dct):
         data = super().__post_serialize__(dct)
         data.update(self.extra)
-        if '_extra' in data:
-            del data['_extra']
+        if "_extra" in data:
+            del data["_extra"]
         return data
 
     def replace(self, **kwargs):

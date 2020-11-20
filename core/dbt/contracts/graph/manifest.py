@@ -477,6 +477,7 @@ class MacroMethods:
         """
         filter: Optional[Callable[[MacroCandidate], bool]] = None
         if package is not None:
+
             def filter(candidate: MacroCandidate) -> bool:
                 return package == candidate.macro.package_name
 
@@ -499,11 +500,12 @@ class MacroMethods:
             - return the `generate_{component}_name` macro from the 'dbt'
               internal project
         """
+
         def filter(candidate: MacroCandidate) -> bool:
             return candidate.locality != Locality.Imported
 
         candidates: CandidateList = self._find_macros_by_name(
-            name=f'generate_{component}_name',
+            name=f"generate_{component}_name",
             root_project_name=root_project_name,
             # filter out imported packages
             filter=filter,
@@ -514,12 +516,12 @@ class MacroMethods:
         self,
         name: str,
         root_project_name: str,
-        filter: Optional[Callable[[MacroCandidate], bool]] = None
+        filter: Optional[Callable[[MacroCandidate], bool]] = None,
     ) -> CandidateList:
-        """Find macros by their name.
-        """
+        """Find macros by their name."""
         # avoid an import cycle
         from dbt.adapters.factory import get_adapter_package_names
+
         candidates: CandidateList = CandidateList()
         packages = set(get_adapter_package_names(self.metadata.adapter_type))
         for unique_id, macro in self.macros.items():

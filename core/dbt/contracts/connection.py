@@ -3,7 +3,14 @@ import itertools
 import hashlib
 from dataclasses import dataclass, field
 from typing import (
-    Any, ClassVar, Dict, Tuple, Iterable, Optional, List, Callable,
+    Any,
+    ClassVar,
+    Dict,
+    Tuple,
+    Iterable,
+    Optional,
+    List,
+    Callable,
 )
 from dbt.exceptions import InternalException
 from dbt.utils import translate_aliases
@@ -12,13 +19,17 @@ from dbt.events.types import NewConnectionOpening
 from typing_extensions import Protocol
 from dbt.dataclass_schema import (
     dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, HyphenatedDbtClassMixin,
-    ValidatedStringMixin, register_pattern
+    StrEnum,
+    ExtensibleDbtClassMixin,
+    HyphenatedDbtClassMixin,
+    ValidatedStringMixin,
+    register_pattern,
 )
 from dbt.contracts.util import Replaceable
 
 
 class Identifier(ValidatedStringMixin):
-    ValidationRegex = r'^[A-Za-z_][A-Za-z0-9_]+$'
+    ValidationRegex = r"^[A-Za-z_][A-Za-z0-9_]+$"
 
 
 # we need register_pattern for jsonschema validation
@@ -169,10 +180,10 @@ class Credentials(
     def __post_serialize__(self, dct):
         # no super() -- do we need it?
         if self._ALIASES:
-            dct.update({
-                new_name: dct[canonical_name]
+            dct.update(
+                {
                     new_name: dct[canonical_name]
-                if canonical_name in dct
+                    for new_name, canonical_name in self._ALIASES.items()
                     if canonical_name in dct
                 }
             )

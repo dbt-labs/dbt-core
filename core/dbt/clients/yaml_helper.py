@@ -4,15 +4,9 @@ import yaml
 
 # the C version is faster, but it doesn't always exist
 try:
-    from yaml import (
-        CLoader as Loader,
-        CSafeLoader as SafeLoader,
-        CDumper as Dumper
-    )
+    from yaml import CLoader as Loader, CSafeLoader as SafeLoader, CDumper as Dumper
 except ImportError:
-    from yaml import (  # type: ignore  # noqa: F401
-        Loader, SafeLoader, Dumper
-    )
+    from yaml import Loader, SafeLoader, Dumper  # type: ignore  # noqa: F401
 
 
 YAML_ERROR_MESSAGE = """
