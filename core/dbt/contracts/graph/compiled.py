@@ -19,19 +19,19 @@ from dbt.contracts.graph.parsed import (
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
 
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 from dataclasses import dataclass, field
 from typing import Optional, List, Union, Dict, Type
 
 
 @dataclass
-class InjectedCTE(JsonSchemaMixin, Replaceable):
+class InjectedCTE(dbtClassMixin, Replaceable):
     id: str
     sql: str
 
 
 @dataclass
-class CompiledNodeMixin(JsonSchemaMixin):
+class CompiledNodeMixin(dbtClassMixin):
     # this is a special mixin class to provide a required argument. If a node
     # is missing a `compiled` flag entirely, it must not be a CompiledNode.
     compiled: bool
@@ -178,8 +178,7 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
         raise ValueError('invalid resource_type: {}'
                          .format(compiled.resource_type))
 
-    # validate=False to allow extra keys from compiling
-    return cls.from_dict(compiled.to_dict(), validate=False)
+    return cls.from_dict(compiled.to_dict())
 
 
 NonSourceCompiledNode = Union[

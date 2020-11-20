@@ -12,7 +12,9 @@ class DataTestParser(SimpleSQLParser[ParsedDataTestNode]):
         )
 
     def parse_from_dict(self, dct, validate=True) -> ParsedDataTestNode:
-        return ParsedDataTestNode.from_dict(dct, validate=validate)
+        if validate:
+            ParsedDataTestNode.validate(dct)
+        return ParsedDataTestNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:

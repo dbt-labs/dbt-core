@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from requests.exceptions import ConnectionError
 from unittest.mock import patch, MagicMock, Mock, create_autospec, ANY
 
-import hologram
+import dbt.dataclass_schema
 
 import dbt.flags as flags
 
@@ -19,6 +19,7 @@ from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.context.providers import RuntimeConfigObject
 
 import google.cloud.bigquery
 
@@ -364,7 +365,7 @@ class TestBigQueryRelation(unittest.TestCase):
                 'identifier': False
             }
         }
-        BigQueryRelation.from_dict(kwargs)
+        BigQueryRelation.validate(kwargs)
 
     def test_view_relation(self):
         kwargs = {
@@ -379,7 +380,7 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': True
             }
         }
-        BigQueryRelation.from_dict(kwargs)
+        BigQueryRelation.validate(kwargs)
 
     def test_table_relation(self):
         kwargs = {
@@ -394,7 +395,7 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': True
             }
         }
-        BigQueryRelation.from_dict(kwargs)
+        BigQueryRelation.validate(kwargs)
 
     def test_external_source_relation(self):
         kwargs = {
@@ -409,7 +410,7 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': True
             }
         }
-        BigQueryRelation.from_dict(kwargs)
+        BigQueryRelation.validate(kwargs)
 
     def test_invalid_relation(self):
         kwargs = {
@@ -424,8 +425,8 @@ class TestBigQueryRelation(unittest.TestCase):
                 'schema': True
             }
         }
-        with self.assertRaises(hologram.ValidationError):
-            BigQueryRelation.from_dict(kwargs)
+        with self.assertRaises(dbt.dataclass_schema.ValidationError):
+            BigQueryRelation.validate(kwargs)
 
 
 class TestBigQueryInformationSchema(unittest.TestCase):
@@ -451,6 +452,7 @@ class TestBigQueryInformationSchema(unittest.TestCase):
                 'identifier': True,
             }
         }
+        BigQueryRelation.validate(kwargs)
         relation = BigQueryRelation.from_dict(kwargs)
         info_schema = relation.information_schema()
 
@@ -808,7 +810,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
     def test_hours_to_expiration(self):
         adapter = self.get_adapter('oauth')
         mock_config = create_autospec(
-            dbt.context.providers.RuntimeConfigObject)
+            RuntimeConfigObject)
         config = {'hours_to_expiration': 4}
         mock_config.get.side_effect = lambda name: config.get(name)
 
@@ -822,7 +824,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
     def test_hours_to_expiration_temporary(self):
         adapter = self.get_adapter('oauth')
         mock_config = create_autospec(
-            dbt.context.providers.RuntimeConfigObject)
+            RuntimeConfigObject)
         config={'hours_to_expiration': 4}
         mock_config.get.side_effect = lambda name: config.get(name)
 

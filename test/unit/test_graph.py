@@ -13,7 +13,7 @@ import dbt.config
 import dbt.utils
 import dbt.parser.manifest
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
 from dbt.graph import NodeSelector, parse_difference
@@ -105,9 +105,8 @@ class GraphTest(unittest.TestCase):
         self.mock_source_file = self.load_source_file_patcher.start()
         self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 
-        self.macro_manifest = Manifest.from_macros(macros={
-            n.unique_id: n for n in generate_name_macros('test_models_compile')
-        })
+        self.macro_manifest = MacroManifest(
+            {n.unique_id: n for n in generate_name_macros('test_models_compile')}, {})
 
         def filesystem_iter(iter_self):
             if 'sql' not in iter_self.extension:

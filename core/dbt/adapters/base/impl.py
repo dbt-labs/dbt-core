@@ -28,7 +28,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.contracts.graph.compiled import (
     CompileResultNode, CompiledSeedNode
 )
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
 from dbt.node_types import NodeType
@@ -160,7 +160,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         self.config = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
-        self._macro_manifest_lazy: Optional[Manifest] = None
+        self._macro_manifest_lazy: Optional[MacroManifest] = None
 
     ###
     # Methods that pass through to the connection manager
@@ -259,18 +259,18 @@ class BaseAdapter(metaclass=AdapterMeta):
         return cls.ConnectionManager.TYPE
 
     @property
-    def _macro_manifest(self) -> Manifest:
+    def _macro_manifest(self) -> MacroManifest:
         if self._macro_manifest_lazy is None:
             return self.load_macro_manifest()
         return self._macro_manifest_lazy
 
-    def check_macro_manifest(self) -> Optional[Manifest]:
+    def check_macro_manifest(self) -> Optional[MacroManifest]:
         """Return the internal manifest (used for executing macros) if it's
         been initialized, otherwise return None.
         """
         return self._macro_manifest_lazy
 
-    def load_macro_manifest(self) -> Manifest:
+    def load_macro_manifest(self) -> MacroManifest:
         if self._macro_manifest_lazy is None:
             # avoid a circular import
             from dbt.parser.manifest import load_macro_manifest

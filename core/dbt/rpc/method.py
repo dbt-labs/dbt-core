@@ -3,7 +3,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from typing import List, Optional, Type, TypeVar, Generic, Dict, Any
 
-from hologram import JsonSchemaMixin, ValidationError
+from dbt.dataclass_schema import dbtClassMixin, ValidationError
 
 from dbt.contracts.rpc import RPCParameters, RemoteResult, RemoteMethodFlags
 from dbt.exceptions import NotImplementedException, InternalException
@@ -109,7 +109,7 @@ class RemoteBuiltinMethod(RemoteMethod[Parameters, Result]):
             'the run() method on builtins should never be called'
         )
 
-    def __call__(self, **kwargs: Dict[str, Any]) -> JsonSchemaMixin:
+    def __call__(self, **kwargs: Dict[str, Any]) -> dbtClassMixin:
         try:
             params = self.get_parameters().from_dict(kwargs)
         except ValidationError as exc:

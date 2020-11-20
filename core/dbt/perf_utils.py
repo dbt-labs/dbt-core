@@ -3,7 +3,7 @@ little bit too much to go anywhere else.
 """
 from dbt.adapters.factory import get_adapter
 from dbt.parser.manifest import load_manifest
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.config import RuntimeConfig
 
 
@@ -23,10 +23,10 @@ def get_full_manifest(
         config.clear_dependencies()
         adapter.clear_macro_manifest()
 
-    internal: Manifest = adapter.load_macro_manifest()
+    macro_manifest: MacroManifest = adapter.load_macro_manifest()
 
     return load_manifest(
         config,
-        internal,
+        macro_manifest,
         adapter.connections.set_query_header,
     )

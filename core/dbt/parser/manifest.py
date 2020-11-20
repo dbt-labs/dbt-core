@@ -23,7 +23,9 @@ from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
 from dbt.contracts.files import FilePath, FileHash
 from dbt.contracts.graph.compiled import ManifestNode
-from dbt.contracts.graph.manifest import Manifest, Disabled
+from dbt.contracts.graph.manifest import (
+    Manifest, MacroManifest, AnyManifest, Disabled
+)
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
 )
@@ -51,7 +53,7 @@ from dbt.parser.sources import patch_sources
 from dbt.ui import warning_tag
 from dbt.version import __version__
 
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
 PARSING_STATE = DbtProcessState('parsing')
@@ -59,14 +61,14 @@ DEFAULT_PARTIAL_PARSE = False
 
 
 @dataclass
-class ParserInfo(JsonSchemaMixin):
+class ParserInfo(dbtClassMixin):
     parser: str
     elapsed: float
     path_count: int = 0
 
 
 @dataclass
-class ProjectLoaderInfo(JsonSchemaMixin):
+class ProjectLoaderInfo(dbtClassMixin):
     project_name: str
     elapsed: float
     parsers: List[ParserInfo]
@@ -74,7 +76,7 @@ class ProjectLoaderInfo(JsonSchemaMixin):
 
 
 @dataclass
-class ManifestLoaderInfo(JsonSchemaMixin, Writable):
+class ManifestLoaderInfo(dbtClassMixin, Writable):
     path_count: int = 0
     is_partial_parse_enabled: Optional[bool] = None
     parse_project_elapsed: Optional[float] = None
@@ -137,16 +139,19 @@ class ManifestLoader:
         self,
         root_project: RuntimeConfig,
         all_projects: Mapping[str, Project],
-        macro_hook: Optional[Callable[[Manifest], Any]] = None,
+        macro_hook: Optional[Callable[[AnyManifest], Any]] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
-        self.macro_hook: Callable[[Manifest], Any]
+        self.macro_hook: Callable[[AnyManifest], Any]
         if macro_hook is None:
             self.macro_hook = lambda m: None
         else:
             self.macro_hook = macro_hook
 
+        # results holds all of the nodes created by parsing,
+        # in dictionaries: nodes, sources, docs, macros, exposures,
+        # macro_patches, patches, source_patches, files, etc
         self.results: ParseResult = make_parse_result(
             root_project, all_projects,
         )
@@ -210,7 +215,7 @@ class ManifestLoader:
     def parse_project(
         self,
         project: Project,
-        macro_manifest: Manifest,
+        macro_manifest: MacroManifest,
         old_results: Optional[ParseResult],
     ) -> None:
         parsers: List[Parser] = []
@@ -252,7 +257,7 @@ class ManifestLoader:
             self._perf_info.path_count + total_path_count
         )
 
-    def load_only_macros(self) -> Manifest:
+    def load_only_macros(self) -> MacroManifest:
         old_results = self.read_parse_results()
 
         for project in self.all_projects.values():
@@ -261,17 +266,20 @@ class ManifestLoader:
                 self.parse_with_cache(path, parser, old_results)
 
         # make a manifest with just the macros to get the context
-        macro_manifest = Manifest.from_macros(
+        macro_manifest = MacroManifest(
             macros=self.results.macros,
             files=self.results.files
         )
         self.macro_hook(macro_manifest)
         return macro_manifest
 
-    def load(self, macro_manifest: Manifest):
+    # This is where the main action happens
+    def load(self, macro_manifest: MacroManifest):
+        # if partial parse is enabled, load old results
         old_results = self.read_parse_results()
         if old_results is not None:
             logger.debug('Got an acceptable cached parse result')
+        # store the macros & files from the adapter macro manifest
         self.results.macros.update(macro_manifest.macros)
         self.results.files.update(macro_manifest.files)
 
@@ -423,8 +431,8 @@ class ManifestLoader:
     def load_all(
         cls,
         root_config: RuntimeConfig,
-        macro_manifest: Manifest,
-        macro_hook: Callable[[Manifest], Any],
+        macro_manifest: MacroManifest,
+        macro_hook: Callable[[AnyManifest], Any],
     ) -> Manifest:
         with PARSING_STATE:
             start_load_all = time.perf_counter()
@@ -449,8 +457,8 @@ class ManifestLoader:
     def load_macros(
         cls,
         root_config: RuntimeConfig,
-        macro_hook: Callable[[Manifest], Any],
-    ) -> Manifest:
+        macro_hook: Callable[[AnyManifest], Any],
+    ) -> MacroManifest:
         with PARSING_STATE:
             projects = root_config.load_dependencies()
             loader = cls(root_config, projects, macro_hook)
@@ -841,14 +849,14 @@ def process_node(
 
 def load_macro_manifest(
     config: RuntimeConfig,
-    macro_hook: Callable[[Manifest], Any],
-) -> Manifest:
+    macro_hook: Callable[[AnyManifest], Any],
+) -> MacroManifest:
     return ManifestLoader.load_macros(config, macro_hook)
 
 
 def load_manifest(
     config: RuntimeConfig,
-    macro_manifest: Manifest,
-    macro_hook: Callable[[Manifest], Any],
+    macro_manifest: MacroManifest,
+    macro_hook: Callable[[AnyManifest], Any],
 ) -> Manifest:
     return ManifestLoader.load_all(config, macro_manifest, macro_hook)

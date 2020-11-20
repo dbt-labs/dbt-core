@@ -27,7 +27,7 @@ from dbt.adapters.base import BaseConnectionManager, Credentials
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.version import __version__ as dbt_version
 
-from hologram.helpers import StrEnum
+from dbt.dataclass_schema import StrEnum
 
 
 BQ_QUERY_JOB_SPLIT = '-----Query Job SQL Follows-----'

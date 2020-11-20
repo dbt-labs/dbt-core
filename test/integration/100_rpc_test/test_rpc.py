@@ -66,7 +66,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
 
     def start(self):
         super().start()
-        for _ in range(180):
+        for _ in range(240):
             if self.is_up():
                 break
             time.sleep(0.5)

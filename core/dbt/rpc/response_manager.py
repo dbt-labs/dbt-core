@@ -1,7 +1,7 @@
 import json
 from typing import Callable, Dict, Any
 
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 from jsonrpc.exceptions import (
     JSONRPCParseError,
     JSONRPCInvalidRequestException,
@@ -90,11 +90,14 @@ class ResponseManager(JSONRPCResponseManager):
     @classmethod
     def _get_responses(cls, requests, dispatcher):
         for output in super()._get_responses(requests, dispatcher):
-            # if it's a result, check if it's a JsonSchemaMixin and if so call
+            # if it's a result, check if it's a dbtClassMixin and if so call
             # to_dict
             if hasattr(output, 'result'):
-                if isinstance(output.result, JsonSchemaMixin):
-                    output.result = output.result.to_dict(omit_none=False)
+                if isinstance(output.result, dbtClassMixin):
+                    # Note: errors in to_dict do not show up anywhere in
+                    # the output and all you get is a generic 500 error
+                    output.result = \
+                        output.result.to_dict(options={'keep_none': True})
             yield output
 
     @classmethod

@@ -1,4 +1,4 @@
-from hologram.helpers import StrEnum
+from dbt.dataclass_schema import StrEnum
 import json
 
 from typing import Union, Dict, Any

@@ -4,25 +4,39 @@ from dbt.helper_types import NoValue
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import tracking
 from dbt import ui
-
-from hologram import JsonSchemaMixin, ValidationError
-from hologram.helpers import HyphenatedJsonSchemaMixin, register_pattern, \
-    ExtensibleJsonSchemaMixin
-
+from dbt.dataclass_schema import (
+    dbtClassMixin, ValidationError,
+    HyphenatedDbtClassMixin,
+    ExtensibleDbtClassMixin,
+    register_pattern, ValidatedStringMixin
+)
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Union, Any, NewType
+from typing import Optional, List, Dict, Union, Any
+from mashumaro.types import SerializableType
 
 PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions'  # noqa
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
 
-Name = NewType('Name', str)
+class Name(ValidatedStringMixin):
+    ValidationRegex = r'^[^\d\W]\w*$'
+
+
 register_pattern(Name, r'^[^\d\W]\w*$')
+
+
+class SemverString(str, SerializableType):
+    def _serialize(self) -> str:
+        return self
+
+    @classmethod
+    def _deserialize(cls, value: str) -> 'SemverString':
+        return SemverString(value)
+
 
 # this does not support the full semver (does not allow a trailing -fooXYZ) and
 # is not restrictive enough for full semver, (allows '1.0'). But it's like
 # 'semver lite'.
-SemverString = NewType('SemverString', str)
 register_pattern(
     SemverString,
     r'^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(\.(?:0|[1-9]\d*))?$',
@@ -30,15 +44,15 @@ register_pattern(
 
 
 @dataclass
-class Quoting(JsonSchemaMixin, Mergeable):
-    identifier: Optional[bool]
-    schema: Optional[bool]
-    database: Optional[bool]
-    project: Optional[bool]
+class Quoting(dbtClassMixin, Mergeable):
+    schema: Optional[bool] = None
+    database: Optional[bool] = None
+    project: Optional[bool] = None
+    identifier: Optional[bool] = None
 
 
 @dataclass
-class Package(Replaceable, HyphenatedJsonSchemaMixin):
+class Package(Replaceable, HyphenatedDbtClassMixin):
     pass
 
 
@@ -54,7 +68,7 @@ RawVersion = Union[str, float]
 @dataclass
 class GitPackage(Package):
     git: str
-    revision: Optional[RawVersion]
+    revision: Optional[RawVersion] = None
     warn_unpinned: Optional[bool] = None
 
     def get_revisions(self) -> List[str]:
@@ -80,7 +94,7 @@ PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
 
 
 @dataclass
-class PackageConfig(JsonSchemaMixin, Replaceable):
+class PackageConfig(dbtClassMixin, Replaceable):
     packages: List[PackageSpec]
 
 
@@ -96,13 +110,13 @@ class ProjectPackageMetadata:
 
 
 @dataclass
-class Downloads(ExtensibleJsonSchemaMixin, Replaceable):
+class Downloads(ExtensibleDbtClassMixin, Replaceable):
     tarball: str
 
 
 @dataclass
 class RegistryPackageMetadata(
-    ExtensibleJsonSchemaMixin,
+    ExtensibleDbtClassMixin,
     ProjectPackageMetadata,
 ):
     downloads: Downloads
@@ -154,7 +168,7 @@ BANNED_PROJECT_NAMES = {
 
 
 @dataclass
-class Project(HyphenatedJsonSchemaMixin, Replaceable):
+class Project(HyphenatedDbtClassMixin, Replaceable):
     name: Name
     version: Union[SemverString, float]
     config_version: int
@@ -191,18 +205,16 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     query_comment: Optional[Union[QueryComment, NoValue, str]] = NoValue()
 
     @classmethod
-    def from_dict(cls, data, validate=True) -> 'Project':
-        result = super().from_dict(data, validate=validate)
-        if result.name in BANNED_PROJECT_NAMES:
+    def validate(cls, data):
+        super().validate(data)
+        if data['name'] in BANNED_PROJECT_NAMES:
             raise ValidationError(
-                f'Invalid project name: {result.name} is a reserved word'
+                f"Invalid project name: {data['name']} is a reserved word"
             )
-
-        return result
 
 
 @dataclass
-class UserConfig(ExtensibleJsonSchemaMixin, Replaceable, UserConfigContract):
+class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
     use_colors: Optional[bool] = None
     partial_parse: Optional[bool] = None
@@ -222,7 +234,7 @@ class UserConfig(ExtensibleJsonSchemaMixin, Replaceable, UserConfigContract):
 
 
 @dataclass
-class ProfileConfig(HyphenatedJsonSchemaMixin, Replaceable):
+class ProfileConfig(HyphenatedDbtClassMixin, Replaceable):
     profile_name: str = field(metadata={'preserve_underscore': True})
     target_name: str = field(metadata={'preserve_underscore': True})
     config: UserConfig
@@ -233,10 +245,10 @@ class ProfileConfig(HyphenatedJsonSchemaMixin, Replaceable):
 
 @dataclass
 class ConfiguredQuoting(Quoting, Replaceable):
-    identifier: bool
-    schema: bool
-    database: Optional[bool]
-    project: Optional[bool]
+    identifier: bool = True
+    schema: bool = True
+    database: Optional[bool] = None
+    project: Optional[bool] = None
 
 
 @dataclass
@@ -249,5 +261,5 @@ class Configuration(Project, ProfileConfig):
 
 
 @dataclass
-class ProjectList(JsonSchemaMixin):
+class ProjectList(dbtClassMixin):
     projects: Dict[str, Project]

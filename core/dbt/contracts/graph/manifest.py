@@ -428,158 +428,13 @@ def _update_into(dest: MutableMapping[str, T], new_item: T):
     dest[unique_id] = new_item
 
 
-@dataclass
-class Manifest:
-    """The manifest for the full graph, after parsing and during compilation.
-    """
-    # These attributes are both positional and by keyword. If an attribute
-    # is added it must all be added in the __reduce_ex__ method in the
-    # args tuple in the right position.
-    nodes: MutableMapping[str, ManifestNode]
-    sources: MutableMapping[str, ParsedSourceDefinition]
-    macros: MutableMapping[str, ParsedMacro]
-    docs: MutableMapping[str, ParsedDocumentation]
-    exposures: MutableMapping[str, ParsedExposure]
-    selectors: MutableMapping[str, Any]
-    disabled: List[CompileResultNode]
-    files: MutableMapping[str, SourceFile]
-    metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
-    flat_graph: Dict[str, Any] = field(default_factory=dict)
-    _docs_cache: Optional[DocCache] = None
-    _sources_cache: Optional[SourceCache] = None
-    _refs_cache: Optional[RefableCache] = None
-    _lock: Lock = field(default_factory=flags.MP_CONTEXT.Lock)
-
-    @classmethod
-    def from_macros(
-        cls,
-        macros: Optional[MutableMapping[str, ParsedMacro]] = None,
-        files: Optional[MutableMapping[str, SourceFile]] = None,
-    ) -> 'Manifest':
-        if macros is None:
-            macros = {}
-        if files is None:
-            files = {}
-        return cls(
-            nodes={},
-            sources={},
-            macros=macros,
-            docs={},
-            exposures={},
-            selectors={},
-            disabled=[],
-            files=files,
-        )
-
-    def sync_update_node(
-        self, new_node: NonSourceCompiledNode
-    ) -> NonSourceCompiledNode:
-        """update the node with a lock. The only time we should want to lock is
-        when compiling an ephemeral ancestor of a node at runtime, because
-        multiple threads could be just-in-time compiling the same ephemeral
-        dependency, and we want them to have a consistent view of the manifest.
-
-        If the existing node is not compiled, update it with the new node and
-        return that. If the existing node is compiled, do not update the
-        manifest and return the existing node.
-        """
-        with self._lock:
-            existing = self.nodes[new_node.unique_id]
-            if getattr(existing, 'compiled', False):
-                # already compiled -> must be a NonSourceCompiledNode
-                return cast(NonSourceCompiledNode, existing)
-            _update_into(self.nodes, new_node)
-            return new_node
-
-    def update_exposure(self, new_exposure: ParsedExposure):
-        _update_into(self.exposures, new_exposure)
-
-    def update_node(self, new_node: ManifestNode):
-        _update_into(self.nodes, new_node)
-
-    def update_source(self, new_source: ParsedSourceDefinition):
-        _update_into(self.sources, new_source)
-
-    def build_flat_graph(self):
-        """This attribute is used in context.common by each node, so we want to
-        only build it once and avoid any concurrency issues around it.
-        Make sure you don't call this until you're done with building your
-        manifest!
-        """
-        self.flat_graph = {
-            'nodes': {
-                k: v.to_dict(omit_none=False) for k, v in self.nodes.items()
-            },
-            'sources': {
-                k: v.to_dict(omit_none=False) for k, v in self.sources.items()
-            }
-        }
-
-    def find_disabled_by_name(
-        self, name: str, package: Optional[str] = None
-    ) -> Optional[ManifestNode]:
-        searcher: NameSearcher = NameSearcher(
-            name, package, NodeType.refable()
-        )
-        result = searcher.search(self.disabled)
-        return result
-
-    def find_disabled_source_by_name(
-        self, source_name: str, table_name: str, package: Optional[str] = None
-    ) -> Optional[ParsedSourceDefinition]:
-        search_name = f'{source_name}.{table_name}'
-        searcher: NameSearcher = NameSearcher(
-            search_name, package, [NodeType.Source]
-        )
-        result = searcher.search(self.disabled)
-        if result is not None:
-            assert isinstance(result, ParsedSourceDefinition)
-        return result
-
-    def _find_macros_by_name(
-        self,
-        name: str,
-        root_project_name: str,
-        filter: Optional[Callable[[MacroCandidate], bool]] = None
-    ) -> CandidateList:
-        """Find macros by their name.
-        """
-        # avoid an import cycle
-        from dbt.adapters.factory import get_adapter_package_names
-        candidates: CandidateList = CandidateList()
-        packages = set(get_adapter_package_names(self.metadata.adapter_type))
-        for unique_id, macro in self.macros.items():
-            if macro.name != name:
-                continue
-            candidate = MacroCandidate(
-                locality=_get_locality(macro, root_project_name, packages),
-                macro=macro,
-            )
-            if filter is None or filter(candidate):
-                candidates.append(candidate)
-
-        return candidates
-
-    def _materialization_candidates_for(
-        self, project_name: str,
-        materialization_name: str,
-        adapter_type: Optional[str],
-    ) -> CandidateList:
-
-        if adapter_type is None:
-            specificity = Specificity.Default
-        else:
-            specificity = Specificity.Adapter
-
-        full_name = dbt.utils.get_materialization_macro_name(
-            materialization_name=materialization_name,
-            adapter_type=adapter_type,
-            with_prefix=False,
-        )
-        return CandidateList(
-            MaterializationCandidate.from_macro(m, specificity)
-            for m in self._find_macros_by_name(full_name, project_name)
-        )
+# This contains macro methods that are in both the Manifest
+# and the MacroManifest
+class MacroMethods:
+    # Just to make mypy happy. There must be a better way.
+    def __init__(self):
+        self.macros = []
+        self.metadata = {}
 
     def find_macro_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
@@ -624,6 +479,141 @@ class Manifest:
             filter=filter,
         )
         return candidates.last()
+
+    def _find_macros_by_name(
+        self,
+        name: str,
+        root_project_name: str,
+        filter: Optional[Callable[[MacroCandidate], bool]] = None
+    ) -> CandidateList:
+        """Find macros by their name.
+        """
+        # avoid an import cycle
+        from dbt.adapters.factory import get_adapter_package_names
+        candidates: CandidateList = CandidateList()
+        packages = set(get_adapter_package_names(self.metadata.adapter_type))
+        for unique_id, macro in self.macros.items():
+            if macro.name != name:
+                continue
+            candidate = MacroCandidate(
+                locality=_get_locality(macro, root_project_name, packages),
+                macro=macro,
+            )
+            if filter is None or filter(candidate):
+                candidates.append(candidate)
+
+        return candidates
+
+
+@dataclass
+class Manifest(MacroMethods):
+    """The manifest for the full graph, after parsing and during compilation.
+    """
+    # These attributes are both positional and by keyword. If an attribute
+    # is added it must all be added in the __reduce_ex__ method in the
+    # args tuple in the right position.
+    nodes: MutableMapping[str, ManifestNode]
+    sources: MutableMapping[str, ParsedSourceDefinition]
+    macros: MutableMapping[str, ParsedMacro]
+    docs: MutableMapping[str, ParsedDocumentation]
+    exposures: MutableMapping[str, ParsedExposure]
+    selectors: MutableMapping[str, Any]
+    disabled: List[CompileResultNode]
+    files: MutableMapping[str, SourceFile]
+    metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
+    flat_graph: Dict[str, Any] = field(default_factory=dict)
+    _docs_cache: Optional[DocCache] = None
+    _sources_cache: Optional[SourceCache] = None
+    _refs_cache: Optional[RefableCache] = None
+    _lock: Lock = field(default_factory=flags.MP_CONTEXT.Lock)
+
+    def sync_update_node(
+        self, new_node: NonSourceCompiledNode
+    ) -> NonSourceCompiledNode:
+        """update the node with a lock. The only time we should want to lock is
+        when compiling an ephemeral ancestor of a node at runtime, because
+        multiple threads could be just-in-time compiling the same ephemeral
+        dependency, and we want them to have a consistent view of the manifest.
+
+        If the existing node is not compiled, update it with the new node and
+        return that. If the existing node is compiled, do not update the
+        manifest and return the existing node.
+        """
+        with self._lock:
+            existing = self.nodes[new_node.unique_id]
+            if getattr(existing, 'compiled', False):
+                # already compiled -> must be a NonSourceCompiledNode
+                return cast(NonSourceCompiledNode, existing)
+            _update_into(self.nodes, new_node)
+            return new_node
+
+    def update_exposure(self, new_exposure: ParsedExposure):
+        _update_into(self.exposures, new_exposure)
+
+    def update_node(self, new_node: ManifestNode):
+        _update_into(self.nodes, new_node)
+
+    def update_source(self, new_source: ParsedSourceDefinition):
+        _update_into(self.sources, new_source)
+
+    def build_flat_graph(self):
+        """This attribute is used in context.common by each node, so we want to
+        only build it once and avoid any concurrency issues around it.
+        Make sure you don't call this until you're done with building your
+        manifest!
+        """
+        self.flat_graph = {
+            'nodes': {
+                k: v.to_dict(options={'keep_none': True})
+                for k, v in self.nodes.items()
+            },
+            'sources': {
+                k: v.to_dict(options={'keep_none': True})
+                for k, v in self.sources.items()
+            }
+        }
+
+    def find_disabled_by_name(
+        self, name: str, package: Optional[str] = None
+    ) -> Optional[ManifestNode]:
+        searcher: NameSearcher = NameSearcher(
+            name, package, NodeType.refable()
+        )
+        result = searcher.search(self.disabled)
+        return result
+
+    def find_disabled_source_by_name(
+        self, source_name: str, table_name: str, package: Optional[str] = None
+    ) -> Optional[ParsedSourceDefinition]:
+        search_name = f'{source_name}.{table_name}'
+        searcher: NameSearcher = NameSearcher(
+            search_name, package, [NodeType.Source]
+        )
+        result = searcher.search(self.disabled)
+        if result is not None:
+            assert isinstance(result, ParsedSourceDefinition)
+        return result
+
+    def _materialization_candidates_for(
+        self, project_name: str,
+        materialization_name: str,
+        adapter_type: Optional[str],
+    ) -> CandidateList:
+
+        if adapter_type is None:
+            specificity = Specificity.Default
+        else:
+            specificity = Specificity.Adapter
+
+        full_name = dbt.utils.get_materialization_macro_name(
+            materialization_name=materialization_name,
+            adapter_type=adapter_type,
+            with_prefix=False,
+        )
+        return CandidateList(
+            MaterializationCandidate.from_macro(m, specificity)
+            for m in self._find_macros_by_name(full_name, project_name)
+        )
 
     def find_materialization_macro_by_name(
         self, project_name: str, materialization_name: str, adapter_type: str
@@ -763,10 +753,10 @@ class Manifest:
             parent_map=backward_edges,
         )
 
-    def to_dict(self, omit_none=True, validate=False):
-        return self.writable_manifest().to_dict(
-            omit_none=omit_none, validate=validate
-        )
+    # When 'to_dict' is called on the Manifest, it substitues a
+    # WritableManifest
+    def __pre_serialize__(self, options=None):
+        return self.writable_manifest()
 
     def write(self, path):
         self.writable_manifest().write(path)
@@ -942,6 +932,19 @@ class Manifest:
             self._refs_cache,
         )
         return self.__class__, args
+
+
+class MacroManifest(MacroMethods):
+    def __init__(self, macros, files):
+        self.macros = macros
+        self.files = files
+        self.metadata = ManifestMetadata()
+        # This is returned by the 'graph' context property
+        # in the ProviderContext class.
+        self.flat_graph = {}
+
+
+AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass

@@ -8,8 +8,9 @@ from dbt.contracts.util import (
 import dbt.helper_types  # noqa:F401
 from dbt.exceptions import CompilationException
 
-from hologram import JsonSchemaMixin
-from hologram.helpers import StrEnum, ExtensibleJsonSchemaMixin
+from dbt.dataclass_schema import (
+    dbtClassMixin, StrEnum, ExtensibleDbtClassMixin
+)
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -18,7 +19,7 @@ from typing import Optional, List, Union, Dict, Any, Sequence
 
 
 @dataclass
-class UnparsedBaseNode(JsonSchemaMixin, Replaceable):
+class UnparsedBaseNode(dbtClassMixin, Replaceable):
     package_name: str
     root_path: str
     path: str
@@ -66,12 +67,12 @@ class UnparsedRunHook(UnparsedNode):
 
 
 @dataclass
-class Docs(JsonSchemaMixin, Replaceable):
+class Docs(dbtClassMixin, Replaceable):
     show: bool = True
 
 
 @dataclass
-class HasDocs(AdditionalPropertiesMixin, ExtensibleJsonSchemaMixin,
+class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin,
               Replaceable):
     name: str
     description: str = ''
@@ -100,7 +101,7 @@ class UnparsedColumn(HasTests):
 
 
 @dataclass
-class HasColumnDocs(JsonSchemaMixin, Replaceable):
+class HasColumnDocs(dbtClassMixin, Replaceable):
     columns: Sequence[HasDocs] = field(default_factory=list)
 
 
@@ -110,7 +111,7 @@ class HasColumnTests(HasColumnDocs):
 
 
 @dataclass
-class HasYamlMetadata(JsonSchemaMixin):
+class HasYamlMetadata(dbtClassMixin):
     original_file_path: str
     yaml_key: str
     package_name: str
@@ -127,7 +128,7 @@ class UnparsedNodeUpdate(HasColumnTests, HasTests, HasYamlMetadata):
 
 
 @dataclass
-class MacroArgument(JsonSchemaMixin):
+class MacroArgument(dbtClassMixin):
     name: str
     type: Optional[str] = None
     description: str = ''
@@ -148,7 +149,7 @@ class TimePeriod(StrEnum):
 
 
 @dataclass
-class Time(JsonSchemaMixin, Replaceable):
+class Time(dbtClassMixin, Replaceable):
     count: int
     period: TimePeriod
 
@@ -159,7 +160,7 @@ class Time(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class FreshnessThreshold(JsonSchemaMixin, Mergeable):
+class FreshnessThreshold(dbtClassMixin, Mergeable):
     warn_after: Optional[Time] = None
     error_after: Optional[Time] = None
     filter: Optional[str] = None
@@ -180,7 +181,7 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
 @dataclass
 class AdditionalPropertiesAllowed(
     AdditionalPropertiesMixin,
-    ExtensibleJsonSchemaMixin
+    ExtensibleDbtClassMixin
 ):
     _extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -212,7 +213,7 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
 
 
 @dataclass
-class Quoting(JsonSchemaMixin, Mergeable):
+class Quoting(dbtClassMixin, Mergeable):
     database: Optional[bool] = None
     schema: Optional[bool] = None
     identifier: Optional[bool] = None
@@ -230,15 +231,18 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
     external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
-    def to_dict(self, omit_none=True, validate=False):
-        result = super().to_dict(omit_none=omit_none, validate=validate)
-        if omit_none and self.freshness is None:
-            result['freshness'] = None
-        return result
+    def __post_serialize__(self, dct, options=None):
+        dct = super().__post_serialize__(dct)
+        keep_none = False
+        if options and 'keep_none' in options and options['keep_none']:
+            keep_none = True
+        if not keep_none and self.freshness is None:
+            dct['freshness'] = None
+        return dct
 
 
 @dataclass
-class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
+class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     name: str
     description: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -257,15 +261,18 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     def yaml_key(self) -> 'str':
         return 'sources'
 
-    def to_dict(self, omit_none=True, validate=False):
-        result = super().to_dict(omit_none=omit_none, validate=validate)
-        if omit_none and self.freshness is None:
-            result['freshness'] = None
-        return result
+    def __post_serialize__(self, dct, options=None):
+        dct = super().__post_serialize__(dct)
+        keep_none = False
+        if options and 'keep_none' in options and options['keep_none']:
+            keep_none = True
+        if not keep_none and self.freshness is None:
+            dct['freshness'] = None
+        return dct
 
 
 @dataclass
-class SourceTablePatch(JsonSchemaMixin):
+class SourceTablePatch(dbtClassMixin):
     name: str
     description: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
@@ -283,7 +290,7 @@ class SourceTablePatch(JsonSchemaMixin):
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
-        dct = self.to_dict(omit_none=True)
+        dct = self.to_dict()
         remove_keys = ('name')
         for key in remove_keys:
             if key in dct:
@@ -296,7 +303,7 @@ class SourceTablePatch(JsonSchemaMixin):
 
 
 @dataclass
-class SourcePatch(JsonSchemaMixin, Replaceable):
+class SourcePatch(dbtClassMixin, Replaceable):
     name: str = field(
         metadata=dict(description='The name of the source to override'),
     )
@@ -320,7 +327,7 @@ class SourcePatch(JsonSchemaMixin, Replaceable):
     tags: Optional[List[str]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
-        dct = self.to_dict(omit_none=True)
+        dct = self.to_dict()
         remove_keys = ('name', 'overrides', 'tables', 'path')
         for key in remove_keys:
             if key in dct:
@@ -340,7 +347,7 @@ class SourcePatch(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class UnparsedDocumentation(JsonSchemaMixin, Replaceable):
+class UnparsedDocumentation(dbtClassMixin, Replaceable):
     package_name: str
     root_path: str
     path: str
@@ -400,13 +407,13 @@ class MaturityType(StrEnum):
 
 
 @dataclass
-class ExposureOwner(JsonSchemaMixin, Replaceable):
+class ExposureOwner(dbtClassMixin, Replaceable):
     email: str
     name: Optional[str] = None
 
 
 @dataclass
-class UnparsedExposure(JsonSchemaMixin, Replaceable):
+class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
     type: ExposureType
     owner: ExposureOwner

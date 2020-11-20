@@ -5,8 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional, Union, List, Any, Dict, Type, Sequence
 
-from hologram import JsonSchemaMixin
-from hologram.helpers import StrEnum
+from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
@@ -34,16 +33,25 @@ TaskID = uuid.UUID
 
 
 @dataclass
-class RPCParameters(JsonSchemaMixin):
-    timeout: Optional[float]
+class RPCParameters(dbtClassMixin):
     task_tags: TaskTags
+    timeout: Optional[float]
+
+    @classmethod
+    def __pre_deserialize__(cls, data, options=None):
+        data = super().__pre_deserialize__(data, options=options)
+        if 'timeout' not in data:
+            data['timeout'] = None
+        if 'task_tags' not in data:
+            data['task_tags'] = None
+        return data
 
 
 @dataclass
 class RPCExecParameters(RPCParameters):
     name: str
     sql: str
-    macros: Optional[str]
+    macros: Optional[str] = None
 
 
 @dataclass
@@ -132,7 +140,7 @@ class StatusParameters(RPCParameters):
 
 
 @dataclass
-class GCSettings(JsonSchemaMixin):
+class GCSettings(dbtClassMixin):
     # start evicting the longest-ago-ended tasks here
     maxsize: int
     # start evicting all tasks before now - auto_reap_age when we have this
@@ -254,7 +262,7 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
 
 
 @dataclass
-class ResultTable(JsonSchemaMixin):
+class ResultTable(dbtClassMixin):
     column_names: List[str]
     rows: List[Any]
 
@@ -411,21 +419,31 @@ class TaskHandlerState(StrEnum):
 
 
 @dataclass
-class TaskTiming(JsonSchemaMixin):
+class TaskTiming(dbtClassMixin):
     state: TaskHandlerState
     start: Optional[datetime]
     end: Optional[datetime]
     elapsed: Optional[float]
 
+    # These ought to be defaults but superclass order doesn't
+    # allow that to work
+    @classmethod
+    def __pre_deserialize__(cls, data, options=None):
+        data = super().__pre_deserialize__(data, options=options)
+        for field_name in ('start', 'end', 'elapsed'):
+            if field_name not in data:
+                data[field_name] = None
+        return data
+
 
 @dataclass
 class TaskRow(TaskTiming):
     task_id: TaskID
-    request_id: Union[str, int]
     request_source: str
     method: str
-    timeout: Optional[float]
-    tags: TaskTags
+    request_id: Union[str, int]
+    tags: TaskTags = None
+    timeout: Optional[float] = None
 
 
 @dataclass
@@ -451,7 +469,7 @@ class KillResult(RemoteResult):
 @dataclass
 @schema_version('remote-manifest-result', 1)
 class GetManifestResult(RemoteResult):
-    manifest: Optional[WritableManifest]
+    manifest: Optional[WritableManifest] = None
 
 
 # this is kind of carefuly structured: BlocksManifestTasks is implied by
@@ -474,6 +492,16 @@ class PollResult(RemoteResult, TaskTiming):
     start: Optional[datetime]
     end: Optional[datetime]
     elapsed: Optional[float]
+
+    # These ought to be defaults but superclass order doesn't
+    # allow that to work
+    @classmethod
+    def __pre_deserialize__(cls, data, options=None):
+        data = super().__pre_deserialize__(data, options=options)
+        for field_name in ('start', 'end', 'elapsed'):
+            if field_name not in data:
+                data[field_name] = None
+        return data
 
 
 @dataclass

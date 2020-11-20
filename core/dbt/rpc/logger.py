@@ -1,8 +1,7 @@
 import logbook
 import logbook.queues
 from jsonrpc.exceptions import JSONRPCError
-from hologram import JsonSchemaMixin
-from hologram.helpers import StrEnum
+from dbt.dataclass_schema import StrEnum
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -25,8 +24,11 @@ class QueueMessageType(StrEnum):
     terminating = frozenset((Error, Result, Timeout))
 
 
+# This class was subclassed from JsonSchemaMixin, but it
+# doesn't appear to be necessary, and Mashumaro does not
+# handle logbook.LogRecord
 @dataclass
-class QueueMessage(JsonSchemaMixin):
+class QueueMessage:
     message_type: QueueMessageType
 
 

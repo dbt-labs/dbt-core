@@ -3,7 +3,7 @@ import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 from .compile import CompileRunner, CompileTask
 
@@ -96,6 +96,7 @@ def get_hooks_by_tags(
 def get_hook(source, index):
     hook_dict = get_hook_dict(source)
     hook_dict.setdefault('index', index)
+    Hook.validate(hook_dict)
     return Hook.from_dict(hook_dict)
 
 
@@ -191,7 +192,7 @@ class ModelRunner(CompileRunner):
     def _build_run_model_result(self, model, context):
         result = context['load_result']('main')
         adapter_response = {}
-        if isinstance(result.response, JsonSchemaMixin):
+        if isinstance(result.response, dbtClassMixin):
             adapter_response = result.response.to_dict()
         return RunResult(
             node=model,

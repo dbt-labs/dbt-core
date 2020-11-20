@@ -92,6 +92,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'database': None,
                     'schema': None,
                     'alias': None,
+                    'check_cols': None,
                 },
                 'alias': 'my_snapshot',
                 'resource_type': 'snapshot',

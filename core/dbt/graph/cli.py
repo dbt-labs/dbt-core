@@ -1,6 +1,6 @@
 # special support for CLI argument parsing.
 import itertools
-import yaml
+from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 
 from typing import (
     Dict, List, Optional, Tuple, Any, Union
@@ -236,7 +236,7 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
         )
 
     # if key isn't a valid method name, this will raise
-    base = SelectionCriteria.from_dict(definition, dct)
+    base = SelectionCriteria.selection_criteria_from_dict(definition, dct)
     if diff_arg is None:
         return base
     else:

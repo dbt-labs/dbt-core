@@ -1,6 +1,6 @@
 import abc
 import shlex
-import yaml
+from dbt.clients.yaml_helper import Dumper, yaml  # noqa: F401
 from typing import Type, Optional
 
 

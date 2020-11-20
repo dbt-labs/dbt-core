@@ -4,7 +4,7 @@ import inspect
 import json
 from dataclasses import dataclass
 from typing import List, Optional, Iterable, Union, Dict, Any
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 
 from dbt.context.base import BaseContext
@@ -21,20 +21,20 @@ CONTEXTS_MAP = {
 
 
 @dataclass
-class ContextValue(JsonSchemaMixin):
+class ContextValue(dbtClassMixin):
     name: str
     value: str  # a type description
     doc: Optional[str]
 
 
 @dataclass
-class MethodArgument(JsonSchemaMixin):
+class MethodArgument(dbtClassMixin):
     name: str
     value: str  # a type description
 
 
 @dataclass
-class ContextMethod(JsonSchemaMixin):
+class ContextMethod(dbtClassMixin):
     name: str
     args: List[MethodArgument]
     result: str  # a type description
@@ -42,7 +42,7 @@ class ContextMethod(JsonSchemaMixin):
 
 
 @dataclass
-class Unknown(JsonSchemaMixin):
+class Unknown(dbtClassMixin):
     name: str
     value: str
     doc: Optional[str]
@@ -96,7 +96,7 @@ def collect(cls):
 
 
 @dataclass
-class ContextCatalog(JsonSchemaMixin):
+class ContextCatalog(dbtClassMixin):
     base: List[ContextMember]
     target: List[ContextMember]
     model: List[ContextMember]

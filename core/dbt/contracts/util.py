@@ -7,13 +7,12 @@ from typing import (
 
 from dbt.clients.system import write_json, read_json
 from dbt.exceptions import (
-    IncompatibleSchemaException,
     InternalException,
     RuntimeException,
 )
 from dbt.version import __version__
 from dbt.tracking import get_invocation_id
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 MacroKey = Tuple[str, str]
 SourceKey = Tuple[str, str]
@@ -57,8 +56,10 @@ class Mergeable(Replaceable):
 
 
 class Writable:
-    def write(self, path: str, omit_none: bool = False):
-        write_json(path, self.to_dict(omit_none=omit_none))  # type: ignore
+    def write(self, path: str):
+        write_json(
+            path, self.to_dict(options={'keep_none': True})  # type: ignore
+        )
 
 
 class AdditionalPropertiesMixin:
@@ -69,22 +70,41 @@ class AdditionalPropertiesMixin:
     """
     ADDITIONAL_PROPERTIES = True
 
+    # This takes attributes in the dictionary that are
+    # not in the class definitions and puts them in an
+    # _extra dict in the class
     @classmethod
-    def from_dict(cls, data, validate=True):
-        self = super().from_dict(data=data, validate=validate)
-        keys = self.to_dict(validate=False, omit_none=False)
+    def __pre_deserialize__(cls, data, options=None):
+        # dir() did not work because fields with
+        # metadata settings are not found
+        # The original version of this would create the
+        # object first and then update extra with the
+        # extra keys, but that won't work here, so
+        # we're copying the dict so we don't insert the
+        # _extra in the original data. This also requires
+        # that Mashumaro actually build the '_extra' field
+        cls_keys = cls._get_field_names()
+        new_dict = {}
         for key, value in data.items():
-            if key not in keys:
-                self.extra[key] = value
-        return self
+            if key not in cls_keys and key != '_extra':
+                if '_extra' not in new_dict:
+                    new_dict['_extra'] = {}
+                new_dict['_extra'][key] = value
+            else:
+                new_dict[key] = value
+        data = new_dict
+        data = super().__pre_deserialize__(data, options=options)
+        return data
 
-    def to_dict(self, omit_none=True, validate=False):
-        data = super().to_dict(omit_none=omit_none, validate=validate)
+    def __post_serialize__(self, dct, options=None):
+        data = super().__post_serialize__(dct, options=options)
         data.update(self.extra)
+        if '_extra' in data:
+            del data['_extra']
         return data
 
     def replace(self, **kwargs):
-        dct = self.to_dict(omit_none=False, validate=False)
+        dct = self.to_dict(options={'keep_none': True})
         dct.update(kwargs)
         return self.from_dict(dct)
 
@@ -135,7 +155,7 @@ def get_metadata_env() -> Dict[str, str]:
 
 
 @dataclasses.dataclass
-class BaseArtifactMetadata(JsonSchemaMixin):
+class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(
@@ -158,7 +178,7 @@ def schema_version(name: str, version: int):
 
 
 @dataclasses.dataclass
-class VersionedSchema(JsonSchemaMixin):
+class VersionedSchema(dbtClassMixin):
     dbt_schema_version: ClassVar[SchemaVersion]
 
     @classmethod
@@ -180,18 +200,9 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
     metadata: BaseArtifactMetadata
 
     @classmethod
-    def from_dict(
-        cls: Type[T], data: Dict[str, Any], validate: bool = True
-    ) -> T:
+    def validate(cls, data):
+        super().validate(data)
         if cls.dbt_schema_version is None:
             raise InternalException(
                 'Cannot call from_dict with no schema version!'
             )
-
-        if validate:
-            expected = str(cls.dbt_schema_version)
-            found = data.get('metadata', {}).get(SCHEMA_VERSION_KEY)
-            if found != expected:
-                raise IncompatibleSchemaException(expected, found)
-
-        return super().from_dict(data=data, validate=validate)

@@ -2,7 +2,8 @@ from typing import List
 
 from dbt.clients.jinja import MacroStack
 from dbt.contracts.connection import AdapterRequiredConfig
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, AnyManifest
+from dbt.context.macro_resolver import TestMacroNamespace
 
 
 from .configured import ConfiguredContext
@@ -19,17 +20,25 @@ class ManifestContext(ConfiguredContext):
     def __init__(
         self,
         config: AdapterRequiredConfig,
-        manifest: Manifest,
+        manifest: AnyManifest,
         search_package: str,
     ) -> None:
         super().__init__(config)
         self.manifest = manifest
+        # this is the package of the node for which this context was built
         self.search_package = search_package
         self.macro_stack = MacroStack()
+        # This namespace is used by the BaseDatabaseWrapper in jinja rendering.
+        # The namespace is passed to it when it's constructed. It expects
+        # to be able to do: namespace.get_from_package(..)
+        self.namespace = self._build_namespace()
+
+    def _build_namespace(self):
+        # this takes all the macros in the manifest and adds them
+        # to the MacroNamespaceBuilder stored in self.namespace
         builder = self._get_namespace_builder()
-        self.namespace = builder.build_namespace(
-            self.manifest.macros.values(),
-            self._ctx,
+        return builder.build_namespace(
+            self.manifest.macros.values(), self._ctx
         )
 
     def _get_namespace_builder(self) -> MacroNamespaceBuilder:
@@ -46,9 +55,15 @@ class ManifestContext(ConfiguredContext):
             None,
         )
 
+    # This does not use the Mashumaro code
     def to_dict(self):
         dct = super().to_dict()
-        dct.update(self.namespace)
+        # This moves all of the macros in the 'namespace' into top level
+        # keys in the manifest dictionary
+        if isinstance(self.namespace, TestMacroNamespace):
+            dct.update(self.namespace.local_namespace)
+        else:
+            dct.update(self.namespace)
         return dct
 
 

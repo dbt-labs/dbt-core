@@ -13,7 +13,7 @@ from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
 import colorama
 import logbook
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 # Colorama needs some help on windows because we're using logger.info
 # intead of print(). If the Windows env doesn't have a TERM var set,
@@ -45,11 +45,10 @@ DEBUG_LOG_FORMAT = (
 
 
 ExceptionInformation = str
-Extras = Dict[str, Any]
 
 
 @dataclass
-class LogMessage(JsonSchemaMixin):
+class LogMessage(dbtClassMixin):
     timestamp: datetime
     message: str
     channel: str
@@ -57,7 +56,7 @@ class LogMessage(JsonSchemaMixin):
     levelname: str
     thread_name: str
     process: int
-    extra: Optional[Extras] = None
+    extra: Optional[Dict[str, Any]] = None
     exc_info: Optional[ExceptionInformation] = None
 
     @classmethod
@@ -215,7 +214,7 @@ class TextOnly(logbook.Processor):
 
 
 class TimingProcessor(logbook.Processor):
-    def __init__(self, timing_info: Optional[JsonSchemaMixin] = None):
+    def __init__(self, timing_info: Optional[dbtClassMixin] = None):
         self.timing_info = timing_info
         super().__init__()
 

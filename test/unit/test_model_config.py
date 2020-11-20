@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 from typing import List, Dict
 import pytest
 from dbt.contracts.graph.model_config import MergeBehavior, ShowBehavior, CompareBehavior
 
 
 @dataclass
-class ThingWithMergeBehavior(JsonSchemaMixin):
+class ThingWithMergeBehavior(dbtClassMixin):
     default_behavior: int
     appended: List[str] = field(metadata={'merge': MergeBehavior.Append})
     updated: Dict[str, int] = field(metadata={'merge': MergeBehavior.Update})
@@ -35,7 +35,7 @@ def test_merge_behavior_from_field():
 
 
 @dataclass
-class ThingWithShowBehavior(JsonSchemaMixin):
+class ThingWithShowBehavior(dbtClassMixin):
     default_behavior: int
     hidden: str = field(metadata={'show_hide': ShowBehavior.Hide})
     shown: float = field(metadata={'show_hide': ShowBehavior.Show})
@@ -61,7 +61,7 @@ def test_show_behavior_from_field():
 
 
 @dataclass
-class ThingWithCompareBehavior(JsonSchemaMixin):
+class ThingWithCompareBehavior(dbtClassMixin):
     default_behavior: int
     included: float = field(metadata={'compare': CompareBehavior.Include})
     excluded: str = field(metadata={'compare': CompareBehavior.Exclude})

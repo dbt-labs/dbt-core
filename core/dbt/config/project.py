@@ -26,15 +26,12 @@ from dbt.version import get_installed_version
 from dbt.utils import MultiDict
 from dbt.node_types import NodeType
 from dbt.config.selectors import SelectorDict
-
 from dbt.contracts.project import (
     Project as ProjectContract,
     SemverString,
 )
 from dbt.contracts.project import PackageConfig
-
-from hologram import ValidationError
-
+from dbt.dataclass_schema import ValidationError
 from .renderer import DbtProjectYamlRenderer
 from .selectors import (
     selector_config_from_data,
@@ -101,6 +98,7 @@ def package_config_from_data(packages_data: Dict[str, Any]):
         packages_data = {'packages': []}
 
     try:
+        PackageConfig.validate(packages_data)
         packages = PackageConfig.from_dict(packages_data)
     except ValidationError as e:
         raise DbtProjectError(
@@ -306,7 +304,10 @@ class PartialProject(RenderComponents):
         )
 
         try:
-            cfg = ProjectContract.from_dict(rendered.project_dict)
+            ProjectContract.validate(rendered.project_dict)
+            cfg = ProjectContract.from_dict(
+                rendered.project_dict
+            )
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
         # name/version are required in the Project definition, so we can assume
@@ -586,7 +587,7 @@ class Project:
 
     def validate(self):
         try:
-            ProjectContract.from_dict(self.to_project_config())
+            ProjectContract.validate(self.to_project_config())
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 

@@ -33,7 +33,7 @@ from dbt.exceptions import (
     raise_compiler_error
 )
 
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 
 
 def _project_quoting_dict(
@@ -174,7 +174,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         :raises DbtProjectError: If the configuration fails validation.
         """
         try:
-            Configuration.from_dict(self.serialize())
+            Configuration.validate(self.serialize())
         except ValidationError as e:
             raise DbtProjectError(validator_error_message(e)) from e
 
@@ -391,7 +391,7 @@ class UnsetConfig(UserConfig):
                 f"'UnsetConfig' object has no attribute {name}"
             )
 
-    def to_dict(self):
+    def __post_serialize__(self, dct, options=None):
         return {}
 
 

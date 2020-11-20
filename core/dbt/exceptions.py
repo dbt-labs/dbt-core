@@ -7,14 +7,14 @@ from dbt.node_types import NodeType
 from dbt import flags
 from dbt.ui import line_wrap_message
 
-import hologram
+import dbt.dataclass_schema
 
 
 def validator_error_message(exc):
-    """Given a hologram.ValidationError (which is basically a
+    """Given a dbt.dataclass_schema.ValidationError (which is basically a
     jsonschema.ValidationError), return the relevant parts as a string
     """
-    if not isinstance(exc, hologram.ValidationError):
+    if not isinstance(exc, dbt.dataclass_schema.ValidationError):
         return str(exc)
     path = "[%s]" % "][".join(map(repr, exc.relative_path))
     return 'at path {}: {}'.format(path, exc.message)

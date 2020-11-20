@@ -5,7 +5,7 @@ from typing import (
     List, Dict, Any, Iterable, Generic, TypeVar
 )
 
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 
 from dbt import utils
 from dbt.clients.jinja import MacroGenerator
@@ -23,7 +23,7 @@ from dbt.context.context_config import (
 from dbt.contracts.files import (
     SourceFile, FilePath, FileHash
 )
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import MacroManifest
 from dbt.contracts.graph.parsed import HasUniqueID
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
@@ -99,7 +99,7 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
         results: ParseResult,
         project: Project,
         root_project: RuntimeConfig,
-        macro_manifest: Manifest,
+        macro_manifest: MacroManifest,
     ) -> None:
         super().__init__(results, project)
         self.root_project = root_project
@@ -108,9 +108,10 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 class RelationUpdate:
     def __init__(
-        self, config: RuntimeConfig, manifest: Manifest, component: str
+        self, config: RuntimeConfig, macro_manifest: MacroManifest,
+        component: str
     ) -> None:
-        macro = manifest.find_generate_macro_by_name(
+        macro = macro_manifest.find_generate_macro_by_name(
             component=component,
             root_project_name=config.project_name,
         )
@@ -120,7 +121,7 @@ class RelationUpdate:
             )
 
         root_context = generate_generate_component_name_macro(
-            macro, config, manifest
+            macro, config, macro_manifest
         )
         self.updater = MacroGenerator(macro, root_context)
         self.component = component
@@ -144,18 +145,21 @@ class ConfiguredParser(
         results: ParseResult,
         project: Project,
         root_project: RuntimeConfig,
-        macro_manifest: Manifest,
+        macro_manifest: MacroManifest,
     ) -> None:
         super().__init__(results, project, root_project, macro_manifest)
 
         self._update_node_database = RelationUpdate(
-            manifest=macro_manifest, config=root_project, component='database'
+            macro_manifest=macro_manifest, config=root_project,
+            component='database'
         )
         self._update_node_schema = RelationUpdate(
-            manifest=macro_manifest, config=root_project, component='schema'
+            macro_manifest=macro_manifest, config=root_project,
+            component='schema'
         )
         self._update_node_alias = RelationUpdate(
-            manifest=macro_manifest, config=root_project, component='alias'
+            macro_manifest=macro_manifest, config=root_project,
+            component='alias'
         )
 
     @abc.abstractclassmethod
@@ -252,7 +256,7 @@ class ConfiguredParser(
         }
         dct.update(kwargs)
         try:
-            return self.parse_from_dict(dct)
+            return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:
             msg = validator_error_message(exc)
             # this is a bit silly, but build an UnparsedNode just for error
@@ -275,20 +279,24 @@ class ConfiguredParser(
     def render_with_context(
         self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> None:
-        """Given the parsed node and a ContextConfig to use during parsing,
-        render the node's sql wtih macro capture enabled.
+        # Given the parsed node and a ContextConfig to use during parsing,
+        # render the node's sql wtih macro capture enabled.
+        # Note: this mutates the config object when config calls are rendered.
 
-        Note: this mutates the config object when config() calls are rendered.
-        """
         # during parsing, we don't have a connection, but we might need one, so
         # we have to acquire it.
         with get_adapter(self.root_project).connection_for(parsed_node):
             context = self._context_for(parsed_node, config)
 
+            # this goes through the process of rendering, but just throws away
+            # the rendered result. The "macro capture" is the point?
             get_rendered(
                 parsed_node.raw_sql, context, parsed_node, capture_macros=True
             )
 
+    # This is taking the original config for the node, converting it to a dict,
+    # updating the config with new config passed in, then re-creating the
+    # config from the dict in the node.
     def update_parsed_node_config(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:

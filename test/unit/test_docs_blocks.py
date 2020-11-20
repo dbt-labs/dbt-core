@@ -2,7 +2,7 @@ import os
 import unittest
 
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.node_types import NodeType
 from dbt.parser import docs
@@ -147,7 +147,7 @@ class DocumentationParserTest(unittest.TestCase):
             results=ParseResult.rpc(),
             root_project=self.root_project_config,
             project=self.subdir_project_config,
-            macro_manifest=Manifest.from_macros())
+            macro_manifest=MacroManifest({}, {}))
 
         file_block = self._build_file(TEST_DOCUMENTATION_FILE, 'test_file.md')
 
@@ -172,7 +172,7 @@ class DocumentationParserTest(unittest.TestCase):
             results=ParseResult.rpc(),
             root_project=self.root_project_config,
             project=self.subdir_project_config,
-            macro_manifest=Manifest.from_macros())
+            macro_manifest=MacroManifest({}, {}))
 
         file_block = self._build_file(TEST_DOCUMENTATION_FILE, 'test_file.md')
 
@@ -189,7 +189,7 @@ class DocumentationParserTest(unittest.TestCase):
             results=ParseResult.rpc(),
             root_project=self.root_project_config,
             project=self.subdir_project_config,
-            macro_manifest=Manifest.from_macros())
+            macro_manifest=MacroManifest({}, {}))
 
         file_block = self._build_file(MULTIPLE_RAW_BLOCKS, 'test_file.md')
 

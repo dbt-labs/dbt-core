@@ -4,15 +4,12 @@ import pytest
 from dbt.node_types import NodeType
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.model_config import (
-    All,
     NodeConfig,
     SeedConfig,
     TestConfig,
-    TimestampSnapshotConfig,
-    CheckSnapshotConfig,
+    SnapshotConfig,
     SourceConfig,
     EmptySnapshotConfig,
-    SnapshotStrategy,
     Hook,
 )
 from dbt.contracts.graph.parsed import (
@@ -44,8 +41,8 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt import flags
 
-from hologram import ValidationError
-from .utils import ContractTestCase, assert_symmetric, assert_from_dict, assert_fails_validation, dict_replace, replace_config
+from dbt.dataclass_schema import ValidationError
+from .utils import ContractTestCase, assert_symmetric, assert_from_dict, assert_to_dict, compare_dicts, assert_fails_validation, dict_replace, replace_config
 
 
 @pytest.fixture(autouse=True)
@@ -724,7 +721,7 @@ def test_patch_parsed_model(basic_parsed_model_object, basic_parsed_model_patch_
 
 
 def test_patch_parsed_model_invalid(basic_parsed_model_object, basic_parsed_model_patch_object):
-    pre_patch = basic_parsed_model_object
+    pre_patch = basic_parsed_model_object # ParsedModelNode
     patch = basic_parsed_model_patch_object.replace(description=None)
     with pytest.raises(ValidationError):
         pre_patch.patch(patch)
@@ -1144,7 +1141,9 @@ def test_basic_schema_test_node(minimal_parsed_schema_test_dict, basic_parsed_sc
 
 
 def test_complex_schema_test_node(complex_parsed_schema_test_dict, complex_parsed_schema_test_object):
-    node = complex_parsed_schema_test_object
+    # this tests for the presence of _extra keys
+    node = complex_parsed_schema_test_object  # ParsedSchemaTestNode
+    assert(node.config._extra['extra_key'])
     node_dict = complex_parsed_schema_test_dict
     assert_symmetric(node, node_dict)
     assert node.empty is False
@@ -1185,8 +1184,8 @@ def basic_timestamp_snapshot_config_dict():
 
 @pytest.fixture
 def basic_timestamp_snapshot_config_object():
-    return TimestampSnapshotConfig(
-        strategy=SnapshotStrategy.Timestamp,
+    return SnapshotConfig(
+        strategy='timestamp',
         updated_at='last_update',
         unique_key='id',
         target_database='some_snapshot_db',
@@ -1217,11 +1216,11 @@ def complex_timestamp_snapshot_config_dict():
 
 @pytest.fixture
 def complex_timestamp_snapshot_config_object():
-    cfg = TimestampSnapshotConfig(
+    cfg = SnapshotConfig(
         column_types={'a': 'text'},
         materialized='snapshot',
         post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
-        strategy=SnapshotStrategy.Timestamp,
+        strategy='timestamp',
         target_database='some_snapshot_db',
         target_schema='some_snapshot_schema',
         updated_at='last_update',
@@ -1241,20 +1240,14 @@ def test_basic_timestamp_snapshot_config(basic_timestamp_snapshot_config_dict, b
 def test_complex_timestamp_snapshot_config(complex_timestamp_snapshot_config_dict, complex_timestamp_snapshot_config_object):
     cfg = complex_timestamp_snapshot_config_object
     cfg_dict = complex_timestamp_snapshot_config_dict
-    assert_symmetric(cfg, cfg_dict, TimestampSnapshotConfig)
-
-
-def test_invalid_wrong_strategy(basic_timestamp_snapshot_config_dict):
-    bad_type = basic_timestamp_snapshot_config_dict
-    bad_type['strategy'] = 'check'
-    assert_fails_validation(bad_type, TimestampSnapshotConfig)
+    assert_symmetric(cfg, cfg_dict, SnapshotConfig)
 
 
 def test_invalid_missing_updated_at(basic_timestamp_snapshot_config_dict):
     bad_fields = basic_timestamp_snapshot_config_dict
     del bad_fields['updated_at']
     bad_fields['check_cols'] = 'all'
-    assert_fails_validation(bad_fields, TimestampSnapshotConfig)
+    assert_fails_validation(bad_fields, SnapshotConfig)
 
 
 @pytest.fixture
@@ -1279,9 +1272,9 @@ def basic_check_snapshot_config_dict():
 
 @pytest.fixture
 def basic_check_snapshot_config_object():
-    return CheckSnapshotConfig(
-        strategy=SnapshotStrategy.Check,
-        check_cols=All.All,
+    return SnapshotConfig(
+        strategy='check',
+        check_cols='all',
         unique_key='id',
         target_database='some_snapshot_db',
         target_schema='some_snapshot_schema',
@@ -1311,11 +1304,11 @@ def complex_set_snapshot_config_dict():
 
 @pytest.fixture
 def complex_set_snapshot_config_object():
-    cfg = CheckSnapshotConfig(
+    cfg = SnapshotConfig(
         column_types={'a': 'text'},
         materialized='snapshot',
         post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
-        strategy=SnapshotStrategy.Check,
+        strategy='check',
         check_cols=['a', 'b'],
         target_database='some_snapshot_db',
         target_schema='some_snapshot_schema',
@@ -1328,7 +1321,7 @@ def complex_set_snapshot_config_object():
 def test_basic_snapshot_config(basic_check_snapshot_config_dict, basic_check_snapshot_config_object):
     cfg_dict = basic_check_snapshot_config_dict
     cfg = basic_check_snapshot_config_object
-    assert_symmetric(cfg, cfg_dict, CheckSnapshotConfig)
+    assert_symmetric(cfg, cfg_dict, SnapshotConfig)
     pickle.loads(pickle.dumps(cfg))
 
 
@@ -1342,20 +1335,20 @@ def test_complex_snapshot_config(complex_set_snapshot_config_dict, complex_set_s
 def test_invalid_check_wrong_strategy(basic_check_snapshot_config_dict):
     wrong_strategy = basic_check_snapshot_config_dict
     wrong_strategy['strategy'] = 'timestamp'
-    assert_fails_validation(wrong_strategy, CheckSnapshotConfig)
+    assert_fails_validation(wrong_strategy, SnapshotConfig)
 
 
 def test_invalid_missing_check_cols(basic_check_snapshot_config_dict):
     wrong_fields = basic_check_snapshot_config_dict
     del wrong_fields['check_cols']
-    with pytest.raises(ValidationError, match=r"'check_cols' is a required property"):
-        CheckSnapshotConfig.from_dict(wrong_fields)
+    with pytest.raises(ValidationError, match=r"A snapshot configured with the check strategy"):
+        SnapshotConfig.validate(wrong_fields)
 
 
 def test_invalid_check_value(basic_check_snapshot_config_dict):
     invalid_check_type = basic_check_snapshot_config_dict
     invalid_check_type['check_cols'] = 'some'
-    assert_fails_validation(invalid_check_type, CheckSnapshotConfig)
+    assert_fails_validation(invalid_check_type, SnapshotConfig)
 
 
 @pytest.fixture
@@ -1429,8 +1422,8 @@ def basic_timestamp_snapshot_object():
         schema='test_schema',
         alias='bar',
         tags=[],
-        config=TimestampSnapshotConfig(
-            strategy=SnapshotStrategy.Timestamp,
+        config=SnapshotConfig(
+            strategy='timestamp',
             unique_key='id',
             updated_at='last_update',
             target_database='some_snapshot_db',
@@ -1559,10 +1552,10 @@ def basic_check_snapshot_object():
         schema='test_schema',
         alias='bar',
         tags=[],
-        config=CheckSnapshotConfig(
-            strategy=SnapshotStrategy.Check,
+        config=SnapshotConfig(
+            strategy='check',
             unique_key='id',
-            check_cols=All.All,
+            check_cols='all',
             target_database='some_snapshot_db',
             target_schema='some_snapshot_schema',
         ),

@@ -13,8 +13,9 @@ from typing import (
     TypeVar,
 )
 
-from hologram import JsonSchemaMixin
-from hologram.helpers import ExtensibleJsonSchemaMixin
+from dbt.dataclass_schema import (
+    dbtClassMixin, ExtensibleDbtClassMixin
+)
 
 from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
@@ -38,20 +39,14 @@ from .model_config import (
     TestConfig,
     SourceConfig,
     EmptySnapshotConfig,
-    SnapshotVariants,
-)
-# import these 3 so the SnapshotVariants forward ref works.
-from .model_config import (  # noqa
-    TimestampSnapshotConfig,
-    CheckSnapshotConfig,
-    GenericSnapshotConfig,
+    SnapshotConfig,
 )
 
 
 @dataclass
 class ColumnInfo(
     AdditionalPropertiesMixin,
-    ExtensibleJsonSchemaMixin,
+    ExtensibleDbtClassMixin,
     Replaceable
 ):
     name: str
@@ -64,7 +59,7 @@ class ColumnInfo(
 
 
 @dataclass
-class HasFqn(JsonSchemaMixin, Replaceable):
+class HasFqn(dbtClassMixin, Replaceable):
     fqn: List[str]
 
     def same_fqn(self, other: 'HasFqn') -> bool:
@@ -72,12 +67,12 @@ class HasFqn(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class HasUniqueID(JsonSchemaMixin, Replaceable):
+class HasUniqueID(dbtClassMixin, Replaceable):
     unique_id: str
 
 
 @dataclass
-class MacroDependsOn(JsonSchemaMixin, Replaceable):
+class MacroDependsOn(dbtClassMixin, Replaceable):
     macros: List[str] = field(default_factory=list)
 
     # 'in' on lists is O(n) so this is O(n^2) for # of macros
@@ -96,12 +91,22 @@ class DependsOn(MacroDependsOn):
 
 
 @dataclass
-class HasRelationMetadata(JsonSchemaMixin, Replaceable):
+class HasRelationMetadata(dbtClassMixin, Replaceable):
     database: Optional[str]
     schema: str
 
+    # Can't set database to None like it ought to be
+    # because it messes up the subclasses and default parameters
+    # so hack it here
+    @classmethod
+    def __pre_deserialize__(cls, data, options=None):
+        data = super().__pre_deserialize__(data, options=options)
+        if 'database' not in data:
+            data['database'] = None
+        return data
 
-class ParsedNodeMixins(JsonSchemaMixin):
+
+class ParsedNodeMixins(dbtClassMixin):
     resource_type: NodeType
     depends_on: DependsOn
     config: NodeConfig
@@ -132,8 +137,12 @@ class ParsedNodeMixins(JsonSchemaMixin):
         self.meta = patch.meta
         self.docs = patch.docs
         if flags.STRICT_MODE:
-            assert isinstance(self, JsonSchemaMixin)
-            self.to_dict(validate=True, omit_none=False)
+            # It seems odd that an instance can be invalid
+            # Maybe there should be validation or restrictions
+            # elsewhere?
+            assert isinstance(self, dbtClassMixin)
+            dct = self.to_dict(options={'keep_none': True})
+            self.validate(dct)
 
     def get_materialization(self):
         return self.config.materialized
@@ -335,14 +344,14 @@ class ParsedSeedNode(ParsedNode):
 
 
 @dataclass
-class TestMetadata(JsonSchemaMixin, Replaceable):
-    namespace: Optional[str]
+class TestMetadata(dbtClassMixin, Replaceable):
     name: str
-    kwargs: Dict[str, Any]
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    namespace: Optional[str] = None
 
 
 @dataclass
-class HasTestMetadata(JsonSchemaMixin):
+class HasTestMetadata(dbtClassMixin):
     test_metadata: TestMetadata
 
 
@@ -394,7 +403,7 @@ class IntermediateSnapshotNode(ParsedNode):
 @dataclass
 class ParsedSnapshotNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
-    config: SnapshotVariants
+    config: SnapshotConfig
 
 
 @dataclass
@@ -443,8 +452,10 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.docs = patch.docs
         self.arguments = patch.arguments
         if flags.STRICT_MODE:
-            assert isinstance(self, JsonSchemaMixin)
-            self.to_dict(validate=True, omit_none=False)
+            # What does this actually validate?
+            assert isinstance(self, dbtClassMixin)
+            dct = self.to_dict(options={'keep_none': True})
+            self.validate(dct)
 
     def same_contents(self, other: Optional['ParsedMacro']) -> bool:
         if other is None:

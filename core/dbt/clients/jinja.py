@@ -231,6 +231,7 @@ class BaseMacroGenerator:
         template = self.get_template()
         # make the module. previously we set both vars and local, but that's
         # redundant: They both end up in the same place
+        # make_module is in jinja2.environment. It returns a TemplateModule
         module = template.make_module(vars=self.context, shared=False)
         macro = module.__dict__[get_dbt_macro_name(name)]
         module.__dict__.update(self.context)
@@ -244,6 +245,7 @@ class BaseMacroGenerator:
             raise_compiler_error(str(e))
 
     def call_macro(self, *args, **kwargs):
+        # called from __call__ methods
         if self.context is None:
             raise InternalException(
                 'Context is still None in call_macro!'
@@ -306,8 +308,10 @@ class MacroGenerator(BaseMacroGenerator):
             e.stack.append(self.macro)
             raise e
 
+    # This adds the macro's unique id to the node's 'depends_on'
     @contextmanager
     def track_call(self):
+        # This is only called from __call__
         if self.stack is None or self.node is None:
             yield
         else:
@@ -322,6 +326,7 @@ class MacroGenerator(BaseMacroGenerator):
             finally:
                 self.stack.pop(unique_id)
 
+    # this makes MacroGenerator objects callable like functions
     def __call__(self, *args, **kwargs):
         with self.track_call():
             return self.call_macro(*args, **kwargs)

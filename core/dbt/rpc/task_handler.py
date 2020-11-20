@@ -9,7 +9,7 @@ from typing import (
 )
 from typing_extensions import Protocol
 
-from hologram import JsonSchemaMixin, ValidationError
+from dbt.dataclass_schema import dbtClassMixin, ValidationError
 
 import dbt.exceptions
 import dbt.flags
@@ -283,7 +283,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
         #   - The actual thread that this represents, which writes its data to
         #     the result and logs. The atomicity of list.append() and item
         #     assignment means we don't need a lock.
-        self.result: Optional[JsonSchemaMixin] = None
+        self.result: Optional[dbtClassMixin] = None
         self.error: Optional[RPCException] = None
         self.state: TaskHandlerState = TaskHandlerState.NotStarted
         self.logs: List[LogMessage] = []
@@ -453,6 +453,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
             )
 
         try:
+            cls.validate(self.task_kwargs)
             return cls.from_dict(self.task_kwargs)
         except ValidationError as exc:
             # raise a TypeError to indicate invalid parameters so we get a nice

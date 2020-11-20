@@ -1,6 +1,6 @@
 from .utils import ContractTestCase
 
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 
 from dbt.contracts.project import Project
 
@@ -34,7 +34,7 @@ class TestProject(ContractTestCase):
             'config-version': 2,
         }
         with self.assertRaises(ValidationError):
-            self.ContractType.from_dict(dct)
+            self.ContractType.validate(dct)
 
     def test_unsupported_version(self):
         dct = {
@@ -43,5 +43,5 @@ class TestProject(ContractTestCase):
             'profile': 'test',
             'project-root': '/usr/src/app',
         }
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(Exception):
             self.ContractType.from_dict(dct)

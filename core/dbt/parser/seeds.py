@@ -13,7 +13,9 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
         )
 
     def parse_from_dict(self, dct, validate=True) -> ParsedSeedNode:
-        return ParsedSeedNode.from_dict(dct, validate=validate)
+        if validate:
+            ParsedSeedNode.validate(dct)
+        return ParsedSeedNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:

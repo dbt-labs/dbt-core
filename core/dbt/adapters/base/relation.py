@@ -21,8 +21,8 @@ Self = TypeVar('Self', bound='BaseRelation')
 
 @dataclass(frozen=True, eq=False, repr=False)
 class BaseRelation(FakeAPIObject, Hashable):
-    type: Optional[RelationType]
     path: Path
+    type: Optional[RelationType] = None
     quote_character: str = '"'
     include_policy: Policy = Policy()
     quote_policy: Policy = Policy()

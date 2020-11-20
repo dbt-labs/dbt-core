@@ -1,0 +1,3 @@
+from typing import Any
+
+def parse_timezone(s: str) -> Any: ...

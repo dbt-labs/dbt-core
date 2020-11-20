@@ -1,18 +1,18 @@
 from dataclasses import dataclass
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 from typing import List, Dict, Any, Union
 
 
 @dataclass
-class SelectorDefinition(JsonSchemaMixin):
+class SelectorDefinition(dbtClassMixin):
     name: str
     definition: Union[str, Dict[str, Any]]
     description: str = ''
 
 
 @dataclass
-class SelectorFile(JsonSchemaMixin):
+class SelectorFile(dbtClassMixin):
     selectors: List[SelectorDefinition]
     version: int = 2
 

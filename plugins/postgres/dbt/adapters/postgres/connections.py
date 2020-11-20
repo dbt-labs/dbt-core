@@ -17,9 +17,9 @@ from typing import Optional
 class PostgresCredentials(Credentials):
     host: str
     user: str
-    role: Optional[str]
     port: Port
     password: str  # on postgres the password is mandatory
+    role: Optional[str] = None
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
     sslmode: Optional[str] = None

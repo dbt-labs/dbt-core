@@ -7,13 +7,14 @@ from typing import (
 from dbt import flags
 from dbt import tracking
 from dbt.clients.jinja import undefined_error, get_rendered
-from dbt.clients import yaml_helper
+from dbt.clients.yaml_helper import (  # noqa: F401
+    yaml, safe_load, SafeLoader, Loader, Dumper
+)
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import raise_compiler_error, MacroReturn
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.version import __version__ as dbt_version
 
-import yaml
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
@@ -172,6 +173,7 @@ class BaseContext(metaclass=ContextMeta):
             builtins[key] = value
         return builtins
 
+    # no dbtClassMixin so this is not an actual override
     def to_dict(self):
         self._ctx['context'] = self._ctx
         builtins = self.generate_builtins()
@@ -394,7 +396,7 @@ class BaseContext(metaclass=ContextMeta):
             -- ["good"]
         """
         try:
-            return yaml_helper.safe_load(value)
+            return safe_load(value)
         except (AttributeError, ValueError, yaml.YAMLError):
             return default
 
