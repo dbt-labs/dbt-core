@@ -15,6 +15,10 @@ NamespaceMember = Union[FlatNamespace, MacroGenerator]
 FullNamespace = Dict[str, NamespaceMember]
 
 
+# The point of this class is to collect the various macros
+# and provide the ability to flatten them into the ManifestContexts
+# that are created for jinja, so that macro calls can be resolved.
+# Creates special iterators and _keys methods to flatten the lists.
 class MacroNamespace(Mapping):
     def __init__(
         self,
@@ -37,12 +41,16 @@ class MacroNamespace(Mapping):
         }
         yield self.global_project_namespace
 
+    # provides special keys method for MacroNamespace iterator
+    # returns keys from local_namespace, global_namespace, packages,
+    # global_project_namespace
     def _keys(self) -> Set[str]:
         keys: Set[str] = set()
         for search in self._search_order():
             keys.update(search)
         return keys
 
+    # special iterator using special keys
     def __iter__(self) -> Iterator[str]:
         for key in self._keys():
             yield key
@@ -72,6 +80,10 @@ class MacroNamespace(Mapping):
             )
 
 
+# This class builds the MacroNamespace by adding macros to
+# internal_packages or packages, and locals/globals.
+# Call 'build_namespace' to return a MacroNamespace.
+# This is used by ManifestContext (and subclasses)
 class MacroNamespaceBuilder:
     def __init__(
         self,
@@ -83,10 +95,15 @@ class MacroNamespaceBuilder:
     ) -> None:
         self.root_package = root_package
         self.search_package = search_package
+        # internal packages comes from get_adapter_package_names
         self.internal_package_names = set(internal_packages)
         self.internal_package_names_order = internal_packages
+        # macro_func is added here if in root package
         self.globals: FlatNamespace = {}
+        # macro_func is added here if it's the package for this node
         self.locals: FlatNamespace = {}
+        # Create a dictionary of [package name][macro name] =
+        #     MacroGenerator object which acts like a function
         self.internal_packages: Dict[str, FlatNamespace] = {}
         self.packages: Dict[str, FlatNamespace] = {}
         self.thread_ctx = thread_ctx
@@ -94,25 +111,28 @@ class MacroNamespaceBuilder:
 
     def _add_macro_to(
         self,
-        heirarchy: Dict[str, FlatNamespace],
+        hierarchy: Dict[str, FlatNamespace],
         macro: ParsedMacro,
         macro_func: MacroGenerator,
     ):
-        if macro.package_name in heirarchy:
-            namespace = heirarchy[macro.package_name]
+        if macro.package_name in hierarchy:
+            namespace = hierarchy[macro.package_name]
         else:
             namespace = {}
-            heirarchy[macro.package_name] = namespace
+            hierarchy[macro.package_name] = namespace
 
         if macro.name in namespace:
             raise_duplicate_macro_name(
                 macro_func.macro, macro, macro.package_name
             )
-        heirarchy[macro.package_name][macro.name] = macro_func
+        hierarchy[macro.package_name][macro.name] = macro_func
 
     def add_macro(self, macro: ParsedMacro, ctx: Dict[str, Any]):
         macro_name: str = macro.name
 
+        # MacroGenerator is in clients/jinja.py
+        # a MacroGenerator object is a callable object that will
+        # execute the MacroGenerator.__call__ function
         macro_func: MacroGenerator = MacroGenerator(
             macro, ctx, self.node, self.thread_ctx
         )
@@ -122,10 +142,12 @@ class MacroNamespaceBuilder:
         if macro.package_name in self.internal_package_names:
             self._add_macro_to(self.internal_packages, macro, macro_func)
         else:
+            # if it's not an internal package
             self._add_macro_to(self.packages, macro, macro_func)
-
+            # add to locals if it's the package this node is in
             if macro.package_name == self.search_package:
                 self.locals[macro_name] = macro_func
+            # add to globals if it's in the root package
             elif macro.package_name == self.root_package:
                 self.globals[macro_name] = macro_func
 
@@ -143,6 +165,7 @@ class MacroNamespaceBuilder:
         global_project_namespace: FlatNamespace = {}
         for pkg in reversed(self.internal_package_names_order):
             if pkg in self.internal_packages:
+                # add the macros pointed to by this package name
                 global_project_namespace.update(self.internal_packages[pkg])
 
         return MacroNamespace(

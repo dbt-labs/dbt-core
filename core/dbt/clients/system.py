@@ -438,7 +438,9 @@ def run_cmd(
     return out, err
 
 
-def download(url: str, path: str, timeout: Union[float, tuple] = None) -> None:
+def download(
+    url: str, path: str, timeout: Optional[Union[float, tuple]] = None
+) -> None:
     path = convert_path(path)
     connection_timeout = timeout or float(os.getenv('DBT_HTTP_TIMEOUT', 10))
     response = requests.get(url, timeout=connection_timeout)

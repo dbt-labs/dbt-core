@@ -3,7 +3,7 @@ import shutil
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple, Set
 
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 
 from .compile import CompileTask
 

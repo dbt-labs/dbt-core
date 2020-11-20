@@ -79,7 +79,9 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         return [path]
 
     def parse_from_dict(self, dct, validate=True) -> ParsedHookNode:
-        return ParsedHookNode.from_dict(dct, validate=validate)
+        if validate:
+            ParsedHookNode.validate(dct)
+        return ParsedHookNode.from_dict(dct)
 
     @classmethod
     def get_compiled_path(cls, block: HookBlock):

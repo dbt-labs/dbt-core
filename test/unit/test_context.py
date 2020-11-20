@@ -415,16 +415,6 @@ def test_query_header_context(config, manifest_fx):
     assert_has_keys(REQUIRED_QUERY_HEADER_KEYS, MAYBE_KEYS, ctx)
 
 
-def test_macro_parse_context(config, manifest_fx, get_adapter, get_include_paths):
-    ctx = providers.generate_parser_macro(
-        macro=manifest_fx.macros['macro.root.macro_a'],
-        config=config,
-        manifest=manifest_fx,
-        package_name='root',
-    )
-    assert_has_keys(REQUIRED_MACRO_KEYS, MAYBE_KEYS, ctx)
-
-
 def test_macro_runtime_context(config, manifest_fx, get_adapter, get_include_paths):
     ctx = providers.generate_runtime_macro(
         macro=manifest_fx.macros['macro.root.macro_a'],

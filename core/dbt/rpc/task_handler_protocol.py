@@ -14,11 +14,11 @@ from dbt.contracts.rpc import (
 
 
 class TaskHandlerProtocol(Protocol):
-    started: Optional[datetime]
-    ended: Optional[datetime]
-    state: TaskHandlerState
     task_id: TaskID
-    process: Optional[multiprocessing.Process]
+    state: TaskHandlerState
+    started: Optional[datetime] = None
+    ended: Optional[datetime] = None
+    process: Optional[multiprocessing.Process] = None
 
     @property
     def request_id(self) -> Union[str, int]:

@@ -102,7 +102,9 @@ class SelectionCriteria:
         return method_name, method_arguments
 
     @classmethod
-    def from_dict(cls, raw: Any, dct: Dict[str, Any]) -> 'SelectionCriteria':
+    def selection_criteria_from_dict(
+        cls, raw: Any, dct: Dict[str, Any]
+    ) -> 'SelectionCriteria':
         if 'value' not in dct:
             raise RuntimeException(
                 f'Invalid node spec "{raw}" - no search value!'
@@ -150,7 +152,7 @@ class SelectionCriteria:
             # bad spec!
             raise RuntimeException(f'Invalid selector spec "{raw}"')
 
-        return cls.from_dict(raw, result.groupdict())
+        return cls.selection_criteria_from_dict(raw, result.groupdict())
 
 
 class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):

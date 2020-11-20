@@ -26,7 +26,9 @@ class RPCCallParser(SimpleSQLParser[ParsedRPCNode]):
         return []
 
     def parse_from_dict(self, dct, validate=True) -> ParsedRPCNode:
-        return ParsedRPCNode.from_dict(dct, validate=validate)
+        if validate:
+            ParsedRPCNode.validate(dct)
+        return ParsedRPCNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:

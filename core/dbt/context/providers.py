@@ -10,15 +10,18 @@ from dbt import deprecations
 from dbt.adapters.base.column import Column
 from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.clients import agate_helper
-from dbt.clients.jinja import get_rendered, MacroGenerator
+from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
 from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
 from .context_config import ContextConfig
+from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
-from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.connection import AdapterResponse
+from dbt.contracts.graph.manifest import (
+    Manifest, AnyManifest, Disabled, MacroManifest
+)
 from dbt.contracts.graph.compiled import (
     CompiledResource,
     CompiledSeedNode,
@@ -141,6 +144,7 @@ class BaseDatabaseWrapper:
             for prefix in self._get_adapter_macro_prefixes():
                 search_name = f'{prefix}__{macro_name}'
                 try:
+                    # this uses the namespace from the context
                     macro = self._namespace.get_from_package(
                         package_name, search_name
                     )
@@ -638,10 +642,13 @@ class ProviderContext(ManifestContext):
         self.context_config: Optional[ContextConfig] = context_config
         self.provider: Provider = provider
         self.adapter = get_adapter(self.config)
+        # The macro namespace is used in creating the DatabaseWrapper
         self.db_wrapper = self.provider.DatabaseWrapper(
             self.adapter, self.namespace
         )
 
+    # This overrides the method in ManifestContext, and provides
+    # a model, which the ManifestContext builder does not
     def _get_namespace_builder(self):
         internal_packages = get_adapter_package_names(
             self.config.credentials.type
@@ -1203,7 +1210,7 @@ class MacroContext(ProviderContext):
         self,
         model: ParsedMacro,
         config: RuntimeConfig,
-        manifest: Manifest,
+        manifest: AnyManifest,
         provider: Provider,
         search_package: Optional[str],
     ) -> None:
@@ -1289,34 +1296,28 @@ class ModelContext(ProviderContext):
         return self.db_wrapper.Relation.create_from(self.config, self.model)
 
 
+# This is called by '_context_for', used in 'render_with_context'
 def generate_parser_model(
     model: ManifestNode,
     config: RuntimeConfig,
-    manifest: Manifest,
+    manifest: MacroManifest,
     context_config: ContextConfig,
 ) -> Dict[str, Any]:
+    # The __init__ method of ModelContext also initializes
+    # a ManifestContext object which creates a MacroNamespaceBuilder
+    # which adds every macro in the Manifest.
     ctx = ModelContext(
         model, config, manifest, ParseProvider(), context_config
     )
-    return ctx.to_dict()
-
-
-def generate_parser_macro(
-    macro: ParsedMacro,
-    config: RuntimeConfig,
-    manifest: Manifest,
-    package_name: Optional[str],
-) -> Dict[str, Any]:
-    ctx = MacroContext(
-        macro, config, manifest, ParseProvider(), package_name
-    )
+    # The 'to_dict' method in ManifestContext moves all of the macro names
+    # in the macro 'namespace' up to top level keys
     return ctx.to_dict()
 
 
 def generate_generate_component_name_macro(
     macro: ParsedMacro,
     config: RuntimeConfig,
-    manifest: Manifest,
+    manifest: MacroManifest,
 ) -> Dict[str, Any]:
     ctx = MacroContext(
         macro, config, manifest, GenerateNameProvider(), None
@@ -1369,7 +1370,7 @@ class ExposureSourceResolver(BaseResolver):
 def generate_parse_exposure(
     exposure: ParsedExposure,
     config: RuntimeConfig,
-    manifest: Manifest,
+    manifest: MacroManifest,
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
@@ -1387,3 +1388,57 @@ def generate_parse_exposure(
             manifest,
         )
     }
+
+
+# This class is currently used by the schema parser in order
+# to limit the number of macros in the context by using
+# the TestMacroNamespace
+class TestContext(ProviderContext):
+    def __init__(
+        self,
+        model,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        provider: Provider,
+        context_config: Optional[ContextConfig],
+        macro_resolver: MacroResolver,
+    ) -> None:
+        # this must be before super init so that macro_resolver exists for
+        # build_namespace
+        self.macro_resolver = macro_resolver
+        self.thread_ctx = MacroStack()
+        super().__init__(model, config, manifest, provider, context_config)
+        self._build_test_namespace
+
+    def _build_namespace(self):
+        return {}
+
+    # this overrides _build_namespace in ManifestContext which provides a
+    # complete namespace of all macros to only specify macros in the depends_on
+    # This only provides a namespace with macros in the test node
+    # 'depends_on.macros' by using the TestMacroNamespace
+    def _build_test_namespace(self):
+        depends_on_macros = []
+        if self.model.depends_on and self.model.depends_on.macros:
+            depends_on_macros = self.model.depends_on.macros
+        macro_namespace = TestMacroNamespace(
+            self.macro_resolver, self.ctx, self.node, self.thread_ctx,
+            depends_on_macros
+        )
+        self._namespace = macro_namespace
+
+
+def generate_test_context(
+    model: ManifestNode,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    context_config: ContextConfig,
+    macro_resolver: MacroResolver
+) -> Dict[str, Any]:
+    ctx = TestContext(
+        model, config, manifest, ParseProvider(), context_config,
+        macro_resolver
+    )
+    # The 'to_dict' method in ManifestContext moves all of the macro names
+    # in the macro 'namespace' up to top level keys
+    return ctx.to_dict()

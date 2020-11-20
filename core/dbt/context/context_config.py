@@ -165,7 +165,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         # Calculate the defaults. We don't want to validate the defaults,
         # because it might be invalid in the case of required config members
         # (such as on snapshots!)
-        result = config_cls.from_dict({}, validate=False)
+        result = config_cls.from_dict({})
         return result
 
     def _update_from_config(

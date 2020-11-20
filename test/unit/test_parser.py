@@ -20,9 +20,9 @@ from dbt.parser.manifest import process_docs, process_sources, process_refs
 
 from dbt.node_types import NodeType
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.model_config import (
-    NodeConfig, TestConfig, TimestampSnapshotConfig, SnapshotStrategy,
+    NodeConfig, TestConfig, SnapshotConfig
 )
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, DependsOn, ColumnInfo,
@@ -126,8 +126,8 @@ class BaseParserTest(unittest.TestCase):
         self.parser_patcher = mock.patch('dbt.parser.base.get_adapter')
         self.factory_parser = self.parser_patcher.start()
 
-        self.macro_manifest = Manifest.from_macros(
-            macros={m.unique_id: m for m in generate_name_macros('root')}
+        self.macro_manifest = MacroManifest(
+            {m.unique_id: m for m in generate_name_macros('root')}, {}
         )
 
     def tearDown(self):
@@ -544,8 +544,8 @@ class SnapshotParserTest(BaseParserTest):
             package_name='snowplow',
             original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
-            config=TimestampSnapshotConfig(
-                strategy=SnapshotStrategy.Timestamp,
+            config=SnapshotConfig(
+                strategy='timestamp',
                 updated_at='last_update',
                 target_database='dbt',
                 target_schema='analytics',
@@ -604,8 +604,8 @@ class SnapshotParserTest(BaseParserTest):
             package_name='snowplow',
             original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
-            config=TimestampSnapshotConfig(
-                strategy=SnapshotStrategy.Timestamp,
+            config=SnapshotConfig(
+                strategy='timestamp',
                 updated_at='last_update',
                 target_database='dbt',
                 target_schema='analytics',
@@ -634,8 +634,8 @@ class SnapshotParserTest(BaseParserTest):
             package_name='snowplow',
             original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
-            config=TimestampSnapshotConfig(
-                strategy=SnapshotStrategy.Timestamp,
+            config=SnapshotConfig(
+                strategy='timestamp',
                 updated_at='last_update',
                 target_database='dbt',
                 target_schema='analytics',

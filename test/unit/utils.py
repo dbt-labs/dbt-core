@@ -10,7 +10,7 @@ from unittest import TestCase
 
 import agate
 import pytest
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 
 
 def normalize(path):
@@ -150,6 +150,7 @@ class ContractTestCase(TestCase):
     def assert_from_dict(self, obj, dct, cls=None):
         if cls is None:
             cls = self.ContractType
+        cls.validate(dct)
         self.assertEqual(cls.from_dict(dct),  obj)
 
     def assert_symmetric(self, obj, dct, cls=None):
@@ -161,7 +162,26 @@ class ContractTestCase(TestCase):
             cls = self.ContractType
 
         with self.assertRaises(ValidationError):
+            cls.validate(dct)
             cls.from_dict(dct)
+
+
+def compare_dicts(dict1, dict2):
+    first_set = set(dict1.keys())
+    second_set = set(dict2.keys())
+    print(f"--- Difference between first and second keys: {first_set.difference(second_set)}")
+    print(f"--- Difference between second and first keys: {second_set.difference(first_set)}")
+    common_keys = set(first_set).intersection(set(second_set))
+    found_differences = False
+    for key in common_keys:
+        if dict1[key] != dict2[key] :
+            print(f"--- --- first dict: {key}: {str(dict1[key])}")
+            print(f"--- --- second dict: {key}: {str(dict2[key])}")
+            found_differences = True
+    if found_differences:
+        print("--- Found differences in dictionaries")
+    else:
+        print("--- Found no differences in dictionaries")
 
 
 def assert_to_dict(obj, dct):
@@ -171,6 +191,7 @@ def assert_to_dict(obj, dct):
 def assert_from_dict(obj, dct, cls=None):
     if cls is None:
         cls = obj.__class__
+    cls.validate(dct)
     assert cls.from_dict(dct) == obj
 
 
@@ -181,6 +202,7 @@ def assert_symmetric(obj, dct, cls=None):
 
 def assert_fails_validation(dct, cls):
     with pytest.raises(ValidationError):
+        cls.validate(dct)
         cls.from_dict(dct)
 
 

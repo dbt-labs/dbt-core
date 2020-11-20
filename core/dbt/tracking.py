@@ -1,6 +1,8 @@
 from typing import Optional
 
-from dbt.clients import yaml_helper
+from dbt.clients.yaml_helper import (  # noqa:F401
+    yaml, safe_load, Loader, Dumper,
+)
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
@@ -12,7 +14,6 @@ import pytz
 import platform
 import uuid
 import requests
-import yaml
 import os
 
 sp_logger.setLevel(100)
@@ -147,7 +148,7 @@ class User:
         else:
             with open(self.cookie_path, "r") as fh:
                 try:
-                    user = yaml_helper.safe_load(fh)
+                    user = safe_load(fh)
                     if user is None:
                         user = self.set_cookie()
                 except yaml.reader.ReaderError:

@@ -16,6 +16,7 @@ from .utils import (
     assert_fails_validation,
     dict_replace,
     replace_config,
+    compare_dicts,
 )
 
 

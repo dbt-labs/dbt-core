@@ -1,8 +1,9 @@
 from pathlib import Path
 from typing import Dict, Any
-import yaml
-
-from hologram import ValidationError
+from dbt.clients.yaml_helper import (  # noqa: F401
+    yaml, Loader, Dumper, load_yaml_text
+)
+from dbt.dataclass_schema import ValidationError
 
 from .renderer import SelectorRenderer
 
@@ -11,7 +12,6 @@ from dbt.clients.system import (
     path_exists,
     resolve_path_from_base,
 )
-from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.selection import SelectorFile
 from dbt.exceptions import DbtSelectorsError, RuntimeException
 from dbt.graph import parse_from_selectors_definition, SelectionSpec
@@ -30,9 +30,11 @@ Validator Error:
 
 
 class SelectorConfig(Dict[str, SelectionSpec]):
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SelectorConfig':
+    def selectors_from_dict(cls, data: Dict[str, Any]) -> 'SelectorConfig':
         try:
+            SelectorFile.validate(data)
             selector_file = SelectorFile.from_dict(data)
             selectors = parse_from_selectors_definition(selector_file)
         except ValidationError as exc:
@@ -66,7 +68,7 @@ class SelectorConfig(Dict[str, SelectionSpec]):
                 f'Could not render selector data: {exc}',
                 result_type='invalid_selector',
             ) from exc
-        return cls.from_dict(rendered)
+        return cls.selectors_from_dict(rendered)
 
     @classmethod
     def from_path(
@@ -107,7 +109,7 @@ def selector_config_from_data(
         selectors_data = {'selectors': []}
 
     try:
-        selectors = SelectorConfig.from_dict(selectors_data)
+        selectors = SelectorConfig.selectors_from_dict(selectors_data)
     except ValidationError as e:
         raise DbtSelectorsError(
             MALFORMED_SELECTOR_ERROR.format(error=str(e.message)),

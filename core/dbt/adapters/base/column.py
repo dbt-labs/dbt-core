@@ -1,14 +1,12 @@
 from dataclasses import dataclass
 import re
-
-from hologram import JsonSchemaMixin
-from dbt.exceptions import RuntimeException
-
 from typing import Dict, ClassVar, Any, Optional
+
+from dbt.exceptions import RuntimeException
 
 
 @dataclass
-class Column(JsonSchemaMixin):
+class Column:
     TYPE_LABELS: ClassVar[Dict[str, str]] = {
         'STRING': 'TEXT',
         'TIMESTAMP': 'TIMESTAMP',

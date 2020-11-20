@@ -1,6 +1,6 @@
 from typing import List
 
-from hologram.helpers import StrEnum
+from dbt.dataclass_schema import StrEnum
 
 
 class NodeType(StrEnum):

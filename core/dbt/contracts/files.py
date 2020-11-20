@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
 
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 
 from dbt.exceptions import InternalException
 
@@ -15,7 +15,7 @@ MAXIMUM_SEED_SIZE_NAME = '1MB'
 
 
 @dataclass
-class FilePath(JsonSchemaMixin):
+class FilePath(dbtClassMixin):
     searched_path: str
     relative_path: str
     project_root: str
@@ -51,7 +51,7 @@ class FilePath(JsonSchemaMixin):
 
 
 @dataclass
-class FileHash(JsonSchemaMixin):
+class FileHash(dbtClassMixin):
     name: str  # the hash type name
     checksum: str  # the hashlib.hash_type().hexdigest() of the file contents
 
@@ -91,7 +91,7 @@ class FileHash(JsonSchemaMixin):
 
 
 @dataclass
-class RemoteFile(JsonSchemaMixin):
+class RemoteFile(dbtClassMixin):
     @property
     def searched_path(self) -> str:
         return 'from remote system'
@@ -110,7 +110,7 @@ class RemoteFile(JsonSchemaMixin):
 
 
 @dataclass
-class SourceFile(JsonSchemaMixin):
+class SourceFile(dbtClassMixin):
     """Define a source file in dbt"""
     path: Union[FilePath, RemoteFile]  # the path information
     checksum: FileHash

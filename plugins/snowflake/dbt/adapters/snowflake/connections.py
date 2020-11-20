@@ -30,16 +30,16 @@ _TOKEN_REQUEST_URL = 'https://{}.snowflakecomputing.com/oauth/token-request'
 class SnowflakeCredentials(Credentials):
     account: str
     user: str
-    warehouse: Optional[str]
-    role: Optional[str]
-    password: Optional[str]
-    authenticator: Optional[str]
-    private_key_path: Optional[str]
-    private_key_passphrase: Optional[str]
-    token: Optional[str]
-    oauth_client_id: Optional[str]
-    oauth_client_secret: Optional[str]
-    query_tag: Optional[str]
+    warehouse: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = None
+    authenticator: Optional[str] = None
+    private_key_path: Optional[str] = None
+    private_key_passphrase: Optional[str] = None
+    token: Optional[str] = None
+    oauth_client_id: Optional[str] = None
+    oauth_client_secret: Optional[str] = None
+    query_tag: Optional[str] = None
     client_session_keep_alive: bool = False
 
     def __post_init__(self):

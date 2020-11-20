@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Dict, Any
 import json
 
-from hologram import JsonSchemaMixin
+from dbt.dataclass_schema import dbtClassMixin
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
     CatalogArtifact, RunResultsArtifact, FreshnessExecutionResultArtifact
@@ -11,7 +11,7 @@ from dbt.contracts.results import (
 
 
 @dataclass
-class Schemas(JsonSchemaMixin):
+class Schemas(dbtClassMixin):
     manifest: Dict[str, Any]
     catalog: Dict[str, Any]
     run_results: Dict[str, Any]

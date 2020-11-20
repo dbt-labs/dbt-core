@@ -6,7 +6,7 @@ from typing import (
     Set,
 )
 from dbt.config import RuntimeConfig
-from dbt.contracts.graph.manifest import Manifest, SourceKey
+from dbt.contracts.graph.manifest import MacroManifest, SourceKey
 from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition,
     ParsedSourceDefinition,
@@ -33,7 +33,7 @@ class SourcePatcher:
     ) -> None:
         self.results = results
         self.root_project = root_project
-        self.macro_manifest = Manifest.from_macros(
+        self.macro_manifest = MacroManifest(
             macros=self.results.macros,
             files=self.results.files
         )

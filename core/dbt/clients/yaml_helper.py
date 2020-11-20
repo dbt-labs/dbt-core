@@ -1,16 +1,19 @@
-from typing import Any
-
 import dbt.exceptions
 
 import yaml
 import yaml.scanner
 
 # the C version is faster, but it doesn't always exist
-YamlLoader: Any
 try:
-    from yaml import CSafeLoader as YamlLoader
+    from yaml import (
+        CLoader as Loader,
+        CSafeLoader as SafeLoader,
+        CDumper as Dumper
+    )
 except ImportError:
-    from yaml import SafeLoader as YamlLoader
+    from yaml import (  # type: ignore  # noqa: F401
+        Loader, SafeLoader, Dumper
+    )
 
 
 YAML_ERROR_MESSAGE = """
@@ -54,7 +57,7 @@ def contextualized_yaml_error(raw_contents, error):
 
 
 def safe_load(contents):
-    return yaml.load(contents, Loader=YamlLoader)
+    return yaml.load(contents, Loader=SafeLoader)
 
 
 def load_yaml_text(contents):

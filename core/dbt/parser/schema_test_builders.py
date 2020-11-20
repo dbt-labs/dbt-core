@@ -179,6 +179,7 @@ class TestBuilder(Generic[Testable]):
         - or it may not be namespaced (test)
 
     """
+    # The 'test_name' is used to find the 'macro' that implements the test
     TEST_NAME_PATTERN = re.compile(
         r'((?P<test_namespace>([a-zA-Z_][0-9a-zA-Z_]*))\.)?'
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
@@ -302,6 +303,8 @@ class TestBuilder(Generic[Testable]):
             name = '{}_{}'.format(self.namespace, name)
         return get_nice_schema_test_name(name, self.target.name, self.args)
 
+    # this is the 'raw_sql' that's used in 'render_update' and execution
+    # of the test macro
     def build_raw_sql(self) -> str:
         return (
             "{{{{ config(severity='{severity}') }}}}"

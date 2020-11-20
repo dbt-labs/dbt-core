@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Set, Union
-from hologram import JsonSchemaMixin, ValidationError
+from dbt.dataclass_schema import dbtClassMixin, ValidationError
 
 import dbt.deprecations
 import dbt.exceptions
@@ -47,7 +47,7 @@ def sql_escape(string):
 
 
 @dataclass
-class PartitionConfig(JsonSchemaMixin):
+class PartitionConfig(dbtClassMixin):
     field: str
     data_type: str = 'date'
     granularity: str = 'day'
@@ -69,6 +69,7 @@ class PartitionConfig(JsonSchemaMixin):
         if raw_partition_by is None:
             return None
         try:
+            cls.validate(raw_partition_by)
             return cls.from_dict(raw_partition_by)
         except ValidationError as exc:
             msg = dbt.exceptions.validator_error_message(exc)
@@ -84,7 +85,7 @@ class PartitionConfig(JsonSchemaMixin):
 
 
 @dataclass
-class GrantTarget(JsonSchemaMixin):
+class GrantTarget(dbtClassMixin):
     dataset: str
     project: str
 
@@ -808,6 +809,7 @@ class BigQueryAdapter(BaseAdapter):
         conn = self.connections.get_thread_connection()
         client = conn.handle
 
+        GrantTarget.validate(grant_target_dict)
         grant_target = GrantTarget.from_dict(grant_target_dict)
         dataset = client.get_dataset(
             self.connections.dataset_from_id(grant_target.render())

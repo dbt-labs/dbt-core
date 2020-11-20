@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 import os
 
-from hologram import ValidationError
+from dbt.dataclass_schema import ValidationError
 
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
@@ -75,6 +75,7 @@ def read_user_config(directory: str) -> UserConfig:
         if profile:
             user_cfg = coerce_dict_str(profile.get('config', {}))
             if user_cfg is not None:
+                UserConfig.validate(user_cfg)
                 return UserConfig.from_dict(user_cfg)
     except (RuntimeException, ValidationError):
         pass
@@ -137,10 +138,10 @@ class Profile(HasCredentials):
     def validate(self):
         try:
             if self.credentials:
-                self.credentials.to_dict(validate=True)
-            ProfileConfig.from_dict(
-                self.to_profile_info(serialize_credentials=True)
-            )
+                dct = self.credentials.to_dict()
+                self.credentials.validate(dct)
+            dct = self.to_profile_info(serialize_credentials=True)
+            ProfileConfig.validate(dct)
         except ValidationError as exc:
             raise DbtProfileError(validator_error_message(exc)) from exc
 
@@ -160,7 +161,9 @@ class Profile(HasCredentials):
         typename = profile.pop('type')
         try:
             cls = load_plugin(typename)
-            credentials = cls.from_dict(profile)
+            data = cls.translate_aliases(profile)
+            cls.validate(data)
+            credentials = cls.from_dict(data)
         except (RuntimeException, ValidationError) as e:
             msg = str(e) if isinstance(e, RuntimeException) else e.message
             raise DbtProfileError(
@@ -233,6 +236,7 @@ class Profile(HasCredentials):
         """
         if user_cfg is None:
             user_cfg = {}
+        UserConfig.validate(user_cfg)
         config = UserConfig.from_dict(user_cfg)
 
         profile = cls(
