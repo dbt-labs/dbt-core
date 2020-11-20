@@ -55,11 +55,7 @@ from .model_config import (
 
 
 @dataclass
-class ColumnInfo(
-    AdditionalPropertiesMixin,
-    ExtensibleDbtClassMixin,
-    Replaceable
-):
+class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin, Replaceable):
     name: str
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
