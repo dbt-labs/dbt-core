@@ -62,7 +62,8 @@ class PartitionConfig(JsonSchemaMixin):
             return f'timestamp_trunc({column}, {self.granularity})'
         elif self.data_type == 'datetime':
             return f'datetime_trunc({column}, {self.granularity})'
-        elif self.data_type == 'date' and self.granularity in ('MONTH','YEAR'):
+        elif self.data_type == 'date' and \
+            self.granularity in ('MONTH','YEAR','month','year'):
             return f'date_trunc({column}, {self.granularity})'
         else:
             return column
