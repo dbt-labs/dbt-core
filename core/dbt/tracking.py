@@ -27,6 +27,7 @@ INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
 PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
 RPC_REQUEST_SPEC = 'iglu:com.dbt/rpc_request/jsonschema/1-0-1'
 DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
+LOAD_ALL_TIMING_SPEC = 'iglu:com.dbt/load_all_timing/jsonschema/1-0-0'
 
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
@@ -269,6 +270,20 @@ def track_invocation_start(config=None, args=None):
         category="dbt",
         action='invocation',
         label='start',
+        context=context
+    )
+
+
+def track_project_load(options):
+    context = [SelfDescribingJson(LOAD_ALL_TIMING_SPEC, options)]
+    assert active_user is not None, \
+        'Cannot track project loading time when active user is None'
+
+    track(
+        active_user,
+        category='dbt',
+        action='load_project',
+        label=active_user.invocation_id,
         context=context
     )
 

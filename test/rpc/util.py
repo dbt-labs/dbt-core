@@ -402,11 +402,14 @@ class Querier:
         )
 
     def is_result(self, data: Dict[str, Any], id=None) -> Dict[str, Any]:
+
         if id is not None:
             assert data['id'] == id
         assert data['jsonrpc'] == '2.0'
-        assert 'result' in data
+        if 'error' in data:
+            print(data['error']['message'])
         assert 'error' not in data
+        assert 'result' in data
         return data['result']
 
     def is_async_result(self, data: Dict[str, Any], id=None) -> str:

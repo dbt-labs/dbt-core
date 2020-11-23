@@ -1,0 +1,93 @@
+# This task is intended to be used for diagnosis, development and
+# performance analysis.
+# It separates out the parsing flows for easier logging and
+# debugging.
+# To store cProfile performance data, execute with the '-r'
+# flag and an output file: dbt -r dbt.cprof parse.
+# Use a visualizer such as snakeviz to look at the output:
+# snakeviz dbt.cprof
+from dbt.task.base import ConfiguredTask
+from dbt.adapters.factory import get_adapter
+from dbt.parser.manifest import Manifest, ManifestLoader, _check_manifest
+from dbt.logger import DbtProcessState, print_timestamped_line
+from dbt.graph import Graph
+import time
+from typing import Optional
+import os
+
+MANIFEST_FILE_NAME = 'manifest.json'
+PERF_INFO_FILE_NAME = 'perf_info.json'
+PARSING_STATE = DbtProcessState('parsing')
+
+
+class ParseTask(ConfiguredTask):
+    def __init__(self, args, config):
+        super().__init__(args, config)
+        self.manifest: Optional[Manifest] = None
+        self.graph: Optional[Graph] = None
+        self.loader: Optional[ManifestLoader] = None
+
+    def write_manifest(self):
+        path = os.path.join(self.config.target_path, MANIFEST_FILE_NAME)
+        self.manifest.write(path)
+
+    def write_perf_info(self):
+        path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
+        self.loader._perf_info.write(path)
+        print_timestamped_line(f"Performance info: {path}")
+
+    # This method takes code that normally exists in other files
+    # and pulls it in here, to simplify logging and make the
+    # parsing flow-of-control easier to understand and manage,
+    # with the downside that if changes happen in those other methods,
+    # similar changes might need to be made here.
+    # ManifestLoader.get_full_manifest
+    # ManifestLoader.load
+    # ManifestLoader.load_all
+
+    def get_full_manifest(self):
+        adapter = get_adapter(self.config)  # type: ignore
+        macro_manifest: Manifest = adapter.load_macro_manifest()
+        print_timestamped_line("Macro manifest loaded")
+        root_config = self.config
+        macro_hook = adapter.connections.set_query_header
+        with PARSING_STATE:
+            start_load_all = time.perf_counter()
+            projects = root_config.load_dependencies()
+            print_timestamped_line("Dependencies loaded")
+            loader = ManifestLoader(root_config, projects, macro_hook)
+            print_timestamped_line("ManifestLoader created")
+            loader.load(macro_manifest=macro_manifest)
+            print_timestamped_line("Manifest loaded")
+            loader.write_parse_results()
+            print_timestamped_line("Parse results written")
+            manifest = loader.create_manifest()
+            print_timestamped_line("Manifest created")
+            _check_manifest(manifest, root_config)
+            print_timestamped_line("Manifest checked")
+            manifest.build_flat_graph()
+            print_timestamped_line("Flat graph built")
+            loader._perf_info.load_all_elapsed = (
+                time.perf_counter() - start_load_all
+            )
+
+        self.loader = loader
+        self.manifest = manifest
+        print_timestamped_line("Manifest loaded")
+
+    def compile_manifest(self):
+        adapter = get_adapter(self.config)
+        compiler = adapter.get_compiler()
+        self.graph = compiler.compile(self.manifest)
+
+    def run(self):
+        print_timestamped_line('Start parsing.')
+        self.get_full_manifest()
+        if self.args.compile:
+            print_timestamped_line('Compiling.')
+            self.compile_manifest()
+        if self.args.write_manifest:
+            print_timestamped_line('Writing manifest.')
+            self.write_manifest()
+        self.write_perf_info()
+        print_timestamped_line('Done.')

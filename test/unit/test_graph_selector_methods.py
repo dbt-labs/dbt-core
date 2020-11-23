@@ -471,6 +471,7 @@ def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source,
         files={},
         exposures={},
         disabled=[],
+        selectors={},
     )
     return manifest
 
