@@ -238,7 +238,6 @@ class BigQueryConnectionManager(BaseConnectionManager):
             handle = cls.get_bigquery_client(connection.credentials)
 
         except Exception as e:
-            raise
             logger.debug("Got an error when attempting to create a bigquery "
                          "client: '{}'".format(e))
 
