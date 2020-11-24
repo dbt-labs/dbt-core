@@ -982,7 +982,7 @@ def basic_parsed_schema_test_dict():
         'config': {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'test',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -1137,7 +1137,7 @@ def test_basic_schema_test_node(minimal_parsed_schema_test_dict, basic_parsed_sc
     assert node.empty is False
     assert node.is_ephemeral is False
     assert node.is_refable is False
-    assert node.get_materialization() == 'view'
+    assert node.get_materialization() == 'test'
 
     assert_from_dict(node, minimum, ParsedSchemaTestNode)
     pickle.loads(pickle.dumps(node))

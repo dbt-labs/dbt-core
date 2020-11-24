@@ -332,7 +332,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': ['schema'],
                     'config': {
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'test',
                         'post-hook': [],
                         'severity': 'ERROR',
                         'tags': [],
@@ -356,7 +356,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': ['data'],
                     'config': {
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'test',
                         'post-hook': [],
                         'severity': 'ERROR',
                         'tags': [],
@@ -380,7 +380,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': ['schema'],
                     'config': {
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'test',
                         'post-hook': [],
                         'severity': 'ERROR',
                         'tags': [],
