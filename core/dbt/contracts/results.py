@@ -1,7 +1,5 @@
 from dbt.contracts.graph.manifest import CompileResultNode
-from dbt.contracts.graph.unparsed import (
-    FreshnessThreshold
-)
+from dbt.contracts.graph.unparsed import FreshnessThreshold
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import (
     BaseArtifactMetadata,
