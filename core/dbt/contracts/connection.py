@@ -106,7 +106,9 @@ class Credentials(
     Replaceable,
     metaclass=abc.ABCMeta
 ):
-    database: str
+    # Most DBs have this as required, but BigQuery is Optional, and mypy doesn't
+    # seem to allow overriding the type in `BigQueryCredentials`
+    database: Optional[str]
     schema: str
     _ALIASES: ClassVar[Dict[str, str]] = field(default={}, init=False)
 

@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from requests.exceptions import ConnectionError
 from typing import Optional, Any, Dict
 
@@ -77,6 +78,10 @@ class BigQueryCredentials(Credentials):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     token_uri: Optional[str] = None
+
+    # BigQuery can evaluate this from the environment with most authentication
+    # mechanisms.
+    database: Optional[str] = None
 
     _ALIASES = {
         'project': 'database',
@@ -170,7 +175,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         creds = GoogleServiceAccountCredentials.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
-            credentials, project_id = google.auth.default(scopes=cls.SCOPE)
+            credentials, _ = cls.get_bigquery_defaults()
             return credentials
 
         elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
@@ -195,6 +200,13 @@ class BigQueryConnectionManager(BaseConnectionManager):
         raise FailedToConnectException(error)
 
     @classmethod
+    @lru_cache()
+    def get_bigquery_defaults(cls):
+        """ Returns (credentials, project_id) """
+        # Cached, because the underlying implementation shells out.
+        return google.auth.default(scopes=cls.SCOPE)
+
+    @classmethod
     def get_impersonated_bigquery_credentials(cls, profile_credentials):
         source_credentials = cls.get_bigquery_credentials(profile_credentials)
         return impersonated_credentials.Credentials(
@@ -211,7 +223,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 cls.get_impersonated_bigquery_credentials(profile_credentials)
         else:
             creds = cls.get_bigquery_credentials(profile_credentials)
+        # `database` is an alias of `project` in BigQuery
         database = profile_credentials.database
+        if database is None:
+            _, database = cls.get_bigquery_defaults()
+
         location = getattr(profile_credentials, 'location', None)
 
         info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
