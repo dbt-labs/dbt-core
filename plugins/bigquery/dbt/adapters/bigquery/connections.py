@@ -79,10 +79,6 @@ class BigQueryCredentials(Credentials):
     client_secret: Optional[str] = None
     token_uri: Optional[str] = None
 
-    # BigQuery can evaluate this from the environment with most authentication
-    # mechanisms.
-    database: Optional[str] = None
-
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
