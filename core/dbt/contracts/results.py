@@ -1,6 +1,6 @@
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.graph.unparsed import (
-    FreshnessStatus, FreshnessThreshold
+    FreshnessThreshold
 )
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import (
@@ -55,22 +55,52 @@ class collect_timing_info:
             logger.debug('finished collecting timing info')
 
 
+class NodeStatus(StrEnum):
+    Success = "success"
+    Error = "error"
+    Fail = "fail"
+    Warn = "warn"
+    Skipped = "skipped"
+    Pass = "pass"
+    RuntimeError = "runtime error"
+
+
+class RunStatus(StrEnum):
+    Success = NodeStatus.Success
+    Error = NodeStatus.Error
+    Skipped = NodeStatus.Skipped
+
+
+class TestStatus(StrEnum):
+    Success = NodeStatus.Success
+    Error = NodeStatus.Error
+    Fail = NodeStatus.Fail
+    Warn = NodeStatus.Warn
+
+
+class FreshnessStatus(StrEnum):  # maybe this should be the same as test status?
+    Pass = NodeStatus.Pass
+    Warn = NodeStatus.Warn
+    Error = NodeStatus.Error
+    RuntimeError = NodeStatus.RuntimeError
+
+
 @dataclass
 class BaseResult(JsonSchemaMixin):
-    node: CompileResultNode
-    error: Optional[str] = None
-    status: Union[None, str, int, bool] = None
-    execution_time: Union[str, int] = 0
-    thread_id: Optional[str] = None
-    timing: List[TimingInfo] = field(default_factory=list)
-    fail: Optional[bool] = None
-    warn: Optional[bool] = None
+    status: Union[RunStatus, TestStatus, FreshnessStatus]
+    timing: List[TimingInfo]
+    thread_id: str
+    execution_time: float
+    message: Optional[str]
 
 
 @dataclass
-class PartialResult(BaseResult, Writable):
-    pass
+class NodeResult(BaseResult):
+    node: CompileResultNode
 
+
+@dataclass
+class PartialNodeResult(NodeResult, Writable):
     # if the result got to the point where it could be skipped/failed, we would
     # be returning a real result, not a partial.
     @property
@@ -79,12 +109,10 @@ class PartialResult(BaseResult, Writable):
 
 
 @dataclass
-class WritableRunModelResult(BaseResult, Writable):
-    skip: bool = False
-
+class WritableRunModelResult(NodeResult, Writable):
     @property
     def skipped(self):
-        return self.skip
+        return self.status == RunStatus.Skipped
 
 
 @dataclass
@@ -99,7 +127,7 @@ class RunModelResult(WritableRunModelResult):
 
 @dataclass
 class ExecutionResult(JsonSchemaMixin):
-    results: Sequence[BaseResult]
+    results: Sequence[NodeResult]
     elapsed_time: float
 
     def __len__(self):
@@ -112,7 +140,7 @@ class ExecutionResult(JsonSchemaMixin):
         return self.results[idx]
 
 
-RunResult = Union[PartialResult, WritableRunModelResult]
+RunResult = Union[PartialNodeResult, WritableRunModelResult]
 
 
 @dataclass
@@ -174,7 +202,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
         elapsed_time: float,
         generated_at: datetime,
     ):
-        meta = RunResultsMetadata(
+        meta = RunOperationResultMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
@@ -186,26 +214,15 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
         )
 
 
-@dataclass
-class SourceFreshnessResultMixin(JsonSchemaMixin):
-    max_loaded_at: datetime
-    snapshotted_at: datetime
-    age: float
-
-
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
 @dataclass
-class SourceFreshnessResult(BaseResult, Writable, SourceFreshnessResultMixin):
+class SourceFreshnessResult(NodeResult, Writable):
     node: ParsedSourceDefinition
-    status: FreshnessStatus = FreshnessStatus.Pass
-
-    def __post_init__(self):
-        self.fail = self.status == 'error'
-
-    @property
-    def warned(self):
-        return self.status == 'warn'
+    status: FreshnessStatus
+    max_loaded_at: datetime
+    snapshotted_at: datetime
+    age: float
 
     @property
     def skipped(self):
@@ -237,18 +254,25 @@ class SourceFreshnessOutput(JsonSchemaMixin):
     criteria: FreshnessThreshold
 
 
-FreshnessNodeResult = Union[PartialResult, SourceFreshnessResult]
+@dataclass
+class PartialSourceFreshnessResult(PartialNodeResult):
+    status: FreshnessStatus
+
+
+FreshnessNodeResult = Union[PartialSourceFreshnessResult,
+                            SourceFreshnessResult]
 FreshnessNodeOutput = Union[SourceFreshnessRuntimeError, SourceFreshnessOutput]
 
 
 def process_freshness_result(
     result: FreshnessNodeResult
 ) -> FreshnessNodeOutput:
+    # TODO(kw) source freshness refactor
     unique_id = result.node.unique_id
-    if result.error is not None:
+    if result.status is FreshnessStatus.RuntimeError:
         return SourceFreshnessRuntimeError(
             unique_id=unique_id,
-            error=result.error,
+            error=result.message or "",
             state=FreshnessErrorEnum.runtime_error,
         )
 

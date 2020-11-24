@@ -7,6 +7,7 @@ from .printer import (
     print_run_end_messages,
 )
 
+from dbt.contracts.results import RunStatus
 from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector
 from dbt.logger import GLOBAL_LOGGER as logger, TextOnly
@@ -79,5 +80,5 @@ class SeedTask(RunTask):
 
     def show_tables(self, results):
         for result in results:
-            if result.error is None:
+            if result.status != RunStatus.Error:
                 self.show_table(result)

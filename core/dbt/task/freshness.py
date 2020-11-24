@@ -13,8 +13,8 @@ from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
-    FreshnessResult,
-    PartialResult,
+    FreshnessResult, NodeStatus,
+    PartialNodeResult, RunResult, RunStatus,
     SourceFreshnessResult,
 )
 from dbt.exceptions import RuntimeException, InternalException
@@ -37,10 +37,11 @@ class FreshnessRunner(BaseRunner):
         )
 
     def get_result_status(self, result) -> Dict[str, str]:
-        if result.error:
-            return {'node_status': 'error', 'node_error': str(result.error)}
+        if result.status == NodeStatus.Error:
+            return {'node_status': 'error', 'node_error': str(result.message)}
         else:
-            return {'node_status': str(result.status)}
+            # TODO(kw) I think this needs to be updated
+            return {'node_status': str(result.message)}
 
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
@@ -54,13 +55,14 @@ class FreshnessRunner(BaseRunner):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         status = utils.lowercase(status)
-        return PartialResult(
+        # TODO(kw): uhh not sure what type to return here
+        return PartialNodeResult(
             node=node,
-            status=status,
-            error=error,
+            status="Asdf",
             execution_time=execution_time,
             thread_id=thread_id,
             timing=timing_info,
+            message=""
         )
 
     def from_run_result(self, result, start_time, timing_info):
@@ -160,7 +162,7 @@ class FreshnessTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         for result in results:
-            if result.error is not None:
+            if result.status == NodeStatus.Error:
                 print_run_result_error(result)
 
         print_timestamped_line('Done.')

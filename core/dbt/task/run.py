@@ -23,7 +23,7 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.contracts.results import RunModelResult
+from dbt.contracts.results import NodeStatus, RunModelResult, RunStatus
 from dbt.exceptions import (
     CompilationException,
     InternalException,
@@ -105,8 +105,9 @@ def track_model_run(index, num_nodes, run_model_result):
         "index": index,
         "total": num_nodes,
         "execution_time": run_model_result.execution_time,
-        "run_status": run_model_result.status,
-        "run_skipped": run_model_result.skip,
+        # TODO(kw) might need to update model run schema!
+        "run_status": run_model_result.message,
+        "run_skipped": run_model_result.status == RunStatus.Skipped,
         "run_error": None,
         "model_materialization": run_model_result.node.get_materialization(),
         "model_id": utils.get_hash(run_model_result.node),
@@ -187,7 +188,16 @@ class ModelRunner(CompileRunner):
 
     def _build_run_model_result(self, model, context):
         result = context['load_result']('main')
-        return RunModelResult(model, status=result.status)
+        # TODO(kw) clean this up
+        return RunModelResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id="asdf",
+            execution_time=0,
+            message=result.status,
+            agate_table=None
+        )
 
     def _materialization_relations(
         self, result: Any, model
@@ -400,10 +410,16 @@ class RunTask(CompileTask):
         # list  of unique database, schema pairs that successfully executed
         # models  were in. for backwards compatibility, include the old
         # 'schemas', which did not include database information.
+
         database_schema_set: Set[Tuple[Optional[str], str]] = {
             (r.node.database, r.node.schema) for r in results
-            if not any((r.error is not None, r.fail, r.skipped))
+            if r.status not in (
+                NodeStatus.Error,
+                NodeStatus.Fail,
+                NodeStatus.Skipped
+            )
         }
+
         self._total_executed += len(results)
 
         extras = {
