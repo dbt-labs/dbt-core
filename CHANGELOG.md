@@ -12,6 +12,7 @@
 - Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
 - Increased the supported relation name length in postgres from 29 to 51 ([#2850](https://github.com/fishtown-analytics/dbt/pull/2850))
 - dbt list command always return 0 as exit code ([#2886](https://github.com/fishtown-analytics/dbt/issues/2886), [#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- Set default `materialized` for test node configs to `test` ([#2806](https://github.com/fishtown-analytics/dbt/issues/2806), [#2902](https://github.com/fishtown-analytics/dbt/pull/2902))
 
 ### Under the hood
 - Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
