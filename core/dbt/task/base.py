@@ -216,7 +216,7 @@ class BaseRunner(metaclass=ABCMeta):
 
     def get_result_status(self, result) -> Dict[str, str]:
         if result.status == NodeStatus.Error:
-            return {'node_status': 'error', 'node_error': str(result.message)}
+            return {"node_status": "error", "node_error": str(result.message)}
         elif result.status == NodeStatus.Skipped:
             return {"node_status": "skipped"}
         elif result.status == NodeStatus.Fail:
@@ -241,7 +241,7 @@ class BaseRunner(metaclass=ABCMeta):
 
         return result
 
-    def _build_run_result(self, node, start_time, status, timing_info, message,
+    def _build_run_result(
         self,
         node,
         start_time,
@@ -283,7 +283,7 @@ class BaseRunner(metaclass=ABCMeta):
             start_time=start_time,
             status=RunStatus.Success,
             timing_info=timing_info,
-            message=None
+            message=None,
         )
 
     def from_run_result(self, result, start_time, timing_info):
@@ -395,7 +395,9 @@ class BaseRunner(metaclass=ABCMeta):
             # an error
             if (
                 exc_str is not None
-                result.status != NodeStatus.Error and error is None
+                and result is not None
+                and result.status != NodeStatus.Error
+                and error is None
             ):
                 error = exc_str
 

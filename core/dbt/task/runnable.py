@@ -477,7 +477,10 @@ class GraphRunnableTask(ManifestTask):
             return False
 
         failures = [
-            r for r in results if r.status in (
+            r
+            for r in results
+            if r.status
+            in (
                 NodeStatus.RuntimeErr,
                 NodeStatus.Error,
                 NodeStatus.Fail,

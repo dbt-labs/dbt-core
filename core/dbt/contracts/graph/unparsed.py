@@ -191,6 +191,7 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
 
     def status(self, age: float) -> "dbt.contracts.results.FreshnessStatus":
         from dbt.contracts.results import FreshnessStatus
+
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error
         elif self.warn_after and self.warn_after.exceeded(age):

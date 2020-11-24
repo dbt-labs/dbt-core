@@ -451,10 +451,8 @@ class RunTask(CompileTask):
         database_schema_set: Set[Tuple[Optional[str], str]] = {
             (r.node.database, r.node.schema) for r in results
             if r.node.is_relational and r.status not in (
-                NodeStatus.Error,
-                NodeStatus.Fail,
-                NodeStatus.Skipped
-            )
+            if r.node.is_relational
+            and r.status not in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped)
         }
 
         self._total_executed += len(results)

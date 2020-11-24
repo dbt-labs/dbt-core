@@ -310,8 +310,7 @@ class PartialSourceFreshnessResult(NodeResult):
         return False
 
 
-FreshnessNodeResult = Union[PartialSourceFreshnessResult,
-                            SourceFreshnessResult]
+FreshnessNodeResult = Union[PartialSourceFreshnessResult, SourceFreshnessResult]
 FreshnessNodeOutput = Union[SourceFreshnessRuntimeError, SourceFreshnessOutput]
 
 
