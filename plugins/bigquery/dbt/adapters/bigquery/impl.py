@@ -50,7 +50,7 @@ def sql_escape(string):
 class PartitionConfig(JsonSchemaMixin):
     field: str
     data_type: str = 'date'
-    granularity: str = 'DAY'
+    granularity: str = 'day'
     range: Optional[Dict[str, Any]] = None
 
     def render(self, alias: Optional[str] = None):
