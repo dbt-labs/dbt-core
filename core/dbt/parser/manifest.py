@@ -622,6 +622,12 @@ def _process_docs_for_macro(
         arg.description = get_rendered(arg.description, context)
 
 
+def _process_docs_for_exposure(
+    context: Dict[str, Any], exposure: ParsedExposure
+) -> None:
+    exposure.description = get_rendered(exposure.description, context)
+
+
 def process_docs(manifest: Manifest, config: RuntimeConfig):
     for node in manifest.nodes.values():
         ctx = generate_runtime_docs(
@@ -647,6 +653,14 @@ def process_docs(manifest: Manifest, config: RuntimeConfig):
             config.project_name,
         )
         _process_docs_for_macro(ctx, macro)
+    for exposure in manifest.exposures.values():
+        ctx = generate_runtime_docs(
+            config,
+            exposure,
+            manifest,
+            config.project_name,
+        )
+        _process_docs_for_exposure(ctx, exposure)
 
 
 def _process_refs_for_exposure(

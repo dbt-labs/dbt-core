@@ -411,7 +411,7 @@ class ExposureOwner(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class UnparsedExposure(JsonSchemaMixin, Replaceable):
+class UnparsedExposure(HasYamlMetadata, Replaceable):
     name: str
     type: ExposureType
     owner: ExposureOwner
