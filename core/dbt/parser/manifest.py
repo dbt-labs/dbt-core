@@ -1026,9 +1026,7 @@ def _process_docs_for_macro(context: Dict[str, Any], macro: ParsedMacro) -> None
 
 
 # exposure descriptions
-def _process_docs_for_exposure(
-    context: Dict[str, Any], exposure: ParsedExposure
-) -> None:
+def _process_docs_for_exposure(context: Dict[str, Any], exposure: ParsedExposure) -> None:
     exposure.description = get_rendered(exposure.description, context)
 
 
