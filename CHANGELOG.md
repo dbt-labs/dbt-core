@@ -15,6 +15,7 @@
 - Widen supported Google Cloud libraries dependencies ([#2794](https://github.com/fishtown-analytics/dbt/pull/2794), [#2877](https://github.com/fishtown-analytics/dbt/pull/2877)).
 - dbt list command always return 0 as exit code ([#2886](https://github.com/fishtown-analytics/dbt/issues/2886), [#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
 - Set default `materialized` for test node configs to `test` ([#2806](https://github.com/fishtown-analytics/dbt/issues/2806), [#2902](https://github.com/fishtown-analytics/dbt/pull/2902))
+- Allow docs blocks in exposure descriptions ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913), [#2920](https://github.com/fishtown-analytics/dbt/pull/2920))
 
 ### Under the hood
 - Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
@@ -29,6 +30,7 @@ Contributors:
 - [@franloza](https://github.com/franloza) ([#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
 - [@max-sixty](https://github.com/max-sixty) ([#2877](https://github.com/fishtown-analytics/dbt/pull/2877))
 - [@rsella](https://github.com/rsella) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- [@joellabes](https://github.com/joellabes) ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913))
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
