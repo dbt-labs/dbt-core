@@ -653,7 +653,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
             }).to_dict(), {
                 "field": "ts",
                 "data_type": "date",
-                "granularity": "DAY"
+                "granularity": "day"
             }
         )
 
