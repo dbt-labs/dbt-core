@@ -6,6 +6,7 @@
 - Store resolved node names in manifest ([#2647](https://github.com/fishtown-analytics/dbt/issues/2647), [#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
 - Save selectors dictionary to manifest, allow descriptions ([#2693](https://github.com/fishtown-analytics/dbt/issues/2693), [#2866](https://github.com/fishtown-analytics/dbt/pull/2866))
 - Normalize cli-style-strings in manifest selectors dictionary ([#2879](https://github.com/fishtown-anaytics/dbt/issues/2879), [#2895](https://github.com/fishtown-analytics/dbt/pull/2895))
+- Hourly, monthly and yearly partitions available in BigQuery ([#2476](https://github.com/fishtown-analytics/dbt/issues/2476), [#2903](https://github.com/fishtown-analytics/dbt/pull/2903))
 
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
@@ -31,6 +32,7 @@ Contributors:
 - [@max-sixty](https://github.com/max-sixty) ([#2877](https://github.com/fishtown-analytics/dbt/pull/2877))
 - [@rsella](https://github.com/rsella) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
 - [@joellabes](https://github.com/joellabes) ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913))
+- [@db-magnus](https://github.com/db-magnus) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
