@@ -789,7 +789,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
             }).to_dict(), {
                 "field": "id",
                 "data_type": "int64",
-                "granularity": "DAY",
+                "granularity": "day",
                 "range": {
                     "start": 1,
                     "end": 100,
