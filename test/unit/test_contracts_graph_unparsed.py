@@ -595,7 +595,7 @@ class TestUnparsedExposure(ContractTestCase):
 
     def test_ok(self):
         exposure = self.ContractType(
-        	yaml_key='exposures'
+        	yaml_key='exposures',
             name='my_exposure',
             type=ExposureType.Dashboard,
             owner=ExposureOwner(email='name@example.com'),
