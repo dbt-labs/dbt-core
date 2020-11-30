@@ -25,3 +25,7 @@ My table
 {% docs column_info %}
 An ID field
 {% enddocs %}
+
+{% docs notebook_info %}
+A description of the complex exposure
+{% enddocs %}

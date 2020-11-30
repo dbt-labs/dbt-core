@@ -1992,7 +1992,32 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': {}
                 },
             },
-            'exposures': {},
+            'exposures': {
+            	'exposure.test.notebook_exposure': {
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['model.test.model', 'model.test.second_model']
+                    },
+                    'description': 'A description of the complex exposure',
+                    'fqn': ['test', 'notebook_exposure'],
+                    'maturity': 'medium',
+                    'name': 'notebook_exposure',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'owner': {
+                        'email': 'something@example.com',
+                        'name': 'Some name'
+                    },
+                    'package_name': 'test',
+                    'path': 'schema.yml',
+                    'refs': [['model'], ['second_model']],
+                    'resource_type': 'exposure',
+                    'root_path': self.test_root_realpath,
+                    'sources': [],
+                    'type': 'notebook',
+                    'unique_id': 'exposure.test.notebook_exposure',
+                    'url': 'http://example.com/notebook/1'
+                },
+            },
             'selectors': {},
             'docs': {
                 'dbt.__overview__': ANY,
