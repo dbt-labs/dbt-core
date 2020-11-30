@@ -62,7 +62,7 @@ class NodeStatus(StrEnum):
     Warn = "warn"
     Skipped = "skipped"
     Pass = "pass"
-    RuntimeError = "runtime error"
+    RuntimeErr = "runtime error"
 
 
 class RunStatus(StrEnum):
@@ -78,11 +78,11 @@ class TestStatus(StrEnum):
     Warn = NodeStatus.Warn
 
 
-class FreshnessStatus(StrEnum):  # maybe this should be the same as test status?
+class FreshnessStatus(StrEnum):  # maybe this should be the same as test status
     Pass = NodeStatus.Pass
     Warn = NodeStatus.Warn
     Error = NodeStatus.Error
-    RuntimeError = NodeStatus.RuntimeError
+    RuntimeErr = NodeStatus.RuntimeErr
 
 
 @dataclass
@@ -229,10 +229,6 @@ class SourceFreshnessResult(NodeResult, Writable):
         return False
 
 
-def _copykeys(src, keys, **updates):
-    return {k: getattr(src, k) for k in keys}
-
-
 class FreshnessErrorEnum(StrEnum):
     runtime_error = 'runtime error'
 
@@ -269,7 +265,7 @@ def process_freshness_result(
 ) -> FreshnessNodeOutput:
     # TODO(kw) source freshness refactor
     unique_id = result.node.unique_id
-    if result.status is FreshnessStatus.RuntimeError:
+    if result.status is FreshnessStatus.RuntimeErr:
         return SourceFreshnessRuntimeError(
             unique_id=unique_id,
             error=result.message or "",

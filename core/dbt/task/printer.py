@@ -198,8 +198,7 @@ def print_seed_result_line(result, schema_name: str, index: int, total: int):
 
 
 def print_freshness_result_line(result, index: int, total: int) -> None:
-    # TODO(kw) uhhhh
-    if result.status == NodeStatus.RuntimeError:
+    if result.status == NodeStatus.RuntimeErr:
         info = 'ERROR'
         color = ui.red
         logger_fn = logger.error
@@ -223,11 +222,7 @@ def print_freshness_result_line(result, index: int, total: int) -> None:
         source_name = result.source_name
         table_name = result.table_name
 
-    msg = "{info} freshness of {source_name}.{table_name}".format(
-        info=info,
-        source_name=source_name,
-        table_name=table_name
-    )
+    msg = f"{info} freshness of {source_name}.{table_name}"
 
     print_fancy_output_line(
         msg,
@@ -277,7 +272,9 @@ def print_run_result_error(
         with TextOnly():
             logger.info("")
 
-    if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
+    if result.status == NodeStatus.Fail or (
+        is_warning and result.status == NodeStatus.Warn
+    ):
         if is_warning:
             color = ui.yellow
             info = 'Warning'

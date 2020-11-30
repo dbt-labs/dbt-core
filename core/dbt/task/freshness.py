@@ -1,7 +1,6 @@
 import os
 import threading
 import time
-from typing import Dict
 
 from .base import BaseRunner
 from .printer import (
@@ -14,7 +13,7 @@ from .runnable import GraphRunnableTask
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
     FreshnessResult, NodeStatus,
-    PartialNodeResult, RunResult, RunStatus,
+    PartialNodeResult, RunStatus,
     SourceFreshnessResult,
 )
 from dbt.exceptions import RuntimeException, InternalException
@@ -36,13 +35,6 @@ class FreshnessRunner(BaseRunner):
             'Freshness: nodes cannot be skipped!'
         )
 
-    def get_result_status(self, result) -> Dict[str, str]:
-        if result.status == NodeStatus.Error:
-            return {'node_status': 'error', 'node_error': str(result.message)}
-        else:
-            # TODO(kw) I think this needs to be updated
-            return {'node_status': str(result.message)}
-
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
         print_start_line(description, self.node_index, self.num_nodes)
@@ -58,7 +50,7 @@ class FreshnessRunner(BaseRunner):
         # TODO(kw): uhh not sure what type to return here
         return PartialNodeResult(
             node=node,
-            status="Asdf",
+            status=RunStatus.Success,  # TODO(kw) fix this as well
             execution_time=execution_time,
             thread_id=thread_id,
             timing=timing_info,

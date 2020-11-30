@@ -11,8 +11,8 @@ from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    NodeStatus, RunStatus, TableMetadata, CatalogTable, CatalogResults, Primitive, CatalogKey,
-    StatsItem, StatsDict, ColumnMetadata, CatalogArtifact
+    NodeStatus, TableMetadata, CatalogTable, CatalogResults, Primitive,
+    CatalogKey, StatsItem, StatsDict, ColumnMetadata, CatalogArtifact
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH

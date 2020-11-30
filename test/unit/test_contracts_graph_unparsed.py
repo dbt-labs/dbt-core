@@ -4,11 +4,12 @@ from datetime import timedelta
 
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedRunHook, UnparsedMacro, Time, TimePeriod,
-    FreshnessStatus, FreshnessThreshold, Quoting, UnparsedSourceDefinition,
+    FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
     UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
     ExposureType
 )
+from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
 from .utils import ContractTestCase
 
@@ -192,7 +193,8 @@ class TestFreshnessThreshold(ContractTestCase):
         error_seconds = timedelta(days=3).total_seconds()
         warn_seconds = timedelta(days=1).total_seconds()
         pass_seconds = timedelta(hours=3).total_seconds()
-        self.assertEqual(threshold.status(error_seconds), FreshnessStatus.Error)
+        self.assertEqual(threshold.status(
+            error_seconds), FreshnessStatus.Error)
         self.assertEqual(threshold.status(warn_seconds), FreshnessStatus.Warn)
         self.assertEqual(threshold.status(pass_seconds), FreshnessStatus.Pass)
         pickle.loads(pickle.dumps(threshold))
@@ -214,7 +216,8 @@ class TestFreshnessThreshold(ContractTestCase):
         error_seconds = timedelta(days=3).total_seconds()
         warn_seconds = timedelta(days=1).total_seconds()
         pass_seconds = timedelta(hours=3).total_seconds()
-        self.assertEqual(threshold.status(error_seconds), FreshnessStatus.Error)
+        self.assertEqual(threshold.status(
+            error_seconds), FreshnessStatus.Error)
         self.assertEqual(threshold.status(warn_seconds), FreshnessStatus.Warn)
         self.assertEqual(threshold.status(pass_seconds), FreshnessStatus.Pass)
 
@@ -632,7 +635,8 @@ class TestUnparsedExposure(ContractTestCase):
         for maturity_allowed in (None, 'low', 'medium', 'high'):
             tst = self.get_ok_dict()
             tst['maturity'] = maturity_allowed
-            assert self.ContractType.from_dict(tst).maturity == maturity_allowed
+            assert self.ContractType.from_dict(
+                tst).maturity == maturity_allowed
 
         tst = self.get_ok_dict()
         del tst['maturity']

@@ -195,10 +195,8 @@ class BaseRunner(metaclass=ABCMeta):
             return {'node_status': 'failed'}
         elif result.status == NodeStatus.Warn:
             return {'node_status': 'warn'}
-        elif result.status == NodeStatus.Success:
-            return {'node_status': 'passed'}
         else:
-            raise RuntimeError(f"unknown status {result.status}")
+            return {'node_status': 'passed'}
 
     def run_with_hooks(self, manifest):
         if self.skip:
@@ -242,7 +240,7 @@ class BaseRunner(metaclass=ABCMeta):
         return self._build_run_result(
             node=node,
             start_time=start_time,
-            status=None,
+            status=RunStatus.Success,
             timing_info=timing_info,
             message=None
         )
@@ -251,7 +249,7 @@ class BaseRunner(metaclass=ABCMeta):
         return self._build_run_result(
             node=result.node,
             start_time=start_time,
-            status=result.status,
+            status=RunStatus.Success,  # TODO(kw) fix this!
             timing_info=timing_info,
             message=result.message,
             agate_table=result.agate_table,

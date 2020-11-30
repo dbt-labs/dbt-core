@@ -105,8 +105,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "index": index,
         "total": num_nodes,
         "execution_time": run_model_result.execution_time,
-        # TODO(kw) might need to update model run schema!
-        "run_status": run_model_result.message,
+        "run_status": run_model_result.status,
         "run_skipped": run_model_result.status == RunStatus.Skipped,
         "run_error": None,
         "model_materialization": run_model_result.node.get_materialization(),
@@ -196,7 +195,6 @@ class ModelRunner(CompileRunner):
             thread_id="asdf",
             execution_time=0,
             message=result.status,
-            agate_table=None
         )
 
     def _materialization_relations(
