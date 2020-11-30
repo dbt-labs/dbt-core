@@ -576,7 +576,7 @@ class TestUnparsedExposure(ContractTestCase):
 
     def get_ok_dict(self):
         return {
-        	'yaml_key': 'exposures'
+        	'yaml_key': 'exposures',
             'name': 'my_exposure',
             'type': 'dashboard',
             'owner': {
