@@ -19,6 +19,7 @@
 ### Under the hood
 - Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
 - Add event tracking for project parser/load times ([#2823](https://github.com/fishtown-analytics/dbt/issues/2823),[#2893](https://github.com/fishtown-analytics/dbt/pull/2893))
+- Bump cryptography version to be >= 3.2 and bump snowflake connector to 2.3.6 ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))  
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
@@ -29,6 +30,7 @@ Contributors:
 - [@franloza](https://github.com/franloza) ([#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
 - [@max-sixty](https://github.com/max-sixty) ([#2877](https://github.com/fishtown-analytics/dbt/pull/2877))
 - [@rsella](https://github.com/rsella) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- [@plotneishestvo](https://github.com/plotneishestvo) ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
