@@ -85,9 +85,7 @@ def print_run_result_error(
         with TextOnly():
             fire_event(EmptyLine())
 
-    if result.status == NodeStatus.Fail or (
-        is_warning and result.status == NodeStatus.Warn
-    ):
+    if result.status == NodeStatus.Fail or (is_warning and result.status == NodeStatus.Warn):
         if is_warning:
             fire_event(
                 RunResultWarning(

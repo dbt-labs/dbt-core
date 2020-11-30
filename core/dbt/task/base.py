@@ -220,7 +220,7 @@ class BaseRunner(metaclass=ABCMeta):
         elif result.status == NodeStatus.Warn:
             return {"node_status": "warn"}
         else:
-            return {'node_status': 'passed'}
+            return {"node_status": "passed"}
 
     def run_with_hooks(self, manifest):
         if self.skip:
