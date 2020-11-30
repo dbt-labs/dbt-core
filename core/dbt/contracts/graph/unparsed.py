@@ -428,7 +428,7 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     name: str
     type: ExposureType
     owner: ExposureOwner
-    description: str = ''
+    description: str = ""
     maturity: Optional[MaturityType] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
