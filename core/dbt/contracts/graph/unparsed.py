@@ -413,9 +413,9 @@ class ExposureOwner(JsonSchemaMixin, Replaceable):
 @dataclass
 class UnparsedExposure(HasYamlMetadata, Replaceable):
     name: str
-    description: str = ''
     type: ExposureType
     owner: ExposureOwner
+    description: str = ''
     maturity: Optional[MaturityType] = None
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
