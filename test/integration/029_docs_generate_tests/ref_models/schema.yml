@@ -34,8 +34,7 @@ exposures:
   - name: notebook_exposure
     type: notebook
     depends_on:
-      - ref('model')
-      - ref('second_model')
+      - ref('view_summary')
     owner:
       email: something@example.com
       name: Some name

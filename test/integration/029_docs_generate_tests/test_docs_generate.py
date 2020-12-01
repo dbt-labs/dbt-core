@@ -1996,7 +1996,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             	'exposure.test.notebook_exposure': {
                     'depends_on': {
                         'macros': [],
-                        'nodes': ['model.test.model', 'model.test.second_model']
+                        'nodes': ['model.test.view_summary']
                     },
                     'description': 'A description of the complex exposure',
                     'fqn': ['test', 'notebook_exposure'],
