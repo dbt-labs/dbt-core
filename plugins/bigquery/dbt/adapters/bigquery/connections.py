@@ -92,6 +92,25 @@ class BigQueryCredentials(Credentials):
         return ('method', 'database', 'schema', 'location', 'priority',
                 'timeout_seconds', 'maximum_bytes_billed')
 
+    def __post_init__(self):
+        # We need to inject the correct value of the database (aka project) at
+        # this stage, ref
+        # https://github.com/fishtown-analytics/dbt/pull/2908#discussion_r532927436.
+
+        # `database` is an alias of `project` in BigQuery
+        if self.database is None:
+            _, database = self.get_bigquery_defaults()
+            self.database = database
+
+    @classmethod
+    @lru_cache()
+    def get_bigquery_defaults(cls):
+        """ Returns (credentials, project_id) """
+        # This method is copied from ` BigQueryConnectionManager`, because it's
+        # required in both classes.
+        # We could move this & the scopes to the module level.
+        return google.auth.default()
+
 
 class BigQueryConnectionManager(BaseConnectionManager):
     TYPE = 'bigquery'
@@ -219,11 +238,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 cls.get_impersonated_bigquery_credentials(profile_credentials)
         else:
             creds = cls.get_bigquery_credentials(profile_credentials)
-        # `database` is an alias of `project` in BigQuery
         database = profile_credentials.database
-        if database is None:
-            _, database = cls.get_bigquery_defaults()
-
         location = getattr(profile_credentials, 'location', None)
 
         info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
