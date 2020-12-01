@@ -11,7 +11,9 @@ from dbt.tracking import InvocationProcessor
 from dbt import ui
 from dbt import utils
 
-from dbt.contracts.results import NodeResult, NodeStatus
+from dbt.contracts.results import (
+    FreshnessStatus, NodeResult, NodeStatus, TestStatus
+)
 
 
 def print_fancy_output_line(
@@ -117,20 +119,20 @@ def print_test_result_line(
 ) -> None:
     model = result.node
 
-    if result.status == NodeStatus.Error:
+    if result.status == TestStatus.Error:
         info = "ERROR"
         color = ui.red
         logger_fn = logger.error
-    elif result.status == NodeStatus.Success:
+    elif result.status == TestStatus.Pass:
         info = 'PASS'
         color = ui.green
         logger_fn = logger.info
-    elif result.status == NodeStatus.Warn:
-        info = 'WARN {}'.format(result.status)
+    elif result.status == TestStatus.Warn:
+        info = 'WARN {}'.format(result.message)
         color = ui.yellow
         logger_fn = logger.warning
-    elif result.status == NodeStatus.Fail:
-        info = 'FAIL {}'.format(result.status)
+    elif result.status == TestStatus.Fail:
+        info = 'FAIL {}'.format(result.message)
         color = ui.red
         logger_fn = logger.error
     else:
@@ -198,15 +200,15 @@ def print_seed_result_line(result, schema_name: str, index: int, total: int):
 
 
 def print_freshness_result_line(result, index: int, total: int) -> None:
-    if result.status == NodeStatus.RuntimeErr:
+    if result.status == FreshnessStatus.RuntimeErr:
         info = 'ERROR'
         color = ui.red
         logger_fn = logger.error
-    elif result.status == NodeStatus.Error:
+    elif result.status == FreshnessStatus.Error:
         info = 'ERROR STALE'
         color = ui.red
         logger_fn = logger.error
-    elif result.status == NodeStatus.Warn:
+    elif result.status == FreshnessStatus.Warn:
         info = 'WARN'
         color = ui.yellow
         logger_fn = logger.warning

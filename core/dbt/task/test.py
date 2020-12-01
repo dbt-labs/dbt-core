@@ -94,7 +94,7 @@ class TestRunner(CompileRunner):
         if failed_rows == 0:
             return RunModelResult(
                 node=test,
-                status=TestStatus.Success,
+                status=TestStatus.Pass,
                 timing=[],
                 thread_id=thread_id,
                 execution_time=0,

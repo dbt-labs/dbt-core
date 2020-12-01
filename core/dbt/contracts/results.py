@@ -72,7 +72,7 @@ class RunStatus(StrEnum):
 
 
 class TestStatus(StrEnum):
-    Success = NodeStatus.Success
+    Pass = NodeStatus.Pass
     Error = NodeStatus.Error
     Fail = NodeStatus.Fail
     Warn = NodeStatus.Warn

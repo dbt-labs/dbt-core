@@ -249,7 +249,7 @@ class BaseRunner(metaclass=ABCMeta):
         return self._build_run_result(
             node=result.node,
             start_time=start_time,
-            status=RunStatus.Success,  # TODO(kw) fix this!
+            status=result.status,
             timing_info=timing_info,
             message=result.message,
             agate_table=result.agate_table,

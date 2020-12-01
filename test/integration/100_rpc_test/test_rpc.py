@@ -188,7 +188,8 @@ class HasRPCServer(DBTIntegrationTest):
 
         while True:
             time.sleep(0.5)
-            response = self.query('poll', _test_request_id=request_id, **kwargs)
+            response = self.query(
+                'poll', _test_request_id=request_id, **kwargs)
             response_json = response.json()
             if 'error' in response_json:
                 return response
@@ -205,7 +206,8 @@ class HasRPCServer(DBTIntegrationTest):
                 )
 
     def async_query(self, _method, _sql=None, _test_request_id=1, _poll_timeout=180, macros=None, **kwargs):
-        response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
+        response = self.query(
+            _method, _sql, _test_request_id, macros, **kwargs).json()
         result = self.assertIsResult(response, _test_request_id)
         self.assertIn('request_token', result)
         return self.poll_for_result(
@@ -215,7 +217,8 @@ class HasRPCServer(DBTIntegrationTest):
         )
 
     def query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
-        built = self.build_query(_method, kwargs, _sql, _test_request_id, macros)
+        built = self.build_query(
+            _method, kwargs, _sql, _test_request_id, macros)
         return query_url(self.url, built)
 
     def handle_result(self, bg_query, pipe):
@@ -307,7 +310,8 @@ class HasRPCServer(DBTIntegrationTest):
         return error_data
 
     def assertRunning(self, sleepers):
-        sleeper_ps_result = self.query('ps', completed=False, active=True).json()
+        sleeper_ps_result = self.query(
+            'ps', completed=False, active=True).json()
         result = self.assertIsResult(sleeper_ps_result)
         self.assertEqual(len(result['rows']), len(sleepers))
         result_map = {rd['request_id']: rd for rd in result['rows']}
@@ -371,7 +375,8 @@ class HasRPCServer(DBTIntegrationTest):
         return status
 
     def run_command_with_id(self, cmd, id_):
-        self.assertIsResult(self.async_query(cmd, _test_request_id=id_).json(), id_)
+        self.assertIsResult(self.async_query(
+            cmd, _test_request_id=id_).json(), id_)
 
     def make_many_requests(self, num_requests):
         stored = []
@@ -424,7 +429,7 @@ class TestRPCServerCompileRun(HasRPCServer):
             compiled_sql='select * from "{}"."{}"."source"'.format(
                 self.default_database,
                 self.unique_schema())
-            )
+        )
 
         macro = self.async_query(
             'compile_sql',
@@ -612,11 +617,13 @@ class TestRPCServerCompileRun(HasRPCServer):
 
         request_token, request_id = self.get_sleep_query()
 
-        empty_ps_result = self.query('ps', completed=False, active=False).json()
+        empty_ps_result = self.query(
+            'ps', completed=False, active=False).json()
         result = self.assertIsResult(empty_ps_result)
         self.assertEqual(len(result['rows']), 0)
 
-        sleeper_ps_result = self.query('ps', completed=False, active=True).json()
+        sleeper_ps_result = self.query(
+            'ps', completed=False, active=True).json()
         result = self.assertIsResult(sleeper_ps_result)
         self.assertEqual(len(result['rows']), 1)
         rowdict = result['rows']
@@ -628,7 +635,8 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertGreater(rowdict[0]['elapsed'], 0)
         self.assertIsNone(rowdict[0]['tags'])
 
-        complete_ps_result = self.query('ps', completed=True, active=False).json()
+        complete_ps_result = self.query(
+            'ps', completed=True, active=False).json()
         result = self.assertIsResult(complete_ps_result)
         self.assertEqual(len(result['rows']), 1)
         rowdict = result['rows']
@@ -806,12 +814,9 @@ class TestRPCServerProjects(HasRPCServer):
         for result in results:
             # TODO: should this be included even when it's 'none'? Should
             # results have all these crazy keys? (no)
-            self.assertIn('fail', result)
-            if result['status'] == 0.0:
-                self.assertIsNone(result['fail'])
+            if result['status'] == "pass":
                 passes += 1
-            else:
-                self.assertTrue(result['fail'])
+
         self.assertEqual(passes, pass_results)
 
     @use_profile('postgres')
@@ -845,7 +850,8 @@ class TestRPCServerProjects(HasRPCServer):
             num_expected=11,
         )
 
-        result = self.async_query('compile', models=['source:test_source+']).json()
+        result = self.async_query(
+            'compile', models=['source:test_source+']).json()
         self.assertHasResults(
             result,
             {'descendant_model', 'multi_source_model'},
@@ -864,7 +870,8 @@ class TestRPCServerProjects(HasRPCServer):
             num_expected=11,
         )
 
-        result = self.async_query('cli_args', cli='compile --models=source:test_source+').json()
+        result = self.async_query(
+            'cli_args', cli='compile --models=source:test_source+').json()
         self.assertHasResults(
             result,
             {'descendant_model', 'multi_source_model'},
@@ -876,13 +883,15 @@ class TestRPCServerProjects(HasRPCServer):
     def test_run_project_postgres(self):
         result = self.async_query('run').json()
         assert 'args' in result['result']
-        self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
+        self.assertHasResults(
+            result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
     @use_profile('postgres')
     def test_run_project_cli_postgres(self):
         result = self.async_query('cli_args', cli='run').json()
-        self.assertHasResults(result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
+        self.assertHasResults(
+            result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
     @use_profile('postgres')
@@ -991,7 +1000,8 @@ class TestRPCTaskManagement(HasRPCServer):
 
         self.assertIn('timestamp', status)
 
-        done_query = self.async_query('compile_sql', 'select 1 as id', name='done').json()
+        done_query = self.async_query(
+            'compile_sql', 'select 1 as id', name='done').json()
         self.assertIsResult(done_query)
         sleepers = []
 
@@ -1058,7 +1068,8 @@ class TestRPCTaskManagement(HasRPCServer):
         resp = self.query('gc', task_ids=stored[:num_requests//2]).json()
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['deleted']), num_requests//2)
-        self.assertEqual(sorted(result['deleted']), sorted(stored[:num_requests//2]))
+        self.assertEqual(sorted(result['deleted']),
+                         sorted(stored[:num_requests//2]))
         self.assertEqual(len(result['missing']), 0)
         self.assertEqual(len(result['running']), 0)
         # we should have total - what we removed still there
@@ -1069,7 +1080,8 @@ class TestRPCTaskManagement(HasRPCServer):
         resp = self.query('gc', task_ids=stored[num_requests//2:]).json()
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['deleted']), num_requests//2)
-        self.assertEqual(sorted(result['deleted']), sorted(stored[num_requests//2:]))
+        self.assertEqual(sorted(result['deleted']),
+                         sorted(stored[num_requests//2:]))
         self.assertEqual(len(result['missing']), 0)
         self.assertEqual(len(result['running']), 0)
         # all gone!
@@ -1146,6 +1158,7 @@ class TestRPCServerDeps(HasRPCServer):
         status = self._check_start_predeps()
 
         # do a dbt deps, wait for the result
-        self.assertIsResult(self.async_query('cli_args', cli='deps', _poll_timeout=180).json())
+        self.assertIsResult(self.async_query(
+            'cli_args', cli='deps', _poll_timeout=180).json())
 
         self._check_deps_ok(status)
