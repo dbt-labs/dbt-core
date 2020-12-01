@@ -1567,7 +1567,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['model.test.model', 'model.test.second_model']
                     },
-                    'description': 'A description of the complex exposure',
+                    'description': 'A description of the complex exposure\n',
                     'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
                     'name': 'notebook_exposure',
@@ -2002,14 +2002,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
                     'name': 'notebook_exposure',
-                    'original_file_path': self.dir('models/schema.yml'),
+                    'original_file_path': 'models/schema.yml',
                     'owner': {
                         'email': 'something@example.com',
                         'name': 'Some name'
                     },
                     'package_name': 'test',
                     'path': 'schema.yml',
-                    'refs': [['model'], ['second_model']],
+                    'refs': [['view_summary']],
                     'resource_type': 'exposure',
                     'root_path': self.test_root_realpath,
                     'sources': [],
