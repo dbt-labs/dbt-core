@@ -1594,7 +1594,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'model.test.model'
                         ],
                     },
-                    'description': None,
+                    'description': '',
                     'fqn': ['test', 'simple_exposure'],
                     'name': 'simple_exposure',
                     'original_file_path': self.dir('models/schema.yml'),
