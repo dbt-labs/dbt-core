@@ -2017,6 +2017,7 @@ def minimal_parsed_exposure_dict():
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
+        'description': ''
     }
 
 
@@ -2041,6 +2042,7 @@ def basic_parsed_exposure_dict():
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
+        'description': ''
     }
 
 
@@ -2056,6 +2058,7 @@ def basic_parsed_exposure_object():
         root_path='/usr/src/app',
         original_file_path='models/something.yml',
         owner=ExposureOwner(email='test@example.com'),
+        description=''
     )
 
 
