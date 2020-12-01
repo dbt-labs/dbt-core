@@ -2002,7 +2002,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
                     'name': 'notebook_exposure',
-                    'original_file_path': 'models/schema.yml',
+                    'original_file_path': self.dir('ref_models/schema.yml'),
                     'owner': {
                         'email': 'something@example.com',
                         'name': 'Some name'
