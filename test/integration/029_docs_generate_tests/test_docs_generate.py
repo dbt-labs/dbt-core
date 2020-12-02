@@ -91,7 +91,8 @@ class TestDocsGenerateEscapes(DBTIntegrationTest):
         self.assertEqual(len(manifest['nodes']), 1)
         self.assertIn('model.test.model', manifest['nodes'])
         self.assertIn('schema', manifest['nodes']['model.test.model'])
-        self.assertEqual('pg', manifest['nodes']['model.test.model']['schema'][:2])
+        self.assertEqual('pg', manifest['nodes']
+                         ['model.test.model']['schema'][:2])
 
 
 class TestDocsGenerate(DBTIntegrationTest):
@@ -116,7 +117,6 @@ class TestDocsGenerate(DBTIntegrationTest):
     def tearDown(self):
         super().tearDown()
         del os.environ['DBT_ENV_CUSTOM_ENV_env_key']
-
 
     @property
     def schema(self):
@@ -209,11 +209,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "include": True
             },
             "diststyle": {
-              "id": "diststyle",
-              "label": "Dist Style",
-              "value": AnyStringWith('AUTO'),
-              "description": "Distribution style or distribution key column, if key distribution is defined.",
-              "include": True
+                "id": "diststyle",
+                "label": "Dist Style",
+                "value": AnyStringWith('AUTO'),
+                "description": "Distribution style or distribution key column, if key distribution is defined.",
+                "include": True
             },
             "max_varchar": {
                 "id": "max_varchar",
@@ -349,7 +349,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                           table_type, model_stats, seed_stats=None, case=None,
                           case_columns=False, model_database=None):
         if case is None:
-            case = lambda x: x
+            def case(x): return x
         col_case = case if case_columns else lambda x: x
 
         if seed_stats is None:
@@ -888,7 +888,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         assert set(catalog) == {'errors', 'metadata', 'nodes', 'sources'}
 
-        self.verify_metadata(catalog['metadata'], 'https://schemas.getdbt.com/dbt/catalog/v1.json')
+        self.verify_metadata(
+            catalog['metadata'], 'https://schemas.getdbt.com/dbt/catalog/v1.json')
         assert not catalog['errors']
 
         for key in 'nodes', 'sources':
@@ -988,7 +989,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         result = {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'test',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -1071,10 +1072,13 @@ class TestDocsGenerate(DBTIntegrationTest):
             model_database = self.alternative_database
 
         model_config = self.rendered_model_config(database=model_database)
-        second_config = self.rendered_model_config(schema=self.alternate_schema[-4:])
+        second_config = self.rendered_model_config(
+            schema=self.alternate_schema[-4:])
 
-        unrendered_model_config = self.unrendered_model_config(database=model_database, materialized='view')
-        unrendered_second_config = self.unrendered_model_config(schema=self.alternate_schema[-4:], materialized='view')
+        unrendered_model_config = self.unrendered_model_config(
+            database=model_database, materialized='view')
+        unrendered_second_config = self.unrendered_model_config(
+            schema=self.alternate_schema[-4:], materialized='view')
 
         seed_config = self.rendered_seed_config()
         unrendered_seed_config = self.unrendered_seed_config()
@@ -1610,6 +1614,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'maturity': None,
                 }
             },
+            'selectors': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'model.test.second_model': ['seed.test.seed'],
@@ -1988,6 +1993,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
             },
             'exposures': {},
+            'selectors': {},
             'docs': {
                 'dbt.__overview__': ANY,
                 'test.column_info': {
@@ -2141,7 +2147,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': self.rendered_model_config(
                         cluster_by=['first_name'],
                         materialized='table',
-                        partition_by={'field': 'updated_at', 'data_type': 'date'},
+                        partition_by={'field': 'updated_at',
+                                      'data_type': 'date'},
                     ),
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -2217,7 +2224,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': self.unrendered_model_config(
                         cluster_by=['first_name'],
                         materialized='table',
-                        partition_by={'field': 'updated_at', 'data_type': 'date'},
+                        partition_by={'field': 'updated_at',
+                                      'data_type': 'date'},
                     ),
                 },
                 'model.test.multi_clustered': {
@@ -2226,7 +2234,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': self.rendered_model_config(
                         cluster_by=['first_name', 'email'],
                         materialized='table',
-                        partition_by={'field': 'updated_at', 'data_type': 'date'}
+                        partition_by={'field': 'updated_at',
+                                      'data_type': 'date'}
                     ),
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
@@ -2301,7 +2310,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': self.unrendered_model_config(
                         cluster_by=['first_name', 'email'],
                         materialized='table',
-                        partition_by={'field': 'updated_at', 'data_type': 'date'}
+                        partition_by={'field': 'updated_at',
+                                      'data_type': 'date'}
                     ),
                 },
                 'model.test.nested_view': {
@@ -2542,6 +2552,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'sources': {},
             'exposures': {},
+            'selectors': {},
             'child_map': {
                 'model.test.clustered': [],
                 'model.test.multi_clustered': [],
@@ -2811,6 +2822,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'sources': {},
             'exposures': {},
+            'selectors': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': [],
@@ -2853,19 +2865,23 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         manifest_keys = frozenset({
             'nodes', 'sources', 'macros', 'parent_map', 'child_map',
-            'docs', 'metadata', 'docs', 'disabled', 'exposures'
+            'docs', 'metadata', 'docs', 'disabled', 'exposures', 'selectors',
         })
 
         self.assertEqual(frozenset(manifest), manifest_keys)
 
         for key in manifest_keys:
             if key == 'macros':
-                self.verify_manifest_macros(manifest, expected_manifest.get('macros'))
+                self.verify_manifest_macros(
+                    manifest, expected_manifest.get('macros'))
             elif key == 'metadata':
                 metadata = manifest['metadata']
-                self.verify_metadata(metadata, 'https://schemas.getdbt.com/dbt/manifest/v1.json')
-                assert 'project_id' in metadata and metadata['project_id'] == '098f6bcd4621d373cade4e832627b4f6'
-                assert 'send_anonymous_usage_stats' in metadata and metadata['send_anonymous_usage_stats'] is False
+                self.verify_metadata(
+                    metadata, 'https://schemas.getdbt.com/dbt/manifest/v1.json')
+                assert 'project_id' in metadata and metadata[
+                    'project_id'] == '098f6bcd4621d373cade4e832627b4f6'
+                assert 'send_anonymous_usage_stats' in metadata and metadata[
+                    'send_anonymous_usage_stats'] is False
                 assert 'user_id' in metadata and metadata['user_id'] is None
                 assert 'adapter_type' in metadata and metadata['adapter_type'] == self.adapter_type
             else:
@@ -2891,9 +2907,12 @@ class TestDocsGenerate(DBTIntegrationTest):
             model_database = self.alternative_database
 
         model_config = self.rendered_model_config(database=model_database)
-        second_model_config = self.rendered_model_config(schema=self.alternate_schema[-4:])
-        unrendered_model_config = self.unrendered_model_config(database=model_database, materialized='view')
-        unrendered_second_model_config = self.unrendered_model_config(schema=self.alternate_schema[-4:], materialized='view')
+        second_model_config = self.rendered_model_config(
+            schema=self.alternate_schema[-4:])
+        unrendered_model_config = self.unrendered_model_config(
+            database=model_database, materialized='view')
+        unrendered_second_model_config = self.unrendered_model_config(
+            schema=self.alternate_schema[-4:], materialized='view')
         schema = self.unique_schema()
 
         # we are selecting from the seed, which is always in the default db
@@ -3731,7 +3750,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         run_results = _read_json('./target/run_results.json')
 
         assert 'metadata' in run_results
-        self.verify_metadata(run_results['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v1.json')
+        self.verify_metadata(
+            run_results['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v1.json')
         self.assertIn('elapsed_time', run_results)
         self.assertGreater(run_results['elapsed_time'], 0)
         self.assertTrue(
@@ -3748,7 +3768,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__run_and_generate_no_compile(self):
-        self.run_and_generate(alternate_db=self.default_database, args=['--no-compile'])
+        self.run_and_generate(
+            alternate_db=self.default_database, args=['--no-compile'])
         self.verify_catalog(self.expected_postgres_catalog())
         self.assertFalse(os.path.exists('./target/manifest.json'))
 
@@ -3773,12 +3794,14 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.verify_catalog(self.expected_postgres_references_catalog())
         self.verify_manifest(self.expected_postgres_references_manifest())
-        self.verify_run_results(self.expected_postgres_references_run_results())
+        self.verify_run_results(
+            self.expected_postgres_references_run_results())
 
     @use_profile('postgres')
     def test_postgres_asset_paths_copied(self):
         self.run_and_generate(
-            {'asset-paths': [self.dir('assets'), self.dir('non-existent-assets')]},
+            {'asset-paths': [self.dir('assets'),
+                             self.dir('non-existent-assets')]},
         )
 
         assert os.path.exists('./target/assets')
@@ -3819,7 +3842,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.verify_catalog(self.expected_snowflake_catalog(case_columns=True))
         self.verify_manifest(self.expected_seeded_manifest(quote_model=True))
-        self.verify_run_results(self.expected_run_results(quote_schema=False, quote_model=True))
+        self.verify_run_results(self.expected_run_results(
+            quote_schema=False, quote_model=True))
 
     @use_profile('bigquery')
     def test__bigquery__run_and_generate(self):
@@ -3858,7 +3882,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             model_count=1,
         )
         self.verify_catalog(self.expected_redshift_incremental_catalog())
-        self.verify_manifest(self.expected_redshift_incremental_view_manifest())
+        self.verify_manifest(
+            self.expected_redshift_incremental_view_manifest())
 
     @use_profile('presto')
     def test__presto__run_and_generate(self):

@@ -659,7 +659,8 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "field": "ts",
             }).to_dict(), {
                 "field": "ts",
-                "data_type": "date"
+                "data_type": "date",
+                "granularity": "day"
             }
         )
 
@@ -669,7 +670,112 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "date",
             }).to_dict(), {
                 "field": "ts",
-                "data_type": "date"
+                "data_type": "date",
+                "granularity": "day"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "MONTH"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "MONTH"
+            }
+        )
+        
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "YEAR"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "YEAR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "HOUR"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "HOUR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "MONTH"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "MONTH"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "YEAR"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "YEAR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "HOUR"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "HOUR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "MONTH"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "MONTH"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "YEAR"
+
+            }).to_dict(), {
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "YEAR"
             }
         )
 
@@ -690,6 +796,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
             }).to_dict(), {
                 "field": "id",
                 "data_type": "int64",
+                "granularity": "day",
                 "range": {
                     "start": 1,
                     "end": 100,

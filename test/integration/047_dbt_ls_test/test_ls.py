@@ -332,7 +332,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': ['schema'],
                     'config': {
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'test',
                         'post-hook': [],
                         'severity': 'ERROR',
                         'tags': [],
@@ -356,7 +356,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': ['data'],
                     'config': {
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'test',
                         'post-hook': [],
                         'severity': 'ERROR',
                         'tags': [],
@@ -380,7 +380,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': ['schema'],
                     'config': {
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'test',
                         'post-hook': [],
                         'severity': 'ERROR',
                         'tags': [],
@@ -436,7 +436,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         results = self.run_dbt_ls(['--resource-type', 'test', '--select', 'outer'])
         self.assertEqual(set(results), {'test.schema_test.not_null_outer_id', 'test.schema_test.unique_outer_id'})
 
-        self.run_dbt_ls(['--resource-type', 'test', '--select', 'inner'], expect_pass=False)
+        self.run_dbt_ls(['--resource-type', 'test', '--select', 'inner'], expect_pass=True)
 
         results = self.run_dbt_ls(['--resource-type', 'test', '--select', '+inner'])
         self.assertEqual(set(results), {'test.schema_test.not_null_outer_id', 'test.schema_test.unique_outer_id'})
@@ -450,7 +450,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         results = self.run_dbt_ls(['--select', 'config.incremental_strategy:delete+insert'])
         self.assertEqual(set(results), {'test.incremental'})
 
-        self.run_dbt_ls(['--select', 'config.incremental_strategy:insert_overwrite'], expect_pass=False)
+        self.run_dbt_ls(['--select', 'config.incremental_strategy:insert_overwrite'], expect_pass=True)
 
 
     @use_profile('postgres')

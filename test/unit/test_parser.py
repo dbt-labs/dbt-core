@@ -860,7 +860,8 @@ class ProcessingTest(BaseParserTest):
             self.doc.unique_id: self.doc,
         }
         self.manifest = Manifest(
-            nodes=nodes, sources=sources, macros={}, docs=docs, disabled=[], files={}, exposures={}
+            nodes=nodes, sources=sources, macros={}, docs=docs,
+            disabled=[], files={}, exposures={}, selectors={},
         )
 
     def test_process_docs(self):

@@ -1,4 +1,7 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import yaml
+import json
+import os
 
 class TestGraphSelection(DBTIntegrationTest):
 
@@ -9,6 +12,18 @@ class TestGraphSelection(DBTIntegrationTest):
     @property
     def models(self):
         return "models"
+
+    @property
+    def selectors_config(self):
+        return yaml.safe_load('''
+            selectors:
+            - name: bi_selector
+              description: This is a BI selector
+              definition:
+                method: tag
+                value: bi
+        ''')
+
 
     def assert_correct_schemas(self):
         with self.get_connection():
@@ -43,7 +58,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__tags(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'tag:bi'])
+        results = self.run_dbt(['run', '--selector', 'bi_selector'])
         self.assertEqual(len(results), 2)
 
         created_models = self.get_models_in_schema()
@@ -52,6 +67,12 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTrue('users' in created_models)
         self.assertTrue('users_rollup' in created_models)
         self.assert_correct_schemas()
+        self.assertTrue(os.path.exists('./target/manifest.json'))
+        with open('./target/manifest.json') as fp:
+            manifest = json.load(fp)
+        self.assertTrue('selectors' in manifest)
+
+
 
     @use_profile('postgres')
     def test__postgres__tags_and_children(self):

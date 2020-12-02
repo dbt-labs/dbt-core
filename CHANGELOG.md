@@ -4,12 +4,23 @@
 - Added macro get_partitions_metadata(table) to return partition metadata for partitioned table [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
 - Added native python 're' module for regex in jinja templates [#2851](https://github.com/fishtown-analytics/dbt/pull/2851)
 - Store resolved node names in manifest ([#2647](https://github.com/fishtown-analytics/dbt/issues/2647), [#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
+- Save selectors dictionary to manifest, allow descriptions ([#2693](https://github.com/fishtown-analytics/dbt/issues/2693), [#2866](https://github.com/fishtown-analytics/dbt/pull/2866))
+- Normalize cli-style-strings in manifest selectors dictionary ([#2879](https://github.com/fishtown-anaytics/dbt/issues/2879), [#2895](https://github.com/fishtown-analytics/dbt/pull/2895))
+- Hourly, monthly and yearly partitions available in BigQuery ([#2476](https://github.com/fishtown-analytics/dbt/issues/2476), [#2903](https://github.com/fishtown-analytics/dbt/pull/2903))
 
 ### Fixes
 - Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
 - Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2855](https://github.com/fishtown-analytics/dbt/issues/2854))
 - Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
 - Increased the supported relation name length in postgres from 29 to 51 ([#2850](https://github.com/fishtown-analytics/dbt/pull/2850))
+- Widen supported Google Cloud libraries dependencies ([#2794](https://github.com/fishtown-analytics/dbt/pull/2794), [#2877](https://github.com/fishtown-analytics/dbt/pull/2877)).
+- dbt list command always return 0 as exit code ([#2886](https://github.com/fishtown-analytics/dbt/issues/2886), [#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- Set default `materialized` for test node configs to `test` ([#2806](https://github.com/fishtown-analytics/dbt/issues/2806), [#2902](https://github.com/fishtown-analytics/dbt/pull/2902))
+
+### Under the hood
+- Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
+- Add event tracking for project parser/load times ([#2823](https://github.com/fishtown-analytics/dbt/issues/2823),[#2893](https://github.com/fishtown-analytics/dbt/pull/2893))
+- Bump cryptography version to be >= 3.2 and bump snowflake connector to 2.3.6 ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))  
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
@@ -18,6 +29,10 @@ Contributors:
 - [@brangisom](https://github.com/brangisom) [#2855](https://github.com/fishtown-analytics/dbt/pull/2855)
 - [@elexisvenator](https://github.com/elexisvenator) ([#2850](https://github.com/fishtown-analytics/dbt/pull/2850))
 - [@franloza](https://github.com/franloza) ([#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
+- [@max-sixty](https://github.com/max-sixty) ([#2877](https://github.com/fishtown-analytics/dbt/pull/2877))
+- [@rsella](https://github.com/rsella) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- [@plotneishestvo](https://github.com/plotneishestvo) ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))
+- [@db-magnus](https://github.com/db-magnus) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
 
 ## dbt 0.19.0b1 (October 21, 2020)
 

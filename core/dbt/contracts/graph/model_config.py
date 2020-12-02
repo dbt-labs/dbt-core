@@ -450,6 +450,7 @@ class SeedConfig(NodeConfig):
 
 @dataclass
 class TestConfig(NodeConfig):
+    materialized: str = 'test'
     severity: Severity = Severity('ERROR')
 
 

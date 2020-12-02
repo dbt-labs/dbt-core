@@ -15,6 +15,7 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.selection import SelectorFile
 from dbt.exceptions import DbtSelectorsError, RuntimeException
 from dbt.graph import parse_from_selectors_definition, SelectionSpec
+from dbt.graph.selector_spec import SelectionCriteria
 
 MALFORMED_SELECTOR_ERROR = """\
 The selectors.yml file in this project is malformed. Please double check
@@ -113,3 +114,67 @@ def selector_config_from_data(
             result_type='invalid_selector',
         ) from e
     return selectors
+
+
+# These are utilities to clean up the dictionary created from
+# selectors.yml by turning the cli-string format entries into
+# normalized dictionary entries. It parallels the flow in
+# dbt/graph/cli.py. If changes are made there, it might
+# be necessary to make changes here. Ideally it would be
+# good to combine the two flows into one at some point.
+class SelectorDict:
+
+    @classmethod
+    def parse_dict_definition(cls, definition):
+        key = list(definition)[0]
+        value = definition[key]
+        if isinstance(value, list):
+            new_values = []
+            for sel_def in value:
+                new_value = cls.parse_from_definition(sel_def)
+                new_values.append(new_value)
+            value = new_values
+        if key == 'exclude':
+            definition = {key: value}
+        elif len(definition) == 1:
+            definition = {'method': key, 'value': value}
+        return definition
+
+    @classmethod
+    def parse_a_definition(cls, def_type, definition):
+        # this definition must be a list
+        new_dict = {def_type: []}
+        for sel_def in definition[def_type]:
+            if isinstance(sel_def, dict):
+                sel_def = cls.parse_from_definition(sel_def)
+                new_dict[def_type].append(sel_def)
+            elif isinstance(sel_def, str):
+                sel_def = SelectionCriteria.dict_from_single_spec(sel_def)
+                new_dict[def_type].append(sel_def)
+            else:
+                new_dict[def_type].append(sel_def)
+        return new_dict
+
+    @classmethod
+    def parse_from_definition(cls, definition):
+        if isinstance(definition, str):
+            definition = SelectionCriteria.dict_from_single_spec(definition)
+        elif 'union' in definition:
+            definition = cls.parse_a_definition('union', definition)
+        elif 'intersection' in definition:
+            definition = cls.parse_a_definition('intersection', definition)
+        elif isinstance(definition, dict):
+            definition = cls.parse_dict_definition(definition)
+        return definition
+
+    # This is the normal entrypoint of this code. Give it the
+    # list of selectors generated from the selectors.yml file.
+    @classmethod
+    def parse_from_selectors_list(cls, selectors):
+        selector_dict = {}
+        for selector in selectors:
+            sel_name = selector['name']
+            selector_dict[sel_name] = selector
+            definition = cls.parse_from_definition(selector['definition'])
+            selector_dict[sel_name]['definition'] = definition
+        return selector_dict
