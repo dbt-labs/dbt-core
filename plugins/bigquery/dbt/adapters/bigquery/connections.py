@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from requests.exceptions import ConnectionError
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Tuple
 
 import google.auth
 import google.auth.exceptions
@@ -44,6 +44,16 @@ RETRYABLE_ERRORS = (
     ConnectionResetError,
     ConnectionError,
 )
+
+@lru_cache()
+def get_bigquery_defaults() -> Tuple[Any, Optional[str]]:
+    """ 
+    Returns (credentials, project_id)
+    
+    project_id where available from the environment 
+    """
+    # Cached, because the underlying implementation shells out, taking ~1s
+    return google.auth.default()
 
 
 class Priority(StrEnum):
@@ -104,15 +114,6 @@ class BigQueryCredentials(Credentials):
         if self.database is None:
             _, database = self.get_bigquery_defaults()
             self.database = database
-
-    @classmethod
-    @lru_cache()
-    def get_bigquery_defaults(cls):
-        """ Returns (credentials, project_id) """
-        # This method is copied from ` BigQueryConnectionManager`, because it's
-        # required in both classes.
-        # We could move this & the scopes to the module level.
-        return google.auth.default()
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -193,7 +194,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         creds = GoogleServiceAccountCredentials.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
-            credentials, _ = cls.get_bigquery_defaults()
+            credentials, _ = get_bigquery_defaults()
             return credentials
 
         elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
@@ -216,13 +217,6 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         error = ('Invalid `method` in profile: "{}"'.format(method))
         raise FailedToConnectException(error)
-
-    @classmethod
-    @lru_cache()
-    def get_bigquery_defaults(cls):
-        """ Returns (credentials, project_id) """
-        # Cached, because the underlying implementation shells out.
-        return google.auth.default(scopes=cls.SCOPE)
 
     @classmethod
     def get_impersonated_bigquery_credentials(cls, profile_credentials):
