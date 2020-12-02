@@ -45,12 +45,13 @@ RETRYABLE_ERRORS = (
     ConnectionError,
 )
 
+
 @lru_cache()
 def get_bigquery_defaults() -> Tuple[Any, Optional[str]]:
-    """ 
+    """
     Returns (credentials, project_id)
-    
-    project_id where available from the environment 
+
+    project_id is returned available from the environment; otherwise None
     """
     # Cached, because the underlying implementation shells out, taking ~1s
     return google.auth.default()
