@@ -112,7 +112,7 @@ class BigQueryCredentials(Credentials):
 
         # `database` is an alias of `project` in BigQuery
         if self.database is None:
-            _, database = self.get_bigquery_defaults()
+            _, database = get_bigquery_defaults()
             self.database = database
 
 
