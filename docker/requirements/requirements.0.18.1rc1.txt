@@ -14,7 +14,7 @@ certifi==2020.6.20
 cffi==1.14.3
 chardet==3.0.4
 colorama==0.4.3
-cryptography==3.2
+cryptography==2.9.2
 decorator==4.4.2
 docutils==0.15.2
 google-api-core==1.16.0
