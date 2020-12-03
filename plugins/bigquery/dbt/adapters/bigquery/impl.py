@@ -789,12 +789,11 @@ class BigQueryAdapter(BaseAdapter):
             opts['labels'] = list(labels.items())
 
         if config.get('partition_by_required'):
-            opts['partition_by_required'] = config.get(
-                'partition_by_required', False)
+            opts['partition_by_required'] = config.get('partition_by_required')
 
-        if config.get('partition_expiration_days'):
+        if config.get('partition_expiration_days') is not None:
             opts['partition_expiration_days'] = config.get(
-                'partition_expiration_days', None)
+                'partition_expiration_days')
 
         return opts
 
