@@ -1,4 +1,6 @@
 """"Test adapter specific config options."""
+from pprint import pprint
+
 from test.integration.base import DBTIntegrationTest, use_profile
 import textwrap
 import yaml
@@ -35,11 +37,12 @@ class TestBigqueryAdapterSpecific(DBTIntegrationTest):
     def test_bigquery_hours_to_expiration(self):
         _, stdout = self.run_dbt_and_capture(['--debug', 'run'])
 
-        print(stdout)
+        pprint(stdout)
         
         self.assertIn(
             'expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
             '4 hour)', stdout)
 
-        self.assertIn('partition_by_required=true', stdout)
+        #self.assertIn('partition_by_required=true', stdout)
         self.assertIn('partition_expiration_days=7', stdout)
+        self.assertEqual("partition_by_required=true", stdout)
