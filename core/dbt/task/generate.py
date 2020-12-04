@@ -211,6 +211,7 @@ class GenerateTask(CompileTask):
         compile_results = None
         if self.args.compile:
             compile_results = CompileTask.run(self)
+            # TODO(kw) not sure this is the right logic
             if any(r.status == NodeStatus.Error for r in compile_results):
                 print_timestamped_line(
                     'compile failed, cannot generate docs'

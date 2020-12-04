@@ -438,8 +438,10 @@ class GraphRunnableTask(ManifestTask):
 
         failures = [
             r for r in results if r.status in (
+                NodeStatus.RuntimeErr,
                 NodeStatus.Error,
-                NodeStatus.Fail
+                NodeStatus.Fail,
+                NodeStatus.Skipped  # propogate error message causing skip
             )
         ]
         return len(failures) == 0

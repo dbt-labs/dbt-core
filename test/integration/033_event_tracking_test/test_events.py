@@ -126,16 +126,16 @@ class TestEventTracking(DBTIntegrationTest):
                         'project_id': project_id,
                         'user_id': user_id,
                         'invocation_id': invocation_id,
+                        'command': command,
+                        'options': None,  # TODO : Add options to compile cmd!
                         'version': version,
 
-                        'command': command,
-                        'progress': progress,
                         'run_type': 'regular',
+                        'adapter_type': adapter_type,
+                        'progress': progress,
 
-                        'options': None,  # TODO : Add options to compile cmd!
                         'result_type': result_type,
                         'result': None,
-                        'adapter_type': adapter_type
                     }
                 },
                 {
@@ -158,12 +158,14 @@ class TestEventTracking(DBTIntegrationTest):
         index,
         total,
         status,
-        error=None
     ):
         timing = []
+        error = False
 
         if status != 'ERROR':
             timing = [ANY, ANY]
+        else:
+            error = True
 
         def populate(project_id, user_id, invocation_id, version):
             return [{
@@ -322,8 +324,8 @@ class TestEventTrackingSuccess(TestEventTracking):
                     'index': 1,
                     'total': 1,
 
-                    'run_status': 'INSERT 1',
-                    'run_error': None,
+                    'run_status': 'SUCCESS',
+                    'run_error': False,
                     'run_skipped': False,
 
                     'timing': [ANY, ANY],
@@ -415,7 +417,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 model_id='4fbacae0e1b69924b22964b457148fb8',
                 index=1,
                 total=2,
-                status='CREATE VIEW',
+                status='SUCCESS',
                 materialization='view'
             ),
             self.run_context(
@@ -423,7 +425,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 model_id='57994a805249953b31b738b1af7a1eeb',
                 index=2,
                 total=2,
-                status='CREATE VIEW',
+                status='SUCCESS',
                 materialization='view'
             ),
             self.build_context('run', 'end', result_type='ok')
@@ -687,7 +689,7 @@ class TestEventTrackingSnapshot(TestEventTracking):
                 model_id='820793a4def8d8a38d109a9709374849',
                 index=1,
                 total=1,
-                status='SELECT 1',
+                status='SUCCESS',
                 materialization='snapshot'
             ),
             self.build_context('snapshot', 'end', result_type='ok')

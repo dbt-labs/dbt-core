@@ -12,15 +12,12 @@ from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
-    FreshnessResult, NodeStatus,
-    PartialNodeResult, RunStatus,
-    SourceFreshnessResult,
+    FreshnessResult, NodeStatus, PartialSourceFreshnessResult,
+    SourceFreshnessResult, FreshnessStatus
 )
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import print_timestamped_line
 from dbt.node_types import NodeType
-
-from dbt import utils
 
 from dbt.graph import NodeSelector, SelectionSpec, parse_difference
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
@@ -42,19 +39,32 @@ class FreshnessRunner(BaseRunner):
     def after_execute(self, result):
         print_freshness_result_line(result, self.node_index, self.num_nodes)
 
-    def _build_run_result(self, node, start_time, error, status, timing_info,
-                          skip=False, failed=None):
+    def error_result(self, node, message, start_time, timing_info):
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            status=FreshnessStatus.RuntimeErr,
+            timing_info=timing_info,
+            message=message,
+        )
+
+    def _build_run_result(
+        self,
+        node,
+        start_time,
+        status,
+        timing_info,
+        message
+    ):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
-        status = utils.lowercase(status)
-        # TODO(kw): uhh not sure what type to return here
-        return PartialNodeResult(
-            node=node,
-            status=RunStatus.Success,  # TODO(kw) fix this as well
-            execution_time=execution_time,
+        return PartialSourceFreshnessResult(
+            status=status,
             thread_id=thread_id,
+            execution_time=execution_time,
             timing=timing_info,
-            message=""
+            message=message,
+            node=node,
         )
 
     def from_run_result(self, result, start_time, timing_info):
@@ -85,10 +95,14 @@ class FreshnessRunner(BaseRunner):
 
         status = compiled_node.freshness.status(freshness['age'])
 
+        # TODO(kw) more cleanup :)
         return SourceFreshnessResult(
             node=compiled_node,
             status=status,
             thread_id=threading.current_thread().name,
+            timing=[],
+            execution_time=0,
+            message="",
             **freshness
         )
 

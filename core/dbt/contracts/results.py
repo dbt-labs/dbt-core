@@ -91,7 +91,7 @@ class BaseResult(JsonSchemaMixin):
     timing: List[TimingInfo]
     thread_id: str
     execution_time: float
-    message: Optional[str]
+    message: Optional[Union[str, int]]
 
 
 @dataclass
@@ -236,7 +236,7 @@ class FreshnessErrorEnum(StrEnum):
 @dataclass
 class SourceFreshnessRuntimeError(JsonSchemaMixin):
     unique_id: str
-    error: str
+    error: Union[str, int]  # TODO(kw) this is to fix mypy
     state: FreshnessErrorEnum
 
 
@@ -265,7 +265,7 @@ def process_freshness_result(
 ) -> FreshnessNodeOutput:
     # TODO(kw) source freshness refactor
     unique_id = result.node.unique_id
-    if result.status is FreshnessStatus.RuntimeErr:
+    if result.status == FreshnessStatus.RuntimeErr:
         return SourceFreshnessRuntimeError(
             unique_id=unique_id,
             error=result.message or "",

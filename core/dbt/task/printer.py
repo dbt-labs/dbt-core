@@ -346,10 +346,14 @@ def print_end_of_run_summary(
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
-    # or r.fail] <- TODO(kw) do we need to handle fail?
-    errors = [r for r in results if r.status in (
-        NodeStatus.Error, NodeStatus.Fail)]
-    warnings = [r for r in results if r.status == NodeStatus.Warn]
+    errors, warnings = [], []
+    for r in results:
+        if (r.status in (NodeStatus.Error, NodeStatus.Fail) or
+                (r.status == NodeStatus.Skipped and r.message is not None)):
+            errors.append(r)
+        elif r.status == NodeStatus.Warn:
+            warnings.append(r)
+
     with DbtStatusMessage(), InvocationProcessor():
         print_end_of_run_summary(len(errors),
                                  len(warnings),

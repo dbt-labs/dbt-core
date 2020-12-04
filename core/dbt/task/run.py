@@ -105,9 +105,9 @@ def track_model_run(index, num_nodes, run_model_result):
         "index": index,
         "total": num_nodes,
         "execution_time": run_model_result.execution_time,
-        "run_status": run_model_result.status,
-        "run_skipped": run_model_result.status == RunStatus.Skipped,
-        "run_error": None,
+        "run_status": str(run_model_result.status).upper(),
+        "run_skipped": run_model_result.status == NodeStatus.Skipped,
+        "run_error": run_model_result.status == NodeStatus.Error,
         "model_materialization": run_model_result.node.get_materialization(),
         "model_id": utils.get_hash(run_model_result.node),
         "hashed_contents": utils.get_hashed_contents(

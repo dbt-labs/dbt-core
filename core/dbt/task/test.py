@@ -91,33 +91,22 @@ class TestRunner(CompileRunner):
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
+        status = None
         if failed_rows == 0:
-            return RunModelResult(
-                node=test,
-                status=TestStatus.Pass,
-                timing=[],
-                thread_id=thread_id,
-                execution_time=0,
-                message=None,
-            )
+            status = TestStatus.Pass
         elif severity == 'ERROR' or flags.WARN_ERROR:
-            return RunModelResult(
-                node=test,
-                status=TestStatus.Fail,
-                timing=[],
-                thread_id=thread_id,
-                execution_time=0,
-                message=failed_rows,
-            )
+            status = TestStatus.Fail
         else:
-            return RunModelResult(
-                node=test,
-                status=TestStatus.Warn,
-                timing=[],
-                thread_id=thread_id,
-                execution_time=0,
-                message=failed_rows,
-            )
+            status = TestStatus.Warn
+
+        return RunModelResult(
+            node=test,
+            status=status,
+            timing=[],
+            thread_id=thread_id,
+            execution_time=0,
+            message=failed_rows,
+        )
 
     def after_execute(self, result):
         self.print_result_line(result)

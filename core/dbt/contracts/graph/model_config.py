@@ -2,8 +2,8 @@ from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
 from typing import (
-    Any, List, Optional, Dict, MutableMapping, Union, Type, NewType, Tuple,
-    TypeVar, Callable
+    Any, Hashable, List, Optional, Dict, MutableMapping, Union, Type, NewType,
+    Tuple, TypeVar, Callable, cast
 )
 
 # TODO: patch+upgrade hologram to avoid this jsonschema import
@@ -493,7 +493,8 @@ class SnapshotWrapper(JsonSchemaMixin):
             to_validate = config
 
         else:
-            schema = _validate_schema(cls)
+            h_cls = cast(Hashable, cls)
+            schema = _validate_schema(h_cls)
             to_validate = data
 
         validator = jsonschema.Draft7Validator(schema)
