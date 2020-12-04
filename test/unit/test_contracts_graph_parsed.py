@@ -443,7 +443,7 @@ def basic_parsed_seed_dict():
         'docs': {'show': True},
         'columns': {},
         'meta': {},
-        'checksum': {'name': 'path', 'checksum': '/root/seeds/seed.csv'},
+        'checksum': {'name': 'path', 'checksum': 'seeds/seed.csv'},
         'unrendered_config': {},
     }
 
@@ -474,7 +474,7 @@ def basic_parsed_seed_object():
         docs=Docs(show=True),
         columns={},
         meta={},
-        checksum=FileHash(name='path', checksum='/root/seeds/seed.csv'),
+        checksum=FileHash(name='path', checksum='seeds/seed.csv'),
         unrendered_config={},
     )
 
@@ -494,7 +494,7 @@ def minimal_parsed_seed_dict():
         'database': 'test_db',
         'schema': 'test_schema',
         'alias': 'foo',
-        'checksum': {'name': 'path', 'checksum': '/root/seeds/seed.csv'},
+        'checksum': {'name': 'path', 'checksum': 'seeds/seed.csv'},
     }
 
 
