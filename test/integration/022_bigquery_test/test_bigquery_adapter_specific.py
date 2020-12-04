@@ -29,8 +29,6 @@ class TestBigqueryAdapterSpecific(DBTIntegrationTest):
                 materialized: table
                 expiring_table:
                     hours_to_expiration: 4    
-                    partition_by_required: True
-                    partition_expiration_days: 7
         '''))
 
     @use_profile('bigquery')
@@ -42,7 +40,3 @@ class TestBigqueryAdapterSpecific(DBTIntegrationTest):
         self.assertIn(
             'expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
             '4 hour)', stdout)
-
-        #self.assertIn('partition_by_required=true', stdout)
-        self.assertIn('partition_expiration_days=7', stdout)
-        self.assertEqual("partition_by_required=true", stdout)
