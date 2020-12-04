@@ -35,8 +35,6 @@ class TestBigqueryAdapterSpecific(DBTIntegrationTest):
     def test_bigquery_hours_to_expiration(self):
         _, stdout = self.run_dbt_and_capture(['--debug', 'run'])
 
-        pprint(stdout)
-        
         self.assertIn(
             'expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL '
             '4 hour)', stdout)
