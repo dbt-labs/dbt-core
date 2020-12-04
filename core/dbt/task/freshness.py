@@ -11,7 +11,9 @@ from .runnable import GraphRunnableTask
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
     FreshnessResult,
-    SourceFreshnessResult, FreshnessStatus
+    PartialSourceFreshnessResult,
+    SourceFreshnessResult,
+    FreshnessStatus,
 )
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.events.functions import fire_event
@@ -108,14 +110,7 @@ class FreshnessRunner(BaseRunner):
             message=message,
         )
 
-    def _build_run_result(
-        self,
-        node,
-        start_time,
-        status,
-        timing_info,
-        message
-    ):
+    def _build_run_result(self, node, start_time, status, timing_info, message):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         return PartialSourceFreshnessResult(

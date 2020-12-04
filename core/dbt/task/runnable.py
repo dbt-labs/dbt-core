@@ -488,7 +488,7 @@ class GraphRunnableTask(ManifestTask):
                 NodeStatus.RuntimeErr,
                 NodeStatus.Error,
                 NodeStatus.Fail,
-                NodeStatus.Skipped  # propogate error message causing skip
+                NodeStatus.Skipped,  # propogate error message causing skip
             )
         ]
         return len(failures) == 0
