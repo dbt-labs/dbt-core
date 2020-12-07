@@ -2121,7 +2121,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.ephemeral_copy': ['source.test.my_source.my_table'],
                 'model.test.ephemeral_summary': ['model.test.ephemeral_copy'],
                 'model.test.view_summary': ['model.test.ephemeral_summary'],
-                'exposure.test.notebook_exposure': ['model.test.view_summary'],
+                'exposure.test.notebook_exposure': [],
                 'seed.test.seed': [],
                 'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'source.test.my_source.my_table': [],
