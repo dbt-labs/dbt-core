@@ -96,6 +96,13 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
                     'priority': 'batch',
                     'maximum_bytes_billed': 0,
                 },
+                'oauth--no-project': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Solar Station',
+                },
             },
             'target': 'oauth',
         }

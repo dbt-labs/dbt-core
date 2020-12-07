@@ -1,7 +1,8 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from requests.exceptions import ConnectionError
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Tuple
 
 import google.auth
 import google.auth.exceptions
@@ -45,6 +46,17 @@ RETRYABLE_ERRORS = (
 )
 
 
+@lru_cache()
+def get_bigquery_defaults() -> Tuple[Any, Optional[str]]:
+    """
+    Returns (credentials, project_id)
+
+    project_id is returned available from the environment; otherwise None
+    """
+    # Cached, because the underlying implementation shells out, taking ~1s
+    return google.auth.default()
+
+
 class Priority(StrEnum):
     Interactive = 'interactive'
     Batch = 'batch'
@@ -60,6 +72,9 @@ class BigQueryConnectionMethod(StrEnum):
 @dataclass
 class BigQueryCredentials(Credentials):
     method: BigQueryConnectionMethod
+    # BigQuery allows an empty database / project, where it defers to the
+    # environment for the project
+    database: Optional[str]
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
     priority: Optional[Priority] = None
@@ -90,6 +105,16 @@ class BigQueryCredentials(Credentials):
     def _connection_keys(self):
         return ('method', 'database', 'schema', 'location', 'priority',
                 'timeout_seconds', 'maximum_bytes_billed')
+
+    def __post_init__(self):
+        # We need to inject the correct value of the database (aka project) at
+        # this stage, ref
+        # https://github.com/fishtown-analytics/dbt/pull/2908#discussion_r532927436.
+
+        # `database` is an alias of `project` in BigQuery
+        if self.database is None:
+            _, database = get_bigquery_defaults()
+            self.database = database
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -170,7 +195,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         creds = GoogleServiceAccountCredentials.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
-            credentials, project_id = google.auth.default(scopes=cls.SCOPE)
+            credentials, _ = get_bigquery_defaults()
             return credentials
 
         elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
@@ -238,7 +263,6 @@ class BigQueryConnectionManager(BaseConnectionManager):
             handle = cls.get_bigquery_client(connection.credentials)
 
         except Exception as e:
-            raise
             logger.debug("Got an error when attempting to create a bigquery "
                          "client: '{}'".format(e))
 
