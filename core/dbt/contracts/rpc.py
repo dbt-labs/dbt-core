@@ -11,7 +11,7 @@ from hologram.helpers import StrEnum
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
-    TimingInfo,
+    RunResultOutput, TimingInfo,
     CatalogArtifact,
     CatalogResults,
     ExecutionResult,
@@ -21,6 +21,7 @@ from dbt.contracts.results import (
     RunOperationResultsArtifact,
     RunResult,
     RunResultsArtifact,
+    process_run_result,
 )
 from dbt.contracts.util import VersionedSchema, schema_version
 from dbt.exceptions import InternalException
@@ -225,8 +226,8 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 @dataclass
 @schema_version('remote-execution-result', 1)
 class RemoteExecutionResult(ExecutionResult, RemoteResult):
+    results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
-    results: Sequence[RunResult]
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
     def write(self, path: str):

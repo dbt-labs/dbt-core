@@ -78,7 +78,7 @@ class TestStatus(StrEnum):
     Warn = NodeStatus.Warn
 
 
-class FreshnessStatus(StrEnum):  # maybe this should be the same as test status
+class FreshnessStatus(StrEnum):
     Pass = NodeStatus.Pass
     Warn = NodeStatus.Warn
     Error = NodeStatus.Error
@@ -127,7 +127,7 @@ class RunModelResult(WritableRunModelResult):
 
 @dataclass
 class ExecutionResult(JsonSchemaMixin):
-    results: Sequence[NodeResult]
+    results: Sequence[BaseResult]
     elapsed_time: float
 
     def __len__(self):
@@ -151,18 +151,37 @@ class RunResultsMetadata(BaseArtifactMetadata):
 
 
 @dataclass
+class RunResultOutput(BaseResult):
+    unique_id: str
+
+
+def process_run_result(result: Union[RunResult, RunResultOutput]) -> RunResultOutput:  # noqa
+    if isinstance(result, RunResultOutput):
+        return result
+
+    return RunResultOutput(
+        unique_id=result.node.unique_id,
+        status=result.status,
+        timing=result.timing,
+        thread_id=result.thread_id,
+        execution_time=result.execution_time,
+        message=result.message
+    )
+
+
+@dataclass
 @schema_version('run-results', 1)
 class RunResultsArtifact(
     ExecutionResult,
-    ArtifactMixin,
+    ArtifactMixin
 ):
-    results: Sequence[RunResult]
+    results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_node_results(
         cls,
-        results: Sequence[RunResult],
+        results: Union[Sequence[RunResult], Sequence[RunResultOutput]],
         elapsed_time: float,
         generated_at: datetime,
         args: Dict,
@@ -171,9 +190,10 @@ class RunResultsArtifact(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
+        processed_results = [process_run_result(result) for result in results]
         return cls(
             metadata=meta,
-            results=results,
+            results=processed_results,
             elapsed_time=elapsed_time,
             args=args
         )
@@ -236,8 +256,8 @@ class FreshnessErrorEnum(StrEnum):
 @dataclass
 class SourceFreshnessRuntimeError(JsonSchemaMixin):
     unique_id: str
-    error: Union[str, int]  # TODO(kw) this is to fix mypy
-    state: FreshnessErrorEnum
+    error: Optional[Union[str, int]]
+    status: FreshnessErrorEnum
 
 
 @dataclass
@@ -246,7 +266,7 @@ class SourceFreshnessOutput(JsonSchemaMixin):
     max_loaded_at: datetime
     snapshotted_at: datetime
     max_loaded_at_time_ago_in_s: float
-    state: FreshnessStatus
+    status: FreshnessStatus
     criteria: FreshnessThreshold
 
 
@@ -263,13 +283,12 @@ FreshnessNodeOutput = Union[SourceFreshnessRuntimeError, SourceFreshnessOutput]
 def process_freshness_result(
     result: FreshnessNodeResult
 ) -> FreshnessNodeOutput:
-    # TODO(kw) source freshness refactor
     unique_id = result.node.unique_id
     if result.status == FreshnessStatus.RuntimeErr:
         return SourceFreshnessRuntimeError(
             unique_id=unique_id,
-            error=result.message or "",
-            state=FreshnessErrorEnum.runtime_error,
+            error=result.message,
+            status=FreshnessErrorEnum.runtime_error,
         )
 
     # we know that this must be a SourceFreshnessResult
@@ -291,7 +310,7 @@ def process_freshness_result(
         max_loaded_at=result.max_loaded_at,
         snapshotted_at=result.snapshotted_at,
         max_loaded_at_time_ago_in_s=result.age,
-        state=result.status,
+        status=result.status,
         criteria=criteria,
     )
 

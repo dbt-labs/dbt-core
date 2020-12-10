@@ -1,4 +1,5 @@
 import functools
+import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
@@ -187,12 +188,11 @@ class ModelRunner(CompileRunner):
 
     def _build_run_model_result(self, model, context):
         result = context['load_result']('main')
-        # TODO(kw) clean this up
         return RunModelResult(
             node=model,
             status=RunStatus.Success,
             timing=[],
-            thread_id="asdf",
+            thread_id=threading.current_thread().name,
             execution_time=0,
             message=result.status,
         )

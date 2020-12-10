@@ -1,3 +1,4 @@
+import threading
 from .runnable import GraphRunnableTask
 from .base import BaseRunner
 
@@ -16,12 +17,11 @@ class CompileRunner(BaseRunner):
         pass
 
     def execute(self, compiled_node, manifest):
-        # TODO(kw) need to think about what to return here
         return RunModelResult(
             node=compiled_node,
             status=RunStatus.Success,
             timing=[],
-            thread_id="asdf",
+            thread_id=threading.current_thread().name,
             execution_time=0,
             message=None,
         )

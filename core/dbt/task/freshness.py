@@ -95,14 +95,13 @@ class FreshnessRunner(BaseRunner):
 
         status = compiled_node.freshness.status(freshness['age'])
 
-        # TODO(kw) more cleanup :)
         return SourceFreshnessResult(
             node=compiled_node,
             status=status,
             thread_id=threading.current_thread().name,
             timing=[],
             execution_time=0,
-            message="",
+            message=None,
             **freshness
         )
 

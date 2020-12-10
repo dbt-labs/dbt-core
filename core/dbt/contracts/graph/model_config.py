@@ -2,8 +2,8 @@ from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
 from typing import (
-    Any, Hashable, List, Optional, Dict, MutableMapping, Union, Type, NewType,
-    Tuple, TypeVar, Callable, cast
+    Any, List, Optional, Dict, MutableMapping, Union, Type, NewType, Tuple,
+    TypeVar, Callable, cast, Hashable
 )
 
 # TODO: patch+upgrade hologram to avoid this jsonschema import
