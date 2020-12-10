@@ -212,12 +212,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
-        return cls(
-            metadata=meta,
-            results=processed_results,
-            elapsed_time=elapsed_time,
-            args=args
-        )
+        return cls(metadata=meta, results=processed_results, elapsed_time=elapsed_time, args=args)
 
     def write(self, path: str):
         write_json(path, self.to_dict(omit_none=False))
