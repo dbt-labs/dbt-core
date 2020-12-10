@@ -1,6 +1,7 @@
 import os
 import multiprocessing
-if os.name != 'nt':
+
+if os.name != "nt":
     # https://bugs.python.org/issue41567
     import multiprocessing.popen_spawn_posix  # type: ignore
 from pathlib import Path
