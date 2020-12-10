@@ -19,9 +19,7 @@ from dbt.contracts.results import (
     FreshnessResult,
     RunOperationResult,
     RunOperationResultsArtifact,
-    RunResult,
     RunResultsArtifact,
-    process_run_result,
 )
 from dbt.contracts.util import VersionedSchema, schema_version
 from dbt.exceptions import InternalException
