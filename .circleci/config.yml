@@ -177,6 +177,18 @@ workflows:
       - integration-snowflake-py36:
           requires:
             - integration-postgres-py36
+      - integration-postgres-py38:
+          requires:
+            - unit
+      - integration-redshift-py38:
+          requires:
+            - integration-postgres-py38
+      - integration-bigquery-py38:
+          requires:
+            - integration-postgres-py38
+      - integration-snowflake-py38:
+          requires:
+            - integration-postgres-py38
       - integration-postgres-py39:
           requires:
             - unit
@@ -196,6 +208,10 @@ workflows:
             - integration-redshift-py36
             - integration-bigquery-py36
             - integration-snowflake-py36
+            - integration-postgres-py38
+            - integration-redshift-py38
+            - integration-bigquery-py38
+            - integration-snowflake-py38
             - integration-postgres-py39
             - integration-redshift-py39
             - integration-bigquery-py39
