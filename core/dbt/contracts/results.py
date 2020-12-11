@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Union, Dict, List, Optional, Any, NamedTuple, Sequence
 
+from dbt.clients.system import write_json
+
 
 @dataclass
 class TimingInfo(JsonSchemaMixin):
@@ -100,7 +102,7 @@ class NodeResult(BaseResult):
 
 
 @dataclass
-class PartialNodeResult(NodeResult, Writable):
+class PartialNodeResult(NodeResult):
     # if the result got to the point where it could be skipped/failed, we would
     # be returning a real result, not a partial.
     @property
@@ -109,20 +111,17 @@ class PartialNodeResult(NodeResult, Writable):
 
 
 @dataclass
-class WritableRunModelResult(NodeResult, Writable):
-    @property
-    def skipped(self):
-        return self.status == RunStatus.Skipped
-
-
-@dataclass
-class RunModelResult(WritableRunModelResult):
+class RunModelResult(NodeResult):
     agate_table: Optional[agate.Table] = None
 
     def to_dict(self, *args, **kwargs):
         dct = super().to_dict(*args, **kwargs)
         dct.pop('agate_table', None)
         return dct
+
+    @property
+    def skipped(self):
+        return self.status == RunStatus.Skipped
 
 
 @dataclass
@@ -140,7 +139,7 @@ class ExecutionResult(JsonSchemaMixin):
         return self.results[idx]
 
 
-RunResult = Union[PartialNodeResult, WritableRunModelResult]
+RunResult = Union[PartialNodeResult, RunModelResult]
 
 
 @dataclass
@@ -155,48 +154,63 @@ class RunResultOutput(BaseResult):
     unique_id: str
 
 
-def process_run_result(result: Union[RunResult, RunResultOutput]) -> RunResultOutput:  # noqa
-    if isinstance(result, RunResultOutput):
-        return result
-
+def process_run_result(result: RunResult) -> RunResultOutput:
     return RunResultOutput(
         unique_id=result.node.unique_id,
         status=result.status,
         timing=result.timing,
         thread_id=result.thread_id,
         execution_time=result.execution_time,
-        message=result.message
+        message=result.message,
     )
 
 
 @dataclass
-@schema_version('run-results', 1)
-class RunResultsArtifact(
+class RunExecutionResult(
     ExecutionResult,
-    ArtifactMixin
 ):
+    results: Sequence[RunResult]
+    args: Dict[str, Any] = field(default_factory=dict)
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+
+    def write(self, path: str):
+        writable = RunResultsArtifact.from_execution_results(
+            results=self.results,
+            elapsed_time=self.elapsed_time,
+            generated_at=self.generated_at,
+            args=self.args,
+        )
+        writable.write(path)
+
+
+@dataclass
+@schema_version('run-results', 1)
+class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_node_results(
+    def from_execution_results(
         cls,
-        results: Union[Sequence[RunResult], Sequence[RunResultOutput]],
+        results: Sequence[RunResult],
         elapsed_time: float,
         generated_at: datetime,
         args: Dict,
     ):
+        processed_results = [process_run_result(result) for result in results]
         meta = RunResultsMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
-        processed_results = [process_run_result(result) for result in results]
         return cls(
             metadata=meta,
             results=processed_results,
             elapsed_time=elapsed_time,
             args=args
         )
+
+    def write(self, path: str, omit_none=False):
+        write_json(path, self.to_dict(omit_none=omit_none))
 
 
 @dataclass

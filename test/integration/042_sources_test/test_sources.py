@@ -266,7 +266,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
                 'max_loaded_at': last_inserted_time,
                 'snapshotted_at': AnyStringWith(),
                 'max_loaded_at_time_ago_in_s': AnyFloat(),
-                'state': state,
+                'status': state,
                 'criteria': {
                     'filter': None,
                     'warn_after': {'count': 10, 'period': 'hour'},

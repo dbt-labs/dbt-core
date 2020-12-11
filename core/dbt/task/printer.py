@@ -305,7 +305,7 @@ def print_run_result_error(
             logger.info("  compiled SQL at {}".format(
                 result.node.build_path))
 
-    else:
+    elif result.message is not None:
         first = True
         for line in result.message.split("\n"):
             if first:

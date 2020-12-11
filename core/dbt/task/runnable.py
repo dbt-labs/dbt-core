@@ -31,7 +31,7 @@ from dbt.logger import (
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.results import NodeStatus, RunResultsArtifact
+from dbt.contracts.results import NodeStatus, RunExecutionResult
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     InternalException,
@@ -538,8 +538,7 @@ class GraphRunnableTask(ManifestTask):
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
-
-        return RunResultsArtifact.from_node_results(
+        return RunExecutionResult(
             results=results,
             elapsed_time=elapsed_time,
             generated_at=generated_at,
