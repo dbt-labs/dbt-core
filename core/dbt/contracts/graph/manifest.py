@@ -947,10 +947,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             if current and (
                 node.resource_type in refables
                 and not node.is_ephemeral
-                unique_id not in selected and
-                not adapter.get_relation(
-                    current.database, current.schema, current.identifier
-                )
+                and unique_id not in selected
+                and not adapter.get_relation(current.database, current.schema, current.identifier)
             ):
                 merged.add(unique_id)
                 self.nodes[unique_id] = node.replace(deferred=True)
