@@ -1567,7 +1567,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['model.test.model', 'model.test.second_model']
                     },
-                    'description': 'A description of the complex exposure',
+                    'description': 'A description of the complex exposure\n',
                     'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
                     'name': 'notebook_exposure',
@@ -1594,7 +1594,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'model.test.model'
                         ],
                     },
-                    'description': None,
+                    'description': '',
                     'fqn': ['test', 'simple_exposure'],
                     'name': 'simple_exposure',
                     'original_file_path': self.dir('models/schema.yml'),
@@ -1992,7 +1992,32 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': {}
                 },
             },
-            'exposures': {},
+            'exposures': {
+            	'exposure.test.notebook_exposure': {
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['model.test.view_summary']
+                    },
+                    'description': 'A description of the complex exposure',
+                    'fqn': ['test', 'notebook_exposure'],
+                    'maturity': 'medium',
+                    'name': 'notebook_exposure',
+                    'original_file_path': self.dir('ref_models/schema.yml'),
+                    'owner': {
+                        'email': 'something@example.com',
+                        'name': 'Some name'
+                    },
+                    'package_name': 'test',
+                    'path': 'schema.yml',
+                    'refs': [['view_summary']],
+                    'resource_type': 'exposure',
+                    'root_path': self.test_root_realpath,
+                    'sources': [],
+                    'type': 'notebook',
+                    'unique_id': 'exposure.test.notebook_exposure',
+                    'url': 'http://example.com/notebook/1'
+                },
+            },
             'selectors': {},
             'docs': {
                 'dbt.__overview__': ANY,
@@ -2073,6 +2098,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': self.test_root_realpath,
                     'unique_id': 'test.macro_info',
                 },
+                'test.notebook_info': {
+                    'block_contents': 'A description of the complex exposure',
+                    'name': 'notebook_info',
+                    'original_file_path': docs_path,
+                    'package_name': 'test',
+                    'path': 'docs.md',
+                    'root_path': self.test_root_realpath,
+                    'unique_id': 'test.notebook_info'
+                },
                 'test.macro_arg_info': {
                     'block_contents': 'The model for my custom test',
                     'name': 'macro_arg_info',
@@ -2085,8 +2119,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'child_map': {
                 'model.test.ephemeral_copy': ['model.test.ephemeral_summary'],
+		        'exposure.test.notebook_exposure': [],
                 'model.test.ephemeral_summary': ['model.test.view_summary'],
-                'model.test.view_summary': [],
+                'model.test.view_summary': ['exposure.test.notebook_exposure'],
                 'seed.test.seed': ['snapshot.test.snapshot_seed'],
                 'snapshot.test.snapshot_seed': [],
                 'source.test.my_source.my_table': ['model.test.ephemeral_copy'],
@@ -2095,6 +2130,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.ephemeral_copy': ['source.test.my_source.my_table'],
                 'model.test.ephemeral_summary': ['model.test.ephemeral_copy'],
                 'model.test.view_summary': ['model.test.ephemeral_summary'],
+                'exposure.test.notebook_exposure': ['model.test.view_summary'],
                 'seed.test.seed': [],
                 'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'source.test.my_source.my_table': [],

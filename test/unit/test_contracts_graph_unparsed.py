@@ -576,6 +576,7 @@ class TestUnparsedExposure(ContractTestCase):
 
     def get_ok_dict(self):
         return {
+        	'yaml_key': 'exposures',
             'name': 'my_exposure',
             'type': 'dashboard',
             'owner': {
@@ -587,11 +588,14 @@ class TestUnparsedExposure(ContractTestCase):
             'depends_on': [
                 'ref("my_model")',
                 'source("raw", "source_table")',
-            ]
+            ],
+            'original_file_path': '/some/fake/path',
+            'package_name': 'test'
         }
 
     def test_ok(self):
         exposure = self.ContractType(
+        	yaml_key='exposures',
             name='my_exposure',
             type=ExposureType.Dashboard,
             owner=ExposureOwner(email='name@example.com'),
@@ -599,6 +603,8 @@ class TestUnparsedExposure(ContractTestCase):
             url='https://example.com/dashboards/1',
             description='A exposure',
             depends_on=['ref("my_model")', 'source("raw", "source_table")'],
+            original_file_path='/some/fake/path',
+            package_name='test'
         )
         dct = self.get_ok_dict()
         self.assert_symmetric(exposure, dct)

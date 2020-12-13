@@ -29,3 +29,15 @@ sources:
         columns:
           - name: id
             description: "{{ doc('column_info') }}"
+
+exposures:
+  - name: notebook_exposure
+    type: notebook
+    depends_on:
+      - ref('view_summary')
+    owner:
+      email: something@example.com
+      name: Some name
+    description: "{{ doc('notebook_info') }}"
+    maturity: medium
+    url: http://example.com/notebook/1
