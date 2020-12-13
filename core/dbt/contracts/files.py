@@ -156,7 +156,7 @@ class SourceFile(JsonSchemaMixin):
     @classmethod
     def big_seed(cls, path: FilePath) -> 'SourceFile':
         """Parse seeds over the size limit with just the path"""
-        self = cls(path=path, checksum=FileHash.path(path.absolute_path))
+        self = cls(path=path, checksum=FileHash.path(path.original_file_path))
         self.contents = ''
         return self
 
