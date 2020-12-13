@@ -2098,6 +2098,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': self.test_root_realpath,
                     'unique_id': 'test.macro_info',
                 },
+                'test.notebook_info': {
+                    'block_contents': 'A description of the complex exposure',
+                    'name': 'notebook_info',
+                    'original_file_path': docs_path,
+                    'package_name': 'test',
+                    'path': 'docs.md',
+                    'root_path': self.test_root_realpath,
+                    'unique_id': 'test.notebook_info'
+                },
                 'test.macro_arg_info': {
                     'block_contents': 'The model for my custom test',
                     'name': 'macro_arg_info',
