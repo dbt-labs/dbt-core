@@ -198,9 +198,9 @@ workflows:
       - integration-bigquery-py39:
           requires:
             - integration-postgres-py39
-      - integration-snowflake-py39:
-          requires:
-            - integration-postgres-py39
+      # - integration-snowflake-py39:
+      #     requires:
+      #       - integration-postgres-py39
       - build-wheels:
           requires:
             - unit
@@ -215,4 +215,4 @@ workflows:
             - integration-postgres-py39
             - integration-redshift-py39
             - integration-bigquery-py39
-            - integration-snowflake-py39
+            # - integration-snowflake-py39
