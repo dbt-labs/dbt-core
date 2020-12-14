@@ -12,7 +12,7 @@ from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
-    FreshnessResult, NodeStatus, PartialSourceFreshnessResult,
+    FreshnessResult, PartialSourceFreshnessResult,
     SourceFreshnessResult, FreshnessStatus
 )
 from dbt.exceptions import RuntimeException, InternalException
@@ -167,7 +167,10 @@ class FreshnessTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         for result in results:
-            if result.status == NodeStatus.Error:
+            if result.status in (
+                FreshnessStatus.Error,
+                FreshnessStatus.RuntimeErr
+            ):
                 print_run_result_error(result)
 
         print_timestamped_line('Done.')

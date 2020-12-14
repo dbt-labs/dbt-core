@@ -104,7 +104,7 @@ def get_printable_result(
         result, success: str, error: str) -> Tuple[str, str, Callable]:
     if result.status == NodeStatus.Error:
         info = 'ERROR {}'.format(error)
-        status = ui.red(result.message)
+        status = ui.red(result.status.upper())
         logger_fn = logger.error
     else:
         info = 'OK {}'.format(success)
@@ -292,12 +292,13 @@ def print_run_result_error(
             result.node.original_file_path))
 
         try:
-            int(result.status)
+            # if message is int, must be rows returned for a test
+            int(result.message)
         except ValueError:
             logger.error("  Status: {}".format(result.status))
         else:
-            status = utils.pluralize(result.status, 'result')
-            logger.error("  Got {}, expected 0.".format(status))
+            num_rows = utils.pluralize(result.message, 'result')
+            logger.error("  Got {}, expected 0.".format(num_rows))
 
         if result.node.build_path is not None:
             with TextOnly():
@@ -348,7 +349,11 @@ def print_end_of_run_summary(
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     errors, warnings = [], []
     for r in results:
-        if r.status in (NodeStatus.Error, NodeStatus.Fail):
+        if r.status in (
+            NodeStatus.RuntimeErr,
+            NodeStatus.Error,
+            NodeStatus.Fail
+        ):
             errors.append(r)
         elif r.status == NodeStatus.Skipped and r.message is not None:
             # this means we skipped a node because of an issue upstream,
