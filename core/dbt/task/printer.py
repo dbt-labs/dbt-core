@@ -131,11 +131,7 @@ def print_run_result_error(
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
     errors, warnings = [], []
     for r in results:
-        if r.status in (
-            NodeStatus.RuntimeErr,
-            NodeStatus.Error,
-            NodeStatus.Fail
-        ):
+        if r.status in (NodeStatus.RuntimeErr, NodeStatus.Error, NodeStatus.Fail):
             errors.append(r)
         elif r.status == NodeStatus.Skipped and r.message is not None:
             # this means we skipped a node because of an issue upstream,
