@@ -76,7 +76,8 @@ class SuccessfulSourcesTest(BaseSourcesTest):
         quoted_columns = ','.join(
             self.adapter.quote(c) if self.adapter_type != 'bigquery' else c
             for c in
-            ('favorite_color', 'id', 'first_name', 'email', 'ip_address', 'updated_at')
+            ('favorite_color', 'id', 'first_name',
+             'email', 'ip_address', 'updated_at')
         )
         self.run_sql(
             raw_sql,
@@ -88,7 +89,8 @@ class SuccessfulSourcesTest(BaseSourcesTest):
                 'quoted_columns': quoted_columns,
             }
         )
-        self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        self.last_inserted_time = insert_time.strftime(
+            "%Y-%m-%dT%H:%M:%S+00:00")
 
 
 class TestSources(SuccessfulSourcesTest):
@@ -254,7 +256,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
             key = key.upper()
         assert data['metadata']['env'] == {key: 'value'}
 
-
         last_inserted_time = self.last_inserted_time
 
         self.assertEqual(len(data['results']), 1)
@@ -265,7 +266,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
                 'max_loaded_at': last_inserted_time,
                 'snapshotted_at': AnyStringWith(),
                 'max_loaded_at_time_ago_in_s': AnyFloat(),
-                'state': state,
+                'status': state,
                 'criteria': {
                     'filter': None,
                     'warn_after': {'count': 10, 'period': 'hour'},
@@ -285,8 +286,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'error')
-        self.assertTrue(results[0].fail)
-        self.assertIsNone(results[0].error)
         self._assert_freshness_results('target/error_source.json', 'error')
 
         self._set_updated_at_to(timedelta(hours=-12))
@@ -296,8 +295,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'warn')
-        self.assertFalse(results[0].fail)
-        self.assertIsNone(results[0].error)
         self._assert_freshness_results('target/warn_source.json', 'warn')
 
         self._set_updated_at_to(timedelta(hours=-2))
@@ -307,8 +304,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'pass')
-        self.assertFalse(results[0].fail)
-        self.assertIsNone(results[0].error)
         self._assert_freshness_results('target/pass_source.json', 'pass')
 
     @use_profile('postgres')
@@ -340,9 +335,7 @@ class TestSourceFreshnessErrors(SuccessfulSourcesTest):
             expect_pass=False
         )
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'error')
-        self.assertFalse(results[0].fail)
-        self.assertIsNotNone(results[0].error)
+        self.assertEqual(results[0].status, 'runtime error')
 
 
 class TestSourceFreshnessFilter(SuccessfulSourcesTest):
@@ -350,31 +343,22 @@ class TestSourceFreshnessFilter(SuccessfulSourcesTest):
     def models(self):
         return 'filtered_models'
 
-    def assert_source_freshness_passed(self, results):
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'pass')
-        self.assertFalse(results[0].fail)
-        self.assertIsNone(results[0].error)
-
-    def assert_source_freshness_failed(self, results):
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'error')
-        self.assertTrue(results[0].fail)
-        self.assertIsNone(results[0].error)
-
     @use_profile('postgres')
     def test_postgres_all_records(self):
         # all records are filtered out
-        self.run_dbt_with_vars(['source', 'snapshot-freshness'], expect_pass=False)
+        self.run_dbt_with_vars(
+            ['source', 'snapshot-freshness'], expect_pass=False)
         # we should insert a record with #101 that's fresh, but will still fail
         # because the filter excludes it
         self._set_updated_at_to(timedelta(hours=-2))
-        self.run_dbt_with_vars(['source', 'snapshot-freshness'], expect_pass=False)
+        self.run_dbt_with_vars(
+            ['source', 'snapshot-freshness'], expect_pass=False)
 
         # we should now insert a record with #102 that's fresh, and the filter
         # includes it
         self._set_updated_at_to(timedelta(hours=-2))
-        results = self.run_dbt_with_vars(['source', 'snapshot-freshness'], expect_pass=True)
+        results = self.run_dbt_with_vars(
+            ['source', 'snapshot-freshness'], expect_pass=True)
 
 
 class TestMalformedSources(BaseSourcesTest):

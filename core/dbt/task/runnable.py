@@ -31,7 +31,7 @@ from dbt.logger import (
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.results import RunResultsArtifact
+from dbt.contracts.results import NodeStatus, RunExecutionResult
 from dbt.contracts.state import PreviousState
 from dbt.exceptions import (
     InternalException,
@@ -189,17 +189,17 @@ class GraphRunnableTask(ManifestTask):
 
         fail_fast = getattr(self.config.args, 'fail_fast', False)
 
-        if (result.fail is not None or result.error is not None) and fail_fast:
+        if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastException(
                 message='Failing early due to test failure or runtime error',
                 result=result,
                 node=getattr(result, 'node', None)
             )
-        elif result.error is not None and self.raise_on_first_error():
+        elif result.status == NodeStatus.Error and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
             # next 'tick' - should be soon since our thread is about to finish!
-            self._raise_next_tick = RuntimeException(result.error)
+            self._raise_next_tick = RuntimeException(result.message)
 
         return result
 
@@ -287,7 +287,7 @@ class GraphRunnableTask(ManifestTask):
         else:
             self.manifest.update_node(node)
 
-        if result.error is not None:
+        if result.status == NodeStatus.Error:
             if is_ephemeral:
                 cause = result
             else:
@@ -436,7 +436,14 @@ class GraphRunnableTask(ManifestTask):
         if results is None:
             return False
 
-        failures = [r for r in results if r.error or r.fail]
+        failures = [
+            r for r in results if r.status in (
+                NodeStatus.RuntimeErr,
+                NodeStatus.Error,
+                NodeStatus.Fail,
+                NodeStatus.Skipped  # propogate error message causing skip
+            )
+        ]
         return len(failures) == 0
 
     def get_model_schemas(
@@ -531,8 +538,7 @@ class GraphRunnableTask(ManifestTask):
                 create_future.result()
 
     def get_result(self, results, elapsed_time, generated_at):
-
-        return RunResultsArtifact.from_node_results(
+        return RunExecutionResult(
             results=results,
             elapsed_time=elapsed_time,
             generated_at=generated_at,

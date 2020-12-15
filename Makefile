@@ -7,19 +7,19 @@ install:
 
 test: .env
 	@echo "Full test run starting..."
-	@time docker-compose run test tox
+	@time docker-compose run --rm test tox
 
 test-unit: .env
 	@echo "Unit test run starting..."
-	@time docker-compose run test tox -e unit-py36,flake8
+	@time docker-compose run --rm test tox -e unit-py36,flake8
 
 test-integration: .env
 	@echo "Integration test run starting..."
-	@time docker-compose run test tox -e integration-postgres-py36,integration-redshift-py36,integration-snowflake-py36,integration-bigquery-py36
+	@time docker-compose run --rm test tox -e integration-postgres-py36,integration-redshift-py36,integration-snowflake-py36,integration-bigquery-py36
 
 test-quick: .env
 	@echo "Integration test run starting..."
-	@time docker-compose run test tox -e integration-postgres-py36 -- -x
+	@time docker-compose run --rm test tox -e integration-postgres-py36 -- -x
 
 # This rule creates a file named .env that is used by docker-compose for passing
 # the USER_ID and GROUP_ID arguments to the Docker image.

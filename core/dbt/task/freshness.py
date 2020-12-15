@@ -1,7 +1,6 @@
 import os
 import threading
 import time
-from typing import Dict
 
 from .base import BaseRunner
 from .printer import (
@@ -13,15 +12,12 @@ from .runnable import GraphRunnableTask
 
 from dbt.contracts.results import (
     FreshnessExecutionResultArtifact,
-    FreshnessResult,
-    PartialResult,
-    SourceFreshnessResult,
+    FreshnessResult, PartialSourceFreshnessResult,
+    SourceFreshnessResult, FreshnessStatus
 )
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import print_timestamped_line
 from dbt.node_types import NodeType
-
-from dbt import utils
 
 from dbt.graph import NodeSelector, SelectionSpec, parse_difference
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
@@ -36,12 +32,6 @@ class FreshnessRunner(BaseRunner):
             'Freshness: nodes cannot be skipped!'
         )
 
-    def get_result_status(self, result) -> Dict[str, str]:
-        if result.error:
-            return {'node_status': 'error', 'node_error': str(result.error)}
-        else:
-            return {'node_status': str(result.status)}
-
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
         print_start_line(description, self.node_index, self.num_nodes)
@@ -49,18 +39,32 @@ class FreshnessRunner(BaseRunner):
     def after_execute(self, result):
         print_freshness_result_line(result, self.node_index, self.num_nodes)
 
-    def _build_run_result(self, node, start_time, error, status, timing_info,
-                          skip=False, failed=None):
+    def error_result(self, node, message, start_time, timing_info):
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            status=FreshnessStatus.RuntimeErr,
+            timing_info=timing_info,
+            message=message,
+        )
+
+    def _build_run_result(
+        self,
+        node,
+        start_time,
+        status,
+        timing_info,
+        message
+    ):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
-        status = utils.lowercase(status)
-        return PartialResult(
-            node=node,
+        return PartialSourceFreshnessResult(
             status=status,
-            error=error,
-            execution_time=execution_time,
             thread_id=thread_id,
+            execution_time=execution_time,
             timing=timing_info,
+            message=message,
+            node=node,
         )
 
     def from_run_result(self, result, start_time, timing_info):
@@ -95,6 +99,9 @@ class FreshnessRunner(BaseRunner):
             node=compiled_node,
             status=status,
             thread_id=threading.current_thread().name,
+            timing=[],
+            execution_time=0,
+            message=None,
             **freshness
         )
 
@@ -160,7 +167,10 @@ class FreshnessTask(GraphRunnableTask):
 
     def task_end_messages(self, results):
         for result in results:
-            if result.error is not None:
+            if result.status in (
+                FreshnessStatus.Error,
+                FreshnessStatus.RuntimeErr
+            ):
                 print_run_result_error(result)
 
         print_timestamped_line('Done.')

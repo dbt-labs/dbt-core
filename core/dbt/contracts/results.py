@@ -1,6 +1,6 @@
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.graph.unparsed import (
-    FreshnessStatus, FreshnessThreshold
+    FreshnessThreshold
 )
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import (
@@ -26,6 +26,8 @@ import agate
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Union, Dict, List, Optional, Any, NamedTuple, Sequence
+
+from dbt.clients.system import write_json
 
 
 @dataclass
@@ -55,22 +57,52 @@ class collect_timing_info:
             logger.debug('finished collecting timing info')
 
 
+class NodeStatus(StrEnum):
+    Success = "success"
+    Error = "error"
+    Fail = "fail"
+    Warn = "warn"
+    Skipped = "skipped"
+    Pass = "pass"
+    RuntimeErr = "runtime error"
+
+
+class RunStatus(StrEnum):
+    Success = NodeStatus.Success
+    Error = NodeStatus.Error
+    Skipped = NodeStatus.Skipped
+
+
+class TestStatus(StrEnum):
+    Pass = NodeStatus.Pass
+    Error = NodeStatus.Error
+    Fail = NodeStatus.Fail
+    Warn = NodeStatus.Warn
+
+
+class FreshnessStatus(StrEnum):
+    Pass = NodeStatus.Pass
+    Warn = NodeStatus.Warn
+    Error = NodeStatus.Error
+    RuntimeErr = NodeStatus.RuntimeErr
+
+
 @dataclass
 class BaseResult(JsonSchemaMixin):
-    node: CompileResultNode
-    error: Optional[str] = None
-    status: Union[None, str, int, bool] = None
-    execution_time: Union[str, int] = 0
-    thread_id: Optional[str] = None
-    timing: List[TimingInfo] = field(default_factory=list)
-    fail: Optional[bool] = None
-    warn: Optional[bool] = None
+    status: Union[RunStatus, TestStatus, FreshnessStatus]
+    timing: List[TimingInfo]
+    thread_id: str
+    execution_time: float
+    message: Optional[Union[str, int]]
 
 
 @dataclass
-class PartialResult(BaseResult, Writable):
-    pass
+class NodeResult(BaseResult):
+    node: CompileResultNode
 
+
+@dataclass
+class PartialNodeResult(NodeResult):
     # if the result got to the point where it could be skipped/failed, we would
     # be returning a real result, not a partial.
     @property
@@ -79,22 +111,17 @@ class PartialResult(BaseResult, Writable):
 
 
 @dataclass
-class WritableRunModelResult(BaseResult, Writable):
-    skip: bool = False
-
-    @property
-    def skipped(self):
-        return self.skip
-
-
-@dataclass
-class RunModelResult(WritableRunModelResult):
+class RunModelResult(NodeResult):
     agate_table: Optional[agate.Table] = None
 
     def to_dict(self, *args, **kwargs):
         dct = super().to_dict(*args, **kwargs)
         dct.pop('agate_table', None)
         return dct
+
+    @property
+    def skipped(self):
+        return self.status == RunStatus.Skipped
 
 
 @dataclass
@@ -112,7 +139,7 @@ class ExecutionResult(JsonSchemaMixin):
         return self.results[idx]
 
 
-RunResult = Union[PartialResult, WritableRunModelResult]
+RunResult = Union[PartialNodeResult, RunModelResult]
 
 
 @dataclass
@@ -123,32 +150,67 @@ class RunResultsMetadata(BaseArtifactMetadata):
 
 
 @dataclass
-@schema_version('run-results', 1)
-class RunResultsArtifact(
+class RunResultOutput(BaseResult):
+    unique_id: str
+
+
+def process_run_result(result: RunResult) -> RunResultOutput:
+    return RunResultOutput(
+        unique_id=result.node.unique_id,
+        status=result.status,
+        timing=result.timing,
+        thread_id=result.thread_id,
+        execution_time=result.execution_time,
+        message=result.message,
+    )
+
+
+@dataclass
+class RunExecutionResult(
     ExecutionResult,
-    ArtifactMixin,
 ):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+
+    def write(self, path: str):
+        writable = RunResultsArtifact.from_execution_results(
+            results=self.results,
+            elapsed_time=self.elapsed_time,
+            generated_at=self.generated_at,
+            args=self.args,
+        )
+        writable.write(path)
+
+
+@dataclass
+@schema_version('run-results', 1)
+class RunResultsArtifact(ExecutionResult, ArtifactMixin):
+    results: Sequence[RunResultOutput]
+    args: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_node_results(
+    def from_execution_results(
         cls,
         results: Sequence[RunResult],
         elapsed_time: float,
         generated_at: datetime,
         args: Dict,
     ):
+        processed_results = [process_run_result(result) for result in results]
         meta = RunResultsMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
         return cls(
             metadata=meta,
-            results=results,
+            results=processed_results,
             elapsed_time=elapsed_time,
             args=args
         )
+
+    def write(self, path: str, omit_none=False):
+        write_json(path, self.to_dict(omit_none=omit_none))
 
 
 @dataclass
@@ -174,7 +236,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
         elapsed_time: float,
         generated_at: datetime,
     ):
-        meta = RunResultsMetadata(
+        meta = RunOperationResultMetadata(
             dbt_schema_version=str(cls.dbt_schema_version),
             generated_at=generated_at,
         )
@@ -186,34 +248,19 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
         )
 
 
+# due to issues with typing.Union collapsing subclasses, this can't subclass
+# PartialResult
 @dataclass
-class SourceFreshnessResultMixin(JsonSchemaMixin):
+class SourceFreshnessResult(NodeResult, Writable):
+    node: ParsedSourceDefinition
+    status: FreshnessStatus
     max_loaded_at: datetime
     snapshotted_at: datetime
     age: float
 
-
-# due to issues with typing.Union collapsing subclasses, this can't subclass
-# PartialResult
-@dataclass
-class SourceFreshnessResult(BaseResult, Writable, SourceFreshnessResultMixin):
-    node: ParsedSourceDefinition
-    status: FreshnessStatus = FreshnessStatus.Pass
-
-    def __post_init__(self):
-        self.fail = self.status == 'error'
-
-    @property
-    def warned(self):
-        return self.status == 'warn'
-
     @property
     def skipped(self):
         return False
-
-
-def _copykeys(src, keys, **updates):
-    return {k: getattr(src, k) for k in keys}
 
 
 class FreshnessErrorEnum(StrEnum):
@@ -223,8 +270,8 @@ class FreshnessErrorEnum(StrEnum):
 @dataclass
 class SourceFreshnessRuntimeError(JsonSchemaMixin):
     unique_id: str
-    error: str
-    state: FreshnessErrorEnum
+    error: Optional[Union[str, int]]
+    status: FreshnessErrorEnum
 
 
 @dataclass
@@ -233,11 +280,17 @@ class SourceFreshnessOutput(JsonSchemaMixin):
     max_loaded_at: datetime
     snapshotted_at: datetime
     max_loaded_at_time_ago_in_s: float
-    state: FreshnessStatus
+    status: FreshnessStatus
     criteria: FreshnessThreshold
 
 
-FreshnessNodeResult = Union[PartialResult, SourceFreshnessResult]
+@dataclass
+class PartialSourceFreshnessResult(PartialNodeResult):
+    status: FreshnessStatus
+
+
+FreshnessNodeResult = Union[PartialSourceFreshnessResult,
+                            SourceFreshnessResult]
 FreshnessNodeOutput = Union[SourceFreshnessRuntimeError, SourceFreshnessOutput]
 
 
@@ -245,11 +298,11 @@ def process_freshness_result(
     result: FreshnessNodeResult
 ) -> FreshnessNodeOutput:
     unique_id = result.node.unique_id
-    if result.error is not None:
+    if result.status == FreshnessStatus.RuntimeErr:
         return SourceFreshnessRuntimeError(
             unique_id=unique_id,
-            error=result.error,
-            state=FreshnessErrorEnum.runtime_error,
+            error=result.message,
+            status=FreshnessErrorEnum.runtime_error,
         )
 
     # we know that this must be a SourceFreshnessResult
@@ -271,7 +324,7 @@ def process_freshness_result(
         max_loaded_at=result.max_loaded_at,
         snapshotted_at=result.snapshotted_at,
         max_loaded_at_time_ago_in_s=result.age,
-        state=result.status,
+        status=result.status,
         criteria=criteria,
     )
 

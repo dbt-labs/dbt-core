@@ -43,16 +43,15 @@ class TestDataTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'fail' in result.node.name:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, "fail")
                 self.assertFalse(result.skipped)
-                self.assertTrue(result.status > 0)
+                self.assertTrue(int(result.message) > 0)
 
             # assert that actual tests pass
             else:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                # status = # of failing rows
-                self.assertEqual(result.status, 0)
+                self.assertEqual(int(result.message), 0)
 
         # check that all tests were run
         defined_tests = os.listdir(self.test_path)
@@ -72,13 +71,12 @@ class TestDataTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'fail' in result.node.name:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
-                self.assertTrue(result.status > 0)
+                self.assertTrue(int(result.message) > 0)
 
             # assert that actual tests pass
             else:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                # status = # of failing rows
-                self.assertEqual(result.status, 0)
+                self.assertEqual(int(result.message), 0)

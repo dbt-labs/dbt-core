@@ -27,19 +27,18 @@ class TestSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     def assertTestFailed(self, result):
-        self.assertIsNone(result.error)
+        self.assertEqual(result.status, "fail")
         self.assertFalse(result.skipped)
         self.assertTrue(
-            result.status > 0,
+            int(result.message) > 0,
             'test {} did not fail'.format(result.node.name)
         )
 
     def assertTestPassed(self, result):
-        self.assertIsNone(result.error)
+        self.assertEqual(result.status, "pass")
         self.assertFalse(result.skipped)
-        # status = # of failing rows
         self.assertEqual(
-            result.status, 0,
+            int(result.message), 0,
             'test {} failed'.format(result.node.name)
         )
 
@@ -59,25 +58,28 @@ class TestSchemaTests(DBTIntegrationTest):
             else:
                 self.assertTestPassed(result)
 
-        self.assertEqual(sum(x.status for x in test_results), 6)
+        self.assertEqual(sum(x.message for x in test_results), 6)
 
     @use_profile('postgres')
     def test_postgres_schema_test_selection(self):
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
-        test_results = self.run_dbt(['test', '--models', 'tag:table_favorite_color'])
-        self.assertEqual(len(test_results), 5)  # 1 in table_copy, 4 in table_summary
+        test_results = self.run_dbt(
+            ['test', '--models', 'tag:table_favorite_color'])
+        # 1 in table_copy, 4 in table_summary
+        self.assertEqual(len(test_results), 5)
         for result in test_results:
             self.assertTestPassed(result)
 
-        test_results = self.run_dbt(['test', '--models', 'tag:favorite_number_is_pi'])
+        test_results = self.run_dbt(
+            ['test', '--models', 'tag:favorite_number_is_pi'])
         self.assertEqual(len(test_results), 1)
         self.assertTestPassed(test_results[0])
 
-        test_results = self.run_dbt(['test', '--models', 'tag:table_copy_favorite_color'])
+        test_results = self.run_dbt(
+            ['test', '--models', 'tag:table_copy_favorite_color'])
         self.assertEqual(len(test_results), 1)
         self.assertTestPassed(test_results[0])
-
 
     @use_profile('postgres')
     def test_postgres_schema_test_exclude_failures(self):
@@ -88,7 +90,8 @@ class TestSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(test_results), 13)
         for result in test_results:
             self.assertTestPassed(result)
-        test_results = self.run_dbt(['test', '--models', 'tag:xfail'], expect_pass=False)
+        test_results = self.run_dbt(
+            ['test', '--models', 'tag:xfail'], expect_pass=False)
         self.assertEqual(len(test_results), 6)
         for result in test_results:
             self.assertTestFailed(result)
@@ -160,12 +163,12 @@ class TestMalformedMacroTests(DBTIntegrationTest):
         self.assertEqual(len(test_results), 2)
 
         for result in test_results:
-            self.assertTrue(result.error is not None or result.fail)
+            self.assertIn(result.status, ('error', 'fail'))
             # Assert that error is thrown for empty schema test
-            if result.error is not None:
-                self.assertIn("Returned 0 rows", result.error)
+            if result.status == "error":
+                self.assertIn("Returned 0 rows", result.message)
             # Assert that failure occurs for normal schema test
-            elif result.fail:
+            elif result.status == "fail":
                 self.assertIn(expected_failure, result.node.name)
 
 
@@ -194,11 +197,10 @@ class TestHooksInTests(DBTIntegrationTest):
         results = self.run_dbt(['test', '--model', 'ephemeral'])
         self.assertEqual(len(results), 1)
         for result in results:
-            self.assertIsNone(result.error)
+            self.assertEqual(result.status, "pass")
             self.assertFalse(result.skipped)
-            # status = # of failing rows
             self.assertEqual(
-                result.status, 0,
+                int(result.message), 0,
                 'test {} failed'.format(result.node.name)
             )
 
@@ -259,9 +261,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         expected_failures = ['unique', 'every_value_is_blue']
 
         for result in test_results:
-            if result.error is not None:
+            if result.status == 'error':
                 self.assertTrue(result.node['name'] in expected_failures)
-        self.assertEqual(sum(x.status for x in test_results), 52)
+        self.assertEqual(sum(x.message for x in test_results), 52)
 
 
 class TestBQSchemaTests(DBTIntegrationTest):
@@ -296,24 +298,22 @@ class TestBQSchemaTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'failure' in result.node.name:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
                 self.assertTrue(
-                    result.status > 0,
+                    int(result.message) > 0,
                     'test {} did not fail'.format(result.node.name)
                 )
-
             # assert that actual tests pass
             else:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                # status = # of failing rows
                 self.assertEqual(
-                    result.status, 0,
+                    int(result.message), 0,
                     'test {} failed'.format(result.node.name)
                 )
 
-        self.assertEqual(sum(x.status for x in test_results), 0)
+        self.assertEqual(sum(x.message for x in test_results), 0)
 
 
 class TestQuotedSchemaTestColumns(DBTIntegrationTest):

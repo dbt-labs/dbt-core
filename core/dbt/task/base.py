@@ -9,7 +9,7 @@ from dbt import tracking
 from dbt import ui
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    RunModelResult, collect_timing_info
+    NodeStatus, RunModelResult, collect_timing_info, RunStatus
 )
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
@@ -165,6 +165,7 @@ class ExecutionContext:
     """During execution and error handling, dbt makes use of mutable state:
     timing information and the newest (compiled vs executed) form of the node.
     """
+
     def __init__(self, node):
         self.timing = []
         self.node = node
@@ -186,13 +187,13 @@ class BaseRunner(metaclass=ABCMeta):
         pass
 
     def get_result_status(self, result) -> Dict[str, str]:
-        if result.error:
-            return {'node_status': 'error', 'node_error': str(result.error)}
-        elif result.skip:
+        if result.status == NodeStatus.Error:
+            return {'node_status': 'error', 'node_error': str(result.message)}
+        elif result.status == NodeStatus.Skipped:
             return {'node_status': 'skipped'}
-        elif result.fail:
+        elif result.status == NodeStatus.Fail:
             return {'node_status': 'failed'}
-        elif result.warn:
+        elif result.status == NodeStatus.Warn:
             return {'node_status': 'warn'}
         else:
             return {'node_status': 'passed'}
@@ -212,52 +213,57 @@ class BaseRunner(metaclass=ABCMeta):
 
         return result
 
-    def _build_run_result(self, node, start_time, error, status, timing_info,
-                          skip=False, fail=None, warn=None, agate_table=None):
+    def _build_run_result(self, node, start_time, status, timing_info, message,
+                          agate_table=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         return RunModelResult(
-            node=node,
-            error=error,
-            skip=skip,
             status=status,
-            fail=fail,
-            warn=warn,
-            execution_time=execution_time,
             thread_id=thread_id,
+            execution_time=execution_time,
             timing=timing_info,
-            agate_table=agate_table,
+            message=message,
+            node=node,
+            agate_table=agate_table
         )
 
-    def error_result(self, node, error, start_time, timing_info):
+    def error_result(self, node, message, start_time, timing_info):
         return self._build_run_result(
             node=node,
             start_time=start_time,
-            error=error,
-            status='ERROR',
-            timing_info=timing_info
+            status=RunStatus.Error,
+            timing_info=timing_info,
+            message=message,
         )
 
     def ephemeral_result(self, node, start_time, timing_info):
         return self._build_run_result(
             node=node,
             start_time=start_time,
-            error=None,
-            status=None,
-            timing_info=timing_info
+            status=RunStatus.Success,
+            timing_info=timing_info,
+            message=None
         )
 
     def from_run_result(self, result, start_time, timing_info):
         return self._build_run_result(
             node=result.node,
             start_time=start_time,
-            error=result.error,
-            skip=result.skip,
             status=result.status,
-            fail=result.fail,
-            warn=result.warn,
             timing_info=timing_info,
+            message=result.message,
             agate_table=result.agate_table,
+        )
+
+    def skip_result(self, node, message):
+        thread_id = threading.current_thread().name
+        return RunModelResult(
+            status=RunStatus.Skipped,
+            thread_id=thread_id,
+            execution_time=0,
+            timing=[],
+            message=message,
+            node=node,
         )
 
     def compile_and_execute(self, manifest, ctx):
@@ -340,7 +346,7 @@ class BaseRunner(metaclass=ABCMeta):
             # an error
             if (
                 exc_str is not None and result is not None and
-                result.error is None and error is None
+                result.status != NodeStatus.Error and error is None
             ):
                 error = exc_str
 
@@ -389,7 +395,7 @@ class BaseRunner(metaclass=ABCMeta):
         schema_name = self.node.schema
         node_name = self.node.name
 
-        error = None
+        error_message = None
         if not self.node.is_ephemeral_model:
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
@@ -408,7 +414,7 @@ class BaseRunner(metaclass=ABCMeta):
                         'an ephemeral failure'
                     )
                 # set an error so dbt will exit with an error code
-                error = (
+                error_message = (
                     'Compilation Error in {}, caused by compilation error '
                     'in referenced ephemeral model {}'
                     .format(self.node.unique_id,
@@ -423,7 +429,7 @@ class BaseRunner(metaclass=ABCMeta):
                     self.num_nodes
                 )
 
-        node_result = RunModelResult(self.node, skip=True, error=error)
+        node_result = self.skip_result(self.node, error_message)
         return node_result
 
     def do_skip(self, cause=None):

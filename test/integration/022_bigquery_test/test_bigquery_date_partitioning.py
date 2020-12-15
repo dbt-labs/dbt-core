@@ -41,7 +41,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
 
         self.assertTrue(len(test_results) > 0)
         for result in test_results:
-            self.assertIsNone(result.error)
+            self.assertEqual(result.status, 'pass')
             self.assertFalse(result.skipped)
-            # status = # of failing rows
-            self.assertEqual(result.status, 0)
+            # message = # of failing rows
+            self.assertEqual(int(result.message), 0)

@@ -101,7 +101,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         self.assertEqual(len(results),  7)
         for result in results:
             if 'incremental' in result.node.name:
-                self.assertIn('not implemented for presto', result.error)
+                self.assertIn('not implemented for presto', result.message)
 
         self.assertManyTablesEqual(["seed", "view_model", "materialized"])
 

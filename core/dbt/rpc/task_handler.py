@@ -187,6 +187,7 @@ def get_results_context(
 
 class StateHandler:
     """A helper context manager to manage task handler state."""
+
     def __init__(self, task_handler: 'RequestTaskHandler') -> None:
         self.handler = task_handler
 
@@ -248,6 +249,7 @@ class SetArgsStateHandler(StateHandler):
     """A state handler that does not touch state on success and does not
     execute the teardown
     """
+
     def handle_completed(self):
         pass
 
@@ -257,6 +259,7 @@ class SetArgsStateHandler(StateHandler):
 
 class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
     """Handler for the single task triggered by a given jsonrpc request."""
+
     def __init__(
         self,
         manager: TaskManagerProtocol,
@@ -400,6 +403,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
         try:
             with StateHandler(self):
                 self.result = self.get_result()
+
         except (dbt.exceptions.Exception, RPCException):
             # we probably got an error after the RPC call ran (and it was
             # probably deps...). By now anyone who wanted to see it has seen it
