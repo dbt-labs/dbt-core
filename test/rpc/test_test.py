@@ -105,3 +105,9 @@ def test_rpc_test_state(
             querier.test(state='./state', models=['state:modified']),
         )
         assert len(results['results']) == 0
+        
+        # a better test of defer would require multiple targets
+        results = querier.async_wait_for_result(
+            querier.run(state='./state', models=['state:modified'], defer=True)
+        )
+        assert len(results['results']) == 0
