@@ -119,6 +119,23 @@ class TestDeferState(DBTIntegrationTest):
         # because the seed now exists in our schema, we shouldn't defer it
         assert self.other_schema not in results[0].node.compiled_sql
         assert self.unique_schema() in results[0].node.compiled_sql
+        
+    def run_defer_deleted_upstream(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+
+        # copy files over from the happy times when we had a good target
+        self.copy_state()
+
+        self.use_default_project({'source-paths': ['changed_models_missing']})
+        # ephemeral_model is now gone. previously this caused a 
+        # keyerror (dbt#2875), now it should pass
+        self.run_dbt(
+            ['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'],
+            expect_pass=True,
+        )
 
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):
@@ -142,6 +159,10 @@ class TestDeferState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_state_defer_iffnotexists(self):
         self.run_defer_iff_not_exists()
+        
+    @use_profile('postgres')
+    def test_postgres_state_defer_deleted_upstream(self):
+        self.run_defer_deleted_upstream()    
 
     @use_profile('snowflake')
     def test_snowflake_state_changetarget(self):
