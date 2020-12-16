@@ -10,7 +10,7 @@ import agate
 
 import dbt.exceptions
 from dbt.contracts.connection import (
-    Connection, Identifier, ConnectionState,
+    Connection,
     AdapterRequiredConfig, LazyHandle, AdapterResponse
 )
 from dbt.contracts.graph.manifest import Manifest

@@ -7,7 +7,7 @@ from typing_extensions import Protocol
 
 import agate
 
-from dbt.contracts.connection import (
+from dbt.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
     Connection, AdapterRequiredConfig, AdapterResponse
 )
 from dbt.contracts.graph.compiled import (

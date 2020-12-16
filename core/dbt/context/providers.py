@@ -711,7 +711,7 @@ class ProviderContext(ManifestContext):
         message=Optional[str],
         code=Optional[str],
         rows_affected=Optional[str],
-        agate_table: Optional[agate.Table] = None
+        agate_table: Optional[agate.Table] = None,
     ) -> str:
         response = AdapterResponse(
             _message=message, code=code, rows_affected=rows_affected)
