@@ -102,6 +102,24 @@ class TestDeferState(DBTIntegrationTest):
             expect_pass=False,
         )
 
+    def run_defer_iff_not_exists(self):
+        results = self.run_dbt(['seed', '--target', 'otherschema'])
+        assert len(results) == 1
+        results = self.run_dbt(['run', '--target', 'otherschema'])
+        assert len(results) == 2
+
+        # copy files over from the happy times when we had a good target
+        self.copy_state()
+        
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        results = self.run_dbt(['run', '--state', 'state', '--defer'])
+        assert len(results) == 2
+        
+        # because the seed now exists in our schema, we shouldn't defer it
+        assert self.other_schema not in results[0].node.compiled_sql
+        assert self.unique_schema() in results[0].node.compiled_sql
+
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):
         self.run_and_defer()
@@ -118,8 +136,12 @@ class TestDeferState(DBTIntegrationTest):
             self.run_dbt(['snapshot', '--defer'])
 
     @use_profile('postgres')
-    def test_postgres_stat_changedir(self):
+    def test_postgres_state_changedir(self):
         self.run_switchdirs_defer()
+        
+    @use_profile('postgres')
+    def test_postgres_state_defer_iffnotexists(self):
+        self.run_defer_iff_not_exists()
 
     @use_profile('snowflake')
     def test_snowflake_state_changetarget(self):

@@ -380,7 +380,7 @@ class RunTask(CompileTask):
             )
         return state.manifest
 
-    def defer_to_manifest(self, selected_uids: AbstractSet[str]):
+    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
         deferred_manifest = self._get_deferred_manifest()
         if deferred_manifest is None:
             return
@@ -390,6 +390,7 @@ class RunTask(CompileTask):
                 'manifest to defer from!'
             )
         self.manifest.merge_from_artifact(
+            adapter=adapter,
             other=deferred_manifest,
             selected=selected_uids,
         )
@@ -397,10 +398,10 @@ class RunTask(CompileTask):
         self.write_manifest()
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        self.defer_to_manifest(selected_uids)
         with adapter.connection_named('master'):
             self.create_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter)
+            self.defer_to_manifest(adapter, selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):
