@@ -2,7 +2,7 @@ import threading
 from .runnable import GraphRunnableTask
 from .base import BaseRunner
 
-from dbt.contracts.results import RunStatus, RunModelResult
+from dbt.contracts.results import RunStatus, RunResult
 from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector, SelectionSpec, parse_difference
 from dbt.logger import print_timestamped_line
@@ -17,7 +17,7 @@ class CompileRunner(BaseRunner):
         pass
 
     def execute(self, compiled_node, manifest):
-        return RunModelResult(
+        return RunResult(
             node=compiled_node,
             status=RunStatus.Success,
             timing=[],

@@ -15,7 +15,7 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro noop_statement(name=None, status=None, res=None) -%}
+{% macro noop_statement(name=None, message=None, state=None, rows=None, res=None) -%}
   {%- set sql = caller() -%}
 
   {%- if name == 'main' -%}
@@ -24,7 +24,7 @@
   {%- endif -%}
 
   {%- if name is not none -%}
-    {{ store_result(name, status=status, agate_table=res) }}
+    {{ store_raw_result(name, message=message, state=state, rows=rows, agate_table=res) }}
   {%- endif -%}
 
 {%- endmacro %}

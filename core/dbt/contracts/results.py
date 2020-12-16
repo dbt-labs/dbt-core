@@ -19,7 +19,7 @@ from dbt.logger import (
 )
 from dbt.utils import lowercase
 from hologram.helpers import StrEnum
-from hologram import JsonSchemaMixin
+from hologram import JsonDict, JsonSchemaMixin
 
 import agate
 
@@ -102,22 +102,9 @@ class NodeResult(BaseResult):
 
 
 @dataclass
-class PartialNodeResult(NodeResult):
-    # if the result got to the point where it could be skipped/failed, we would
-    # be returning a real result, not a partial.
-    @property
-    def skipped(self):
-        return False
-
-
-@dataclass
-class RunModelResult(NodeResult):
+class RunResult(NodeResult):
     agate_table: Optional[agate.Table] = None
-
-    def to_dict(self, *args, **kwargs):
-        dct = super().to_dict(*args, **kwargs)
-        dct.pop('agate_table', None)
-        return dct
+    adapter_query_status: JsonDict = field(default_factory=dict)
 
     @property
     def skipped(self):
@@ -139,9 +126,6 @@ class ExecutionResult(JsonSchemaMixin):
         return self.results[idx]
 
 
-RunResult = Union[PartialNodeResult, RunModelResult]
-
-
 @dataclass
 class RunResultsMetadata(BaseArtifactMetadata):
     dbt_schema_version: str = field(
@@ -152,6 +136,7 @@ class RunResultsMetadata(BaseArtifactMetadata):
 @dataclass
 class RunResultOutput(BaseResult):
     unique_id: str
+    adapter_query_status: JsonDict = field(default_factory=dict)
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
@@ -162,6 +147,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         thread_id=result.thread_id,
         execution_time=result.execution_time,
         message=result.message,
+        adapter_query_status=result.adapter_query_status
     )
 
 
@@ -247,9 +233,10 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
             success=success,
         )
 
-
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
+
+
 @dataclass
 class SourceFreshnessResult(NodeResult, Writable):
     node: ParsedSourceDefinition
@@ -285,8 +272,12 @@ class SourceFreshnessOutput(JsonSchemaMixin):
 
 
 @dataclass
-class PartialSourceFreshnessResult(PartialNodeResult):
+class PartialSourceFreshnessResult(NodeResult):
     status: FreshnessStatus
+
+    @property
+    def skipped(self):
+        return False
 
 
 FreshnessNodeResult = Union[PartialSourceFreshnessResult,

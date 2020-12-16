@@ -129,11 +129,11 @@
     {% set create_table_sql = create_csv_table(model, agate_table) %}
   {% endif %}
 
-  {% set status = 'CREATE' if full_refresh_mode else 'INSERT' %}
+  {% set state = 'CREATE' if full_refresh_mode else 'INSERT' %}
   {% set num_rows = (agate_table.rows | length) %}
   {% set sql = load_csv_rows(model, agate_table) %}
 
-  {% call noop_statement('main', status ~ ' ' ~ num_rows) %}
+  {% call noop_statement('main', state ~ ' ' ~ num_rows, state, num_rows) %}
     {{ create_table_sql }};
     -- dbt seed --
     {{ sql }}

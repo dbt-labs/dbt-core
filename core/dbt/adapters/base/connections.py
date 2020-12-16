@@ -4,14 +4,15 @@ import os
 from multiprocessing.synchronize import RLock
 from threading import get_ident
 from typing import (
-    Dict, Tuple, Hashable, Optional, ContextManager, List
+    Dict, Tuple, Hashable, Optional, ContextManager, List, Union
 )
 
 import agate
 
 import dbt.exceptions
 from dbt.contracts.connection import (
-    Connection, Identifier, ConnectionState, AdapterRequiredConfig, LazyHandle
+    Connection, Identifier, ConnectionState,
+    AdapterRequiredConfig, LazyHandle, ExecutionStatus
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
@@ -290,7 +291,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[str, agate.Table]:
+    ) -> Tuple[Union[str, ExecutionStatus], agate.Table]:
         """Execute the given SQL.
 
         :param str sql: The sql to execute.
@@ -298,7 +299,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
         :return: A tuple of the status and the results (empty if fetch=False).
-        :rtype: Tuple[str, agate.Table]
+        :rtype: Tuple[Union[str, ExecutionStatus], agate.Table]
         """
         raise dbt.exceptions.NotImplementedException(
             '`execute` is not implemented for this adapter!'

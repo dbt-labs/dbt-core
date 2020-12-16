@@ -18,6 +18,7 @@ from .context_config import ContextConfig
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.graph.manifest import Manifest, Disabled
+from dbt.contracts.connection import ExecutionStatus
 from dbt.contracts.graph.compiled import (
     CompiledResource,
     CompiledSeedNode,
@@ -83,6 +84,7 @@ class BaseDatabaseWrapper:
     Wrapper for runtime database interaction. Applies the runtime quote policy
     via a relation proxy.
     """
+
     def __init__(self, adapter, namespace: MacroNamespace):
         self._adapter = adapter
         self.Relation = RelationProxy(adapter)
@@ -379,6 +381,7 @@ class ParseDatabaseWrapper(BaseDatabaseWrapper):
     """The parser subclass of the database wrapper applies any explicit
     parse-time overrides.
     """
+
     def __getattr__(self, name):
         override = (name in self._adapter._available_ and
                     name in self._adapter._parse_replacements_)
@@ -399,6 +402,7 @@ class RuntimeDatabaseWrapper(BaseDatabaseWrapper):
     """The runtime database wrapper exposes everything the adapter marks
     available.
     """
+
     def __getattr__(self, name):
         if name in self._adapter._available_:
             return getattr(self._adapter, name)
@@ -671,6 +675,18 @@ class ProviderContext(ManifestContext):
             'table': agate_table
         })
         return ''
+
+    @contextmember
+    def store_raw_result(
+        self,
+        name: str,
+        message=Optional[str],
+        state=Optional[str],
+        rows=Optional[str],
+        agate_table: Optional[agate.Table] = None
+    ) -> str:
+        status = ExecutionStatus(message=message, state=state, rows=rows)
+        return self.store_result(name, status, agate_table)
 
     @contextproperty
     def validation(self):
@@ -1179,6 +1195,7 @@ class MacroContext(ProviderContext):
         - 'schema' does not use any 'model' information
      - they can't be configured with config() directives
     """
+
     def __init__(
         self,
         model: ParsedMacro,

@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
+import agate
 from requests.exceptions import ConnectionError
 from typing import Optional, Any, Dict, Tuple
 
@@ -18,7 +19,7 @@ from google.oauth2 import (
 from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
 from dbt.tracking import active_user
-from dbt.contracts.connection import ConnectionState
+from dbt.contracts.connection import ConnectionState, ExecutionStatus
 from dbt.exceptions import (
     FailedToConnectException, RuntimeException, DatabaseException
 )
@@ -67,6 +68,11 @@ class BigQueryConnectionMethod(StrEnum):
     SERVICE_ACCOUNT = 'service-account'
     SERVICE_ACCOUNT_JSON = 'service-account-json'
     OAUTH_SECRETS = 'oauth-secrets'
+
+
+@dataclass
+class BigQueryExecutionStatus(ExecutionStatus):
+    bytes: Optional[str] = None
 
 
 @dataclass
@@ -324,7 +330,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         return query_job, iterator
 
-    def execute(self, sql, auto_begin=False, fetch=None):
+    def execute(
+        self, sql, auto_begin=False, fetch=None
+    ) -> Tuple[BigQueryExecutionStatus, agate.Table]:
         sql = self._add_query_comment(sql)
         # auto_begin is ignored on bigquery, and only included for consistency
         query_job, iterator = self.raw_execute(sql, fetch=fetch)
@@ -334,33 +342,48 @@ class BigQueryConnectionManager(BaseConnectionManager):
         else:
             res = agate_helper.empty_table()
 
+        message = 'OK'
+        state = None
+        num_rows = None
+        processed_bytes = None
+
         if query_job.statement_type == 'CREATE_VIEW':
-            status = 'CREATE VIEW'
+            state = 'CREATE VIEW'
 
         elif query_job.statement_type == 'CREATE_TABLE_AS_SELECT':
             conn = self.get_thread_connection()
             client = conn.handle
             table = client.get_table(query_job.destination)
-            processed = format_bytes(query_job.total_bytes_processed)
-            status = 'CREATE TABLE ({} rows, {} processed)'.format(
-                format_rows_number(table.num_rows),
-                format_bytes(query_job.total_bytes_processed),
+            state = 'CREATE TABLE'
+            num_rows = format_rows_number(table.num_rows)
+            processed_bytes = format_bytes(query_job.total_bytes_processed)
+            message = '{} ({} rows, {} processed)'.format(
+                state,
+                num_rows,
+                processed_bytes
             )
 
         elif query_job.statement_type == 'SCRIPT':
-            processed = format_bytes(query_job.total_bytes_processed)
-            status = f'SCRIPT ({processed} processed)'
+            state = 'SCRIPT'
+            processed_bytes = format_bytes(query_job.total_bytes_processed)
+            message = f'{state} ({processed_bytes} processed)'
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-            status = '{} ({} rows, {} processed)'.format(
-                query_job.statement_type,
-                format_rows_number(query_job.num_dml_affected_rows),
-                format_bytes(query_job.total_bytes_processed),
+            state = query_job.statement_type
+            num_rows = format_rows_number(query_job.num_dml_affected_rows)
+            processed_bytes = format_bytes(query_job.total_bytes_processed)
+            message = '{} ({} rows, {} processed)'.format(
+                state,
+                num_rows,
+                processed_bytes,
             )
 
-        else:
-            status = 'OK'
-
+        status = BigQueryExecutionStatus(
+            message=message,
+            rows=num_rows,
+            state=state,
+            bytes=processed_bytes
+        )
         return status, res
 
     def get_partitions_metadata(self, table):

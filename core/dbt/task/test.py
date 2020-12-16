@@ -15,7 +15,7 @@ from dbt.contracts.graph.parsed import (
     ParsedDataTestNode,
     ParsedSchemaTestNode,
 )
-from dbt.contracts.results import RunModelResult, TestStatus
+from dbt.contracts.results import RunResult, TestStatus
 from dbt.exceptions import raise_compiler_error, InternalException
 from dbt.graph import (
     ResourceTypeSelector,
@@ -99,7 +99,7 @@ class TestRunner(CompileRunner):
         else:
             status = TestStatus.Warn
 
-        return RunModelResult(
+        return RunResult(
             node=test,
             status=status,
             timing=[],

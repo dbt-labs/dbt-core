@@ -35,7 +35,7 @@ from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values, executor
 
-from dbt.adapters.base.connections import Connection
+from dbt.adapters.base.connections import Connection, ExecutionStatus
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base.relation import (
     ComponentName, BaseRelation, InformationSchema, SchemaSearchMap
@@ -213,7 +213,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     @available.parse(lambda *a, **k: ('', empty_table()))
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[str, agate.Table]:
+    ) -> Tuple[Union[str, ExecutionStatus], agate.Table]:
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
 
@@ -222,7 +222,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
         :return: A tuple of the status and the results (empty if fetch=False).
-        :rtype: Tuple[str, agate.Table]
+        :rtype: Tuple[Union[str, ExecutionStatus], agate.Table]
         """
         return self.connections.execute(
             sql=sql,

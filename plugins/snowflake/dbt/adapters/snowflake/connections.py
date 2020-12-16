@@ -18,6 +18,7 @@ from dbt.exceptions import (
     DatabaseException, warn_or_error
 )
 from dbt.adapters.base import Credentials
+from dbt.contracts.connection import ExecutionStatus
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -245,13 +246,17 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
 
     @classmethod
-    def get_status(cls, cursor):
+    def get_status(cls, cursor) -> ExecutionStatus:
         state = cursor.sqlstate
 
         if state is None:
             state = 'SUCCESS'
 
-        return "{} {}".format(state, cursor.rowcount)
+        return ExecutionStatus(
+            message="{} {}".format(state, cursor.rowcount),
+            rows=cursor.rowcount,
+            state=state
+        )
 
     @classmethod
     def _split_queries(cls, sql):

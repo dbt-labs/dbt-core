@@ -22,6 +22,16 @@ Identifier = NewType('Identifier', str)
 register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
 
 
+@dataclass
+class ExecutionStatus(JsonSchemaMixin):
+    message: str
+    state: Optional[str] = None
+    rows: Optional[str] = None
+
+    def __str__(self):
+        return self.message
+
+
 class ConnectionState(StrEnum):
     INIT = 'init'
     OPEN = 'open'
@@ -85,6 +95,7 @@ class LazyHandle:
     """Opener must be a callable that takes a Connection object and opens the
     connection, updating the handle on the Connection.
     """
+
     def __init__(self, opener: Callable[[Connection], Connection]):
         self.opener = opener
 

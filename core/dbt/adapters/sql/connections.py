@@ -1,13 +1,15 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict
+from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
 
 import agate
 
 import dbt.clients.agate_helper
 import dbt.exceptions
 from dbt.adapters.base import BaseConnectionManager
-from dbt.contracts.connection import Connection, ConnectionState
+from dbt.contracts.connection import (
+    Connection, ConnectionState, ExecutionStatus
+)
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import flags
 
@@ -76,7 +78,6 @@ class SQLConnectionManager(BaseConnectionManager):
 
             cursor = connection.handle.cursor()
             cursor.execute(sql, bindings)
-
             logger.debug(
                 "SQL status: {status} in {elapsed:0.2f} seconds",
                 status=self.get_status(cursor),
@@ -86,7 +87,7 @@ class SQLConnectionManager(BaseConnectionManager):
             return connection, cursor
 
     @abc.abstractclassmethod
-    def get_status(cls, cursor: Any) -> str:
+    def get_status(cls, cursor: Any) -> Union[str, ExecutionStatus]:
         """Get the status of the cursor."""
         raise dbt.exceptions.NotImplementedException(
             '`get_status` is not implemented for this adapter!'
@@ -118,7 +119,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[str, agate.Table]:
+    ) -> Tuple[Union[str, ExecutionStatus], agate.Table]:
         sql = self._add_query_comment(sql)
         _, cursor = self.add_query(sql, auto_begin)
         status = self.get_status(cursor)

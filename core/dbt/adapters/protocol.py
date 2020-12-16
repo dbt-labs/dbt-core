@@ -7,7 +7,9 @@ from typing_extensions import Protocol
 
 import agate
 
-from dbt.contracts.connection import Connection, AdapterRequiredConfig
+from dbt.contracts.connection import (
+    Connection, AdapterRequiredConfig, ExecutionStatus
+)
 from dbt.contracts.graph.compiled import (
     CompiledNode, ManifestNode, NonSourceCompiledNode
 )
@@ -154,7 +156,7 @@ class AdapterProtocol(
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[str, agate.Table]:
+    ) -> Tuple[Union[str, ExecutionStatus], agate.Table]:
         ...
 
     def get_compiler(self) -> Compiler_T:

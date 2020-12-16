@@ -9,7 +9,7 @@ from dbt import tracking
 from dbt import ui
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    NodeStatus, RunModelResult, collect_timing_info, RunStatus
+    NodeStatus, RunResult, collect_timing_info, RunStatus
 )
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
@@ -180,7 +180,7 @@ class BaseRunner(metaclass=ABCMeta):
         self.num_nodes = num_nodes
 
         self.skip = False
-        self.skip_cause: Optional[RunModelResult] = None
+        self.skip_cause: Optional[RunResult] = None
 
     @abstractmethod
     def compile(self, manifest: Manifest) -> Any:
@@ -214,17 +214,20 @@ class BaseRunner(metaclass=ABCMeta):
         return result
 
     def _build_run_result(self, node, start_time, status, timing_info, message,
-                          agate_table=None):
+                          agate_table=None, adapter_query_status=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
-        return RunModelResult(
+        if adapter_query_status is None:
+            adapter_query_status = {}
+        return RunResult(
             status=status,
             thread_id=thread_id,
             execution_time=execution_time,
             timing=timing_info,
             message=message,
             node=node,
-            agate_table=agate_table
+            agate_table=agate_table,
+            adapter_query_status=adapter_query_status
         )
 
     def error_result(self, node, message, start_time, timing_info):
@@ -253,11 +256,12 @@ class BaseRunner(metaclass=ABCMeta):
             timing_info=timing_info,
             message=result.message,
             agate_table=result.agate_table,
+            adapter_query_status=result.adapter_query_status
         )
 
     def skip_result(self, node, message):
         thread_id = threading.current_thread().name
-        return RunModelResult(
+        return RunResult(
             status=RunStatus.Skipped,
             thread_id=thread_id,
             execution_time=0,
