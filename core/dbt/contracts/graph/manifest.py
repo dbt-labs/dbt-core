@@ -899,8 +899,8 @@ class Manifest:
         refables = set(NodeType.refable())
         merged = set()
         for unique_id, node in other.nodes.items():
-            current = self.nodes[unique_id]
-            if (
+            current = self.nodes.get(unique_id)
+            if current and (
                 node.resource_type in refables and
                 not node.is_ephemeral and
                 unique_id not in selected and
