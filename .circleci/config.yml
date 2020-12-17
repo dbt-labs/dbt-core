@@ -121,6 +121,45 @@ jobs:
       - store_artifacts:
           path: ./logs
 
+  integration-postgres-py39:
+    docker: *test_and_postgres
+    steps:
+      - checkout
+      - run: *setupdb
+      - run:
+          name: Run tests
+          command: tox -e integration-postgres-py39
+      - store_artifacts:
+          path: ./logs
+  integration-snowflake-py39:
+    docker: *test_only
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: tox -e integration-snowflake-py39
+          no_output_timeout: 1h
+      - store_artifacts:
+          path: ./logs
+  integration-redshift-py39:
+    docker: *test_only
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: tox -e integration-redshift-py39
+      - store_artifacts:
+          path: ./logs
+  integration-bigquery-py39:
+    docker: *test_only
+    steps:
+      - checkout
+      - run:
+          name: Run tests
+          command: tox -e integration-bigquery-py39
+      - store_artifacts:
+          path: ./logs
+
 workflows:
   version: 2
   test-everything:
@@ -150,6 +189,18 @@ workflows:
       - integration-snowflake-py38:
           requires:
             - integration-postgres-py38
+      - integration-postgres-py39:
+          requires:
+            - unit
+      - integration-redshift-py39:
+          requires:
+            - integration-postgres-py39
+      - integration-bigquery-py39:
+          requires:
+            - integration-postgres-py39
+      # - integration-snowflake-py39:
+      #     requires:
+      #       - integration-postgres-py39
       - build-wheels:
           requires:
             - unit
@@ -161,3 +212,7 @@ workflows:
             - integration-redshift-py38
             - integration-bigquery-py38
             - integration-snowflake-py38
+            - integration-postgres-py39
+            - integration-redshift-py39
+            - integration-bigquery-py39
+            # - integration-snowflake-py39

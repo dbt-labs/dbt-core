@@ -20,13 +20,16 @@
 - Allow docs blocks in exposure descriptions ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913), [#2920](https://github.com/fishtown-analytics/dbt/pull/2920))
 - Use original file path instead of absolute path as checksum for big seeds ([#2927](https://github.com/fishtown-analytics/dbt/issues/2927), [#2939](https://github.com/fishtown-analytics/dbt/pull/2939))
 - Defer if and only if upstream reference does not exist in current environment namespace ([#2909](https://github.com/fishtown-analytics/dbt/issues/2909), [#2946](https://github.com/fishtown-analytics/dbt/pull/2946))
+- Fix KeyError if deferring to a manifest with a since-deleted source, ephemeral model, or test ([#2875](https://github.com/fishtown-analytics/dbt/issues/2875), [#2958](https://github.com/fishtown-analytics/dbt/pull/2958))
 
 ### Under the hood
 - Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
 - Add event tracking for project parser/load times ([#2823](https://github.com/fishtown-analytics/dbt/issues/2823),[#2893](https://github.com/fishtown-analytics/dbt/pull/2893))
 - Bump cryptography version to be >= 3.2 and bump snowflake connector to 2.3.6 ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))  
 - Widen supported Google Cloud libraries dependencies ([#2794](https://github.com/fishtown-analytics/dbt/pull/2794), [#2877](https://github.com/fishtown-analytics/dbt/pull/2877)).
+- Bump hologram to 0.0.12 and adding testing support for python3.9 ([#2822](https://github.com/fishtown-analytics/dbt/issues/2822),[#2960](https://github.com/fishtown-analytics/dbt/pull/2960))
 - Bump the version requirements for boto3 in dbt-redshift to the upper limit 1.16 to match dbt-redshift and the snowflake-python-connector as of version 2.3.6. ([#2931](https://github.com/fishtown-analytics/dbt/issues/2931))
+
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
@@ -40,6 +43,7 @@ Contributors:
 - [@joellabes](https://github.com/joellabes) ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913))
 - [@plotneishestvo](https://github.com/plotneishestvo) ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))
 - [@db-magnus](https://github.com/db-magnus) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- [@tyang209](https:/github.com/tyang209) ([#2931](https://github.com/fishtown-analytics/dbt/issues/2931))
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
