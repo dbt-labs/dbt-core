@@ -70,7 +70,7 @@ setup(
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<0.17',
         'dataclasses==0.6;python_version<"3.7"',
-        'hologram==0.0.11',
+        'hologram==0.0.12',
         'logbook>=1.5,<1.6',
         'typing-extensions>=3.7.4,<3.8',
         # the following are all to match snowflake-connector-python
@@ -91,6 +91,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
     python_requires=">=3.6.3",
 )
