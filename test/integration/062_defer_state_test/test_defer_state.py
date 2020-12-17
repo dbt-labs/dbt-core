@@ -27,7 +27,7 @@ class TestDeferState(DBTIntegrationTest):
             'config-version': 2,
             'seeds': {
                 'test': {
-                    'quote_columns': True,
+                    'quote_columns': False,
                 }
             }
         }
@@ -55,12 +55,21 @@ class TestDeferState(DBTIntegrationTest):
         results = self.run_dbt(['run'])
         assert len(results) == 2
         assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['test'])
+        assert len(results) == 2
 
         # copy files over from the happy times when we had a good target
         self.copy_state()
 
-        # no state, still fails
+        # test tests first, because run will change things
+        # no state, wrong schema, failure.
+        self.run_dbt(['test', '--target', 'otherschema'], expect_pass=False)
+
+        # no state, run also fails
         self.run_dbt(['run', '--target', 'otherschema'], expect_pass=False)
+
+        # defer test, it succeeds
+        results = self.run_dbt(['test', '-m', 'view_model+', '--state', 'state', '--defer', '--target', 'otherschema'])
 
         # with state it should work though
         results = self.run_dbt(['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'])
@@ -115,7 +124,7 @@ class TestDeferState(DBTIntegrationTest):
         assert len(results) == 1
         results = self.run_dbt(['run', '--state', 'state', '--defer'])
         assert len(results) == 2
-        
+
         # because the seed now exists in our schema, we shouldn't defer it
         assert self.other_schema not in results[0].node.compiled_sql
         assert self.unique_schema() in results[0].node.compiled_sql
@@ -137,18 +146,20 @@ class TestDeferState(DBTIntegrationTest):
             expect_pass=True,
         )
 
+        # despite deferral, test should use models just created in our schema
+        results = self.run_dbt(['test', '--state', 'state', '--defer'])
+        assert self.other_schema not in results[0].node.compiled_sql
+        assert self.unique_schema() in results[0].node.compiled_sql
+
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):
         self.run_and_defer()
         # these should work without --defer!
-        self.run_dbt(['test'])
         self.run_dbt(['snapshot'])
         # make sure these commands don't work with --defer
         with pytest.raises(SystemExit):
             self.run_dbt(['seed', '--defer'])
 
-        with pytest.raises(SystemExit):
-            self.run_dbt(['test', '--defer'])
         with pytest.raises(SystemExit):
             self.run_dbt(['snapshot', '--defer'])
 

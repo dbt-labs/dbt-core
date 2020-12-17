@@ -79,6 +79,7 @@ class RPCTestParameters(RPCCompileParameters):
     data: bool = False
     schema: bool = False
     state: Optional[str] = None
+    defer: Optional[bool] = None
 
 
 @dataclass

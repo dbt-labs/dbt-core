@@ -22,6 +22,10 @@ class SnapshotTask(RunTask):
     def raise_on_first_error(self):
         return False
 
+    def defer_to_manifest(self, adapter, selected_uids):
+        # snapshots don't defer
+        return
+
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
             raise InternalException(

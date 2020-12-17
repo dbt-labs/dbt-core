@@ -335,6 +335,7 @@ class Querier:
         data: bool = None,
         schema: bool = None,
         request_id: int = 1,
+        defer: Optional[bool] = None,
         state: Optional[bool] = None,
     ):
         params = {}
@@ -348,6 +349,8 @@ class Querier:
             params['schema'] = schema
         if threads is not None:
             params['threads'] = threads
+        if defer is not None:
+            params['defer'] = defer
         if state is not None:
             params['state'] = state
         return self.request(
