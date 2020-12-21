@@ -7,9 +7,7 @@ import agate
 import dbt.clients.agate_helper
 import dbt.exceptions
 from dbt.adapters.base import BaseConnectionManager
-from dbt.contracts.connection import (
-    Connection, ConnectionState, AdapterResponse
-)
+from dbt.contracts.connection import Connection, ConnectionState, AdapterResponse
 from dbt.events.functions import fire_event
 from dbt.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
 
