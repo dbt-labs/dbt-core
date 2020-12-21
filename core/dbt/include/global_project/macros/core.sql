@@ -7,15 +7,15 @@
       {{ write(sql) }}
     {%- endif -%}
 
-    {%- set status, res = adapter.execute(sql, auto_begin=auto_begin, fetch=fetch_result) -%}
+    {%- set res, table = adapter.execute(sql, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- if name is not none -%}
-      {{ store_result(name, status=status, agate_table=res) }}
+      {{ store_result(name, response=res, agate_table=table) }}
     {%- endif -%}
 
   {%- endif -%}
 {%- endmacro %}
 
-{% macro noop_statement(name=None, message=None, state=None, rows=None, res=None) -%}
+{% macro noop_statement(name=None, message=None, code=None, rows_affected=None, res=None) -%}
   {%- set sql = caller() -%}
 
   {%- if name == 'main' -%}
@@ -24,7 +24,7 @@
   {%- endif -%}
 
   {%- if name is not none -%}
-    {{ store_raw_result(name, message=message, state=state, rows=rows, agate_table=res) }}
+    {{ store_raw_result(name, message=message, code=code, rows_affected=rows_affected, agate_table=res) }}
   {%- endif -%}
 
 {%- endmacro %}

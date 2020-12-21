@@ -29,7 +29,7 @@
       destination,
       config.get('copy_materialization', 'table')) -%}
 
-  {{ store_result('main', status=result_str) }}
+  {{ store_result('main', response=result_str) }}
 
   {# Clean up #}
   {{ run_hooks(post_hooks) }}

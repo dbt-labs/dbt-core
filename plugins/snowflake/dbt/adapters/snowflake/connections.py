@@ -18,7 +18,7 @@ from dbt.exceptions import (
     DatabaseException, warn_or_error
 )
 from dbt.adapters.base import Credentials
-from dbt.contracts.connection import ExecutionStatus
+from dbt.contracts.connection import AdapterResponse
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -246,16 +246,16 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
 
     @classmethod
-    def get_status(cls, cursor) -> ExecutionStatus:
-        state = cursor.sqlstate
+    def get_response(cls, cursor) -> AdapterResponse:
+        code = cursor.sqlstate
 
-        if state is None:
-            state = 'SUCCESS'
+        if code is None:
+            code = 'SUCCESS'
 
-        return ExecutionStatus(
-            message="{} {}".format(state, cursor.rowcount),
-            rows=cursor.rowcount,
-            state=state
+        return AdapterResponse(
+            message="{} {}".format(code, cursor.rowcount),
+            rows_affected=cursor.rowcount,
+            code=code
         )
 
     @classmethod

@@ -18,7 +18,7 @@ from .context_config import ContextConfig
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.graph.manifest import Manifest, Disabled
-from dbt.contracts.connection import ExecutionStatus
+from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.compiled import (
     CompiledResource,
     CompiledSeedNode,
@@ -664,13 +664,15 @@ class ProviderContext(ManifestContext):
 
     @contextmember
     def store_result(
-        self, name: str, status: Any, agate_table: Optional[agate.Table] = None
+        self, name: str,
+        response: Any,
+        agate_table: Optional[agate.Table] = None
     ) -> str:
         if agate_table is None:
             agate_table = agate_helper.empty_table()
 
         self.sql_results[name] = AttrDict({
-            'status': status,
+            'response': response,
             'data': agate_helper.as_matrix(agate_table),
             'table': agate_table
         })
@@ -681,12 +683,13 @@ class ProviderContext(ManifestContext):
         self,
         name: str,
         message=Optional[str],
-        state=Optional[str],
-        rows=Optional[str],
+        code=Optional[str],
+        rows_affected=Optional[str],
         agate_table: Optional[agate.Table] = None
     ) -> str:
-        status = ExecutionStatus(message=message, state=state, rows=rows)
-        return self.store_result(name, status, agate_table)
+        response = AdapterResponse(
+            message=message, code=code, rows_affected=rows_affected)
+        return self.store_result(name, response, agate_table)
 
     @contextproperty
     def validation(self):

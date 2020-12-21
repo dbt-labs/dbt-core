@@ -19,7 +19,7 @@ from dbt.logger import (
 )
 from dbt.utils import lowercase
 from hologram.helpers import StrEnum
-from hologram import JsonDict, JsonSchemaMixin
+from hologram import JsonSchemaMixin
 
 import agate
 
@@ -94,6 +94,7 @@ class BaseResult(JsonSchemaMixin):
     thread_id: str
     execution_time: float
     message: Optional[Union[str, int]]
+    adapter_response: Dict[str, Any]
 
 
 @dataclass
@@ -104,7 +105,6 @@ class NodeResult(BaseResult):
 @dataclass
 class RunResult(NodeResult):
     agate_table: Optional[agate.Table] = None
-    adapter_query_status: JsonDict = field(default_factory=dict)
 
     @property
     def skipped(self):
@@ -136,7 +136,6 @@ class RunResultsMetadata(BaseArtifactMetadata):
 @dataclass
 class RunResultOutput(BaseResult):
     unique_id: str
-    adapter_query_status: JsonDict = field(default_factory=dict)
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
@@ -147,7 +146,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         thread_id=result.thread_id,
         execution_time=result.execution_time,
         message=result.message,
-        adapter_query_status=result.adapter_query_status
+        adapter_response=result.adapter_response
     )
 
 

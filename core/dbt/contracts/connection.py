@@ -23,10 +23,10 @@ register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
 
 
 @dataclass
-class ExecutionStatus(JsonSchemaMixin):
+class AdapterResponse(JsonSchemaMixin):
     message: str
-    state: Optional[str] = None
-    rows: Optional[str] = None
+    code: Optional[str] = None
+    rows_affected: Optional[int] = None
 
     def __str__(self):
         return self.message

@@ -12,7 +12,7 @@ import agate
 import dbt.exceptions
 from dbt.contracts.connection import (
     Connection, Identifier, ConnectionState,
-    AdapterRequiredConfig, LazyHandle, ExecutionStatus
+    AdapterRequiredConfig, LazyHandle, AdapterResponse
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (
@@ -291,7 +291,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[Union[str, ExecutionStatus], agate.Table]:
+    ) -> Tuple[Union[str, AdapterResponse], agate.Table]:
         """Execute the given SQL.
 
         :param str sql: The sql to execute.
@@ -299,7 +299,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
         :return: A tuple of the status and the results (empty if fetch=False).
-        :rtype: Tuple[Union[str, ExecutionStatus], agate.Table]
+        :rtype: Tuple[Union[str, AdapterResponse], agate.Table]
         """
         raise dbt.exceptions.NotImplementedException(
             '`execute` is not implemented for this adapter!'

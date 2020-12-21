@@ -19,7 +19,7 @@ from google.oauth2 import (
 from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
 from dbt.tracking import active_user
-from dbt.contracts.connection import ConnectionState, ExecutionStatus
+from dbt.contracts.connection import ConnectionState, AdapterResponse
 from dbt.exceptions import (
     FailedToConnectException, RuntimeException, DatabaseException
 )
@@ -71,8 +71,8 @@ class BigQueryConnectionMethod(StrEnum):
 
 
 @dataclass
-class BigQueryExecutionStatus(ExecutionStatus):
-    bytes: Optional[str] = None
+class BigQueryAdapterResponse(AdapterResponse):
+    bytes_processed: Optional[int] = None
 
 
 @dataclass
@@ -332,59 +332,60 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
     def execute(
         self, sql, auto_begin=False, fetch=None
-    ) -> Tuple[BigQueryExecutionStatus, agate.Table]:
+    ) -> Tuple[BigQueryAdapterResponse, agate.Table]:
         sql = self._add_query_comment(sql)
         # auto_begin is ignored on bigquery, and only included for consistency
         query_job, iterator = self.raw_execute(sql, fetch=fetch)
 
         if fetch:
-            res = self.get_table_from_response(iterator)
+            table = self.get_table_from_response(iterator)
         else:
-            res = agate_helper.empty_table()
+            table = agate_helper.empty_table()
 
         message = 'OK'
-        state = None
+        code = None
         num_rows = None
-        processed_bytes = None
+        bytes_processed = None
 
         if query_job.statement_type == 'CREATE_VIEW':
-            state = 'CREATE VIEW'
+            code = 'CREATE VIEW'
 
         elif query_job.statement_type == 'CREATE_TABLE_AS_SELECT':
             conn = self.get_thread_connection()
             client = conn.handle
-            table = client.get_table(query_job.destination)
-            state = 'CREATE TABLE'
-            num_rows = format_rows_number(table.num_rows)
-            processed_bytes = format_bytes(query_job.total_bytes_processed)
+            query_table = client.get_table(query_job.destination)
+            code = 'CREATE TABLE'
+            num_rows = query_table.num_rows
+            bytes_processed = query_job.total_bytes_processed
             message = '{} ({} rows, {} processed)'.format(
-                state,
-                num_rows,
-                processed_bytes
+                code,
+                format_rows_number(num_rows),
+                format_bytes(bytes_processed)
             )
 
         elif query_job.statement_type == 'SCRIPT':
-            state = 'SCRIPT'
-            processed_bytes = format_bytes(query_job.total_bytes_processed)
-            message = f'{state} ({processed_bytes} processed)'
+            code = 'SCRIPT'
+            bytes_processed = query_job.total_bytes_processed
+            message = f'{code} ({format_bytes(bytes_processed)} processed)'
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-            state = query_job.statement_type
-            num_rows = format_rows_number(query_job.num_dml_affected_rows)
-            processed_bytes = format_bytes(query_job.total_bytes_processed)
+            code = query_job.statement_type
+            num_rows = query_job.num_dml_affected_rows
+            bytes_processed = query_job.total_bytes_processed
             message = '{} ({} rows, {} processed)'.format(
-                state,
-                num_rows,
-                processed_bytes,
+                code,
+                format_rows_number(num_rows),
+                format_bytes(bytes_processed),
             )
 
-        status = BigQueryExecutionStatus(
+        response = BigQueryAdapterResponse(
             message=message,
-            rows=num_rows,
-            state=state,
-            bytes=processed_bytes
+            rows_affected=num_rows,
+            code=code,
+            bytes_processed=bytes_processed
         )
-        return status, res
+
+        return response, table
 
     def get_partitions_metadata(self, table):
         def standard_to_legacy(table):

@@ -5,7 +5,7 @@ import psycopg2
 import dbt.exceptions
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
-from dbt.contracts.connection import ExecutionStatus
+from dbt.contracts.connection import AdapterResponse
 from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.helper_types import Port
@@ -147,14 +147,20 @@ class PostgresConnectionManager(SQLConnectionManager):
     def get_credentials(cls, credentials):
         return credentials
 
+    # TODO(kw) update this
     @classmethod
-    def get_status(cls, cursor) -> ExecutionStatus:
+    def get_response(cls, cursor) -> AdapterResponse:
         message = str(cursor.statusmessage)
         rows = cursor.rowcount
-        status_parts = message.split() if message is not None else []
-        state = status_parts[0] if len(status_parts) == 2 else None
-        return ExecutionStatus(
+        status_message_parts = message.split() if message is not None else []
+        status_messsage_strings = [
+            part
+            for part in status_message_parts
+            if not part.isdigit()
+        ]
+        code = ' '.join(status_messsage_strings)
+        return AdapterResponse(
             message=message,
-            state=state,
-            rows=rows
+            code=code,
+            rows_affected=rows
         )

@@ -106,6 +106,7 @@ class TestRunner(CompileRunner):
             thread_id=thread_id,
             execution_time=0,
             message=failed_rows,
+            adapter_response={}
         )
 
     def after_execute(self, result):
