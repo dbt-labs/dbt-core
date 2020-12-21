@@ -18,11 +18,7 @@ from typing_extensions import Protocol
 import agate
 
 from dbt.contracts.connection import Connection, AdapterRequiredConfig, AdapterResponse
-    Connection, AdapterRequiredConfig, AdapterResponse
-)
-from dbt.contracts.graph.compiled import (
-    CompiledNode, ManifestNode, NonSourceCompiledNode
-)
+from dbt.contracts.graph.compiled import CompiledNode, ManifestNode, NonSourceCompiledNode
 from dbt.contracts.graph.parsed import ParsedNode, ParsedSourceDefinition
 from dbt.contracts.graph.model_config import BaseConfig
 from dbt.contracts.graph.manifest import Manifest
