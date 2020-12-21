@@ -177,8 +177,8 @@ class PostgresConnectionManager(SQLConnectionManager):
         message = str(cursor.statusmessage)
         rows = cursor.rowcount
         status_message_parts = message.split() if message is not None else []
-        status_messsage_strings = [
-            part
+        status_messsage_strings = [part for part in status_message_parts if not part.isdigit()]
+        code = " ".join(status_messsage_strings)
             for part in status_message_parts
             if not part.isdigit()
         ]

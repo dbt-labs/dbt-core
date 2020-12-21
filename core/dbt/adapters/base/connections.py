@@ -11,7 +11,11 @@ import agate
 import dbt.exceptions
 from dbt.contracts.connection import (
     Connection,
-    AdapterRequiredConfig, LazyHandle, AdapterResponse
+    Identifier,
+    ConnectionState,
+    AdapterRequiredConfig,
+    LazyHandle,
+    AdapterResponse,
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.adapters.base.query_headers import (

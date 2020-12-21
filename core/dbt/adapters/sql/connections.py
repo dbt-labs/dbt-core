@@ -87,7 +87,7 @@ class SQLConnectionManager(BaseConnectionManager):
     def get_response(cls, cursor: Any) -> Union[AdapterResponse, str]:
         """Get the status of the cursor."""
         raise dbt.exceptions.NotImplementedException(
-            '`get_response` is not implemented for this adapter!'
+            "`get_response` is not implemented for this adapter!"
         )
 
     @classmethod

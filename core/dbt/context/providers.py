@@ -690,15 +690,13 @@ class ProviderContext(ManifestContext):
 
     @contextmember
     def store_result(
-        self, name: str,
-        response: Any,
-        agate_table: Optional[agate.Table] = None
+        self, name: str, response: Any, agate_table: Optional[agate.Table] = None
     ) -> str:
         if agate_table is None:
             agate_table = agate_helper.empty_table()
 
         self.sql_results[name] = AttrDict({
-            'response': response,
+            {
             'data': agate_helper.as_matrix(agate_table),
             'table': agate_table
         })
