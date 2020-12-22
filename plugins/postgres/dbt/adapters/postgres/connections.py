@@ -181,12 +181,4 @@ class PostgresConnectionManager(SQLConnectionManager):
         status_message_parts = message.split() if message is not None else []
         status_messsage_strings = [part for part in status_message_parts if not part.isdigit()]
         code = " ".join(status_messsage_strings)
-            for part in status_message_parts
-            if not part.isdigit()
-        ]
-        code = ' '.join(status_messsage_strings)
-        return AdapterResponse(
-            _message=message,
-            code=code,
-            rows_affected=rows
-        )
+        return AdapterResponse(_message=message, code=code, rows_affected=rows)
