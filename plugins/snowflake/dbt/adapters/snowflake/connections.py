@@ -253,7 +253,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             code = 'SUCCESS'
 
         return AdapterResponse(
-            message="{} {}".format(code, cursor.rowcount),
+            _message="{} {}".format(code, cursor.rowcount),
             rows_affected=cursor.rowcount,
             code=code
         )

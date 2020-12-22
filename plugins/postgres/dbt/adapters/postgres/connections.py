@@ -147,7 +147,6 @@ class PostgresConnectionManager(SQLConnectionManager):
     def get_credentials(cls, credentials):
         return credentials
 
-    # TODO(kw) update this
     @classmethod
     def get_response(cls, cursor) -> AdapterResponse:
         message = str(cursor.statusmessage)
@@ -160,7 +159,7 @@ class PostgresConnectionManager(SQLConnectionManager):
         ]
         code = ' '.join(status_messsage_strings)
         return AdapterResponse(
-            message=message,
+            _message=message,
             code=code,
             rows_affected=rows
         )

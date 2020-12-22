@@ -24,12 +24,12 @@ register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
 
 @dataclass
 class AdapterResponse(JsonSchemaMixin):
-    message: str
+    _message: str
     code: Optional[str] = None
     rows_affected: Optional[int] = None
 
     def __str__(self):
-        return self.message
+        return self._message
 
 
 class ConnectionState(StrEnum):

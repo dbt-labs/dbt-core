@@ -105,7 +105,7 @@ class TestRunner(CompileRunner):
             timing=[],
             thread_id=thread_id,
             execution_time=0,
-            message=failed_rows,
+            message=int(failed_rows),
             adapter_response={}
         )
 

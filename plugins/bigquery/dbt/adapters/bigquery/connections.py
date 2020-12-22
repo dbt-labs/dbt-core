@@ -379,7 +379,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
             )
 
         response = BigQueryAdapterResponse(
-            message=message,
+            _message=message,
             rows_affected=num_rows,
             code=code,
             bytes_processed=bytes_processed

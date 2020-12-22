@@ -6,7 +6,6 @@ from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
-    Writable,
     VersionedSchema,
     Replaceable,
     schema_version,
@@ -237,7 +236,7 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
 
 
 @dataclass
-class SourceFreshnessResult(NodeResult, Writable):
+class SourceFreshnessResult(NodeResult):
     node: ParsedSourceDefinition
     status: FreshnessStatus
     max_loaded_at: datetime
@@ -268,6 +267,7 @@ class SourceFreshnessOutput(JsonSchemaMixin):
     max_loaded_at_time_ago_in_s: float
     status: FreshnessStatus
     criteria: FreshnessThreshold
+    adapter_response: Dict[str, Any]
 
 
 @dataclass
@@ -316,6 +316,7 @@ def process_freshness_result(
         max_loaded_at_time_ago_in_s=result.age,
         status=result.status,
         criteria=criteria,
+        adapter_response=result.adapter_response
     )
 
 

@@ -688,7 +688,7 @@ class ProviderContext(ManifestContext):
         agate_table: Optional[agate.Table] = None
     ) -> str:
         response = AdapterResponse(
-            message=message, code=code, rows_affected=rows_affected)
+            _message=message, code=code, rows_affected=rows_affected)
         return self.store_result(name, response, agate_table)
 
     @contextproperty
