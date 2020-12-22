@@ -22,7 +22,7 @@
       {% set result_str = 'CREATED ' ~ num_days ~ ' PARTITIONS' %}
   {% endif %}
 
-  {{ store_result('main', status=result_str) }}
+  {{ store_result('main', response=result_str) }}
 
 {% endmacro %}
 

@@ -272,6 +272,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
                     'warn_after': {'count': 10, 'period': 'hour'},
                     'error_after': {'count': 18, 'period': 'hour'},
                 },
+                'adapter_response': {}
             }
         ])
 

@@ -109,7 +109,8 @@ class TestParseWrapper(unittest.TestCase):
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
         self.namespace = mock.MagicMock()
-        self.wrapper = providers.ParseDatabaseWrapper(self.mock_adapter, self.namespace)
+        self.wrapper = providers.ParseDatabaseWrapper(
+            self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):
@@ -125,11 +126,13 @@ class TestParseWrapper(unittest.TestCase):
 class TestRuntimeWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
-        self.mock_config.quoting = {'database': True, 'schema': True, 'identifier': True}
+        self.mock_config.quoting = {
+            'database': True, 'schema': True, 'identifier': True}
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
         self.namespace = mock.MagicMock()
-        self.wrapper = providers.RuntimeDatabaseWrapper(self.mock_adapter, self.namespace)
+        self.wrapper = providers.RuntimeDatabaseWrapper(
+            self.mock_adapter, self.namespace)
         self.responder = self.mock_adapter.responder
 
     def test_unwrapped_method(self):
@@ -146,10 +149,12 @@ class TestRuntimeWrapper(unittest.TestCase):
 
         self.assertEqual(found, rel)
 
-        self.responder.list_relations_without_caching.assert_called_once_with(mock.ANY)
+        self.responder.list_relations_without_caching.assert_called_once_with(
+            mock.ANY)
         # extract the argument
         assert len(self.responder.list_relations_without_caching.mock_calls) == 1
-        assert len(self.responder.list_relations_without_caching.call_args[0]) == 1
+        assert len(
+            self.responder.list_relations_without_caching.call_args[0]) == 1
         arg = self.responder.list_relations_without_caching.call_args[0][0]
         assert arg.database == 'database'
         assert arg.schema == 'schema'
@@ -192,6 +197,7 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     '_sql_results',
     'load_result',
     'store_result',
+    'store_raw_result',
     'validation',
     'write',
     'render',
@@ -362,6 +368,7 @@ def get_include_paths():
 def config():
     return config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
 
+
 @pytest.fixture
 def manifest_fx(config):
     return mock_manifest(config)
@@ -467,7 +474,8 @@ def test_macro_namespace_duplicates(config, manifest_fx):
 
 
 def test_macro_namespace(config, manifest_fx):
-    mn = macros.MacroNamespaceBuilder('root', 'search', MacroStack(), ['dbt_postgres', 'dbt'])
+    mn = macros.MacroNamespaceBuilder(
+        'root', 'search', MacroStack(), ['dbt_postgres', 'dbt'])
 
     dbt_macro = mock_macro('some_macro', 'dbt')
     # same namespace, same name, different pkg!
@@ -475,7 +483,8 @@ def test_macro_namespace(config, manifest_fx):
     # same name, different package
     package_macro = mock_macro('some_macro', 'root')
 
-    all_macros = itertools.chain(manifest_fx.macros.values(), [dbt_macro, pg_macro, package_macro])
+    all_macros = itertools.chain(manifest_fx.macros.values(), [
+                                 dbt_macro, pg_macro, package_macro])
 
     namespace = mn.build_namespace(all_macros, {})
     dct = dict(namespace)
@@ -487,9 +496,11 @@ def test_macro_namespace(config, manifest_fx):
         # tests __len__
         assert len(result) == 5
         # tests __iter__
-        assert set(result) == {'dbt', 'root', 'some_macro', 'macro_a', 'macro_b'}
+        assert set(result) == {'dbt', 'root',
+                               'some_macro', 'macro_a', 'macro_b'}
         assert len(result['dbt']) == 1
-        assert len(result['root']) == 3  # from the regular manifest + some_macro
+        # from the regular manifest + some_macro
+        assert len(result['root']) == 3
         assert result['dbt']['some_macro'].macro is pg_macro
         assert result['root']['some_macro'].macro is package_macro
         assert result['some_macro'].macro is package_macro
@@ -510,10 +521,14 @@ def test_resolve_specific(config, manifest_extended, redshift_adapter, get_inclu
         ctx['adapter'].dispatch('macro_a').macro
 
     assert ctx['adapter'].dispatch('some_macro').macro is package_rs_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['dbt']).macro is rs_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['root']).macro is package_rs_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['root', 'dbt']).macro is package_rs_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['dbt', 'root']).macro is rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'dbt']).macro is rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'root']).macro is package_rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'root', 'dbt']).macro is package_rs_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'dbt', 'root']).macro is rs_macro
 
 
 def test_resolve_default(config, manifest_extended, postgres_adapter, get_include_paths):
@@ -531,10 +546,14 @@ def test_resolve_default(config, manifest_extended, postgres_adapter, get_includ
         ctx['adapter'].dispatch('macro_a').macro
 
     assert ctx['adapter'].dispatch('some_macro').macro is package_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['dbt']).macro is dbt_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['root']).macro is package_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['root', 'dbt']).macro is package_macro
-    assert ctx['adapter'].dispatch('some_macro', packages=['dbt', 'root']).macro is dbt_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'dbt']).macro is dbt_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'root']).macro is package_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'root', 'dbt']).macro is package_macro
+    assert ctx['adapter'].dispatch('some_macro', packages=[
+                                   'dbt', 'root']).macro is dbt_macro
 
 
 def test_resolve_errors(config, manifest_extended, redshift_adapter, get_include_paths):

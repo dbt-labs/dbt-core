@@ -6,7 +6,6 @@ from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import (
     BaseArtifactMetadata,
     ArtifactMixin,
-    Writable,
     VersionedSchema,
     Replaceable,
     schema_version,
@@ -94,6 +93,7 @@ class BaseResult(JsonSchemaMixin):
     thread_id: str
     execution_time: float
     message: Optional[Union[str, int]]
+    adapter_response: Dict[str, Any]
 
 
 @dataclass
@@ -102,22 +102,8 @@ class NodeResult(BaseResult):
 
 
 @dataclass
-class PartialNodeResult(NodeResult):
-    # if the result got to the point where it could be skipped/failed, we would
-    # be returning a real result, not a partial.
-    @property
-    def skipped(self):
-        return False
-
-
-@dataclass
-class RunModelResult(NodeResult):
+class RunResult(NodeResult):
     agate_table: Optional[agate.Table] = None
-
-    def to_dict(self, *args, **kwargs):
-        dct = super().to_dict(*args, **kwargs)
-        dct.pop('agate_table', None)
-        return dct
 
     @property
     def skipped(self):
@@ -137,9 +123,6 @@ class ExecutionResult(JsonSchemaMixin):
 
     def __getitem__(self, idx):
         return self.results[idx]
-
-
-RunResult = Union[PartialNodeResult, RunModelResult]
 
 
 @dataclass
@@ -162,6 +145,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         thread_id=result.thread_id,
         execution_time=result.execution_time,
         message=result.message,
+        adapter_response=result.adapter_response
     )
 
 
@@ -247,11 +231,12 @@ class RunOperationResultsArtifact(RunOperationResult, ArtifactMixin):
             success=success,
         )
 
-
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
+
+
 @dataclass
-class SourceFreshnessResult(NodeResult, Writable):
+class SourceFreshnessResult(NodeResult):
     node: ParsedSourceDefinition
     status: FreshnessStatus
     max_loaded_at: datetime
@@ -282,11 +267,16 @@ class SourceFreshnessOutput(JsonSchemaMixin):
     max_loaded_at_time_ago_in_s: float
     status: FreshnessStatus
     criteria: FreshnessThreshold
+    adapter_response: Dict[str, Any]
 
 
 @dataclass
-class PartialSourceFreshnessResult(PartialNodeResult):
+class PartialSourceFreshnessResult(NodeResult):
     status: FreshnessStatus
+
+    @property
+    def skipped(self):
+        return False
 
 
 FreshnessNodeResult = Union[PartialSourceFreshnessResult,
@@ -326,6 +316,7 @@ def process_freshness_result(
         max_loaded_at_time_ago_in_s=result.age,
         status=result.status,
         criteria=criteria,
+        adapter_response=result.adapter_response
     )
 
 
