@@ -32,6 +32,8 @@
 - Bump hologram to 0.0.12 and adding testing support for python3.9 ([#2822](https://github.com/fishtown-analytics/dbt/issues/2822),[#2960](https://github.com/fishtown-analytics/dbt/pull/2960))
 - Bump the version requirements for boto3 in dbt-redshift to the upper limit 1.16 to match dbt-redshift and the snowflake-python-connector as of version 2.3.6. ([#2931](https://github.com/fishtown-analytics/dbt/issues/2931))
 
+### Docs
+- Fixed issue where data tests with tags were not showing up in graph viz ([docs#147](https://github.com/fishtown-analytics/dbt-docs/issues/147), [docs#157](https://github.com/fishtown-analytics/dbt-docs/pull/157))
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
