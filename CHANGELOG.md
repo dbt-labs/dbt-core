@@ -1,5 +1,8 @@
 ## dbt 0.19.0 (Release TBD)
 
+## dbt 0.19.0rc1 (December 29, 2020)
+
+
 ### Features
 - Added macro get_partitions_metadata(table) to return partition metadata for partitioned table ([#2552](https://github.com/fishtown-analytics/dbt/pull/2552), [#2596](https://github.com/fishtown-analytics/dbt/pull/2596))
 - Added `--defer` flag for `dbt test` as well. ([#2701](https://github.com/fishtown-analytics/dbt/issues/2701), [#2706](https://github.com/fishtown-analytics/dbt/pull/2706))
