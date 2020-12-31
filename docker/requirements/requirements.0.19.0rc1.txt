@@ -5,7 +5,7 @@ azure-common==1.1.26
 azure-core==1.9.0
 azure-storage-blob==12.6.0
 Babel==2.9.0
-boto3==1.15.18
+boto3==1.11.17
 botocore==1.14.17
 cachetools==4.2.0
 certifi==2020.12.5
@@ -22,16 +22,16 @@ google-cloud-core==1.4.4
 google-crc32c==1.1.0
 google-resumable-media==1.2.0
 googleapis-common-protos==1.52.0
+grpcio==1.34.0
 hologram==0.0.12
 idna==2.9
 importlib-metadata==3.3.0
 isodate==0.6.0
-jeepney==0.6.0
 Jinja2==2.11.2
 jmespath==0.10.0
 json-rpc==1.13.0
 jsonschema==3.1.1
-keyring==21.7.0
+keyring==21.8.0
 leather==0.3.3
 Logbook==1.5.3
 MarkupSafe==1.1.1
@@ -60,7 +60,6 @@ requests==2.23.0
 requests-oauthlib==1.3.0
 rsa==4.6
 s3transfer==0.3.3
-SecretStorage==3.3.0
 six==1.15.0
 snowflake-connector-python==2.3.6
 sqlparse==0.3.1
