@@ -3,7 +3,7 @@ from enum import Enum
 from itertools import chain
 from typing import (
     Any, List, Optional, Dict, MutableMapping, Union, Type, NewType, Tuple,
-    TypeVar, Callable
+    TypeVar, Callable, cast, Hashable
 )
 
 # TODO: patch+upgrade hologram to avoid this jsonschema import
@@ -450,6 +450,7 @@ class SeedConfig(NodeConfig):
 
 @dataclass
 class TestConfig(NodeConfig):
+    materialized: str = 'test'
     severity: Severity = Severity('ERROR')
 
 
@@ -492,7 +493,8 @@ class SnapshotWrapper(JsonSchemaMixin):
             to_validate = config
 
         else:
-            schema = _validate_schema(cls)
+            h_cls = cast(Hashable, cls)
+            schema = _validate_schema(h_cls)
             to_validate = data
 
         validator = jsonschema.Draft7Validator(schema)

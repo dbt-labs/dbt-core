@@ -154,6 +154,7 @@ class CompilerTest(unittest.TestCase):
             disabled=[],
             files={},
             exposures={},
+            selectors={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -236,6 +237,7 @@ class CompilerTest(unittest.TestCase):
             disabled=[],
             files={},
             exposures={},
+            selectors={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -327,6 +329,7 @@ class CompilerTest(unittest.TestCase):
             disabled=[],
             files={},
             exposures={},
+            selectors={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -430,6 +433,7 @@ class CompilerTest(unittest.TestCase):
             disabled=[],
             files={},
             exposures={},
+            selectors={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)
@@ -534,6 +538,7 @@ class CompilerTest(unittest.TestCase):
             disabled=[],
             files={},
             exposures={},
+            selectors={},
         )
 
         compiler = dbt.compilation.Compiler(self.config)

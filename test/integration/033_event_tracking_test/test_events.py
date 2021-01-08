@@ -87,6 +87,24 @@ class TestEventTracking(DBTIntegrationTest):
             populated_contexts
         )
 
+    def load_context(self):
+
+        def populate(project_id, user_id, invocation_id, version):
+            return [{
+                'schema': 'iglu:com.dbt/load_all_timing/jsonschema/1-0-0',
+                'data': {
+                    'invocation_id': invocation_id,
+                    'project_id': project_id,
+                    'path_count': ANY,
+                    'is_partial_parse_enabled': ANY,
+                    'load_all_elapsed': ANY,
+                    'parse_project_elapsed': ANY,
+                    'patch_sources_elapsed': ANY,
+                    'process_manifest_elapsed': ANY,
+                },
+            }]
+        return populate
+
     def build_context(
         self,
         command,
@@ -108,16 +126,16 @@ class TestEventTracking(DBTIntegrationTest):
                         'project_id': project_id,
                         'user_id': user_id,
                         'invocation_id': invocation_id,
+                        'command': command,
+                        'options': None,  # TODO : Add options to compile cmd!
                         'version': version,
 
-                        'command': command,
-                        'progress': progress,
                         'run_type': 'regular',
+                        'adapter_type': adapter_type,
+                        'progress': progress,
 
-                        'options': None,  # TODO : Add options to compile cmd!
                         'result_type': result_type,
                         'result': None,
-                        'adapter_type': adapter_type
                     }
                 },
                 {
@@ -140,12 +158,14 @@ class TestEventTracking(DBTIntegrationTest):
         index,
         total,
         status,
-        error=None
     ):
         timing = []
+        error = False
 
         if status != 'ERROR':
             timing = [ANY, ANY]
+        else:
+            error = True
 
         def populate(project_id, user_id, invocation_id, version):
             return [{
@@ -207,6 +227,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='load_project',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -215,6 +241,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         expected_contexts = [
             self.build_context('compile', 'start'),
+            self.load_context(),
             self.build_context('compile', 'end', result_type='ok')
         ]
 
@@ -297,8 +324,8 @@ class TestEventTrackingSuccess(TestEventTracking):
                     'index': 1,
                     'total': 1,
 
-                    'run_status': 'INSERT 1',
-                    'run_error': None,
+                    'run_status': 'SUCCESS',
+                    'run_error': False,
                     'run_skipped': False,
 
                     'timing': [ANY, ANY],
@@ -310,6 +337,12 @@ class TestEventTrackingSuccess(TestEventTracking):
                 category='dbt',
                 action='invocation',
                 label='start',
+                context=ANY
+            ),
+            call(
+                category='dbt',
+                action='load_project',
+                label=ANY,
                 context=ANY
             ),
             call(
@@ -328,6 +361,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         expected_contexts = [
             self.build_context('seed', 'start'),
+            self.load_context(),
             seed_context,
             self.build_context('seed', 'end', result_type='ok')
         ]
@@ -341,6 +375,12 @@ class TestEventTrackingSuccess(TestEventTracking):
                 category='dbt',
                 action='invocation',
                 label='start',
+                context=ANY
+            ),
+            call(
+                category='dbt',
+                action='load_project',
+                label=ANY,
                 context=ANY
             ),
             call(
@@ -371,12 +411,13 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         expected_contexts = [
             self.build_context('run', 'start'),
+            self.load_context(),
             self.run_context(
                 hashed_contents='1e5789d34cddfbd5da47d7713aa9191c',
                 model_id='4fbacae0e1b69924b22964b457148fb8',
                 index=1,
                 total=2,
-                status='CREATE VIEW',
+                status='SUCCESS',
                 materialization='view'
             ),
             self.run_context(
@@ -384,7 +425,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 model_id='57994a805249953b31b738b1af7a1eeb',
                 index=2,
                 total=2,
-                status='CREATE VIEW',
+                status='SUCCESS',
                 materialization='view'
             ),
             self.build_context('run', 'end', result_type='ok')
@@ -410,6 +451,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='load_project',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='run_model',
                 label=ANY,
                 context=ANY
@@ -424,6 +471,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         expected_contexts = [
             self.build_context('run', 'start'),
+            self.load_context(),
             self.run_context(
                 hashed_contents='4419e809ce0995d99026299e54266037',
                 model_id='576c3d4489593f00fad42b97c278641e',
@@ -456,6 +504,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='load_project',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -464,6 +518,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         expected_contexts = [
             self.build_context('test', 'start'),
+            self.load_context(),
             self.build_context('test', 'end', result_type='ok')
         ]
 
@@ -560,6 +615,12 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='load_project',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -568,6 +629,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
 
         expected_contexts = [
             self.build_context('run', 'start'),
+            self.load_context(),
             self.build_context('run', 'end', result_type='error')
         ]
 
@@ -600,6 +662,12 @@ class TestEventTrackingSnapshot(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='load_project',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='run_model',
                 label=ANY,
                 context=ANY
@@ -615,12 +683,13 @@ class TestEventTrackingSnapshot(TestEventTracking):
         # the model here has a raw_sql that contains the schema, which changes
         expected_contexts = [
             self.build_context('snapshot', 'start'),
+            self.load_context(),
             self.run_context(
                 hashed_contents=ANY,
                 model_id='820793a4def8d8a38d109a9709374849',
                 index=1,
                 total=1,
-                status='SELECT 1',
+                status='SUCCESS',
                 materialization='snapshot'
             ),
             self.build_context('snapshot', 'end', result_type='ok')
@@ -648,6 +717,12 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='load_project',
+                label=ANY,
+                context=ANY,
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -656,6 +731,7 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
 
         expected_contexts = [
             self.build_context('generate', 'start'),
+            self.load_context(),
             self.build_context('generate', 'end', result_type='ok')
         ]
 

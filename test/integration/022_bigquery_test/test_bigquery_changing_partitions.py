@@ -23,27 +23,50 @@ class TestChangingPartitions(DBTIntegrationTest):
         test_results = self.run_dbt(['test', '--vars', json.dumps(expected)])
 
         for result in test_results:
-            self.assertIsNone(result.error)
+            self.assertEqual(result.status, 'pass')
             self.assertFalse(result.skipped)
-            # status = # of failing rows
-            self.assertEqual(result.status, 0)
+            self.assertEqual(int(result.message), 0)
 
     @use_profile('bigquery')
     def test_bigquery_add_partition(self):
         before = {"partition_by": None, "cluster_by": None}
-        after = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp'}, "cluster_by": None}
+        after = {"partition_by": {'field': 'cur_time',
+                                  'data_type': 'timestamp'}, "cluster_by": None}
         self.run_changes(before, after)
         self.test_partitions({"expected": 1})
-        
+
+    @use_profile('bigquery')
+    def test_bigquery_add_partition_year(self):
+        before = {"partition_by": None, "cluster_by": None}
+        after = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp', 'granularity': 'year'}, "cluster_by": None}
+        self.run_changes(before, after)
+        self.test_partitions({"expected": 1})
+
+    @use_profile('bigquery')
+    def test_bigquery_add_partition_month(self):
+        before = {"partition_by": None, "cluster_by": None}
+        after = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp', 'granularity': 'month'}, "cluster_by": None}
+        self.run_changes(before, after)
+        self.test_partitions({"expected": 1})
+
+    @use_profile('bigquery')
+    def test_bigquery_add_partition_hour(self):
+        before = {"partition_by": None, "cluster_by": None}
+        after = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp', 'granularity': 'hour'}, "cluster_by": None}
+        self.run_changes(before, after)
+        self.test_partitions({"expected": 1})
+
     @use_profile('bigquery')
     def test_bigquery_remove_partition(self):
-        before = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp'}, "cluster_by": None}
+        before = {"partition_by": {'field': 'cur_time',
+                                   'data_type': 'timestamp'}, "cluster_by": None}
         after = {"partition_by": None, "cluster_by": None}
         self.run_changes(before, after)
 
     @use_profile('bigquery')
     def test_bigquery_change_partitions(self):
-        before = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp'}, "cluster_by": None}
+        before = {"partition_by": {'field': 'cur_time',
+                                   'data_type': 'timestamp'}, "cluster_by": None}
         after = {"partition_by": {'field': "cur_date"}, "cluster_by": None}
         self.run_changes(before, after)
         self.test_partitions({"expected": 1})
@@ -52,8 +75,10 @@ class TestChangingPartitions(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test_bigquery_change_partitions_from_int(self):
-        before = {"partition_by": {"field": "id", "data_type": "int64", "range": {"start": 0, "end": 10, "interval": 1}}, "cluster_by": None}
-        after = {"partition_by": {"field": "cur_date", "data_type": "date"}, "cluster_by": None}
+        before = {"partition_by": {"field": "id", "data_type": "int64", "range": {
+            "start": 0, "end": 10, "interval": 1}}, "cluster_by": None}
+        after = {"partition_by": {"field": "cur_date",
+                                  "data_type": "date"}, "cluster_by": None}
         self.run_changes(before, after)
         self.test_partitions({"expected": 1})
         self.run_changes(after, before)
@@ -61,24 +86,29 @@ class TestChangingPartitions(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test_bigquery_add_clustering(self):
-        before = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp'}, "cluster_by": None}
+        before = {"partition_by": {'field': 'cur_time',
+                                   'data_type': 'timestamp'}, "cluster_by": None}
         after = {"partition_by": {'field': "cur_date"}, "cluster_by": "id"}
         self.run_changes(before, after)
 
     @use_profile('bigquery')
     def test_bigquery_remove_clustering(self):
-        before = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp'}, "cluster_by": "id"}
+        before = {"partition_by": {'field': 'cur_time',
+                                   'data_type': 'timestamp'}, "cluster_by": "id"}
         after = {"partition_by": {'field': "cur_date"}, "cluster_by": None}
         self.run_changes(before, after)
 
     @use_profile('bigquery')
     def test_bigquery_change_clustering(self):
-        before = {"partition_by": {'field': 'cur_time', 'data_type': 'timestamp'}, "cluster_by": "id"}
+        before = {"partition_by": {'field': 'cur_time',
+                                   'data_type': 'timestamp'}, "cluster_by": "id"}
         after = {"partition_by": {'field': "cur_date"}, "cluster_by": "name"}
         self.run_changes(before, after)
 
     @use_profile('bigquery')
     def test_bigquery_change_clustering_strict(self):
-        before = {'partition_by': {'field': 'cur_time', 'data_type': 'timestamp'}, 'cluster_by': 'id'}
-        after = {'partition_by': {'field': 'cur_date', 'data_type': 'date'}, 'cluster_by': 'name'}
+        before = {'partition_by': {'field': 'cur_time',
+                                   'data_type': 'timestamp'}, 'cluster_by': 'id'}
+        after = {'partition_by': {'field': 'cur_date',
+                                  'data_type': 'date'}, 'cluster_by': 'name'}
         self.run_changes(before, after)

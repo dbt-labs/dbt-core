@@ -96,11 +96,13 @@ def test_parse_simple():
     sf = parse_file('''\
         selectors:
           - name: tagged_foo
+            description: Selector for foo-tagged models
             definition:
               tag: foo
     ''')
 
     assert len(sf.selectors) == 1
+    assert sf.selectors[0].description == 'Selector for foo-tagged models'
     parsed = cli.parse_from_selectors_definition(sf)
     assert len(parsed) == 1
     assert 'tagged_foo' in parsed

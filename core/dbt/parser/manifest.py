@@ -1,10 +1,14 @@
+from dataclasses import dataclass
+from dataclasses import field
 import os
 import pickle
 from typing import (
     Dict, Optional, Mapping, Callable, Any, List, Type, Union, MutableMapping
 )
+import time
 
 import dbt.exceptions
+import dbt.tracking
 import dbt.flags as flags
 
 from dbt.adapters.factory import (
@@ -23,6 +27,7 @@ from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
 )
+from dbt.contracts.util import Writable
 from dbt.exceptions import (
     ref_target_not_found,
     get_target_not_found_or_disabled_msg,
@@ -46,10 +51,37 @@ from dbt.parser.sources import patch_sources
 from dbt.ui import warning_tag
 from dbt.version import __version__
 
+from hologram import JsonSchemaMixin
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
 PARSING_STATE = DbtProcessState('parsing')
 DEFAULT_PARTIAL_PARSE = False
+
+
+@dataclass
+class ParserInfo(JsonSchemaMixin):
+    parser: str
+    elapsed: float
+    path_count: int = 0
+
+
+@dataclass
+class ProjectLoaderInfo(JsonSchemaMixin):
+    project_name: str
+    elapsed: float
+    parsers: List[ParserInfo]
+    path_count: int = 0
+
+
+@dataclass
+class ManifestLoaderInfo(JsonSchemaMixin, Writable):
+    path_count: int = 0
+    is_partial_parse_enabled: Optional[bool] = None
+    parse_project_elapsed: Optional[float] = None
+    patch_sources_elapsed: Optional[float] = None
+    process_manifest_elapsed: Optional[float] = None
+    load_all_elapsed: Optional[float] = None
+    projects: List[ProjectLoaderInfo] = field(default_factory=list)
 
 
 _parser_types: List[Type[Parser]] = [
@@ -119,6 +151,26 @@ class ManifestLoader:
             root_project, all_projects,
         )
         self._loaded_file_cache: Dict[str, FileBlock] = {}
+        self._perf_info = ManifestLoaderInfo(
+            is_partial_parse_enabled=self._partial_parse_enabled()
+        )
+
+    def track_project_load(self):
+        invocation_id = dbt.tracking.active_user.invocation_id
+        dbt.tracking.track_project_load({
+            "invocation_id": invocation_id,
+            "project_id": self.root_project.hashed_name(),
+            "path_count": self._perf_info.path_count,
+            "parse_project_elapsed": self._perf_info.parse_project_elapsed,
+            "patch_sources_elapsed": self._perf_info.patch_sources_elapsed,
+            "process_manifest_elapsed": (
+                self._perf_info.process_manifest_elapsed
+            ),
+            "load_all_elapsed": self._perf_info.load_all_elapsed,
+            "is_partial_parse_enabled": (
+                self._perf_info.is_partial_parse_enabled
+            ),
+        })
 
     def parse_with_cache(
         self,
@@ -170,9 +222,39 @@ class ManifestLoader:
         # per-project cache.
         self._loaded_file_cache.clear()
 
+        project_parser_info: List[ParserInfo] = []
+        start_timer = time.perf_counter()
+        total_path_count = 0
         for parser in parsers:
+            parser_path_count = 0
+            parser_start_timer = time.perf_counter()
             for path in parser.search():
                 self.parse_with_cache(path, parser, old_results)
+                parser_path_count = parser_path_count + 1
+                if parser_path_count % 100 == 0:
+                    print("..", end='', flush=True)
+
+            if parser_path_count > 0:
+                project_parser_info.append(ParserInfo(
+                    parser=parser.resource_type,
+                    path_count=parser_path_count,
+                    elapsed=time.perf_counter() - parser_start_timer
+                ))
+                total_path_count = total_path_count + parser_path_count
+        if total_path_count > 100:
+            print("..")
+
+        elapsed = time.perf_counter() - start_timer
+        project_info = ProjectLoaderInfo(
+            project_name=project.project_name,
+            path_count=total_path_count,
+            elapsed=elapsed,
+            parsers=project_parser_info
+        )
+        self._perf_info.projects.append(project_info)
+        self._perf_info.path_count = (
+            self._perf_info.path_count + total_path_count
+        )
 
     def load_only_macros(self) -> Manifest:
         old_results = self.read_parse_results()
@@ -197,9 +279,15 @@ class ManifestLoader:
         self.results.macros.update(macro_manifest.macros)
         self.results.files.update(macro_manifest.files)
 
+        start_timer = time.perf_counter()
+
         for project in self.all_projects.values():
             # parse a single project
             self.parse_project(project, macro_manifest, old_results)
+
+        self._perf_info.parse_project_elapsed = (
+            time.perf_counter() - start_timer
+        )
 
     def write_parse_results(self):
         path = os.path.join(self.root_project.target_path,
@@ -300,7 +388,11 @@ class ManifestLoader:
         # before we do anything else, patch the sources. This mutates
         # results.disabled, so it needs to come before the final 'disabled'
         # list is created
+        start_patch = time.perf_counter()
         sources = patch_sources(self.results, self.root_project)
+        self._perf_info.patch_sources_elapsed = (
+            time.perf_counter() - start_patch
+        )
         disabled = []
         for value in self.results.disabled.values():
             disabled.extend(value)
@@ -318,10 +410,17 @@ class ManifestLoader:
             metadata=self.root_project.get_metadata(),
             disabled=disabled,
             files=self.results.files,
+            selectors=self.root_project.manifest_selectors,
         )
         manifest.patch_nodes(self.results.patches)
         manifest.patch_macros(self.results.macro_patches)
+        start_process = time.perf_counter()
         self.process_manifest(manifest)
+
+        self._perf_info.process_manifest_elapsed = (
+            time.perf_counter() - start_process
+        )
+
         return manifest
 
     @classmethod
@@ -332,6 +431,8 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
     ) -> Manifest:
         with PARSING_STATE:
+            start_load_all = time.perf_counter()
+
             projects = root_config.load_dependencies()
             loader = cls(root_config, projects, macro_hook)
             loader.load(macro_manifest=macro_manifest)
@@ -339,6 +440,13 @@ class ManifestLoader:
             manifest = loader.create_manifest()
             _check_manifest(manifest, root_config)
             manifest.build_flat_graph()
+
+            loader._perf_info.load_all_elapsed = (
+                time.perf_counter() - start_load_all
+            )
+
+            loader.track_project_load()
+
             return manifest
 
     @classmethod
@@ -514,6 +622,12 @@ def _process_docs_for_macro(
         arg.description = get_rendered(arg.description, context)
 
 
+def _process_docs_for_exposure(
+    context: Dict[str, Any], exposure: ParsedExposure
+) -> None:
+    exposure.description = get_rendered(exposure.description, context)
+
+
 def process_docs(manifest: Manifest, config: RuntimeConfig):
     for node in manifest.nodes.values():
         ctx = generate_runtime_docs(
@@ -539,6 +653,14 @@ def process_docs(manifest: Manifest, config: RuntimeConfig):
             config.project_name,
         )
         _process_docs_for_macro(ctx, macro)
+    for exposure in manifest.exposures.values():
+        ctx = generate_runtime_docs(
+            config,
+            exposure,
+            manifest,
+            config.project_name,
+        )
+        _process_docs_for_exposure(ctx, exposure)
 
 
 def _process_refs_for_exposure(

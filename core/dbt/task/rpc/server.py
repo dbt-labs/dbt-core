@@ -1,7 +1,8 @@
 # import these so we can find them
 from . import sql_commands  # noqa
 from . import project_commands  # noqa
-from . import deps # noqa
+from . import deps  # noqa
+import multiprocessing.queues  # noqa - https://bugs.python.org/issue41567
 import json
 import os
 import signal

@@ -11,7 +11,7 @@ from hologram.helpers import StrEnum
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.results import (
-    TimingInfo,
+    RunResult, RunResultsArtifact, TimingInfo,
     CatalogArtifact,
     CatalogResults,
     ExecutionResult,
@@ -19,8 +19,7 @@ from dbt.contracts.results import (
     FreshnessResult,
     RunOperationResult,
     RunOperationResultsArtifact,
-    RunResult,
-    RunResultsArtifact,
+    RunExecutionResult,
 )
 from dbt.contracts.util import VersionedSchema, schema_version
 from dbt.exceptions import InternalException
@@ -80,6 +79,7 @@ class RPCTestParameters(RPCCompileParameters):
     data: bool = False
     schema: bool = False
     state: Optional[str] = None
+    defer: Optional[bool] = None
 
 
 @dataclass
@@ -225,12 +225,12 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 @dataclass
 @schema_version('remote-execution-result', 1)
 class RemoteExecutionResult(ExecutionResult, RemoteResult):
-    args: Dict[str, Any] = field(default_factory=dict)
     results: Sequence[RunResult]
+    args: Dict[str, Any] = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
     def write(self, path: str):
-        writable = RunResultsArtifact.from_node_results(
+        writable = RunResultsArtifact.from_execution_results(
             generated_at=self.generated_at,
             results=self.results,
             elapsed_time=self.elapsed_time,
@@ -241,11 +241,11 @@ class RemoteExecutionResult(ExecutionResult, RemoteResult):
     @classmethod
     def from_local_result(
         cls,
-        base: RunResultsArtifact,
+        base: RunExecutionResult,
         logs: List[LogMessage],
     ) -> 'RemoteExecutionResult':
         return cls(
-            generated_at=base.metadata.generated_at,
+            generated_at=base.generated_at,
             results=base.results,
             elapsed_time=base.elapsed_time,
             args=base.args,

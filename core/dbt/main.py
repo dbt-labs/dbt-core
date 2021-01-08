@@ -23,6 +23,7 @@ import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
+import dbt.task.parse as parse_task
 from dbt.profiler import profiler
 from dbt.task.list import ListTask
 from dbt.task.rpc.server import RPCServerTask
@@ -445,6 +446,21 @@ def _build_snapshot_subparser(subparsers, base_subparser):
     return sub
 
 
+def _add_defer_argument(*subparsers):
+    for sub in subparsers:
+        sub.add_optional_argument_inverse(
+            '--defer',
+            enable_help='''
+            If set, defer to the state variable for resolving unselected nodes.
+            ''',
+            disable_help='''
+            If set, do not defer to the state variable for resolving unselected
+            nodes.
+            ''',
+            default=flags.DEFER_MODE,
+        )
+
+
 def _build_run_subparser(subparsers, base_subparser):
     run_sub = subparsers.add_parser(
         'run',
@@ -460,19 +476,6 @@ def _build_run_subparser(subparsers, base_subparser):
         help='''
         Stop execution upon a first failure.
         '''
-    )
-
-    # this is a "dbt run"-only thing, for now
-    run_sub.add_optional_argument_inverse(
-        '--defer',
-        enable_help='''
-        If set, defer to the state variable for resolving unselected nodes.
-        ''',
-        disable_help='''
-        If set, do not defer to the state variable for resolving unselected
-        nodes.
-        ''',
-        default=flags.DEFER_MODE,
     )
 
     run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
@@ -491,6 +494,21 @@ def _build_compile_subparser(subparsers, base_subparser):
     sub.set_defaults(cls=compile_task.CompileTask, which='compile',
                      rpc_method='compile')
     sub.add_argument('--parse-only', action='store_true')
+    return sub
+
+
+def _build_parse_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
+        'parse',
+        parents=[base_subparser],
+        help='''
+        Parsed the project and provides information on performance
+        '''
+    )
+    sub.set_defaults(cls=parse_task.ParseTask, which='parse',
+                     rpc_method='parse')
+    sub.add_argument('--write-manifest', action='store_true')
+    sub.add_argument('--compile', action='store_true')
     return sub
 
 
@@ -1006,16 +1024,19 @@ def parse_args(args, cls=DBTArgumentParser):
     rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
+    parse_sub = _build_parse_subparser(subs, base_subparser)
     generate_sub = _build_docs_generate_subparser(docs_subs, base_subparser)
     test_sub = _build_test_subparser(subs, base_subparser)
     seed_sub = _build_seed_subparser(subs, base_subparser)
     # --threads, --no-version-check
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                          rpc_sub, seed_sub)
+                          rpc_sub, seed_sub, parse_sub)
     # --models, --exclude
     # list_sub sets up its own arguments.
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
+    # --defer
+    _add_defer_argument(run_sub, test_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 

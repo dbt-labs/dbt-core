@@ -158,19 +158,14 @@ class Time(JsonSchemaMixin, Replaceable):
         return actual_age > difference
 
 
-class FreshnessStatus(StrEnum):
-    Pass = 'pass'
-    Warn = 'warn'
-    Error = 'error'
-
-
 @dataclass
 class FreshnessThreshold(JsonSchemaMixin, Mergeable):
     warn_after: Optional[Time] = None
     error_after: Optional[Time] = None
     filter: Optional[str] = None
 
-    def status(self, age: float) -> FreshnessStatus:
+    def status(self, age: float) -> "dbt.contracts.results.FreshnessStatus":
+        from dbt.contracts.results import FreshnessStatus
         if self.error_after and self.error_after.exceeded(age):
             return FreshnessStatus.Error
         elif self.warn_after and self.warn_after.exceeded(age):
@@ -411,11 +406,11 @@ class ExposureOwner(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class UnparsedExposure(JsonSchemaMixin, Replaceable):
+class UnparsedExposure(HasYamlMetadata, Replaceable):
     name: str
     type: ExposureType
     owner: ExposureOwner
+    description: str = ''
     maturity: Optional[MaturityType] = None
     url: Optional[str] = None
-    description: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)

@@ -25,6 +25,7 @@ from dbt.semver import versions_compatible
 from dbt.version import get_installed_version
 from dbt.utils import MultiDict
 from dbt.node_types import NodeType
+from dbt.config.selectors import SelectorDict
 
 from dbt.contracts.project import (
     Project as ProjectContract,
@@ -370,6 +371,12 @@ class PartialProject(RenderComponents):
 
         packages = package_config_from_data(rendered.packages_dict)
         selectors = selector_config_from_data(rendered.selectors_dict)
+        manifest_selectors: Dict[str, Any] = {}
+        if rendered.selectors_dict and rendered.selectors_dict['selectors']:
+            # this is a dict with a single key 'selectors' pointing to a list
+            # of dicts.
+            manifest_selectors = SelectorDict.parse_from_selectors_list(
+                rendered.selectors_dict['selectors'])
 
         project = Project(
             project_name=name,
@@ -396,6 +403,7 @@ class PartialProject(RenderComponents):
             snapshots=snapshots,
             dbt_version=dbt_version,
             packages=packages,
+            manifest_selectors=manifest_selectors,
             selectors=selectors,
             query_comment=query_comment,
             sources=sources,
@@ -458,6 +466,7 @@ class PartialProject(RenderComponents):
 
 class VarProvider:
     """Var providers are tied to a particular Project."""
+
     def __init__(
         self,
         vars: Dict[str, Dict[str, Any]]
@@ -476,6 +485,8 @@ class VarProvider:
         return self.vars
 
 
+# The Project class is included in RuntimeConfig, so any attribute
+# additions must also be set where the RuntimeConfig class is created
 @dataclass
 class Project:
     project_name: str
@@ -504,6 +515,7 @@ class Project:
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
+    manifest_selectors: Dict[str, Any]
     selectors: SelectorConfig
     query_comment: QueryComment
     config_version: int

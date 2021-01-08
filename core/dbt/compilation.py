@@ -172,6 +172,15 @@ class Compiler:
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
 
+    def _get_relation_name(self, node: ParsedNode):
+        relation_name = None
+        if (node.resource_type in NodeType.refable() and
+                not node.is_ephemeral_model):
+            adapter = get_adapter(self.config)
+            relation_cls = adapter.Relation
+            relation_name = str(relation_cls.create_from(self.config, node))
+        return relation_name
+
     def _inject_ctes_into_sql(self, sql: str, ctes: List[InjectedCTE]) -> str:
         """
         `ctes` is a list of InjectedCTEs like:
@@ -339,13 +348,13 @@ class Compiler:
         manifest: Manifest,
         extra_context: Dict[str, Any],
     ) -> NonSourceCompiledNode:
-        """Insert the CTEs for the model."""
+        """Wrap the data test SQL in a CTE."""
 
         # for data tests, we need to insert a special CTE at the end of the
         # list containing the test query, and then have the "real" query be a
         # select count(*) from that model.
-        # the benefit of doing it this way is that _insert_ctes() can be
-        # rewritten for different adapters to handle databses that don't
+        # the benefit of doing it this way is that _add_ctes() can be
+        # rewritten for different adapters to handle databases that don't
         # support CTEs, or at least don't have full support.
         if isinstance(compiled_node, CompiledDataTestNode):
             # the last prepend (so last in order) should be the data test body.
@@ -394,6 +403,8 @@ class Compiler:
             context,
             node,
         )
+
+        compiled_node.relation_name = self._get_relation_name(node)
 
         compiled_node.compiled = True
 

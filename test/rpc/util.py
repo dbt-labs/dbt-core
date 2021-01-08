@@ -142,7 +142,7 @@ class Querier:
     def status(self, request_id: int = 1):
         return self.request(method='status', request_id=request_id)
 
-    def wait_for_status(self, expected, times=30) -> bool:
+    def wait_for_status(self, expected, times=120) -> bool:
         for _ in range(times):
             time.sleep(0.5)
             status = self.is_result(self.status())
@@ -335,6 +335,7 @@ class Querier:
         data: bool = None,
         schema: bool = None,
         request_id: int = 1,
+        defer: Optional[bool] = None,
         state: Optional[bool] = None,
     ):
         params = {}
@@ -348,6 +349,8 @@ class Querier:
             params['schema'] = schema
         if threads is not None:
             params['threads'] = threads
+        if defer is not None:
+            params['defer'] = defer
         if state is not None:
             params['state'] = state
         return self.request(
@@ -402,11 +405,14 @@ class Querier:
         )
 
     def is_result(self, data: Dict[str, Any], id=None) -> Dict[str, Any]:
+
         if id is not None:
             assert data['id'] == id
         assert data['jsonrpc'] == '2.0'
-        assert 'result' in data
+        if 'error' in data:
+            print(data['error']['message'])
         assert 'error' not in data
+        assert 'result' in data
         return data['result']
 
     def is_async_result(self, data: Dict[str, Any], id=None) -> str:

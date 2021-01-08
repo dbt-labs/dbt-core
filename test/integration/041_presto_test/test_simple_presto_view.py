@@ -34,16 +34,16 @@ class TestBasePrestoRun(DBTIntegrationTest):
 
         for result in test_results:
             if 'dupe' in result.node.name:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
-                self.assertTrue(result.status > 0)
+                self.assertTrue(int(result.message) > 0)
 
             # assert that actual tests pass
             else:
-                self.assertIsNone(result.error)
+                self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                # status = # of failing rows
-                self.assertEqual(result.status, 0)
+                # message = # of failing rows
+                self.assertEqual(int(result.message), 0)
 
 
 class TestSimplePrestoRun(TestBasePrestoRun):
@@ -74,4 +74,3 @@ class TestUnderscorePrestoRun(TestBasePrestoRun):
         results = self.run_dbt()
         self.assertEqual(len(results), 2)
         self.assert_nondupes_pass()
-

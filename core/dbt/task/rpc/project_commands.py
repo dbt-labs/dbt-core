@@ -129,6 +129,10 @@ class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
         self.args.schema = params.schema
         if params.threads is not None:
             self.args.threads = params.threads
+        if params.defer is None:
+            self.args.defer = flags.DEFER_MODE
+        else:
+            self.args.defer = params.defer
 
         self.args.state = state_path(params.state)
         self.set_previous_state()

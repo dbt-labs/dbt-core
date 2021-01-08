@@ -190,4 +190,5 @@ class ListTask(GraphRunnableTask):
             )
 
     def interpret_results(self, results):
-        return bool(results)
+        # list command should always return 0 as exit code
+        return True

@@ -12,7 +12,7 @@ from hologram.helpers import HyphenatedJsonSchemaMixin, register_pattern, \
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Union, Any, NewType
 
-PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
+PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions'  # noqa
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
 
@@ -142,6 +142,7 @@ BANNED_PROJECT_NAMES = {
     'sql',
     'sql_now',
     'store_result',
+    'store_raw_result',
     'target',
     'this',
     'tojson',

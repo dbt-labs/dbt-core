@@ -235,31 +235,40 @@ unchanged_compiled_models = [
     lambda u: (u, u.replace(alias='nope')),
 
     # None -> False is a config change even though it's pretty much the same
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': False})), u.replace(config=u.config.replace(persist_docs={'relation': False}))),
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': False})), u.replace(config=u.config.replace(persist_docs={'columns': False}))),
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': False})), u.replace(
+        config=u.config.replace(persist_docs={'relation': False}))),
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': False})), u.replace(
+        config=u.config.replace(persist_docs={'columns': False}))),
     # True -> True
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}))),
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}))),
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(
+        config=u.config.replace(persist_docs={'relation': True}))),
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(
+        config=u.config.replace(persist_docs={'columns': True}))),
 
     # only columns docs enabled, but description changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(config=u.config.replace(persist_docs={'columns': True}), description='a model description')),
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'columns': True})), u.replace(
+        config=u.config.replace(persist_docs={'columns': True}), description='a model description')),
     # only relation docs eanbled, but columns changed
-    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')}))
+    lambda u: (u.replace(config=u.config.replace(persist_docs={'relation': True})), u.replace(config=u.config.replace(
+        persist_docs={'relation': True}), columns={'a': ColumnInfo(name='a', description='a column description')}))
 ]
 
 
 changed_compiled_models = [
     lambda u: (u, None),
     lambda u: (u, u.replace(raw_sql='select * from wherever')),
-    lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
+    lambda u: (u, u.replace(fqn=['test', 'models', 'subdir', 'foo'],
+                            original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql')),
     lambda u: (u, replace_config(u, full_refresh=True)),
     lambda u: (u, replace_config(u, post_hook=['select 1 as id'])),
     lambda u: (u, replace_config(u, pre_hook=['select 1 as id'])),
-    lambda u: (u, replace_config(u, quoting={'database': True, 'schema': False, 'identifier': False})),
+    lambda u: (u, replace_config(
+        u, quoting={'database': True, 'schema': False, 'identifier': False})),
     # we changed persist_docs values
     lambda u: (u, replace_config(u, persist_docs={'relation': True})),
     lambda u: (u, replace_config(u, persist_docs={'columns': True})),
-    lambda u: (u, replace_config(u, persist_docs={'columns': True, 'relation': True})),
+    lambda u: (u, replace_config(u, persist_docs={
+               'columns': True, 'relation': True})),
 
     # None -> False is a config change even though it's pretty much the same
     lambda u: (u, replace_config(u, persist_docs={'relation': False})),
@@ -267,12 +276,14 @@ changed_compiled_models = [
     # persist docs was true for the relation and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={'relation': True}),
-        replace_config(u, persist_docs={'relation': True}, description='a model description'),
+        replace_config(u, persist_docs={
+                       'relation': True}, description='a model description'),
     ),
     # persist docs was true for columns and we changed the model description
     lambda u: (
         replace_config(u, persist_docs={'columns': True}),
-        replace_config(u, persist_docs={'columns': True}, columns={'a': ColumnInfo(name='a', description='a column description')})
+        replace_config(u, persist_docs={'columns': True}, columns={
+                       'a': ColumnInfo(name='a', description='a column description')})
     ),
     # changing alias/schema/database on the config level is a change
     lambda u: (u, replace_config(u, database='nope')),
@@ -408,7 +419,7 @@ def basic_uncompiled_schema_test_dict():
         'config': {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'test',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -457,7 +468,7 @@ def basic_compiled_schema_test_dict():
         'config': {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'test',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -539,13 +550,15 @@ unchanged_schema_tests = [
     lambda u: replace_config(u, full_refresh=True),
     lambda u: replace_config(u, post_hook=['select 1 as id']),
     lambda u: replace_config(u, pre_hook=['select 1 as id']),
-    lambda u: replace_config(u, quoting={'database': True, 'schema': False, 'identifier': False}),
+    lambda u: replace_config(
+        u, quoting={'database': True, 'schema': False, 'identifier': False}),
 ]
 
 
 changed_schema_tests = [
     lambda u: None,
-    lambda u: u.replace(fqn=['test', 'models', 'subdir', 'foo'], original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql'),
+    lambda u: u.replace(fqn=['test', 'models', 'subdir', 'foo'],
+                        original_file_path='models/subdir/foo.sql', path='/root/models/subdir/foo.sql'),
     lambda u: replace_config(u, severity='warn'),
     # If we checked test metadata, these would caount. But we don't, because these changes would all change the unique ID, so it's irrelevant.
     # lambda u: u.replace(test_metadata=u.test_metadata.replace(namespace='something')),
@@ -572,5 +585,6 @@ def test_compare_to_compiled(basic_uncompiled_schema_test_node, basic_compiled_s
     compiled = basic_compiled_schema_test_node
     assert not uncompiled.same_contents(compiled)
     fixed_config = compiled.config.replace(severity=uncompiled.config.severity)
-    fixed_compiled = compiled.replace(config=fixed_config, unrendered_config=uncompiled.unrendered_config)
+    fixed_compiled = compiled.replace(
+        config=fixed_config, unrendered_config=uncompiled.unrendered_config)
     assert uncompiled.same_contents(fixed_compiled)

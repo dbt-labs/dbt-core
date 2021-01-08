@@ -20,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-snowflake"
-package_version = "0.19.0b1"
+package_version = "0.19.0rc1"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -47,12 +47,12 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'snowflake-connector-python[secure-local-storage]==2.2.10',
+        'snowflake-connector-python[secure-local-storage]==2.3.6',
         'azure-common<2.0.0',
         'azure-storage-blob>=12.0.0,<13.0.0',
         'urllib3>=1.20,<1.26.0',
         # this seems sufficiently broad
-        'cryptography>=2,<3',
+        'cryptography>=3.2,<4',
     ],
     zip_safe=False,
     classifiers=[

@@ -1,3 +1,4 @@
+import threading
 from typing import Dict, Any, Set
 
 from .compile import CompileRunner
@@ -14,7 +15,7 @@ from dbt.contracts.graph.parsed import (
     ParsedDataTestNode,
     ParsedSchemaTestNode,
 )
-from dbt.contracts.results import RunModelResult
+from dbt.contracts.results import RunResult, TestStatus
 from dbt.exceptions import raise_compiler_error, InternalException
 from dbt.graph import (
     ResourceTypeSelector,
@@ -83,19 +84,30 @@ class TestRunner(CompileRunner):
         elif isinstance(test, CompiledSchemaTestNode):
             failed_rows = self.execute_schema_test(test)
         else:
-
             raise InternalException(
                 f'Expected compiled schema test or compiled data test, got '
                 f'{type(test)}'
             )
-        severity = test.config.severity.upper()
 
+        severity = test.config.severity.upper()
+        thread_id = threading.current_thread().name
+        status = None
         if failed_rows == 0:
-            return RunModelResult(test, status=failed_rows)
+            status = TestStatus.Pass
         elif severity == 'ERROR' or flags.WARN_ERROR:
-            return RunModelResult(test, status=failed_rows, fail=True)
+            status = TestStatus.Fail
         else:
-            return RunModelResult(test, status=failed_rows, warn=True)
+            status = TestStatus.Warn
+
+        return RunResult(
+            node=test,
+            status=status,
+            timing=[],
+            thread_id=thread_id,
+            execution_time=0,
+            message=int(failed_rows),
+            adapter_response={}
+        )
 
     def after_execute(self, result):
         self.print_result_line(result)
@@ -132,6 +144,7 @@ class TestTask(RunTask):
         Read schema files + custom data tests and validate that
         constraints are satisfied.
     """
+
     def raise_on_first_error(self):
         return False
 

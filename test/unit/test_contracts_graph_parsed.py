@@ -443,7 +443,7 @@ def basic_parsed_seed_dict():
         'docs': {'show': True},
         'columns': {},
         'meta': {},
-        'checksum': {'name': 'path', 'checksum': '/root/seeds/seed.csv'},
+        'checksum': {'name': 'path', 'checksum': 'seeds/seed.csv'},
         'unrendered_config': {},
     }
 
@@ -474,7 +474,7 @@ def basic_parsed_seed_object():
         docs=Docs(show=True),
         columns={},
         meta={},
-        checksum=FileHash(name='path', checksum='/root/seeds/seed.csv'),
+        checksum=FileHash(name='path', checksum='seeds/seed.csv'),
         unrendered_config={},
     )
 
@@ -494,7 +494,7 @@ def minimal_parsed_seed_dict():
         'database': 'test_db',
         'schema': 'test_schema',
         'alias': 'foo',
-        'checksum': {'name': 'path', 'checksum': '/root/seeds/seed.csv'},
+        'checksum': {'name': 'path', 'checksum': 'seeds/seed.csv'},
     }
 
 
@@ -982,7 +982,7 @@ def basic_parsed_schema_test_dict():
         'config': {
             'column_types': {},
             'enabled': True,
-            'materialized': 'view',
+            'materialized': 'test',
             'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
@@ -1137,7 +1137,7 @@ def test_basic_schema_test_node(minimal_parsed_schema_test_dict, basic_parsed_sc
     assert node.empty is False
     assert node.is_ephemeral is False
     assert node.is_refable is False
-    assert node.get_materialization() == 'view'
+    assert node.get_materialization() == 'test'
 
     assert_from_dict(node, minimum, ParsedSchemaTestNode)
     pickle.loads(pickle.dumps(node))
@@ -2017,6 +2017,7 @@ def minimal_parsed_exposure_dict():
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
+        'description': ''
     }
 
 
@@ -2041,6 +2042,7 @@ def basic_parsed_exposure_dict():
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
+        'description': ''
     }
 
 
@@ -2056,6 +2058,7 @@ def basic_parsed_exposure_object():
         root_path='/usr/src/app',
         original_file_path='models/something.yml',
         owner=ExposureOwner(email='test@example.com'),
+        description=''
     )
 
 

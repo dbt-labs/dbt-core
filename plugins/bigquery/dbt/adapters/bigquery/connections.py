@@ -1,7 +1,9 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
+import agate
 from requests.exceptions import ConnectionError
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Tuple
 
 import google.auth
 import google.auth.exceptions
@@ -17,7 +19,7 @@ from google.oauth2 import (
 from dbt.utils import format_bytes, format_rows_number
 from dbt.clients import agate_helper, gcloud
 from dbt.tracking import active_user
-from dbt.contracts.connection import ConnectionState
+from dbt.contracts.connection import ConnectionState, AdapterResponse
 from dbt.exceptions import (
     FailedToConnectException, RuntimeException, DatabaseException
 )
@@ -45,6 +47,17 @@ RETRYABLE_ERRORS = (
 )
 
 
+@lru_cache()
+def get_bigquery_defaults() -> Tuple[Any, Optional[str]]:
+    """
+    Returns (credentials, project_id)
+
+    project_id is returned available from the environment; otherwise None
+    """
+    # Cached, because the underlying implementation shells out, taking ~1s
+    return google.auth.default()
+
+
 class Priority(StrEnum):
     Interactive = 'interactive'
     Batch = 'batch'
@@ -58,8 +71,16 @@ class BigQueryConnectionMethod(StrEnum):
 
 
 @dataclass
+class BigQueryAdapterResponse(AdapterResponse):
+    bytes_processed: Optional[int] = None
+
+
+@dataclass
 class BigQueryCredentials(Credentials):
     method: BigQueryConnectionMethod
+    # BigQuery allows an empty database / project, where it defers to the
+    # environment for the project
+    database: Optional[str]
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
     priority: Optional[Priority] = None
@@ -90,6 +111,16 @@ class BigQueryCredentials(Credentials):
     def _connection_keys(self):
         return ('method', 'database', 'schema', 'location', 'priority',
                 'timeout_seconds', 'maximum_bytes_billed')
+
+    def __post_init__(self):
+        # We need to inject the correct value of the database (aka project) at
+        # this stage, ref
+        # https://github.com/fishtown-analytics/dbt/pull/2908#discussion_r532927436.
+
+        # `database` is an alias of `project` in BigQuery
+        if self.database is None:
+            _, database = get_bigquery_defaults()
+            self.database = database
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -170,7 +201,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         creds = GoogleServiceAccountCredentials.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
-            credentials, project_id = google.auth.default(scopes=cls.SCOPE)
+            credentials, _ = get_bigquery_defaults()
             return credentials
 
         elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
@@ -238,7 +269,6 @@ class BigQueryConnectionManager(BaseConnectionManager):
             handle = cls.get_bigquery_client(connection.credentials)
 
         except Exception as e:
-            raise
             logger.debug("Got an error when attempting to create a bigquery "
                          "client: '{}'".format(e))
 
@@ -300,44 +330,62 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         return query_job, iterator
 
-    def execute(self, sql, auto_begin=False, fetch=None):
+    def execute(
+        self, sql, auto_begin=False, fetch=None
+    ) -> Tuple[BigQueryAdapterResponse, agate.Table]:
         sql = self._add_query_comment(sql)
         # auto_begin is ignored on bigquery, and only included for consistency
         query_job, iterator = self.raw_execute(sql, fetch=fetch)
 
         if fetch:
-            res = self.get_table_from_response(iterator)
+            table = self.get_table_from_response(iterator)
         else:
-            res = agate_helper.empty_table()
+            table = agate_helper.empty_table()
+
+        message = 'OK'
+        code = None
+        num_rows = None
+        bytes_processed = None
 
         if query_job.statement_type == 'CREATE_VIEW':
-            status = 'CREATE VIEW'
+            code = 'CREATE VIEW'
 
         elif query_job.statement_type == 'CREATE_TABLE_AS_SELECT':
             conn = self.get_thread_connection()
             client = conn.handle
-            table = client.get_table(query_job.destination)
-            processed = format_bytes(query_job.total_bytes_processed)
-            status = 'CREATE TABLE ({} rows, {} processed)'.format(
-                format_rows_number(table.num_rows),
-                format_bytes(query_job.total_bytes_processed),
+            query_table = client.get_table(query_job.destination)
+            code = 'CREATE TABLE'
+            num_rows = query_table.num_rows
+            bytes_processed = query_job.total_bytes_processed
+            message = '{} ({} rows, {} processed)'.format(
+                code,
+                format_rows_number(num_rows),
+                format_bytes(bytes_processed)
             )
 
         elif query_job.statement_type == 'SCRIPT':
-            processed = format_bytes(query_job.total_bytes_processed)
-            status = f'SCRIPT ({processed} processed)'
+            code = 'SCRIPT'
+            bytes_processed = query_job.total_bytes_processed
+            message = f'{code} ({format_bytes(bytes_processed)} processed)'
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-            status = '{} ({} rows, {} processed)'.format(
-                query_job.statement_type,
-                format_rows_number(query_job.num_dml_affected_rows),
-                format_bytes(query_job.total_bytes_processed),
+            code = query_job.statement_type
+            num_rows = query_job.num_dml_affected_rows
+            bytes_processed = query_job.total_bytes_processed
+            message = '{} ({} rows, {} processed)'.format(
+                code,
+                format_rows_number(num_rows),
+                format_bytes(bytes_processed),
             )
 
-        else:
-            status = 'OK'
+        response = BigQueryAdapterResponse(
+            _message=message,
+            rows_affected=num_rows,
+            code=code,
+            bytes_processed=bytes_processed
+        )
 
-        return status, res
+        return response, table
 
     def get_partitions_metadata(self, table):
         def standard_to_legacy(table):

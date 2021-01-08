@@ -25,10 +25,9 @@ class TestBigqueryAdapterFunctions(DBTIntegrationTest):
 
         self.assertTrue(len(test_results) > 0)
         for result in test_results:
-            self.assertIsNone(result.error)
+            self.assertEqual(result.status, 'pass')
             self.assertFalse(result.skipped)
-            # status = # of failing rows
-            self.assertEqual(result.status, 0)
+            self.assertEqual(int(result.message), 0)
 
 
 class TestBigqueryAdapterMacros(DBTIntegrationTest):
@@ -50,22 +49,29 @@ class TestBigqueryAdapterMacros(DBTIntegrationTest):
             'db_name': self.default_database,
             'schema_name': self.unique_schema(),
         })
-        self.run_dbt(['run-operation', 'my_create_schema', '--args', schema_args])
+        self.run_dbt(
+            ['run-operation', 'my_create_schema', '--args', schema_args])
         relation_args = yaml.safe_dump({
             'db_name': self.default_database,
             'schema_name': self.unique_schema(),
             'table_name': 'some_table',
         })
-        self.run_dbt(['run-operation', 'my_create_table_as', '--args', relation_args])
+        self.run_dbt(['run-operation', 'my_create_table_as',
+                      '--args', relation_args])
         # exercise list_relations_without_caching and get_columns_in_relation
-        self.run_dbt(['run-operation', 'ensure_one_relation_in', '--args', schema_args])
+        self.run_dbt(
+            ['run-operation', 'ensure_one_relation_in', '--args', schema_args])
         # now to drop the schema
-        schema_relation = self.adapter.Relation.create(database=self.default_database, schema=self.unique_schema()).without_identifier()
+        schema_relation = self.adapter.Relation.create(
+            database=self.default_database, schema=self.unique_schema()).without_identifier()
         with self.adapter.connection_named('test'):
-            results = self.adapter.list_relations_without_caching(schema_relation)
+            results = self.adapter.list_relations_without_caching(
+                schema_relation)
         assert len(results) == 1
 
-        self.run_dbt(['run-operation', 'my_drop_schema', '--args', schema_args])
+        self.run_dbt(
+            ['run-operation', 'my_drop_schema', '--args', schema_args])
         with self.adapter.connection_named('test'):
-            results = self.adapter.list_relations_without_caching(schema_relation)
+            results = self.adapter.list_relations_without_caching(
+                schema_relation)
         assert len(results) == 0

@@ -11,8 +11,8 @@ from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    TableMetadata, CatalogTable, CatalogResults, Primitive, CatalogKey,
-    StatsItem, StatsDict, ColumnMetadata, CatalogArtifact
+    NodeStatus, TableMetadata, CatalogTable, CatalogResults, Primitive,
+    CatalogKey, StatsItem, StatsDict, ColumnMetadata, CatalogArtifact
 )
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
@@ -211,7 +211,7 @@ class GenerateTask(CompileTask):
         compile_results = None
         if self.args.compile:
             compile_results = CompileTask.run(self)
-            if any(r.error is not None for r in compile_results):
+            if any(r.status == NodeStatus.Error for r in compile_results):
                 print_timestamped_line(
                     'compile failed, cannot generate docs'
                 )

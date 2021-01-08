@@ -11,6 +11,10 @@ from dbt.tracking import InvocationProcessor
 from dbt import ui
 from dbt import utils
 
+from dbt.contracts.results import (
+    FreshnessStatus, NodeResult, NodeStatus, TestStatus
+)
+
 
 def print_fancy_output_line(
         msg: str, status: str, logger_fn: Callable, index: Optional[int],
@@ -98,37 +102,37 @@ def print_cancel_line(model) -> None:
 
 def get_printable_result(
         result, success: str, error: str) -> Tuple[str, str, Callable]:
-    if result.error is not None:
+    if result.status == NodeStatus.Error:
         info = 'ERROR {}'.format(error)
-        status = ui.red(result.status)
+        status = ui.red(result.status.upper())
         logger_fn = logger.error
     else:
         info = 'OK {}'.format(success)
-        status = ui.green(result.status)
+        status = ui.green(result.message)
         logger_fn = logger.info
 
     return info, status, logger_fn
 
 
 def print_test_result_line(
-        result, schema_name, index: int, total: int
+        result: NodeResult, schema_name, index: int, total: int
 ) -> None:
     model = result.node
 
-    if result.error is not None:
+    if result.status == TestStatus.Error:
         info = "ERROR"
         color = ui.red
         logger_fn = logger.error
-    elif result.status == 0:
+    elif result.status == TestStatus.Pass:
         info = 'PASS'
         color = ui.green
         logger_fn = logger.info
-    elif result.warn:
-        info = 'WARN {}'.format(result.status)
+    elif result.status == TestStatus.Warn:
+        info = 'WARN {}'.format(result.message)
         color = ui.yellow
         logger_fn = logger.warning
-    elif result.fail:
-        info = 'FAIL {}'.format(result.status)
+    elif result.status == TestStatus.Fail:
+        info = 'FAIL {}'.format(result.message)
         color = ui.red
         logger_fn = logger.error
     else:
@@ -196,15 +200,15 @@ def print_seed_result_line(result, schema_name: str, index: int, total: int):
 
 
 def print_freshness_result_line(result, index: int, total: int) -> None:
-    if result.error:
+    if result.status == FreshnessStatus.RuntimeErr:
         info = 'ERROR'
         color = ui.red
         logger_fn = logger.error
-    elif result.status == 'error':
+    elif result.status == FreshnessStatus.Error:
         info = 'ERROR STALE'
         color = ui.red
         logger_fn = logger.error
-    elif result.status == 'warn':
+    elif result.status == FreshnessStatus.Warn:
         info = 'WARN'
         color = ui.yellow
         logger_fn = logger.warning
@@ -220,11 +224,7 @@ def print_freshness_result_line(result, index: int, total: int) -> None:
         source_name = result.source_name
         table_name = result.table_name
 
-    msg = "{info} freshness of {source_name}.{table_name}".format(
-        info=info,
-        source_name=source_name,
-        table_name=table_name
-    )
+    msg = f"{info} freshness of {source_name}.{table_name}"
 
     print_fancy_output_line(
         msg,
@@ -237,14 +237,16 @@ def print_freshness_result_line(result, index: int, total: int) -> None:
 
 
 def interpret_run_result(result) -> str:
-    if result.error is not None or result.fail:
+    if result.status in (NodeStatus.Error, NodeStatus.Fail):
         return 'error'
-    elif result.skipped:
+    elif result.status == NodeStatus.Skipped:
         return 'skip'
-    elif result.warn:
+    elif result.status == NodeStatus.Warn:
         return 'warn'
-    else:
+    elif result.status in (NodeStatus.Pass, NodeStatus.Success):
         return 'pass'
+    else:
+        raise RuntimeError(f"unhandled result {result}")
 
 
 def print_run_status_line(results) -> None:
@@ -272,7 +274,9 @@ def print_run_result_error(
         with TextOnly():
             logger.info("")
 
-    if result.fail or (is_warning and result.warn):
+    if result.status == NodeStatus.Fail or (
+        is_warning and result.status == NodeStatus.Warn
+    ):
         if is_warning:
             color = ui.yellow
             info = 'Warning'
@@ -288,12 +292,13 @@ def print_run_result_error(
             result.node.original_file_path))
 
         try:
-            int(result.status)
+            # if message is int, must be rows returned for a test
+            int(result.message)
         except ValueError:
             logger.error("  Status: {}".format(result.status))
         else:
-            status = utils.pluralize(result.status, 'result')
-            logger.error("  Got {}, expected 0.".format(status))
+            num_rows = utils.pluralize(result.message, 'result')
+            logger.error("  Got {}, expected 0.".format(num_rows))
 
         if result.node.build_path is not None:
             with TextOnly():
@@ -301,9 +306,9 @@ def print_run_result_error(
             logger.info("  compiled SQL at {}".format(
                 result.node.build_path))
 
-    else:
+    elif result.message is not None:
         first = True
-        for line in result.error.split("\n"):
+        for line in result.message.split("\n"):
             if first:
                 logger.error(ui.yellow(line))
                 first = False
@@ -342,8 +347,21 @@ def print_end_of_run_summary(
 
 
 def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
-    errors = [r for r in results if r.error is not None or r.fail]
-    warnings = [r for r in results if r.warn]
+    errors, warnings = [], []
+    for r in results:
+        if r.status in (
+            NodeStatus.RuntimeErr,
+            NodeStatus.Error,
+            NodeStatus.Fail
+        ):
+            errors.append(r)
+        elif r.status == NodeStatus.Skipped and r.message is not None:
+            # this means we skipped a node because of an issue upstream,
+            # so include it as an error
+            errors.append(r)
+        elif r.status == NodeStatus.Warn:
+            warnings.append(r)
+
     with DbtStatusMessage(), InvocationProcessor():
         print_end_of_run_summary(len(errors),
                                  len(warnings),

@@ -555,6 +555,7 @@ class ParsedSourceDefinition(
     config: SourceConfig = field(default_factory=SourceConfig)
     patch_path: Optional[Path] = None
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    relation_name: Optional[str] = None
 
     def same_database_representation(
         self, other: 'ParsedSourceDefinition'
@@ -653,9 +654,9 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     type: ExposureType
     owner: ExposureOwner
     resource_type: NodeType = NodeType.Exposure
+    description: str = ''
     maturity: Optional[MaturityType] = None
     url: Optional[str] = None
-    description: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)

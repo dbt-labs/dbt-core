@@ -1,13 +1,15 @@
 import abc
 import time
-from typing import List, Optional, Tuple, Any, Iterable, Dict
+from typing import List, Optional, Tuple, Any, Iterable, Dict, Union
 
 import agate
 
 import dbt.clients.agate_helper
 import dbt.exceptions
 from dbt.adapters.base import BaseConnectionManager
-from dbt.contracts.connection import Connection, ConnectionState
+from dbt.contracts.connection import (
+    Connection, ConnectionState, AdapterResponse
+)
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import flags
 
@@ -18,7 +20,7 @@ class SQLConnectionManager(BaseConnectionManager):
     Methods to implement:
         - exception_handler
         - cancel
-        - get_status
+        - get_response
         - open
     """
     @abc.abstractmethod
@@ -76,20 +78,19 @@ class SQLConnectionManager(BaseConnectionManager):
 
             cursor = connection.handle.cursor()
             cursor.execute(sql, bindings)
-
             logger.debug(
                 "SQL status: {status} in {elapsed:0.2f} seconds",
-                status=self.get_status(cursor),
+                status=self.get_response(cursor),
                 elapsed=(time.time() - pre)
             )
 
             return connection, cursor
 
     @abc.abstractclassmethod
-    def get_status(cls, cursor: Any) -> str:
+    def get_response(cls, cursor: Any) -> Union[AdapterResponse, str]:
         """Get the status of the cursor."""
         raise dbt.exceptions.NotImplementedException(
-            '`get_status` is not implemented for this adapter!'
+            '`get_response` is not implemented for this adapter!'
         )
 
     @classmethod
@@ -118,15 +119,15 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> Tuple[str, agate.Table]:
+    ) -> Tuple[Union[AdapterResponse, str], agate.Table]:
         sql = self._add_query_comment(sql)
         _, cursor = self.add_query(sql, auto_begin)
-        status = self.get_status(cursor)
+        response = self.get_response(cursor)
         if fetch:
             table = self.get_result_from_cursor(cursor)
         else:
             table = dbt.clients.agate_helper.empty_table()
-        return status, table
+        return response, table
 
     def add_begin_query(self):
         return self.add_query('BEGIN', auto_begin=False)

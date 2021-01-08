@@ -1,6 +1,9 @@
 import functools
+import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
+
+from hologram import JsonSchemaMixin
 
 from .compile import CompileRunner, CompileTask
 
@@ -23,7 +26,7 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.contracts.results import RunModelResult
+from dbt.contracts.results import NodeStatus, RunResult, RunStatus
 from dbt.exceptions import (
     CompilationException,
     InternalException,
@@ -105,9 +108,9 @@ def track_model_run(index, num_nodes, run_model_result):
         "index": index,
         "total": num_nodes,
         "execution_time": run_model_result.execution_time,
-        "run_status": run_model_result.status,
-        "run_skipped": run_model_result.skip,
-        "run_error": None,
+        "run_status": str(run_model_result.status).upper(),
+        "run_skipped": run_model_result.status == NodeStatus.Skipped,
+        "run_error": run_model_result.status == NodeStatus.Error,
         "model_materialization": run_model_result.node.get_materialization(),
         "model_id": utils.get_hash(run_model_result.node),
         "hashed_contents": utils.get_hashed_contents(
@@ -187,7 +190,18 @@ class ModelRunner(CompileRunner):
 
     def _build_run_model_result(self, model, context):
         result = context['load_result']('main')
-        return RunModelResult(model, status=result.status)
+        adapter_response = {}
+        if isinstance(result.response, JsonSchemaMixin):
+            adapter_response = result.response.to_dict()
+        return RunResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=0,
+            message=str(result.response),
+            adapter_response=adapter_response
+        )
 
     def _materialization_relations(
         self, result: Any, model
@@ -322,7 +336,7 @@ class RunTask(CompileTask):
 
                 with finishctx, DbtModelState({'node_status': 'passed'}):
                     print_hook_end_line(
-                        hook_text, status, idx, num_hooks, timer.elapsed
+                        hook_text, str(status), idx, num_hooks, timer.elapsed
                     )
 
         self._total_executed += len(ordered_hooks)
@@ -372,7 +386,7 @@ class RunTask(CompileTask):
             )
         return state.manifest
 
-    def defer_to_manifest(self, selected_uids: AbstractSet[str]):
+    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
         deferred_manifest = self._get_deferred_manifest()
         if deferred_manifest is None:
             return
@@ -382,6 +396,7 @@ class RunTask(CompileTask):
                 'manifest to defer from!'
             )
         self.manifest.merge_from_artifact(
+            adapter=adapter,
             other=deferred_manifest,
             selected=selected_uids,
         )
@@ -389,10 +404,10 @@ class RunTask(CompileTask):
         self.write_manifest()
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        self.defer_to_manifest(selected_uids)
         with adapter.connection_named('master'):
             self.create_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter)
+            self.defer_to_manifest(adapter, selected_uids)
             self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):
@@ -400,10 +415,16 @@ class RunTask(CompileTask):
         # list  of unique database, schema pairs that successfully executed
         # models  were in. for backwards compatibility, include the old
         # 'schemas', which did not include database information.
+
         database_schema_set: Set[Tuple[Optional[str], str]] = {
             (r.node.database, r.node.schema) for r in results
-            if not any((r.error is not None, r.fail, r.skipped))
+            if r.status not in (
+                NodeStatus.Error,
+                NodeStatus.Fail,
+                NodeStatus.Skipped
+            )
         }
+
         self._total_executed += len(results)
 
         extras = {
