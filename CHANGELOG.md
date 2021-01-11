@@ -5,7 +5,7 @@
 
 Contributors:
 - [@dbeatty10](https://github.com/dbeatty10) ([dbt-adapter-tests#10](https://github.com/fishtown-analytics/dbt-adapter-tests/pull/10))
-- [@swanderz](https://github.com/swanderz) [#3000](https://github.com/fishtown-analytics/dbt/pull/3000)
+- [@swanderz](https://github.com/swanderz) ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000))
 
 ## dbt 0.19.0rc1 (December 29, 2020)
 
