@@ -164,9 +164,6 @@
     {%- for col in check_cols -%}
         {{ snapshotted_rel }}.{{ col }} != {{ current_rel }}.{{ col }}
         or
-        {# hack to make CI try again #}
-        {# below is equivalent to the two clauses being not equal (!=) to one another  #}
-        {# ({{ snapshotted_rel }}.{{ col }} is null) != ({{ current_rel }}.{{ col }} is null) #}
         (
             (({{ snapshotted_rel }}.{{ col }} is null) and not ({{ current_rel }}.{{ col }} is null))
             or
