@@ -1,9 +1,11 @@
 ## dbt 0.19.0 (Release TBD)
 
 ### Under the hood
+- Rewrite macro for snapshot_merge_sql to make compatible with other SQL dialects ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003)
 - Rewrite logic in `snapshot_check_strategy()` to make compatible with other SQL dialects ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000), [#3001](https://github.com/fishtown-analytics/dbt/pull/3001))
 
 Contributors:
+- [@mikaelene](https://github.com/mikaelene) ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003))
 - [@dbeatty10](https://github.com/dbeatty10) ([dbt-adapter-tests#10](https://github.com/fishtown-analytics/dbt-adapter-tests/pull/10))
 - [@swanderz](https://github.com/swanderz) ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000))
 
