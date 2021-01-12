@@ -3,11 +3,13 @@
 ### Under the hood
 - Rewrite macro for snapshot_merge_sql to make compatible with other SQL dialects ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003)
 - Rewrite logic in `snapshot_check_strategy()` to make compatible with other SQL dialects ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000), [#3001](https://github.com/fishtown-analytics/dbt/pull/3001))
+- Remove version restrictions on `botocore` ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
 
 Contributors:
 - [@mikaelene](https://github.com/mikaelene) ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003))
 - [@dbeatty10](https://github.com/dbeatty10) ([dbt-adapter-tests#10](https://github.com/fishtown-analytics/dbt-adapter-tests/pull/10))
 - [@swanderz](https://github.com/swanderz) ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000))
+- [@stpierre](https://github.com/stpierre) ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
 
 ## dbt 0.19.0rc1 (December 29, 2020)
 
@@ -40,7 +42,7 @@ Contributors:
 ### Under the hood
 - Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
 - Add event tracking for project parser/load times ([#2823](https://github.com/fishtown-analytics/dbt/issues/2823),[#2893](https://github.com/fishtown-analytics/dbt/pull/2893))
-- Bump `cryptography` version to `>= 3.2` and bump snowflake connector to `2.3.6` ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896), [#2922](https://github.com/fishtown-analytics/dbt/issues/2922))  
+- Bump `cryptography` version to `>= 3.2` and bump snowflake connector to `2.3.6` ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896), [#2922](https://github.com/fishtown-analytics/dbt/issues/2922))
 - Widen supported Google Cloud libraries dependencies ([#2794](https://github.com/fishtown-analytics/dbt/pull/2794), [#2877](https://github.com/fishtown-analytics/dbt/pull/2877)).
 - Bump `hologram` version to `0.0.11`. Add `scripts/dtr.py` ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
 - Bump `hologram` version to `0.0.12`. Add testing support for python3.9 ([#2822](https://github.com/fishtown-analytics/dbt/issues/2822),[#2960](https://github.com/fishtown-analytics/dbt/pull/2960))

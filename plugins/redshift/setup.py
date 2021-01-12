@@ -50,7 +50,6 @@ setup(
         'dbt-postgres=={}'.format(package_version),
         # match snowflake-connector-python supported ranges
         'boto3>=1.4.4,<1.16',
-        'botocore>=1.5.0,<1.15',
     ],
     zip_safe=False,
     classifiers=[
