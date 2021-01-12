@@ -54,7 +54,7 @@ def print_compile_stats(stats):
         NodeType.Operation: "operation",
         NodeType.Seed: "seed file",
         NodeType.Source: "source",
-        NodeType.Exposure: 'exposure',
+        NodeType.Exposure: "exposure",
         NodeType.Metric: 'metric'
     }
 
