@@ -4,6 +4,7 @@
 - Rewrite macro for snapshot_merge_sql to make compatible with other SQL dialects ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003)
 - Rewrite logic in `snapshot_check_strategy()` to make compatible with other SQL dialects ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000), [#3001](https://github.com/fishtown-analytics/dbt/pull/3001))
 - Remove version restrictions on `botocore` ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
+- Include `exposures` in start-of-invocation stdout summary: `Found ...` ([#3007](https://github.com/fishtown-analytics/dbt/pull/3007), [#3008](https://github.com/fishtown-analytics/dbt/pull/3008))
 
 Contributors:
 - [@mikaelene](https://github.com/mikaelene) ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003))

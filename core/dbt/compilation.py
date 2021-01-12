@@ -52,6 +52,7 @@ def print_compile_stats(stats):
         NodeType.Operation: 'operation',
         NodeType.Seed: 'seed file',
         NodeType.Source: 'source',
+        NodeType.Exposure: 'exposure',
     }
 
     results = {k: 0 for k in names.keys()}
@@ -81,6 +82,8 @@ def _generate_stats(manifest: Manifest):
 
     for source in manifest.sources.values():
         stats[source.resource_type] += 1
+    for exposure in manifest.exposures.values():
+        stats[exposure.resource_type] += 1
     for macro in manifest.macros.values():
         stats[macro.resource_type] += 1
     return stats
