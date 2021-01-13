@@ -68,7 +68,7 @@ setup(
         'agate>=1.6,<2',
         'isodate>=0.6,<0.7',
         'json-rpc>=1.12,<2',
-        'werkzeug>=0.15,<0.17',
+        'werkzeug>=0.15,<2.0',
         'dataclasses==0.6;python_version<"3.7"',
         'hologram==0.0.12',
         'logbook>=1.5,<1.6',
