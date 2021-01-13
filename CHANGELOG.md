@@ -17,12 +17,14 @@
 - Rewrite logic in `snapshot_check_strategy()` to make compatible with other SQL dialects ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000), [#3001](https://github.com/fishtown-analytics/dbt/pull/3001))
 - Remove version restrictions on `botocore` ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
 - Include `exposures` in start-of-invocation stdout summary: `Found ...` ([#3007](https://github.com/fishtown-analytics/dbt/pull/3007), [#3008](https://github.com/fishtown-analytics/dbt/pull/3008))
+- Bump werkzeug upper bound dependency to <v2.0 ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))
 
 Contributors:
 - [@mikaelene](https://github.com/mikaelene) ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003))
 - [@dbeatty10](https://github.com/dbeatty10) ([dbt-adapter-tests#10](https://github.com/fishtown-analytics/dbt-adapter-tests/pull/10))
 - [@swanderz](https://github.com/swanderz) ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000))
 - [@stpierre](https://github.com/stpierre) ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
+- [@Bl3f](https://github.com/Bl3f) ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))
 
 ## dbt 0.19.0rc1 (December 29, 2020)
 
