@@ -586,7 +586,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 elif key == NodeType.Analysis:
                     parser = AnalysisPatchParser(self, yaml_block, plural)
                 elif key == NodeType.Exposure:
-                    # handle exposures seperately, but they are
+                    # handle exposures separately, but they are
                     # technically still "documentable"
                     continue
                 else:

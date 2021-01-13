@@ -1,0 +1,10 @@
+version: 2
+exposures:
+  - name: something
+    type: dashboard
+    owner:
+      email: test@example.com
+  - name: something
+    type: dashboard
+    owner:
+      email: test@example.com
