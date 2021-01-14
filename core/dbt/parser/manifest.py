@@ -231,8 +231,6 @@ class ManifestLoader:
             for path in parser.search():
                 self.parse_with_cache(path, parser, old_results)
                 parser_path_count = parser_path_count + 1
-                if parser_path_count % 100 == 0:
-                    print("..", end='', flush=True)
 
             if parser_path_count > 0:
                 project_parser_info.append(ParserInfo(
@@ -241,8 +239,6 @@ class ManifestLoader:
                     elapsed=time.perf_counter() - parser_start_timer
                 ))
                 total_path_count = total_path_count + parser_path_count
-        if total_path_count > 100:
-            print("..")
 
         elapsed = time.perf_counter() - start_timer
         project_info = ProjectLoaderInfo(
