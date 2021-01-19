@@ -4,7 +4,9 @@
     config(
         materialized="table",
         partition_by=var('partition_by'),
-        cluster_by=var('cluster_by')
+        cluster_by=var('cluster_by'),
+        partition_expiration_days=var('partition_expiration_days'),
+        require_partition_filter=var('require_partition_filter')
     )
 }}
 

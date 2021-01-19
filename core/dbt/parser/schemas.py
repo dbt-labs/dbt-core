@@ -95,6 +95,7 @@ def error_context(
 
 class ParserRef:
     """A helper object to hold parse-time references."""
+
     def __init__(self):
         self.column_info: Dict[str, ColumnInfo] = {}
 
@@ -584,6 +585,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                     parser = MacroPatchParser(self, yaml_block, plural)
                 elif key == NodeType.Analysis:
                     parser = AnalysisPatchParser(self, yaml_block, plural)
+                elif key == NodeType.Exposure:
+                    # handle exposures separately, but they are
+                    # technically still "documentable"
+                    continue
                 else:
                     parser = TestablePatchParser(self, yaml_block, plural)
                 for test_block in parser.parse():

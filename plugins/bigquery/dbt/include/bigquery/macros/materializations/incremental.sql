@@ -54,6 +54,7 @@
 
       set _dbt_max_partition = (
           select max({{ partition_by.field }}) from {{ this }}
+          where {{ partition_by.field }} is not null
       );
 
       -- 1. create a temp table

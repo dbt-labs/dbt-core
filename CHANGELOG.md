@@ -1,45 +1,78 @@
-## dbt 0.19.0 (Release TBD)
+## dbt 0.20.0 (Release TBD)
 
 ### Features
-- Added macro get_partitions_metadata(table) to return partition metadata for partitioned table ([#2552](https://github.com/fishtown-analytics/dbt/pull/2552), [#2596](https://github.com/fishtown-analytics/dbt/pull/2596))
-- Added `--defer` flag for `dbt test` as well. ([#2701](https://github.com/fishtown-analytics/dbt/issues/2701), [#2706](https://github.com/fishtown-analytics/dbt/pull/2706))
-- Added native python 're' module for regex in jinja templates [#2851](https://github.com/fishtown-analytics/dbt/pull/2851)
+- Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
+
+Contributors:
+- [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
+
+## dbt 0.19.0 (Release TBD)
+
+## dbt 0.19.0rc2 (January 14, 2021)
+
+
+### Fixes
+- Fix regression with defining exposures and other resources with the same name ([#2969](https://github.com/fishtown-analytics/dbt/issues/2969), [#3009](https://github.com/fishtown-analytics/dbt/pull/3009))
+- Remove ellipses printed while parsing ([#2971](https://github.com/fishtown-analytics/dbt/issues/2971), [#2996](https://github.com/fishtown-analytics/dbt/pull/2996))
+
+### Under the hood
+- Rewrite macro for snapshot_merge_sql to make compatible with other SQL dialects ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003)
+- Rewrite logic in `snapshot_check_strategy()` to make compatible with other SQL dialects ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000), [#3001](https://github.com/fishtown-analytics/dbt/pull/3001))
+- Remove version restrictions on `botocore` ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
+- Include `exposures` in start-of-invocation stdout summary: `Found ...` ([#3007](https://github.com/fishtown-analytics/dbt/pull/3007), [#3008](https://github.com/fishtown-analytics/dbt/pull/3008))
+
+Contributors:
+- [@mikaelene](https://github.com/mikaelene) ([#3003](https://github.com/fishtown-analytics/dbt/pull/3003))
+- [@dbeatty10](https://github.com/dbeatty10) ([dbt-adapter-tests#10](https://github.com/fishtown-analytics/dbt-adapter-tests/pull/10))
+- [@swanderz](https://github.com/swanderz) ([#3000](https://github.com/fishtown-analytics/dbt/pull/3000))
+- [@stpierre](https://github.com/stpierre) ([#3006](https://github.com/fishtown-analytics/dbt/pull/3006))
+
+## dbt 0.19.0rc1 (December 29, 2020)
+
+### Breaking changes
+
+- Defer if and only if upstream reference does not exist in current environment namespace ([#2909](https://github.com/fishtown-analytics/dbt/issues/2909), [#2946](https://github.com/fishtown-analytics/dbt/pull/2946))
+- Rationalize run result status reporting and clean up artifact schema ([#2493](https://github.com/fishtown-analytics/dbt/issues/2493), [#2943](https://github.com/fishtown-analytics/dbt/pull/2943))
+- Add adapter specific query execution info to run results and source freshness results artifacts. Statement call blocks return `response` instead of `status`, and the adapter method `get_status` is now `get_response` ([#2747](https://github.com/fishtown-analytics/dbt/issues/2747), [#2961](https://github.com/fishtown-analytics/dbt/pull/2961))
+
+### Features
+- Added macro `get_partitions_metadata(table)` to return partition metadata for BigQuery partitioned tables ([#2552](https://github.com/fishtown-analytics/dbt/pull/2552), [#2596](https://github.com/fishtown-analytics/dbt/pull/2596))
+- Added `--defer` flag for `dbt test` as well ([#2701](https://github.com/fishtown-analytics/dbt/issues/2701), [#2954](https://github.com/fishtown-analytics/dbt/pull/2954))
+- Added native python `re` module for regex in jinja templates ([#1755](https://github.com/fishtown-analytics/dbt/pull/2851), [#1755](https://github.com/fishtown-analytics/dbt/pull/2851))
 - Store resolved node names in manifest ([#2647](https://github.com/fishtown-analytics/dbt/issues/2647), [#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
 - Save selectors dictionary to manifest, allow descriptions ([#2693](https://github.com/fishtown-analytics/dbt/issues/2693), [#2866](https://github.com/fishtown-analytics/dbt/pull/2866))
 - Normalize cli-style-strings in manifest selectors dictionary ([#2879](https://github.com/fishtown-anaytics/dbt/issues/2879), [#2895](https://github.com/fishtown-analytics/dbt/pull/2895))
 - Hourly, monthly and yearly partitions available in BigQuery ([#2476](https://github.com/fishtown-analytics/dbt/issues/2476), [#2903](https://github.com/fishtown-analytics/dbt/pull/2903))
 - Allow BigQuery to default to the environment's default project ([#2828](https://github.com/fishtown-analytics/dbt/pull/2828), [#2908](https://github.com/fishtown-analytics/dbt/pull/2908))
 - Rationalize run result status reporting and clean up artifact schema ([#2493](https://github.com/fishtown-analytics/dbt/issues/2493), [#2943](https://github.com/fishtown-analytics/dbt/pull/2943))
-- Add adapter specific query execution info to run results and source freshness results artifacts ([#2747](https://github.com/fishtown-analytics/dbt/issues/2747), [#2961](https://github.com/fishtown-analytics/dbt/pull/2961))
 
 ### Fixes
-- Respect --project-dir in dbt clean command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
-- Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2855](https://github.com/fishtown-analytics/dbt/issues/2854))
-- Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
+- Respect `--project-dir` in `dbt clean` command ([#2840](https://github.com/fishtown-analytics/dbt/issues/2840), [#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
+- Fix Redshift adapter `get_columns_in_relation` macro to push schema filter down to the `svv_external_columns` view ([#2854](https://github.com/fishtown-analytics/dbt/issues/2854), [#2854](https://github.com/fishtown-analytics/dbt/issues/2854))
 - Increased the supported relation name length in postgres from 29 to 51 ([#2850](https://github.com/fishtown-analytics/dbt/pull/2850))
-- dbt list command always return 0 as exit code ([#2886](https://github.com/fishtown-analytics/dbt/issues/2886), [#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
+- `dbt list` command always return `0` as exit code ([#2886](https://github.com/fishtown-analytics/dbt/issues/2886), [#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
 - Set default `materialized` for test node configs to `test` ([#2806](https://github.com/fishtown-analytics/dbt/issues/2806), [#2902](https://github.com/fishtown-analytics/dbt/pull/2902))
-- Allow docs blocks in exposure descriptions ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913), [#2920](https://github.com/fishtown-analytics/dbt/pull/2920))
+- Allow `docs` blocks in `exposure` descriptions ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913), [#2920](https://github.com/fishtown-analytics/dbt/pull/2920))
 - Use original file path instead of absolute path as checksum for big seeds ([#2927](https://github.com/fishtown-analytics/dbt/issues/2927), [#2939](https://github.com/fishtown-analytics/dbt/pull/2939))
-- Defer if and only if upstream reference does not exist in current environment namespace ([#2909](https://github.com/fishtown-analytics/dbt/issues/2909), [#2946](https://github.com/fishtown-analytics/dbt/pull/2946))
 - Fix KeyError if deferring to a manifest with a since-deleted source, ephemeral model, or test ([#2875](https://github.com/fishtown-analytics/dbt/issues/2875), [#2958](https://github.com/fishtown-analytics/dbt/pull/2958))
 
 ### Under the hood
-- Bump hologram version to 0.0.11. Add scripts/dtr.py ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
+- Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
 - Add event tracking for project parser/load times ([#2823](https://github.com/fishtown-analytics/dbt/issues/2823),[#2893](https://github.com/fishtown-analytics/dbt/pull/2893))
-- Bump cryptography version to be >= 3.2 and bump snowflake connector to 2.3.6 ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))  
+- Bump `cryptography` version to `>= 3.2` and bump snowflake connector to `2.3.6` ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896), [#2922](https://github.com/fishtown-analytics/dbt/issues/2922))
 - Widen supported Google Cloud libraries dependencies ([#2794](https://github.com/fishtown-analytics/dbt/pull/2794), [#2877](https://github.com/fishtown-analytics/dbt/pull/2877)).
-- Bump hologram to 0.0.12 and adding testing support for python3.9 ([#2822](https://github.com/fishtown-analytics/dbt/issues/2822),[#2960](https://github.com/fishtown-analytics/dbt/pull/2960))
-- Bump the version requirements for boto3 in dbt-redshift to the upper limit 1.16 to match dbt-redshift and the snowflake-python-connector as of version 2.3.6. ([#2931](https://github.com/fishtown-analytics/dbt/issues/2931))
+- Bump `hologram` version to `0.0.11`. Add `scripts/dtr.py` ([#2888](https://github.com/fishtown-analytics/dbt/issues/2840),[#2889](https://github.com/fishtown-analytics/dbt/pull/2889))
+- Bump `hologram` version to `0.0.12`. Add testing support for python3.9 ([#2822](https://github.com/fishtown-analytics/dbt/issues/2822),[#2960](https://github.com/fishtown-analytics/dbt/pull/2960))
+- Bump the version requirements for `boto3` in dbt-redshift to the upper limit `1.16` to match dbt-redshift and the `snowflake-python-connector` as of version `2.3.6`. ([#2931](https://github.com/fishtown-analytics/dbt/issues/2931), ([#2963](https://github.com/fishtown-analytics/dbt/issues/2963))
 
 ### Docs
 - Fixed issue where data tests with tags were not showing up in graph viz ([docs#147](https://github.com/fishtown-analytics/dbt-docs/issues/147), [docs#157](https://github.com/fishtown-analytics/dbt-docs/pull/157))
 
 Contributors:
 - [@feluelle](https://github.com/feluelle) ([#2841](https://github.com/fishtown-analytics/dbt/pull/2841))
-- [ran-eh](https://github.com/ran-eh) [#2596](https://github.com/fishtown-analytics/dbt/pull/2596)
-- [@hochoy](https://github.com/hochoy) [#2851](https://github.com/fishtown-analytics/dbt/pull/2851)
-- [@brangisom](https://github.com/brangisom) [#2855](https://github.com/fishtown-analytics/dbt/pull/2855)
+- [ran-eh](https://github.com/ran-eh) ([#2596](https://github.com/fishtown-analytics/dbt/pull/2596))
+- [@hochoy](https://github.com/hochoy) ([#2851](https://github.com/fishtown-analytics/dbt/pull/2851))
+- [@brangisom](https://github.com/brangisom) ([#2855](https://github.com/fishtown-analytics/dbt/pull/2855))
 - [@elexisvenator](https://github.com/elexisvenator) ([#2850](https://github.com/fishtown-analytics/dbt/pull/2850))
 - [@franloza](https://github.com/franloza) ([#2837](https://github.com/fishtown-analytics/dbt/pull/2837))
 - [@max-sixty](https://github.com/max-sixty) ([#2877](https://github.com/fishtown-analytics/dbt/pull/2877), [#2908](https://github.com/fishtown-analytics/dbt/pull/2908))
@@ -52,25 +85,24 @@ Contributors:
 ## dbt 0.19.0b1 (October 21, 2020)
 
 ### Breaking changes
-- The format for sources.json, run-results.json, manifest.json, and catalog.json has changed to include a common metadata field ([#2761](https://github.com/fishtown-analytics/dbt/issues/2761), [#2778](https://github.com/fishtown-analytics/dbt/pull/2778), [#2763](https://github.com/fishtown-analytics/dbt/issues/2763), [#2784](https://github.com/fishtown-analytics/dbt/pull/2784), [#2764](https://github.com/fishtown-analytics/dbt/issues/2764), [#2785](https://github.com/fishtown-analytics/dbt/pull/2785))
+- The format for `sources.json`, `run-results.json`, `manifest.json`, and `catalog.json` has changed:
+    - Each now has a common metadata dictionary ([#2761](https://github.com/fishtown-analytics/dbt/issues/2761), [#2778](https://github.com/fishtown-analytics/dbt/pull/2778)). The contents include: schema and dbt versions ([#2670](https://github.com/fishtown-analytics/dbt/issues/2670), [#2767](https://github.com/fishtown-analytics/dbt/pull/2767)); `invocation_id` ([#2763](https://github.com/fishtown-analytics/dbt/issues/2763), [#2784](https://github.com/fishtown-analytics/dbt/pull/2784)); custom environment variables prefixed with `DBT_ENV_CUSTOM_ENV_` ([#2764](https://github.com/fishtown-analytics/dbt/issues/2764), [#2785](https://github.com/fishtown-analytics/dbt/pull/2785)); cli and rpc arguments in the `run_results.json` ([#2510](https://github.com/fishtown-analytics/dbt/issues/2510), [#2813](https://github.com/fishtown-analytics/dbt/pull/2813)).
+    - Remove `injected_sql` from manifest nodes, use `compiled_sql` instead ([#2762](https://github.com/fishtown-analytics/dbt/issues/2762), [#2834](https://github.com/fishtown-analytics/dbt/pull/2834))
 
 ### Features
-- dbt will compare configurations using the un-rendered form of the config block in dbt_project.yml ([#2713](https://github.com/fishtown-analytics/dbt/issues/2713), [#2735](https://github.com/fishtown-analytics/dbt/pull/2735))
+- dbt will compare configurations using the un-rendered form of the config block in `dbt_project.yml` ([#2713](https://github.com/fishtown-analytics/dbt/issues/2713), [#2735](https://github.com/fishtown-analytics/dbt/pull/2735))
 - Added state and defer arguments to the RPC client, matching the CLI ([#2678](https://github.com/fishtown-analytics/dbt/issues/2678), [#2736](https://github.com/fishtown-analytics/dbt/pull/2736))
-- Added schema and dbt versions to JSON artifacts ([#2670](https://github.com/fishtown-analytics/dbt/issues/2670), [#2767](https://github.com/fishtown-analytics/dbt/pull/2767))
 - Added ability to snapshot hard-deleted records (opt-in with `invalidate_hard_deletes` config option). ([#249](https://github.com/fishtown-analytics/dbt/issues/249), [#2749](https://github.com/fishtown-analytics/dbt/pull/2749))
 - Added revival for snapshotting hard-deleted records. ([#2819](https://github.com/fishtown-analytics/dbt/issues/2819), [#2821](https://github.com/fishtown-analytics/dbt/pull/2821))
 - Improved error messages for YAML selectors ([#2700](https://github.com/fishtown-analytics/dbt/issues/2700), [#2781](https://github.com/fishtown-analytics/dbt/pull/2781))
-- Save manifest at the same time we save the run_results at the end of a run ([#2765](https://github.com/fishtown-analytics/dbt/issues/2765), [#2799](https://github.com/fishtown-analytics/dbt/pull/2799))
-- Added dbt_invocation_id for each BigQuery job to enable performance analysis ([#2808](https://github.com/fishtown-analytics/dbt/issues/2808), [#2809](https://github.com/fishtown-analytics/dbt/pull/2809))
-- Save cli and rpc arguments in run_results.json ([#2510](https://github.com/fishtown-analytics/dbt/issues/2510), [#2813](https://github.com/fishtown-analytics/dbt/pull/2813))
+- Added `dbt_invocation_id` for each BigQuery job to enable performance analysis ([#2808](https://github.com/fishtown-analytics/dbt/issues/2808), [#2809](https://github.com/fishtown-analytics/dbt/pull/2809))
 - Added support for BigQuery connections using refresh tokens ([#2344](https://github.com/fishtown-analytics/dbt/issues/2344), [#2805](https://github.com/fishtown-analytics/dbt/pull/2805))
-- Remove injected_sql from manifest nodes ([#2762](https://github.com/fishtown-analytics/dbt/issues/2762), [#2834](https://github.com/fishtown-analytics/dbt/pull/2834))
 
 ### Under the hood
+- Save `manifest.json` at the same time we save the `run_results.json` at the end of a run ([#2765](https://github.com/fishtown-analytics/dbt/issues/2765), [#2799](https://github.com/fishtown-analytics/dbt/pull/2799))
 - Added strategy-specific validation to improve the relevancy of compilation errors for the `timestamp` and `check` snapshot strategies. (([#2787](https://github.com/fishtown-analytics/dbt/issues/2787), [#2791](https://github.com/fishtown-analytics/dbt/pull/2791))
 - Changed rpc test timeouts to avoid locally run test failures ([#2803](https://github.com/fishtown-analytics/dbt/issues/2803),[#2804](https://github.com/fishtown-analytics/dbt/pull/2804))
-- Added a debug_query on the base adapter that will allow plugin authors to create custom debug queries ([#2751](https://github.com/fishtown-analytics/dbt/issues/2751),[#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
+- Added a `debug_query` on the base adapter that will allow plugin authors to create custom debug queries ([#2751](https://github.com/fishtown-analytics/dbt/issues/2751),[#2871](https://github.com/fishtown-analytics/dbt/pull/2817))
 
 ### Docs
 - Add select/deselect option in DAG view dropups. ([docs#98](https://github.com/fishtown-analytics/dbt-docs/issues/98), [docs#138](https://github.com/fishtown-analytics/dbt-docs/pull/138))
