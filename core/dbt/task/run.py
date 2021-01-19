@@ -3,6 +3,8 @@ import threading
 import time
 from typing import List, Dict, Any, Iterable, Set, Tuple, Optional, AbstractSet
 
+from hologram import JsonSchemaMixin
+
 from .compile import CompileRunner, CompileTask
 
 from .printer import (
@@ -24,7 +26,7 @@ from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
 from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.contracts.results import NodeStatus, RunModelResult, RunStatus
+from dbt.contracts.results import NodeStatus, RunResult, RunStatus
 from dbt.exceptions import (
     CompilationException,
     InternalException,
@@ -188,13 +190,17 @@ class ModelRunner(CompileRunner):
 
     def _build_run_model_result(self, model, context):
         result = context['load_result']('main')
-        return RunModelResult(
+        adapter_response = {}
+        if isinstance(result.response, JsonSchemaMixin):
+            adapter_response = result.response.to_dict()
+        return RunResult(
             node=model,
             status=RunStatus.Success,
             timing=[],
             thread_id=threading.current_thread().name,
             execution_time=0,
-            message=result.status,
+            message=str(result.response),
+            adapter_response=adapter_response
         )
 
     def _materialization_relations(
@@ -330,7 +336,7 @@ class RunTask(CompileTask):
 
                 with finishctx, DbtModelState({'node_status': 'passed'}):
                     print_hook_end_line(
-                        hook_text, status, idx, num_hooks, timer.elapsed
+                        hook_text, str(status), idx, num_hooks, timer.elapsed
                     )
 
         self._total_executed += len(ordered_hooks)

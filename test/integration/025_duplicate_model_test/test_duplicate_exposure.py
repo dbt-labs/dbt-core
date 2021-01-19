@@ -2,22 +2,22 @@ from dbt.exceptions import CompilationException
 from test.integration.base import DBTIntegrationTest, use_profile
 
 
-class TestDuplicateSourceEnabled(DBTIntegrationTest):
+class TestDuplicateExposure(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "duplicate_model_025"
+        return "duplicate_exposure_025"
 
     @property
     def models(self):
-        return "models-source-dupes"
+        return "models-exposure-dupes"
 
     @use_profile("postgres")
-    def test_postgres_duplicate_source_enabled(self):
+    def test_postgres_duplicate_exposure(self):
         message = "dbt found two resources with the name"
         try:
             self.run_dbt(["compile"])
-            self.assertTrue(False, "dbt did not throw for duplicate sources")
+            self.assertTrue(False, "dbt did not throw for duplicate exposures")
         except CompilationException as e:
             self.assertTrue(message in str(
                 e), "dbt did not throw the correct error message")

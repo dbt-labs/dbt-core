@@ -12,26 +12,6 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
     def models(self):
         return "models-1"
 
-    @property
-    def profile_config(self):
-        return {
-            "test": {
-                "outputs": {
-                    "dev": {
-                        "type": "postgres",
-                        "threads": 1,
-                        "host": self.database_host,
-                        "port": 5432,
-                        "user": "root",
-                        "pass": "password",
-                        "dbname": "dbt",
-                        "schema": self.unique_schema()
-                    },
-                },
-                "target": "dev"
-            }
-        }
-
     @use_profile("postgres")
     def test_postgres_duplicate_model_enabled(self):
         message = "dbt found two resources with the name"
@@ -39,7 +19,8 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
             self.run_dbt(["run"])
             self.assertTrue(False, "dbt did not throw for duplicate models")
         except CompilationException as e:
-            self.assertTrue(message in str(e), "dbt did not throw the correct error message")
+            self.assertTrue(message in str(
+                e), "dbt did not throw the correct error message")
 
 
 class TestDuplicateModelDisabled(DBTIntegrationTest):
@@ -51,26 +32,6 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
     @property
     def models(self):
         return "models-2"
-
-    @property
-    def profile_config(self):
-        return {
-            "test": {
-                "outputs": {
-                    "dev": {
-                        "type": "postgres",
-                        "threads": 1,
-                        "host": self.database_host,
-                        "port": 5432,
-                        "user": "root",
-                        "pass": "password",
-                        "dbname": "dbt",
-                        "schema": self.unique_schema()
-                    },
-                },
-                "target": "dev"
-            }
-        }
 
     @use_profile("postgres")
     def test_postgres_duplicate_model_disabled(self):
@@ -124,7 +85,8 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
             self.run_dbt(["run"])
             self.assertTrue(False, "dbt did not throw for duplicate models")
         except CompilationException as e:
-            self.assertTrue(message in str(e), "dbt did not throw the correct error message")
+            self.assertTrue(message in str(
+                e), "dbt did not throw the correct error message")
 
 
 class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):

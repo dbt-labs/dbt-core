@@ -164,7 +164,11 @@
     {%- for col in check_cols -%}
         {{ snapshotted_rel }}.{{ col }} != {{ current_rel }}.{{ col }}
         or
-        ({{ snapshotted_rel }}.{{ col }} is null) != ({{ current_rel }}.{{ col }} is null)
+        (
+            (({{ snapshotted_rel }}.{{ col }} is null) and not ({{ current_rel }}.{{ col }} is null))
+            or
+            ((not {{ snapshotted_rel }}.{{ col }} is null) and ({{ current_rel }}.{{ col }} is null))
+        )
         {%- if not loop.last %} or {% endif -%}
     {%- endfor -%}
     {%- endif -%}
