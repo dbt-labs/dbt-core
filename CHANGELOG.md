@@ -1,7 +1,9 @@
 ## dbt 0.19.0 (Release TBD)
 
-## dbt 0.19.0rc2 (January 14, 2021)
+### Under the hood
+- Cleanup docker resources, use single `docker/Dockerfile` for publishing dbt as a docker image ([dbt-release#3](https://github.com/fishtown-analytics/dbt-release/issues/3), [#3019](https://github.com/fishtown-analytics/dbt/pull/3019))
 
+## dbt 0.19.0rc2 (January 14, 2021)
 
 ### Fixes
 - Fix regression with defining exposures and other resources with the same name ([#2969](https://github.com/fishtown-analytics/dbt/issues/2969), [#3009](https://github.com/fishtown-analytics/dbt/pull/3009))
