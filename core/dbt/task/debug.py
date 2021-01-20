@@ -49,7 +49,6 @@ Check your database credentials and try again. For more information, visit:
 {url}
 '''.lstrip()
 
-
 MISSING_PROFILE_MESSAGE = '''
 dbt looked for a profiles.yml file in {path}, but did
 not find one. For more information on configuring your profile, consult the
@@ -136,12 +135,10 @@ class DebugTask(BaseTask):
 
         return not self.any_failure
 
-
     def interpret_results(self, results):
         if results:
             return ExitCodes.Success
         return ExitCodes.ModelError
-
 
     def _load_project(self):
         if not os.path.exists(self.project_path):
@@ -232,8 +229,8 @@ class DebugTask(BaseTask):
 
     def _choose_target_name(self, profile_name: str):
         has_raw_profile = (
-            self.raw_profile_data is not None and
-            profile_name in self.raw_profile_data
+                self.raw_profile_data is not None and
+                profile_name in self.raw_profile_data
         )
 
         if not has_raw_profile:
