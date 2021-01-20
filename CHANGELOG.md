@@ -8,6 +8,10 @@ Contributors:
 
 ## dbt 0.19.0 (Release TBD)
 
+### Fixes
+
+- Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
+
 ## dbt 0.19.0rc2 (January 14, 2021)
 
 
