@@ -66,17 +66,17 @@ class TestDebug(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_nopass(self):
-        self.run_dbt(['debug', '--target', 'nopass'])
+        self.run_dbt(['debug', '--target', 'nopass'], expect_pass=False)
         self.assertGotValue(re.compile(r'\s+profiles\.yml file'), 'ERROR invalid')
 
     @use_profile('postgres')
     def test_postgres_wronguser(self):
-        self.run_dbt(['debug', '--target', 'wronguser'])
+        self.run_dbt(['debug', '--target', 'wronguser'], expect_pass=False)
         self.assertGotValue(re.compile(r'\s+Connection test'), 'ERROR')
 
     @use_profile('postgres')
     def test_postgres_empty_target(self):
-        self.run_dbt(['debug', '--target', 'none_target'])
+        self.run_dbt(['debug', '--target', 'none_target'], expect_pass=False)
         self.assertGotValue(re.compile(r"\s+output 'none_target'"), 'misconfigured')
 
 
