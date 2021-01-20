@@ -110,7 +110,7 @@ class TestDebugInvalidProject(DBTIntegrationTest):
     def test_postgres_empty_project(self):
         with open('dbt_project.yml', 'w') as f:
             pass
-        self.run_dbt(['debug', '--profile', 'test'])
+        self.run_dbt(['debug', '--profile', 'test'], expect_pass=False)
         splitout = self.capsys.readouterr().out.split('\n')
         for line in splitout:
             if line.strip().startswith('dbt_project.yml file'):
@@ -124,7 +124,7 @@ class TestDebugInvalidProject(DBTIntegrationTest):
         self.use_default_project(overrides={
             'invalid-key': 'not a valid key so this is bad project',
         })
-        self.run_dbt(['debug', '--profile', 'test'])
+        self.run_dbt(['debug', '--profile', 'test'], expect_pass=False)
         splitout = self.capsys.readouterr().out.split('\n')
         for line in splitout:
             if line.strip().startswith('dbt_project.yml file'):
@@ -134,7 +134,7 @@ class TestDebugInvalidProject(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_not_found_project_dir(self):
-        self.run_dbt(['debug', '--project-dir', 'nopass'])
+        self.run_dbt(['debug', '--project-dir', 'nopass'], expect_pass=False)
         splitout = self.capsys.readouterr().out.split('\n')
         for line in splitout:
             if line.strip().startswith('dbt_project.yml file'):
@@ -151,7 +151,7 @@ class TestDebugInvalidProject(DBTIntegrationTest):
         os.makedirs('custom', exist_ok=True)
         with open("custom/dbt_project.yml", 'w') as f:
             yaml.safe_dump(project_config, f, default_flow_style=True)
-        self.run_dbt(['debug', '--project-dir', 'custom'])
+        self.run_dbt(['debug', '--project-dir', 'custom'], expect_pass=False)
         splitout = self.capsys.readouterr().out.split('\n')
         for line in splitout:
             if line.strip().startswith('dbt_project.yml file'):
