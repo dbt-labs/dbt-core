@@ -17,6 +17,7 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
 from dbt.version import get_installed_version
+from dbt.utils import ExitCodes
 
 from dbt.task.base import BaseTask, get_nearest_project_dir
 
@@ -134,7 +135,9 @@ class DebugTask(BaseTask):
 
 
     def interpret_results(self, results):
-        return results
+        if results:
+            return ExitCodes.Success
+        return ExitCodes.ModelError
 
 
     def _load_project(self):
