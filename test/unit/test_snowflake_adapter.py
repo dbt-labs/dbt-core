@@ -535,6 +535,7 @@ class SnowflakeConnectionsTest(unittest.TestCase):
         query2 = 'select 1; /* comment */'
         query3 = 'select 1; -- comment\nselect 2; /* comment */ '
         query4 = 'select \n1; -- comment\nselect \n2; /* comment */ '
+        query5 = 'select 1; -- comment \nselect 2; -- comment \nselect 3; -- comment'
 
         stripped_comment1 = re.sub(re.compile(pattern, re.MULTILINE),
                                    '', comment1).strip()
@@ -554,8 +555,12 @@ class SnowflakeConnectionsTest(unittest.TestCase):
         stripped_query4 = re.sub(re.compile(pattern, re.MULTILINE),
                                  '', query4).strip()
 
+        stripped_query5 = re.sub(re.compile(pattern, re.MULTILINE),
+                                 '', query5).strip()
+
         expected_query_3 = 'select 1; \nselect 2;'
         expected_query_4 = 'select \n1; \nselect \n2;'
+        expected_query_5 = 'select 1; \nselect 2; \nselect 3;'
 
         self.assertEqual('', stripped_comment1)
         self.assertEqual('', stripped_comment2)
@@ -563,3 +568,4 @@ class SnowflakeConnectionsTest(unittest.TestCase):
         self.assertEqual('select 1;', stripped_query2)
         self.assertEqual(expected_query_3, stripped_query3)
         self.assertEqual(expected_query_4, stripped_query4)
+        self.assertEqual(expected_query_5, stripped_query5)
