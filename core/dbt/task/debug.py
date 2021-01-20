@@ -113,7 +113,7 @@ class DebugTask(BaseTask):
     def run(self):
         if self.args.config_dir:
             self.path_info()
-            return True
+            return not self.any_failure
 
         version = get_installed_version().to_version_string(skip_matcher=True)
         print('dbt version: {}'.format(version))
@@ -130,6 +130,9 @@ class DebugTask(BaseTask):
         for message in self.messages:
             print(message)
             print('')
+
+        if self.any_failure:
+            sys.exit(ExitCodes.ModelError)
 
         return not self.any_failure
 
