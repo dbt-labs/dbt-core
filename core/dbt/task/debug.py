@@ -229,8 +229,8 @@ class DebugTask(BaseTask):
 
     def _choose_target_name(self, profile_name: str):
         has_raw_profile = (
-                self.raw_profile_data is not None and
-                profile_name in self.raw_profile_data
+            self.raw_profile_data is not None and
+            profile_name in self.raw_profile_data
         )
 
         if not has_raw_profile:
