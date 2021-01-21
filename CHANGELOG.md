@@ -1,19 +1,19 @@
 ## dbt 0.20.0 (Release TBD)
 
+### Fixes
+
+- Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
+
 ### Features
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
+- [@sdebruyn](https://github.com/sdebruyn) / [@lynxcare](https://github.com/lynxcare) ([#3018](https://github.com/fishtown-analytics/dbt/pull/3018))
 
 ## dbt 0.19.0 (Release TBD)
 
-### Fixes
-
-- Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
-
 ## dbt 0.19.0rc2 (January 14, 2021)
-
 
 ### Fixes
 - Fix regression with defining exposures and other resources with the same name ([#2969](https://github.com/fishtown-analytics/dbt/issues/2969), [#3009](https://github.com/fishtown-analytics/dbt/pull/3009))
