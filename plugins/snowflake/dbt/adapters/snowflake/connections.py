@@ -305,7 +305,9 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             # empty queries. this avoids using exceptions as flow control,
             # and also allows us to return the status of the last cursor
             without_comments = re.sub(
-                re.compile('^.*(--.*)$', re.MULTILINE),
+                re.compile(
+                    r'(\".*?\"|\'.*?\')|(/\*.*?\*/|--[^\r\n]*$)', re.MULTILINE
+                ),
                 '', individual_query).strip()
 
             if without_comments == "":
