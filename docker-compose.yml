@@ -12,7 +12,7 @@ services:
   test:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.test
       args:
         # Run `make .env` to set $USER_ID and $GROUP_ID
         USER_ID: ${USER_ID:-}
