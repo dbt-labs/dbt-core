@@ -48,7 +48,6 @@ Check your database credentials and try again. For more information, visit:
 {url}
 '''.lstrip()
 
-
 MISSING_PROFILE_MESSAGE = '''
 dbt looked for a profiles.yml file in {path}, but did
 not find one. For more information on configuring your profile, consult the
@@ -90,6 +89,7 @@ class DebugTask(BaseTask):
         self.profile_name: Optional[str] = None
         self.project: Optional[Project] = None
         self.project_fail_details = ''
+        self.any_failure = False
         self.messages: List[str] = []
 
     @property
@@ -111,7 +111,7 @@ class DebugTask(BaseTask):
     def run(self):
         if self.args.config_dir:
             self.path_info()
-            return
+            return not self.any_failure
 
         version = get_installed_version().to_version_string(skip_matcher=True)
         print('dbt version: {}'.format(version))
@@ -128,6 +128,11 @@ class DebugTask(BaseTask):
         for message in self.messages:
             print(message)
             print('')
+
+        return not self.any_failure
+
+    def interpret_results(self, results):
+        return results
 
     def _load_project(self):
         if not os.path.exists(self.project_path):
@@ -245,6 +250,7 @@ class DebugTask(BaseTask):
             self.messages.append(MISSING_PROFILE_MESSAGE.format(
                 path=self.profile_path, url=ProfileConfigDocs
             ))
+            self.any_failure = True
             return red('ERROR not found')
 
         try:
@@ -283,6 +289,7 @@ class DebugTask(BaseTask):
             dbt.clients.system.run_cmd(os.getcwd(), ['git', '--help'])
         except dbt.exceptions.ExecutableError as exc:
             self.messages.append('Error from git --help: {!s}'.format(exc))
+            self.any_failure = True
             return red('ERROR')
         return green('OK found')
 
@@ -310,6 +317,8 @@ class DebugTask(BaseTask):
     def _log_project_fail(self):
         if not self.project_fail_details:
             return
+
+        self.any_failure = True
         if self.project_fail_details == FILE_NOT_FOUND:
             return
         print('Project loading failed for the following reason:')
@@ -319,6 +328,8 @@ class DebugTask(BaseTask):
     def _log_profile_fail(self):
         if not self.profile_fail_details:
             return
+
+        self.any_failure = True
         if self.profile_fail_details == FILE_NOT_FOUND:
             return
         print('Profile loading failed for the following reason:')
@@ -347,6 +358,7 @@ class DebugTask(BaseTask):
         result = self.attempt_connection(self.profile)
         if result is not None:
             self.messages.append(result)
+            self.any_failure = True
             return red('ERROR')
         return green('OK connection ok')
 
