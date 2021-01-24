@@ -203,7 +203,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @staticmethod
     def add_ephemeral_prefix(name: str):
-        return f'__dbt__CTE__{name}'
+        return f'__dbt__cte__{name}'
 
     @classmethod
     def create_ephemeral_from_node(

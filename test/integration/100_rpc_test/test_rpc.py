@@ -87,11 +87,11 @@ def query_url(url, query):
     return requests.post(url, headers=headers, data=json.dumps(query))
 
 
-_select_from_ephemeral = '''with __dbt__CTE__ephemeral_model as (
+_select_from_ephemeral = '''with __dbt__cte__ephemeral_model as (
 
 
 select 1 as id
-)select * from __dbt__CTE__ephemeral_model'''
+)select * from __dbt__cte__ephemeral_model'''
 
 
 def addr_in_use(err, *args):
