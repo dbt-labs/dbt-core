@@ -3,6 +3,7 @@
 ### Fixes
 
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
+- Auto-generated dbt test CTE's have lowercase names to comply with dbt coding conventions.
 
 ### Features
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
