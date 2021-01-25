@@ -13,6 +13,7 @@ Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
 - [@sdebruyn](https://github.com/sdebruyn) / [@lynxcare](https://github.com/lynxcare) ([#3018](https://github.com/fishtown-analytics/dbt/pull/3018))
 - [@rvacaru](https://github.com/rvacaru) ([#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
+- [@NiallRees](https://github.com/NiallRees) ([#3028](https://github.com/fishtown-analytics/dbt/pull/3028))
 
 ## dbt 0.19.0 (Release TBD)
 
