@@ -29,15 +29,15 @@ class TestEphemeralMulti(DBTIntegrationTest):
 
         sql_file = re.sub(r'\d+', '', sql_file)
         expected_sql = ('create view "dbt"."test_ephemeral_"."double_dependent__dbt_tmp" as ('
-                        'with __dbt__CTE__base as ('
+                        'with __dbt__cte__base as ('
                         'select * from test_ephemeral_.seed'
-                        '),  __dbt__CTE__base_copy as ('
-                        'select * from __dbt__CTE__base'
+                        '),  __dbt__cte__base_copy as ('
+                        'select * from __dbt__cte__base'
                         ')-- base_copy just pulls from base. Make sure the listed'
                         '-- graph of CTEs all share the same dbt_cte__base cte'
-                        "select * from __dbt__CTE__base where gender = 'Male'"
+                        "select * from __dbt__cte__base where gender = 'Male'"
                         'union all'
-                        "select * from __dbt__CTE__base_copy where gender = 'Female'"
+                        "select * from __dbt__cte__base_copy where gender = 'Female'"
                         ');')
         sql_file = "".join(sql_file.split())
         expected_sql = "".join(expected_sql.split())
@@ -79,11 +79,11 @@ class TestEphemeralNested(DBTIntegrationTest):
         sql_file = re.sub(r'\d+', '', sql_file)
         expected_sql = (
             'create view "dbt"."test_ephemeral_"."root_view__dbt_tmp" as ('
-            'with __dbt__CTE__ephemeral_level_two as ('
+            'with __dbt__cte__ephemeral_level_two as ('
             'select * from "dbt"."test_ephemeral_"."source_table"'
-            '),  __dbt__CTE__ephemeral as ('
-            'select * from __dbt__CTE__ephemeral_level_two'
-            ')select * from __dbt__CTE__ephemeral'
+            '),  __dbt__cte__ephemeral as ('
+            'select * from __dbt__cte__ephemeral_level_two'
+            ')select * from __dbt__cte__ephemeral'
             ');')
 
         sql_file = "".join(sql_file.split())

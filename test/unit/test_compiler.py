@@ -80,7 +80,7 @@ class CompilerTest(unittest.TestCase):
 
         def mock_generate_runtime_model_context(model, config, manifest):
             def ref(name):
-                result = f'__dbt__CTE__{name}'
+                result = f'__dbt__cte__{name}'
                 unique_id = f'model.root.{name}'
                 model.extra_ctes.append(InjectedCTE(id=unique_id, sql=None))
                 return result
@@ -121,7 +121,7 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
                     compiled_sql=(
                         'with cte as (select * from something_else) '
-                        'select * from __dbt__CTE__ephemeral'),
+                        'select * from __dbt__cte__ephemeral'),
                     checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': CompiledModelNode(
@@ -168,10 +168,10 @@ class CompilerTest(unittest.TestCase):
         self.assertEqual(result.extra_ctes_injected, True)
         self.assertEqualIgnoreWhitespace(
             result.compiled_sql,
-            ('with __dbt__CTE__ephemeral as ('
+            ('with __dbt__cte__ephemeral as ('
              'select * from source_table'
              '), cte as (select * from something_else) '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
 
         self.assertEqual(
             manifest.nodes['model.root.ephemeral'].extra_ctes_injected,
@@ -296,7 +296,7 @@ class CompilerTest(unittest.TestCase):
                     compiled=True,
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
-                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    compiled_sql='select * from __dbt__cte__ephemeral',
                     checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': CompiledModelNode(
@@ -345,10 +345,10 @@ class CompilerTest(unittest.TestCase):
         self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
             result.compiled_sql,
-            ('with __dbt__CTE__ephemeral as ('
+            ('with __dbt__cte__ephemeral as ('
              'select * from source_table'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
         print(f"\n---- line 349 ----")
 
         self.assertFalse(manifest.nodes['model.root.ephemeral'].extra_ctes_injected)
@@ -423,7 +423,7 @@ class CompilerTest(unittest.TestCase):
                     compiled=True,
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql='select * from source_table')],
-                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    compiled_sql='select * from __dbt__cte__ephemeral',
                     checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': parsed_ephemeral,
@@ -454,10 +454,10 @@ class CompilerTest(unittest.TestCase):
         self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
             result.compiled_sql,
-            ('with __dbt__CTE__ephemeral as ('
+            ('with __dbt__cte__ephemeral as ('
              'select * from source_table'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
 
         self.assertTrue(manifest.nodes['model.root.ephemeral'].extra_ctes_injected)
 
@@ -488,7 +488,7 @@ class CompilerTest(unittest.TestCase):
                     compiled=True,
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(id='model.root.ephemeral', sql=None)],
-                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    compiled_sql='select * from __dbt__cte__ephemeral',
                     checksum=FileHash.from_contents(''),
 
                 ),
@@ -552,12 +552,12 @@ class CompilerTest(unittest.TestCase):
         self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
             result.compiled_sql,
-            ('with __dbt__CTE__ephemeral_level_two as ('
+            ('with __dbt__cte__ephemeral_level_two as ('
              'select * from source_table'
-             '), __dbt__CTE__ephemeral as ('
-             'select * from __dbt__CTE__ephemeral_level_two'
+             '), __dbt__cte__ephemeral as ('
+             'select * from __dbt__cte__ephemeral_level_two'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
 
         self.assertTrue(manifest.nodes['model.root.ephemeral'].compiled)
         self.assertTrue(manifest.nodes['model.root.ephemeral_level_two'].compiled)

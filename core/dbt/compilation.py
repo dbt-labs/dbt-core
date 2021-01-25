@@ -191,11 +191,11 @@ class Compiler:
             [
                 InjectedCTE(
                     id="cte_id_1",
-                    sql="__dbt__CTE__ephemeral as (select * from table)",
+                    sql="__dbt__cte__ephemeral as (select * from table)",
                 ),
                 InjectedCTE(
                     id="cte_id_2",
-                    sql="__dbt__CTE__events as (select id, type from events)",
+                    sql="__dbt__cte__events as (select id, type from events)",
                 ),
             ]
 
@@ -206,8 +206,8 @@ class Compiler:
 
         This will spit out:
 
-          "with __dbt__CTE__ephemeral as (select * from table),
-                __dbt__CTE__events as (select id, type from events),
+          "with __dbt__cte__ephemeral as (select * from table),
+                __dbt__cte__events as (select id, type from events),
                 with internal_cte as (select * from sessions)
            select * from internal_cte"
 
@@ -246,7 +246,7 @@ class Compiler:
         return str(parsed)
 
     def _get_dbt_test_name(self) -> str:
-        return 'dbt__CTE__INTERNAL_test'
+        return 'dbt__cte__internal_test'
 
     # This method is called by the 'compile_node' method. Starting
     # from the node that it is passed in, it will recursively call
