@@ -24,7 +24,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.19.0rc2"
+package_version = "0.19.0"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -68,7 +68,7 @@ setup(
         'agate>=1.6,<2',
         'isodate>=0.6,<0.7',
         'json-rpc>=1.12,<2',
-        'werkzeug>=0.15,<0.17',
+        'werkzeug>=0.15,<2.0',
         'dataclasses==0.6;python_version<"3.7"',
         'hologram==0.0.12',
         'logbook>=1.5,<1.6',

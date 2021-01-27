@@ -15,7 +15,20 @@ Contributors:
 - [@rvacaru](https://github.com/rvacaru) ([#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
 - [@NiallRees](https://github.com/NiallRees) ([#3028](https://github.com/fishtown-analytics/dbt/pull/3028))
 
-## dbt 0.19.0 (Release TBD)
+## dbt 0.19.1 (Release TBD)
+
+### Under the hood
+- Bump werkzeug upper bound dependency to `<v2.0` ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))
+
+Contributors:
+- [@Bl3f](https://github.com/Bl3f) ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))
+
+## dbt 0.19.0 (January 27, 2021)
+
+## dbt 0.19.0rc3 (January 27, 2021)
+
+### Under the hood
+- Cleanup docker resources, use single `docker/Dockerfile` for publishing dbt as a docker image ([dbt-release#3](https://github.com/fishtown-analytics/dbt-release/issues/3), [#3019](https://github.com/fishtown-analytics/dbt/pull/3019))
 
 ## dbt 0.19.0rc2 (January 14, 2021)
 
