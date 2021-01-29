@@ -48,14 +48,14 @@ RETRYABLE_ERRORS = (
 
 
 @lru_cache()
-def get_bigquery_defaults() -> Tuple[Any, Optional[str]]:
+def get_bigquery_defaults(scopes=None) -> Tuple[Any, Optional[str]]:
     """
     Returns (credentials, project_id)
 
     project_id is returned available from the environment; otherwise None
     """
     # Cached, because the underlying implementation shells out, taking ~1s
-    return google.auth.default()
+    return google.auth.default(scopes=scopes)
 
 
 class Priority(StrEnum):
@@ -201,7 +201,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         creds = GoogleServiceAccountCredentials.Credentials
 
         if method == BigQueryConnectionMethod.OAUTH:
-            credentials, _ = get_bigquery_defaults()
+            credentials, _ = get_bigquery_defaults(scopes=cls.SCOPE)
             return credentials
 
         elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
