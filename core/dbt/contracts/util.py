@@ -130,10 +130,7 @@ class SchemaVersion:
 
     @property
     def path(self) -> str:
-        return SCHEMA_PATH.format(
-            name=self.name,
-            version=self.version
-        )
+        return SCHEMA_PATH.format(name=self.name, version=self.version)
 
     def __str__(self) -> str:
         return BASE_SCHEMAS_URL + self.path
