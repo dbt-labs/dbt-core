@@ -119,8 +119,8 @@ class Readable:
         return cls.from_dict(data)  # type: ignore
 
 
-BASE_SCHEMAS_URL = 'https://schemas.getdbt.com/'
-SCHEMA_PATH = 'dbt/{name}/v{version}.json'
+BASE_SCHEMAS_URL = "https://schemas.getdbt.com/"
+SCHEMA_PATH = "dbt/{name}/v{version}.json"
 
 
 @dataclasses.dataclass
