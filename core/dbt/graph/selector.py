@@ -25,7 +25,8 @@ def get_package_names(nodes):
 def alert_non_existence(raw_spec, nodes):
     if len(nodes) == 0:
         warn_or_error(
-            f"The selection criterion '{str(raw_spec)}' does not match any nodes"
+            f"The selection criterion '{str(raw_spec)}' does not match"
+            f" any nodes"
         )
 
 
