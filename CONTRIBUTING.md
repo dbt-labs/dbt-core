@@ -62,6 +62,13 @@ The dbt maintainers use labels to categorize open issues. Some labels indicate t
 | [stale](https://github.com/fishtown-analytics/dbt/labels/stale) | This is an old issue which has not recently been updated. Stale issues will periodically be closed by dbt maintainers, but they can be re-opened if the discussion is restarted. |
 | [wontfix](https://github.com/fishtown-analytics/dbt/labels/wontfix) | This issue does not require a code change in the dbt repository, or the maintainers are unwilling/unable to merge a Pull Request which implements the behavior described in the issue. |
 
+#### Branching Strategy
+
+dbt has three types of branches:
+
+- **Trunks** are where active development of the next release takes place. There is one trunk named `develop` at the time of writing this, and will be the default branch of the repository.
+- **Release Branches** track a specific, not yet complete release of dbt. Each minor version release has a corresponding release branch. For example, the `0.11.x` series of releases has a branch called `0.11.latest`. This allows us to release new patch versions under `0.11` without necessarily needing to pull them into the latest version of dbt.
+- **Feature Branches** track individual features and fixes. On completion they should be merged into the trunk brnach or a specific release branch.
 
 ## Getting the code
 
@@ -83,7 +90,6 @@ If you are not a member of the `fishtown-analytics` GitHub organization, you can
 
 If you are a member of the `fishtown-analytics` GitHub organization, you will have push access to the dbt repo. Rather than 
 forking dbt to make your changes, just clone the repository, check out a new branch, and push directly to that branch.
-
 
 ## Setting up an environment
 
@@ -115,7 +121,7 @@ This will create and activate a new Python virtual environment.
 
 #### docker and docker-compose
 
-Docker and docker-compose are both used in testing. For macOS, the easiest thing to do is to [download docker for mac](https://store.docker.com/editions/community/docker-ce-desktop-mac). You'll need to make an account. On Linux, you can use one of the packages [here](https://docs.docker.com/install/#server). We recommend installing from docker.com instead of from your package manager. On Linux you also have to install docker-compose separately, following [these instructions](https://docs.docker.com/compose/install/#install-compose).
+Docker and docker-compose are both used in testing. Specific instructions for you OS can be found [here](https://docs.docker.com/get-docker/).
 
 
 #### postgres (optional)
@@ -159,7 +165,6 @@ dbt uses test credentials specified in a `test.env` file in the root of the repo
 
 ```
 cp test.env.sample test.env
-atom test.env # supply your credentials
 ```
 
 We recommend starting with dbt's Postgres tests. These tests cover most of the functionality in dbt, are the fastest to run, and are the easiest to set up. dbt's test suite runs Postgres in a Docker container, so no setup should be required to run these tests.
