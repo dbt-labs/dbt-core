@@ -1,7 +1,6 @@
 ## dbt 0.20.0 (Release TBD)
 
 ### Fixes
-
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
 - Auto-generated CTEs in tests and ephemeral models have lowercase names to comply with dbt coding conventions ([#3027](https://github.com/fishtown-analytics/dbt/issues/3027), [#3028](https://github.com/fishtown-analytics/dbt/issues/3028))
 - Fix incorrect error message when a selector does not match any node [#3036](https://github.com/fishtown-analytics/dbt/issues/3036))
@@ -12,6 +11,7 @@
 
 ### Under the hood
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
+- Update script to collect and write json schema for dbt artifacts ([#2870](https://github.com/fishtown-analytics/dbt/issues/2870), [#3065](https://github.com/fishtown-analytics/dbt/pull/3065))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
