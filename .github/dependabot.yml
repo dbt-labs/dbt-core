@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pip"
+    directory: "/core"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pip"
+    directory: "/plugins/bigquery"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pip"
+    directory: "/plugins/postgres"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pip"
+    directory: "/plugins/redshift"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pip"
+    directory: "/plugins/snowflake"
+    schedule:
+      interval: "daily"
+
+  # docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
