@@ -113,9 +113,8 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
 def default_branch(repo):
     logger.debug('  Getting default branch for {}.'.format(repo))
 
-    out, err = run_cmd(os.getcwd(), ['git', 'remote', 'show', repo])
-
     try:
+        out, err = run_cmd(os.getcwd(), ['git', 'remote', 'show', repo])
         result = {out.decode("utf-8").replace('\n',' ').split()[-1]}
         logger.debug('  Default branch for {} is {}'.format(repo, result))
     except:

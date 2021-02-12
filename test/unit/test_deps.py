@@ -93,23 +93,25 @@ class TestGitPackage(unittest.TestCase):
             c.resolved()
 
     def test_default_revision(self):
-        a_contract = GitPackage.from_dict({'git': 'http://example.com'})
+        git_path = 'git@github.com:fishtown-analytics/dbt_artifacts.git'
+
+        a_contract = GitPackage.from_dict({'git': git_path})
         self.assertEqual(a_contract.revision, None)
         self.assertIs(a_contract.warn_unpinned, None)
 
         a = GitUnpinnedPackage.from_contract(a_contract)
-        self.assertEqual(a.git, 'http://example.com')
+        self.assertEqual(a.git, git_path)
         self.assertEqual(a.revisions, [])
         self.assertIs(a.warn_unpinned, True)
 
         a_pinned = a.resolved()
-        self.assertEqual(a_pinned.name, 'http://example.com')
+        self.assertEqual(a_pinned.name, git_path)
         self.assertEqual(a_pinned.get_version(), 'master')
         self.assertEqual(a_pinned.source_type(), 'git')
         self.assertIs(a_pinned.warn_unpinned, True)
 
         a_pinned = a.resolved()
-        self.assertEqual(a_pinned.name, 'http://example.com')
+        self.assertEqual(a_pinned.name, git_path)
         self.assertEqual(a_pinned.get_version(), 'main')
         self.assertEqual(a_pinned.source_type(), 'git')
         self.assertIs(a_pinned.warn_unpinned, True)
