@@ -1,5 +1,8 @@
 ## dbt 0.19.1 (Release TBD)
 
+## dbt 0.19.1b1 (February 12, 2021)
+
+
 ### Fixes
 
 - On BigQuery, fix regressions for `insert_overwrite` incremental strategy with `int64` and `timestamp` partition columns ([#3063](https://github.com/fishtown-analytics/dbt/issues/3063), [#3095](https://github.com/fishtown-analytics/dbt/issues/3095), [#3098](https://github.com/fishtown-analytics/dbt/issues/3098))
