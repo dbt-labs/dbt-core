@@ -73,6 +73,7 @@ setup(
         'hologram==0.0.13',
         'logbook>=1.5,<1.6',
         'typing-extensions>=3.7.4,<3.8',
+        'mashumaro @ https://github.com/fishtown-analytics/dbt-mashumaro/archive/c25ed077e7982e2bfe8aee7df80bfeac63d3927f.tar.gz',
         # the following are all to match snowflake-connector-python
         'requests>=2.18.0,<2.24.0',
         'idna<2.10',
