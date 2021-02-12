@@ -16,9 +16,6 @@
 
 
 {% macro bq_insert_overwrite(tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns) %}
-  {%- set partition_type =
-      'date' if partition_by.data_type in ('timestamp, datetime')
-      else partition_by.data_type -%}
 
   {% if partitions is not none and partitions != [] %} {# static #}
 
@@ -49,7 +46,7 @@
       {%- endset -%}
 
       -- generated script to merge partitions into {{ target_relation }}
-      declare dbt_partitions_for_replacement array<{{ partition_type }}>;
+      declare dbt_partitions_for_replacement array<{{ partition_by.data_type }}>;
       declare _dbt_max_partition {{ partition_by.data_type }};
 
       set _dbt_max_partition = (

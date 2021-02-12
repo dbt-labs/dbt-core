@@ -58,8 +58,10 @@ class PartitionConfig(dbtClassMixin):
         if alias:
             column = f'{alias}.{self.field}'
 
-        if self.data_type.lower() == 'date' and \
-                self.granularity.lower() == 'day':
+        if self.data_type.lower() == 'int64' or (
+            self.data_type.lower() == 'date' and
+            self.granularity.lower() == 'day'
+        ):
             return column
         else:
             return f'{self.data_type}_trunc({column}, {self.granularity})'
@@ -551,10 +553,10 @@ class BigQueryAdapter(BaseAdapter):
         if not is_partitioned and not conf_partition:
             return True
         elif conf_partition and table.time_partitioning is not None:
-            table_field = table.time_partitioning.field
-            table_granularity = table.partitioning_type
-            return table_field == conf_partition.field \
-                and table_granularity == conf_partition.granularity
+            table_field = table.time_partitioning.field.lower()
+            table_granularity = table.partitioning_type.lower()
+            return table_field == conf_partition.field.lower() \
+                and table_granularity == conf_partition.granularity.lower()
         elif conf_partition and table.range_partitioning is not None:
             dest_part = table.range_partitioning
             conf_part = conf_partition.range or {}
