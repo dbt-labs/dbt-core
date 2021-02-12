@@ -52,7 +52,7 @@ def _checkout(cwd, repo, branch):
 
 def checkout(cwd, repo, branch=None):
     if branch is None:
-        branch = 'master'
+        branch = default_branch(repo).pop()
     try:
         return _checkout(cwd, repo, branch)
     except dbt.exceptions.CommandResultError as exc:
@@ -108,3 +108,18 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
     else:
         logger.debug('  Checked out at {}.', end_sha[:7])
     return directory
+
+
+def default_branch(repo):
+    logger.debug('  Getting default branch for {}.'.format(repo))
+
+    out, err = run_cmd(os.getcwd(), ['git', 'remote', 'show', repo])
+
+    try:
+        result = {out.decode("utf-8").replace('\n',' ').split()[-1]}
+        logger.debug('  Default branch for {} is {}'.format(repo, result))
+    except:
+        result = {'master'}
+        logger.debug('  Default branch for {} set to {}'.format(repo, result))
+
+    return result

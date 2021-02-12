@@ -108,6 +108,12 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(a_pinned.source_type(), 'git')
         self.assertIs(a_pinned.warn_unpinned, True)
 
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.name, 'http://example.com')
+        self.assertEqual(a_pinned.get_version(), 'main')
+        self.assertEqual(a_pinned.source_type(), 'git')
+        self.assertIs(a_pinned.warn_unpinned, True)
+
 
 class TestHubPackage(unittest.TestCase):
     def setUp(self):
