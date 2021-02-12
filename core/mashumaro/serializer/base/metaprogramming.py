@@ -1,3 +1,4 @@
+# this file as been modified for use with dbt
 # noinspection PyUnresolvedReferences
 import builtins  # noqa
 import collections
