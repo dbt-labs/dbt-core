@@ -72,7 +72,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
     def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
         path = self._checkout()
-        if self.revision == 'master' and self.warn_unpinned:
+        if self.revision == 'HEAD' and self.warn_unpinned:
             warn_or_error(
                 'The git package "{}" is not pinned.\n\tThis can introduce '
                 'breaking changes into your project without warning!\n\nSee {}'
@@ -133,7 +133,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def resolved(self) -> GitPinnedPackage:
         requested = set(self.revisions)
         if len(requested) == 0:
-            requested = {'master'}
+            requested = {'HEAD'}
         elif len(requested) > 1:
             raise_dependency_error(
                 'git dependencies should contain exactly one version. '

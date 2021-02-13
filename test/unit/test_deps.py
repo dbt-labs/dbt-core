@@ -104,7 +104,7 @@ class TestGitPackage(unittest.TestCase):
 
         a_pinned = a.resolved()
         self.assertEqual(a_pinned.name, 'http://example.com')
-        self.assertEqual(a_pinned.get_version(), 'master')
+        self.assertEqual(a_pinned.get_version(), 'HEAD')
         self.assertEqual(a_pinned.source_type(), 'git')
         self.assertIs(a_pinned.warn_unpinned, True)
 
