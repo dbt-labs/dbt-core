@@ -160,7 +160,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def resolved(self) -> GitPinnedPackage:
         requested = set(self.revisions)
         if len(requested) == 0:
-            requested = {'HEAD'}
+            requested = {"HEAD"}
         elif len(requested) > 1:
             raise_dependency_error(
                 "git dependencies should contain exactly one version. "
