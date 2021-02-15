@@ -37,7 +37,12 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
+    packages=find_namespace_packages(include=[
+        'dbt',
+        'dbt.*',
+        'mashumaro',
+        'mashumaro.*'
+    ]),
     package_data={
         'dbt': [
             'include/index.html',
@@ -73,11 +78,13 @@ setup(
         'hologram==0.0.13',
         'logbook>=1.5,<1.6',
         'typing-extensions>=3.7.4,<3.8',
-        'mashumaro @ https://github.com/fishtown-analytics/dbt-mashumaro/archive/c25ed077e7982e2bfe8aee7df80bfeac63d3927f.tar.gz',
         # the following are all to match snowflake-connector-python
         'requests>=2.18.0,<2.24.0',
         'idna<2.10',
         'cffi>=1.9,<1.15',
+        # the following are pulled in from mashumaro
+        "backports-datetime-fromisoformat;python_version=='3.6'",
+        "msgpack>=0.5.6",
     ],
     zip_safe=False,
     classifiers=[
