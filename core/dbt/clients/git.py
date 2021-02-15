@@ -52,7 +52,7 @@ def _checkout(cwd, repo, branch):
 
 def checkout(cwd, repo, branch=None):
     if branch is None:
-        branch = 'master'
+        branch = 'HEAD'
     try:
         return _checkout(cwd, repo, branch)
     except dbt.exceptions.CommandResultError as exc:
