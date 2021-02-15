@@ -1,4 +1,4 @@
-# this file as been modified for use with dbt
+# this file has been modified for use with dbt
 import decimal
 from typing import TypeVar, Generic
 
