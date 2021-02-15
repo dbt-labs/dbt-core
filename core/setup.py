@@ -24,7 +24,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.19.0"
+package_version = "0.19.1b2"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -37,7 +37,12 @@ setup(
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
-    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
+    packages=find_namespace_packages(include=[
+        'dbt',
+        'dbt.*',
+        'mashumaro',
+        'mashumaro.*'
+    ]),
     package_data={
         'dbt': [
             'include/index.html',
@@ -77,6 +82,9 @@ setup(
         'requests>=2.18.0,<2.24.0',
         'idna<2.10',
         'cffi>=1.9,<1.15',
+        # the following are pulled in from mashumaro
+        "backports-datetime-fromisoformat;python_version=='3.6'",
+        "msgpack>=0.5.6",
     ],
     zip_safe=False,
     classifiers=[
