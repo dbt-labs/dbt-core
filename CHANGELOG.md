@@ -5,6 +5,7 @@
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
 - Auto-generated CTEs in tests and ephemeral models have lowercase names to comply with dbt coding conventions ([#3027](https://github.com/fishtown-analytics/dbt/issues/3027), [#3028](https://github.com/fishtown-analytics/dbt/issues/3028))
 - Fix incorrect error message when a selector does not match any node [#3036](https://github.com/fishtown-analytics/dbt/issues/3036))
+- Fix variable `_dbt_max_partition` declaration and initialization for BigQuery incremental models ([#2940](https://github.com/fishtown-analytics/dbt/issues/2940), [#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
 
 ### Features
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -19,7 +20,7 @@ Contributors:
 - [@rvacaru](https://github.com/rvacaru) ([#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
 - [@NiallRees](https://github.com/NiallRees) ([#3028](https://github.com/fishtown-analytics/dbt/pull/3028))
 - [ran-eh](https://github.com/ran-eh) ([#3036](https://github.com/fishtown-analytics/dbt/pull/3036))
-
+- [@pcasteran](https://github.com/pcasteran) ([#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
 
 ## dbt 0.19.1 (Release TBD)
 
@@ -87,7 +88,6 @@ Contributors:
 - Allow `docs` blocks in `exposure` descriptions ([#2913](https://github.com/fishtown-analytics/dbt/issues/2913), [#2920](https://github.com/fishtown-analytics/dbt/pull/2920))
 - Use original file path instead of absolute path as checksum for big seeds ([#2927](https://github.com/fishtown-analytics/dbt/issues/2927), [#2939](https://github.com/fishtown-analytics/dbt/pull/2939))
 - Fix KeyError if deferring to a manifest with a since-deleted source, ephemeral model, or test ([#2875](https://github.com/fishtown-analytics/dbt/issues/2875), [#2958](https://github.com/fishtown-analytics/dbt/pull/2958))
-- Fix variable `_dbt_max_partition` declaration and initialization for BigQuery incremental models ([#2940](https://github.com/fishtown-analytics/dbt/issues/2940), [#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
 
 ### Under the hood
 - Add `unixodbc-dev` package to testing docker image ([#2859](https://github.com/fishtown-analytics/dbt/pull/2859))
@@ -114,7 +114,6 @@ Contributors:
 - [@plotneishestvo](https://github.com/plotneishestvo) ([#2896](https://github.com/fishtown-analytics/dbt/issues/2896))
 - [@db-magnus](https://github.com/db-magnus) ([#2892](https://github.com/fishtown-analytics/dbt/issues/2892))
 - [@tyang209](https:/github.com/tyang209) ([#2931](https://github.com/fishtown-analytics/dbt/issues/2931))
-- [@pcasteran](https://github.com/pcasteran) ([#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
 
 ## dbt 0.19.0b1 (October 21, 2020)
 
