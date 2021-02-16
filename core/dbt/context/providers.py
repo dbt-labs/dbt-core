@@ -1176,17 +1176,13 @@ class ModelContext(ProviderContext):
     def pre_hooks(self) -> List[Dict[str, Any]]:
         if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
-        return [
-            h.to_dict(omit_none=True) for h in self.model.config.pre_hook
-        ]
+        return [h.to_dict(omit_none=True) for h in self.model.config.pre_hook]
 
     @contextproperty
     def post_hooks(self) -> List[Dict[str, Any]]:
         if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
-        return [
-            h.to_dict(omit_none=True) for h in self.model.config.post_hook
-        ]
+        return [h.to_dict(omit_none=True) for h in self.model.config.post_hook]
 
     @contextproperty
     def sql(self) -> Optional[str]:
