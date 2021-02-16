@@ -255,7 +255,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if 'freshness' not in dct and self.freshness is None:
+        if "freshness" not in dct and self.freshness is None:
             dct["freshness"] = None
         return dct
 

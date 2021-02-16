@@ -232,7 +232,7 @@ class ConfiguredParser(
             'raw_sql': block.contents,
             'unique_id': self.generate_unique_id(name),
             'config': self.config_dict(config),
-            'checksum': block.file.checksum.to_dict(omit_none=True),
+            "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
         try:

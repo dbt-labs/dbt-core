@@ -225,8 +225,7 @@ class TimingProcessor(logbook.Processor):
 
     def process(self, record):
         if self.timing_info is not None:
-            record.extra['timing_info'] = self.timing_info.to_dict(
-                omit_none=True)
+            record.extra["timing_info"] = self.timing_info.to_dict(omit_none=True)
 
 
 class DbtProcessState(logbook.Processor):

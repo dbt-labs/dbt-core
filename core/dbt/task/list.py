@@ -124,7 +124,7 @@ class ListTask(GraphRunnableTask):
         for node in self._iterate_selected_nodes():
             yield json.dumps({
                 k: v
-                for k, v in node.to_dict(omit_none=False).items()
+                    k: v
                 if (
                     k in self.args.output_keys
                     if self.args.output_keys is not None

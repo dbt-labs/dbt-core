@@ -261,7 +261,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             'config': self.config_dict(config),
             'test_metadata': test_metadata,
             'column_name': column_name,
-            'checksum': FileHash.empty().to_dict(omit_none=True),
+            "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
         }
         try:

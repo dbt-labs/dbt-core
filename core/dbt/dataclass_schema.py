@@ -1,5 +1,7 @@
 from typing import (
-    Type, ClassVar, cast,
+    Type,
+    ClassVar,
+    cast,
 )
 import re
 from dataclasses import fields
@@ -11,9 +13,7 @@ from hologram import JsonSchemaMixin, FieldEncoder, ValidationError
 
 # type: ignore
 from mashumaro import DataClassDictMixin
-from mashumaro.config import (
-    TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseConfig
-)
+from mashumaro.config import TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseConfig
 from mashumaro.types import SerializableType, SerializationStrategy
 
 
@@ -89,8 +89,8 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
     # hologram and in mashumaro.
     def _local_to_dict(self, **kwargs):
         args = {}
-        if 'omit_none' in kwargs:
-            args['omit_none'] = kwargs['omit_none']
+        if "omit_none" in kwargs:
+            args["omit_none"] = kwargs["omit_none"]
         return self.to_dict(**args)
 
 

@@ -128,7 +128,7 @@ class Profile(HasCredentials):
         }
         if serialize_credentials:
             result["user_config"] = self.user_config.to_dict(omit_none=True)
-            result['credentials'] = self.credentials.to_dict(omit_none=True)
+            result["credentials"] = self.credentials.to_dict(omit_none=True)
         return result
 
     def to_target_dict(self) -> Dict[str, Any]:

@@ -624,8 +624,7 @@ class Project:
             'config-version': self.config_version,
         )
         if self.query_comment:
-            result['query-comment'] = \
-                self.query_comment.to_dict(omit_none=True)
+            result["query-comment"] = self.query_comment.to_dict(omit_none=True)
 
         if with_packages:
             result.update(self.packages.to_dict(omit_none=True))
