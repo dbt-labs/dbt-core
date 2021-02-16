@@ -1,5 +1,5 @@
 from typing import (
-    Type, ClassVar, Dict, cast, TypeVar
+    Type, ClassVar, cast,
 )
 import re
 from dataclasses import fields
@@ -9,27 +9,26 @@ from dateutil.parser import parse
 
 from hologram import JsonSchemaMixin, FieldEncoder, ValidationError
 
+# type: ignore
 from mashumaro import DataClassDictMixin
-from mashumaro.types import SerializableEncoder, SerializableType
+from mashumaro.config import (
+    TO_DICT_ADD_OMIT_NONE_FLAG, BaseConfig as MashBaseConfig
+)
+from mashumaro.types import SerializableType, SerializationStrategy
 
 
-class DateTimeSerializableEncoder(SerializableEncoder[datetime]):
-    @classmethod
-    def _serialize(cls, value: datetime) -> str:
+class DateTimeSerialization(SerializationStrategy):
+    def serialize(self, value):
         out = value.isoformat()
         # Assume UTC if timezone is missing
         if value.tzinfo is None:
             out = out + "Z"
         return out
 
-    @classmethod
-    def _deserialize(cls, value: str) -> datetime:
+    def deserialize(self, value):
         return (
             value if isinstance(value, datetime) else parse(cast(str, value))
         )
-
-
-TV = TypeVar("TV")
 
 
 # This class pulls in both JsonSchemaMixin from Hologram and
@@ -43,23 +42,21 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
        against the schema
     """
 
-    _serializable_encoders: ClassVar[Dict[str, SerializableEncoder]] = {
-        'datetime.datetime': DateTimeSerializableEncoder(),
-    }
+    class Config(MashBaseConfig):
+        code_generation_options = [
+            TO_DICT_ADD_OMIT_NONE_FLAG,
+        ]
+        serialization_strategy = {
+            datetime: DateTimeSerialization(),
+        }
+
     _hyphenated: ClassVar[bool] = False
     ADDITIONAL_PROPERTIES: ClassVar[bool] = False
 
     # This is called by the mashumaro to_dict in order to handle
     # nested classes.
     # Munges the dict that's returned.
-    def __post_serialize__(self, dct, options=None):
-        keep_none = False
-        if options and 'keep_none' in options and options['keep_none']:
-            keep_none = True
-        if not keep_none:  # remove attributes that are None
-            new_dict = {k: v for k, v in dct.items() if v is not None}
-            dct = new_dict
-
+    def __post_serialize__(self, dct):
         if self._hyphenated:
             new_dict = {}
             for key in dct:
@@ -75,7 +72,7 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
     # This is called by the mashumaro _from_dict method, before
     # performing the conversion to a dict
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
+    def __pre_deserialize__(cls, data):
         if cls._hyphenated:
             new_dict = {}
             for key in data:
@@ -92,8 +89,8 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
     # hologram and in mashumaro.
     def _local_to_dict(self, **kwargs):
         args = {}
-        if 'omit_none' in kwargs and kwargs['omit_none'] is False:
-            args['options'] = {'keep_none': True}
+        if 'omit_none' in kwargs:
+            args['omit_none'] = kwargs['omit_none']
         return self.to_dict(**args)
 
 

@@ -97,8 +97,8 @@ class BaseResult(dbtClassMixin):
     message: Optional[Union[str, int]]
 
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
         if 'message' not in data:
             data['message'] = None
         return data
@@ -206,7 +206,7 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         )
 
     def write(self, path: str):
-        write_json(path, self.to_dict(options={'keep_none': True}))
+        write_json(path, self.to_dict(omit_none=False))
 
 
 @dataclass
@@ -448,8 +448,8 @@ class CatalogResults(dbtClassMixin):
     errors: Optional[List[str]] = None
     _compile_results: Optional[Any] = None
 
-    def __post_serialize__(self, dct, options=None):
-        dct = super().__post_serialize__(dct, options=options)
+    def __post_serialize__(self, dct):
+        dct = super().__post_serialize__(dct)
         if '_compile_results' in dct:
             del dct['_compile_results']
         return dct

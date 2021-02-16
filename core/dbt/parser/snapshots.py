@@ -68,7 +68,8 @@ class SnapshotParser(
 
     def transform(self, node: IntermediateSnapshotNode) -> ParsedSnapshotNode:
         try:
-            parsed_node = ParsedSnapshotNode.from_dict(node.to_dict())
+            dct = node.to_dict(omit_none=True)
+            parsed_node = ParsedSnapshotNode.from_dict(dct)
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
         except ValidationError as exc:

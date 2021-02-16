@@ -117,7 +117,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "hashed_contents": utils.get_hashed_contents(
             run_model_result.node
         ),
-        "timing": [t.to_dict() for t in run_model_result.timing],
+        "timing": [t.to_dict(omit_none=True) for t in run_model_result.timing],
     })
 
 
@@ -193,7 +193,7 @@ class ModelRunner(CompileRunner):
         result = context['load_result']('main')
         adapter_response = {}
         if isinstance(result.response, dbtClassMixin):
-            adapter_response = result.response.to_dict()
+            adapter_response = result.response.to_dict(omit_none=True)
         return RunResult(
             node=model,
             status=RunStatus.Success,

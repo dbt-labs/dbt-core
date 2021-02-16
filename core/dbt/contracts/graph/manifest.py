@@ -240,7 +240,7 @@ def build_edges(nodes: List[ManifestNode]):
 
 
 def _deepcopy(value):
-    return value.from_dict(value.to_dict())
+    return value.from_dict(value.to_dict(omit_none=True))
 
 
 class Locality(enum.IntEnum):
@@ -564,11 +564,11 @@ class Manifest(MacroMethods):
         """
         self.flat_graph = {
             'nodes': {
-                k: v.to_dict(options={'keep_none': True})
+                k: v.to_dict(omit_none=False)
                 for k, v in self.nodes.items()
             },
             'sources': {
-                k: v.to_dict(options={'keep_none': True})
+                k: v.to_dict(omit_none=False)
                 for k, v in self.sources.items()
             }
         }
@@ -755,7 +755,7 @@ class Manifest(MacroMethods):
 
     # When 'to_dict' is called on the Manifest, it substitues a
     # WritableManifest
-    def __pre_serialize__(self, options=None):
+    def __pre_serialize__(self):
         return self.writable_manifest()
 
     def write(self, path):

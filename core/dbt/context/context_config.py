@@ -196,7 +196,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             base=base,
         )
         finalized = config.finalize_and_validate()
-        return finalized.to_dict()
+        return finalized.to_dict(omit_none=True)
 
 
 class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):

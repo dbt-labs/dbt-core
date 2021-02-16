@@ -111,8 +111,8 @@ class Profile(HasCredentials):
             'credentials': self.credentials,
         }
         if serialize_credentials:
-            result['config'] = self.config.to_dict()
-            result['credentials'] = self.credentials.to_dict()
+            result['config'] = self.config.to_dict(omit_none=True)
+            result['credentials'] = self.credentials.to_dict(omit_none=True)
         return result
 
     def to_target_dict(self) -> Dict[str, Any]:
@@ -125,7 +125,7 @@ class Profile(HasCredentials):
             'name': self.target_name,
             'target_name': self.target_name,
             'profile_name': self.profile_name,
-            'config': self.config.to_dict(),
+            'config': self.config.to_dict(omit_none=True),
         })
         return target
 
@@ -138,7 +138,7 @@ class Profile(HasCredentials):
     def validate(self):
         try:
             if self.credentials:
-                dct = self.credentials.to_dict()
+                dct = self.credentials.to_dict(omit_none=True)
                 self.credentials.validate(dct)
             dct = self.to_profile_info(serialize_credentials=True)
             ProfileConfig.validate(dct)

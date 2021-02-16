@@ -110,7 +110,7 @@ class ListTask(GraphRunnableTask):
         for node in self._iterate_selected_nodes():
             yield json.dumps({
                 k: v
-                for k, v in node.to_dict(options={'keep_none': True}).items()
+                for k, v in node.to_dict(omit_none=False).items()
                 if k in self.ALLOWED_KEYS
             })
 

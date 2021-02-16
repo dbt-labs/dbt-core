@@ -385,7 +385,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             'config': self.config_dict(config),
             'test_metadata': test_metadata,
             'column_name': column_name,
-            'checksum': FileHash.empty().to_dict(),
+            'checksum': FileHash.empty().to_dict(omit_none=True),
         }
         try:
             ParsedSchemaTestNode.validate(dct)
