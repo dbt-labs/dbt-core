@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Set
+from typing import Optional, Set, Dict, List, Any
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
@@ -16,6 +16,7 @@ GET_RELATIONS_MACRO_NAME = 'postgres_get_relations'
 @dataclass
 class PostgresConfig(AdapterConfig):
     unlogged: Optional[bool] = None
+    indexes: Optional[List[Dict[str, Any]]] = None
 
 
 class PostgresAdapter(SQLAdapter):

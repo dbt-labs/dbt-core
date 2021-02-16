@@ -51,6 +51,14 @@
 
 {% endmacro %}
 
+{% macro create_indexes(relation) -%}
+  {{ adapter.dispatch('create_indexes')(relation) }}
+{%- endmacro %}
+
+{% macro default__create_indexes(relation) -%}
+  -- NOOP
+{% endmacro %}
+
 {% macro create_view_as(relation, sql) -%}
   {{ adapter.dispatch('create_view_as')(relation, sql) }}
 {%- endmacro %}
