@@ -52,14 +52,14 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             return 'HEAD (default branch)'
         else:
             return 'revision {}'.format(self.revision)
-        
+
     def unpinned_msg(self):
         if self.revision == 'HEAD':
             return 'not pinned, using HEAD (default branch)'
         elif self.revision in ('main', 'master'):
             return f'pinned to the "{self.revision}" branch'
         else:
-            return none
+            return None
 
     def _checkout(self):
         """Performs a shallow clone of the repository into the downloads
@@ -83,7 +83,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
     def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
         path = self._checkout()
-        
+
         if self.unpinned_msg() and self.warn_unpinned:
             warn_or_error(
                 'The git package "{}" \n\tis {}.\n\tThis can introduce '
