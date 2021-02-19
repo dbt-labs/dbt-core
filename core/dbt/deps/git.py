@@ -57,15 +57,15 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         return self.subdirectory
 
     def nice_version_name(self):
-        if self.revision == 'HEAD':
+        if self.revision == "HEAD":
             return "HEAD (default revision)"
         else:
-            return 'revision {}'.format(self.revision)
+            return "revision {}".format(self.revision)
 
     def unpinned_msg(self):
-        if self.revision == 'HEAD':
-            return 'not pinned, using HEAD (default branch)'
-        elif self.revision in ('main', 'master'):
+        if self.revision == "HEAD":
+            return "not pinned, using HEAD (default branch)"
+        elif self.revision in ("main", "master"):
             return f'pinned to the "{self.revision}" branch'
         else:
             return None
@@ -96,7 +96,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             warn_or_error(
                 'The git package "{}" \n\tis {}.\n\tThis can introduce '
                 "breaking changes into your project without warning!\n\nSee {}".format(
-                .format(self.git, self.unpinned_msg(), PIN_PACKAGE_URL),
+                    self.git, self.unpinned_msg(), PIN_PACKAGE_URL
                 ),
                 log_fmt=ui.yellow("WARNING: {}"),
             )
