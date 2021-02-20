@@ -116,6 +116,7 @@ class BigqueryConfig(AdapterConfig):
     hours_to_expiration: Optional[int] = None
     require_partition_filter: Optional[bool] = None
     partition_expiration_days: Optional[int] = None
+    incrmental_update_columns: Optional[str] = None
 
 
 class BigQueryAdapter(BaseAdapter):
