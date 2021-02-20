@@ -112,7 +112,7 @@
       {% endif %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
   {% else %}
-     {% set dest_columns = config.get('update_columns', none) %}
+     {% set dest_columns = config.get('incremental_update_columns', none) %}
      {% if dest_columns is none %}
          {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
      {% endif %}
