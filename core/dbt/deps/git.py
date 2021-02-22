@@ -48,7 +48,18 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         return self.revision
 
     def nice_version_name(self):
-        return 'revision {}'.format(self.revision)
+        if self.revision == 'HEAD':
+            return 'HEAD (default branch)'
+        else:
+            return 'revision {}'.format(self.revision)
+
+    def unpinned_msg(self):
+        if self.revision == 'HEAD':
+            return 'not pinned, using HEAD (default branch)'
+        elif self.revision in ('main', 'master'):
+            return f'pinned to the "{self.revision}" branch'
+        else:
+            return None
 
     def _checkout(self):
         """Performs a shallow clone of the repository into the downloads
@@ -72,11 +83,12 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
     def _fetch_metadata(self, project, renderer) -> ProjectPackageMetadata:
         path = self._checkout()
-        if self.revision == 'HEAD' and self.warn_unpinned:
+
+        if self.unpinned_msg() and self.warn_unpinned:
             warn_or_error(
-                'The git package "{}" is not pinned.\n\tThis can introduce '
+                'The git package "{}" \n\tis {}.\n\tThis can introduce '
                 'breaking changes into your project without warning!\n\nSee {}'
-                .format(self.git, PIN_PACKAGE_URL),
+                .format(self.git, self.unpinned_msg(), PIN_PACKAGE_URL),
                 log_fmt=ui.yellow('WARNING: {}')
             )
         loaded = Project.from_project_root(path, renderer)
