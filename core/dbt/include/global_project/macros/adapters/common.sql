@@ -51,12 +51,27 @@
 
 {% endmacro %}
 
+{% macro get_create_index_sql(relation, index_dict) -%}
+  {{ return(adapter.dispatch('get_create_index_sql')(relation, index_dict)) }}
+{% endmacro %}
+
+{% macro default__get_create_index_sql(relation, index_dict) -%}
+  {{ exceptions.raise_not_implemented(
+    'get_create_index_sql macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+
 {% macro create_indexes(relation) -%}
   {{ adapter.dispatch('create_indexes')(relation) }}
 {%- endmacro %}
 
 {% macro default__create_indexes(relation) -%}
-  -- NOOP
+  {%- set _indexes = config.get('indexes', default=[]) -%}
+
+  {%- call statement('create_indexes') -%}
+    {% for _index_dict in _indexes %}
+      {{ get_create_index_sql(relation, _index_dict) }}
+    {% endfor %}
+  {% endcall %}
 {% endmacro %}
 
 {% macro create_view_as(relation, sql) -%}

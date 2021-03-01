@@ -24,33 +24,24 @@
   {{ return("_".join(substrings)) }}
 {% endmacro %}
 
-{% macro create_index(unique, columns) -%}
-  {%- set comma_columns_str = ", ".join(columns) -%}
-  {%- set underscore_columns_str = "_".join(columns) -%}
-  {%- set truncated_table_name = truncate_string(relation) -%}
-  {%- set truncated_col_names = truncate_string(underscore_columns_str) -%}
+{% macro postgres__get_create_index_sql(relation, index_dict) -%}
+  {%- set comma_separated_columns = ", ".join(index_dict['columns']) -%}
 
   {#- We append the current timestamp to the index name because otherwise the index will -#}
   {#- only be created on every other run. See -#}
   {#- https://github.com/fishtown-analytics/dbt/issues/1945#issuecomment-576714925 for -#}
   {#- an explanation. -#}
-  {%- set index_name = "_".join([run_started_at.strftime("%s"), truncated_table_name, truncated_col_names, "idx"]) -%}
+  {%- set index_name = md5("_".join([run_started_at.strftime("%s"), relation.identifier] + index_dict['columns'])) -%}
 
-  create {% if unique -%}
+  create {% if index_dict['unique'] -%}
     unique
   {%- endif %} index if not exists
-  "{{ index_name }}" on {{ relation }}
-  ({{ comma_columns_str }});
+  "{{ index_name }}"
+  on {{ relation }} {% if index_dict['type'] -%}
+    using {{ index_dict['type'] }}
+  {%- endif %}
+  ({{ comma_separated_columns }});
 {%- endmacro %}
-
-{% macro postgres__create_indexes(relation) -%}
-  {%- set _indexes = config.get('indexes', default=[]) -%}
-
-  {% for _index in _indexes %}
-    {{ create_index(_index['unique'], _index['columns']) }}
-  {% endfor %}
-{% endmacro %}
-
 
 {% macro postgres__create_schema(relation) -%}
   {% if relation.database -%}
