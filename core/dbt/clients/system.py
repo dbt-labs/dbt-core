@@ -408,7 +408,7 @@ def run_cmd(
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
     exe_pth = shutil.which(cmd[0])
-    if not exe:
+    if not exe_pth:
         # executable not found
         raise dbt.exceptions.CommandError(cwd, cmd)
     cmd = [exe_pth] + list(cmd[1:])
