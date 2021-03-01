@@ -14,16 +14,6 @@
   );
 {%- endmacro %}
 
-{% macro truncate_string(str, length=3) %}
-  {% set substrings = [] %}
-
-  {% for word in str.split("_")  %}
-      {{ substrings.append(word[:length]) }}
-  {% endfor %}
-
-  {{ return("_".join(substrings)) }}
-{% endmacro %}
-
 {% macro postgres__get_create_index_sql(relation, index_dict) -%}
   {%- set comma_separated_columns = ", ".join(index_dict['columns']) -%}
 
