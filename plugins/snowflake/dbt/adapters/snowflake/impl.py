@@ -26,7 +26,7 @@ class SnowflakeConfig(AdapterConfig):
     copy_grants: Optional[bool] = None
     snowflake_warehouse: Optional[str] = None
     query_tag: Optional[str] = None
-    incremental_update_columns: Optional[str] = None
+    merge_update_columns: Optional[str] = None
 
 
 class SnowflakeAdapter(SQLAdapter):
