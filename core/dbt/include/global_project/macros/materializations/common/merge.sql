@@ -18,6 +18,7 @@
 {% macro default__get_merge_sql(target, source, unique_key, dest_columns, predicates) -%}
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
+    {%- set update_columns = config.get('merge_update_columns', default = dest_columns | map(attribute="name") | list) -%}
     {%- set sql_header = config.get('sql_header', none) -%}
 
     {% if unique_key %}
@@ -37,7 +38,7 @@
 
     {% if unique_key %}
     when matched then update set
-        {% for column in dest_columns -%}
+        {% for column_name in update_columns -%}
             {{ adapter.quote(column.name) }} = DBT_INTERNAL_SOURCE.{{ adapter.quote(column.name) }}
             {%- if not loop.last %}, {%- endif %}
         {%- endfor %}
