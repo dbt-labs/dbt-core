@@ -138,7 +138,7 @@ class Linker:
         """
         out_graph = self.graph.copy()
         for node_id in self.graph.nodes():
-            data = manifest.expect(node_id).to_dict()
+            data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
 
@@ -339,7 +339,7 @@ class Compiler:
             model.compiled_sql = injected_sql
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
-        model.validate(model.to_dict())
+        model.validate(model.to_dict(omit_none=True))
 
         manifest.update_node(model)
 
@@ -388,7 +388,7 @@ class Compiler:
 
         logger.debug("Compiling {}".format(node.unique_id))
 
-        data = node.to_dict()
+        data = node.to_dict(omit_none=True)
         data.update({
             'compiled': False,
             'compiled_sql': None,

@@ -38,8 +38,8 @@ class RPCParameters(dbtClassMixin):
     timeout: Optional[float]
 
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data, omit_none=True):
+        data = super().__pre_deserialize__(data)
         if 'timeout' not in data:
             data['timeout'] = None
         if 'task_tags' not in data:
@@ -428,8 +428,8 @@ class TaskTiming(dbtClassMixin):
     # These ought to be defaults but superclass order doesn't
     # allow that to work
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
         for field_name in ('start', 'end', 'elapsed'):
             if field_name not in data:
                 data[field_name] = None
@@ -496,8 +496,8 @@ class PollResult(RemoteResult, TaskTiming):
     # These ought to be defaults but superclass order doesn't
     # allow that to work
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
         for field_name in ('start', 'end', 'elapsed'):
             if field_name not in data:
                 data[field_name] = None

@@ -99,8 +99,8 @@ class HasRelationMetadata(dbtClassMixin, Replaceable):
     # because it messes up the subclasses and default parameters
     # so hack it here
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
         if 'database' not in data:
             data['database'] = None
         return data
@@ -141,7 +141,7 @@ class ParsedNodeMixins(dbtClassMixin):
             # Maybe there should be validation or restrictions
             # elsewhere?
             assert isinstance(self, dbtClassMixin)
-            dct = self.to_dict(options={'keep_none': True})
+            dct = self.to_dict(omit_none=False)
             self.validate(dct)
 
     def get_materialization(self):
@@ -454,7 +454,7 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         if flags.STRICT_MODE:
             # What does this actually validate?
             assert isinstance(self, dbtClassMixin)
-            dct = self.to_dict(options={'keep_none': True})
+            dct = self.to_dict(omit_none=False)
             self.validate(dct)
 
     def same_contents(self, other: Optional['ParsedMacro']) -> bool:

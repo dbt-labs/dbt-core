@@ -1115,7 +1115,7 @@ class ProviderContext(ManifestContext):
 
     @contextproperty('model')
     def ctx_model(self) -> Dict[str, Any]:
-        return self.model.to_dict()
+        return self.model.to_dict(omit_none=True)
 
     @contextproperty
     def pre_hooks(self) -> Optional[List[Dict[str, Any]]]:
@@ -1231,7 +1231,7 @@ class ModelContext(ProviderContext):
         if isinstance(self.model, ParsedSourceDefinition):
             return []
         return [
-            h.to_dict() for h in self.model.config.pre_hook
+            h.to_dict(omit_none=True) for h in self.model.config.pre_hook
         ]
 
     @contextproperty
@@ -1239,7 +1239,7 @@ class ModelContext(ProviderContext):
         if isinstance(self.model, ParsedSourceDefinition):
             return []
         return [
-            h.to_dict() for h in self.model.config.post_hook
+            h.to_dict(omit_none=True) for h in self.model.config.post_hook
         ]
 
     @contextproperty

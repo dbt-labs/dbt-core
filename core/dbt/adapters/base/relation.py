@@ -45,7 +45,7 @@ class BaseRelation(FakeAPIObject, Hashable):
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
             return False
-        return self.to_dict() == other.to_dict()
+        return self.to_dict(omit_none=True) == other.to_dict(omit_none=True)
 
     @classmethod
     def get_default_quote_policy(cls) -> Policy:
@@ -185,10 +185,10 @@ class BaseRelation(FakeAPIObject, Hashable):
     def create_from_source(
         cls: Type[Self], source: ParsedSourceDefinition, **kwargs: Any
     ) -> Self:
-        source_quoting = source.quoting.to_dict()
+        source_quoting = source.quoting.to_dict(omit_none=True)
         source_quoting.pop('column', None)
         quote_policy = deep_merge(
-            cls.get_default_quote_policy().to_dict(),
+            cls.get_default_quote_policy().to_dict(omit_none=True),
             source_quoting,
             kwargs.get('quote_policy', {}),
         )

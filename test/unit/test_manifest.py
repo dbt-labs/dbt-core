@@ -212,9 +212,9 @@ class ManifestTest(unittest.TestCase):
             ),
         }
         for node in self.nested_nodes.values():
-            node.validate(node.to_dict())
+            node.validate(node.to_dict(omit_none=True))
         for source in self.sources.values():
-            source.validate(source.to_dict())
+            source.validate(source.to_dict(omit_none=True))
 
         os.environ['DBT_ENV_CUSTOM_ENV_key'] = 'value'
 
@@ -229,7 +229,7 @@ class ManifestTest(unittest.TestCase):
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         self.assertEqual(
-            manifest.writable_manifest().to_dict(),
+            manifest.writable_manifest().to_dict(omit_none=True),
             {
                 'nodes': {},
                 'sources': {},
@@ -258,7 +258,7 @@ class ManifestTest(unittest.TestCase):
             exposures={}, selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
-        serialized = manifest.writable_manifest().to_dict()
+        serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['docs'], {})
         self.assertEqual(serialized['disabled'], [])
@@ -371,7 +371,7 @@ class ManifestTest(unittest.TestCase):
                             metadata=metadata, files={}, exposures={})
 
         self.assertEqual(
-            manifest.writable_manifest().to_dict(),
+            manifest.writable_manifest().to_dict(omit_none=True),
             {
                 'nodes': {},
                 'sources': {},
@@ -612,7 +612,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={}, selectors={},
                             disabled=[], metadata=metadata, files={}, exposures={})
         self.assertEqual(
-            manifest.writable_manifest().to_dict(),
+            manifest.writable_manifest().to_dict(omit_none=True),
             {
                 'nodes': {},
                 'macros': {},
@@ -640,7 +640,7 @@ class MixedManifestTest(unittest.TestCase):
                             disabled=[], selectors={},
                             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
                             files={}, exposures={})
-        serialized = manifest.writable_manifest().to_dict()
+        serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['disabled'], [])
         parent_map = serialized['parent_map']

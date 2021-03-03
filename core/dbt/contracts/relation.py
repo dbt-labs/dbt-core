@@ -52,7 +52,7 @@ class FakeAPIObject(dbtClassMixin, Replaceable, Mapping):
         return len(fields(self.__class__))
 
     def incorporate(self, **kwargs):
-        value = self.to_dict()
+        value = self.to_dict(omit_none=True)
         value = deep_merge(value, kwargs)
         return self.from_dict(value)
 

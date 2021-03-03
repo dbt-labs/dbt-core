@@ -145,7 +145,7 @@ class ContractTestCase(TestCase):
         super().setUp()
 
     def assert_to_dict(self, obj, dct):
-        self.assertEqual(obj.to_dict(), dct)
+        self.assertEqual(obj.to_dict(omit_none=True), dct)
 
     def assert_from_dict(self, obj, dct, cls=None):
         if cls is None:
@@ -185,7 +185,7 @@ def compare_dicts(dict1, dict2):
 
 
 def assert_to_dict(obj, dct):
-    assert obj.to_dict() == dct
+    assert obj.to_dict(omit_none=True) == dct
 
 
 def assert_from_dict(obj, dct, cls=None):
