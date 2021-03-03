@@ -112,10 +112,7 @@
       {% endif %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
   {% else %}
-     {% set dest_columns = config.get('incremental_update_columns', none) %}
-     {% if dest_columns is none %}
-         {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
-     {% endif %}
+     {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
 
      {#-- if partitioned, use BQ scripting to get the range of partition values to be updated --#}
      {% if strategy == 'insert_overwrite' %}
