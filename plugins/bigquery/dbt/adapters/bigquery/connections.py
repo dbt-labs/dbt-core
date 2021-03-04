@@ -1,4 +1,5 @@
 import json
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -314,7 +315,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
         if self.profile.query_comment.job_label:
             try:
                 labels = json.loads(self.query_header.comment.query_comment)
-                job_params['labels'].update(labels)
+                job_params['labels'].update({
+                    _sanitize_bigquery_label(key): _sanitize_bigquery_label(str(value))
+                    for key, value in labels.items()
+                })
             except (TypeError, ValueError):
                 pass
 
@@ -579,3 +583,14 @@ def _is_retryable(error):
             e['reason'] == 'rateLimitExceeded' for e in error.errors):
         return True
     return False
+
+
+_SANITIZE_BIGQUERY_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
+
+
+def _sanitize_bigquery_label(value: str, max_length: int = 63) -> str:
+    """Return a legal value for a BigQuery label."""
+    value = value.lower()
+    value = _SANITIZE_BIGQUERY_LABEL_PATTERN.sub("_", value)
+    value = value[: max_length - 1]
+    return value
