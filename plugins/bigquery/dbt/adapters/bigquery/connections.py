@@ -307,22 +307,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        labels = {}
+        if self.profile.query_comment.job_label:
+            query_comment = self.query_header.comment.query_comment
+            labels = self._labels_from_query_comment(query_comment)
+        else:
+            labels = {}
 
         if active_user:
             labels['dbt_invocation_id'] = active_user.invocation_id
-
-        if self.profile.query_comment.job_label:
-            try:
-                comment_labels = json.loads(
-                    self.query_header.comment.query_comment
-                )
-                labels.update({
-                    _sanitize_label(key): _sanitize_label(str(value))
-                    for key, value in comment_labels.items()
-                })
-            except (TypeError, ValueError):
-                pass
 
         job_params = {'use_legacy_sql': use_legacy_sql, 'labels': labels}
 
@@ -557,6 +549,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
         return retry.exponential_sleep_generator(
             initial=self.DEFAULT_INITIAL_DELAY,
             maximum=self.DEFAULT_MAXIMUM_DELAY)
+
+    def _labels_from_query_comment(self, comment: str) -> Dict:
+        try:
+            comment_labels = json.loads(comment)
+        except (TypeError, ValueError):
+            return {'query_comment': _sanitize_label(comment)}
+        return {
+            _sanitize_label(key): _sanitize_label(str(value))
+            for key, value in comment_labels.items()
+        }
 
 
 class _ErrorCounter(object):

@@ -1,5 +1,6 @@
 import agate
 import decimal
+import json
 import re
 import unittest
 from contextlib import contextmanager
@@ -588,7 +589,6 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         self.mock_client.query.assert_called_once_with(
           'sql', job_config=mock_bq.QueryJobConfig())
 
-
     def test_copy_bq_table_appends(self):
         self._copy_table(
             write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
@@ -615,12 +615,20 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             kwargs['job_config'].write_disposition,
             dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
 
+    def test_job_labels_valid_json(self):
+        expected = {"key": "value"}
+        labels = self.connections._labels_from_query_comment(json.dumps(expected))
+        self.assertEqual(labels, expected)
+
+    def test_job_labels_invalid_json(self):
+        labels = self.connections._labels_from_query_comment("not json")
+        self.assertEqual(labels, {"query_comment": "not_json"})
+
     def _table_ref(self, proj, ds, table, conn):
         return google.cloud.bigquery.table.TableReference.from_string(
             '{}.{}.{}'.format(proj, ds, table))
 
     def _copy_table(self, write_disposition):
-
         self.connections.table_ref = self._table_ref
         source = BigQueryRelation.create(
             database='project', schema='dataset', identifier='table1')
