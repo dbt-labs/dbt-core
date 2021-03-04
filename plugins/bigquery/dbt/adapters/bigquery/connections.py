@@ -1,3 +1,4 @@
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -305,12 +306,17 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_params = {'use_legacy_sql': use_legacy_sql}
+        job_params = {'use_legacy_sql': use_legacy_sql, 'labels': {}}
 
         if active_user:
-            job_params['labels'] = {
-                'dbt_invocation_id': active_user.invocation_id
-            }
+            job_params['labels']['dbt_invocation_id'] = active_user.invocation_id
+
+        if self.profile.query_comment.job_label:
+            try:
+                labels = json.loads(self.query_header.comment.query_comment)
+                job_params['labels'].update(labels)
+            except (TypeError, ValueError):
+                pass
 
         priority = conn.credentials.priority
         if priority == Priority.Batch:

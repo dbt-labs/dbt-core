@@ -215,6 +215,7 @@ DEFAULT_QUERY_COMMENT = '''
 class QueryComment(dbtClassMixin):
     comment: str = DEFAULT_QUERY_COMMENT
     append: bool = False
+    job_label: bool = False
 
 
 class AdapterRequiredConfig(HasCredentials, Protocol):
