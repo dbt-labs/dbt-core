@@ -307,20 +307,24 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_params = {'use_legacy_sql': use_legacy_sql, 'labels': {}}
+        labels = {}
 
         if active_user:
-            job_params['labels']['dbt_invocation_id'] = active_user.invocation_id
+            labels['dbt_invocation_id'] = active_user.invocation_id
 
         if self.profile.query_comment.job_label:
             try:
-                labels = json.loads(self.query_header.comment.query_comment)
-                job_params['labels'].update({
-                    _sanitize_bigquery_label(key): _sanitize_bigquery_label(str(value))
-                    for key, value in labels.items()
+                comment_labels = json.loads(
+                    self.query_header.comment.query_comment
+                )
+                labels.update({
+                    _sanitize_label(key): _sanitize_label(str(value))
+                    for key, value in comment_labels.items()
                 })
             except (TypeError, ValueError):
                 pass
+
+        job_params = {'use_legacy_sql': use_legacy_sql, 'labels': labels}
 
         priority = conn.credentials.priority
         if priority == Priority.Batch:
@@ -585,12 +589,12 @@ def _is_retryable(error):
     return False
 
 
-_SANITIZE_BIGQUERY_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
+_SANITIZE_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
 
 
-def _sanitize_bigquery_label(value: str, max_length: int = 63) -> str:
+def _sanitize_label(value: str, max_length: int = 63) -> str:
     """Return a legal value for a BigQuery label."""
     value = value.lower()
-    value = _SANITIZE_BIGQUERY_LABEL_PATTERN.sub("_", value)
+    value = _SANITIZE_LABEL_PATTERN.sub("_", value)
     value = value[: max_length - 1]
     return value
