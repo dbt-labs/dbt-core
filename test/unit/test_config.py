@@ -776,7 +776,7 @@ class TestProject(BaseConfigTest):
                 LocalPackage(local='foo'),
                 GitPackage(git='git@example.com:fishtown-analytics/dbt-utils.git', revision='test-rev')
             ]))
-        str(project)
+        str(project)  # this does the equivalent of project.to_project_config(with_packages=True)
         json.dumps(project.to_project_config())
 
     def test_string_run_hooks(self):

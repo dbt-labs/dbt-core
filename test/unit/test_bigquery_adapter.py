@@ -667,7 +667,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         self.assertEqual(
             adapter.parse_partition_by({
                 "field": "ts",
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "date",
                 "granularity": "day"
@@ -678,7 +678,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
             adapter.parse_partition_by({
                 "field": "ts",
                 "data_type": "date",
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "date",
                 "granularity": "day"
@@ -691,7 +691,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "date",
                 "granularity": "MONTH"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "date",
                 "granularity": "MONTH"
@@ -704,7 +704,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "date",
                 "granularity": "YEAR"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "date",
                 "granularity": "YEAR"
@@ -717,7 +717,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "timestamp",
                 "granularity": "HOUR"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "timestamp",
                 "granularity": "HOUR"
@@ -730,7 +730,8 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "timestamp",
                 "granularity": "MONTH"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True
+                ), {
                 "field": "ts",
                 "data_type": "timestamp",
                 "granularity": "MONTH"
@@ -743,7 +744,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "timestamp",
                 "granularity": "YEAR"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "timestamp",
                 "granularity": "YEAR"
@@ -756,7 +757,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "datetime",
                 "granularity": "HOUR"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "datetime",
                 "granularity": "HOUR"
@@ -769,7 +770,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "datetime",
                 "granularity": "MONTH"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "datetime",
                 "granularity": "MONTH"
@@ -782,7 +783,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 "data_type": "datetime",
                 "granularity": "YEAR"
 
-            }).to_dict(), {
+            }).to_dict(omit_none=True), {
                 "field": "ts",
                 "data_type": "datetime",
                 "granularity": "YEAR"
@@ -803,7 +804,8 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                     "end": 100,
                     "interval": 20
                 }
-            }).to_dict(), {
+            }).to_dict(omit_none=True
+                ), {
                 "field": "id",
                 "data_type": "int64",
                 "granularity": "day",

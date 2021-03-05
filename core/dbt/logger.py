@@ -95,7 +95,8 @@ class JsonFormatter(LogMessageFormatter):
         # utils imports exceptions which imports logger...
         import dbt.utils
         log_message = super().__call__(record, handler)
-        return json.dumps(log_message.to_dict(), cls=dbt.utils.JSONEncoder)
+        dct = log_message.to_dict(omit_none=True)
+        return json.dumps(dct, cls=dbt.utils.JSONEncoder)
 
 
 class FormatterMixin:
@@ -127,6 +128,7 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
     The `format_string` parameter only changes the default text output, not
       debug mode or json.
     """
+
     def __init__(
         self,
         stream,
@@ -220,7 +222,8 @@ class TimingProcessor(logbook.Processor):
 
     def process(self, record):
         if self.timing_info is not None:
-            record.extra['timing_info'] = self.timing_info.to_dict()
+            record.extra['timing_info'] = self.timing_info.to_dict(
+                omit_none=True)
 
 
 class DbtProcessState(logbook.Processor):
@@ -349,6 +352,7 @@ def make_log_dir_if_missing(log_dir):
 class DebugWarnings(logbook.compat.redirected_warnings):
     """Log warnings, except send them to 'debug' instead of 'warning' level.
     """
+
     def make_record(self, message, exception, filename, lineno):
         rv = super().make_record(message, exception, filename, lineno)
         rv.level = logbook.DEBUG

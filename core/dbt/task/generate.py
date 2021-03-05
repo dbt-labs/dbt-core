@@ -114,8 +114,8 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                 if unique_id in sources:
                     dbt.exceptions.raise_ambiguous_catalog_match(
                         unique_id,
-                        sources[unique_id].to_dict(),
-                        table.to_dict(),
+                        sources[unique_id].to_dict(omit_none=True),
+                        table.to_dict(omit_none=True),
                     )
                 else:
                     sources[unique_id] = table.replace(unique_id=unique_id)

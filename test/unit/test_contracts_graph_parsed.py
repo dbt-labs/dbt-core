@@ -1618,7 +1618,7 @@ def test_timestamp_snapshot_ok(basic_timestamp_snapshot_dict, basic_timestamp_sn
 
     assert_symmetric(node, node_dict, ParsedSnapshotNode)
     assert_symmetric(inter, node_dict, IntermediateSnapshotNode)
-    assert ParsedSnapshotNode.from_dict(inter.to_dict()) == node
+    assert ParsedSnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
     assert node.is_refable is True
     assert node.is_ephemeral is False
     pickle.loads(pickle.dumps(node))
@@ -1631,7 +1631,7 @@ def test_check_snapshot_ok(basic_check_snapshot_dict, basic_check_snapshot_objec
 
     assert_symmetric(node, node_dict, ParsedSnapshotNode)
     assert_symmetric(inter, node_dict, IntermediateSnapshotNode)
-    assert ParsedSnapshotNode.from_dict(inter.to_dict()) == node
+    assert ParsedSnapshotNode.from_dict(inter.to_dict(omit_none=True)) == node
     assert node.is_refable is True
     assert node.is_ephemeral is False
     pickle.loads(pickle.dumps(node))

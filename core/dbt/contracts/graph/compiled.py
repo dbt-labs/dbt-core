@@ -178,7 +178,7 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
         raise ValueError('invalid resource_type: {}'
                          .format(compiled.resource_type))
 
-    return cls.from_dict(compiled.to_dict())
+    return cls.from_dict(compiled.to_dict(omit_none=True))
 
 
 NonSourceCompiledNode = Union[

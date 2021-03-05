@@ -78,7 +78,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             get_relation_class_by_name(profile.credentials.type)
             .get_default_quote_policy()
             .replace_dict(_project_quoting_dict(project, profile))
-        ).to_dict()
+        ).to_dict(omit_none=True)
 
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
 
@@ -391,7 +391,7 @@ class UnsetConfig(UserConfig):
                 f"'UnsetConfig' object has no attribute {name}"
             )
 
-    def __post_serialize__(self, dct, options=None):
+    def __post_serialize__(self, dct):
         return {}
 
 

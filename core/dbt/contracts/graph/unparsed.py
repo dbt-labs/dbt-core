@@ -231,12 +231,9 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
     external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
-    def __post_serialize__(self, dct, options=None):
+    def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        keep_none = False
-        if options and 'keep_none' in options and options['keep_none']:
-            keep_none = True
-        if not keep_none and self.freshness is None:
+        if 'freshness' not in dct and self.freshness is None:
             dct['freshness'] = None
         return dct
 
@@ -261,12 +258,9 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     def yaml_key(self) -> 'str':
         return 'sources'
 
-    def __post_serialize__(self, dct, options=None):
+    def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        keep_none = False
-        if options and 'keep_none' in options and options['keep_none']:
-            keep_none = True
-        if not keep_none and self.freshness is None:
+        if 'freshnewss' not in dct and self.freshness is None:
             dct['freshness'] = None
         return dct
 
@@ -290,7 +284,7 @@ class SourceTablePatch(dbtClassMixin):
     columns: Optional[Sequence[UnparsedColumn]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
-        dct = self.to_dict()
+        dct = self.to_dict(omit_none=True)
         remove_keys = ('name')
         for key in remove_keys:
             if key in dct:
@@ -327,7 +321,7 @@ class SourcePatch(dbtClassMixin, Replaceable):
     tags: Optional[List[str]] = None
 
     def to_patch_dict(self) -> Dict[str, Any]:
-        dct = self.to_dict()
+        dct = self.to_dict(omit_none=True)
         remove_keys = ('name', 'overrides', 'tables', 'path')
         for key in remove_keys:
             if key in dct:

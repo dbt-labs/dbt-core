@@ -97,7 +97,7 @@ class ResponseManager(JSONRPCResponseManager):
                     # Note: errors in to_dict do not show up anywhere in
                     # the output and all you get is a generic 500 error
                     output.result = \
-                        output.result.to_dict(options={'keep_none': True})
+                        output.result.to_dict(omit_none=False)
             yield output
 
     @classmethod
