@@ -18,7 +18,7 @@ from dbt.events.functions import fire_event
 from dbt.events.types import NewConnectionOpening
 from typing_extensions import Protocol
 from dbt.dataclass_schema import (
-    dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, HyphenatedDbtClassMixin,
+    dbtClassMixin,
     StrEnum,
     ExtensibleDbtClassMixin,
     HyphenatedDbtClassMixin,
