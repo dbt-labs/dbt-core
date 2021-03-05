@@ -9,7 +9,7 @@ from dbt.utils import translate_aliases
 from dbt.logger import GLOBAL_LOGGER as logger
 from typing_extensions import Protocol
 from dbt.dataclass_schema import (
-    dbtClassMixin, StrEnum, ExtensibleDbtClassMixin,
+    dbtClassMixin, StrEnum, ExtensibleDbtClassMixin, HyphenatedDbtClassMixin,
     ValidatedStringMixin, register_pattern
 )
 from dbt.contracts.util import Replaceable
@@ -212,7 +212,7 @@ DEFAULT_QUERY_COMMENT = '''
 
 
 @dataclass
-class QueryComment(dbtClassMixin):
+class QueryComment(HyphenatedDbtClassMixin):
     comment: str = DEFAULT_QUERY_COMMENT
     append: bool = False
     job_label: bool = False
