@@ -468,3 +468,43 @@ class TestQuotedDatabase(BaseTestSimpleCopy):
                 'create schema if not exists' in msg,
                 f'did not expect schema creation: {msg}'
             )
+
+
+class TestIncrementalMergeColumns(BaseTestSimpleCopy):
+    @property
+    def models(self):
+        return self.dir("models-merge-update")
+
+    @property
+    def project_config(self):
+        return {
+            "seeds": {
+                "quote_columns": False
+            }
+        }
+
+    def seed_and_run_twice(self):
+        self.run_dbt(["seed"])
+        self.run_dbt(["run"])
+        self.run_dbt(["run"])
+
+    def run_and_test(self):
+        self.seed_and_run_twice()
+        self.assertTablesEqual("incremental_update_cols", "expected_result")
+
+    @use_profile("bigquery")
+    def test__bigquery__incremental_merge_columns(self):
+        self.use_default_project({
+            "data-paths": ["seeds-merge-update"]
+        })
+        self.run_and_test()
+
+    @use_profile("snowflake")
+    def test__snowflake__incremental_merge_columns(self):
+        self.use_default_project({
+            "data-paths": ["seeds-merge-update"],
+            "seeds": {
+                "quote_columns": False
+            }
+        })
+        self.run_and_test()
