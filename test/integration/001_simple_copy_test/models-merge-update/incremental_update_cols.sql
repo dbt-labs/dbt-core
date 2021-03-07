@@ -12,6 +12,6 @@ from {{ ref('seed') }}
 
 {% if is_incremental() %}
 
-    where id > (select max(id) from {{this}})
+    where load_date > (select max(load_date) from {{this}})
 
 {% endif %}
