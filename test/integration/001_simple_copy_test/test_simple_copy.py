@@ -483,28 +483,36 @@ class TestIncrementalMergeColumns(BaseTestSimpleCopy):
             }
         }
 
-    def seed_and_run_twice(self):
+    def seed_and_run(self):
         self.run_dbt(["seed"])
         self.run_dbt(["run"])
-        self.run_dbt(["run"])
-
-    def run_and_test(self):
-        self.seed_and_run_twice()
-        self.assertTablesEqual("incremental_update_cols", "expected_result")
 
     @use_profile("bigquery")
     def test__bigquery__incremental_merge_columns(self):
         self.use_default_project({
-            "data-paths": ["seeds-merge-update"]
+            "data-paths": ["seeds-merge-cols-initial"]
         })
-        self.run_and_test()
+        self.seed_and_run()
+        self.use_default_project({
+            "data-paths": ["seeds-merge-cols-update"]
+        })
+        self.seed_and_run()
+        self.assertTablesEqual("incremental_update_cols", "expected_result")
 
     @use_profile("snowflake")
     def test__snowflake__incremental_merge_columns(self):
         self.use_default_project({
-            "data-paths": ["seeds-merge-update"],
+            "data-paths": ["seeds-merge-cols-initial"],
             "seeds": {
                 "quote_columns": False
             }
         })
-        self.run_and_test()
+        self.seed_and_run()
+        self.use_default_project({
+            "data-paths": ["seeds-merge-cols-initial"],
+            "seeds": {
+                "quote_columns": False
+            }
+        })
+        self.seed_and_run()
+        self.assertTablesEqual("incremental_update_cols", "expected_result")
