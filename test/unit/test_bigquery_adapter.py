@@ -16,12 +16,14 @@ from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery import Plugin as BigQueryPlugin
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
+from dbt.adapters.bigquery.connections import _sanitize_label
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.context.providers import RuntimeConfigObject
 
+import pytest
 import google.cloud.bigquery
 
 from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
@@ -939,3 +941,16 @@ class TestBigQueryAdapterConversions(TestAdapterConversions):
         expected = ['time', 'time', 'time']
         for col_idx, expect in enumerate(expected):
             assert BigQueryAdapter.convert_time_type(agate_table, col_idx) == expect
+
+
+@pytest.mark.parametrize(
+    ["input", "output"],
+    [
+        ("a" * 64, "a" * 63),
+        ("ABC", "abc"),
+        ("a c", "a_c"),
+        ("a ", "a"),
+    ],
+)
+def test_sanitize_label(input, output):
+    assert _sanitize_label(input) == output

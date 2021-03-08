@@ -596,7 +596,7 @@ _SANITIZE_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
 
 def _sanitize_label(value: str, max_length: int = 63) -> str:
     """Return a legal value for a BigQuery label."""
-    value = value.lower()
+    value = value.strip().lower()
     value = _SANITIZE_LABEL_PATTERN.sub("_", value)
-    value = value[: max_length - 1]
+    value = value[: max_length]
     return value
