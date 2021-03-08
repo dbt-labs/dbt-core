@@ -6,6 +6,7 @@
 - Fix incorrect error message when a selector does not match any node [#3036](https://github.com/fishtown-analytics/dbt/issues/3036))
 - Fix variable `_dbt_max_partition` declaration and initialization for BigQuery incremental models ([#2940](https://github.com/fishtown-analytics/dbt/issues/2940), [#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
 - Moving from 'master' to 'HEAD' default branch in git ([#3057](https://github.com/fishtown-analytics/dbt/issues/3057), [#3104](https://github.com/fishtown-analytics/dbt/issues/3104), [#3117](https://github.com/fishtown-analytics/dbt/issues/3117)))
+- Fix for getting Windows to pick up git.bat as a git executable [#3035](https://github.com/fishtown-analytics/dbt/issues/3035)
 
 ### Features
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
