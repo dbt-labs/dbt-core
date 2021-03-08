@@ -71,7 +71,7 @@ setup(
         'werkzeug>=0.15,<2.0',
         'dataclasses==0.7;python_version<"3.7"',
         # 'hologram==0.0.13',
-        'hologram @ git+ssh://git@github.com/bastienboutonnet/hologram@chore/bump_dataclasses',
+        'hologram @ git+https://github.com/bastienboutonnet/hologram.git@chore/bump_dataclasses',
         'logbook>=1.5,<1.6',
         'mashumaro==2.0',
         'typing-extensions>=3.7.4,<3.8',
