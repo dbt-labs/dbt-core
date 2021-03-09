@@ -69,7 +69,7 @@ setup(
         'isodate>=0.6,<0.7',
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<2.0',
-        'dataclasses==0.7;python_version<"3.7"',
+        'dataclasses>=0.6,<0.9;python_version<"3.7"',
         'hologram==0.0.14',
         'logbook>=1.5,<1.6',
         'mashumaro==2.0',
