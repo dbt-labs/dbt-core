@@ -30,6 +30,7 @@ from dbt.graph import Graph
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.utils import pluralize
+import dbt.tracking
 
 graph_file_name = 'graph.gpickle'
 
@@ -57,6 +58,11 @@ def print_compile_stats(stats):
 
     results = {k: 0 for k in names.keys()}
     results.update(stats)
+
+    # create tracking event for resource_counts
+    if dbt.tracking.active_user is not None:
+        resource_counts = {k.pluralize(): v for k, v in results.items()}
+        dbt.tracking.track_resource_counts(resource_counts)
 
     stat_line = ", ".join([
         pluralize(ct, names.get(t)) for t, ct in results.items()
