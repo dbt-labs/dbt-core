@@ -41,7 +41,7 @@ PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
 RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
 LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
-RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
+RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
 PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
@@ -307,15 +307,14 @@ def track_project_load(options):
 
 def track_resource_counts(resource_counts):
     context = [SelfDescribingJson(RESOURCE_COUNTS, resource_counts)]
-    assert active_user is not None, \
-        'Cannot track resource counts when active user is None'
+    assert active_user is not None, "Cannot track resource counts when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='resource_counts',
+        category="dbt",
+        action="resource_counts",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
