@@ -99,7 +99,14 @@ class SQLConnectionManager(BaseConnectionManager):
         column_names: Iterable[str],
         rows: Iterable[Any]
     ) -> List[Dict[str, Any]]:
-
+        unique_column_names = dict()
+        for idx in range(len(column_names)):
+            col_name = column_names[idx]
+            if col_name in unique_column_names:
+                unique_column_names[col_name] += 1
+                column_names[idx] = f'{col_name}_{unique_column_names[col_name]}'
+            else:
+                unique_column_names[column_names[idx]] = 1
         return [dict(zip(column_names, row)) for row in rows]
 
     @classmethod
