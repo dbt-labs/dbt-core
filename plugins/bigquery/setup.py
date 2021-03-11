@@ -50,10 +50,10 @@ setup(
         'protobuf>=3.13.0,<4',
         # These are more tightly pinned, as they have a track record of
         # breaking changes in minor releases.
-        'google-cloud-core>=1.3.0,<1.5',
-        'google-cloud-bigquery>=1.25.0,<2.4',
-        'google-api-core>=1.16.0,<1.24',
-        'googleapis-common-protos>=1.6.0,<1.53',
+        'google-cloud-core>=1.3.0,<1.7',
+        'google-cloud-bigquery>=1.25.0,<2.12',
+        'google-api-core>=1.16.0,<1.27',
+        'googleapis-common-protos>=1.6.0,<1.54',
         'six>=1.14.0',
     ],
     zip_safe=False,
