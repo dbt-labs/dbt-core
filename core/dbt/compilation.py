@@ -250,19 +250,19 @@ class Compiler:
 
         return str(parsed)
 
-    # This method is called by the 'compile_node' method. Starting
-    # from the node that it is passed in, it will recursively call
-    # itself using the 'extra_ctes'.  The 'ephemeral' models do
-    # not produce SQL that is executed directly, instead they
-    # are rolled up into the models that refer to them by
-    # inserting CTEs into the SQL.
     def _recursively_prepend_ctes(
         self,
         model: NonSourceCompiledNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]],
     ) -> Tuple[NonSourceCompiledNode, List[InjectedCTE]]:
-
+        """This method is called by the 'compile_node' method. Starting
+        from the node that it is passed in, it will recursively call
+        itself using the 'extra_ctes'.  The 'ephemeral' models do
+        not produce SQL that is executed directly, instead they
+        are rolled up into the models that refer to them by
+        inserting CTEs into the SQL.
+        """
         if model.compiled_sql is None:
             raise RuntimeException(
                 'Cannot inject ctes into an unparsed node', model
@@ -320,19 +320,19 @@ class Compiler:
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
             new_cte_name = self.add_ephemeral_prefix(cte_model.name)
-            sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
-
-        _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
-
-        # We don't save injected_sql into compiled sql for ephemeral models
-        # because it will cause problems with processing of subsequent models.
-        # Ephemeral models do not produce executable SQL of their own.
-        if not model.is_ephemeral_model:
-            injected_sql = self._inject_ctes_into_sql(
-                model.compiled_sql,
-                prepended_ctes,
+            rendered_sql = (
+                cte_model._pre_injected_sql or cte_model.compiled_sql
             )
-            model.compiled_sql = injected_sql
+            sql = f' {new_cte_name} as (\n{rendered_sql}\n)'
+
+            _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
+
+        injected_sql = self._inject_ctes_into_sql(
+            model.compiled_sql,
+            prepended_ctes,
+        )
+        model._pre_injected_sql = model.compiled_sql
+        model.compiled_sql = injected_sql
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
         model.validate(model.to_dict(omit_none=True))
@@ -449,11 +449,6 @@ class Compiler:
             )
         return node
 
-    # This is the main entry point into this code. It's called by
-    # CompileRunner.compile, GenericRPCRunner.compile, and
-    # RunTask.get_hook_sql. It calls '_compile_node' to convert
-    # the node into a compiled node, and then calls the
-    # recursive method to "prepend" the ctes.
     def compile_node(
         self,
         node: ManifestNode,
@@ -461,6 +456,12 @@ class Compiler:
         extra_context: Optional[Dict[str, Any]] = None,
         write: bool = True,
     ) -> NonSourceCompiledNode:
+        """This is the main entry point into this code. It's called by
+        CompileRunner.compile, GenericRPCRunner.compile, and
+        RunTask.get_hook_sql. It calls '_compile_node' to convert
+        the node into a compiled node, and then calls the
+        recursive method to "prepend" the ctes.
+        """
         node = self._compile_node(node, manifest, extra_context)
 
         node, _ = self._recursively_prepend_ctes(
