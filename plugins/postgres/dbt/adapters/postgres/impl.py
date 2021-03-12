@@ -1,6 +1,6 @@
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, Set, Dict, List, Any
+from typing import Optional, Set, List, Any
 from dbt.adapters.base.meta import available
 from dbt.adapters.base.impl import AdapterConfig
 from dbt.adapters.sql import SQLAdapter
@@ -23,12 +23,13 @@ class PostgresIndexConfig(dbtClassMixin):
     type: Optional[str] = None
 
     def render(self, relation):
-        # We append the current timestamp to the index name because otherwise the index
-        # will only be created on every other run. See
-        # https://github.com/fishtown-analytics/dbt/issues/1945#issuecomment-576714925 for
-        # an explanation.
+        # We append the current timestamp to the index name because otherwise
+        # the index will only be created on every other run. See
+        # https://github.com/fishtown-analytics/dbt/issues/1945#issuecomment-576714925
+        # for an explanation.
         now = datetime.utcnow().isoformat()
-        inputs = self.columns + [relation.render(), str(self.unique), str(self.type), now]
+        inputs = (self.columns +
+                  [relation.render(), str(self.unique), str(self.type), now])
         string = '_'.join(inputs)
         return dbt.utils.md5(string)
 
@@ -50,6 +51,7 @@ class PostgresIndexConfig(dbtClassMixin):
                 f'  Got: {raw_index}\n'
                 f'  Expected a dictionary with at minimum a "columns" key'
             )
+
 
 @dataclass
 class PostgresConfig(AdapterConfig):
