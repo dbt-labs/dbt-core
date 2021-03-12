@@ -15,20 +15,16 @@
 {%- endmacro %}
 
 {% macro postgres__get_create_index_sql(relation, index_dict) -%}
-  {%- set comma_separated_columns = ", ".join(index_dict['columns']) -%}
+  {%- set index_config = adapter.parse_index(index_dict) -%}
+  {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
+  {%- set index_name = index_config.render(relation) -%}
 
-  {#- We append the current timestamp to the index name because otherwise the index will -#}
-  {#- only be created on every other run. See -#}
-  {#- https://github.com/fishtown-analytics/dbt/issues/1945#issuecomment-576714925 for -#}
-  {#- an explanation. -#}
-  {%- set index_name = md5("_".join([run_started_at.strftime("%s"), relation.identifier] + index_dict['columns'])) -%}
-
-  create {% if index_dict['unique'] -%}
+  create {% if index_config.unique -%}
     unique
   {%- endif %} index if not exists
   "{{ index_name }}"
-  on {{ relation }} {% if index_dict['type'] -%}
-    using {{ index_dict['type'] }}
+  on {{ relation }} {% if index_config.type -%}
+    using {{ index_config.type }}
   {%- endif %}
   ({{ comma_separated_columns }});
 {%- endmacro %}

@@ -142,6 +142,10 @@
   {% set target_relation = this.incorporate(type='table') %}
   {% do persist_docs(target_relation, model) %}
 
+  {% if full_refresh_mode or not exists_as_table %}
+    {% do create_indexes(target_relation) %}
+  {% endif %}
+
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   -- `COMMIT` happens here
