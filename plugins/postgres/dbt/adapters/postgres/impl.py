@@ -33,7 +33,7 @@ class PostgresIndexConfig(dbtClassMixin):
         return dbt.utils.md5(string)
 
     @classmethod
-    def parse(cls, raw_index) -> Optional['PostgresIndexConfig']:
+    def parse(cls, raw_index) -> Optional["PostgresIndexConfig"]:
         if raw_index is None:
             return None
         try:
@@ -41,13 +41,11 @@ class PostgresIndexConfig(dbtClassMixin):
             return cls.from_dict(raw_index)
         except ValidationError as exc:
             msg = dbt.exceptions.validator_error_message(exc)
-            dbt.exceptions.raise_compiler_error(
-                f'Could not parse index config: {msg}'
-            )
+            dbt.exceptions.raise_compiler_error(f"Could not parse index config: {msg}")
         except TypeError:
             dbt.exceptions.raise_compiler_error(
-                f'Invalid index config:\n'
-                f'  Got: {raw_index}\n'
+                f"Invalid index config:\n"
+                f"  Got: {raw_index}\n"
                 f'  Expected a dictionary with at minimum a "columns" key'
             )
 
