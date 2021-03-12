@@ -37,6 +37,7 @@ Contributors:
 - Performance fixes for many different things ([#2862](https://github.com/fishtown-analytics/dbt/issues/2862), [#3034](https://github.com/fishtown-analytics/dbt/pull/3034))
 - Update code to use Mashumaro 2.0 ([#3138](https://github.com/fishtown-analytics/dbt/pull/3138))
 - Add an event to track resource counts ([#3050](https://github.com/fishtown-analytics/dbt/issues/3050), [#3156](https://github.com/fishtown-analytics/dbt/pull/3156))
+- Pin `agate<1.6.2` to avoid installation errors relating to its new dependency `PyICU` ([#3160](https://github.com/fishtown-analytics/dbt/issues/3160), [#3161](https://github.com/fishtown-analytics/dbt/pull/3161))
 
 Contributors:
 - [@Bl3f](https://github.com/Bl3f) ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))

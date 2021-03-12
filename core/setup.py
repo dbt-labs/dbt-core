@@ -65,7 +65,7 @@ setup(
         'networkx>=2.3,<3',
         'minimal-snowplow-tracker==0.0.2',
         'colorama>=0.3.9,<0.4.4',
-        'agate>=1.6,<2',
+        'agate>=1.6,<1.6.2',
         'isodate>=0.6,<0.7',
         'json-rpc>=1.12,<2',
         'werkzeug>=0.15,<2.0',
