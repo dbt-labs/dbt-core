@@ -28,7 +28,7 @@ class PostgresIndexConfig(dbtClassMixin):
         # https://github.com/dbt-labs/dbt-core/issues/1945#issuecomment-576714925
         # for an explanation.
         now = datetime.utcnow().isoformat()
-        inputs = (self.columns +
+        inputs = self.columns + [relation.render(), str(self.unique), str(self.type), now]
                   [relation.render(), str(self.unique), str(self.type), now])
         string = '_'.join(inputs)
         return dbt.utils.md5(string)
