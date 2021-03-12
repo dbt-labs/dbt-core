@@ -60,8 +60,8 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if '_pre_injected_sql' in dct:
-            del dct['_pre_injected_sql']
+        if "_pre_injected_sql" in dct:
+            del dct["_pre_injected_sql"]
         return dct
 
 
