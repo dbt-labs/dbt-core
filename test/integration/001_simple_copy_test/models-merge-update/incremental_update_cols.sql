@@ -2,7 +2,7 @@
     config(
         materialized = "incremental",
         unique_key = "id",
-        incremental_update_columns = ["email", "ip_address"]
+        merge_update_columns = ["email", "ip_address"]
     )
 }}
 
