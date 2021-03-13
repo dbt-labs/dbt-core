@@ -509,7 +509,7 @@ class TestIncrementalMergeColumns(BaseTestSimpleCopy):
         })
         self.seed_and_run()
         self.use_default_project({
-            "data-paths": ["seeds-merge-cols-initial"],
+            "data-paths": ["seeds-merge-cols-update"],
             "seeds": {
                 "quote_columns": False
             }
