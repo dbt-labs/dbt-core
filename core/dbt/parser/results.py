@@ -125,7 +125,7 @@ class ParseResult(dbtClassMixin, Writable, Replaceable):
             # subtract 2 for the "Compilation Error" indent
             # note that the line wrap eats newlines, so if you want newlines,
             # this is the result :(
-            msg = line_wrap_message(
+            dup_macro_msg = line_wrap_message(
                 f'''\
                 dbt found two macros named "{macro.name}" in the project
                 "{macro.package_name}".
@@ -139,6 +139,20 @@ class ParseResult(dbtClassMixin, Writable, Replaceable):
                     - {other_path}
                 ''',
                 subtract=2
+            )
+            dup_path_msg = line_wrap_message(
+                f"""\
+                The file {macro.original_file_path} was parsed multiple times by dbt.
+                This error happens when a path is duplicated in a dbt_project.yml configuration.
+                Check your `dbt_project.yml` file path configurations and remove any
+                duplicated paths to fix this error
+                """,
+                subtract=2,
+            )
+            msg = (
+                dup_path_msg
+                if macro.original_file_path == other_path
+                else dup_macro_msg
             )
             raise_compiler_error(msg)
 
