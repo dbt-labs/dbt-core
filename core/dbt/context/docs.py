@@ -77,4 +77,5 @@ def generate_runtime_docs(
     current_project: str,
 ) -> Dict[str, Any]:
     ctx = DocsRuntimeContext(config, target, manifest, current_project)
+    # This is not a Mashumaro to_dict call
     return ctx.to_dict()

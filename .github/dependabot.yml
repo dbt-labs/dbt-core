@@ -5,33 +5,41 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    rebase-strategy: "disabled"
   - package-ecosystem: "pip"
     directory: "/core"
     schedule:
       interval: "daily"
+    rebase-strategy: "disabled"
   - package-ecosystem: "pip"
     directory: "/plugins/bigquery"
     schedule:
       interval: "daily"
+    rebase-strategy: "disabled"
   - package-ecosystem: "pip"
     directory: "/plugins/postgres"
     schedule:
       interval: "daily"
+    rebase-strategy: "disabled"
   - package-ecosystem: "pip"
     directory: "/plugins/redshift"
     schedule:
       interval: "daily"
+    rebase-strategy: "disabled"
   - package-ecosystem: "pip"
     directory: "/plugins/snowflake"
     schedule:
       interval: "daily"
+    rebase-strategy: "disabled"
 
   # docker dependencies
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    rebase-strategy: "disabled"
   - package-ecosystem: "docker"
     directory: "/docker"
     schedule:
       interval: "weekly"
+    rebase-strategy: "disabled"

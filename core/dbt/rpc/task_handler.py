@@ -391,7 +391,7 @@ class RequestTaskHandler(threading.Thread, TaskHandlerProtocol):
             except RPCException as exc:
                 # RPC Exceptions come already preserialized for the jsonrpc
                 # framework
-                exc.logs = [log.to_dict() for log in self.logs]
+                exc.logs = [log.to_dict(omit_none=True) for log in self.logs]
                 exc.tags = self.tags
                 raise
 

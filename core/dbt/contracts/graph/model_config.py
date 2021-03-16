@@ -307,7 +307,7 @@ class BaseConfig(
         """
         # sadly, this is a circular import
         from dbt.adapters.factory import get_config_class_by_name
-        dct = self.to_dict(options={'keep_none': True})
+        dct = self.to_dict(omit_none=False)
 
         adapter_config_cls = get_config_class_by_name(adapter_type)
 
@@ -326,12 +326,12 @@ class BaseConfig(
         return self.from_dict(dct)
 
     def finalize_and_validate(self: T) -> T:
-        dct = self.to_dict(options={'keep_none': True})
+        dct = self.to_dict(omit_none=False)
         self.validate(dct)
         return self.from_dict(dct)
 
     def replace(self, **kwargs):
-        dct = self.to_dict()
+        dct = self.to_dict(omit_none=True)
 
         mapping = self.field_mapping()
         for key, value in kwargs.items():
@@ -396,8 +396,8 @@ class NodeConfig(BaseConfig):
     full_refresh: Optional[bool] = None
 
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
         field_map = {'post-hook': 'post_hook', 'pre-hook': 'pre_hook'}
         # create a new dict because otherwise it gets overwritten in
         # tests
@@ -414,8 +414,8 @@ class NodeConfig(BaseConfig):
                 data[new_name] = data.pop(field_name)
         return data
 
-    def __post_serialize__(self, dct, options=None):
-        dct = super().__post_serialize__(dct, options=options)
+    def __post_serialize__(self, dct):
+        dct = super().__post_serialize__(dct)
         field_map = {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
         for field_name in field_map:
             if field_name in dct:
@@ -480,7 +480,7 @@ class SnapshotConfig(EmptySnapshotConfig):
         # formerly supported with GenericSnapshotConfig
 
     def finalize_and_validate(self):
-        data = self.to_dict()
+        data = self.to_dict(omit_none=True)
         self.validate(data)
         return self.from_dict(data)
 

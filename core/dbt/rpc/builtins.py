@@ -177,7 +177,7 @@ def poll_complete(
 
 
 def _dict_logs(logs: List[LogMessage]) -> List[Dict[str, Any]]:
-    return [log.to_dict() for log in logs]
+    return [log.to_dict(omit_none=True) for log in logs]
 
 
 class Poll(RemoteBuiltinMethod[PollParameters, PollResult]):

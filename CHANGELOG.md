@@ -1,10 +1,12 @@
 ## dbt 0.20.0 (Release TBD)
 
 ### Fixes
-
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
 - Auto-generated CTEs in tests and ephemeral models have lowercase names to comply with dbt coding conventions ([#3027](https://github.com/fishtown-analytics/dbt/issues/3027), [#3028](https://github.com/fishtown-analytics/dbt/issues/3028))
 - Fix incorrect error message when a selector does not match any node [#3036](https://github.com/fishtown-analytics/dbt/issues/3036))
+- Fix variable `_dbt_max_partition` declaration and initialization for BigQuery incremental models ([#2940](https://github.com/fishtown-analytics/dbt/issues/2940), [#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
+- Moving from 'master' to 'HEAD' default branch in git ([#3057](https://github.com/fishtown-analytics/dbt/issues/3057), [#3104](https://github.com/fishtown-analytics/dbt/issues/3104), [#3117](https://github.com/fishtown-analytics/dbt/issues/3117)))
+- Requirement on `dataclasses` is relaxed to be between `>=0.6,<0.9` allowing dbt to cohabit with other libraries which required higher versions. ([#3150](https://github.com/fishtown-analytics/dbt/issues/3150), [#3151](https://github.com/fishtown-analytics/dbt/pull/3151))
 
 ### Features
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -13,6 +15,7 @@
 
 ### Under the hood
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
+- Update script to collect and write json schema for dbt artifacts ([#2870](https://github.com/fishtown-analytics/dbt/issues/2870), [#3065](https://github.com/fishtown-analytics/dbt/pull/3065))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -20,8 +23,10 @@ Contributors:
 - [@rvacaru](https://github.com/rvacaru) ([#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
 - [@NiallRees](https://github.com/NiallRees) ([#3028](https://github.com/fishtown-analytics/dbt/pull/3028))
 - [ran-eh](https://github.com/ran-eh) ([#3036](https://github.com/fishtown-analytics/dbt/pull/3036))
+- [@pcasteran](https://github.com/pcasteran) ([#2976](https://github.com/fishtown-analytics/dbt/pull/2976))
+- [@VasiliiSurov](https://github.com/VasiliiSurov) ([#3104](https://github.com/fishtown-analytics/dbt/pull/3104))
+- [@bastienboutonnet](https://github.com/bastienboutonnet) ([#3151](https://github.com/fishtown-analytics/dbt/pull/3151))
 - [@prratek](https://github.com/prratek) ([#3100](https://github.com/fishtown-analytics/dbt/pull/3100))
-
 
 ## dbt 0.19.1 (Release TBD)
 
@@ -32,6 +37,9 @@ Contributors:
 ### Under the hood
 - Bump werkzeug upper bound dependency to `<v2.0` ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))
 - Performance fixes for many different things ([#2862](https://github.com/fishtown-analytics/dbt/issues/2862), [#3034](https://github.com/fishtown-analytics/dbt/pull/3034))
+- Update code to use Mashumaro 2.0 ([#3138](https://github.com/fishtown-analytics/dbt/pull/3138))
+- Add an event to track resource counts ([#3050](https://github.com/fishtown-analytics/dbt/issues/3050), [#3156](https://github.com/fishtown-analytics/dbt/pull/3156))
+- Pin `agate<1.6.2` to avoid installation errors relating to its new dependency `PyICU` ([#3160](https://github.com/fishtown-analytics/dbt/issues/3160), [#3161](https://github.com/fishtown-analytics/dbt/pull/3161))
 
 Contributors:
 - [@Bl3f](https://github.com/Bl3f) ([#3011](https://github.com/fishtown-analytics/dbt/pull/3011))

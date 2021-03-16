@@ -169,7 +169,7 @@ def print_snapshot_result_line(
 
     info, status, logger_fn = get_printable_result(
         result, 'snapshotted', 'snapshotting')
-    cfg = model.config.to_dict()
+    cfg = model.config.to_dict(omit_none=True)
 
     msg = "{info} {description}".format(
         info=info, description=description, **cfg)

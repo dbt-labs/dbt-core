@@ -30,6 +30,7 @@ from dbt.graph import Graph
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.utils import pluralize
+import dbt.tracking
 
 graph_file_name = 'graph.gpickle'
 
@@ -57,6 +58,11 @@ def print_compile_stats(stats):
 
     results = {k: 0 for k in names.keys()}
     results.update(stats)
+
+    # create tracking event for resource_counts
+    if dbt.tracking.active_user is not None:
+        resource_counts = {k.pluralize(): v for k, v in results.items()}
+        dbt.tracking.track_resource_counts(resource_counts)
 
     stat_line = ", ".join([
         pluralize(ct, names.get(t)) for t, ct in results.items()
@@ -138,7 +144,7 @@ class Linker:
         """
         out_graph = self.graph.copy()
         for node_id in self.graph.nodes():
-            data = manifest.expect(node_id).to_dict()
+            data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
 
@@ -339,7 +345,7 @@ class Compiler:
             model.compiled_sql = injected_sql
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
-        model.validate(model.to_dict())
+        model.validate(model.to_dict(omit_none=True))
 
         manifest.update_node(model)
 
@@ -388,7 +394,7 @@ class Compiler:
 
         logger.debug("Compiling {}".format(node.unique_id))
 
-        data = node.to_dict()
+        data = node.to_dict(omit_none=True)
         data.update({
             'compiled': False,
             'compiled_sql': None,

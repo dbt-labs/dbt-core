@@ -49,8 +49,8 @@ class SourcePatcher:
         if patch is None:
             return unpatched
 
-        source_dct = unpatched.source.to_dict()
-        table_dct = unpatched.table.to_dict()
+        source_dct = unpatched.source.to_dict(omit_none=True)
+        table_dct = unpatched.table.to_dict(omit_none=True)
         patch_path: Optional[Path] = None
 
         source_table_patch: Optional[SourceTablePatch] = None

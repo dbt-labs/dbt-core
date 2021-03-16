@@ -132,7 +132,7 @@ class Credentials(
     ) -> Iterable[Tuple[str, Any]]:
         """Return an ordered iterator of key/value pairs for pretty-printing.
         """
-        as_dict = self.to_dict(options={'keep_none': True})
+        as_dict = self.to_dict(omit_none=False)
         connection_keys = set(self._connection_keys())
         aliases: List[str] = []
         if with_aliases:
@@ -148,8 +148,8 @@ class Credentials(
         raise NotImplementedError
 
     @classmethod
-    def __pre_deserialize__(cls, data, options=None):
-        data = super().__pre_deserialize__(data, options=options)
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
         data = cls.translate_aliases(data)
         return data
 
@@ -159,7 +159,7 @@ class Credentials(
     ) -> Dict[str, Any]:
         return translate_aliases(kwargs, cls._ALIASES, recurse)
 
-    def __post_serialize__(self, dct, options=None):
+    def __post_serialize__(self, dct):
         # no super() -- do we need it?
         if self._ALIASES:
             dct.update({

@@ -538,4 +538,5 @@ class BaseContext(metaclass=ContextMeta):
 
 def generate_base_context(cli_vars: Dict[str, Any]) -> Dict[str, Any]:
     ctx = BaseContext(cli_vars)
+    # This is not a Mashumaro to_dict call
     return ctx.to_dict()

@@ -32,7 +32,7 @@ class GenerateTest(unittest.TestCase):
             sources=sources,
             errors=None,
         )
-        return result.to_dict(options={'keep_none': True})['nodes']
+        return result.to_dict(omit_none=False)['nodes']
 
     def test__unflatten_empty(self):
         columns = {}

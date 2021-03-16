@@ -347,7 +347,7 @@ class PartialProject(RenderComponents):
         # break many things
         quoting: Dict[str, Any] = {}
         if cfg.quoting is not None:
-            quoting = cfg.quoting.to_dict()
+            quoting = cfg.quoting.to_dict(omit_none=True)
 
         models: Dict[str, Any]
         seeds: Dict[str, Any]
@@ -578,10 +578,11 @@ class Project:
             'config-version': self.config_version,
         })
         if self.query_comment:
-            result['query-comment'] = self.query_comment.to_dict()
+            result['query-comment'] = \
+                self.query_comment.to_dict(omit_none=True)
 
         if with_packages:
-            result.update(self.packages.to_dict())
+            result.update(self.packages.to_dict(omit_none=True))
 
         return result
 
