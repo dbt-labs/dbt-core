@@ -142,11 +142,15 @@ class ParseResult(dbtClassMixin, Writable, Replaceable):
             )
             dup_path_msg = line_wrap_message(
                 f"""\
-                The file {macro.original_file_path} for macro {macro.name}
+                The macro {macro.name} in file {macro.original_file_path}
                 was parsed multiple times by dbt. This error happens when a
+                macro is defined multiple times in the same file, or when a
                 path is duplicated in a dbt_project.yml configuration.
-                Check your `dbt_project.yml` file path configurations and
-                remove any duplicated paths to fix this error
+                To fix this error, check:
+
+                    - {macro.original_file_path}
+
+                    - The `macro-paths` configurations in dbt_project.yml
                 """,
                 subtract=2,
             )
