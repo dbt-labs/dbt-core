@@ -24,11 +24,12 @@ from dbt.events.types import (
     PrintErrorTestResult,
     PrintPassTestResult,
     PrintWarnTestResult,
-from dbt.exceptions import (
+    PrintFailureTestResult,
     InternalException,
     invalid_bool_error,
     missing_materialization
 )
+from dbt.exceptions import InternalException, invalid_bool_error, missing_materialization
 from dbt.graph import (
     ResourceTypeSelector,
 )
@@ -144,10 +145,9 @@ class TestRunner(CompileRunner):
         if materialization_macro is None:
             missing_materialization(test, self.adapter.type())
 
-        if 'config' not in context:
+        if "config" not in context:
             raise InternalException(
-                'Invalid materialization context generated, missing config: {}'
-                .format(context)
+                "Invalid materialization context generated, missing config: {}".format(context)
             )
 
         # generate materialization macro
@@ -156,8 +156,8 @@ class TestRunner(CompileRunner):
         macro_func()
         # load results from context
         # could eventually be returned directly by materialization
-        result = context['load_result']('main')
-        table = result['table']
+        result = context["load_result"]("main")
+        table = result["table"]
         num_rows = len(table.rows)
         if num_rows != 1:
             raise InternalException(
