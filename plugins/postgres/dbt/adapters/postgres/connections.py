@@ -119,7 +119,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             kwargs["sslrootcert"] = credentials.sslrootcert
 
         if credentials.application_name:
-            kwargs['application_name'] = credentials.application_name
+            kwargs["application_name"] = credentials.application_name
 
         try:
             handle = psycopg2.connect(
