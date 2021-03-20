@@ -2,6 +2,7 @@ import agate
 import decimal
 import json
 import re
+import pytest
 import unittest
 from contextlib import contextmanager
 from requests.exceptions import ConnectionError
@@ -23,7 +24,6 @@ import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.context.providers import RuntimeConfigObject
 
-import pytest
 import google.cloud.bigquery
 
 from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
@@ -946,7 +946,6 @@ class TestBigQueryAdapterConversions(TestAdapterConversions):
 @pytest.mark.parametrize(
     ["input", "output"],
     [
-        ("a" * 64, "a" * 63),
         ("ABC", "abc"),
         ("a c", "a_c"),
         ("a ", "a"),
