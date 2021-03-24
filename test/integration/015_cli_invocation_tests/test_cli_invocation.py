@@ -69,6 +69,23 @@ def get_custom_profile_config() -> Dict:
     }
 
 
+def create_directory_with_custom_profiles(directory: str) -> None:
+    """
+    Create directory with profiles.yml. The profile from
+    :func:get_custom_profile_config is used.
+
+    Parameters
+    ----------
+    directory : str
+        The directory in which a profiles file is created.
+    """
+    if not os.path.exists(profiles_dir):
+        os.makedirs(profiles_dir)
+
+    with open(f"{profiles_dir}/profiles.yml", "w") as f:
+        yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
+
+
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
 
     def _symlink_test_folders(self):
