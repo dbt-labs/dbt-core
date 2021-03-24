@@ -5,23 +5,21 @@ import shutil
 import pytest
 import tempfile
 import yaml
-from pathlib import Path
-from typing import Union
 
 
 @contextlib.contextmanager
-def change_working_directory(directory: Union[str, Path]) -> Union[str, Path]:
+def change_working_directory(directory: str) -> str:
     """
     Context manager for changing the working directory.
 
     Parameters
     ----------
-    directory : Union[str, Path]
+    directory : str
         The directory to which the working directory should be changed.
 
     Yields
     ------
-    out : Union[str, Path]
+    out : str
         The new working directory.
     """
     current_working_directory = os.getcwd()
