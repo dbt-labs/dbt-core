@@ -236,7 +236,6 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
             assert not os.path.isdir(target)
 
 
-@pytest.mark.parametrize("dbt_sub_command", ["deps", "debug", "run"])
 class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
 
     @property
@@ -251,11 +250,15 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
     def custom_schema(self):
         return "{}_custom".format(self.unique_schema())
 
-    @pytest.mark.profile_postgres
-    def test_postgres_toplevel_dbt_run_with_profile_dir_and_project_dir(
+    @use_profile("postgres")
+    def test_sub_command_with_profiles_separate_from_project_dir(
         self,
-        dbt_sub_command: str
     ):
+        """
+        Test if a sub command runs well when a profiles dir is separate from a
+        project dir.
+        """
+        dbt_sub_command = "deps"
         profiles_dir = "./tmp-profile"
         workdir = os.getcwd()
         with temporary_working_directory() as tmpdir:
