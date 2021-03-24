@@ -46,6 +46,29 @@ def temporary_working_directory() -> str:
         yield tmpdir
 
 
+def get_custom_profile_config() -> Dict:
+    return {
+        "config": {
+            "send_anonymous_usage_stats": False
+        },
+        "test": {
+            "outputs": {
+                "default": {
+                    "type": "postgres",
+                    "threads": 1,
+                    "host": self.database_host,
+                    "port": 5432,
+                    "user": "root",
+                    "pass": "password",
+                    "dbname": "dbt",
+                    "schema": self.custom_schema
+                },
+            },
+            "target": "default",
+        }
+    }
+
+
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
 
     def _symlink_test_folders(self):
@@ -114,35 +137,13 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
             os.makedirs('./dbt-profile')
 
         with open("./dbt-profile/profiles.yml", 'w') as f:
-            yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
+            yaml.safe_dump(get_custom_profile_config(), f, default_flow_style=True)
 
         self.run_sql_file("seed_custom.sql")
 
     def tearDown(self):
         self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
         super().tearDown()
-
-    def custom_profile_config(self):
-        return {
-            'config': {
-                'send_anonymous_usage_stats': False
-            },
-            'test': {
-                'outputs': {
-                    'default': {
-                        'type': 'postgres',
-                        'threads': 1,
-                        'host': self.database_host,
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
-                        'schema': self.custom_schema
-                    },
-                },
-                'target': 'default',
-            }
-        }
 
     @property
     def schema(self):
