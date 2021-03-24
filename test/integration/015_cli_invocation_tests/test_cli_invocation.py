@@ -236,102 +236,16 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
             assert not os.path.isdir(target)
 
 
-class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
+class TestCLIInvocationWithProfilesAndProjectDir(TestCLIInvocationWithProfilesDir):
 
-    def setUp(self):
-        super().setUp()
-
-        self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
-        self.run_sql(f"CREATE SCHEMA {self.custom_schema};")
-
-        # the test framework will remove this in teardown for us.
-        if not os.path.exists('./dbt-profile'):
-            os.makedirs('./dbt-profile')
-
-        with open("./dbt-profile/profiles.yml", 'w') as f:
-            yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
-
-        self.run_sql_file("seed_custom.sql")
-
-    def tearDown(self):
-        self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
-        super().tearDown()
-
-    def custom_profile_config(self):
-        return {
-            'config': {
-                'send_anonymous_usage_stats': False
-            },
-            'test': {
-                'outputs': {
-                    'default': {
-                        'type': 'postgres',
-                        'threads': 1,
-                        'host': self.database_host,
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
-                        'schema': self.custom_schema
-                    },
-                },
-                'target': 'default',
-            }
-        }
-
-    @property
-    def schema(self):
-        return "test_cli_invocation_015"
-
-    @property
-    def custom_schema(self):
-        return "{}_custom".format(self.unique_schema())
-
-    @property
-    def models(self):
-        return "models"
-
-    @use_profile('postgres')
-    def test_postgres_dbt_commands_with_relative_dir_as_project_dir(self):
+    def test_postgres_toplevel_dbt_run_with_profile_dir_and_project_dir(self):
+        profiles_dir = "./tmp-profile"
         workdir = os.getcwd()
-        with tempfile.TemporaryDirectory() as profiles_dir:
-            profiles_dir_relative = os.path.relpath(workdir, profiles_dir)
-            shutil.move(
-                workdir + '/dbt-profile/profiles.yml',
-                profiles_dir + '/profiles.yml'
-            )
-            with tempfile.TemporaryDirectory() as project_dir:
-                os.chdir(project_dir)
-                project_dir_relative = os.path.relpath(workdir, project_dir)
-                self._run_postgres_toplevel_dbt_run_with_profile_and_project_dir_arg(
-                    project_dir_relative,
-                    profiles_dir_relative,
-                )
-                os.chdir(workdir)
-            shutil.move(
-                workdir + '/dbt-profile/profiles.yml',
-                profiles_dir + '/profiles.yml'
-            )
+        with temporary_working_directory() as tmpdir:
 
-    def _run_postgres_toplevel_dbt_run_with_profile_and_project_dir_arg(
-            self,
-            project_dir,
-            profiles_dir
-    ):
-        self.run_dbt(['deps', '--project-dir', project_dir])
-        results = self.run_dbt(
-            ['run', '--project-dir', project_dir, '--profiles-dir', profiles_dir],
-            profiles_dir=False
-        )
-        self.assertEqual(len(results), 1)
+            profiles = get_custom_profiles_config(
+                self.database_host, self.custom_schema)
+            create_directory_with_custom_profiles(profiles_dir, profiles)
 
-        actual = self.run_sql("select id from {}.model".format(self.custom_schema), fetch='one')
-
-        expected = (1, )
-        self.assertEqual(actual, expected)
-
-        res = self.run_dbt(['test', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
-
-        # make sure the test runs against `custom_schema`
-        for test_result in res:
-            self.assertTrue(self.custom_schema, test_result.node.compiled_sql)
+            project_dir = os.path.relpath(workdir, tmpdir)
+            self.run_dbt(["deps", "--profiles-dir", profiles_dir, "--project-dir", project_dir])
