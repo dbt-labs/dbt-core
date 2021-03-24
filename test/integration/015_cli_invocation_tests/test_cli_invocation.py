@@ -30,7 +30,7 @@ def change_working_directory(directory: str) -> str:
         os.chdir(current_working_directory)
 
 
-@pytest.fixture
+@contextlib.contextmanager
 def temporary_working_directory() -> str:
     """
     Create a temporary working directory.
