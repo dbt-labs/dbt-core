@@ -1,8 +1,33 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import contextlib
 import os
 import shutil
 import tempfile
 import yaml
+from pathlib import Path
+
+
+@contextlib.contextmanager
+def change_working_directory(directory: Union[str, Path]) -> Union[str, Path]:
+    """
+    Context manager for changing the working directory.
+
+    Parameters
+    ----------
+    directory : Union[str, Path]
+        The directory to which the working directory should be changed.
+
+    Yields
+    ------
+    out : Union[str, Path]
+        The new working directory.
+    """
+    current_working_directory = os.getcwd()
+    os.chdir(directory)
+    try:
+        yield directory
+    finally:
+        os.chdir(current_working_directory)
 
 
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
