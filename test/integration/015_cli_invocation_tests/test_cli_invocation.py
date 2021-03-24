@@ -6,6 +6,7 @@ import pytest
 import tempfile
 import yaml
 from pathlib import Path
+from typing import Union
 
 
 @contextlib.contextmanager
