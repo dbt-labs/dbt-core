@@ -238,7 +238,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
 
 class TestCLIInvocationWithProfilesAndProjectDir(TestCLIInvocationWithProfilesDir):
 
-    @pytest.mark.parametrize("dbt_sub_command", ["deps"])
+    @pytest.mark.parametrize("dbt_sub_command", ["deps", "debug", "run"])
     def test_postgres_toplevel_dbt_run_with_profile_dir_and_project_dir(
         self,
         dbt_sub_command: str
