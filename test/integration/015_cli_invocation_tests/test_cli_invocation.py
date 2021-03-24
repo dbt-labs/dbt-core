@@ -2,6 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import contextlib
 import os
 import shutil
+import pytest
 import tempfile
 import yaml
 from pathlib import Path
@@ -28,6 +29,20 @@ def change_working_directory(directory: Union[str, Path]) -> Union[str, Path]:
         yield directory
     finally:
         os.chdir(current_working_directory)
+
+
+@pytest.fixture
+def temporary_working_directory() -> str:
+    """
+    Create a temporary working directory.
+
+    Returns
+    -------
+    out : str
+        The temporary working directory.
+    """
+    with change_working_directory(tempfile.TemporaryDirectory()) as tmpdir:
+        yield tmpdir
 
 
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
