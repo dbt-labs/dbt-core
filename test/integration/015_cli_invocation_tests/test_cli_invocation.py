@@ -5,6 +5,7 @@ import shutil
 import pytest
 import tempfile
 import yaml
+from typing import Dict
 
 
 @contextlib.contextmanager
@@ -40,11 +41,12 @@ def temporary_working_directory() -> str:
     out : str
         The temporary working directory.
     """
-    with change_working_directory(tempfile.TemporaryDirectory()) as tmpdir:
-        yield tmpdir
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with change_working_directory(tmpdir):
+            yield tmpdir
 
 
-def get_custom_profile_config() -> Dict:
+def get_custom_profiles_config(database_host, custom_schema):
     return {
         "config": {
             "send_anonymous_usage_stats": False
@@ -54,12 +56,12 @@ def get_custom_profile_config() -> Dict:
                 "default": {
                     "type": "postgres",
                     "threads": 1,
-                    "host": self.database_host,
+                    "host": database_host,
                     "port": 5432,
                     "user": "root",
                     "pass": "password",
                     "dbname": "dbt",
-                    "schema": self.custom_schema
+                    "schema": custom_schema
                 },
             },
             "target": "default",
@@ -67,21 +69,25 @@ def get_custom_profile_config() -> Dict:
     }
 
 
-def create_directory_with_custom_profiles(directory: str) -> None:
+def create_directory_with_custom_profiles(
+    directory: str,
+    profiles: Dict
+) -> None:
     """
-    Create directory with profiles.yml. The profile from
-    :func:get_custom_profile_config is used.
+    Create directory with profiles.yml.
 
     Parameters
     ----------
     directory : str
         The directory in which a profiles file is created.
+    profiles : Dict
+        The profiles to put into the profiles.yml
     """
-    if not os.path.exists(profiles_dir):
-        os.makedirs(profiles_dir)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
-    with open(f"{profiles_dir}/profiles.yml", "w") as f:
-        yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
+    with open(f"{directory}/profiles.yml", "w") as f:
+        yaml.safe_dump(profiles, f, default_flow_style=True)
 
 
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
@@ -147,12 +153,10 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
         self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
         self.run_sql(f"CREATE SCHEMA {self.custom_schema};")
 
-        # the test framework will remove this in teardown for us.
-        if not os.path.exists('./dbt-profile'):
-            os.makedirs('./dbt-profile')
-
-        with open("./dbt-profile/profiles.yml", 'w') as f:
-            yaml.safe_dump(get_custom_profile_config(), f, default_flow_style=True)
+        profiles = get_custom_profiles_config(
+            self.database_host, self.custom_schema)
+        create_directory_with_custom_profiles(
+            "./dbt-profile", profiles)
 
         self.run_sql_file("seed_custom.sql")
 
