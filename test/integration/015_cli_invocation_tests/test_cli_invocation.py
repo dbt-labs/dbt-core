@@ -238,7 +238,11 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
 
 class TestCLIInvocationWithProfilesAndProjectDir(TestCLIInvocationWithProfilesDir):
 
-    def test_postgres_toplevel_dbt_run_with_profile_dir_and_project_dir(self):
+    @pytest.mark.parametrize("dbt_sub_command", ["deps"])
+    def test_postgres_toplevel_dbt_run_with_profile_dir_and_project_dir(
+        self,
+        dbt_sub_command: str
+    ):
         profiles_dir = "./tmp-profile"
         workdir = os.getcwd()
         with temporary_working_directory() as tmpdir:
@@ -248,4 +252,4 @@ class TestCLIInvocationWithProfilesAndProjectDir(TestCLIInvocationWithProfilesDi
             create_directory_with_custom_profiles(profiles_dir, profiles)
 
             project_dir = os.path.relpath(workdir, tmpdir)
-            self.run_dbt(["deps", "--profiles-dir", profiles_dir, "--project-dir", project_dir])
+            self.run_dbt([dbt_sub_command, "--profiles-dir", profiles_dir, "--project-dir", project_dir])
