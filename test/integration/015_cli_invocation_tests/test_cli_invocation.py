@@ -261,5 +261,8 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
             create_directory_with_custom_profiles(profiles_dir, profiles)
 
             project_dir = os.path.relpath(workdir, tmpdir)
+            if os.path.exists(f"{project_dir}/profiles.yml"):
+                os.remove(f"{project_dir}/profiles.yml")
+
             for dbt_sub_command in ["deps", "debug", "run"]:
                 self.run_dbt([dbt_sub_command, "--profiles-dir", profiles_dir, "--project-dir", project_dir])
