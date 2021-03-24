@@ -250,7 +250,7 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
     def custom_schema(self):
         return "{}_custom".format(self.unique_schema())
 
-    @use_profile("postgres")
+    @pytest.mark.profile_postgres
     def test_postgres_toplevel_dbt_run_with_profile_dir_and_project_dir(self):
         profiles_dir = "./tmp-profile"
         workdir = os.getcwd()
