@@ -270,7 +270,10 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
             if os.path.exists(f"{project_dir}/profiles.yml"):
                 os.remove(f"{project_dir}/profiles.yml")
 
-            self.run_dbt([dbt_sub_command, "--profiles-dir", profiles_dir, "--project-dir", project_dir])
+            args = [
+                dbt_sub_command, "--profiles-dir", profiles_dir, "--project-dir", project_dir
+            ]
+            self.run_dbt(args, profiles_dir=False)
 
     @use_profile("postgres")
     def test_postgres_deps_with_profiles_separate_from_project_dir(self):
