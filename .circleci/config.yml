@@ -5,6 +5,7 @@ jobs:
       - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
+          TOX_PARALLEL_NO_SPINNER: 1
     steps:
       - checkout
       - run: tox -- -v
@@ -29,13 +30,14 @@ jobs:
           path: ./dist
           destination: dist
   integration-postgres:
-    docker: &test_and_postgres
+    docker:
       - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
+          TOX_PARALLEL_NO_SPINNER: 1
       - image: postgres
         name: database
-        environment: &pgenv
+        environment:
           POSTGRES_USER: "root"
           POSTGRES_PASSWORD: "password"
           POSTGRES_DB: "dbt"
@@ -51,7 +53,7 @@ jobs:
             PGDATABASE: postgres
       - run:
           name: Postgres integration tests
-          command: tox -p -e py36-postgres,py37-postgres,py38-postgres,py39-postgres -- -v -n4
+          command: tox -p -e py36-postgres,py38-postgres -- -v -n4 --durations=10
       - store_artifacts:
           path: ./logs
   integration-snowflake:
@@ -60,8 +62,7 @@ jobs:
       - checkout
       - run:
           name: Snowflake integration tests
-          command: tox -p -e py36-snowflake,py37-snowflake,py38-snowflake -- -v -n4
-          no_output_timeout: 1h
+          command: tox -p -e py36-snowflake,py38-snowflake -- -v -n4 --durations=10
       - store_artifacts:
           path: ./logs
   integration-redshift:
@@ -70,7 +71,7 @@ jobs:
       - checkout
       - run:
           name: Redshift integration tests
-          command: tox -p -e py36-redshift,py37-redshift,py38-redshift,py39-redshift -- -v -n4
+          command: tox -p -e py36-redshift,py38-redshift -- -v -n4 --durations=10
       - store_artifacts:
           path: ./logs
   integration-bigquery:
@@ -79,7 +80,7 @@ jobs:
       - checkout
       - run:
           name: Bigquery integration test
-          command: tox -p -e py36-bigquery,py37-bigquery,py38-bigquery,py39-bigquery -- -v -n4
+          command: tox -p -e py36-bigquery,py38-bigquery -- -v -n4 --durations=10
       - store_artifacts:
           path: ./logs
 

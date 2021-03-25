@@ -191,9 +191,11 @@ checks, most notably:
 ```sh
 # Runs unit tests with py38 and code checks in parallel.
 make test
+# Runs postgres integration tests with py38 in "fail fast" mode.
+make integration
 ```
-> These make targets assume you have [`tox`](https://tox.readthedocs.io/en/latest/) installed locally
-> unless you run them with a Docker container. See `make help` for more info.
+> These make targets assume you have a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) installed locally,
+> unless you use choose a Docker container to run tests. Run `make help` for more info.
 
 Check out the other targets in the Makefile to see other commonly used test
 suites.
@@ -204,7 +206,7 @@ suites.
 tests. You can also run tests in parallel, for example, you can run unit tests
 for Python 3.6, Python 3.7, Python 3.8, `flake8` checks, and `mypy` checks in
 parallel with `tox -p`. Also, you can run unit tests for specific python versions
-with `tox -e py36`. The configuration for these tests in located in `tox.ini`
+with `tox -e py36`. The configuration for these tests in located in `tox.ini`.
 
 #### `pytest`
 
@@ -218,8 +220,8 @@ python -m pytest test/unit/test_graph.py
 # run a specific unit test
 python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 ```
-> [Here](https://docs.pytest.org/en/reorganize-docs/new-docs/user/commandlineuseful.html) is a list of useful command-line options for `pytest` to use while developing.
-
+> [Here](https://docs.pytest.org/en/reorganize-docs/new-docs/user/commandlineuseful.html)
+> is a list of useful command-line options for `pytest` to use while developing.
 ## Submitting a Pull Request
 
 Fishtown Analytics provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `fishtown-analytics/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines.

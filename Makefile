@@ -30,25 +30,21 @@ unit: .env ## Runs unit tests with py38.
 test: .env ## Runs unit tests with py38 and code checks in parallel.
 	$(DOCKER_CMD) tox -p -e py38,flake8,mypy
 
-.PHONY: integration
-integration: .env ## Runs all integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -p -e py38-postgres,py38-bigquery,py38-redshift,py38-snowflake -- -x -n4
-
-.PHONY: integration-postgres
-integration-postgres: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-postgres -- -x -n4
+.PHONY: integration integration-postgres
+integration integration-postgres: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
+	$(DOCKER_CMD) tox -e py38-postgres -- -x -nauto
 
 .PHONY: integration-redshift
 integration-redshift: .env ## Runs redshift integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-redshift -- -x -n4
+	$(DOCKER_CMD) tox -e py38-redshift -- -x -nauto
 
 .PHONY: integration-snowflake
 integration-snowflake: .env ## Runs snowflake integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-snowflake -- -x -n4
+	$(DOCKER_CMD) tox -e py38-snowflake -- -x -nauto
 
 .PHONY: integration-bigquery
 integration-bigquery: .env ## Runs bigquery integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-bigquery -- -x -n4
+	$(DOCKER_CMD) tox -e py38-bigquery -- -x -nauto
 
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
