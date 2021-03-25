@@ -250,15 +250,14 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
     def custom_schema(self):
         return "{}_custom".format(self.unique_schema())
 
-    @use_profile("postgres")
-    def test_sub_command_with_profiles_separate_from_project_dir(
+    def _test_postgres_sub_command_with_profiles_separate_from_project_dir(
         self,
+        dbt_sub_command: str
     ):
         """
         Test if a sub command runs well when a profiles dir is separate from a
         project dir.
         """
-        dbt_sub_command = "deps"
         profiles_dir = "./tmp-profile"
         workdir = os.getcwd()
         with temporary_working_directory() as tmpdir:
@@ -272,3 +271,15 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
                 os.remove(f"{project_dir}/profiles.yml")
 
             self.run_dbt([dbt_sub_command, "--profiles-dir", profiles_dir, "--project-dir", project_dir])
+
+    @use_profile("postgres")
+    def test_postgres_deps_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
+
+    @use_profile("postgres")
+    def test_postgres_test_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("test")
+
+    @use_profile("postgres")
+    def test_postgres_debug_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("debug")
