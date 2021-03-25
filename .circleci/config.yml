@@ -7,7 +7,7 @@ jobs:
           DBT_INVOCATION_ENV: circle
     steps:
       - checkout
-      - run: tox -e flake8,mypy,unit-py36,unit-py38
+      - run: tox -- -v
   build-wheels:
     docker: *test_only
     steps:
@@ -28,7 +28,7 @@ jobs:
       - store_artifacts:
           path: ./dist
           destination: dist
-  integration-postgres-py36:
+  integration-postgres:
     docker: &test_and_postgres
       - image: fishtownanalytics/test-container:9
         environment:
@@ -50,113 +50,36 @@ jobs:
             PGPASSWORD: password
             PGDATABASE: postgres
       - run:
-          name: Run tests
-          command: tox -e integration-postgres-py36
+          name: Postgres integration tests
+          command: tox -p -e py36-postgres,py37-postgres,py38-postgres,py39-postgres -- -v -n4
       - store_artifacts:
           path: ./logs
-  integration-snowflake-py36:
+  integration-snowflake:
     docker: *test_only
     steps:
       - checkout
       - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py36
+          name: Snowflake integration tests
+          command: tox -p -e py36-snowflake,py37-snowflake,py38-snowflake -- -v -n4
           no_output_timeout: 1h
       - store_artifacts:
           path: ./logs
-  integration-redshift-py36:
+  integration-redshift:
     docker: *test_only
     steps:
       - checkout
       - run:
-          name: Run tests
-          command: tox -e integration-redshift-py36
+          name: Redshift integration tests
+          command: tox -p -e py36-redshift,py37-redshift,py38-redshift,py39-redshift -- -v -n4
       - store_artifacts:
           path: ./logs
-  integration-bigquery-py36:
+  integration-bigquery:
     docker: *test_only
     steps:
       - checkout
       - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py36
-      - store_artifacts:
-          path: ./logs
-  integration-postgres-py38:
-    docker: *test_and_postgres
-    steps:
-      - checkout
-      - run: *setupdb
-      - run:
-          name: Run tests
-          command: tox -e integration-postgres-py38
-      - store_artifacts:
-          path: ./logs
-  integration-snowflake-py38:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py38
-          no_output_timeout: 1h
-      - store_artifacts:
-          path: ./logs
-  integration-redshift-py38:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-redshift-py38
-      - store_artifacts:
-          path: ./logs
-  integration-bigquery-py38:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py38
-      - store_artifacts:
-          path: ./logs
-
-  integration-postgres-py39:
-    docker: *test_and_postgres
-    steps:
-      - checkout
-      - run: *setupdb
-      - run:
-          name: Run tests
-          command: tox -e integration-postgres-py39
-      - store_artifacts:
-          path: ./logs
-  integration-snowflake-py39:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py39
-          no_output_timeout: 1h
-      - store_artifacts:
-          path: ./logs
-  integration-redshift-py39:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-redshift-py39
-      - store_artifacts:
-          path: ./logs
-  integration-bigquery-py39:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py39
+          name: Bigquery integration test
+          command: tox -p -e py36-bigquery,py37-bigquery,py38-bigquery,py39-bigquery -- -v -n4
       - store_artifacts:
           path: ./logs
 
@@ -165,54 +88,22 @@ workflows:
   test-everything:
     jobs:
       - unit
-      - integration-postgres-py36:
+      - integration-postgres:
           requires:
             - unit
-      - integration-redshift-py36:
+      - integration-redshift:
           requires:
-            - integration-postgres-py36
-      - integration-bigquery-py36:
+            - integration-postgres
+      - integration-bigquery:
           requires:
-            - integration-postgres-py36
-      - integration-snowflake-py36:
+            - integration-postgres
+      - integration-snowflake:
           requires:
-            - integration-postgres-py36
-      - integration-postgres-py38:
-          requires:
-            - unit
-      - integration-redshift-py38:
-          requires:
-            - integration-postgres-py38
-      - integration-bigquery-py38:
-          requires:
-            - integration-postgres-py38
-      - integration-snowflake-py38:
-          requires:
-            - integration-postgres-py38
-      - integration-postgres-py39:
-          requires:
-            - unit
-      - integration-redshift-py39:
-          requires:
-            - integration-postgres-py39
-      - integration-bigquery-py39:
-          requires:
-            - integration-postgres-py39
-      # - integration-snowflake-py39:
-      #     requires:
-      #       - integration-postgres-py39
+            - integration-postgres
       - build-wheels:
           requires:
             - unit
-            - integration-postgres-py36
-            - integration-redshift-py36
-            - integration-bigquery-py36
-            - integration-snowflake-py36
-            - integration-postgres-py38
-            - integration-redshift-py38
-            - integration-bigquery-py38
-            - integration-snowflake-py38
-            - integration-postgres-py39
-            - integration-redshift-py39
-            - integration-bigquery-py39
-            # - integration-snowflake-py39
+            - integration-postgres
+            - integration-redshift
+            - integration-bigquery
+            - integration-snowflake

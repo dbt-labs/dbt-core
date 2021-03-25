@@ -18,8 +18,6 @@ services:
         USER_ID: ${USER_ID:-}
         GROUP_ID: ${GROUP_ID:-}
     command: "/root/.virtualenvs/dbt/bin/pytest"
-    env_file:
-      - ./test.env
     volumes:
       - .:/usr/app
     working_dir: /usr/app

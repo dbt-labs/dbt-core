@@ -1,4 +1,5 @@
 import os
+import sys
 import pytest
 import random
 import time
@@ -57,8 +58,13 @@ def profiles_root(tmpdir):
 def project_root(tmpdir):
     return tmpdir.mkdir('project')
 
-
 def postgres_profile_data(unique_schema):
+    database = 'database'
+    if sys.platform == 'win32':
+        datbase = 'localhost'
+    elif sys.platform == 'darwin':
+        database = 'localhost'
+
     return {
         'config': {
             'send_anonymous_usage_stats': False
@@ -68,7 +74,7 @@ def postgres_profile_data(unique_schema):
                 'default': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': 'database',
+                    'host': database,
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',
@@ -78,7 +84,7 @@ def postgres_profile_data(unique_schema):
                 'other_schema': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': 'database',
+                    'host': database,
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',
