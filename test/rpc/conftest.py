@@ -61,7 +61,7 @@ def project_root(tmpdir):
 def postgres_profile_data(unique_schema):
     database = 'database'
     if sys.platform == 'win32':
-        datbase = 'localhost'
+        database = 'localhost'
     elif sys.platform == 'darwin':
         database = 'localhost'
 

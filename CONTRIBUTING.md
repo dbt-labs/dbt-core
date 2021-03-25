@@ -185,7 +185,7 @@ There are a few methods for running tests locally.
 
 #### Makefile
 
-There mulitple targets in the Makefile to run common test suites and code
+There are multiple targets in the Makefile to run common test suites and code
 checks, most notably:
 
 ```sh
