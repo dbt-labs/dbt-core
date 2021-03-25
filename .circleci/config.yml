@@ -8,7 +8,12 @@ jobs:
           TOX_PARALLEL_NO_SPINNER: 1
     steps:
       - checkout
-      - run: tox -- -v
+      - run: tox -p -e py36,py37,py38
+  lint:
+    docker: *test_only
+    steps:
+      - checkout
+      - run: tox -e mypy,flake8 -- -v
   build-wheels:
     docker: *test_only
     steps:
@@ -20,7 +25,7 @@ jobs:
             export PYTHON_BIN="${PYTHON_ENV}/bin/python"
             $PYTHON_BIN -m pip install -U pip setuptools
             $PYTHON_BIN -m pip install -r requirements.txt
-            $PYTHON_BIN -m pip install -r dev_requirements.txt
+            $PYTHON_BIN -m pip install -r dev-requirements.txt
             /bin/bash ./scripts/build-wheels.sh
             $PYTHON_BIN ./scripts/collect-dbt-contexts.py > ./dist/context_metadata.json
             $PYTHON_BIN ./scripts/collect-artifact-schema.py > ./dist/artifact_schemas.json
@@ -53,7 +58,7 @@ jobs:
             PGDATABASE: postgres
       - run:
           name: Postgres integration tests
-          command: tox -p -e py36-postgres,py38-postgres -- -v -n4 --durations=10
+          command: tox -p -e py36-postgres,py38-postgres -- -v -n4
       - store_artifacts:
           path: ./logs
   integration-snowflake:
@@ -62,7 +67,7 @@ jobs:
       - checkout
       - run:
           name: Snowflake integration tests
-          command: tox -p -e py36-snowflake,py38-snowflake -- -v -n4 --durations=10
+          command: tox -p -e py36-snowflake,py38-snowflake -- -v -n4
       - store_artifacts:
           path: ./logs
   integration-redshift:
@@ -71,7 +76,7 @@ jobs:
       - checkout
       - run:
           name: Redshift integration tests
-          command: tox -p -e py36-redshift,py38-redshift -- -v -n4 --durations=10
+          command: tox -p -e py36-redshift,py38-redshift -- -v -n4
       - store_artifacts:
           path: ./logs
   integration-bigquery:
@@ -80,7 +85,7 @@ jobs:
       - checkout
       - run:
           name: Bigquery integration test
-          command: tox -p -e py36-bigquery,py38-bigquery -- -v -n4 --durations=10
+          command: tox -p -e py36-bigquery,py38-bigquery -- -v -n4
       - store_artifacts:
           path: ./logs
 
@@ -88,21 +93,23 @@ workflows:
   version: 2
   test-everything:
     jobs:
+      - lint
       - unit
       - integration-postgres:
           requires:
             - unit
       - integration-redshift:
           requires:
-            - integration-postgres
+            - unit
       - integration-bigquery:
           requires:
-            - integration-postgres
+            - unit
       - integration-snowflake:
           requires:
-            - integration-postgres
+            - unit
       - build-wheels:
           requires:
+            - lint
             - unit
             - integration-postgres
             - integration-redshift
