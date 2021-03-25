@@ -2,7 +2,7 @@ version: 2.1
 jobs:
   unit:
     docker: &test_only
-      - image: fishtownanalytics/test-container:9
+      - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
     steps:
@@ -30,7 +30,7 @@ jobs:
           destination: dist
   integration-postgres:
     docker: &test_and_postgres
-      - image: fishtownanalytics/test-container:9
+      - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
       - image: postgres
@@ -41,7 +41,7 @@ jobs:
           POSTGRES_DB: "dbt"
     steps:
       - checkout
-      - run: &setupdb
+      - run:
           name: Setup postgres
           command: bash test/setup_db.sh
           environment:
