@@ -5,6 +5,7 @@ jobs:
       - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
+          DOCKER_TEST_DATABASE_HOST: "database"
           TOX_PARALLEL_NO_SPINNER: 1
     steps:
       - checkout
@@ -39,6 +40,7 @@ jobs:
       - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
+          DOCKER_TEST_DATABASE_HOST: "database"
           TOX_PARALLEL_NO_SPINNER: 1
       - image: postgres
         name: database
@@ -59,6 +61,7 @@ jobs:
       - run:
           name: Postgres integration tests
           command: tox -p -e py36-postgres,py38-postgres -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
   integration-snowflake:
@@ -68,6 +71,7 @@ jobs:
       - run:
           name: Snowflake integration tests
           command: tox -p -e py36-snowflake,py38-snowflake -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
   integration-redshift:
@@ -77,6 +81,7 @@ jobs:
       - run:
           name: Redshift integration tests
           command: tox -p -e py36-redshift,py38-redshift -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
   integration-bigquery:
@@ -86,6 +91,7 @@ jobs:
       - run:
           name: Bigquery integration test
           command: tox -p -e py36-bigquery,py38-bigquery -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
 

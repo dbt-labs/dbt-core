@@ -13,6 +13,11 @@ def pytest_addoption(parser):
         '--profile', default='postgres', help='Use the postgres profile',
     )
 
+def pytest_runtest_setup(item):
+    # this is a hack in place to work around marking tests at the module level
+    # https://github.com/pytest-dev/pytest/issues/5830
+    if os.name == 'nt':
+        pytest.skip('"dbt rpc" not supported on windows')
 
 def _get_item_profiles(item) -> Set[str]:
     supported = set()
