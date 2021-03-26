@@ -1,6 +1,8 @@
 import agate
 import decimal
+import json
 import re
+import pytest
 import unittest
 from contextlib import contextmanager
 from requests.exceptions import ConnectionError
@@ -15,6 +17,7 @@ from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery import Plugin as BigQueryPlugin
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
+from dbt.adapters.bigquery.connections import _sanitize_label
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
 import dbt.exceptions
@@ -588,7 +591,6 @@ class TestBigQueryConnectionManager(unittest.TestCase):
         self.mock_client.query.assert_called_once_with(
           'sql', job_config=mock_bq.QueryJobConfig())
 
-
     def test_copy_bq_table_appends(self):
         self._copy_table(
             write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
@@ -615,12 +617,20 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             kwargs['job_config'].write_disposition,
             dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
 
+    def test_job_labels_valid_json(self):
+        expected = {"key": "value"}
+        labels = self.connections._labels_from_query_comment(json.dumps(expected))
+        self.assertEqual(labels, expected)
+
+    def test_job_labels_invalid_json(self):
+        labels = self.connections._labels_from_query_comment("not json")
+        self.assertEqual(labels, {"query_comment": "not_json"})
+
     def _table_ref(self, proj, ds, table, conn):
         return google.cloud.bigquery.table.TableReference.from_string(
             '{}.{}.{}'.format(proj, ds, table))
 
     def _copy_table(self, write_disposition):
-
         self.connections.table_ref = self._table_ref
         source = BigQueryRelation.create(
             database='project', schema='dataset', identifier='table1')
@@ -931,3 +941,15 @@ class TestBigQueryAdapterConversions(TestAdapterConversions):
         expected = ['time', 'time', 'time']
         for col_idx, expect in enumerate(expected):
             assert BigQueryAdapter.convert_time_type(agate_table, col_idx) == expect
+
+
+@pytest.mark.parametrize(
+    ["input", "output"],
+    [
+        ("ABC", "abc"),
+        ("a c", "a_c"),
+        ("a ", "a"),
+    ],
+)
+def test_sanitize_label(input, output):
+    assert _sanitize_label(input) == output
