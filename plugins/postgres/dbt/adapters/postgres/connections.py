@@ -30,7 +30,7 @@ class PostgresCredentials(Credentials):
     sslcert: Optional[str] = None
     sslkey: Optional[str] = None
     sslrootcert: Optional[str] = None
-    application_name: Optional[str] = 'dbt'
+    application_name: Optional[str] = "dbt"
 
     _ALIASES = {
         'dbname': 'database',
