@@ -54,7 +54,7 @@ jobs:
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
 
-  - script: python -m tox -e py-postgres -- -v
+  - script: python -m tox -e py-postgres -- -v -x
     displayName: Run integration tests
 
 # These three are all similar except secure environment variables, which MUST be passed along to their tasks,
