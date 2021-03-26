@@ -23,7 +23,7 @@ class PostgresCredentials(Credentials):
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
     sslmode: Optional[str] = None
-    application_name: Optional[str] = None
+    application_name: Optional[str] = 'dbt'
 
     _ALIASES = {
         'dbname': 'database',
