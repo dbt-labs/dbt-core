@@ -59,11 +59,7 @@ def project_root(tmpdir):
     return tmpdir.mkdir('project')
 
 def postgres_profile_data(unique_schema):
-    database = 'database'
-    if sys.platform == 'win32':
-        database = 'localhost'
-    elif sys.platform == 'darwin':
-        database = 'localhost'
+    database_host = os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
 
     return {
         'config': {
@@ -74,7 +70,7 @@ def postgres_profile_data(unique_schema):
                 'default': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': database,
+                    'host': database_host,
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',
@@ -84,7 +80,7 @@ def postgres_profile_data(unique_schema):
                 'other_schema': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': database,
+                    'host': database_host,
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',

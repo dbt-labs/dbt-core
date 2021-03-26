@@ -141,12 +141,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def database_host(self):
-        if sys.platform == 'win32':
-            return 'localhost'
-        elif sys.platform == 'darwin':
-            return 'localhost'
-        else:
-            return 'database'
+        return os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
 
     def postgres_profile(self):
         return {

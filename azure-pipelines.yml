@@ -54,7 +54,7 @@ jobs:
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
 
-  - script: python -m tox -e py-postgres -- -v -x
+  - script: python -m tox -e py-postgres -- -v -n4
     displayName: Run integration tests
 
 # These three are all similar except secure environment variables, which MUST be passed along to their tasks,
@@ -73,7 +73,7 @@ jobs:
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
 
-  - script: python -m tox -e py-snowflake -- -v
+  - script: python -m tox -e py-snowflake -- -v -n4
     env:
       SNOWFLAKE_TEST_ACCOUNT: $(SNOWFLAKE_TEST_ACCOUNT)
       SNOWFLAKE_TEST_PASSWORD: $(SNOWFLAKE_TEST_PASSWORD)
@@ -96,7 +96,7 @@ jobs:
       architecture: 'x64'
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
-  - script: python -m tox -e py-bigquery -- -v
+  - script: python -m tox -e py-bigquery -- -v -n4
     env:
       BIGQUERY_SERVICE_ACCOUNT_JSON: $(BIGQUERY_SERVICE_ACCOUNT_JSON)
     displayName: Run integration tests
@@ -115,7 +115,7 @@ jobs:
   - script: python -m pip install --upgrade pip && pip install tox
     displayName: 'Install dependencies'
 
-  - script: python -m tox -e py-redshift -- -v
+  - script: python -m tox -e py-redshift -- -v -n4
     env:
       REDSHIFT_TEST_DBNAME: $(REDSHIFT_TEST_DBNAME)
       REDSHIFT_TEST_PASS: $(REDSHIFT_TEST_PASS)
