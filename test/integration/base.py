@@ -141,9 +141,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def database_host(self):
-        if os.name == 'nt':
-            return 'localhost'
-        return 'database'
+        return os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
 
     def postgres_profile(self):
         return {

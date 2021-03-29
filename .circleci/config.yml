@@ -2,12 +2,19 @@ version: 2.1
 jobs:
   unit:
     docker: &test_only
-      - image: fishtownanalytics/test-container:9
+      - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
+          DOCKER_TEST_DATABASE_HOST: "database"
+          TOX_PARALLEL_NO_SPINNER: 1
     steps:
       - checkout
-      - run: tox -e flake8,mypy,unit-py36,unit-py38
+      - run: tox -p -e py36,py37,py38
+  lint:
+    docker: *test_only
+    steps:
+      - checkout
+      - run: tox -e mypy,flake8 -- -v
   build-wheels:
     docker: *test_only
     steps:
@@ -19,7 +26,7 @@ jobs:
             export PYTHON_BIN="${PYTHON_ENV}/bin/python"
             $PYTHON_BIN -m pip install -U pip setuptools
             $PYTHON_BIN -m pip install -r requirements.txt
-            $PYTHON_BIN -m pip install -r dev_requirements.txt
+            $PYTHON_BIN -m pip install -r dev-requirements.txt
             /bin/bash ./scripts/build-wheels.sh
             $PYTHON_BIN ./scripts/collect-dbt-contexts.py > ./dist/context_metadata.json
             $PYTHON_BIN ./scripts/collect-artifact-schema.py > ./dist/artifact_schemas.json
@@ -28,20 +35,22 @@ jobs:
       - store_artifacts:
           path: ./dist
           destination: dist
-  integration-postgres-py36:
-    docker: &test_and_postgres
-      - image: fishtownanalytics/test-container:9
+  integration-postgres:
+    docker:
+      - image: fishtownanalytics/test-container:11
         environment:
           DBT_INVOCATION_ENV: circle
+          DOCKER_TEST_DATABASE_HOST: "database"
+          TOX_PARALLEL_NO_SPINNER: 1
       - image: postgres
         name: database
-        environment: &pgenv
+        environment:
           POSTGRES_USER: "root"
           POSTGRES_PASSWORD: "password"
           POSTGRES_DB: "dbt"
     steps:
       - checkout
-      - run: &setupdb
+      - run:
           name: Setup postgres
           command: bash test/setup_db.sh
           environment:
@@ -50,113 +59,39 @@ jobs:
             PGPASSWORD: password
             PGDATABASE: postgres
       - run:
-          name: Run tests
-          command: tox -e integration-postgres-py36
+          name: Postgres integration tests
+          command: tox -p -e py36-postgres,py38-postgres -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
-  integration-snowflake-py36:
+  integration-snowflake:
     docker: *test_only
     steps:
       - checkout
       - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py36
-          no_output_timeout: 1h
+          name: Snowflake integration tests
+          command: tox -p -e py36-snowflake,py38-snowflake -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
-  integration-redshift-py36:
+  integration-redshift:
     docker: *test_only
     steps:
       - checkout
       - run:
-          name: Run tests
-          command: tox -e integration-redshift-py36
+          name: Redshift integration tests
+          command: tox -p -e py36-redshift,py38-redshift -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
-  integration-bigquery-py36:
+  integration-bigquery:
     docker: *test_only
     steps:
       - checkout
       - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py36
-      - store_artifacts:
-          path: ./logs
-  integration-postgres-py38:
-    docker: *test_and_postgres
-    steps:
-      - checkout
-      - run: *setupdb
-      - run:
-          name: Run tests
-          command: tox -e integration-postgres-py38
-      - store_artifacts:
-          path: ./logs
-  integration-snowflake-py38:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py38
-          no_output_timeout: 1h
-      - store_artifacts:
-          path: ./logs
-  integration-redshift-py38:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-redshift-py38
-      - store_artifacts:
-          path: ./logs
-  integration-bigquery-py38:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py38
-      - store_artifacts:
-          path: ./logs
-
-  integration-postgres-py39:
-    docker: *test_and_postgres
-    steps:
-      - checkout
-      - run: *setupdb
-      - run:
-          name: Run tests
-          command: tox -e integration-postgres-py39
-      - store_artifacts:
-          path: ./logs
-  integration-snowflake-py39:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py39
-          no_output_timeout: 1h
-      - store_artifacts:
-          path: ./logs
-  integration-redshift-py39:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-redshift-py39
-      - store_artifacts:
-          path: ./logs
-  integration-bigquery-py39:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py39
+          name: Bigquery integration test
+          command: tox -p -e py36-bigquery,py38-bigquery -- -v -n4
+          no_output_timeout: 30m
       - store_artifacts:
           path: ./logs
 
@@ -164,55 +99,25 @@ workflows:
   version: 2
   test-everything:
     jobs:
+      - lint
       - unit
-      - integration-postgres-py36:
+      - integration-postgres:
           requires:
             - unit
-      - integration-redshift-py36:
-          requires:
-            - integration-postgres-py36
-      - integration-bigquery-py36:
-          requires:
-            - integration-postgres-py36
-      - integration-snowflake-py36:
-          requires:
-            - integration-postgres-py36
-      - integration-postgres-py38:
+      - integration-redshift:
           requires:
             - unit
-      - integration-redshift-py38:
-          requires:
-            - integration-postgres-py38
-      - integration-bigquery-py38:
-          requires:
-            - integration-postgres-py38
-      - integration-snowflake-py38:
-          requires:
-            - integration-postgres-py38
-      - integration-postgres-py39:
+      - integration-bigquery:
           requires:
             - unit
-      - integration-redshift-py39:
+      - integration-snowflake:
           requires:
-            - integration-postgres-py39
-      - integration-bigquery-py39:
-          requires:
-            - integration-postgres-py39
-      # - integration-snowflake-py39:
-      #     requires:
-      #       - integration-postgres-py39
+            - unit
       - build-wheels:
           requires:
+            - lint
             - unit
-            - integration-postgres-py36
-            - integration-redshift-py36
-            - integration-bigquery-py36
-            - integration-snowflake-py36
-            - integration-postgres-py38
-            - integration-redshift-py38
-            - integration-bigquery-py38
-            - integration-snowflake-py38
-            - integration-postgres-py39
-            - integration-redshift-py39
-            - integration-bigquery-py39
-            # - integration-snowflake-py39
+            - integration-postgres
+            - integration-redshift
+            - integration-bigquery
+            - integration-snowflake

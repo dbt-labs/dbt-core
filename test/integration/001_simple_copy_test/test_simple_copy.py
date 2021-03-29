@@ -52,9 +52,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results), 1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results), 7)
 
         self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
