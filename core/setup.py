@@ -75,9 +75,9 @@ setup(
         'mashumaro==2.0',
         'typing-extensions>=3.7.4,<3.8',
         # the following are all to match snowflake-connector-python
-        'requests>=2.18.0,<2.24.0',
-        'idna<2.10',
-        'cffi>=1.9,<1.15',
+        'requests<3.0.0',
+        'idna>=2.5,<3',
+        'cffi>=1.9,<2.0.0',
     ],
     zip_safe=False,
     classifiers=[
