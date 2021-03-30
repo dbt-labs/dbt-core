@@ -70,10 +70,7 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 
 class RelationUpdate:
-    def __init__(
-        self, config: RuntimeConfig, manifest: Manifest,
-        component: str
-    ) -> None:
+    def __init__(self, config: RuntimeConfig, manifest: Manifest, component: str) -> None:
         macro = manifest.find_generate_macro_by_name(
             component=component,
             root_project_name=config.project_name,
