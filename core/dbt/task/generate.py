@@ -17,7 +17,7 @@ from dbt.contracts.results import (
 from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.logger import GLOBAL_LOGGER as logger, print_timestamped_line
-from dbt.perf_utils import get_full_manifest
+from dbt.parser.manifest import ManifestLoader
 import dbt.utils
 import dbt.compilation
 import dbt.exceptions
@@ -223,7 +223,7 @@ class GenerateTask(CompileTask):
                     compile_results=compile_results
                 )
         else:
-            self.manifest = get_full_manifest(self.config)
+            self.manifest = ManifestLoader.get_full_manifest(self.config)
 
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,

@@ -90,7 +90,7 @@ class MacroParser(BaseParser[ParsedMacro]):
 
     def parse_file(self, block: FileBlock):
         # mark the file as seen, even if there are no macros in it
-        self.results.get_file(block.file)
+        self.manifest.get_file(block.file)
         source_file = block.file
 
         original_file_path = source_file.path.original_file_path
@@ -108,4 +108,4 @@ class MacroParser(BaseParser[ParsedMacro]):
         )
 
         for node in self.parse_unparsed_macros(base_node):
-            self.results.add_macro(block.file, node)
+            self.manifest.add_macro(block.file, node)

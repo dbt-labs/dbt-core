@@ -9,7 +9,7 @@
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.parser.manifest import (
-    Manifest, MacroManifest, ManifestLoader, _check_manifest
+    Manifest, ManifestLoader, _check_manifest
 )
 from dbt.logger import DbtProcessState, print_timestamped_line
 from dbt.clients.system import write_file
@@ -53,8 +53,6 @@ class ParseTask(ConfiguredTask):
 
     def get_full_manifest(self):
         adapter = get_adapter(self.config)  # type: ignore
-        macro_manifest: MacroManifest = adapter.load_macro_manifest()
-        print_timestamped_line("Macro manifest loaded")
         root_config = self.config
         macro_hook = adapter.connections.set_query_header
         with PARSING_STATE:
@@ -63,12 +61,14 @@ class ParseTask(ConfiguredTask):
             print_timestamped_line("Dependencies loaded")
             loader = ManifestLoader(root_config, projects, macro_hook)
             print_timestamped_line("ManifestLoader created")
-            loader.load(macro_manifest=macro_manifest)
+            loader.load_macros_from_adapter(adapter)
+            print_timestamped_line("Macros loaded from adapter")
+            loader.load()
             print_timestamped_line("Manifest loaded")
-            loader.write_parse_results()
-            print_timestamped_line("Parse results written")
-            manifest = loader.create_manifest()
-            print_timestamped_line("Manifest created")
+            loader.write_manifest_for_partial_parse()
+            print_timestamped_line("Manifest for partial parse saved")
+            manifest = loader.update_manifest()
+            print_timestamped_line("Manifest updated")
             _check_manifest(manifest, root_config)
             print_timestamped_line("Manifest checked")
             manifest.build_flat_graph()

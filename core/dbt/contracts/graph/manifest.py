@@ -15,19 +15,24 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
-    ParsedSourceDefinition, ParsedExposure
+    ParsedSourceDefinition, ParsedExposure, HasUniqueID,
+    UnpatchedSourceDefinition, ManifestNodes
 )
-from dbt.contracts.files import SourceFile
+from dbt.contracts.graph.unparsed import SourcePatch
+from dbt.contracts.files import SourceFile, FileHash, RemoteFile
 from dbt.contracts.util import (
     BaseArtifactMetadata, MacroKey, SourceKey, ArtifactMixin, schema_version
 )
 from dbt.exceptions import (
+    InternalException, CompilationException,
     raise_duplicate_resource_name, raise_compiler_error, warn_or_error,
-    raise_invalid_patch,
+    raise_invalid_patch, raise_duplicate_patch_name,
+    raise_duplicate_macro_patch_name, raise_duplicate_source_patch_name,
 )
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt.ui import line_wrap_message
 from dbt import deprecations
 from dbt import flags
 from dbt import tracking
@@ -115,7 +120,8 @@ class SourceCache(PackageAwareCache[SourceKey, ParsedSourceDefinition]):
 
     def populate(self):
         for source in self._manifest.sources.values():
-            self.add_source(source)
+            if hasattr(source, 'source_name'):
+                self.add_source(source)
 
     def perform_lookup(
         self, unique_id: UniqueID
@@ -506,6 +512,13 @@ class MacroMethods:
 
 
 @dataclass
+class ManifestStateCheck():
+    vars_hash: FileHash
+    profile_hash: FileHash
+    project_hashes: MutableMapping[str, FileHash]
+
+
+@dataclass
 class Manifest(MacroMethods):
     """The manifest for the full graph, after parsing and during compilation.
     """
@@ -522,6 +535,13 @@ class Manifest(MacroMethods):
     files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
+    state_check: Optional[ManifestStateCheck] = None
+    # Moved from the ParseResult object
+    macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = field(default_factory=dict)
+    patches: MutableMapping[str, ParsedNodePatch] = field(default_factory=dict)
+    source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
+    # following is from ParseResult
+    _disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
     _docs_cache: Optional[DocCache] = None
     _sources_cache: Optional[SourceCache] = None
     _refs_cache: Optional[RefableCache] = None
@@ -648,26 +668,51 @@ class Manifest(MacroMethods):
                 if node.resource_type in NodeType.refable():
                     self._refs_cache.add_node(node)
 
-    def patch_macros(
-        self, patches: MutableMapping[MacroKey, ParsedMacroPatch]
+    def add_patch(
+        self, source_file: SourceFile, patch: ParsedNodePatch,
     ) -> None:
+        # patches can't be overwritten
+        if patch.name in self.patches:
+            raise_duplicate_patch_name(patch, self.patches[patch.name])
+        self.patches[patch.name] = patch
+        self.get_file(source_file).patches.append(patch.name)
+
+    def add_macro_patch(
+        self, source_file: SourceFile, patch: ParsedMacroPatch,
+    ) -> None:
+        # macros are fully namespaced
+        key = (patch.package_name, patch.name)
+        if key in self.macro_patches:
+            raise_duplicate_macro_patch_name(patch, self.macro_patches[key])
+        self.macro_patches[key] = patch
+        self.get_file(source_file).macro_patches.append(key)
+
+    def add_source_patch(
+        self, source_file: SourceFile, patch: SourcePatch,
+    ) -> None:
+        # source patches must be unique
+        key = (patch.overrides, patch.name)
+        if key in self.source_patches:
+            raise_duplicate_source_patch_name(patch, self.source_patches[key])
+        self.source_patches[key] = patch
+        self.get_file(source_file).source_patches.append(key)
+
+    def patch_macros(self) -> None:
         for macro in self.macros.values():
             key = (macro.package_name, macro.name)
-            patch = patches.pop(key, None)
+            patch = self.macro_patches.pop(key, None)
             if not patch:
                 continue
             macro.patch(patch)
 
-        if patches:
-            for patch in patches.values():
+        if self.macro_patches:
+            for patch in self.macro_patches.values():
                 warn_or_error(
                     f'WARNING: Found documentation for macro "{patch.name}" '
                     f'which was not found'
                 )
 
-    def patch_nodes(
-        self, patches: MutableMapping[str, ParsedNodePatch]
-    ) -> None:
+    def patch_nodes(self) -> None:
         """Patch nodes with the given dict of patches. Note that this consumes
         the input!
         This relies on the fact that all nodes have unique _name_ fields, not
@@ -677,8 +722,10 @@ class Manifest(MacroMethods):
         # only have the node name in the patch, we have to iterate over all the
         # nodes looking for matching names. We could use a NameSearcher if we
         # were ok with doing an O(n*m) search (one nodes scan per patch)
+        # Q: could we save patches by node unique_ids instead, or convert
+        # between names and node ids?
         for node in self.nodes.values():
-            patch = patches.pop(node.name, None)
+            patch = self.patches.pop(node.name, None)
             if not patch:
                 continue
 
@@ -696,9 +743,10 @@ class Manifest(MacroMethods):
 
             node.patch(patch)
 
-        # log debug-level warning about nodes we couldn't find
-        if patches:
-            for patch in patches.values():
+        # If anything is left in self.patches, it means that the node for
+        # that patch wasn't found.
+        if self.patches:
+            for patch in self.patches.values():
                 # since patches aren't nodes, we can't use the existing
                 # target_not_found warning
                 logger.debug((
@@ -719,6 +767,7 @@ class Manifest(MacroMethods):
             chain(self.nodes.values(), self.sources.values())
         )
 
+    # This is used in dbt.task.rpc.sql_commands 'add_new_refs'
     def deepcopy(self):
         return Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
@@ -908,6 +957,212 @@ class Manifest(MacroMethods):
             f'Merged {len(merged)} items from state (sample: {sample})'
         )
 
+    # Methods that were formerly in ParseResult
+    def get_file(self, source_file: SourceFile) -> SourceFile:
+        key = source_file.search_key
+        if key is None:
+            return source_file
+        if key not in self.files:
+            self.files[key] = source_file
+        return self.files[key]
+
+    def add_macro(self, source_file: SourceFile, macro: ParsedMacro):
+        if macro.unique_id in self.macros:
+            # detect that the macro exists and emit an error
+            other_path = self.macros[macro.unique_id].original_file_path
+            # subtract 2 for the "Compilation Error" indent
+            # note that the line wrap eats newlines, so if you want newlines,
+            # this is the result :(
+            msg = line_wrap_message(
+                f'''\
+                dbt found two macros named "{macro.name}" in the project
+                "{macro.package_name}".
+
+
+                To fix this error, rename or remove one of the following
+                macros:
+
+                    - {macro.original_file_path}
+
+                    - {other_path}
+                ''',
+                subtract=2
+            )
+            raise_compiler_error(msg)
+
+        self.macros[macro.unique_id] = macro
+        self.get_file(source_file).macros.append(macro.unique_id)
+
+    def has_file(self, source_file: SourceFile) -> bool:
+        key = source_file.search_key
+        if key is None:
+            return False
+        if key not in self.files:
+            return False
+        my_checksum = self.files[key].checksum
+        return my_checksum == source_file.checksum
+
+    def add_source(
+        self, source_file: SourceFile, source: UnpatchedSourceDefinition
+    ):
+        # sources can't be overwritten!
+        _check_duplicates(source, self.sources)
+        self.sources[source.unique_id] = source  # type: ignore
+        self.get_file(source_file).sources.append(source.unique_id)
+
+    def add_node_nofile(self, node: ManifestNodes):
+        # nodes can't be overwritten!
+        _check_duplicates(node, self.nodes)
+        self.nodes[node.unique_id] = node
+
+    def add_node(self, source_file: SourceFile, node: ManifestNodes):
+        self.add_node_nofile(node)
+        self.get_file(source_file).nodes.append(node.unique_id)
+
+    def add_exposure(self, source_file: SourceFile, exposure: ParsedExposure):
+        _check_duplicates(exposure, self.exposures)
+        self.exposures[exposure.unique_id] = exposure
+        self.get_file(source_file).exposures.append(exposure.unique_id)
+
+    def add_disabled_nofile(self, node: CompileResultNode):
+        if node.unique_id in self._disabled:
+            self._disabled[node.unique_id].append(node)
+        else:
+            self._disabled[node.unique_id] = [node]
+
+    def add_disabled(self, source_file: SourceFile, node: CompileResultNode):
+        self.add_disabled_nofile(node)
+        self.get_file(source_file).nodes.append(node.unique_id)
+
+    def add_doc(self, source_file: SourceFile, doc: ParsedDocumentation):
+        _check_duplicates(doc, self.docs)
+        self.docs[doc.unique_id] = doc
+        self.get_file(source_file).docs.append(doc.unique_id)
+
+    def _get_disabled(
+        self,
+        unique_id: str,
+        match_file: SourceFile,
+    ) -> List[CompileResultNode]:
+        if unique_id not in self._disabled:
+            raise InternalException(
+                'called _get_disabled with id={}, but it does not exist'
+                .format(unique_id)
+            )
+        return [
+            n for n in self._disabled[unique_id]
+            if n.original_file_path == match_file.path.original_file_path
+        ]
+
+    # This is only used by 'sanitized_update' which processes "old_manifest"
+    def _process_node(
+        self,
+        node_id: str,
+        source_file: SourceFile,
+        old_file: SourceFile,
+        old_manifest: Any,
+    ) -> None:
+        """Nodes are a special kind of complicated - there can be multiple
+        with the same name, as long as all but one are disabled.
+
+        Only handle nodes where the matching node has the same resource type
+        as the current parser.
+        """
+        source_path = source_file.path.original_file_path
+        found: bool = False
+        if node_id in old_manifest.nodes:
+            old_node = old_manifest.nodes[node_id]
+            if old_node.original_file_path == source_path:
+                self.add_node(source_file, old_node)
+                found = True
+
+        if node_id in old_manifest._disabled:
+            matches = old_manifest._get_disabled(node_id, source_file)
+            for match in matches:
+                self.add_disabled(source_file, match)
+                found = True
+
+        if not found:
+            raise CompilationException(
+                'Expected to find "{}" in cached "manifest.nodes" or '
+                '"manifest.disabled" based on cached file information: {}!'
+                .format(node_id, old_file)
+            )
+
+    # This is called by ManifestLoader._get_cached/parse_with_cache,
+    # which handles updating the ManifestLoader results with information
+    # from the "old_manifest", i.e. the pickle file if the checksums are
+    # the same.
+    def sanitized_update(
+        self,
+        source_file: SourceFile,
+        old_manifest: Any,
+        resource_type: NodeType,
+    ) -> bool:
+
+        if isinstance(source_file.path, RemoteFile):
+            return False
+
+        old_file = old_manifest.get_file(source_file)
+        for doc_id in old_file.docs:
+            doc = _expect_value(doc_id, old_manifest.docs, old_file, "docs")
+            self.add_doc(source_file, doc)
+
+        for macro_id in old_file.macros:
+            macro = _expect_value(
+                macro_id, old_manifest.macros, old_file, "macros"
+            )
+            self.add_macro(source_file, macro)
+
+        for source_id in old_file.sources:
+            source = _expect_value(
+                source_id, old_manifest.sources, old_file, "sources"
+            )
+            self.add_source(source_file, source)
+
+        # because we know this is how we _parsed_ the node, we can safely
+        # assume if it's disabled it was done by the project or file, and
+        # we can keep our old data
+        # the node ID could be in old_manifest.disabled AND in old_manifest.nodes.
+        # In that case, we have to make sure the path also matches.
+        for node_id in old_file.nodes:
+            # cheat: look at the first part of the node ID and compare it to
+            # the parser resource type. On a mismatch, bail out.
+            if resource_type != node_id.split('.')[0]:
+                continue
+            self._process_node(node_id, source_file, old_file, old_manifest)
+
+        for exposure_id in old_file.exposures:
+            exposure = _expect_value(
+                exposure_id, old_manifest.exposures, old_file, "exposures"
+            )
+            self.add_exposure(source_file, exposure)
+
+        # Note: There shouldn't be any patches in here after the cleanup.
+        # The pickled Manifest should have had all patches applied.
+        patched = False
+        for name in old_file.patches:
+            patch = _expect_value(
+                name, old_manifest.patches, old_file, "patches"
+            )
+            self.add_patch(source_file, patch)
+            patched = True
+        if patched:
+            self.get_file(source_file).patches.sort()
+
+        macro_patched = False
+        for key in old_file.macro_patches:
+            macro_patch = _expect_value(
+                key, old_manifest.macro_patches, old_file, "macro_patches"
+            )
+            self.add_macro_patch(source_file, macro_patch)
+            macro_patched = True
+        if macro_patched:
+            self.get_file(source_file).macro_patches.sort()
+
+        return True
+    # end of methods formerly in ParseResult
+
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
     # pickle and deepcopy use this. It returns a callable object used to
     # create the initial version of the object and a tuple of arguments
@@ -927,6 +1182,11 @@ class Manifest(MacroMethods):
             self.files,
             self.metadata,
             self.flat_graph,
+            self.state_check,
+            self.macro_patches,
+            self.patches,
+            self.source_patches,
+            self._disabled,
             self._docs_cache,
             self._sources_cache,
             self._refs_cache,
@@ -992,3 +1252,22 @@ class WritableManifest(ArtifactMixin):
     metadata: ManifestMetadata = field(metadata=dict(
         description='Metadata about the manifest',
     ))
+
+
+def _check_duplicates(
+    value: HasUniqueID, src: Mapping[str, HasUniqueID]
+):
+    if value.unique_id in src:
+        raise_duplicate_resource_name(value, src[value.unique_id])
+
+
+def _expect_value(
+    key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str
+) -> V_T:
+    if key not in src:
+        raise CompilationException(
+            'Expected to find "{}" in cached "result.{}" based '
+            'on cached file information: {}!'
+            .format(key, name, old_file)
+        )
+    return src[key]
