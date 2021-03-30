@@ -20,7 +20,7 @@ from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.manifest import (
-    Manifest, AnyManifest, Disabled, MacroManifest
+    Manifest, Disabled
 )
 from dbt.contracts.graph.compiled import (
     CompiledResource,
@@ -1210,7 +1210,7 @@ class MacroContext(ProviderContext):
         self,
         model: ParsedMacro,
         config: RuntimeConfig,
-        manifest: AnyManifest,
+        manifest: Manifest,
         provider: Provider,
         search_package: Optional[str],
     ) -> None:
@@ -1300,7 +1300,7 @@ class ModelContext(ProviderContext):
 def generate_parser_model(
     model: ManifestNode,
     config: RuntimeConfig,
-    manifest: MacroManifest,
+    manifest: Manifest,
     context_config: ContextConfig,
 ) -> Dict[str, Any]:
     # The __init__ method of ModelContext also initializes
@@ -1317,7 +1317,7 @@ def generate_parser_model(
 def generate_generate_component_name_macro(
     macro: ParsedMacro,
     config: RuntimeConfig,
-    manifest: MacroManifest,
+    manifest: Manifest,
 ) -> Dict[str, Any]:
     ctx = MacroContext(
         macro, config, manifest, GenerateNameProvider(), None
@@ -1370,7 +1370,7 @@ class ExposureSourceResolver(BaseResolver):
 def generate_parse_exposure(
     exposure: ParsedExposure,
     config: RuntimeConfig,
-    manifest: MacroManifest,
+    manifest: Manifest,
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]

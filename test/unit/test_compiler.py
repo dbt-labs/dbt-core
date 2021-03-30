@@ -349,7 +349,6 @@ class CompilerTest(unittest.TestCase):
              'select * from source_table'
              ') '
              'select * from __dbt__cte__ephemeral'))
-        print(f"\n---- line 349 ----")
 
         self.assertFalse(manifest.nodes['model.root.ephemeral'].extra_ctes_injected)
 

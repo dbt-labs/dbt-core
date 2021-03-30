@@ -2,7 +2,7 @@ from typing import List
 
 from dbt.clients.jinja import MacroStack
 from dbt.contracts.connection import AdapterRequiredConfig
-from dbt.contracts.graph.manifest import Manifest, AnyManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.context.macro_resolver import TestMacroNamespace
 
 
@@ -20,7 +20,7 @@ class ManifestContext(ConfiguredContext):
     def __init__(
         self,
         config: AdapterRequiredConfig,
-        manifest: AnyManifest,
+        manifest: Manifest,
         search_package: str,
     ) -> None:
         super().__init__(config)

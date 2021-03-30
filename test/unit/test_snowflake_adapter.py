@@ -10,9 +10,10 @@ from dbt.adapters.snowflake import SnowflakeAdapter
 from dbt.adapters.snowflake import Plugin as SnowflakePlugin
 from dbt.adapters.snowflake.column import SnowflakeColumn
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.manifest import ManifestStateCheck
 from dbt.clients import agate_helper
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-from dbt.parser.results import ParseResult
 from snowflake import connector as snowflake_connector
 
 from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions, load_internal_manifest_macros
@@ -61,9 +62,19 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.snowflake = self.patcher.start()
 
-        self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
-        self.mock_parse_result = self.load_patch.start()
-        self.mock_parse_result.return_value = ParseResult.rpc()
+        # Create the Manifest.state_check patcher
+        @mock.patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        def _mock_state_check(self):
+            config = self.root_project
+            all_projects = self.all_projects
+            return ManifestStateCheck(
+                vars_hash=FileHash.from_contents('vars'),
+                project_hashes={name: FileHash.from_contents(name) for name in all_projects},
+                profile_hash=FileHash.from_contents('profile'),
+            )
+        self.load_state_check = mock.patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        self.mock_state_check = self.load_state_check.start()
+        self.mock_state_check.side_effect = _mock_state_check
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
@@ -82,7 +93,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.adapter.cleanup_connections()
         self.qh_patch.stop()
         self.patcher.stop()
-        self.load_patch.stop()
+        self.load_state_check.stop()
 
     def test_quoting_on_drop_schema(self):
         relation = SnowflakeAdapter.Relation.create(

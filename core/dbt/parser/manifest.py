@@ -3,7 +3,7 @@ from dataclasses import field
 import os
 import pickle
 from typing import (
-    Dict, Optional, Mapping, Callable, Any, List, Type, Union, MutableMapping
+    Dict, Optional, Mapping, Callable, Any, List, Type, Union
 )
 import time
 
@@ -12,6 +12,7 @@ import dbt.tracking
 import dbt.flags as flags
 
 from dbt.adapters.factory import (
+    get_adapter,
     get_relation_class_by_name,
 )
 from dbt.helper_types import PathSet
@@ -24,7 +25,7 @@ from dbt.context.docs import generate_runtime_docs
 from dbt.contracts.files import FilePath, FileHash
 from dbt.contracts.graph.compiled import ManifestNode
 from dbt.contracts.graph.manifest import (
-    Manifest, MacroManifest, AnyManifest, Disabled
+    Manifest, Disabled, MacroManifest, ManifestStateCheck
 )
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
@@ -44,7 +45,6 @@ from dbt.parser.docs import DocumentationParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
-from dbt.parser.results import ParseResult
 from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
@@ -98,67 +98,30 @@ _parser_types: List[Type[Parser]] = [
 ]
 
 
-# TODO: this should be calculated per-file based on the vars() calls made in
-# parsing, so changing one var doesn't invalidate everything. also there should
-# be something like that for env_var - currently changing env_vars in way that
-# impact graph selection or configs will result in weird test failures.
-# finally, we should hash the actual profile used, not just root project +
-# profiles.yml + relevant args. While sufficient, it is definitely overkill.
-def make_parse_result(
-    config: RuntimeConfig, all_projects: Mapping[str, Project]
-) -> ParseResult:
-    """Make a ParseResult from the project configuration and the profile."""
-    # if any of these change, we need to reject the parser
-    vars_hash = FileHash.from_contents(
-        '\x00'.join([
-            getattr(config.args, 'vars', '{}') or '{}',
-            getattr(config.args, 'profile', '') or '',
-            getattr(config.args, 'target', '') or '',
-            __version__
-        ])
-    )
-    profile_path = os.path.join(config.args.profiles_dir, 'profiles.yml')
-    with open(profile_path) as fp:
-        profile_hash = FileHash.from_contents(fp.read())
-
-    project_hashes = {}
-    for name, project in all_projects.items():
-        path = os.path.join(project.project_root, 'dbt_project.yml')
-        with open(path) as fp:
-            project_hashes[name] = FileHash.from_contents(fp.read())
-
-    return ParseResult(
-        vars_hash=vars_hash,
-        profile_hash=profile_hash,
-        project_hashes=project_hashes,
-    )
-
-
 class ManifestLoader:
     def __init__(
         self,
         root_project: RuntimeConfig,
         all_projects: Mapping[str, Project],
-        macro_hook: Optional[Callable[[AnyManifest], Any]] = None,
+        macro_hook: Optional[Callable[[Manifest], Any]] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
         self.all_projects: Mapping[str, Project] = all_projects
-        self.macro_hook: Callable[[AnyManifest], Any]
+        self.manifest: Manifest = Manifest({}, {}, {}, {}, {}, {}, [], {})
+        self.manifest.metadata = root_project.get_metadata()
+        self.macro_hook: Callable[[Manifest], Any]
         if macro_hook is None:
             self.macro_hook = lambda m: None
         else:
             self.macro_hook = macro_hook
 
-        # results holds all of the nodes created by parsing,
-        # in dictionaries: nodes, sources, docs, macros, exposures,
-        # macro_patches, patches, source_patches, files, etc
-        self.results: ParseResult = make_parse_result(
-            root_project, all_projects,
-        )
         self._loaded_file_cache: Dict[str, FileBlock] = {}
         self._perf_info = ManifestLoaderInfo(
             is_partial_parse_enabled=self._partial_parse_enabled()
         )
+        # Creating state_check must go before read_saved_manifest
+        self.manifest.state_check = self.build_manifest_state_check()
+        self.old_manifest: Optional[Manifest] = self.read_saved_manifest()
 
     def track_project_load(self):
         invocation_id = dbt.tracking.active_user.invocation_id
@@ -177,30 +140,40 @@ class ManifestLoader:
             ),
         })
 
+    # This is where we use the partial-parse state from the
+    # pickle file (if it exists)
     def parse_with_cache(
         self,
         path: FilePath,
         parser: BaseParser,
-        old_results: Optional[ParseResult],
     ) -> None:
         block = self._get_file(path, parser)
-        if not self._get_cached(block, old_results, parser):
+        # _get_cached actually copies the nodes, etc, that were
+        # generated from the file to the results, in 'sanitized_update'
+        if not self._get_cached(block, parser):
             parser.parse_file(block)
 
+    # check if we have a stored parse file, then check if
+    # file checksums are the same or not and either return
+    # the old ... stuff or return false (not cached)
     def _get_cached(
         self,
         block: FileBlock,
-        old_results: Optional[ParseResult],
         parser: BaseParser,
     ) -> bool:
         # TODO: handle multiple parsers w/ same files, by
         # tracking parser type vs node type? Or tracking actual
         # parser type during parsing?
-        if old_results is None:
+        if self.old_manifest is None:
             return False
-        if old_results.has_file(block.file):
-            return self.results.sanitized_update(
-                block.file, old_results, parser.resource_type
+        # The 'has_file' method is where we check to see if
+        # the checksum of the old file is the same as the new
+        # file. If the checksum is different, 'has_file' returns
+        # false. If it's the same, the file and the things that
+        # were generated from it are used.
+        if self.old_manifest.has_file(block.file):
+            return self.manifest.sanitized_update(
+                block.file, self.old_manifest, parser.resource_type
             )
         return False
 
@@ -215,13 +188,10 @@ class ManifestLoader:
     def parse_project(
         self,
         project: Project,
-        macro_manifest: MacroManifest,
-        old_results: Optional[ParseResult],
     ) -> None:
         parsers: List[Parser] = []
         for cls in _parser_types:
-            parser = cls(self.results, project, self.root_project,
-                         macro_manifest)
+            parser = cls(project, self.manifest, self.root_project)
             parsers.append(parser)
 
         # per-project cache.
@@ -234,7 +204,7 @@ class ManifestLoader:
             parser_path_count = 0
             parser_start_timer = time.perf_counter()
             for path in parser.search():
-                self.parse_with_cache(path, parser, old_results)
+                self.parse_with_cache(path, parser)
                 parser_path_count = parser_path_count + 1
 
             if parser_path_count > 0:
@@ -257,76 +227,58 @@ class ManifestLoader:
             self._perf_info.path_count + total_path_count
         )
 
-    def load_only_macros(self) -> MacroManifest:
-        old_results = self.read_parse_results()
-
-        for project in self.all_projects.values():
-            parser = MacroParser(self.results, project)
-            for path in parser.search():
-                self.parse_with_cache(path, parser, old_results)
-
-        # make a manifest with just the macros to get the context
-        macro_manifest = MacroManifest(
-            macros=self.results.macros,
-            files=self.results.files
-        )
-        self.macro_hook(macro_manifest)
-        return macro_manifest
-
     # This is where the main action happens
-    def load(self, macro_manifest: MacroManifest):
-        # if partial parse is enabled, load old results
-        old_results = self.read_parse_results()
-        if old_results is not None:
-            logger.debug('Got an acceptable cached parse result')
-        # store the macros & files from the adapter macro manifest
-        self.results.macros.update(macro_manifest.macros)
-        self.results.files.update(macro_manifest.files)
-
+    def load(self):
         start_timer = time.perf_counter()
+
+        if self.old_manifest is not None:
+            logger.debug('Got an acceptable cached parse result')
 
         for project in self.all_projects.values():
             # parse a single project
-            self.parse_project(project, macro_manifest, old_results)
+            self.parse_project(project)
 
         self._perf_info.parse_project_elapsed = (
             time.perf_counter() - start_timer
         )
 
-    def write_parse_results(self):
+    def write_manifest_for_partial_parse(self):
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
         make_directory(self.root_project.target_path)
         with open(path, 'wb') as fp:
-            pickle.dump(self.results, fp)
+            pickle.dump(self.manifest, fp)
 
-    def matching_parse_results(self, result: ParseResult) -> bool:
+    def matching_parse_results(self, manifest: Manifest) -> bool:
         """Compare the global hashes of the read-in parse results' values to
         the known ones, and return if it is ok to re-use the results.
         """
         try:
-            if result.dbt_version != __version__:
+            if manifest.metadata.dbt_version != __version__:
                 logger.debug(
                     'dbt version mismatch: {} != {}, cache invalidated'
-                    .format(result.dbt_version, __version__)
+                    .format(manifest.metadata.dbt_version, __version__)
                 )
                 return False
-        except AttributeError:
-            logger.debug('malformed result file, cache invalidated')
+        except AttributeError as exc:
+            logger.debug(f"malformed result file, cache invalidated: {exc}")
             return False
 
         valid = True
 
-        if self.results.vars_hash != result.vars_hash:
+        if not self.manifest.state_check or not manifest.state_check:
+            return False
+
+        if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
             logger.debug('vars hash mismatch, cache invalidated')
             valid = False
-        if self.results.profile_hash != result.profile_hash:
+        if self.manifest.state_check.profile_hash != manifest.state_check.profile_hash:
             logger.debug('profile hash mismatch, cache invalidated')
             valid = False
 
         missing_keys = {
-            k for k in self.results.project_hashes
-            if k not in result.project_hashes
+            k for k in self.manifest.state_check.project_hashes
+            if k not in manifest.state_check.project_hashes
         }
         if missing_keys:
             logger.debug(
@@ -335,9 +287,9 @@ class ManifestLoader:
             )
             valid = False
 
-        for key, new_value in self.results.project_hashes.items():
-            if key in result.project_hashes:
-                old_value = result.project_hashes[key]
+        for key, new_value in self.manifest.state_check.project_hashes.items():
+            if key in manifest.state_check.project_hashes:
+                old_value = manifest.state_check.project_hashes[key]
                 if new_value != old_value:
                     logger.debug(
                         'For key {}, hash mismatch ({} -> {}), cache '
@@ -357,7 +309,7 @@ class ManifestLoader:
         else:
             return DEFAULT_PARTIAL_PARSE
 
-    def read_parse_results(self) -> Optional[ParseResult]:
+    def read_saved_manifest(self) -> Optional[Manifest]:
         if not self._partial_parse_enabled():
             logger.debug('Partial parsing not enabled')
             return None
@@ -367,82 +319,132 @@ class ManifestLoader:
         if os.path.exists(path):
             try:
                 with open(path, 'rb') as fp:
-                    result: ParseResult = pickle.load(fp)
+                    manifest: Manifest = pickle.load(fp)
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
-                if self.matching_parse_results(result):
-                    return result
+                if self.matching_parse_results(manifest):
+                    return manifest
             except Exception as exc:
                 logger.debug(
                     'Failed to load parsed file from disk at {}: {}'
                     .format(path, exc),
                     exc_info=True
                 )
-
         return None
 
-    def process_manifest(self, manifest: Manifest):
+    # This find the sources, refs, and docs and resolves them
+    # for nodes and exposures
+    def process_manifest(self):
         project_name = self.root_project.project_name
-        process_sources(manifest, project_name)
-        process_refs(manifest, project_name)
-        process_docs(manifest, self.root_project)
+        process_sources(self.manifest, project_name)
+        process_refs(self.manifest, project_name)
+        process_docs(self.manifest, self.root_project)
 
-    def create_manifest(self) -> Manifest:
-        # before we do anything else, patch the sources. This mutates
-        # results.disabled, so it needs to come before the final 'disabled'
-        # list is created
+    def update_manifest(self) -> Manifest:
         start_patch = time.perf_counter()
-        sources = patch_sources(self.results, self.root_project)
+        # patch_sources converts the UnparsedSourceDefinitions in the
+        # Manifest.sources to ParsedSourceDefinition via 'patch_source'
+        # in SourcePatcher
+        sources = patch_sources(self.root_project, self.manifest)
+        self.manifest.sources = sources
+        # ParseResults had a 'disabled' attribute which was a dictionary
+        # which is now named '_disabled'. This used to copy from
+        # ParseResults to the Manifest. Can this be normalized so
+        # there's only one disabled?
+        disabled = []
+        for value in self.manifest._disabled.values():
+            disabled.extend(value)
+        self.manifest.disabled = disabled
         self._perf_info.patch_sources_elapsed = (
             time.perf_counter() - start_patch
         )
-        disabled = []
-        for value in self.results.disabled.values():
-            disabled.extend(value)
 
-        nodes: MutableMapping[str, ManifestNode] = {
-            k: v for k, v in self.results.nodes.items()
-        }
+        self.manifest.selectors = self.root_project.manifest_selectors
 
-        manifest = Manifest(
-            nodes=nodes,
-            sources=sources,
-            macros=self.results.macros,
-            docs=self.results.docs,
-            exposures=self.results.exposures,
-            metadata=self.root_project.get_metadata(),
-            disabled=disabled,
-            files=self.results.files,
-            selectors=self.root_project.manifest_selectors,
-        )
-        manifest.patch_nodes(self.results.patches)
-        manifest.patch_macros(self.results.macro_patches)
+        # do the node and macro patches
+        self.manifest.patch_nodes()
+        self.manifest.patch_macros()
+
+        # process_manifest updates the refs, sources, and docs
         start_process = time.perf_counter()
-        self.process_manifest(manifest)
+        self.process_manifest()
 
         self._perf_info.process_manifest_elapsed = (
             time.perf_counter() - start_process
         )
 
-        return manifest
+        return self.manifest
 
+    # TODO: this should be calculated per-file based on the vars() calls made in
+    # parsing, so changing one var doesn't invalidate everything. also there should
+    # be something like that for env_var - currently changing env_vars in way that
+    # impact graph selection or configs will result in weird test failures.
+    # finally, we should hash the actual profile used, not just root project +
+    # profiles.yml + relevant args. While sufficient, it is definitely overkill.
+    def build_manifest_state_check(self):
+        config = self.root_project
+        all_projects = self.all_projects
+        # if any of these change, we need to reject the parser
+        vars_hash = FileHash.from_contents(
+            '\x00'.join([
+                getattr(config.args, 'vars', '{}') or '{}',
+                getattr(config.args, 'profile', '') or '',
+                getattr(config.args, 'target', '') or '',
+                __version__
+            ])
+        )
+
+        profile_path = os.path.join(config.args.profiles_dir, 'profiles.yml')
+        with open(profile_path) as fp:
+            profile_hash = FileHash.from_contents(fp.read())
+
+        project_hashes = {}
+        for name, project in all_projects.items():
+            path = os.path.join(project.project_root, 'dbt_project.yml')
+            with open(path) as fp:
+                project_hashes[name] = FileHash.from_contents(fp.read())
+
+        state_check = ManifestStateCheck(
+            vars_hash=vars_hash,
+            profile_hash=profile_hash,
+            project_hashes=project_hashes,
+        )
+        return state_check
+
+    # Get "full" manifest means a manifest with the macros already loaded
+    # We sometimes build a manifest without that, so it can't be done in
+    # an init routine. We call the adapter for this because apparently
+    # it stores a lightweight manifest with only macros and we want to
+    # reuse that if it exists.
     @classmethod
-    def load_all(
+    def get_full_manifest(
         cls,
-        root_config: RuntimeConfig,
-        macro_manifest: MacroManifest,
-        macro_hook: Callable[[AnyManifest], Any],
+        config: RuntimeConfig,
+        *,
+        reset: bool = False,
     ) -> Manifest:
+
+        adapter = get_adapter(config)  # type: ignore
+        # reset is set in a TaskManager load_manifest call
+        if reset:
+            config.clear_dependencies()
+            adapter.clear_macro_manifest()
+        # load_macro_manifest here calls load_macros in ManifestLoader
+        # The MacroManifest is like the Manifest but only contains
+        # macros and files.
+        macro_hook = adapter.connections.set_query_header
+
         with PARSING_STATE:
             start_load_all = time.perf_counter()
 
-            projects = root_config.load_dependencies()
-            loader = cls(root_config, projects, macro_hook)
-            loader.load(macro_manifest=macro_manifest)
-            loader.write_parse_results()
-            manifest = loader.create_manifest()
-            _check_manifest(manifest, root_config)
+            projects = config.load_dependencies()
+            loader = ManifestLoader(config, projects, macro_hook)
+            loader.load_macros_from_adapter(adapter)
+            loader.load()
+            loader.write_manifest_for_partial_parse()
+            manifest = loader.update_manifest()
+            _check_manifest(manifest, config)
             manifest.build_flat_graph()
 
             loader._perf_info.load_all_elapsed = (
@@ -451,18 +453,57 @@ class ManifestLoader:
 
             loader.track_project_load()
 
-            return manifest
+        return manifest
 
+    # The point of this is to store the lightweight
+    # MacroManifest in the adapter, with the same files
+    # and macros in the Manifest
+    def load_macros_from_adapter(self, adapter):
+        if adapter._macro_manifest_lazy is None:
+            macro_manifest = self.create_macro_manifest()
+            adapter._macro_manifest_lazy = macro_manifest
+            # macro_hook = adapter MacroQueryStringSetter callable
+            self.macro_hook(macro_manifest)
+            # the files and macros are already in self.manifest
+        else:
+            macro_manifest = adapter._macro_manifest_lazy
+            self.manifest.files = macro_manifest.files
+            self.manifest.macros = macro_manifest.macros
+            # macro_hook = adapter MacroQueryStringSetter callable
+            self.macro_hook(macro_manifest)
+
+    # This creates a MacroManifest with 'files' and 'macros' to
+    # save in the adapter
+    def create_macro_manifest(self):
+        for project in self.all_projects.values():
+            # what is the manifest passed in actually used for?
+            parser = MacroParser(project, self.manifest)
+            for path in parser.search():
+                self.parse_with_cache(path, parser)
+        macro_manifest = MacroManifest(self.manifest.macros, self.manifest.files)
+        return macro_manifest
+
+    # This is called by the adapter code only, to create the
+    # MacroManifest that's stored in the adapter.
+    # 'get_full_manifest' uses a persistent ManifestLoader while this
+    # creates a temporary ManifestLoader and throws it away.
+    # Not sure when this would actually get used. The
+    # ManifestLoader uses 'load_macros_from_adapter' above.
     @classmethod
     def load_macros(
         cls,
         root_config: RuntimeConfig,
-        macro_hook: Callable[[AnyManifest], Any],
-    ) -> MacroManifest:
+        macro_hook: Callable[[Manifest], Any],
+    ) -> Manifest:
         with PARSING_STATE:
             projects = root_config.load_dependencies()
+            # This creates a loader object, including result,
+            # and then throws it away, returning only the
+            # manifest
             loader = cls(root_config, projects, macro_hook)
-            return loader.load_only_macros()
+            macro_manifest = loader.create_macro_manifest()
+
+        return macro_manifest
 
 
 def invalid_ref_fail_unless_test(node, target_model_name,
@@ -559,6 +600,7 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _warn_for_unused_resource_config_paths(manifest, config)
 
 
+# This is just used in test cases
 def _load_projects(config, paths):
     for path in paths:
         try:
@@ -592,6 +634,7 @@ DocsContextCallback = Callable[
 ]
 
 
+# node and column descriptions
 def _process_docs_for_node(
     context: Dict[str, Any],
     node: ManifestNode,
@@ -601,6 +644,7 @@ def _process_docs_for_node(
         column.description = get_rendered(column.description, context)
 
 
+# source and table descriptions, column descriptions
 def _process_docs_for_source(
     context: Dict[str, Any],
     source: ParsedSourceDefinition,
@@ -618,6 +662,7 @@ def _process_docs_for_source(
         column.description = column_desc
 
 
+# macro argument descriptions
 def _process_docs_for_macro(
     context: Dict[str, Any], macro: ParsedMacro
 ) -> None:
@@ -626,12 +671,17 @@ def _process_docs_for_macro(
         arg.description = get_rendered(arg.description, context)
 
 
+# exposure descriptions
 def _process_docs_for_exposure(
     context: Dict[str, Any], exposure: ParsedExposure
 ) -> None:
     exposure.description = get_rendered(exposure.description, context)
 
 
+# nodes: node and column descriptions
+# sources: source and table descriptions, column descriptions
+# macros: macro argument descriptions
+# exposures: exposure descriptions
 def process_docs(manifest: Manifest, config: RuntimeConfig):
     for node in manifest.nodes.values():
         ctx = generate_runtime_docs(
@@ -750,9 +800,12 @@ def _process_refs_for_node(
         # TODO: I think this is extraneous, node should already be the same
         # as manifest.nodes[node.unique_id] (we're mutating node here, not
         # making a new one)
+        # Q: could we stop doing this?
         manifest.update_node(node)
 
 
+# Takes references in 'refs' array of nodes and exposures, finds the target
+# node, and updates 'depends_on.nodes' with the unique id
 def process_refs(manifest: Manifest, current_project: str):
     for node in manifest.nodes.values():
         _process_refs_for_node(manifest, current_project, node)
@@ -812,6 +865,9 @@ def _process_sources_for_node(
         manifest.update_node(node)
 
 
+# Loops through all nodes and exposures, for each element in
+# 'sources' array finds the source node and updates the
+# 'depends_on.nodes' array with the unique id
 def process_sources(manifest: Manifest, current_project: str):
     for node in manifest.nodes.values():
         if node.resource_type == NodeType.Source:
@@ -823,6 +879,8 @@ def process_sources(manifest: Manifest, current_project: str):
     return manifest
 
 
+# This is called in task.rpc.sql_commands when a "dynamic" node is
+# created in the manifest, in 'add_refs'
 def process_macro(
     config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro
 ) -> None:
@@ -835,6 +893,8 @@ def process_macro(
     _process_docs_for_macro(ctx, macro)
 
 
+# This is called in task.rpc.sql_commands when a "dynamic" node is
+# created in the manifest, in 'add_refs'
 def process_node(
     config: RuntimeConfig, manifest: Manifest, node: ManifestNode
 ):
@@ -845,18 +905,3 @@ def process_node(
     _process_refs_for_node(manifest, config.project_name, node)
     ctx = generate_runtime_docs(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)
-
-
-def load_macro_manifest(
-    config: RuntimeConfig,
-    macro_hook: Callable[[AnyManifest], Any],
-) -> MacroManifest:
-    return ManifestLoader.load_macros(config, macro_hook)
-
-
-def load_manifest(
-    config: RuntimeConfig,
-    macro_manifest: MacroManifest,
-    macro_hook: Callable[[AnyManifest], Any],
-) -> Manifest:
-    return ManifestLoader.load_all(config, macro_manifest, macro_hook)
