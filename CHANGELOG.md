@@ -20,8 +20,8 @@
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
 - Update script to collect and write json schema for dbt artifacts ([#2870](https://github.com/fishtown-analytics/dbt/issues/2870), [#3065](https://github.com/fishtown-analytics/dbt/pull/3065))
 - Bump `snowflake-connector-python` and releated dependencies, support Python 3.9 ([#2985](https://github.com/fishtown-analytics/dbt/issues/2985), [#3148](https://github.com/fishtown-analytics/dbt/pull/3148))
-- General development environment clean up and improve experience running tests
-  locally ([#3194](https://github.com/fishtown-analytics/dbt/issues/3194), [#3204](https://github.com/fishtown-analytics/dbt/pull/3204))
+- General development environment clean up and improve experience running tests locally ([#3194](https://github.com/fishtown-analytics/dbt/issues/3194), [#3204](https://github.com/fishtown-analytics/dbt/pull/3204))
+- Add a new materialization for tests, update data tests to use test materialization when executing. ([#3154](https://github.com/fishtown-analytics/dbt/issues/3154), [#3181](https://github.com/fishtown-analytics/dbt/pull/3181))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))

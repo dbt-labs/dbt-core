@@ -16,7 +16,13 @@ from dbt.contracts.graph.parsed import (
     ParsedSchemaTestNode,
 )
 from dbt.contracts.results import RunResult, TestStatus
-from dbt.exceptions import raise_compiler_error, InternalException
+from dbt.context.providers import generate_runtime_model
+from dbt.clients.jinja import MacroGenerator
+from dbt.exceptions import (
+    raise_compiler_error,
+    InternalException,
+    missing_materialization
+)
 from dbt.graph import (
     ResourceTypeSelector,
     SelectionSpec,
@@ -41,25 +47,8 @@ class TestRunner(CompileRunner):
         description = self.describe_node()
         print_start_line(description, self.node_index, self.num_nodes)
 
-    def execute_data_test(self, test: CompiledDataTestNode):
-        res, table = self.adapter.execute(
-            test.compiled_sql, auto_begin=True, fetch=True
-        )
-
-        num_rows = len(table.rows)
-        if num_rows != 1:
-            num_cols = len(table.columns)
-            # since we just wrapped our query in `select count(*)`, we are in
-            # big trouble!
-            raise InternalException(
-                f"dbt internally failed to execute {test.unique_id}: "
-                f"Returned {num_rows} rows and {num_cols} cols, but expected "
-                f"1 row and 1 column"
-            )
-        return table[0][0]
-
     def execute_schema_test(self, test: CompiledSchemaTestNode):
-        res, table = self.adapter.execute(
+        _, table = self.adapter.execute(
             test.compiled_sql,
             auto_begin=True,
             fetch=True,
@@ -78,9 +67,53 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
+    def execute_data_test(
+        self,
+        test: CompiledDataTestNode,
+        manifest: Manifest
+    ) -> int:
+        context = generate_runtime_model(
+            test, self.config, manifest
+        )
+
+        materialization_macro = manifest.find_materialization_macro_by_name(
+            self.config.project_name,
+            test.get_materialization(),
+            self.adapter.type())
+
+        if materialization_macro is None:
+            missing_materialization(test, self.adapter.type())
+
+        if 'config' not in context:
+            raise InternalException(
+                'Invalid materialization context generated, missing config: {}'
+                .format(context)
+            )
+
+        # generate materialization macro
+        # simple `select(*)` of the compiled test node
+        macro_func = MacroGenerator(materialization_macro, context)
+        # execute materialization macro
+        macro_func()
+        # load results from context
+        # could eventually be returned directly by materialization
+        result = context['load_result']('main')
+        table = result['table']
+        num_rows = len(table.rows)
+        if num_rows != 1:
+            num_cols = len(table.columns)
+            # since we just wrapped our query in `select count(*)`, we are in
+            # big trouble!
+            raise InternalException(
+                f"dbt internally failed to execute {test.unique_id}: "
+                f"Returned {num_rows} rows and {num_cols} cols, but expected "
+                f"1 row and 1 column"
+            )
+        return int(table[0][0])
+
     def execute(self, test: CompiledTestNode, manifest: Manifest):
         if isinstance(test, CompiledDataTestNode):
-            failed_rows = self.execute_data_test(test)
+            failed_rows = self.execute_data_test(test, manifest)
         elif isinstance(test, CompiledSchemaTestNode):
             failed_rows = self.execute_schema_test(test)
         else:

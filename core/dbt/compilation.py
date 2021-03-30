@@ -12,7 +12,6 @@ from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.compiled import (
-    CompiledDataTestNode,
     CompiledSchemaTestNode,
     COMPILED_TYPES,
     GraphMemberNode,
@@ -351,34 +350,6 @@ class Compiler:
 
         return model, prepended_ctes
 
-    def _add_ctes(
-        self,
-        compiled_node: NonSourceCompiledNode,
-        manifest: Manifest,
-        extra_context: Dict[str, Any],
-    ) -> NonSourceCompiledNode:
-        """Wrap the data test SQL in a CTE."""
-
-        # for data tests, we need to insert a special CTE at the end of the
-        # list containing the test query, and then have the "real" query be a
-        # select count(*) from that model.
-        # the benefit of doing it this way is that _add_ctes() can be
-        # rewritten for different adapters to handle databases that don't
-        # support CTEs, or at least don't have full support.
-        if isinstance(compiled_node, CompiledDataTestNode):
-            # the last prepend (so last in order) should be the data test body.
-            # then we can add our select count(*) from _that_ cte as the "real"
-            # compiled_sql, and do the regular prepend logic from CTEs.
-            name = self._get_dbt_test_name()
-            cte = InjectedCTE(
-                id=name,
-                sql=f' {name} as (\n{compiled_node.compiled_sql}\n)'
-            )
-            compiled_node.extra_ctes.append(cte)
-            compiled_node.compiled_sql = f'\nselect count(*) from {name}'
-
-        return compiled_node
-
     # creates a compiled_node from the ManifestNode passed in,
     # creates a "context" dictionary for jinja rendering,
     # and then renders the "compiled_sql" using the node, the
@@ -416,12 +387,6 @@ class Compiler:
         compiled_node.relation_name = self._get_relation_name(node)
 
         compiled_node.compiled = True
-
-        # add ctes for specific test nodes, and also for
-        # possible future use in adapters
-        compiled_node = self._add_ctes(
-            compiled_node, manifest, extra_context
-        )
 
         return compiled_node
 
