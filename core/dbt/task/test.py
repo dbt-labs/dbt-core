@@ -90,7 +90,13 @@ class TestRunner(CompileRunner):
                 .format(context)
             )
 
-        MacroGenerator(materialization_macro, context)()
+        # generate materialization macro
+        # simple `select(*)` of the compiled test node
+        macro_func = MacroGenerator(materialization_macro, context)
+        # execute materialization macro
+        macro_func()
+        # load results from context
+        # could eventually be returned directly by materialization
         result = context['load_result']('main')
         table = result['table']
         num_rows = len(table.rows)
