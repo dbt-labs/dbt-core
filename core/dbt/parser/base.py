@@ -130,16 +130,13 @@ class ConfiguredParser(
         super().__init__(project, manifest, root_project)
 
         self._update_node_database = RelationUpdate(
-            manifest=manifest, config=root_project,
-            component='database'
+            manifest=manifest, config=root_project, component="database"
         )
         self._update_node_schema = RelationUpdate(
-            manifest=manifest, config=root_project,
-            component='schema'
+            manifest=manifest, config=root_project, component="schema"
         )
         self._update_node_alias = RelationUpdate(
-            manifest=manifest, config=root_project,
-            component='alias'
+            manifest=manifest, config=root_project, component="alias"
         )
 
     @abc.abstractclassmethod

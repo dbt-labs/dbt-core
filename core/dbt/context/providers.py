@@ -27,9 +27,7 @@ from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.connection import AdapterResponse
-from dbt.contracts.graph.manifest import (
-    Manifest, Disabled
-)
+from dbt.contracts.graph.manifest import Manifest, Disabled
 from dbt.contracts.graph.compiled import (
     CompiledResource,
     CompiledSeedNode,

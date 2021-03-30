@@ -185,9 +185,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         )
         internal_package_names = get_adapter_package_names(self.root_project.credentials.type)
         self.macro_resolver = MacroResolver(
-            self.manifest.macros,
-            self.root_project.project_name,
-            internal_package_names
+            self.manifest.macros, self.root_project.project_name, internal_package_names
         )
 
     @classmethod
