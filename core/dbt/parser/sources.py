@@ -197,9 +197,7 @@ class SourcePatcher:
         else:
             all_projects = self.root_project.load_dependencies()
             project = all_projects[package_name]
-            schema_parser = SchemaParser(
-                project, self.manifest, self.root_project
-            )
+            schema_parser = SchemaParser(project, self.manifest, self.root_project)
             self.schema_parsers[package_name] = schema_parser
         return schema_parser
 
