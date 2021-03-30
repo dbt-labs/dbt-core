@@ -274,7 +274,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         if self._macro_manifest_lazy is None:
             # avoid a circular import
             from dbt.parser.manifest import ManifestLoader
-            manifest = ManifestLoader.load_macros(
+
                 self.config, self.connections.set_query_header
             )
             self._macro_manifest_lazy = manifest

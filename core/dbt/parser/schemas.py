@@ -167,7 +167,10 @@ def _trimmed(inp: str) -> str:
 
 class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
     def __init__(
-        self, project, manifest, root_project,
+        self,
+        project,
+        manifest,
+        root_project,
     ) -> None:
         super().__init__(project, manifest, root_project)
 
@@ -394,7 +397,10 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             try:
                 # make a base context that doesn't have the magic kwargs field
                 context = generate_test_context(
-                    node, self.root_project, self.manifest, config,
+                    node,
+                    self.root_project,
+                    self.manifest,
+                    config,
                     self.macro_resolver,
                 )
                 # update with rendered test kwargs (which collects any refs)

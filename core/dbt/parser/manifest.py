@@ -578,7 +578,8 @@ class ManifestLoader:
             reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
-            k for k in self.manifest.state_check.project_hashes
+            k
+            for k in self.manifest.state_check.project_hashes
             if k not in manifest.state_check.project_hashes
         }
         if missing_keys:
@@ -677,12 +678,14 @@ class ManifestLoader:
         # to not pass, it doesn't matter.  If we move to more granular checking
         # of env_vars, that would need to change.
         vars_hash = FileHash.from_contents(
-            '\x00'.join([
-                getattr(config.args, 'vars', '{}') or '{}',
-                getattr(config.args, 'profile', '') or '',
-                getattr(config.args, 'target', '') or '',
-                __version__
-            ])
+            "\x00".join(
+                [
+                    getattr(config.args, "vars", "{}") or "{}",
+                    getattr(config.args, "profile", "") or "",
+                    getattr(config.args, "target", "") or "",
+                    __version__,
+                ]
+            )
         )
 
         # Create a FileHash of the env_vars in the project
@@ -709,7 +712,7 @@ class ManifestLoader:
         # Create a FileHashes for dbt_project for all dependencies
         project_hashes = {}
         for name, project in all_projects.items():
-            path = os.path.join(project.project_root, 'dbt_project.yml')
+            path = os.path.join(project.project_root, "dbt_project.yml")
             with open(path) as fp:
                 project_hashes[name] = FileHash.from_contents(fp.read())
 

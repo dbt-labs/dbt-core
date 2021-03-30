@@ -116,7 +116,7 @@ class SourceLookup(dbtClassMixin):
 
     def populate(self, manifest):
         for source in manifest.sources.values():
-            if hasattr(source, 'source_name'):
+            if hasattr(source, "source_name"):
                 self.add_source(source)
 
     def perform_lookup(
@@ -968,7 +968,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             # note that the line wrap eats newlines, so if you want newlines,
             # this is the result :(
             msg = line_wrap_message(
-                f'''\
+                f"""\
                 dbt found two macros named "{macro.name}" in the project
                 "{macro.package_name}".
 
@@ -979,8 +979,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                     - {macro.original_file_path}
 
                     - {other_path}
-                ''',
-                subtract=2
+                """,
+                subtract=2,
             )
             raise_compiler_error(msg)
 
@@ -1143,11 +1143,7 @@ class WritableManifest(ArtifactMixin):
     metadata: ManifestMetadata = field(metadata=dict(
         description='Metadata about the manifest',
     ))
-
-
-def _check_duplicates(
-    value: HasUniqueID, src: Mapping[str, HasUniqueID]
-):
+def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])
 
@@ -1156,13 +1152,10 @@ K_T = TypeVar('K_T')
 V_T = TypeVar('V_T')
 
 
-def _expect_value(
-    key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str
-) -> V_T:
+def _expect_value(key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str) -> V_T:
     if key not in src:
         raise CompilationException(
             'Expected to find "{}" in cached "result.{}" based '
-            'on cached file information: {}!'
-            .format(key, name, old_file)
+            "on cached file information: {}!".format(key, name, old_file)
         )
     return src[key]
