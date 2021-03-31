@@ -190,7 +190,8 @@ class TestRedshiftAdapter(unittest.TestCase):
             password='password',
             port=5439,
             connect_timeout=10,
-            keepalives_idle=240
+            keepalives_idle=240,
+            application_name='dbt'
         )
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -207,7 +208,8 @@ class TestRedshiftAdapter(unittest.TestCase):
             password='password',
             port=5439,
             connect_timeout=10,
-            keepalives_idle=256)
+            keepalives_idle=256,
+            application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_search_path(self, psycopg2):
@@ -224,7 +226,8 @@ class TestRedshiftAdapter(unittest.TestCase):
             port=5439,
             connect_timeout=10,
             options="-c search_path=test",
-            keepalives_idle=240)
+            keepalives_idle=240,
+            application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_search_path_with_space(self, psycopg2):
@@ -241,7 +244,8 @@ class TestRedshiftAdapter(unittest.TestCase):
             port=5439,
             connect_timeout=10,
             options=r"-c search_path=test\ test",
-            keepalives_idle=240)
+            keepalives_idle=240,
+            application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
@@ -256,7 +260,8 @@ class TestRedshiftAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5439,
-            connect_timeout=10)
+            connect_timeout=10,
+            application_name='dbt')
 
     def test_dbname_verification_is_case_insensitive(self):
         # Override adapter settings from setUp()
