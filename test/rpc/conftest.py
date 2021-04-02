@@ -1,4 +1,5 @@
 import os
+import sys
 import pytest
 import random
 import time
@@ -12,6 +13,11 @@ def pytest_addoption(parser):
         '--profile', default='postgres', help='Use the postgres profile',
     )
 
+def pytest_runtest_setup(item):
+    # this is a hack in place to work around marking tests at the module level
+    # https://github.com/pytest-dev/pytest/issues/5830
+    if os.name == 'nt':
+        pytest.skip('"dbt rpc" not supported on windows')
 
 def _get_item_profiles(item) -> Set[str]:
     supported = set()
@@ -57,8 +63,9 @@ def profiles_root(tmpdir):
 def project_root(tmpdir):
     return tmpdir.mkdir('project')
 
-
 def postgres_profile_data(unique_schema):
+    database_host = os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
+
     return {
         'config': {
             'send_anonymous_usage_stats': False
@@ -68,7 +75,7 @@ def postgres_profile_data(unique_schema):
                 'default': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': 'database',
+                    'host': database_host,
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',
@@ -78,7 +85,7 @@ def postgres_profile_data(unique_schema):
                 'other_schema': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': 'database',
+                    'host': database_host,
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',

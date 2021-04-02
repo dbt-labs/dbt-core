@@ -119,7 +119,8 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=10)
+            connect_timeout=10,
+            application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_changed_keepalive(self, psycopg2):
@@ -135,8 +136,39 @@ class TestPostgresAdapter(unittest.TestCase):
             password='password',
             port=5432,
             connect_timeout=10,
-            keepalives_idle=256)
+            keepalives_idle=256,
+            application_name='dbt')
 
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_default_application_name(self, psycopg2):
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=10,
+            application_name='dbt')
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_changed_application_name(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(application_name='myapp')
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=10,
+            application_name='myapp')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_role(self, psycopg2):
@@ -161,6 +193,7 @@ class TestPostgresAdapter(unittest.TestCase):
             password='password',
             port=5432,
             connect_timeout=10,
+            application_name='dbt',
             options="-c search_path=test")
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -177,7 +210,8 @@ class TestPostgresAdapter(unittest.TestCase):
             password='password',
             port=5432,
             connect_timeout=10,
-            sslmode="require")
+            sslmode="require",
+            application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_schema_with_space(self, psycopg2):
@@ -193,6 +227,7 @@ class TestPostgresAdapter(unittest.TestCase):
             password='password',
             port=5432,
             connect_timeout=10,
+            application_name='dbt',
             options="-c search_path=test\ test")
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -208,7 +243,8 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=10)
+            connect_timeout=10,
+            application_name='dbt')
 
     @mock.patch.object(PostgresAdapter, 'execute_macro')
     @mock.patch.object(PostgresAdapter, '_get_catalog_schemas')

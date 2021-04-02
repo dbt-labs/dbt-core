@@ -6,7 +6,6 @@ env | grep '^PG'
 # If you want to run this script for your own postgresql (run with
 # docker-compose) it will look like this:
 # PGHOST=127.0.0.1 PGUSER=root PGPASSWORD=password PGDATABASE=postgres \
-#     bash test/setup.sh
 PGUSER="${PGUSER:-postgres}"
 export PGUSER
 PGPORT="${PGPORT:-5432}"

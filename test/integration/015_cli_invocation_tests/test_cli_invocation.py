@@ -149,7 +149,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_dbt_commands_with_randomdir_as_project_dir(self):
-        workdir = os.getcwd()
+        workdir = self.test_root_dir
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             self._run_simple_dbt_commands(workdir)
@@ -157,7 +157,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_dbt_commands_with_relative_dir_as_project_dir(self):
-        workdir = os.getcwd()
+        workdir = self.test_root_dir
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             self._run_simple_dbt_commands(os.path.relpath(workdir, tmpdir))

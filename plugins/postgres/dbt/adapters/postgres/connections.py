@@ -23,6 +23,7 @@ class PostgresCredentials(Credentials):
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
     sslmode: Optional[str] = None
+    application_name: Optional[str] = 'dbt'
 
     _ALIASES = {
         'dbname': 'database',
@@ -92,6 +93,9 @@ class PostgresConnectionManager(SQLConnectionManager):
 
         if credentials.sslmode:
             kwargs['sslmode'] = credentials.sslmode
+
+        if credentials.application_name:
+            kwargs['application_name'] = credentials.application_name
 
         try:
             handle = psycopg2.connect(
