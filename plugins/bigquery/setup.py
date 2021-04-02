@@ -48,8 +48,6 @@ setup(
     install_requires=[
         'dbt-core=={}'.format(package_version),
         'protobuf>=3.13.0,<4',
-        # These are more tightly pinned, as they have a track record of
-        # breaking changes in minor releases.
         'google-cloud-core>=1.3.0,<2',
         'google-cloud-bigquery>=1.25.0,<3',
         'google-api-core>=1.16.0,<2',
