@@ -192,6 +192,15 @@ Contributors:
 - [@Mr-Nobody99](https://github.com/Mr-Nobody99) ([docs#138](https://github.com/fishtown-analytics/dbt-docs/pull/138))
 - [@jplynch77](https://github.com/jplynch77) ([docs#139](https://github.com/fishtown-analytics/dbt-docs/pull/139))
 
+## dbt 0.18.2 (March 22, 2021)
+
+## dbt 0.18.2rc1 (March 12, 2021)
+
+### Under the hood
+- Pin `agate<1.6.2` to avoid installation errors relating to its new dependency
+  `PyICU` ([#3160](https://github.com/fishtown-analytics/dbt/issues/3160),
+  [#3161](https://github.com/fishtown-analytics/dbt/pull/3161))
+
 ## dbt 0.18.1 (October 13, 2020)
 
 ## dbt 0.18.1rc1 (October 01, 2020)
