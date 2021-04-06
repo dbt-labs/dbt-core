@@ -23,15 +23,14 @@ from dbt.context.context_config import (
 from dbt.contracts.files import (
     SourceFile, FilePath, FileHash
 )
-from dbt.contracts.graph.manifest import MacroManifest
-from dbt.contracts.graph.parsed import HasUniqueID
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
     CompilationException, validator_error_message, InternalException
 )
 from dbt import hooks
 from dbt.node_types import NodeType
-from dbt.parser.results import ParseResult, ManifestNodes
 from dbt.parser.search import FileBlock
 
 # internally, the parser may store a less-restrictive type that will be
@@ -48,10 +47,10 @@ ConfiguredBlockType = TypeVar('ConfiguredBlockType', bound=FileBlock)
 
 
 class BaseParser(Generic[FinalValue]):
-    def __init__(self, results: ParseResult, project: Project) -> None:
-        self.results = results
+    def __init__(self, project: Project, manifest: Manifest) -> None:
         self.project = project
-        # this should be a superset of [x.path for x in self.results.files]
+        self.manifest = manifest
+        # this should be a superset of [x.path for x in self.manifest.files]
         # because we fill it via search()
         self.searched: List[FilePath] = []
 
@@ -96,22 +95,20 @@ class BaseParser(Generic[FinalValue]):
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
     def __init__(
         self,
-        results: ParseResult,
         project: Project,
+        manifest: Manifest,
         root_project: RuntimeConfig,
-        macro_manifest: MacroManifest,
     ) -> None:
-        super().__init__(results, project)
+        super().__init__(project, manifest)
         self.root_project = root_project
-        self.macro_manifest = macro_manifest
 
 
 class RelationUpdate:
     def __init__(
-        self, config: RuntimeConfig, macro_manifest: MacroManifest,
+        self, config: RuntimeConfig, manifest: Manifest,
         component: str
     ) -> None:
-        macro = macro_manifest.find_generate_macro_by_name(
+        macro = manifest.find_generate_macro_by_name(
             component=component,
             root_project_name=config.project_name,
         )
@@ -121,7 +118,7 @@ class RelationUpdate:
             )
 
         root_context = generate_generate_component_name_macro(
-            macro, config, macro_manifest
+            macro, config, manifest
         )
         self.updater = MacroGenerator(macro, root_context)
         self.component = component
@@ -142,23 +139,22 @@ class ConfiguredParser(
 ):
     def __init__(
         self,
-        results: ParseResult,
         project: Project,
+        manifest: Manifest,
         root_project: RuntimeConfig,
-        macro_manifest: MacroManifest,
     ) -> None:
-        super().__init__(results, project, root_project, macro_manifest)
+        super().__init__(project, manifest, root_project)
 
         self._update_node_database = RelationUpdate(
-            macro_manifest=macro_manifest, config=root_project,
+            manifest=manifest, config=root_project,
             component='database'
         )
         self._update_node_schema = RelationUpdate(
-            macro_manifest=macro_manifest, config=root_project,
+            manifest=manifest, config=root_project,
             component='schema'
         )
         self._update_node_alias = RelationUpdate(
-            macro_manifest=macro_manifest, config=root_project,
+            manifest=manifest, config=root_project,
             component='alias'
         )
 
@@ -273,7 +269,7 @@ class ConfiguredParser(
         self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> Dict[str, Any]:
         return generate_parser_model(
-            parsed_node, self.root_project, self.macro_manifest, config
+            parsed_node, self.root_project, self.manifest, config
         )
 
     def render_with_context(
@@ -386,9 +382,9 @@ class ConfiguredParser(
 
     def add_result_node(self, block: FileBlock, node: ManifestNodes):
         if node.config.enabled:
-            self.results.add_node(block.file, node)
+            self.manifest.add_node(block.file, node)
         else:
-            self.results.add_disabled(block.file, node)
+            self.manifest.add_disabled(block.file, node)
 
     def parse_node(self, block: ConfiguredBlockType) -> FinalNode:
         compiled_path: str = self.get_compiled_path(block)

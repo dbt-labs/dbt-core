@@ -14,7 +14,6 @@ from dbt.contracts.rpc import RPCExecParameters
 from dbt.contracts.rpc import RemoteExecutionResult
 from dbt.exceptions import RPCKilledException, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.parser.results import ParseResult
 from dbt.parser.manifest import process_node, process_macro
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.rpc.error import invalid_params
@@ -42,7 +41,9 @@ def add_new_refs(
     for macro in macros.values():
         process_macro(config, manifest, macro)
 
-    manifest.add_nodes({node.unique_id: node})
+    # We used to do 'manifest.add_nodes({node.unique_id: node}) here, but the
+    # node has already been added to the Manifest by the RPCCallParser
+    # now that we save nodes to the Manifest instead of ParseResults.
     process_node(config, manifest, node)
 
 
@@ -102,22 +103,20 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
                 'manifest not set in _get_exec_node'
             )
 
-        results = ParseResult.rpc()
         macro_overrides = {}
         macros = self.args.macros
         sql, macros = self._extract_request_data(self.args.sql)
 
         if macros:
-            macro_parser = RPCMacroParser(results, self.config)
+            macro_parser = RPCMacroParser(self.config, self.manifest)
             for node in macro_parser.parse_remote(macros):
                 macro_overrides[node.unique_id] = node
 
         self.manifest.macros.update(macro_overrides)
         rpc_parser = RPCCallParser(
-            results=results,
             project=self.config,
+            manifest=self.manifest,
             root_project=self.config,
-            macro_manifest=self.manifest,
         )
         rpc_node = rpc_parser.parse_remote(sql, self.args.name)
         add_new_refs(

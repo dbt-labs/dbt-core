@@ -14,7 +14,7 @@ from dbt.rpc.method import (
     Result,
 )
 from dbt.exceptions import InternalException
-from dbt.perf_utils import get_full_manifest
+from dbt.parser.manifest import ManifestLoader
 
 from .base import RPCTask
 
@@ -104,7 +104,7 @@ class RemoteRPCCli(RPCTask[RPCCliParameters]):
         if dumped != self.args.vars:
             self.real_task.args.vars = dumped
             if isinstance(self.real_task, RemoteManifestMethod):
-                self.real_task.manifest = get_full_manifest(
+                self.real_task.manifest = ManifestLoader.get_full_manifest(
                     self.config, reset=True
                 )
 

@@ -158,9 +158,9 @@ def merge_freshness(
 
 class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     def __init__(
-        self, results, project, root_project, macro_manifest,
+        self, project, manifest, root_project,
     ) -> None:
-        super().__init__(results, project, root_project, macro_manifest)
+        super().__init__(project, manifest, root_project)
         all_v_2 = (
             self.root_project.config_version == 2 and
             self.project.config_version == 2
@@ -180,7 +180,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             self.root_project.credentials.type
         )
         self.macro_resolver = MacroResolver(
-            self.macro_manifest.macros,
+            self.manifest.macros,
             self.root_project.project_name,
             internal_package_names
         )
@@ -284,6 +284,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         relation_cls = adapter.Relation
         return str(relation_cls.create_from(self.root_project, node))
 
+    # This converts an UnpatchedSourceDefinition to a ParsedSourceDefinition
+    # it is used by the SourcePatcher.
     def parse_source(
         self, target: UnpatchedSourceDefinition
     ) -> ParsedSourceDefinition:
@@ -496,7 +498,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             try:
                 # make a base context that doesn't have the magic kwargs field
                 context = generate_test_context(
-                    node, self.root_project, self.macro_manifest, config,
+                    node, self.root_project, self.manifest, config,
                     self.macro_resolver,
                 )
                 # update with rendered test kwargs (which collects any refs)
@@ -542,9 +544,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         )
         # we can't go through result.add_node - no file... instead!
         if node.config.enabled:
-            self.results.add_node_nofile(node)
+            self.manifest.add_node_nofile(node)
         else:
-            self.results.add_disabled_nofile(node)
+            self.manifest.add_disabled_nofile(node)
         return node
 
     def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
@@ -618,13 +620,13 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     def parse_exposures(self, block: YamlBlock) -> None:
         parser = ExposureParser(self, block)
         for node in parser.parse():
-            self.results.add_exposure(block.file, node)
+            self.manifest.add_exposure(block.file, node)
 
     def parse_file(self, block: FileBlock) -> None:
         dct = self._yaml_from_file(block.file)
 
-        # mark the file as seen, in ParseResult.files
-        self.results.get_file(block.file)
+        # mark the file as seen, in Manifest.files
+        self.manifest.get_file(block.file)
 
         if dct:
             try:
@@ -716,8 +718,8 @@ class YamlReader(metaclass=ABCMeta):
         self.yaml = yaml
 
     @property
-    def results(self):
-        return self.schema_parser.results
+    def manifest(self):
+        return self.schema_parser.manifest
 
     @property
     def project(self):
@@ -765,6 +767,7 @@ class YamlDocsReader(YamlReader):
 T = TypeVar('T', bound=dbtClassMixin)
 
 
+# This parses the 'sources' keys in yaml files.
 class SourceParser(YamlDocsReader):
     def _target_from_dict(self, cls: Type[T], data: Dict[str, Any]) -> T:
         path = self.yaml.path.original_file_path
@@ -775,7 +778,11 @@ class SourceParser(YamlDocsReader):
             msg = error_context(path, self.key, data, exc)
             raise CompilationException(msg) from exc
 
-    # the other parse method returns TestBlocks. This one doesn't.
+    # The other parse method returns TestBlocks. This one doesn't.
+    # This takes the yaml dictionaries in 'sources' keys and uses them
+    # to create UnparsedSourceDefinition objects. They are then turned
+    # into UnpatchedSourceDefinition objects in 'add_source_definitions'
+    # or SourcePatch objects in 'add_source_patch'
     def parse(self) -> List[TestBlock]:
         # get a verified list of dicts for the key handled by this parser
         for data in self.get_key_dicts():
@@ -787,7 +794,7 @@ class SourceParser(YamlDocsReader):
             if is_override:
                 data['path'] = self.yaml.path.original_file_path
                 patch = self._target_from_dict(SourcePatch, data)
-                self.results.add_source_patch(self.yaml.file, patch)
+                self.manifest.add_source_patch(self.yaml.file, patch)
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
                 self.add_source_definitions(source)
@@ -817,7 +824,7 @@ class SourceParser(YamlDocsReader):
                 resource_type=NodeType.Source,
                 fqn=fqn,
             )
-            self.results.add_source(self.yaml.file, result)
+            self.manifest.add_source(self.yaml.file, result)
 
 
 # This class has three main subclasses: TestablePatchParser (models,
@@ -860,8 +867,8 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 refs: ParserRef = ParserRef.from_target(node)
             else:
                 refs = ParserRef()
-            # This adds the node_block to self.results (a ParseResult
-            # object) as a ParsedNodePatch or ParsedMacroPatch
+            # This adds the node_block to self.manifest
+            # as a ParsedNodePatch or ParsedMacroPatch
             self.parse_patch(node_block, refs)
         return test_blocks
 
@@ -898,7 +905,7 @@ class NodePatchParser(
     def parse_patch(
         self, block: TargetBlock[NodeTarget], refs: ParserRef
     ) -> None:
-        result = ParsedNodePatch(
+        patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
             yaml_key=block.target.yaml_key,
@@ -908,7 +915,7 @@ class NodePatchParser(
             meta=block.target.meta,
             docs=block.target.docs,
         )
-        self.results.add_patch(self.yaml.file, result)
+        self.manifest.add_patch(self.yaml.file, patch)
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
@@ -937,7 +944,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
     def parse_patch(
         self, block: TargetBlock[UnparsedMacroUpdate], refs: ParserRef
     ) -> None:
-        result = ParsedMacroPatch(
+        patch = ParsedMacroPatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
             yaml_key=block.target.yaml_key,
@@ -947,7 +954,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             meta=block.target.meta,
             docs=block.target.docs,
         )
-        self.results.add_macro_patch(self.yaml.file, result)
+        self.manifest.add_macro_patch(self.yaml.file, patch)
 
 
 class ExposureParser(YamlReader):
@@ -981,7 +988,7 @@ class ExposureParser(YamlReader):
         ctx = generate_parse_exposure(
             parsed,
             self.root_project,
-            self.schema_parser.macro_manifest,
+            self.schema_parser.manifest,
             package_name,
         )
         depends_on_jinja = '\n'.join(
