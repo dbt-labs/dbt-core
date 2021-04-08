@@ -57,7 +57,7 @@ class MacroParser(BaseParser[ParsedMacro]):
                 t
                 for t in jinja.extract_toplevel_blocks(
                     base_node.raw_sql,
-                    allowed_blocks={'macro', 'materialization', 'test'},
+                    allowed_blocks={"macro", "materialization", "test"},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)

@@ -101,7 +101,7 @@ def get_docs_macro_name(docs_name, with_prefix=True):
 
 
 def get_test_macro_name(test_name, with_prefix=True):
-    name = f'test_{test_name}'
+    name = f"test_{test_name}"
     return get_dbt_macro_name(name) if with_prefix else name
 
 

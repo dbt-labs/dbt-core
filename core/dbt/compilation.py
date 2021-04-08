@@ -305,17 +305,17 @@ class Compiler:
         for cte in model.extra_ctes:
             if cte.id not in manifest.nodes:
                 raise InternalException(
-                    f'During compilation, found a cte reference that '
-                    f'could not be resolved: {cte.id}'
+                    f"During compilation, found a cte reference that "
+                    f"could not be resolved: {cte.id}"
                 )
             cte_model = manifest.nodes[cte.id]
 
             if not cte_model.is_ephemeral_model:
-                raise InternalException(f'{cte.id} is not ephemeral')
+                raise InternalException(f"{cte.id} is not ephemeral")
 
             # This model has already been compiled, so it's been
             # through here before
-            if getattr(cte_model, 'compiled', False):
+            if getattr(cte_model, "compiled", False):
                 assert isinstance(cte_model, tuple(COMPILED_TYPES.values()))
                 cte_model = cast(NonSourceCompiledNode, cte_model)
                 new_prepended_ctes = cte_model.extra_ctes
@@ -324,11 +324,10 @@ class Compiler:
             else:
                 # This is an ephemeral parsed model that we can compile.
                 # Compile and update the node
-                cte_model = self._compile_node(
-                    cte_model, manifest, extra_context)
+                cte_model = self._compile_node(cte_model, manifest, extra_context)
                 # recursively call this method
-                cte_model, new_prepended_ctes = \
-                    self._recursively_prepend_ctes(
+                cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
+                    cte_model, manifest, extra_context
                         cte_model, manifest, extra_context
                     )
                 # Save compiled SQL file and sync manifest

@@ -389,7 +389,7 @@ class DocumentationExtension(jinja2.ext.Extension):
 
 
 class TestExtension(jinja2.ext.Extension):
-    tags = ['test']
+    tags = ["test"]
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
@@ -397,8 +397,7 @@ class TestExtension(jinja2.ext.Extension):
 
         parser.parse_signature(node)
         node.name = get_test_macro_name(test_name)
-        node.body = parser.parse_statements(('name:endtest',),
-                                            drop_needle=True)
+        node.body = parser.parse_statements(("name:endtest",), drop_needle=True)
         return node
 
 
@@ -473,7 +472,7 @@ def get_environment(
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
-    args['extensions'].append(TestExtension)
+    args["extensions"].append(TestExtension)
 
     env_cls: Type[jinja2.Environment]
     text_filter: Type
