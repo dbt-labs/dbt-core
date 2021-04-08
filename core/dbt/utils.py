@@ -101,6 +101,15 @@ def get_docs_macro_name(docs_name, with_prefix=True):
         return docs_name
 
 
+def get_test_macro_name(test_name, with_prefix=True):
+    name = f'test_{test_name}'
+
+    if with_prefix:
+        return get_dbt_macro_name(name)
+    else:
+        return name
+
+
 def split_path(path):
     return path.split(os.sep)
 

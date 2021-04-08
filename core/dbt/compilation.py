@@ -250,9 +250,6 @@ class Compiler:
 
         return str(parsed)
 
-    def _get_dbt_test_name(self) -> str:
-        return 'dbt__cte__internal_test'
-
     # This method is called by the 'compile_node' method. Starting
     # from the node that it is passed in, it will recursively call
     # itself using the 'extra_ctes'.  The 'ephemeral' models do
@@ -283,55 +280,49 @@ class Compiler:
         # gathered and then "injected" into the model.
         prepended_ctes: List[InjectedCTE] = []
 
-        dbt_test_name = self._get_dbt_test_name()
-
         # extra_ctes are added to the model by
         # RuntimeRefResolver.create_relation, which adds an
         # extra_cte for every model relation which is an
         # ephemeral model.
         for cte in model.extra_ctes:
-            if cte.id == dbt_test_name:
-                sql = cte.sql
+            if cte.id not in manifest.nodes:
+                raise InternalException(
+                    f'During compilation, found a cte reference that '
+                    f'could not be resolved: {cte.id}'
+                )
+            cte_model = manifest.nodes[cte.id]
+
+            if not cte_model.is_ephemeral_model:
+                raise InternalException(f'{cte.id} is not ephemeral')
+
+            # This model has already been compiled, so it's been
+            # through here before
+            if getattr(cte_model, 'compiled', False):
+                assert isinstance(cte_model, tuple(COMPILED_TYPES.values()))
+                cte_model = cast(NonSourceCompiledNode, cte_model)
+                new_prepended_ctes = cte_model.extra_ctes
+
+            # if the cte_model isn't compiled, i.e. first time here
             else:
-                if cte.id not in manifest.nodes:
-                    raise InternalException(
-                        f'During compilation, found a cte reference that '
-                        f'could not be resolved: {cte.id}'
+                # This is an ephemeral parsed model that we can compile.
+                # Compile and update the node
+                cte_model = self._compile_node(
+                    cte_model, manifest, extra_context)
+                # recursively call this method
+                cte_model, new_prepended_ctes = \
+                    self._recursively_prepend_ctes(
+                        cte_model, manifest, extra_context
                     )
-                cte_model = manifest.nodes[cte.id]
+                # Save compiled SQL file and sync manifest
+                self._write_node(cte_model)
+                manifest.sync_update_node(cte_model)
 
-                if not cte_model.is_ephemeral_model:
-                    raise InternalException(f'{cte.id} is not ephemeral')
+            _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-                # This model has already been compiled, so it's been
-                # through here before
-                if getattr(cte_model, 'compiled', False):
-                    assert isinstance(cte_model,
-                                      tuple(COMPILED_TYPES.values()))
-                    cte_model = cast(NonSourceCompiledNode, cte_model)
-                    new_prepended_ctes = cte_model.extra_ctes
+            new_cte_name = self.add_ephemeral_prefix(cte_model.name)
+            sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
 
-                # if the cte_model isn't compiled, i.e. first time here
-                else:
-                    # This is an ephemeral parsed model that we can compile.
-                    # Compile and update the node
-                    cte_model = self._compile_node(
-                        cte_model, manifest, extra_context)
-                    # recursively call this method
-                    cte_model, new_prepended_ctes = \
-                        self._recursively_prepend_ctes(
-                            cte_model, manifest, extra_context
-                        )
-                    # Save compiled SQL file and sync manifest
-                    self._write_node(cte_model)
-                    manifest.sync_update_node(cte_model)
-
-                _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
-
-                new_cte_name = self.add_ephemeral_prefix(cte_model.name)
-                sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
-
-            _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
+        _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
         # We don't save injected_sql into compiled sql for ephemeral models
         # because it will cause problems with processing of subsequent models.
