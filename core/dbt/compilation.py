@@ -316,8 +316,7 @@ class Compiler:
                 # recursively call this method
                 cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
                     cte_model, manifest, extra_context
-                        cte_model, manifest, extra_context
-                    )
+                )
                 # Save compiled SQL file and sync manifest
                 self._write_node(cte_model)
                 manifest.sync_update_node(cte_model)
