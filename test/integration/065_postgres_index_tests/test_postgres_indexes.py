@@ -14,9 +14,25 @@ class TestPostgresIndex(DBTIntegrationTest):
     def models(self):
         return "models"
 
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'seeds': {
+                'quote_columns': False,
+                'indexes': [
+                  {'columns': ['country_code'], 'unique': False, 'type': 'hash'},
+                  {'columns': ['country_code', 'country_name'], 'unique': True},
+                ],
+            },
+            'vars': {
+                'version': 1
+            },
+        }
+
     @use_profile('postgres')
     def test__postgres__table(self):
-        results = self.run_dbt()
+        results = self.run_dbt(['run', '--models', 'table'])
         self.assertEqual(len(results),  1)
 
         indexes = self.get_indexes('table')
@@ -30,6 +46,51 @@ class TestPostgresIndex(DBTIntegrationTest):
               {'columns': 'column_a', 'unique': False, 'type': 'hash'}
             ]
         )
+
+    @use_profile('postgres')
+    def test__postgres__incremental(self):
+        for additional_argument in [[], [], ['--full-refresh']]:
+            results = self.run_dbt(['run', '--models', 'incremental'] + additional_argument)
+            self.assertEqual(len(results),  1)
+
+            indexes = self.get_indexes('incremental')
+            self.assertCountEqual(
+                indexes,
+                [
+                  {'columns': 'column_a', 'unique': False, 'type': 'hash'},
+                  {'columns': 'column_a, column_b', 'unique': True, 'type': 'btree'},
+                ]
+            )
+
+    @use_profile('postgres')
+    def test__postgres__seed(self):
+        for additional_argument in [[], [], ['--full-refresh']]:
+            results = self.run_dbt(["seed"] + additional_argument)
+            self.assertEqual(len(results),  1)
+
+            indexes = self.get_indexes('seed')
+            self.assertCountEqual(
+                indexes,
+                [
+                  {'columns': 'country_code', 'unique': False, 'type': 'hash'},
+                  {'columns': 'country_code, country_name', 'unique': True, 'type': 'btree'},
+                ]
+            )
+
+    @use_profile('postgres')
+    def test__postgres__snapshot(self):
+        for version in [1, 2]:
+            results = self.run_dbt(["snapshot", '--vars', 'version: {}'.format(version)])
+            self.assertEqual(len(results),  1)
+
+            indexes = self.get_indexes('colors')
+            self.assertCountEqual(
+                indexes,
+                [
+                  {'columns': 'id', 'unique': False, 'type': 'hash'},
+                  {'columns': 'id, color', 'unique': True, 'type': 'btree'},
+                ]
+            )
 
     def get_indexes(self, table_name):
         sql = """
@@ -53,3 +114,21 @@ class TestPostgresIndex(DBTIntegrationTest):
         is_unique = 'unique' in index_definition
         m = INDEX_DEFINITION_PATTERN.search(index_definition)
         return {'columns': m.group(2), 'unique': is_unique, 'type': m.group(1)}
+
+class TestPostgresInvalidIndex(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "postgres_index_065"
+
+    @property
+    def models(self):
+        return "models-invalid"
+
+    @use_profile('postgres')
+    def test__postgres__invalid_index_configs(self):
+        results, output = self.run_dbt_and_capture(expect_pass=False)
+        self.assertEqual(len(results), 4)
+        self.assertRegex(output, r'columns.*is not of type \'array\'')
+        self.assertRegex(output, r'unique.*is not of type \'boolean\'')
+        self.assertRegex(output, r'\'columns\' is a required property')
+        self.assertRegex(output, r'Database Error in model invalid_type')
