@@ -40,7 +40,7 @@ from dbt.exceptions import (
     FailFastException
 )
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
-from dbt.perf_utils import get_full_manifest
+from dbt.parser.manifest import ManifestLoader
 
 import dbt.exceptions
 from dbt import flags
@@ -63,7 +63,7 @@ class ManifestTask(ConfiguredTask):
             self.manifest.write(path)
 
     def load_manifest(self):
-        self.manifest = get_full_manifest(self.config)
+        self.manifest = ManifestLoader.get_full_manifest(self.config)
         self.write_manifest()
 
     def compile_manifest(self):

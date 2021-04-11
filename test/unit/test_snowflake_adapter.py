@@ -1,4 +1,5 @@
 import agate
+import re
 import unittest
 from contextlib import contextmanager
 from unittest import mock
@@ -9,9 +10,10 @@ from dbt.adapters.snowflake import SnowflakeAdapter
 from dbt.adapters.snowflake import Plugin as SnowflakePlugin
 from dbt.adapters.snowflake.column import SnowflakeColumn
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.manifest import ManifestStateCheck
 from dbt.clients import agate_helper
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-from dbt.parser.results import ParseResult
 from snowflake import connector as snowflake_connector
 
 from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, TestAdapterConversions, load_internal_manifest_macros
@@ -60,9 +62,19 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.snowflake = self.patcher.start()
 
-        self.load_patch = mock.patch('dbt.parser.manifest.make_parse_result')
-        self.mock_parse_result = self.load_patch.start()
-        self.mock_parse_result.return_value = ParseResult.rpc()
+        # Create the Manifest.state_check patcher
+        @mock.patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        def _mock_state_check(self):
+            config = self.root_project
+            all_projects = self.all_projects
+            return ManifestStateCheck(
+                vars_hash=FileHash.from_contents('vars'),
+                project_hashes={name: FileHash.from_contents(name) for name in all_projects},
+                profile_hash=FileHash.from_contents('profile'),
+            )
+        self.load_state_check = mock.patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        self.mock_state_check = self.load_state_check.start()
+        self.mock_state_check.side_effect = _mock_state_check
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
@@ -81,7 +93,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.adapter.cleanup_connections()
         self.qh_patch.stop()
         self.patcher.stop()
-        self.load_patch.stop()
+        self.load_state_check.stop()
 
     def test_quoting_on_drop_schema(self):
         relation = SnowflakeAdapter.Relation.create(
@@ -523,3 +535,48 @@ class TestSnowflakeColumn(unittest.TestCase):
         assert col.is_numeric() is False
         assert col.is_string() is False
         assert col.is_integer() is False
+
+
+class SnowflakeConnectionsTest(unittest.TestCase):
+    def test_comment_stripping_regex(self):
+        pattern = r'(\".*?\"|\'.*?\')|(/\*.*?\*/|--[^\r\n]*$)'
+        comment1 = '-- just comment'
+        comment2 = '/* just comment */'
+        query1 = 'select 1; -- comment'
+        query2 = 'select 1; /* comment */'
+        query3 = 'select 1; -- comment\nselect 2; /* comment */ '
+        query4 = 'select \n1; -- comment\nselect \n2; /* comment */ '
+        query5 = 'select 1; -- comment \nselect 2; -- comment \nselect 3; -- comment'
+
+        stripped_comment1 = re.sub(re.compile(pattern, re.MULTILINE),
+                                   '', comment1).strip()
+
+        stripped_comment2 = re.sub(re.compile(pattern, re.MULTILINE),
+                                   '', comment2).strip()
+
+        stripped_query1 = re.sub(re.compile(pattern, re.MULTILINE),
+                                 '', query1).strip()
+
+        stripped_query2 = re.sub(re.compile(pattern, re.MULTILINE),
+                                 '', query2).strip()
+
+        stripped_query3 = re.sub(re.compile(pattern, re.MULTILINE),
+                                 '', query3).strip()
+
+        stripped_query4 = re.sub(re.compile(pattern, re.MULTILINE),
+                                 '', query4).strip()
+
+        stripped_query5 = re.sub(re.compile(pattern, re.MULTILINE),
+                                 '', query5).strip()
+
+        expected_query_3 = 'select 1; \nselect 2;'
+        expected_query_4 = 'select \n1; \nselect \n2;'
+        expected_query_5 = 'select 1; \nselect 2; \nselect 3;'
+
+        self.assertEqual('', stripped_comment1)
+        self.assertEqual('', stripped_comment2)
+        self.assertEqual('select 1;', stripped_query1)
+        self.assertEqual('select 1;', stripped_query2)
+        self.assertEqual(expected_query_3, stripped_query3)
+        self.assertEqual(expected_query_4, stripped_query4)
+        self.assertEqual(expected_query_5, stripped_query5)

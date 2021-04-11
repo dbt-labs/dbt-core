@@ -114,6 +114,9 @@ class BigqueryConfig(AdapterConfig):
     partitions: Optional[List[str]] = None
     grant_access_to: Optional[List[Dict[str, str]]] = None
     hours_to_expiration: Optional[int] = None
+    require_partition_filter: Optional[bool] = None
+    partition_expiration_days: Optional[int] = None
+    merge_update_columns: Optional[str] = None
 
 
 class BigQueryAdapter(BaseAdapter):
@@ -790,6 +793,14 @@ class BigQueryAdapter(BaseAdapter):
         if config.get('labels'):
             labels = config.get('labels', {})
             opts['labels'] = list(labels.items())
+
+        if config.get('require_partition_filter'):
+            opts['require_partition_filter'] = config.get(
+                'require_partition_filter')
+
+        if config.get('partition_expiration_days') is not None:
+            opts['partition_expiration_days'] = config.get(
+                'partition_expiration_days')
 
         return opts
 

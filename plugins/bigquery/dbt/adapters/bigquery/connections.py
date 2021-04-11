@@ -1,3 +1,5 @@
+import json
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -305,12 +307,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        job_params = {'use_legacy_sql': use_legacy_sql}
+        if self.profile.query_comment.job_label:
+            query_comment = self.query_header.comment.query_comment
+            labels = self._labels_from_query_comment(query_comment)
+        else:
+            labels = {}
 
         if active_user:
-            job_params['labels'] = {
-                'dbt_invocation_id': active_user.invocation_id
-            }
+            labels['dbt_invocation_id'] = active_user.invocation_id
+
+        job_params = {'use_legacy_sql': use_legacy_sql, 'labels': labels}
 
         priority = conn.credentials.priority
         if priority == Priority.Batch:
@@ -544,6 +550,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
             initial=self.DEFAULT_INITIAL_DELAY,
             maximum=self.DEFAULT_MAXIMUM_DELAY)
 
+    def _labels_from_query_comment(self, comment: str) -> Dict:
+        try:
+            comment_labels = json.loads(comment)
+        except (TypeError, ValueError):
+            return {'query_comment': _sanitize_label(comment)}
+        return {
+            _sanitize_label(key): _sanitize_label(str(value))
+            for key, value in comment_labels.items()
+        }
+
 
 class _ErrorCounter(object):
     """Counts errors seen up to a threshold then raises the next error."""
@@ -573,3 +589,13 @@ def _is_retryable(error):
             e['reason'] == 'rateLimitExceeded' for e in error.errors):
         return True
     return False
+
+
+_SANITIZE_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
+
+
+def _sanitize_label(value: str) -> str:
+    """Return a legal value for a BigQuery label."""
+    value = value.strip().lower()
+    value = _SANITIZE_LABEL_PATTERN.sub("_", value)
+    return value

@@ -298,7 +298,7 @@ def filter_null_values(input: Dict[K_T, Optional[V_T]]) -> Dict[K_T, V_T]:
 
 
 def add_ephemeral_model_prefix(s: str) -> str:
-    return '__dbt__CTE__{}'.format(s)
+    return '__dbt__cte__{}'.format(s)
 
 
 def timestring() -> str:

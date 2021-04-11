@@ -73,7 +73,9 @@ class dbtClassMixin(DataClassDictMixin, JsonSchemaMixin):
     # performing the conversion to a dict
     @classmethod
     def __pre_deserialize__(cls, data):
-        if cls._hyphenated:
+        # `data` might not be a dict, e.g. for `query_comment`, which accepts
+        # a dict or a string; only snake-case for dict values.
+        if cls._hyphenated and isinstance(data, dict):
             new_dict = {}
             for key in data:
                 if '-' in key:

@@ -4,9 +4,10 @@ from typing import (
     Dict,
     Optional,
     Set,
+    Union,
 )
 from dbt.config import RuntimeConfig
-from dbt.contracts.graph.manifest import MacroManifest, SourceKey
+from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition,
     ParsedSourceDefinition,
@@ -21,22 +22,17 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import warn_or_error
 
 from dbt.parser.schemas import SchemaParser, ParserRef
-from dbt.parser.results import ParseResult
 from dbt import ui
 
 
 class SourcePatcher:
     def __init__(
         self,
-        results: ParseResult,
         root_project: RuntimeConfig,
+        manifest: Manifest,
     ) -> None:
-        self.results = results
         self.root_project = root_project
-        self.macro_manifest = MacroManifest(
-            macros=self.results.macros,
-            files=self.results.files
-        )
+        self.manifest = manifest
         self.schema_parsers: Dict[str, SchemaParser] = {}
         self.patches_used: Dict[SourceKey, Set[str]] = {}
         self.sources: Dict[str, ParsedSourceDefinition] = {}
@@ -85,7 +81,7 @@ class SourcePatcher:
             all_projects = self.root_project.load_dependencies()
             project = all_projects[package_name]
             schema_parser = SchemaParser(
-                self.results, project, self.root_project, self.macro_manifest
+                project, self.manifest, self.root_project
             )
             self.schema_parsers[package_name] = schema_parser
         return schema_parser
@@ -103,10 +99,12 @@ class SourcePatcher:
 
     def get_patch_for(
         self,
-        unpatched: UnpatchedSourceDefinition,
+        unpatched: Union[UnpatchedSourceDefinition, ParsedSourceDefinition],
     ) -> Optional[SourcePatch]:
+        if isinstance(unpatched, ParsedSourceDefinition):
+            return None
         key = (unpatched.package_name, unpatched.source.name)
-        patch: Optional[SourcePatch] = self.results.source_patches.get(key)
+        patch: Optional[SourcePatch] = self.manifest.source_patches.get(key)
         if patch is None:
             return None
         if key not in self.patches_used:
@@ -119,7 +117,9 @@ class SourcePatcher:
     def construct_sources(self) -> None:
         # given the UnpatchedSourceDefinition and SourcePatches, combine them
         # to make a beautiful baby ParsedSourceDefinition.
-        for unique_id, unpatched in self.results.sources.items():
+        for unique_id, unpatched in self.manifest.sources.items():
+            if isinstance(unpatched, ParsedSourceDefinition):
+                continue
             patch = self.get_patch_for(unpatched)
 
             patched = self.patch_source(unpatched, patch)
@@ -127,22 +127,22 @@ class SourcePatcher:
             # data.
             for test in self.get_source_tests(patched):
                 if test.config.enabled:
-                    self.results.add_node_nofile(test)
+                    self.manifest.add_node_nofile(test)
                 else:
-                    self.results.add_disabled_nofile(test)
+                    self.manifest.add_disabled_nofile(test)
 
             schema_parser = self.get_schema_parser_for(unpatched.package_name)
             parsed = schema_parser.parse_source(patched)
             if parsed.config.enabled:
                 self.sources[unique_id] = parsed
             else:
-                self.results.add_disabled_nofile(parsed)
+                self.manifest.add_disabled_nofile(parsed)
 
         self.warn_unused()
 
     def warn_unused(self) -> None:
         unused_tables: Dict[SourceKey, Optional[Set[str]]] = {}
-        for patch in self.results.source_patches.values():
+        for patch in self.manifest.source_patches.values():
             key = (patch.overrides, patch.name)
             if key not in self.patches_used:
                 unused_tables[key] = None
@@ -168,7 +168,7 @@ class SourcePatcher:
             'target:',
         ]
         for key, table_names in unused_tables.items():
-            patch = self.results.source_patches[key]
+            patch = self.manifest.source_patches[key]
             patch_name = f'{patch.overrides}.{patch.name}'
             if table_names is None:
                 msg.append(
@@ -185,8 +185,8 @@ class SourcePatcher:
 
 
 def patch_sources(
-    results: ParseResult,
     root_project: RuntimeConfig,
+    manifest: Manifest,
 ) -> Dict[str, ParsedSourceDefinition]:
     """Patch all the sources found in the results. Updates results.disabled and
     results.nodes.
@@ -194,6 +194,6 @@ def patch_sources(
     Return a dict of ParsedSourceDefinitions, suitable for use in
     manifest.sources.
     """
-    patcher = SourcePatcher(results, root_project)
+    patcher = SourcePatcher(root_project, manifest)
     patcher.construct_sources()
     return patcher.sources

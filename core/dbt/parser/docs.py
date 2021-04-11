@@ -60,6 +60,6 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         )
         for block in searcher:
             for parsed in self.parse_block(block):
-                self.results.add_doc(file_block.file, parsed)
+                self.manifest.add_doc(file_block.file, parsed)
         # mark the file as seen, even if there are no macros in it
-        self.results.get_file(file_block.file)
+        self.manifest.get_file(file_block.file)

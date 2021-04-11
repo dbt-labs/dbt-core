@@ -13,8 +13,7 @@ import dbt.config
 import dbt.utils
 import dbt.parser.manifest
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest, MacroManifest
-from dbt.parser.results import ParseResult
+from dbt.contracts.graph.manifest import Manifest, MacroManifest, ManifestStateCheck
 from dbt.parser.base import BaseParser
 from dbt.graph import NodeSelector, parse_difference
 
@@ -38,35 +37,14 @@ class GraphTest(unittest.TestCase):
         self.get_adapter_patcher_parser.stop()
         self.mock_filesystem_constructor.stop()
         self.mock_hook_constructor.stop()
-        self.load_patch.stop()
+        self.load_state_check.stop()
         self.load_source_file_patcher.stop()
         reset_adapters()
 
     def setUp(self):
+        # create various attributes
         dbt.flags.STRICT_MODE = True
         self.graph_result = None
-
-        self.write_gpickle_patcher = patch('networkx.write_gpickle')
-        self.load_projects_patcher = patch('dbt.parser.manifest._load_projects')
-        self.file_system_patcher = patch.object(
-            dbt.parser.search.FilesystemSearcher, '__new__'
-        )
-        self.hook_patcher = patch.object(
-            dbt.parser.hooks.HookParser, '__new__'
-        )
-        self.get_adapter_patcher = patch('dbt.context.providers.get_adapter')
-        self.factory = self.get_adapter_patcher.start()
-        # also patch this one
-
-        self.get_adapter_patcher_parser = patch('dbt.parser.base.get_adapter')
-        self.factory_cmn = self.get_adapter_patcher_parser.start()
-
-
-        def mock_write_gpickle(graph, outfile):
-            self.graph_result = graph
-        self.mock_write_gpickle = self.write_gpickle_patcher.start()
-        self.mock_write_gpickle.side_effect = mock_write_gpickle
-
         self.profile = {
             'outputs': {
                 'test': {
@@ -82,54 +60,78 @@ class GraphTest(unittest.TestCase):
             },
             'target': 'test'
         }
-
-        self.mock_load_projects = self.load_projects_patcher.start()
-        def _load_projects(config, paths):
-            yield config.project_name, config
-        self.mock_load_projects.side_effect = _load_projects
-
-        self.mock_models = []
-
-        def _mock_parse_result(config, all_projects):
-            return ParseResult(
-                vars_hash=FileHash.from_contents('vars'),
-                project_hashes={name: FileHash.from_contents(name) for name in all_projects},
-                profile_hash=FileHash.from_contents('profile'),
-            )
-
-        self.load_patch = patch('dbt.parser.manifest.make_parse_result')
-        self.mock_parse_result = self.load_patch.start()
-        self.mock_parse_result.side_effect = _mock_parse_result
-
-        self.load_source_file_patcher = patch.object(BaseParser, 'load_file')
-        self.mock_source_file = self.load_source_file_patcher.start()
-        self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
-
         self.macro_manifest = MacroManifest(
             {n.unique_id: n for n in generate_name_macros('test_models_compile')}, {})
+        self.mock_models = []  # used by filesystem_searcher
 
+        # Create gpickle patcher
+        self.write_gpickle_patcher = patch('networkx.write_gpickle')
+        def mock_write_gpickle(graph, outfile):
+            self.graph_result = graph
+        self.mock_write_gpickle = self.write_gpickle_patcher.start()
+        self.mock_write_gpickle.side_effect = mock_write_gpickle
+
+        # Create file system patcher and filesystem searcher
+        self.file_system_patcher = patch.object(
+            dbt.parser.search.FilesystemSearcher, '__new__'
+        )
+        self.mock_filesystem_constructor = self.file_system_patcher.start()
         def filesystem_iter(iter_self):
             if 'sql' not in iter_self.extension:
                 return []
             if 'models' not in iter_self.relative_dirs:
                 return []
             return [model.path for model in self.mock_models]
-
         def create_filesystem_searcher(cls, project, relative_dirs, extension):
             result = MagicMock(project=project, relative_dirs=relative_dirs, extension=extension)
             result.__iter__.side_effect = lambda: iter(filesystem_iter(result))
             return result
+        self.mock_filesystem_constructor.side_effect = create_filesystem_searcher
 
-        def create_hook_patcher(cls, results, project, relative_dirs, extension):
-            result = MagicMock(results=results, project=project, relative_dirs=relative_dirs, extension=extension)
+        # Create HookParser patcher
+        self.hook_patcher = patch.object(
+            dbt.parser.hooks.HookParser, '__new__'
+        )
+        def create_hook_patcher(cls, project, manifest, root_project):
+            result = MagicMock(project=project, manifest=manifest, root_project=root_project)
             result.__iter__.side_effect = lambda: iter([])
             return result
-
-        self.mock_filesystem_constructor = self.file_system_patcher.start()
-        self.mock_filesystem_constructor.side_effect = create_filesystem_searcher
         self.mock_hook_constructor = self.hook_patcher.start()
         self.mock_hook_constructor.side_effect = create_hook_patcher
+
+        # Create get_adapter patcher
+        self.get_adapter_patcher = patch('dbt.context.providers.get_adapter')
+        self.factory = self.get_adapter_patcher.start()
+        # Also patch the base class
+        self.get_adapter_patcher_parser = patch('dbt.parser.base.get_adapter')
+        self.factory_cmn = self.get_adapter_patcher_parser.start()
         inject_plugin(PostgresPlugin)
+
+        # Create load_projects patcher
+        self.load_projects_patcher = patch('dbt.parser.manifest._load_projects')
+        self.mock_load_projects = self.load_projects_patcher.start()
+        def _load_projects(config, paths):
+            yield config.project_name, config
+        self.mock_load_projects.side_effect = _load_projects
+
+        # Create the Manifest.state_check patcher
+        @patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        def _mock_state_check(self):
+            config = self.root_project
+            all_projects = self.all_projects
+            return ManifestStateCheck(
+                vars_hash=FileHash.from_contents('vars'),
+                project_hashes={name: FileHash.from_contents(name) for name in all_projects},
+                profile_hash=FileHash.from_contents('profile'),
+            )
+        self.load_state_check = patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
+        self.mock_state_check = self.load_state_check.start()
+        self.mock_state_check.side_effect = _mock_state_check
+
+        # Create the source file patcher
+        self.load_source_file_patcher = patch.object(BaseParser, 'load_file')
+        self.mock_source_file = self.load_source_file_patcher.start()
+        self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:
@@ -162,8 +164,10 @@ class GraphTest(unittest.TestCase):
 
     def load_manifest(self, config):
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.load(macro_manifest=self.macro_manifest)
-        return loader.create_manifest()
+        loader.manifest.macros = self.macro_manifest.macros
+        loader.load()
+        loader.update_manifest()
+        return loader.manifest
 
     def test__single_model(self):
         self.use_models({
@@ -319,13 +323,16 @@ class GraphTest(unittest.TestCase):
     def test__partial_parse(self):
         config = self.get_config()
 
-        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.load(macro_manifest=self.macro_manifest)
-        loader.create_manifest()
-        results = loader.results
+        manifest = self.load_manifest(config)
 
-        self.assertTrue(loader.matching_parse_results(results))
-        too_low = results.replace(dbt_version='0.0.1a1')
-        self.assertFalse(loader.matching_parse_results(too_low))
-        too_high = results.replace(dbt_version='99999.99.99')
-        self.assertFalse(loader.matching_parse_results(too_high))
+        # we need a loader to compare the two manifests
+        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
+        loader.manifest.macros = self.macro_manifest.macros
+        loader.load()
+        loader.update_manifest()
+
+        self.assertTrue(loader.matching_parse_results(manifest))
+        manifest.metadata.dbt_version = '0.0.1a1'
+        self.assertFalse(loader.matching_parse_results(manifest))
+        manifest.metadata.dbt_version = '99999.99.99'
+        self.assertFalse(loader.matching_parse_results(manifest))

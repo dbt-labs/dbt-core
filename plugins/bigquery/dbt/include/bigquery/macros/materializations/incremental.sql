@@ -47,10 +47,9 @@
 
       -- generated script to merge partitions into {{ target_relation }}
       declare dbt_partitions_for_replacement array<{{ partition_by.data_type }}>;
-      declare _dbt_max_partition {{ partition_by.data_type }};
-
-      set _dbt_max_partition = (
+      declare _dbt_max_partition {{ partition_by.data_type }} default (
           select max({{ partition_by.field }}) from {{ this }}
+          where {{ partition_by.field }} is not null
       );
 
       -- 1. create a temp table

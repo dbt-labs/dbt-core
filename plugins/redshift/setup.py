@@ -20,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-redshift"
-package_version = "0.19.1"
+package_version = "0.19.0"
 description = """The redshift adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -48,8 +48,8 @@ setup(
     install_requires=[
         'dbt-core=={}'.format(package_version),
         'dbt-postgres=={}'.format(package_version),
-        # match snowflake-connector-python supported ranges
-        'boto3>=1.4.4,<1.16',
+        # the following are all to match snowflake-connector-python
+        'boto3>=1.4.4,<2.0.0',
     ],
     zip_safe=False,
     classifiers=[
