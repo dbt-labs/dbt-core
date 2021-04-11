@@ -85,6 +85,7 @@ target/
 
 # pycharm
 .idea/
+venv/
 
 # AWS credentials
 .aws/
