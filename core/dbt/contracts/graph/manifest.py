@@ -658,9 +658,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         manifest!
         """
         self.flat_graph = {
-            'exposures': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.exposures.items()
+            "exposures": {k: v.to_dict(omit_none=False) for k, v in self.exposures.items()},
+            "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
+            "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
             },
             'metrics': {
                 k: v.to_dict(omit_none=False)
