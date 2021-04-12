@@ -14,15 +14,15 @@ MAXIMUM_SEED_SIZE_NAME = "1MB"
 
 
 class ParseFileType(StrEnum):
-    Macro = 'macro'
-    Model = 'model'
-    Snapshot = 'snapshot'
-    Analysis = 'analysis'
+    Macro = "macro"
+    Model = "model"
+    Snapshot = "snapshot"
+    Analysis = "analysis"
     SingularTest = 'singular_test'
     GenericTest = 'generic_test'
-    Seed = 'seed'
-    Documentation = 'docs'
-    Schema = 'schema'
+    Seed = "seed"
+    Documentation = "docs"
+    Schema = "schema"
     Hook = 'hook'   # not a real filetype, from dbt_project.yml
 
 

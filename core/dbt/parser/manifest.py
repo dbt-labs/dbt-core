@@ -212,9 +212,7 @@ class ManifestLoader:
             loader.save_macros_to_adapter(adapter)
 
             # Save performance info
-            loader._perf_info.load_all_elapsed = (
-                time.perf_counter() - start_load_all
-            )
+            loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
             loader.track_project_load()
 
         return manifest
@@ -233,7 +231,7 @@ class ManifestLoader:
             read_files(project, self.manifest.files, project_parser_files, saved_files)
         orig_project_parser_files = project_parser_files
         self._perf_info.path_count = len(self.manifest.files)
-        self._perf_info.read_files_elapsed = (time.perf_counter() - start_read_files)
+        self._perf_info.read_files_elapsed = time.perf_counter() - start_read_files
 
         skip_parsing = False
         if self.saved_manifest is not None:
@@ -462,10 +460,12 @@ class ManifestLoader:
 
             # Save timing info
             project_loader_info.parsers.append(ParserInfo(
-                parser=parser.resource_type,
+                ParserInfo(
                 parsed_path_count=project_parsed_path_count,
-                elapsed=time.perf_counter() - parser_start_timer
-            ))
+                    parsed_path_count=project_parsed_path_count,
+                    elapsed=time.perf_counter() - parser_start_timer,
+                )
+            )
             total_parsed_path_count += project_parsed_path_count
 
         # HookParser doesn't run from loaded files, just dbt_project.yml,
@@ -780,22 +780,22 @@ class ManifestLoader:
     # Create tracking event for saving performance info
     def track_project_load(self):
         invocation_id = get_invocation_id()
-        dbt.tracking.track_project_load({
-            "invocation_id": invocation_id,
-            "project_id": self.root_project.hashed_name(),
-            "path_count": self._perf_info.path_count,
+        dbt.tracking.track_project_load(
+            {
+                "invocation_id": invocation_id,
+                "project_id": self.root_project.hashed_name(),
             "parsed_path_count": self._perf_info.parsed_path_count,
-            "read_files_elapsed": self._perf_info.read_files_elapsed,
-            "load_macros_elapsed": self._perf_info.load_macros_elapsed,
-            "parse_project_elapsed": self._perf_info.parse_project_elapsed,
-            "patch_sources_elapsed": self._perf_info.patch_sources_elapsed,
-            "process_manifest_elapsed": (
-                self._perf_info.process_manifest_elapsed
-            ),
-            "load_all_elapsed": self._perf_info.load_all_elapsed,
-            "is_partial_parse_enabled": (
-                self._perf_info.is_partial_parse_enabled
-            ),
+                "parsed_path_count": self._perf_info.parsed_path_count,
+                "read_files_elapsed": self._perf_info.read_files_elapsed,
+                "load_macros_elapsed": self._perf_info.load_macros_elapsed,
+                "parse_project_elapsed": self._perf_info.parse_project_elapsed,
+                "patch_sources_elapsed": self._perf_info.patch_sources_elapsed,
+                "process_manifest_elapsed": (self._perf_info.process_manifest_elapsed),
+                "load_all_elapsed": self._perf_info.load_all_elapsed,
+                "is_partial_parse_enabled": (self._perf_info.is_partial_parse_enabled),
+                "is_static_analysis_enabled": self._perf_info.is_static_analysis_enabled,
+                "static_analysis_path_count": self._perf_info.static_analysis_path_count,
+                "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,  # noqa: E501
             "is_static_analysis_enabled": self._perf_info.is_static_analysis_enabled,
             "static_analysis_path_count": self._perf_info.static_analysis_path_count,
             "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,

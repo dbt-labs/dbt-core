@@ -12,7 +12,7 @@ from typing import Optional
 
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
-        path: FilePath, parse_file_type: ParseFileType,
+    path: FilePath,
     parse_file_type: ParseFileType,
     project_name: str,
     saved_files,
@@ -84,7 +84,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
         file_contents = load_file_contents(match.absolute_path, strip=False)
         checksum = FileHash.from_contents(file_contents)
         source_file = SourceFile(path=match, checksum=checksum)
-        source_file.contents = ''
+        source_file.contents = ""
     source_file.parse_file_type = ParseFileType.Seed
     source_file.project_name = project_name
     return source_file
@@ -135,19 +135,19 @@ def read_files(project, files, parser_files, saved_files):
 
     project_files = {}
 
-    project_files['MacroParser'] = read_files_for_parser(
+    project_files["MacroParser"] = read_files_for_parser(
         project, files, project.macro_paths, ".sql", ParseFileType.Macro, saved_files
     )
 
-    project_files['ModelParser'] = read_files_for_parser(
+    project_files["ModelParser"] = read_files_for_parser(
         project, files, project.model_paths, ".sql", ParseFileType.Model, saved_files
     )
 
-    project_files['SnapshotParser'] = read_files_for_parser(
+    project_files["SnapshotParser"] = read_files_for_parser(
         project, files, project.snapshot_paths, ".sql", ParseFileType.Snapshot, saved_files
     )
 
-    project_files['AnalysisParser'] = read_files_for_parser(
+    project_files["AnalysisParser"] = read_files_for_parser(
         project, files, project.analysis_paths, ".sql", ParseFileType.Analysis, saved_files
     )
 
@@ -160,15 +160,15 @@ def read_files(project, files, parser_files, saved_files):
         project, files, project.generic_test_paths, ".sql", ParseFileType.GenericTest, saved_files
     )
 
-    project_files['SeedParser'] = read_files_for_parser(
+    project_files["SeedParser"] = read_files_for_parser(
         project, files, project.seed_paths, ".csv", ParseFileType.Seed, saved_files
     )
 
-    project_files['DocumentationParser'] = read_files_for_parser(
+    project_files["DocumentationParser"] = read_files_for_parser(
         project, files, project.docs_paths, ".md", ParseFileType.Documentation, saved_files
     )
 
-    project_files['SchemaParser'] = read_files_for_parser(
+    project_files["SchemaParser"] = read_files_for_parser(
         project, files, project.all_source_paths, ".yml", ParseFileType.Schema, saved_files
     )
 
@@ -177,7 +177,7 @@ def read_files(project, files, parser_files, saved_files):
     yaml_files = read_files_for_parser(
         project, files, project.all_source_paths, ".yaml", ParseFileType.Schema, saved_files
     )
-    project_files['SchemaParser'].extend(yaml_files)
+    project_files["SchemaParser"].extend(yaml_files)
 
     # Store the parser files for this particular project
     parser_files[project.project_name] = project_files
