@@ -7,9 +7,7 @@ from dbt.contracts.files import SourceFile
 from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.node_types import NodeType
 from dbt.parser.base import Parser
-from dbt.parser.search import (
-    BlockContents, FileBlock, BlockSearcher
-)
+from dbt.parser.search import BlockContents, FileBlock, BlockSearcher
 
 
 SHOULD_PARSE_RE = re.compile(r"{[{%]")

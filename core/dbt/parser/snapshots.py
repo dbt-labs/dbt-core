@@ -11,9 +11,7 @@ from dbt.exceptions import (
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
-from dbt.parser.search import (
-    BlockContents, BlockSearcher, FileBlock
-)
+from dbt.parser.search import BlockContents, BlockSearcher, FileBlock
 from dbt.utils import split_path
 
 
