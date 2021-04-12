@@ -61,8 +61,6 @@ class ParseTask(ConfiguredTask):
             print_timestamped_line("Dependencies loaded")
             loader = ManifestLoader(root_config, projects, macro_hook)
             print_timestamped_line("ManifestLoader created")
-            loader.load_macros_from_adapter(adapter)
-            print_timestamped_line("Macros loaded from adapter")
             loader.load()
             print_timestamped_line("Manifest loaded")
             loader.write_manifest_for_partial_parse()

@@ -7,7 +7,7 @@ from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.node_types import NodeType
 from dbt.parser.base import Parser
 from dbt.parser.search import (
-    BlockContents, FileBlock, FilesystemSearcher, BlockSearcher
+    BlockContents, FileBlock, BlockSearcher
 )
 
 
@@ -15,13 +15,6 @@ SHOULD_PARSE_RE = re.compile(r'{[{%]')
 
 
 class DocumentationParser(Parser[ParsedDocumentation]):
-    def get_paths(self):
-        return FilesystemSearcher(
-            project=self.project,
-            relative_dirs=self.project.docs_paths,
-            extension='.md',
-        )
-
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Documentation
@@ -61,5 +54,3 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         for block in searcher:
             for parsed in self.parse_block(block):
                 self.manifest.add_doc(file_block.file, parsed)
-        # mark the file as seen, even if there are no macros in it
-        self.manifest.get_file(file_block.file)
