@@ -23,7 +23,7 @@
 - Update script to collect and write json schema for dbt artifacts ([#2870](https://github.com/fishtown-analytics/dbt/issues/2870), [#3065](https://github.com/fishtown-analytics/dbt/pull/3065))
 - Relax Google Cloud dependency pins to major versions. ([#3156](https://github.com/fishtown-analytics/dbt/pull/3156)
 - Bump `snowflake-connector-python` and releated dependencies, support Python 3.9 ([#2985](https://github.com/fishtown-analytics/dbt/issues/2985), [#3148](https://github.com/fishtown-analytics/dbt/pull/3148))
-- General development environment clean up and improve experience running tests locally ([#3194](https://github.com/fishtown-analytics/dbt/issues/3194), [#3204](https://github.com/fishtown-analytics/dbt/pull/3204))
+- General development environment clean up and improve experience running tests locally ([#3194](https://github.com/fishtown-analytics/dbt/issues/3194), [#3204](https://github.com/fishtown-analytics/dbt/pull/3204), [#3228](https://github.com/fishtown-analytics/dbt/pull/3228))
 - Add a new materialization for tests, update data tests to use test materialization when executing. ([#3154](https://github.com/fishtown-analytics/dbt/issues/3154), [#3181](https://github.com/fishtown-analytics/dbt/pull/3181))
 - Switch from externally storing parsing state in ParseResult object to using Manifest ([#3163](http://github.com/fishtown-analytics/dbt/issues/3163), [#3219](https://github.com/fishtown-analytics/dbt/pull/3219))
 

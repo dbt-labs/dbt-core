@@ -6,8 +6,8 @@
 trigger:
   branches:
     include:
-    - master
-    - dev/*
+    - develop
+    - '*.latest'
     - pr/*
 
 jobs:
