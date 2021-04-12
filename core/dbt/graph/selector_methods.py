@@ -156,7 +156,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 class QualifiedNameSelectorMethod(SelectorMethod):
     def node_is_match(
         self,
-        qualified_name: List[str],
+        selector: str,
         package_names: Set[str],
         fqn: List[str],
     ) -> bool:
@@ -168,16 +168,22 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         :param Set[str] package_names: The set of pacakge names in the graph.
         :param List[str] fqn: The node's fully qualified name in the graph.
         """
-        if len(qualified_name) == 1 and fqn[-1] == qualified_name[0]:
+
+        # If selector exactly matches model name (fqn's leaf), return True
+        if fqn[-1] == selector:
             return True
 
+        # Flatten node parts. Dots in model names act as namespace separators.
+        flat_fqn = [item for segment in fqn for item in segment.split('.')]
+        qualified_name = selector.split(".")
+
         if qualified_name[0] in package_names:
-            if is_selected_node(fqn, qualified_name):
+            if is_selected_node(flat_fqn, qualified_name):
                 return True
 
         for package_name in package_names:
             local_qualified_node_name = [package_name] + qualified_name
-            if is_selected_node(fqn, local_qualified_node_name):
+            if is_selected_node(flat_fqn, local_qualified_node_name):
                 return True
 
         return False
@@ -189,12 +195,11 @@ class QualifiedNameSelectorMethod(SelectorMethod):
 
         :param str selector: The selector or node name
         """
-        qualified_name = selector.split(".")
         parsed_nodes = list(self.parsed_nodes(included_nodes))
         package_names = {n.package_name for _, n in parsed_nodes}
         for node, real_node in parsed_nodes:
             if self.node_is_match(
-                qualified_name,
+                selector,
                 package_names,
                 real_node.fqn,
             ):
