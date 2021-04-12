@@ -583,6 +583,10 @@ class Manifest(MacroMethods):
         manifest!
         """
         self.flat_graph = {
+            'exposures': {
+                k: v.to_dict(omit_none=False)
+                for k, v in self.exposures.items()
+            },
             'nodes': {
                 k: v.to_dict(omit_none=False)
                 for k, v in self.nodes.items()
@@ -649,7 +653,7 @@ class Manifest(MacroMethods):
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
-        all_resources = chain(self.nodes.values(), self.sources.values())
+        all_resources = chain(self.exposures.values(), self.nodes.values(), self.sources.values())
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
             if resource_type_plural not in resource_fqns:
