@@ -151,7 +151,10 @@ class TestMacroNamespace:
                     # Save the plain macro_name in the local_namespace
                     macro = self.macro_resolver.macros[macro_unique_id]
                     macro_gen = MacroGenerator(
-                        macro, self.ctx, self.node, self.thread_ctx,
+                        macro,
+                        self.ctx,
+                        self.node,
+                        self.thread_ctx,
                     )
                     self.local_namespace[macro_name] = macro_gen
                     # We also need the two part macro name

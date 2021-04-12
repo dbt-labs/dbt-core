@@ -493,13 +493,9 @@ class ManifestLoader:
 
     # This should only be called after the macros have been loaded
     def build_macro_resolver(self):
-        internal_package_names = get_adapter_package_names(
-            self.root_project.credentials.type
-        )
+        internal_package_names = get_adapter_package_names(self.root_project.credentials.type)
         self.macro_resolver = MacroResolver(
-            self.manifest.macros,
-            self.root_project.project_name,
-            internal_package_names
+            self.manifest.macros, self.root_project.project_name, internal_package_names
         )
 
     # Loop through macros in the manifest and statically parse

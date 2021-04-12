@@ -23,7 +23,7 @@ class MacroNamespace(Mapping):
     def __init__(
         self,
         global_namespace: FlatNamespace,  # root package macros
-        local_namespace: FlatNamespace,   # packages for *this* node
+        local_namespace: FlatNamespace,  # packages for *this* node
         global_project_namespace: FlatNamespace,  # internal packages
         packages: Dict[str, FlatNamespace],  # non-internal packages
     ):
@@ -33,9 +33,9 @@ class MacroNamespace(Mapping):
         self.global_project_namespace: FlatNamespace = global_project_namespace
 
     def _search_order(self) -> Iterable[Union[FullNamespace, FlatNamespace]]:
-        yield self.local_namespace   # local package
+        yield self.local_namespace  # local package
         yield self.global_namespace  # root package
-        yield self.packages          # non-internal packages
+        yield self.packages  # non-internal packages
         yield {
             GLOBAL_PROJECT_NAME: self.global_project_namespace,  # dbt
         }

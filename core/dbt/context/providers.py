@@ -1414,9 +1414,7 @@ class TestContext(ProviderContext):
         self._build_test_namespace()
         # We need to rebuild this because it's already been built by
         # the ProviderContext with the wrong namespace.
-        self.db_wrapper = self.provider.DatabaseWrapper(
-            self.adapter, self.namespace
-        )
+        self.db_wrapper = self.provider.DatabaseWrapper(self.adapter, self.namespace)
 
     def _build_namespace(self):
         return {}
