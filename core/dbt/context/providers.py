@@ -1403,8 +1403,7 @@ class TestContext(ProviderContext):
                 depends_on_macros.extend(lookup_macro.depends_on.macros)
 
         macro_namespace = TestMacroNamespace(
-            self.macro_resolver, self._ctx, self.model, self.thread_ctx,
-            depends_on_macros
+            self.macro_resolver, self._ctx, self.model, self.thread_ctx, depends_on_macros
         )
         self.namespace = macro_namespace
 
