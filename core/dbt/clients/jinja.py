@@ -647,3 +647,39 @@ def add_rendered_test_kwargs(
 
     kwargs = deep_map(_convert_function, node.test_metadata.kwargs)
     context[SCHEMA_TEST_KWARGS_NAME] = kwargs
+
+
+def statically_extract_macro_calls(string, ctx):
+    # set 'capture_macros' to capture undefined
+    env = get_environment(None, capture_macros=True)
+    parsed = env.parse(string)
+
+    standard_calls = {
+        'source': [],
+        'ref': [],
+        'config': [],
+    }
+
+    possible_macro_calls = []
+    for func_call in parsed.find_all(jinja2.nodes.Call):
+        if hasattr(func_call, 'node') and hasattr(func_call.node, 'name'):
+            func_name = func_call.node.name
+        else:
+            # This is a kludge to capture an adapter.dispatch('<macro_name>') call.
+            # Call(node=Getattr(
+            #     node=Name(name='adapter', ctx='load'), attr='dispatch', ctx='load'),
+            #     args=[Const(value='get_snapshot_unique_id')], kwargs=[],
+            #     dyn_args=None, dyn_kwargs=None)
+            if (hasattr(func_call, 'node') and hasattr(func_call.node, 'attr') and
+                    func_call.node.attr == 'dispatch'):
+                func_name = func_call.args[0].value
+            else:
+                continue
+        if func_name in standard_calls:
+            continue
+        elif ctx.get(func_name):
+            continue
+        else:
+            possible_macro_calls.append(func_name)
+
+    return possible_macro_calls
