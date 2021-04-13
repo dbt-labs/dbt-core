@@ -41,6 +41,8 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get('snapshots')
         elif resource_type == NodeType.Source:
             model_configs = unrendered.get('sources')
+        elif resource_type == NodeType.Test:
+            model_configs = unrendered.get('tests')
         else:
             model_configs = unrendered.get('models')
 
@@ -61,6 +63,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.snapshots
         elif resource_type == NodeType.Source:
             model_configs = self.project.sources
+        elif resource_type == NodeType.Test:
+            model_configs = self.project.tests
         else:
             model_configs = self.project.models
         return model_configs
