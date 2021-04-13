@@ -220,7 +220,7 @@ class TestBuilder(Generic[Testable]):
         for key in self.MODIFIER_ARGS:
             value = self.args.pop(key, None)
             if isinstance(value, str):
-                value = get_rendered(value, render_ctx)
+                value = get_rendered(value, render_ctx, native=True)
             if value is not None:
                 self.modifiers[key] = value
 
@@ -312,7 +312,11 @@ class TestBuilder(Generic[Testable]):
         return get_nice_schema_test_name(name, self.target.name, self.args)
 
     def construct_config(self) -> str:
-        configs = ",".join([f"{key}={value}" for key, value in self.modifiers.items()])
+        configs = ",".join([
+            f"{key}=" + (f"'{value}'" if isinstance(value, str) else str(value))
+            for key, value
+            in self.modifiers.items()
+        ])
         if configs:
             return f"{{{{ config({configs}) }}}}"
         else:
