@@ -486,8 +486,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         if (macro_unique_id in
                 ['macro.dbt.test_not_null', 'macro.dbt.test_unique']):
             self.update_parsed_node(node, config)
-            node.unrendered_config['severity'] = builder.severity()
-            node.config['severity'] = builder.severity()
+            if builder.severity():
+                node.unrendered_config['severity'] = builder.severity()
+                node.config['severity'] = builder.severity()
+            if builder.enabled():
+                node.config['enabled'] = builder.enabled()
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]

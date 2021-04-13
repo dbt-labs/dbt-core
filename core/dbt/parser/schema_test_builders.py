@@ -184,8 +184,8 @@ class TestBuilder(Generic[Testable]):
         r'((?P<test_namespace>([a-zA-Z_][0-9a-zA-Z_]*))\.)?'
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
-    # map magic keys to default values
-    MODIFIER_ARGS = {'severity': 'ERROR', 'tags': []}
+    # kwargs representing test configs
+    MODIFIER_ARGS = ('severity', 'tags', 'enabled')
 
     def __init__(
         self,
@@ -217,11 +217,12 @@ class TestBuilder(Generic[Testable]):
         self.name: str = groups['test_name']
         self.namespace: str = groups['test_namespace']
         self.modifiers: Dict[str, Any] = {}
-        for key, default in self.MODIFIER_ARGS.items():
-            value = self.args.pop(key, default)
+        for key in self.MODIFIER_ARGS:
+            value = self.args.pop(key, None)
             if isinstance(value, str):
                 value = get_rendered(value, render_ctx)
-            self.modifiers[key] = value
+            if value is not None:
+                self.modifiers[key] = value
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -267,8 +268,15 @@ class TestBuilder(Generic[Testable]):
             test_args['column_name'] = name
         return test_name, test_args
 
-    def severity(self) -> str:
-        return self.modifiers.get('severity', 'ERROR').upper()
+    def enabled(self) -> Optional[bool]:
+        return self.modifiers.get('enabled')
+
+    def severity(self) -> Optional[str]:
+        sev = self.modifiers.get('severity')
+        if sev:
+            return sev.upper()
+        else:
+            return None
 
     def tags(self) -> List[str]:
         tags = self.modifiers.get('tags', [])
@@ -303,15 +311,21 @@ class TestBuilder(Generic[Testable]):
             name = '{}_{}'.format(self.namespace, name)
         return get_nice_schema_test_name(name, self.target.name, self.args)
 
+    def construct_config(self) -> str:
+        configs = ",".join([f"{key}={value}" for key, value in self.modifiers.items()])
+        if configs:
+            return f"{{{{ config({configs}) }}}}"
+        else:
+            return ""
+
     # this is the 'raw_sql' that's used in 'render_update' and execution
     # of the test macro
     def build_raw_sql(self) -> str:
         return (
-            "{{{{ config(severity='{severity}') }}}}"
-            "{{{{ {macro}(**{kwargs_name}) }}}}"
+            "{config}{{{{ {macro}(**{kwargs_name}) }}}}"
         ).format(
             macro=self.macro_name(),
-            severity=self.severity(),
+            config=self.construct_config(),
             kwargs_name=SCHEMA_TEST_KWARGS_NAME,
         )
 
