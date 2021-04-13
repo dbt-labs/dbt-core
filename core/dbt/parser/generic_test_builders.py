@@ -413,14 +413,17 @@ class TestBuilder(Generic[Testable]):
         return get_nice_generic_test_name(name, self.target.name, self.args)
 
     def construct_config(self) -> str:
-        configs = ",".join([
+        configs = ",".join(
             f"{key}=" + (
                 ("\"" + value.replace('\"', '\\\"') + "\"") if isinstance(value, str)
                 else str(value)
             )
-            for key, value
+                    if isinstance(value, str)
                     else str(value)
-        ])
+                )
+                for key, value in self.config.items()
+            ]
+        )
         if configs:
             return f"{{{{ config({configs}) }}}}"
         else:
