@@ -282,7 +282,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             'seeds': self._get_config_paths(self.seeds),
             'snapshots': self._get_config_paths(self.snapshots),
             'sources': self._get_config_paths(self.sources),
-            'tests': self._get_config_paths(self.tests),
+            "tests": self._get_config_paths(self.tests),
         }
 
     def get_unused_resource_config_paths(

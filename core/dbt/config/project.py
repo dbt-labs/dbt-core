@@ -608,7 +608,7 @@ class Project:
                 "dispatch": self.dispatch,
             'snapshots': self.snapshots,
             'sources': self.sources,
-            'tests': self.tests,
+                "sources": self.sources,
             'vars': self.vars.to_dict(),
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],

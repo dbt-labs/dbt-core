@@ -42,7 +42,7 @@ class UnrenderedConfig(ConfigSource):
         elif resource_type == NodeType.Source:
             model_configs = unrendered.get('sources')
         elif resource_type == NodeType.Test:
-            model_configs = unrendered.get('tests')
+            model_configs = unrendered.get("tests")
         else:
             model_configs = unrendered.get('models')
 
