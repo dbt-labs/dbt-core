@@ -52,11 +52,11 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException,
-    CompilationException, warn_or_error, InternalException
+    CompilationException, InternalException
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
-from dbt.parser.search import FileBlock, FilesystemSearcher
+from dbt.parser.search import FileBlock
 from dbt.parser.schema_test_builders import (
     TestBuilder, SchemaTestBlock, TargetBlock, YamlBlock,
     TestBlock, Testable
@@ -193,25 +193,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Test
-
-    def get_paths(self):
-        # TODO: In order to support this, make FilesystemSearcher accept a list
-        # of file patterns. eg: ['.yml', '.yaml']
-        yaml_files = list(FilesystemSearcher(
-            self.project, self.project.all_source_paths, '.yaml'
-        ))
-        if yaml_files:
-            warn_or_error(
-                'A future version of dbt will parse files with both'
-                ' .yml and .yaml file extensions. dbt found'
-                f' {len(yaml_files)} files with .yaml extensions in'
-                ' your dbt project. To avoid errors when upgrading'
-                ' to a future release, either remove these files from'
-                ' your dbt project, or change their extensions.'
-            )
-        return FilesystemSearcher(
-            self.project, self.project.all_source_paths, '.yml'
-        )
 
     def parse_from_dict(self, dct, validate=True) -> ParsedSchemaTestNode:
         if validate:

@@ -12,7 +12,7 @@ from dbt.exceptions import (
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
 from dbt.parser.search import (
-    FilesystemSearcher, BlockContents, BlockSearcher, FileBlock
+    BlockContents, BlockSearcher, FileBlock
 )
 from dbt.utils import split_path
 
@@ -20,11 +20,6 @@ from dbt.utils import split_path
 class SnapshotParser(
     SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]
 ):
-    def get_paths(self):
-        return FilesystemSearcher(
-            self.project, self.project.snapshot_paths, '.sql'
-        )
-
     def parse_from_dict(self, dct, validate=True) -> IntermediateSnapshotNode:
         if validate:
             IntermediateSnapshotNode.validate(dct)

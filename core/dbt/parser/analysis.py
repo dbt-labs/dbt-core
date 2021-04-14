@@ -3,15 +3,10 @@ import os
 from dbt.contracts.graph.parsed import ParsedAnalysisNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
-from dbt.parser.search import FilesystemSearcher, FileBlock
+from dbt.parser.search import FileBlock
 
 
 class AnalysisParser(SimpleSQLParser[ParsedAnalysisNode]):
-    def get_paths(self):
-        return FilesystemSearcher(
-            self.project, self.project.analysis_paths, '.sql'
-        )
-
     def parse_from_dict(self, dct, validate=True) -> ParsedAnalysisNode:
         if validate:
             ParsedAnalysisNode.validate(dct)
