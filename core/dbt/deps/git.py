@@ -48,6 +48,9 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     def get_version(self):
         return self.revision
 
+    def get_subdirectory(self):
+        return self.subdirectory
+
     def nice_version_name(self):
         if self.revision == 'HEAD':
             return 'HEAD (default revision)'
