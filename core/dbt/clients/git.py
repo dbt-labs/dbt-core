@@ -39,7 +39,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
     result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
 
     if subdirectory:
-        run_cmd(os.path.join(cwd, dirname), ['git', 'sparse-checkout', 'set', subdirectory])
+        run_cmd(os.path.join(cwd, dirname or ''), ['git', 'sparse-checkout', 'set', subdirectory])
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, '.git'))
@@ -139,4 +139,4 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
                          start_sha[:7], end_sha[:7])
     else:
         logger.debug('  Checked out at {}.', end_sha[:7])
-    return os.path.join(directory, subdirectory)
+    return os.path.join(directory, subdirectory or '')
