@@ -1,6 +1,6 @@
 import os
 import hashlib
-from typing import List
+from typing import List, Optional
 
 from dbt.clients import git, system
 from dbt.config import Project
@@ -37,11 +37,12 @@ class GitPackageMixin:
 
 class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     def __init__(
-        self, git: str, revision: str, warn_unpinned: bool = True
+        self, git: str, revision: str, warn_unpinned: bool = True, subdirectory: Optional[str] = None
     ) -> None:
         super().__init__(git)
         self.revision = revision
         self.warn_unpinned = warn_unpinned
+        self.subdirectory = subdirectory
         self._checkout_name = md5sum(self.git)
 
     def get_version(self):
@@ -69,7 +70,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         try:
             dir_ = git.clone_and_checkout(
                 self.git, get_downloads_path(), revision=self.revision,
-                dirname=self._checkout_name
+                dirname=self._checkout_name, subdirectory=self.subdirectory
             )
         except ExecutableError as exc:
             if exc.cmd and exc.cmd[0] == 'git':
@@ -107,11 +108,12 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
 class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def __init__(
-        self, git: str, revisions: List[str], warn_unpinned: bool = True
+        self, git: str, revisions: List[str], warn_unpinned: bool = True, subdirectory: Optional[str] = None
     ) -> None:
         super().__init__(git)
         self.revisions = revisions
         self.warn_unpinned = warn_unpinned
+        self.subdirectory = subdirectory
 
     @classmethod
     def from_contract(
@@ -122,7 +124,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         # we want to map None -> True
         warn_unpinned = contract.warn_unpinned is not False
         return cls(git=contract.git, revisions=revisions,
-                   warn_unpinned=warn_unpinned)
+                   warn_unpinned=warn_unpinned, subdirectory=contract.subdirectory)
 
     def all_names(self) -> List[str]:
         if self.git.endswith('.git'):
@@ -140,6 +142,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
             git=self.git,
             revisions=self.revisions + other.revisions,
             warn_unpinned=warn_unpinned,
+            subdirectory=self.subdirectory,
         )
 
     def resolved(self) -> GitPinnedPackage:
@@ -153,5 +156,5 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
 
         return GitPinnedPackage(
             git=self.git, revision=requested.pop(),
-            warn_unpinned=self.warn_unpinned
+            warn_unpinned=self.warn_unpinned, subdirectory=self.subdirectory
         )

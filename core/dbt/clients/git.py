@@ -11,7 +11,7 @@ def _is_commit(revision: str) -> bool:
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
 
 
-def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None):
+def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None):
     has_revision = revision is not None
     is_commit = _is_commit(revision or "")
 
@@ -84,11 +84,16 @@ def remove_remote(cwd):
 
 
 def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
-                       revision=None):
+                       revision=None, subdirectory=None):
     exists = None
     try:
-        _, err = clone(repo, cwd, dirname=dirname,
-                       remove_git_dir=remove_git_dir)
+        _, err = clone(
+            repo,
+            cwd,
+            dirname=dirname,
+            remove_git_dir=remove_git_dir,
+            subdirectory=subdirectory,
+        )
     except dbt.exceptions.CommandResultError as exc:
         err = exc.stderr.decode('utf-8')
         exists = re.match("fatal: destination path '(.+)' already exists", err)
