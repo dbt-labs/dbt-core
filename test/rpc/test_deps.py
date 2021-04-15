@@ -87,10 +87,19 @@ def test_rpc_deps_packages(project_root, profiles_root, dbt_profile, unique_sche
 
 @pytest.mark.supported('postgres')
 def test_rpc_deps_git(project_root, profiles_root, dbt_profile, unique_schema):
-    packages = [{
-        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-        'revision': '0.5.0'
-    }]
+    packages = [
+        {
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': '0.5.0'
+        },
+        # TODO: Change me to something that fishtown-analytics manages!
+        # here I just moved the dbt_utils code into a subdirectory
+        {
+            'git': 'https://github.com/dmateusp/dbt-utils.git',
+            'revision': 'dmateusp/move_dbt_utils_to_subdir',
+            'subdirectory': 'dbt_projects/dbt_utils'
+        },
+    ]
     # if you use a bad URL, git thinks it's a private repo and prompts for auth
     bad_packages = [{
         'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
