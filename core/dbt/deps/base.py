@@ -96,6 +96,7 @@ class PinnedPackage(BasePackage):
     def get_subdirectory(self):
         return None
 
+
 SomePinned = TypeVar('SomePinned', bound=PinnedPackage)
 SomeUnpinned = TypeVar('SomeUnpinned', bound='UnpinnedPackage')
 

@@ -37,7 +37,11 @@ class GitPackageMixin:
 
 class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     def __init__(
-        self, git: str, revision: str, warn_unpinned: bool = True, subdirectory: Optional[str] = None
+        self,
+        git: str,
+        revision: str,
+        warn_unpinned: bool = True,
+        subdirectory: Optional[str] = None,
     ) -> None:
         super().__init__(git)
         self.revision = revision
@@ -111,7 +115,11 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
 class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def __init__(
-        self, git: str, revisions: List[str], warn_unpinned: bool = True, subdirectory: Optional[str] = None
+        self,
+        git: str,
+        revisions: List[str],
+        warn_unpinned: bool = True,
+        subdirectory: Optional[str] = None,
     ) -> None:
         super().__init__(git)
         self.revisions = revisions
