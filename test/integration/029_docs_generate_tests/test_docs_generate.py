@@ -1006,9 +1006,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return result
 
     def unrendered_tst_config(self, **updates):
-        result = {
-            'severity': 'ERROR',
-        }
+        result = {}
         result.update(updates)
         return result
 
@@ -1354,7 +1352,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/not_null_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
+                    'raw_sql': "{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': None,
                     'resource_type': 'test',
@@ -1441,7 +1439,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/test_nothing_model_.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
+                    'raw_sql': "{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': None,
                     'resource_type': 'test',
@@ -1485,7 +1483,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/unique_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
+                    'raw_sql': "{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': None,
                     'resource_type': 'test',
