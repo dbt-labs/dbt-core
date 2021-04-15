@@ -2,7 +2,9 @@ version: 2.1
 jobs:
   unit:
     docker: &test_only
-      - image: fishtownanalytics/test-container:11
+      # TODO: Ask for someone at fishtown to publish
+      # a new version of the test container    
+      - image: dmateusp/dbt-test-container
         environment:
           DBT_INVOCATION_ENV: circle
           DOCKER_TEST_DATABASE_HOST: "database"
@@ -37,7 +39,9 @@ jobs:
           destination: dist
   integration-postgres:
     docker:
-      - image: fishtownanalytics/test-container:11
+      # TODO: Ask for someone at fishtown to publish
+      # a new version of the test container
+      - image: dmateusp/dbt-test-container
         environment:
           DBT_INVOCATION_ENV: circle
           DOCKER_TEST_DATABASE_HOST: "database"
