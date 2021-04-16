@@ -49,7 +49,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
     def nice_version_name(self):
         if self.revision == 'HEAD':
-            return 'HEAD (default branch)'
+            return 'HEAD (default revision)'
         else:
             return 'revision {}'.format(self.revision)
 
@@ -68,7 +68,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         the path to the checked out directory."""
         try:
             dir_ = git.clone_and_checkout(
-                self.git, get_downloads_path(), branch=self.revision,
+                self.git, get_downloads_path(), revision=self.revision,
                 dirname=self._checkout_name
             )
         except ExecutableError as exc:
