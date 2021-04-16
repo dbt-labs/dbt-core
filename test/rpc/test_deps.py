@@ -98,3 +98,16 @@ def test_rpc_deps_git(project_root, profiles_root, dbt_profile, unique_schema):
     }]
     deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
 
+
+@pytest.mark.supported('postgres')
+def test_rpc_deps_git_commit(project_root, profiles_root, dbt_profile, unique_schema):
+    packages = [{
+        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+        'revision': 'b736cf6acdbf80d2de69b511a51c8d7fe214ee79'
+    }]
+    # don't use short commits
+    bad_packages = [{
+        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+        'revision': 'b736cf6'
+    }]
+    deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
