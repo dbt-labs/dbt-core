@@ -847,7 +847,7 @@ class TestProject(BaseConfigTest):
         self.default_project_data.update({
             'models': models,
         })
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+        with self.assertRaises(Exception) as exc:
             project_from_config_rendered(self.default_project_data)
 
         assert 'Cycle detected' in str(exc.exception)

@@ -214,6 +214,7 @@ def deep_map(
         dbt.exceptions.RecursionException
     """
     try:
+        print("1")
         return _deep_map(func, value, ())
     except RuntimeError as exc:
         if 'maximum recursion depth exceeded' in str(exc):
@@ -225,6 +226,8 @@ def deep_map(
         raise dbt.exceptions.OOMException(
             'Stack overflow detected in deep_map'
         )
+    except Exception as exc:
+        print(repr(exc))
 
 
 class AttrDict(dict):
