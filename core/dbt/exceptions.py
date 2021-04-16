@@ -237,6 +237,10 @@ class RecursionException(RuntimeException):
     pass
 
 
+class OOMException(RuntimeException):
+    pass
+
+
 class ValidationException(RuntimeException):
     CODE = 10005
     MESSAGE = "Validation Error"

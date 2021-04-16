@@ -221,6 +221,10 @@ def deep_map(
                 'Cycle detected in deep_map'
             )
         raise
+    except MemoryError:
+        raise dbt.exceptions.OOMException(
+            'Stack overflow detected in deep_map'
+        )
 
 
 class AttrDict(dict):
