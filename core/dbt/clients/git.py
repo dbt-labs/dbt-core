@@ -55,7 +55,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
         clone_cmd.extend(["--filter=blob:none", "--sparse"])
 
     if has_revision and not is_commit:
-        clone_cmd.extend(['--branch', revision])
+        clone_cmd.extend(["--branch", revision])
 
     clone_cmd.append(repo)
 
@@ -94,16 +94,16 @@ def _checkout(cwd, repo, revision):
     if _is_commit(revision):
         run_cmd(cwd, fetch_cmd + [revision])
     else:
-        run_cmd(cwd, ['git', 'remote', 'set-branches', 'origin', revision])
+        run_cmd(cwd, ["git", "remote", "set-branches", "origin", revision])
         run_cmd(cwd, fetch_cmd + ["--tags", revision])
 
     if _is_commit(revision):
         spec = revision
     # Prefer tags to branches if one exists
     elif revision in list_tags(cwd):
-        spec = 'tags/{}'.format(revision)
+        spec = "tags/{}".format(revision)
     else:
-        spec = 'origin/{}'.format(revision)
+        spec = "origin/{}".format(revision)
 
     out, err = run_cmd(cwd, ['git', 'reset', '--hard', spec],
                        env={'LC_ALL': 'C'})
@@ -112,7 +112,7 @@ def _checkout(cwd, repo, revision):
 
 def checkout(cwd, repo, revision=None):
     if revision is None:
-        revision = 'HEAD'
+        revision = "HEAD"
     try:
         return _checkout(cwd, repo, revision)
     except CommandResultError as exc:
