@@ -10,6 +10,6 @@ pytest-dotenv
 pytest-logbook
 pytest-xdist
 pytz
-tox
+tox>=3.13
 twine
 wheel
