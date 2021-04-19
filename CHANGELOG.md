@@ -54,14 +54,11 @@ Contributors:
 - [@fux](https://github.com/fuchsst) ([#3241](https://github.com/fishtown-analytics/dbt/issues/3241))
 - [@dmateusp](https://github.com/dmateusp) ([#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
 - [@arzavj](https://github.com/arzavj) ([3106](https://github.com/fishtown-analytics/dbt/pull/3106))
+- [@JCZuurmond](https://github.com/JCZuurmond) ([#3133](https://github.com/fishtown-analytics/dbt/pull/3133))
 
 ## dbt 0.19.1 (March 31, 2021)
 
 ## dbt 0.19.1rc2 (March 25, 2021)
-=======
-- [@JCZuurmond](https://github.com/JCZuurmond) ([#3133](https://github.com/fishtown-analytics/dbt/pull/3133))
->>>>>>> Add JCZuurmond to change log
-
 
 ### Fixes
 - Pass service-account scopes to gcloud-based oauth ([#3040](https://github.com/fishtown-analytics/dbt/issues/3040), [#3041](https://github.com/fishtown-analytics/dbt/pull/3041))
