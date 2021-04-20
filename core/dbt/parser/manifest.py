@@ -14,14 +14,17 @@ import dbt.flags as flags
 from dbt.adapters.factory import (
     get_adapter,
     get_relation_class_by_name,
+    get_adapter_package_names,
 )
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
-from dbt.clients.jinja import get_rendered
+from dbt.clients.jinja import get_rendered, statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
+from dbt.context.macro_resolver import MacroResolver
+from dbt.context.base import generate_base_context
 from dbt.contracts.files import FileHash, ParseFileType
 from dbt.parser.read_files import read_files, load_source_file
 from dbt.contracts.graph.compiled import ManifestNode
@@ -198,6 +201,7 @@ class ManifestLoader:
             for search_key in parser_files['MacroParser']:
                 block = FileBlock(self.manifest.files[search_key])
                 self.parse_with_cache(block, parser)
+        self.reparse_macros()
         # This is where a loop over self.manifest.macros should be performed
         # to set the 'depends_on' information from static rendering.
         self._perf_info.load_macros_elapsed = (time.perf_counter() - start_load_macros)
@@ -269,6 +273,29 @@ class ManifestLoader:
         self._perf_info.path_count = (
             self._perf_info.path_count + total_path_count
         )
+
+    # Loop through macros in the manifest and statically parse
+    # the 'macro_sql' to find depends_on.macros
+    def reparse_macros(self):
+        internal_package_names = get_adapter_package_names(
+            self.root_project.credentials.type
+        )
+        macro_resolver = MacroResolver(
+            self.manifest.macros,
+            self.root_project.project_name,
+            internal_package_names
+        )
+        base_ctx = generate_base_context({})
+        for macro in self.manifest.macros.values():
+            possible_macro_calls = statically_extract_macro_calls(macro.macro_sql, base_ctx)
+            for macro_name in possible_macro_calls:
+                # adapter.dispatch calls can generate a call with the same name as the macro
+                # it ought to be an adapter prefix (postgres_) or default_
+                if macro_name == macro.name:
+                    continue
+                dep_macro_id = macro_resolver.get_macro_id(macro.package_name, macro_name)
+                if dep_macro_id:
+                    macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
     # This is where we use the partial-parse state from the
     # pickle file (if it exists)
