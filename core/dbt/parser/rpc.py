@@ -22,9 +22,6 @@ class RPCBlock(FileBlock):
 
 
 class RPCCallParser(SimpleSQLParser[ParsedRPCNode]):
-    def get_paths(self):
-        return []
-
     def parse_from_dict(self, dct, validate=True) -> ParsedRPCNode:
         if validate:
             ParsedRPCNode.validate(dct)

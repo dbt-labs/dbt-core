@@ -42,7 +42,7 @@ class InitTask(BaseTask):
             cwd='.',
             dirname=project_name,
             remove_git_dir=True,
-            branch=STARTER_BRANCH,
+            revision=STARTER_BRANCH,
         )
 
     def create_profiles_dir(self, profiles_dir):

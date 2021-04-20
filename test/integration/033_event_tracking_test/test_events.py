@@ -91,13 +91,15 @@ class TestEventTracking(DBTIntegrationTest):
 
         def populate(project_id, user_id, invocation_id, version):
             return [{
-                'schema': 'iglu:com.dbt/load_all_timing/jsonschema/1-0-0',
+                'schema': 'iglu:com.dbt/load_all_timing/jsonschema/1-0-2',
                 'data': {
                     'invocation_id': invocation_id,
                     'project_id': project_id,
                     'path_count': ANY,
                     'is_partial_parse_enabled': ANY,
                     'load_all_elapsed': ANY,
+                    'read_files_elapsed': ANY,
+                    'load_macros_elapsed': ANY,
                     'parse_project_elapsed': ANY,
                     'patch_sources_elapsed': ANY,
                     'process_manifest_elapsed': ANY,

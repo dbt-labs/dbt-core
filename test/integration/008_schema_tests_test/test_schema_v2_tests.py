@@ -390,17 +390,3 @@ class TestSchemaCaseInsensitive(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
 
 
-class TestSchemaYAMLExtension(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "schema_tests_008"
-
-    @property
-    def models(self):
-        return "case-sensitive-models"
-
-    @use_profile('postgres')
-    def test_postgres_yaml_extension(self):
-        with self.assertRaises(Exception) as exc:
-            self.run_dbt(["run"])
-        self.assertIn('yaml', str(exc.exception))

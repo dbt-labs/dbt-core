@@ -110,6 +110,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             selectors=project.selectors,
             query_comment=project.query_comment,
             sources=project.sources,
+            tests=project.tests,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
@@ -272,7 +273,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         return frozenset(paths)
 
     def get_resource_config_paths(self) -> Dict[str, PathSet]:
-        """Return a dictionary with 'seeds' and 'models' keys whose values are
+        """Return a dictionary with resource type keys whose values are
         lists of lists of strings, where each inner list of strings represents
         a configured path in the resource.
         """
@@ -281,6 +282,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             'seeds': self._get_config_paths(self.seeds),
             'snapshots': self._get_config_paths(self.snapshots),
             'sources': self._get_config_paths(self.sources),
+            'tests': self._get_config_paths(self.tests),
         }
 
     def get_unused_resource_config_paths(
@@ -488,6 +490,7 @@ class UnsetProfileConfig(RuntimeConfig):
             selectors=project.selectors,
             query_comment=project.query_comment,
             sources=project.sources,
+            tests=project.tests,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,

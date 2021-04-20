@@ -21,7 +21,7 @@ import jinja2.sandbox
 
 from dbt.utils import (
     get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name,
-    deep_map
+    get_test_macro_name, deep_map
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
@@ -408,6 +408,21 @@ class DocumentationExtension(jinja2.ext.Extension):
         return node
 
 
+class TestExtension(jinja2.ext.Extension):
+    tags = ['test']
+
+    def parse(self, parser):
+        node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
+        test_name = parser.parse_assign_target(name_only=True).name
+
+        parser.parse_signature(node)
+        node.defaults = []
+        node.name = get_test_macro_name(test_name)
+        node.body = parser.parse_statements(('name:endtest',),
+                                            drop_needle=True)
+        return node
+
+
 def _is_dunder_name(name):
     return name.startswith('__') and name.endswith('__')
 
@@ -479,6 +494,7 @@ def get_environment(
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
+    args['extensions'].append(TestExtension)
 
     env_cls: Type[jinja2.Environment]
     text_filter: Type

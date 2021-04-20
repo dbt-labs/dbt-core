@@ -6,3 +6,21 @@ sources:
     tables:
       - name: 'seed'
         identifier: "{{ var('seed_name', 'invalid') }}"
+        columns:
+          - name: id
+            tests:
+              - unique:
+                  enabled: "{{ var('enabled_direct', None) | as_native }}"
+              - accepted_values:
+                  enabled: "{{ var('enabled_direct', None) | as_native }}"
+                  severity: "{{ var('severity_direct', None) | as_native }}"
+                  values: [1,2]
+
+models:
+  - name: model
+    columns:
+      - name: id
+        tests:
+          - unique
+          - accepted_values:
+              values: [1,2,3,4]

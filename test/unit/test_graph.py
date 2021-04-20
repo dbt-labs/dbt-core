@@ -61,7 +61,7 @@ class GraphTest(unittest.TestCase):
             'target': 'test'
         }
         self.macro_manifest = MacroManifest(
-            {n.unique_id: n for n in generate_name_macros('test_models_compile')}, {})
+            {n.unique_id: n for n in generate_name_macros('test_models_compile')})
         self.mock_models = []  # used by filesystem_searcher
 
         # Create gpickle patcher
@@ -129,9 +129,26 @@ class GraphTest(unittest.TestCase):
         self.mock_state_check.side_effect = _mock_state_check
 
         # Create the source file patcher
-        self.load_source_file_patcher = patch.object(BaseParser, 'load_file')
+        self.load_source_file_patcher = patch('dbt.parser.read_files.load_source_file')
         self.mock_source_file = self.load_source_file_patcher.start()
-        self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
+        def mock_load_source_file(path, parse_file_type, project_name):
+            for sf in self.mock_models:
+                if sf.path == path:
+                    source_file = sf
+            source_file.project_name = project_name
+            source_file.parse_file_type = parse_file_type
+            return source_file
+        self.mock_source_file.side_effect = mock_load_source_file
+
+        @patch('dbt.parser.hooks.HookParser.get_path')
+        def _mock_hook_path(self):
+            path = FilePath(
+                searched_path='.',
+                project_root=os.path.normcase(os.getcwd()),
+                relative_path='dbt_project.yml',
+            )
+            return path
+
 
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:
@@ -158,7 +175,8 @@ class GraphTest(unittest.TestCase):
                 project_root=os.path.normcase(os.getcwd()),
                 relative_path='{}.sql'.format(k),
             )
-            source_file = SourceFile(path=path, checksum=FileHash.empty())
+            # FileHash can't be empty or 'search_key' will be None
+            source_file = SourceFile(path=path, checksum=FileHash.from_contents('abc'))
             source_file.contents = v
             self.mock_models.append(source_file)
 
@@ -327,9 +345,7 @@ class GraphTest(unittest.TestCase):
 
         # we need a loader to compare the two manifests
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
-        loader.manifest.macros = self.macro_manifest.macros
-        loader.load()
-        loader.update_manifest()
+        loader.manifest = manifest.deepcopy()
 
         self.assertTrue(loader.matching_parse_results(manifest))
         manifest.metadata.dbt_version = '0.0.1a1'

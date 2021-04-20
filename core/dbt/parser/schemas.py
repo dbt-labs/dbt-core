@@ -52,11 +52,11 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException,
-    CompilationException, warn_or_error, InternalException
+    CompilationException, InternalException
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
-from dbt.parser.search import FileBlock, FilesystemSearcher
+from dbt.parser.search import FileBlock
 from dbt.parser.schema_test_builders import (
     TestBuilder, SchemaTestBlock, TargetBlock, YamlBlock,
     TestBlock, Testable
@@ -193,25 +193,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     @property
     def resource_type(self) -> NodeType:
         return NodeType.Test
-
-    def get_paths(self):
-        # TODO: In order to support this, make FilesystemSearcher accept a list
-        # of file patterns. eg: ['.yml', '.yaml']
-        yaml_files = list(FilesystemSearcher(
-            self.project, self.project.all_source_paths, '.yaml'
-        ))
-        if yaml_files:
-            warn_or_error(
-                'A future version of dbt will parse files with both'
-                ' .yml and .yaml file extensions. dbt found'
-                f' {len(yaml_files)} files with .yaml extensions in'
-                ' your dbt project. To avoid errors when upgrading'
-                ' to a future release, either remove these files from'
-                ' your dbt project, or change their extensions.'
-            )
-        return FilesystemSearcher(
-            self.project, self.project.all_source_paths, '.yml'
-        )
 
     def parse_from_dict(self, dct, validate=True) -> ParsedSchemaTestNode:
         if validate:
@@ -486,8 +467,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         if (macro_unique_id in
                 ['macro.dbt.test_not_null', 'macro.dbt.test_unique']):
             self.update_parsed_node(node, config)
-            node.unrendered_config['severity'] = builder.severity()
-            node.config['severity'] = builder.severity()
+            if builder.severity() is not None:
+                node.unrendered_config['severity'] = builder.severity()
+                node.config['severity'] = builder.severity()
+            if builder.enabled() is not None:
+                node.config['enabled'] = builder.enabled()
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]

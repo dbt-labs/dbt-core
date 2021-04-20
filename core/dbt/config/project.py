@@ -353,12 +353,14 @@ class PartialProject(RenderComponents):
         seeds: Dict[str, Any]
         snapshots: Dict[str, Any]
         sources: Dict[str, Any]
+        tests: Dict[str, Any]
         vars_value: VarProvider
 
         models = cfg.models
         seeds = cfg.seeds
         snapshots = cfg.snapshots
         sources = cfg.sources
+        tests = cfg.tests
         if cfg.vars is None:
             vars_dict: Dict[str, Any] = {}
         else:
@@ -408,6 +410,7 @@ class PartialProject(RenderComponents):
             selectors=selectors,
             query_comment=query_comment,
             sources=sources,
+            tests=tests,
             vars=vars_value,
             config_version=cfg.config_version,
             unrendered=unrendered,
@@ -513,6 +516,7 @@ class Project:
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]
     sources: Dict[str, Any]
+    tests: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: Dict[str, Any]
@@ -571,6 +575,7 @@ class Project:
             'seeds': self.seeds,
             'snapshots': self.snapshots,
             'sources': self.sources,
+            'tests': self.tests,
             'vars': self.vars.to_dict(),
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version

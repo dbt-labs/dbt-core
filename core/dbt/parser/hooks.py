@@ -70,13 +70,14 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
     def transform(self, node):
         return node
 
-    def get_paths(self) -> List[FilePath]:
+    # Hooks are only in the dbt_project.yml file for the project
+    def get_path(self) -> FilePath:
         path = FilePath(
             project_root=self.project.project_root,
             searched_path='.',
             relative_path='dbt_project.yml',
         )
-        return [path]
+        return path
 
     def parse_from_dict(self, dct, validate=True) -> ParsedHookNode:
         if validate:

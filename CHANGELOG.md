@@ -13,11 +13,15 @@
 - Fix FQN selector unable to find models whose name contains dots ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246))
 
 ### Features
+- Support commit hashes in dbt deps package revision ([#3268](https://github.com/fishtown-analytics/dbt/issues/3268), [#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
 - Fix for EOL SQL comments prevent entire line execution ([#2731](https://github.com/fishtown-analytics/dbt/issues/2731), [#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
 - Add optional `merge_update_columns` config to specify columns to update for `merge` statements in BigQuery and Snowflake ([#1862](https://github.com/fishtown-analytics/dbt/issues/1862), [#3100](https://github.com/fishtown-analytics/dbt/pull/3100))
 - Use query comment JSON as job labels for BigQuery adapter when `query-comment.job-label` is set to `true` ([#2483](https://github.com/fishtown-analytics/dbt/issues/2483)), ([#3145](https://github.com/fishtown-analytics/dbt/pull/3145))
 - Set application_name for Postgres connections ([#885](https://github.com/fishtown-analytics/dbt/issues/885), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
+- Support disabling schema tests, and configuring tests from `dbt_project.yml` ([#3252](https://github.com/fishtown-analytics/dbt/issues/3252),
+[#3253](https://github.com/fishtown-analytics/dbt/issues/3253), [#3257](https://github.com/fishtown-analytics/dbt/pull/3257))
+- Add Jinja tag for tests ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
 
 ### Under the hood
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
@@ -27,6 +31,7 @@
 - General development environment clean up and improve experience running tests locally ([#3194](https://github.com/fishtown-analytics/dbt/issues/3194), [#3204](https://github.com/fishtown-analytics/dbt/pull/3204), [#3228](https://github.com/fishtown-analytics/dbt/pull/3228))
 - Add a new materialization for tests, update data tests to use test materialization when executing. ([#3154](https://github.com/fishtown-analytics/dbt/issues/3154), [#3181](https://github.com/fishtown-analytics/dbt/pull/3181))
 - Switch from externally storing parsing state in ParseResult object to using Manifest ([#3163](http://github.com/fishtown-analytics/dbt/issues/3163), [#3219](https://github.com/fishtown-analytics/dbt/pull/3219))
+- Switch from loading project files in separate parsers to loading in one place([#3244](http://github.com/fishtown-analytics/dbt/issues/3244), [#3248](https://github.com/fishtown-analytics/dbt/pull/3248))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -43,7 +48,9 @@ Contributors:
 - [@techytushar](https://github.com/techytushar) ([#3158](https://github.com/fishtown-analytics/dbt/pull/3158))
 - [@cgopalan](https://github.com/cgopalan) ([#3165](https://github.com/fishtown-analytics/dbt/pull/3165), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
 - [@fux](https://github.com/fuchsst) ([#3241](https://github.com/fishtown-analytics/dbt/issues/3241))
+- [@dmateusp](https://github.com/dmateusp) ([#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
 - [@monti-python](https://github.com/monti-python) ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246))
+
 
 ## dbt 0.19.1 (March 31, 2021)
 
