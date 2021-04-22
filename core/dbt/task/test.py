@@ -131,9 +131,7 @@ class TestRunner(CompileRunner):
         context = generate_runtime_model_context(test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
-            self.config.project_name,
-            test.get_materialization(),
-            self.adapter.type()
+            self.config.project_name, test.get_materialization(), self.adapter.type()
         )
 
         if materialization_macro is None:
