@@ -21,7 +21,6 @@ class TestPostgresColumnTypes(TestColumnTypes):
     def test_postgres_column_types(self):
         self.run_and_test()
 
-@pytest.mark.skip("Temporarily skipping while implementing the handling of test results.")
 class TestRedshiftColumnTypes(TestColumnTypes):
     @property
     def models(self):
@@ -32,7 +31,6 @@ class TestRedshiftColumnTypes(TestColumnTypes):
         self.run_and_test()
 
 
-@pytest.mark.skip("Temporarily skipping while implementing the handling of test results.")
 class TestSnowflakeColumnTypes(TestColumnTypes):
     @property
     def models(self):
@@ -43,7 +41,6 @@ class TestSnowflakeColumnTypes(TestColumnTypes):
         self.run_and_test()
 
 
-@pytest.mark.skip("Temporarily skipping while implementing the handling of test results.")
 class TestBigQueryColumnTypes(TestColumnTypes):
     @property
     def models(self):

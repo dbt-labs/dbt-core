@@ -9,10 +9,10 @@
         {%- set table = {} -%}
     {%- endif -%}
 
-    {% if table and table.type == type %}
-        select 0 as success
-    {% else %}
-        select 1 as error
+    {% if table %}
+      select '{{ table.type }} does not match expected value {{ type }}'
+      from (select true)
+      where '{{ table.type }}' != '{{ type }}'
     {% endif %}
 
 {% endtest %}

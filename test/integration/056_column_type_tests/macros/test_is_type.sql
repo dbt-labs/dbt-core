@@ -64,5 +64,9 @@
         {% endif %}
     {% endfor %}
     {% do log('bad columns: ' ~ bad_columns, info=True) %}
-    select * from unnest(string_to_array('{{ bad_columns|join(',') }}', ','))
+    {% for bad_column in bad_columns %}
+      select '{{ bad_column }}' as bad_column
+      {{ 'union all' if not loop.last }}
+    {% endfor %}
+      select * from (select 1 limit 0) as nothing
 {% endtest %}

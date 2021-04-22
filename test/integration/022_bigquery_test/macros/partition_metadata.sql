@@ -13,6 +13,7 @@
     {% set success = 1 if model and actual == expected else 0 %}
 
     select 'Expected {{ expected }}, but got {{ actual }}' as validation_error
+    from (select true)
     where {{ success }} = 0
 
 {% endtest %}

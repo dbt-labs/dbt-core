@@ -16,6 +16,7 @@
     {% endif %}
 
     select '{{ validation_message }}' as validation_error
-    where {{ val }} = 1 
+    from (select true) as nothing
+    where {{ val }} = 1
 
 {% endtest %}
