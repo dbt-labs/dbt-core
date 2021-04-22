@@ -1364,7 +1364,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'test.test.not_null_model_id',
                     'docs': {'show': True},
                     'compiled': True,
-                    'compiled_sql': AnyStringWith('count(*)'),
+                    'compiled_sql': AnyStringWith('where id is null'),
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'test_metadata': {
@@ -2140,7 +2140,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'depends_on': {'macros': []},
                     'description': 'My custom test that I wrote that does nothing',
                     'docs': {'show': True},
-                    'macro_sql': AnyStringWith('macro test_nothing'),
+                    'macro_sql': AnyStringWith('test nothing'),
                     'original_file_path': self.dir('macros/dummy_test.sql'),
                     'path': self.dir('macros/dummy_test.sql'),
                     'package_name': 'test',

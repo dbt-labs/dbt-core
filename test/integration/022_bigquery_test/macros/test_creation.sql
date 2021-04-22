@@ -1,5 +1,5 @@
 
-{% macro test_was_materialized(model, name, type) %}
+{% test was_materialized(model, name, type) %}
 
     {#-- don't run this query in the parsing step #}
     {%- if model -%}
@@ -15,4 +15,4 @@
         select 1 as error
     {% endif %}
 
-{% endmacro %}
+{% endtest %}

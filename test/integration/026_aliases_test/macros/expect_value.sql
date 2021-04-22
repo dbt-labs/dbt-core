@@ -1,10 +1,10 @@
 
 -- cross-db compatible test, similar to accepted_values
 
-{% macro test_expect_value(model, field, value) %}
+{% test expect_value(model, field, value) %}
 
-select count(*)
+select *
 from {{ model }}
 where {{ field }} != '{{ value }}'
 
-{% endmacro %}
+{% endtest %}

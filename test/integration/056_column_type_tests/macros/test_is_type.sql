@@ -35,8 +35,7 @@
     {% do return((failures | length) == 0) %}
 {% endmacro %}
 
-
-{% macro test_is_type(model, column_map) %}
+{% test is_type(model, column_map) %}
     {% if not execute %}
         {{ return(None) }}
     {% endif %}
@@ -65,5 +64,5 @@
         {% endif %}
     {% endfor %}
     {% do log('bad columns: ' ~ bad_columns, info=True) %}
-    select {{ bad_columns | length }} as pass_fail
-{% endmacro %}
+    select * from unnest(string_to_array('{{ bad_columns|join(',') }}', ','))
+{% endtest %}

@@ -1,5 +1,5 @@
 import threading
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, Union
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -11,15 +11,10 @@ from dbt.contracts.graph.compiled import (
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import (
-    ParsedDataTestNode,
-    ParsedSchemaTestNode,
-)
 from dbt.contracts.results import RunResult, TestStatus
 from dbt.context.providers import generate_runtime_model
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
-    raise_compiler_error,
     InternalException,
     missing_materialization
 )
@@ -47,29 +42,12 @@ class TestRunner(CompileRunner):
         description = self.describe_node()
         print_start_line(description, self.node_index, self.num_nodes)
 
-    def execute_schema_test(self, test: CompiledSchemaTestNode):
-        _, table = self.adapter.execute(
-            test.compiled_sql,
-            auto_begin=True,
-            fetch=True,
-        )
-
-        num_rows = len(table.rows)
-        if num_rows != 1:
-            num_cols = len(table.columns)
-            raise_compiler_error(
-                f"Bad test {test.test_metadata.name}: "
-                f"Returned {num_rows} rows and {num_cols} cols, but expected "
-                f"1 row and 1 column"
-            )
-        return table[0][0]
-
     def before_execute(self):
         self.print_start_line()
 
-    def execute_data_test(
+    def execute_test(
         self,
-        test: CompiledDataTestNode,
+        test: Union[CompiledDataTestNode, CompiledSchemaTestNode],
         manifest: Manifest
     ) -> int:
         context = generate_runtime_model(
@@ -79,7 +57,8 @@ class TestRunner(CompileRunner):
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name,
             test.get_materialization(),
-            self.adapter.type())
+            self.adapter.type()
+        )
 
         if materialization_macro is None:
             missing_materialization(test, self.adapter.type())
@@ -112,15 +91,7 @@ class TestRunner(CompileRunner):
         return int(table[0][0])
 
     def execute(self, test: CompiledTestNode, manifest: Manifest):
-        if isinstance(test, CompiledDataTestNode):
-            failed_rows = self.execute_data_test(test, manifest)
-        elif isinstance(test, CompiledSchemaTestNode):
-            failed_rows = self.execute_schema_test(test)
-        else:
-            raise InternalException(
-                f'Expected compiled schema test or compiled data test, got '
-                f'{type(test)}'
-            )
+        failed_rows = self.execute_test(test, manifest)
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
@@ -144,10 +115,6 @@ class TestRunner(CompileRunner):
 
     def after_execute(self, result):
         self.print_result_line(result)
-
-
-DATA_TEST_TYPES = (CompiledDataTestNode, ParsedDataTestNode)
-SCHEMA_TEST_TYPES = (CompiledSchemaTestNode, ParsedSchemaTestNode)
 
 
 class TestSelector(ResourceTypeSelector):
