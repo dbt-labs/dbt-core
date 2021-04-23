@@ -19,13 +19,17 @@ FullNamespace = Dict[str, NamespaceMember]
 # and provide the ability to flatten them into the ManifestContexts
 # that are created for jinja, so that macro calls can be resolved.
 # Creates special iterators and _keys methods to flatten the lists.
+# When this class is created it has a static 'local_namespace' which
+# depends on the package of the node, so it only works for one
+# particular local package at a time for "flattening" into a context.
+# 'get_by_package' should work for any macro.
 class MacroNamespace(Mapping):
     def __init__(
         self,
-        global_namespace: FlatNamespace,
-        local_namespace: FlatNamespace,
-        global_project_namespace: FlatNamespace,
-        packages: Dict[str, FlatNamespace],
+        global_namespace: FlatNamespace,  # root package macros
+        local_namespace: FlatNamespace,   # packages for *this* node
+        global_project_namespace: FlatNamespace,  # internal packages
+        packages: Dict[str, FlatNamespace],  # non-internal packages
     ):
         self.global_namespace: FlatNamespace = global_namespace
         self.local_namespace: FlatNamespace = local_namespace
@@ -33,13 +37,13 @@ class MacroNamespace(Mapping):
         self.global_project_namespace: FlatNamespace = global_project_namespace
 
     def _search_order(self) -> Iterable[Union[FullNamespace, FlatNamespace]]:
-        yield self.local_namespace
-        yield self.global_namespace
-        yield self.packages
+        yield self.local_namespace   # local package
+        yield self.global_namespace  # root package
+        yield self.packages          # non-internal packages
         yield {
-            GLOBAL_PROJECT_NAME: self.global_project_namespace,
+            GLOBAL_PROJECT_NAME: self.global_project_namespace,  # dbt
         }
-        yield self.global_project_namespace
+        yield self.global_project_namespace  # other internal project besides dbt
 
     # provides special keys method for MacroNamespace iterator
     # returns keys from local_namespace, global_namespace, packages,
@@ -98,7 +102,9 @@ class MacroNamespaceBuilder:
         # internal packages comes from get_adapter_package_names
         self.internal_package_names = set(internal_packages)
         self.internal_package_names_order = internal_packages
-        # macro_func is added here if in root package
+        # macro_func is added here if in root package, since
+        # the root package acts as a "global" namespace, overriding
+        # everything else except local external package macro calls
         self.globals: FlatNamespace = {}
         # macro_func is added here if it's the package for this node
         self.locals: FlatNamespace = {}
@@ -169,8 +175,8 @@ class MacroNamespaceBuilder:
                 global_project_namespace.update(self.internal_packages[pkg])
 
         return MacroNamespace(
-            global_namespace=self.globals,
-            local_namespace=self.locals,
-            global_project_namespace=global_project_namespace,
-            packages=self.packages,
+            global_namespace=self.globals,  # root package macros
+            local_namespace=self.locals,  # packages for *this* node
+            global_project_namespace=global_project_namespace,  # internal packages
+            packages=self.packages,  # non internal_packages
         )
