@@ -5,8 +5,8 @@
 {%- endmacro %}
 
 
-{% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-  {{ adapter.dispatch('get_delete_insert_merge_sql')(target, source, unique_key, dest_columns) }}
+{% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=None) -%}
+  {{ adapter.dispatch('get_delete_insert_merge_sql')(target, source, unique_key, dest_columns, incremental_predicates) }}
 {%- endmacro %}
 
 
@@ -63,16 +63,18 @@
 {% endmacro %}
 
 
-{% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
+{% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=None) -%}
 
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
+    {%- set incremental_predicates = [] if incremental_predicates is none else [] + incremental_predicates -%}
 
     {% if unique_key is not none %}
     delete from {{ target }}
     where ({{ unique_key }}) in (
         select ({{ unique_key }})
         from {{ source }}
-    );
+    )
+    {% if incremental_predicates %} and {{ incremental_predicates | join(' and ') }} {% endif %};
     {% endif %}
 
     insert into {{ target }} ({{ dest_cols_csv }})
@@ -83,8 +85,8 @@
 
 {%- endmacro %}
 
-{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-    {{ common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) }}
+{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=None) -%}
+    {{ common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=None) }}
 {% endmacro %}
 
 
