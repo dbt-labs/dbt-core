@@ -159,11 +159,11 @@ class QualifiedNameSelectorMethod(SelectorMethod):
         :param str qualified_name: The qualified name to match the nodes with
         :param List[str] fqn: The node's fully qualified name in the graph.
         """
-        unscoped_fqn = fqn[1:] 
+        unscoped_fqn = fqn[1:]
 
         if is_selected_node(fqn, qualified_name):
             return True
-        # Match nodes across different packages 
+        # Match nodes across different packages
         elif is_selected_node(unscoped_fqn, qualified_name):
             return True
 
