@@ -54,10 +54,9 @@ def is_selected_node(fqn: List[str], node_selector: str):
     # If qualified_name exactly matches model name (fqn's leaf), return True
     if fqn[-1] == node_selector:
         return True
-
     # Flatten node parts. Dots in model names act as namespace separators
     flat_fqn = [item for segment in fqn for item in segment.split('.')]
-
+    # Selector components cannot be more than fqn's
     if len(flat_fqn) < len(node_selector.split('.')):
         return False
 
