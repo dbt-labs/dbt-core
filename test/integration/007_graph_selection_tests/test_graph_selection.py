@@ -118,7 +118,6 @@ class TestGraphSelection(DBTIntegrationTest):
 
         self.assertTablesEqual("SEED", "USERS")
         created_models = self.get_models_in_schema()
-        self.assertFalse('ALTERNATIVE.USERS' in created_models)
         self.assertFalse('USERS_ROLLUP' in created_models)
         self.assertFalse('BASE_USERS' in created_models)
         self.assertFalse('EMAILS' in created_models)
@@ -153,7 +152,6 @@ class TestGraphSelection(DBTIntegrationTest):
         )
         created_models = self.get_models_in_schema()
         self.assertFalse('BASE_USERS' in created_models)
-        self.assertFalse('ALTERNATIVE.USERS' in created_models)
         self.assertFalse('EMAILS' in created_models)
 
     @use_profile('postgres')
