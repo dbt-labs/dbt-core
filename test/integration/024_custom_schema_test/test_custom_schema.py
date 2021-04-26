@@ -289,3 +289,81 @@ class TestCustomSchemaWithCustomMacroConfigs(TestCustomSchemaWithCustomMacro):
         self.assertTablesEqual("seed", "view_1", schema, v1_schema)
         self.assertTablesEqual("seed", "view_2", schema, v2_schema)
         self.assertTablesEqual("agg", "view_3", schema, xf_schema)
+
+
+class TestCustomSchemaWithCustomMacroFromModelName(DBTIntegrationTest):
+    def setUp(self):
+        super().setUp()
+
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.v1_schema())
+        )
+        self._created_schemas.add(
+            self._get_schema_fqn(self.default_database, self.v2_schema())
+        )
+
+    @property
+    def schema(self):
+        return "custom_macro_024"
+
+    @property
+    def models(self):
+        return "dot-models"
+
+    @property
+    def profile_config(self):
+        return {
+            'test': {
+                'outputs': {
+                    'prod': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'host': self.database_host,
+                        'port': 5432,
+                        'user': 'root',
+                        'pass': 'password',
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema(),
+                    }
+                },
+                'target': 'prod'
+            }
+        }
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'macro-paths': ['custom-macros-multischema'],
+            'data-paths': ['seed'],
+            'seeds': {
+                'quote_columns': False,
+            },            
+            'models': {
+                'schema': 'dbt_test',
+            }
+        }
+
+    def v1_schema(self):
+        return f"first_schema"
+
+    def v2_schema(self):
+        return f"second_schema"
+
+    @use_profile('postgres')
+    def test__postgres__custom_schema_from_macro_model_name(self):
+        self.run_sql_file("seed.sql")
+        default_schema = self.unique_schema()
+
+        results = self.run_dbt(['seed'])
+        self.assertEqual(len(results), 2)
+        self.assertTableDoesExist("my_seed", self.v1_schema())
+        self.assertTableDoesExist("my_agg", self.v2_schema())
+
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
+
+        self.assertTablesEqual("seed", "view_1", default_schema, self.v1_schema())
+        self.assertTablesEqual("seed", "view_2", default_schema, self.v2_schema())
+        self.assertTablesEqual("agg", "view_3", default_schema, default_schema)
+
