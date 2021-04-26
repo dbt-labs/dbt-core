@@ -10,8 +10,10 @@
 - Add feature to add `_n` alias to same column names in SQL query ([#3147](https://github.com/fishtown-analytics/dbt/issues/3147), [#3158](https://github.com/fishtown-analytics/dbt/pull/3158))
 - Raise a proper error message if dbt parses a macro twice due to macro duplication or misconfiguration. ([#2449](https://github.com/fishtown-analytics/dbt/issues/2449), [#3165](https://github.com/fishtown-analytics/dbt/pull/3165))
 - Fix exposures missing in graph context variable. ([#3241](https://github.com/fishtown-analytics/dbt/issues/3241))
+- Ensure that schema test macros are properly processed ([#3229](https://github.com/fishtown-analytics/dbt/issues/3229), [#3272](https://github.com/fishtown-analytics/dbt/pull/3272))
 
 ### Features
+- Support commit hashes in dbt deps package revision ([#3268](https://github.com/fishtown-analytics/dbt/issues/3268), [#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
 - Fix for EOL SQL comments prevent entire line execution ([#2731](https://github.com/fishtown-analytics/dbt/issues/2731), [#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
 - Add optional `merge_update_columns` config to specify columns to update for `merge` statements in BigQuery and Snowflake ([#1862](https://github.com/fishtown-analytics/dbt/issues/1862), [#3100](https://github.com/fishtown-analytics/dbt/pull/3100))
@@ -19,6 +21,7 @@
 - Set application_name for Postgres connections ([#885](https://github.com/fishtown-analytics/dbt/issues/885), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
 - Support disabling schema tests, and configuring tests from `dbt_project.yml` ([#3252](https://github.com/fishtown-analytics/dbt/issues/3252),
 [#3253](https://github.com/fishtown-analytics/dbt/issues/3253), [#3257](https://github.com/fishtown-analytics/dbt/pull/3257))
+- Add Jinja tag for tests ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
 
 ### Under the hood
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
@@ -45,6 +48,7 @@ Contributors:
 - [@techytushar](https://github.com/techytushar) ([#3158](https://github.com/fishtown-analytics/dbt/pull/3158))
 - [@cgopalan](https://github.com/cgopalan) ([#3165](https://github.com/fishtown-analytics/dbt/pull/3165), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
 - [@fux](https://github.com/fuchsst) ([#3241](https://github.com/fishtown-analytics/dbt/issues/3241))
+- [@dmateusp](https://github.com/dmateusp) ([#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
 
 ## dbt 0.19.1 (March 31, 2021)
 

@@ -19,7 +19,7 @@ from (
 {% endmacro %}
 
 
-{% macro test_unique(model) %}
+{% test unique(model) %}
     {% set macro = adapter.dispatch('test_unique') %}
     {{ macro(model, **kwargs) }}
-{% endmacro %}
+{% endtest %}

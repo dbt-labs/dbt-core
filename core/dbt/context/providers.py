@@ -1408,7 +1408,12 @@ class TestContext(ProviderContext):
         self.macro_resolver = macro_resolver
         self.thread_ctx = MacroStack()
         super().__init__(model, config, manifest, provider, context_config)
-        self._build_test_namespace
+        self._build_test_namespace()
+        # We need to rebuild this because it's already been built by
+        # the ProviderContext with the wrong namespace.
+        self.db_wrapper = self.provider.DatabaseWrapper(
+            self.adapter, self.namespace
+        )
 
     def _build_namespace(self):
         return {}
@@ -1421,11 +1426,17 @@ class TestContext(ProviderContext):
         depends_on_macros = []
         if self.model.depends_on and self.model.depends_on.macros:
             depends_on_macros = self.model.depends_on.macros
+        lookup_macros = depends_on_macros.copy()
+        for macro_unique_id in lookup_macros:
+            lookup_macro = self.macro_resolver.macros.get(macro_unique_id)
+            if lookup_macro:
+                depends_on_macros.extend(lookup_macro.depends_on.macros)
+
         macro_namespace = TestMacroNamespace(
-            self.macro_resolver, self.ctx, self.node, self.thread_ctx,
+            self.macro_resolver, self._ctx, self.model, self.thread_ctx,
             depends_on_macros
         )
-        self._namespace = macro_namespace
+        self.namespace = macro_namespace
 
 
 def generate_test_context(
