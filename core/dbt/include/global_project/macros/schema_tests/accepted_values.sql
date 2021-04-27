@@ -31,13 +31,12 @@ validation_errors as (
     )
 )
 
-select count(*) as validation_errors
+select *
 from validation_errors
 
 {% endmacro %}
 
-
-{% macro test_accepted_values(model, values) %}
+{% test accepted_values(model, values) %}
     {% set macro = adapter.dispatch('test_accepted_values') %}
     {{ macro(model, values, **kwargs) }}
-{% endmacro %}
+{% endtest %}

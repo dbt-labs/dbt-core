@@ -15,6 +15,3 @@ models:
         tests:
           - every_value_is_blue
           - rejected_values: { values: ['orange', 'purple'] }
-    # passes
-    tests:
-      - local_dep.equality: { compare_model: ref('table_copy') }

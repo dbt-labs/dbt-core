@@ -23,6 +23,7 @@ from dbt.contracts.files import SourceFile, FileHash, RemoteFile
 from dbt.contracts.util import (
     BaseArtifactMetadata, MacroKey, SourceKey, ArtifactMixin, schema_version
 )
+from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     InternalException, CompilationException,
     raise_duplicate_resource_name, raise_compiler_error, warn_or_error,
@@ -512,7 +513,7 @@ class MacroMethods:
 
 
 @dataclass
-class ManifestStateCheck():
+class ManifestStateCheck(dbtClassMixin):
     vars_hash: FileHash
     profile_hash: FileHash
     project_hashes: MutableMapping[str, FileHash]
@@ -583,6 +584,10 @@ class Manifest(MacroMethods):
         manifest!
         """
         self.flat_graph = {
+            'exposures': {
+                k: v.to_dict(omit_none=False)
+                for k, v in self.exposures.items()
+            },
             'nodes': {
                 k: v.to_dict(omit_none=False)
                 for k, v in self.nodes.items()
@@ -649,7 +654,7 @@ class Manifest(MacroMethods):
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
-        all_resources = chain(self.nodes.values(), self.sources.values())
+        all_resources = chain(self.exposures.values(), self.nodes.values(), self.sources.values())
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
             if resource_type_plural not in resource_fqns:
@@ -775,10 +780,11 @@ class Manifest(MacroMethods):
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
-            selectors=self.root_project.manifest_selectors,
+            selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
             metadata=self.metadata,
             disabled=[_deepcopy(n) for n in self.disabled],
             files={k: _deepcopy(v) for k, v in self.files.items()},
+            state_check=_deepcopy(self.state_check),
         )
 
     def writable_manifest(self):
@@ -1195,9 +1201,8 @@ class Manifest(MacroMethods):
 
 
 class MacroManifest(MacroMethods):
-    def __init__(self, macros, files):
+    def __init__(self, macros):
         self.macros = macros
-        self.files = files
         self.metadata = ManifestMetadata()
         # This is returned by the 'graph' context property
         # in the ProviderContext class.

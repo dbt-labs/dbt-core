@@ -2,14 +2,13 @@ import abc
 import itertools
 import os
 from typing import (
-    List, Dict, Any, Iterable, Generic, TypeVar
+    List, Dict, Any, Generic, TypeVar
 )
 
 from dbt.dataclass_schema import ValidationError
 
 from dbt import utils
 from dbt.clients.jinja import MacroGenerator
-from dbt.clients.system import load_file_contents
 from dbt.context.providers import (
     generate_parser_model,
     generate_generate_component_name_macro,
@@ -19,9 +18,6 @@ from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import (
     ContextConfig
-)
-from dbt.contracts.files import (
-    SourceFile, FilePath, FileHash
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
@@ -50,17 +46,6 @@ class BaseParser(Generic[FinalValue]):
     def __init__(self, project: Project, manifest: Manifest) -> None:
         self.project = project
         self.manifest = manifest
-        # this should be a superset of [x.path for x in self.manifest.files]
-        # because we fill it via search()
-        self.searched: List[FilePath] = []
-
-    @abc.abstractmethod
-    def get_paths(self) -> Iterable[FilePath]:
-        pass
-
-    def search(self) -> List[FilePath]:
-        self.searched = list(self.get_paths())
-        return self.searched
 
     @abc.abstractmethod
     def parse_file(self, block: FileBlock) -> None:
@@ -75,21 +60,6 @@ class BaseParser(Generic[FinalValue]):
         return "{}.{}.{}".format(self.resource_type,
                                  self.project.project_name,
                                  resource_name)
-
-    def load_file(
-        self,
-        path: FilePath,
-        *,
-        set_contents: bool = True,
-    ) -> SourceFile:
-        file_contents = load_file_contents(path.absolute_path, strip=False)
-        checksum = FileHash.from_contents(file_contents)
-        source_file = SourceFile(path=path, checksum=checksum)
-        if set_contents:
-            source_file.contents = file_contents.strip()
-        else:
-            source_file.contents = ''
-        return source_file
 
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):

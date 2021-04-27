@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import pytest
 
 from unittest import mock
 import yaml
@@ -840,6 +841,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.models, {'vars': {}, 'pre-hook': [], 'post-hook': []})
         self.assertEqual(project.seeds, {'vars': {}, 'pre-hook': [], 'post-hook': [], 'column_types': {}})
 
+    @pytest.mark.skipif(os.name == 'nt', reason='crashes CI for Windows')
     def test_cycle(self):
         models = {}
         models['models'] = models

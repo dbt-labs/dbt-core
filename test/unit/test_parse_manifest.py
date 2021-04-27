@@ -107,7 +107,7 @@ class TestLoader(unittest.TestCase):
         self.parser.load_file.return_value = source_file
 
         self.loader.old_manifest = None
-        self.loader.parse_with_cache(source_file.path, self.parser)
+        self.loader.parse_with_cache(FileBlock(source_file), self.parser)
         # there was nothing in the cache, so parse_file should get called
         # with a FileBlock that has the given source file in it
         self.parser.parse_file.assert_called_once_with(FileBlock(file=source_file))
@@ -124,7 +124,7 @@ class TestLoader(unittest.TestCase):
         self.loader.old_manifest = old_manifest
         self.loader.old_manifest.nodes = {'model.root.model_1': mock.MagicMock()}
 
-        self.loader.parse_with_cache(source_file.path, self.parser)
+        self.loader.parse_with_cache(FileBlock(source_file), self.parser)
         # there was a cache hit, so parse_file should never have been called
         self.parser.parse_file.assert_not_called()
 
@@ -140,7 +140,7 @@ class TestLoader(unittest.TestCase):
         old_manifest.nodes = {'model.root.model_1': mock.MagicMock()}
         self.loader.old_manifest = old_manifest
 
-        self.loader.parse_with_cache(source_file.path, self.parser)
+        self.loader.parse_with_cache(FileBlock(source_file), self.parser)
         # there was a cache checksum mismatch, so parse_file should get called
         # with a FileBlock that has the given source file in it
         self.parser.parse_file.assert_called_once_with(FileBlock(file=source_file))
@@ -157,7 +157,7 @@ class TestLoader(unittest.TestCase):
         old_manifest.nodes = {'model.root.model_2': mock.MagicMock()}
 
         self.loader.old_manifest = old_manifest
-        self.loader.parse_with_cache(source_file.path, self.parser)
+        self.loader.parse_with_cache(FileBlock(source_file), self.parser)
         # the filename wasn't in the cache, so parse_file should get called
         # with a  FileBlock that has the given source file in it.
         self.parser.parse_file.assert_called_once_with(FileBlock(file=source_file))

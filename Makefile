@@ -7,7 +7,7 @@ ifeq ($(USE_DOCKER),true)
 endif
 
 .PHONY: dev
-dev: ## Installs dbt-* packages in develop mode and development dependencies.
+dev: ## Installs dbt-* packages in develop mode along with development dependencies.
 	pip install -r dev-requirements.txt -r editable-requirements.txt
 
 .PHONY: mypy
@@ -30,20 +30,42 @@ unit: .env ## Runs unit tests with py38.
 test: .env ## Runs unit tests with py38 and code checks in parallel.
 	$(DOCKER_CMD) tox -p -e py38,flake8,mypy
 
-.PHONY: integration integration-postgres
-integration integration-postgres: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
+.PHONY: integration
+integration: .env integration-postgres ## Alias for integration-postgres.
+
+.PHONY: integration-fail-fast
+integration-fail-fast: .env integration-postgres-fail-fast ## Alias for integration-postgres-fail-fast.
+
+.PHONY: integration-postgres
+integration-postgres: .env ## Runs postgres integration tests with py38.
+	$(DOCKER_CMD) tox -e py38-postgres -- -nauto
+
+.PHONY: integration-postgres-fail-fast
+integration-postgres-fail-fast: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
 	$(DOCKER_CMD) tox -e py38-postgres -- -x -nauto
 
 .PHONY: integration-redshift
-integration-redshift: .env ## Runs redshift integration tests with py38 in "fail fast" mode.
+integration-redshift: .env ## Runs redshift integration tests with py38.
+	$(DOCKER_CMD) tox -e py38-redshift -- -nauto
+
+.PHONY: integration-redshift-fail-fast
+integration-redshift-fail-fast: .env ## Runs redshift integration tests with py38 in "fail fast" mode.
 	$(DOCKER_CMD) tox -e py38-redshift -- -x -nauto
 
 .PHONY: integration-snowflake
-integration-snowflake: .env ## Runs snowflake integration tests with py38 in "fail fast" mode.
+integration-snowflake: .env ## Runs snowflake integration tests with py38.
+	$(DOCKER_CMD) tox -e py38-snowflake -- -nauto
+
+.PHONY: integration-snowflake-fail-fast
+integration-snowflake-fail-fast: .env ## Runs snowflake integration tests with py38 in "fail fast" mode.
 	$(DOCKER_CMD) tox -e py38-snowflake -- -x -nauto
 
 .PHONY: integration-bigquery
-integration-bigquery: .env ## Runs bigquery integration tests with py38 in "fail fast" mode.
+integration-bigquery: .env ## Runs bigquery integration tests with py38.
+	$(DOCKER_CMD) tox -e py38-bigquery -- -nauto
+
+.PHONY: integration-bigquery-fail-fast
+integration-bigquery-fail-fast: .env ## Runs bigquery integration tests with py38 in "fail fast" mode.
 	$(DOCKER_CMD) tox -e py38-bigquery -- -x -nauto
 
 .PHONY: setup-db

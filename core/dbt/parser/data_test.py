@@ -1,16 +1,11 @@
 from dbt.contracts.graph.parsed import ParsedDataTestNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
-from dbt.parser.search import FilesystemSearcher, FileBlock
+from dbt.parser.search import FileBlock
 from dbt.utils import get_pseudo_test_path
 
 
 class DataTestParser(SimpleSQLParser[ParsedDataTestNode]):
-    def get_paths(self):
-        return FilesystemSearcher(
-            self.project, self.project.test_paths, '.sql'
-        )
-
     def parse_from_dict(self, dct, validate=True) -> ParsedDataTestNode:
         if validate:
             ParsedDataTestNode.validate(dct)

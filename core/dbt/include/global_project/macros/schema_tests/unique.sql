@@ -3,7 +3,7 @@
 
 {% set column_name = kwargs.get('column_name', kwargs.get('arg')) %}
 
-select count(*) as validation_errors
+select *
 from (
 
     select
@@ -19,7 +19,7 @@ from (
 {% endmacro %}
 
 
-{% macro test_unique(model) %}
+{% test unique(model) %}
     {% set macro = adapter.dispatch('test_unique') %}
     {{ macro(model, **kwargs) }}
-{% endmacro %}
+{% endtest %}
