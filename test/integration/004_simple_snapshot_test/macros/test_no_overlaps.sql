@@ -15,7 +15,7 @@
     mostly copy+pasted from dbt_utils, but I removed some parameters and added
     a query that calls get_snapshot_unique_id
 #}
-{% macro test_mutually_exclusive_ranges(model) %}
+{% test mutually_exclusive_ranges(model) %}
 
 with base as (
     select {{ get_snapshot_unique_id() }} as dbt_unique_id,
@@ -81,5 +81,5 @@ validation_errors as (
     )
 )
 
-select count(*) from validation_errors
-{% endmacro %}
+select * from validation_errors
+{% endtest %}

@@ -4,7 +4,7 @@
 {% set column_name = kwargs.get('column_name', kwargs.get('from')) %}
 
 
-select count(*) as validation_errors
+select *
 from (
     select {{ column_name }} as id from {{ model }}
 ) as child
