@@ -70,8 +70,7 @@ class NodeSelector(MethodManager):
         return set(method.search(included_nodes, spec.value))
 
     def get_nodes_from_criteria(
-        self,
-        spec: SelectionCriteria
+        self, spec: SelectionCriteria
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         """Get all nodes specified by the single selection criteria.
 
