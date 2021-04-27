@@ -390,17 +390,39 @@ class TestSchemaCaseInsensitive(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
 
 
-class TestSchemaYAMLExtension(DBTIntegrationTest):
+class TestSchemaTestContext(DBTIntegrationTest):
     @property
     def schema(self):
         return "schema_tests_008"
 
     @property
     def models(self):
-        return "case-sensitive-models"
+        return "test-context-models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["test-context-macros"],
+        }
 
     @use_profile('postgres')
-    def test_postgres_yaml_extension(self):
-        with self.assertRaises(Exception) as exc:
-            self.run_dbt(["run"])
-        self.assertIn('yaml', str(exc.exception))
+    def test_postgres_test_context_tests(self):
+        # This test tests the the TestContext and TestMacroNamespace
+        # are working correctly
+        results = self.run_dbt(strict=False)
+        self.assertEqual(len(results), 2)
+
+        results = self.run_dbt(['test'], expect_pass=False)
+        self.assertEqual(len(results), 2)
+        result0 = results[0]
+        result1 = results[1]
+        for result in results:
+            if result.node.name == 'type_two_model_a_':
+                # This will be WARN if the test macro was rendered correctly
+                self.assertEqual(result.node.config.severity, 'WARN')
+            elif result.node.name == 'type_one_model_a':
+                # This will have correct compiled_sql if the test macro
+                # was rendered correctly
+                self.assertRegex(result.node.compiled_sql, r'union all')
+

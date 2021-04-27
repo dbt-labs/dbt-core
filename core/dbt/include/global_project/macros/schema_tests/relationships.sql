@@ -18,7 +18,7 @@ where child.id is not null
 
 
 
-{% macro test_relationships(model, to, field) %}
+{% test relationships(model, to, field) %}
     {% set macro = adapter.dispatch('test_relationships') %}
     {{ macro(model, to, field, **kwargs) }}
-{% endmacro %}
+{% endtest %}

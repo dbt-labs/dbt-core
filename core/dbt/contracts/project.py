@@ -195,6 +195,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     snapshots: Dict[str, Any] = field(default_factory=dict)
     analyses: Dict[str, Any] = field(default_factory=dict)
     sources: Dict[str, Any] = field(default_factory=dict)
+    tests: Dict[str, Any] = field(default_factory=dict)
     vars: Optional[Dict[str, Any]] = field(
         default=None,
         metadata=dict(

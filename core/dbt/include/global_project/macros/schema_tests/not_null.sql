@@ -9,9 +9,7 @@ where {{ column_name }} is null
 
 {% endmacro %}
 
-
-
-{% macro test_not_null(model) %}
+{% test not_null(model) %}
     {% set macro = adapter.dispatch('test_not_null') %}
     {{ macro(model, **kwargs) }}
-{% endmacro %}
+{% endtest %}
