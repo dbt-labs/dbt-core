@@ -113,7 +113,7 @@ class BaseDatabaseWrapper:
         #  1. current adapter
         #  2. any parent adapters (dependencies)
         #  3. 'default'
-        search_prefixes = get_adapter_type_names(self.config.credentials.type) + ['default']
+        search_prefixes = get_adapter_type_names(self._adapter.type()) + ['default']
         return search_prefixes
 
     def dispatch(
