@@ -1,5 +1,5 @@
 import threading
-from typing import Dict, Any, Set, Union
+from typing import Dict, Any, Union
 
 from .compile import CompileRunner
 from .run import RunTask
