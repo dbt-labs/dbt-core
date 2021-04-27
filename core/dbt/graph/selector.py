@@ -126,10 +126,7 @@ class NodeSelector(MethodManager):
         if isinstance(spec, SelectionCriteria):
             direct_nodes, indirect_nodes = self.get_nodes_from_criteria(spec)
         else:
-            bundles = [
-                self.select_nodes_recursively(component)
-                for component in spec
-            ]
+            bundles = [self.select_nodes_recursively(component) for component in spec]
 
             direct_sets = []
             indirect_sets = []
