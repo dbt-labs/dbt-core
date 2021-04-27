@@ -30,6 +30,18 @@ def alert_non_existence(raw_spec, nodes):
         )
 
 
+def can_select_indirectly(node):
+    """If a node is not selected itself, but its parent(s) are, it may qualify
+    for indirect selection.
+    Today, only Test nodes can be indirectly selected. In the future,
+    other node types or invocation flags might qualify.
+    """
+    if node.resource_type == NodeType.Test:
+        return True
+    else:
+        return False
+
+
 class NodeSelector(MethodManager):
     """The node selector is aware of the graph and manifest,
     """
@@ -202,13 +214,13 @@ class NodeSelector(MethodManager):
         #    for later and see if its other parents show up.
         # We use this for INCLUSION.
 
-        direct_nodes = selected
+        direct_nodes = set(selected)
         indirect_nodes = set()
 
         for unique_id in self.graph.select_successors(selected):
             if unique_id in self.manifest.nodes:
                 node = self.manifest.nodes[unique_id]
-                if node.resource_type == NodeType.Test:
+                if can_select_indirectly(node):
                     # should we add it in directly?
                     if greedy or set(node.depends_on.nodes) <= set(selected):
                         direct_nodes.add(unique_id)
@@ -219,12 +231,14 @@ class NodeSelector(MethodManager):
         return direct_nodes, indirect_nodes
 
     def incorporate_indirect_nodes(
-        self, selected: Set[UniqueId], greedy_nodes: Set[UniqueId] = set()
+        self, direct_nodes: Set[UniqueId], indirect_nodes: Set[UniqueId] = set()
     ) -> Set[UniqueId]:
         # Check tests previously selected indirectly to see if ALL their
         # parents are now present.
 
-        for unique_id in greedy_nodes:
+        selected = set(direct_nodes)
+
+        for unique_id in indirect_nodes:
             if unique_id in self.manifest.nodes:
                 node = self.manifest.nodes[unique_id]
                 if set(node.depends_on.nodes) <= set(selected):
