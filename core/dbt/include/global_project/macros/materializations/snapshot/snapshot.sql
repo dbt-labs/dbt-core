@@ -263,6 +263,10 @@
 
   {% do persist_docs(target_relation, model) %}
 
+  {% if not target_relation_exists %}
+    {% do create_indexes(target_relation) %}
+  {% endif %}
+
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   {{ adapter.commit() }}
