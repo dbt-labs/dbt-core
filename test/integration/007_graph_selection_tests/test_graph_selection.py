@@ -384,12 +384,13 @@ class TestGraphSelection(DBTIntegrationTest):
         assert sorted(results) == ['exposure:test.seed_ml_exposure', 'source:test.raw.seed']
 
         results = self.run_dbt(['ls', '--select', '1+exposure:user_exposure'])
-        assert len(results) == 3
-        assert sorted(results) == ['exposure:test.user_exposure', 'test.users', 'test.users_rollup']
+        assert len(results) == 5
+        assert sorted(results) == ['exposure:test.user_exposure', 'test.schema_test.unique_users_id', 
+            'test.schema_test.unique_users_rollup_gender', 'test.users', 'test.users_rollup']
 
-        self.run_dbt(['run', '-m', '+exposure:user_exposure'])
+        results = self.run_dbt(['run', '-m', '+exposure:user_exposure'])
         # users, users_rollup
-        assert len(results) == 3
+        assert len(results) == 2
 
         created_models = self.get_models_in_schema()
         self.assertIn('users_rollup', created_models)
