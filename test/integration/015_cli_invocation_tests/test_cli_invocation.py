@@ -257,6 +257,7 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
         """
         Test if a sub command runs well when a profiles dir is separate from a
         project dir.
+
         """
         profiles_dir = "./tmp-profile"
         workdir = os.getcwd()
