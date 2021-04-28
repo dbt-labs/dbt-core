@@ -93,6 +93,9 @@ class PinnedPackage(BasePackage):
         dest_dirname = self.get_project_name(project, renderer)
         return os.path.join(project.modules_path, dest_dirname)
 
+    def get_subdirectory(self):
+        return None
+
 
 SomePinned = TypeVar('SomePinned', bound=PinnedPackage)
 SomeUnpinned = TypeVar('SomeUnpinned', bound='UnpinnedPackage')
