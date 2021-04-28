@@ -56,12 +56,12 @@ def is_selected_node(fqn: List[str], node_selector: str):
     if fqn[-1] == node_selector:
         return True
     # Flatten node parts. Dots in model names act as namespace separators
-    flat_fqn = [item for segment in fqn for item in segment.split('.')]
+    flat_fqn = [item for segment in fqn for item in segment.split(".")]
     # Selector components cannot be more than fqn's
-    if len(flat_fqn) < len(node_selector.split('.')):
+    if len(flat_fqn) < len(node_selector.split(".")):
         return False
 
-    for i, selector_part in enumerate(node_selector.split('.')):
+    for i, selector_part in enumerate(node_selector.split(".")):
         # if we hit a GLOB, then this node is selected
         if selector_part == SELECTOR_GLOB:
             return True
