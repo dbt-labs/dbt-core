@@ -112,16 +112,14 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
     ),
     # from git release and subdirectory
     (
-        # TODO: Change me to something that fishtown-analytics manages!
-        # here I just moved the dbt_utils code into a subdirectory
         [{
-            'git': 'https://github.com/dmateusp/dbt-utils.git',
-            'revision': 'dmateusp/0.5.0/move_dbt_utils_to_subdir',
-            'subdirectory': 'dbt_projects/dbt_utils',
+            'git': 'https://github.com/fishtown-analytics/dbt-labs-experimental-features.git',
+            'revision': '0.0.1',
+            'subdirectory': 'materialized-views',
         }],
         [{
-            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-            'revision': '0.5.0',
+            'git': 'https://github.com/fishtown-analytics/dbt-labs-experimental-features.git',
+            'revision': '0.0.1',
             'subdirectory': 'path/to/nonexistent/dir',
         }],
     ),
