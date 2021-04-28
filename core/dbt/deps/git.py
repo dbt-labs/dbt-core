@@ -78,7 +78,10 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         try:
             dir_ = git.clone_and_checkout(
                 self.git, get_downloads_path(), revision=self.revision,
-                dirname=self._checkout_name, subdirectory=self.subdirectory
+                get_downloads_path(),
+                revision=self.revision,
+                dirname=self._checkout_name,
+                subdirectory=self.subdirectory,
             )
         except ExecutableError as exc:
             if exc.cmd and exc.cmd[0] == 'git':
@@ -132,7 +135,11 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
         # we want to map None -> True
         warn_unpinned = contract.warn_unpinned is not False
         return cls(git=contract.git, revisions=revisions,
-                   warn_unpinned=warn_unpinned, subdirectory=contract.subdirectory)
+            git=contract.git,
+            revisions=revisions,
+            warn_unpinned=warn_unpinned,
+            subdirectory=contract.subdirectory,
+        )
 
     def all_names(self) -> List[str]:
         if self.git.endswith('.git'):
@@ -164,5 +171,7 @@ class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
 
         return GitPinnedPackage(
             git=self.git, revision=requested.pop(),
-            warn_unpinned=self.warn_unpinned, subdirectory=self.subdirectory
+            revision=requested.pop(),
+            warn_unpinned=self.warn_unpinned,
+            subdirectory=self.subdirectory,
         )

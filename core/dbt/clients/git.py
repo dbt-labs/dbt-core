@@ -44,7 +44,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
     clone_cmd = ["git", "clone", "--depth", "1"]
     if subdirectory:
         fire_event(GitSparseCheckoutSubdirectory(subdir=subdirectory))
-        out, _ = run_cmd(cwd, ['git', '--version'], env={'LC_ALL': 'C'})
+        out, _ = run_cmd(cwd, ["git", "--version"], env={"LC_ALL": "C"})
         git_version = version.parse(re.search(r"\d+\.\d+\.\d+", out.decode("utf-8")).group(0))
         if not git_version >= version.parse("2.25.0"):
             # 2.25.0 introduces --sparse
@@ -52,7 +52,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
                 "Please update your git version to pull a dbt package "
                 "from a subdirectory: your version is {}, >= 2.25.0 needed".format(git_version)
             )
-        clone_cmd.extend(['--filter=blob:none', '--sparse'])
+        clone_cmd.extend(["--filter=blob:none", "--sparse"])
 
     if has_revision and not is_commit:
         clone_cmd.extend(['--branch', revision])
@@ -131,7 +131,8 @@ def remove_remote(cwd):
 
 
 def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
-                       revision=None, subdirectory=None):
+    repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None
+):
     exists = None
     try:
         _, err = clone(
@@ -173,4 +174,4 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
             )
     else:
         fire_event(GitProgressCheckedOutAt(end_sha=end_sha[:7]))
-    return os.path.join(directory, subdirectory or '')
+    return os.path.join(directory, subdirectory or "")
