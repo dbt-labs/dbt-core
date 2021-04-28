@@ -280,6 +280,11 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
         self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
 
     @use_profile("postgres")
+    def test_postgres_run_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("run")
+
+    @use_profile("postgres")
     def test_postgres_test_with_profiles_separate_from_project_dir(self):
         self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
         self._test_postgres_sub_command_with_profiles_separate_from_project_dir("run")
@@ -288,8 +293,3 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
     @use_profile("postgres")
     def test_postgres_debug_with_profiles_separate_from_project_dir(self):
         self._test_postgres_sub_command_with_profiles_separate_from_project_dir("debug")
-
-    @use_profile("postgres")
-    def test_postgres_run_with_profiles_separate_from_project_dir(self):
-        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
-        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("run")
