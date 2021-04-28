@@ -279,7 +279,6 @@ class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
     def test_postgres_deps_with_profiles_separate_from_project_dir(self):
         self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
 
-
     @use_profile("postgres")
     def test_postgres_run_with_profiles_separate_from_project_dir(self):
         self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
