@@ -29,8 +29,11 @@ def _wrap_exceptions(fn):
             try:
                 return fn(*args, **kwargs)
             except requests.exceptions.Timeout as exc_timeout:
+                if attempt < max_attempts:
+                    time.sleep(1)
+                    continue
                 raise requests.exceptions.Timeout(
-                    'Request timeout, server has not issued a response for 60 seconds'
+                    'Request timeout, server has not issued a response for 30 seconds after 5 attempts'
                 ) from exc_timeout
             except requests.exceptions.ConnectionError as exc:
                 if attempt < max_attempts:
@@ -46,7 +49,7 @@ def _wrap_exceptions(fn):
 def _get(path, registry_base_url=None):
     url = _get_url(path, registry_base_url)
     logger.debug('Making package registry request: GET {}'.format(url))
-    resp = requests.get(url, timeout=60)
+    resp = requests.get(url, timeout=30)
     logger.debug('Response from registry: GET {} {}'.format(url,
                                                             resp.status_code))
     resp.raise_for_status()
