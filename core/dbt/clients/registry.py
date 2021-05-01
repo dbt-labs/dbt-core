@@ -28,14 +28,7 @@ def _wrap_exceptions(fn):
             attempt += 1
             try:
                 return fn(*args, **kwargs)
-            except requests.exceptions.Timeout as exc_timeout:
-                if attempt < max_attempts:
-                    time.sleep(1)
-                    continue
-                raise requests.exceptions.Timeout(
-                    'Request timeout, server has not issued a response for 30 seconds after 5 attempts'
-                ) from exc_timeout
-            except requests.exceptions.ConnectionError as exc:
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
                 if attempt < max_attempts:
                     time.sleep(1)
                     continue
