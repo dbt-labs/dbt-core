@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: my_src
+    schema: "{{ target.schema }}"
+    tables:
+      - name: my_tbl
+        identifier: model_b
+        columns:
+          - name: fun
+            tests:
+              - unique
+
+models:
+  - name: model_a
+    columns:
+      - name: fun
+        tags: [column_level_tag]
+        tests:
+          - unique
+          - relationships:
+              to: ref('model_b')
+              field: fun
+              tags: [test_level_tag]
+          - relationships:
+              to: source('my_src', 'my_tbl')
+              field: fun

@@ -2,7 +2,7 @@ version: 2.1
 jobs:
   unit:
     docker: &test_only
-      - image: fishtownanalytics/test-container:11
+      - image: fishtownanalytics/test-container:12
         environment:
           DBT_INVOCATION_ENV: circle
           DOCKER_TEST_DATABASE_HOST: "database"
@@ -37,7 +37,7 @@ jobs:
           destination: dist
   integration-postgres:
     docker:
-      - image: fishtownanalytics/test-container:11
+      - image: fishtownanalytics/test-container:12
         environment:
           DBT_INVOCATION_ENV: circle
           DOCKER_TEST_DATABASE_HOST: "database"

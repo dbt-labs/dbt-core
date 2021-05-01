@@ -59,8 +59,11 @@ class DepsTask(BaseTask):
             for package in final_deps:
                 logger.info('Installing {}', package)
                 package.install(self.config, renderer)
-                logger.info('  Installed from {}\n',
+                logger.info('  Installed from {}',
                             package.nice_version_name())
+                if package.get_subdirectory():
+                    logger.info('   and subdirectory {}\n',
+                                package.get_subdirectory())
 
                 self.track_package_install(
                     package_name=package.name,

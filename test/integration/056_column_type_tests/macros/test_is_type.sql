@@ -35,8 +35,7 @@
     {% do return((failures | length) == 0) %}
 {% endmacro %}
 
-
-{% macro test_is_type(model, column_map) %}
+{% test is_type(model, column_map) %}
     {% if not execute %}
         {{ return(None) }}
     {% endif %}
@@ -65,5 +64,9 @@
         {% endif %}
     {% endfor %}
     {% do log('bad columns: ' ~ bad_columns, info=True) %}
-    select {{ bad_columns | length }} as pass_fail
-{% endmacro %}
+    {% for bad_column in bad_columns %}
+      select '{{ bad_column }}' as bad_column
+      {{ 'union all' if not loop.last }}
+    {% endfor %}
+      select * from (select 1 limit 0) as nothing
+{% endtest %}

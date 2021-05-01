@@ -3,6 +3,9 @@ FROM ubuntu:18.04
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:git-core/ppa -y \
     && apt-get dist-upgrade -y \
     && apt-get install -y --no-install-recommends \
     netcat \

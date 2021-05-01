@@ -50,6 +50,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTablesEqual("seed", "users")
         created_models = self.get_models_in_schema()
         self.assertFalse('users_rollup' in created_models)
+        self.assertFalse('alternative.users' in created_models)
         self.assertFalse('base_users' in created_models)
         self.assertFalse('emails' in created_models)
         self.assert_correct_schemas()
@@ -62,6 +63,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertEqual(len(results), 2)
 
         created_models = self.get_models_in_schema()
+        self.assertFalse('alternative.users' in created_models)
         self.assertFalse('base_users' in created_models)
         self.assertFalse('emails' in created_models)
         self.assertTrue('users' in created_models)
@@ -79,7 +81,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(['run', '--models', 'tag:base+'])
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 5)
 
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
@@ -87,6 +89,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('emails_alt', created_models)
         self.assertTrue('users_rollup' in created_models)
         self.assertTrue('users' in created_models)
+        self.assertTrue('alternative.users' in created_models)
         self.assert_correct_schemas()
 
     @use_profile('postgres')
@@ -94,7 +97,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(['run', '--models', 'tag:base+2'])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 4)
 
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
@@ -102,6 +105,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('emails_alt', created_models)
         self.assertIn('users_rollup', created_models)
         self.assertIn('users', created_models)
+        self.assertIn('alternative.users', created_models)
         self.assertNotIn('users_rollup_dependency', created_models)
         self.assert_correct_schemas()
 
@@ -131,6 +135,7 @@ class TestGraphSelection(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertIn('emails_alt', created_models)
         self.assertNotIn('base_users', created_models)
+        self.assertNotIn('alternative.users', created_models)
         self.assertNotIn('emails', created_models)
         self.assert_correct_schemas()
 
@@ -265,15 +270,33 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assert_correct_schemas()
 
     @use_profile('postgres')
+    def test__postgres__locally_qualified_name_model_with_dots(self):
+        self.run_sql_file("seed.sql")
+        results = self.run_dbt(['run', '--models', 'alternative.users'])
+        self.assertEqual(len(results), 1)
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('alternative.users', created_models)
+        self.assert_correct_schemas()
+
+        results = self.run_dbt(['run', '--models', 'models/alternative.*'])
+        self.assertEqual(len(results), 1)
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('alternative.users', created_models)
+        self.assert_correct_schemas()
+
+    @use_profile('postgres')
     def test__postgres__childrens_parents(self):
         self.run_sql_file("seed.sql")
         results = self.run_dbt(['run', '--models', '@base_users'])
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 5)
 
         created_models = self.get_models_in_schema()
         self.assertIn('users_rollup', created_models)
         self.assertIn('users', created_models)
         self.assertIn('emails_alt', created_models)
+        self.assertIn('alternative.users', created_models)
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
 
@@ -384,12 +407,13 @@ class TestGraphSelection(DBTIntegrationTest):
         assert sorted(results) == ['exposure:test.seed_ml_exposure', 'source:test.raw.seed']
 
         results = self.run_dbt(['ls', '--select', '1+exposure:user_exposure'])
-        assert len(results) == 3
-        assert sorted(results) == ['exposure:test.user_exposure', 'test.users', 'test.users_rollup']
+        assert len(results) == 5
+        assert sorted(results) == ['exposure:test.user_exposure', 'test.schema_test.unique_users_id', 
+            'test.schema_test.unique_users_rollup_gender', 'test.users', 'test.users_rollup']
 
-        self.run_dbt(['run', '-m', '+exposure:user_exposure'])
+        results = self.run_dbt(['run', '-m', '+exposure:user_exposure'])
         # users, users_rollup
-        assert len(results) == 3
+        assert len(results) == 2
 
         created_models = self.get_models_in_schema()
         self.assertIn('users_rollup', created_models)

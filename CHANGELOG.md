@@ -11,9 +11,12 @@
 - Raise a proper error message if dbt parses a macro twice due to macro duplication or misconfiguration. ([#2449](https://github.com/fishtown-analytics/dbt/issues/2449), [#3165](https://github.com/fishtown-analytics/dbt/pull/3165))
 - Fix exposures missing in graph context variable. ([#3241](https://github.com/fishtown-analytics/dbt/issues/3241))
 - Ensure that schema test macros are properly processed ([#3229](https://github.com/fishtown-analytics/dbt/issues/3229), [#3272](https://github.com/fishtown-analytics/dbt/pull/3272))
+- Use absolute path for profiles directory instead of a path relative to the project directory. Note: If a user supplies a relative path to the profiles directory, the value of `args.profiles_dir` will still be absolute. ([#3133](https://github.com/fishtown-analytics/dbt/issues/3133))
+- Fix FQN selector unable to find models whose name contains dots ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246))
 
 ### Features
 - Support commit hashes in dbt deps package revision ([#3268](https://github.com/fishtown-analytics/dbt/issues/3268), [#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
+- Add optional `subdirectory` key to install dbt packages that are not hosted at the root of a Git repository ([#275](https://github.com/fishtown-analytics/dbt/issues/275), [#3267](https://github.com/fishtown-analytics/dbt/pull/3267))
 - Add optional configs for `require_partition_filter` and `partition_expiration_days` in BigQuery ([#1843](https://github.com/fishtown-analytics/dbt/issues/1843), [#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
 - Fix for EOL SQL comments prevent entire line execution ([#2731](https://github.com/fishtown-analytics/dbt/issues/2731), [#2974](https://github.com/fishtown-analytics/dbt/pull/2974))
 - Add optional `merge_update_columns` config to specify columns to update for `merge` statements in BigQuery and Snowflake ([#1862](https://github.com/fishtown-analytics/dbt/issues/1862), [#3100](https://github.com/fishtown-analytics/dbt/pull/3100))
@@ -22,6 +25,8 @@
 - Support disabling schema tests, and configuring tests from `dbt_project.yml` ([#3252](https://github.com/fishtown-analytics/dbt/issues/3252),
 [#3253](https://github.com/fishtown-analytics/dbt/issues/3253), [#3257](https://github.com/fishtown-analytics/dbt/pull/3257))
 - Add Jinja tag for tests ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
+- Add native support for Postgres index creation ([#804](https://github.com/fishtown-analytics/dbt/issues/804), [3106](https://github.com/fishtown-analytics/dbt/pull/3106))
+- Less greedy test selection: expand to select unselected tests if and only if all parents are selected ([#2891](https://github.com/fishtown-analytics/dbt/issues/2891), [#3235](https://github.com/fishtown-analytics/dbt/pull/3235))
 
 ### Under the hood
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
@@ -32,6 +37,7 @@
 - Add a new materialization for tests, update data tests to use test materialization when executing. ([#3154](https://github.com/fishtown-analytics/dbt/issues/3154), [#3181](https://github.com/fishtown-analytics/dbt/pull/3181))
 - Switch from externally storing parsing state in ParseResult object to using Manifest ([#3163](http://github.com/fishtown-analytics/dbt/issues/3163), [#3219](https://github.com/fishtown-analytics/dbt/pull/3219))
 - Switch from loading project files in separate parsers to loading in one place([#3244](http://github.com/fishtown-analytics/dbt/issues/3244), [#3248](https://github.com/fishtown-analytics/dbt/pull/3248))
+- Update schema/generic tests to use test materialization when executing. ([#3192](https://github.com/fishtown-analytics/dbt/issues/3192), [#3286](https://github.com/fishtown-analytics/dbt/pull/3286))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -48,12 +54,20 @@ Contributors:
 - [@techytushar](https://github.com/techytushar) ([#3158](https://github.com/fishtown-analytics/dbt/pull/3158))
 - [@cgopalan](https://github.com/cgopalan) ([#3165](https://github.com/fishtown-analytics/dbt/pull/3165), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
 - [@fux](https://github.com/fuchsst) ([#3241](https://github.com/fishtown-analytics/dbt/issues/3241))
-- [@dmateusp](https://github.com/dmateusp) ([#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
+- [@arzavj](https://github.com/arzavj) ([3106](https://github.com/fishtown-analytics/dbt/pull/3106))
+- [@JCZuurmond](https://github.com/JCZuurmond) ([#3133](https://github.com/fishtown-analytics/dbt/pull/3133))
+- [@dmateusp](https://github.com/dmateusp) ([#3270](https://github.com/fishtown-analytics/dbt/pull/3270), [#3267](https://github.com/fishtown-analytics/dbt/pull/3267))
+- [@monti-python](https://github.com/monti-python) ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246))
+
+## dbt 0.19.2 (Release TBD)
+
+### Fixes
+- Ensure that schema test macros are properly processed ([#3229](https://github.com/fishtown-analytics/dbt/issues/3229), [#3272](https://github.com/fishtown-analytics/dbt/pull/3272))
+- Fix regression for default project/database for BigQuery connections ([#3218](https://github.com/fishtown-analytics/dbt/issues/3218), [#3305](https://github.com/fishtown-analytics/dbt/pull/3305))
 
 ## dbt 0.19.1 (March 31, 2021)
 
 ## dbt 0.19.1rc2 (March 25, 2021)
-
 
 ### Fixes
 - Pass service-account scopes to gcloud-based oauth ([#3040](https://github.com/fishtown-analytics/dbt/issues/3040), [#3041](https://github.com/fishtown-analytics/dbt/pull/3041))

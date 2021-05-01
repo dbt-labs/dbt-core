@@ -12,8 +12,8 @@ from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.compiled import (
-    CompiledSchemaTestNode,
     COMPILED_TYPES,
+    CompiledSchemaTestNode,
     GraphMemberNode,
     InjectedCTE,
     ManifestNode,
