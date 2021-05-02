@@ -204,7 +204,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             "encoded": {
                 "id": "encoded",
                 "label": "Encoded",
-                "value": "Y",
+                "value": AnyStringWith('AUTO'),
                 "description": "Indicates whether any column in the table has compression encoding defined.",
                 "include": True
             },
