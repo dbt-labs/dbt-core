@@ -242,6 +242,22 @@ PROFILE_DATA = {
     },
 }
 
+POSTGRES_PROFILE_DATA = {
+    'target': 'test',
+    'quoting': {},
+    'outputs': {
+        'test': {
+            'type': 'postgres',
+            'host': 'localhost',
+            'schema': 'analytics',
+            'user': 'test',
+            'pass': 'test',
+            'dbname': 'test',
+            'port': 1,
+        }
+    },
+}
+
 PROJECT_DATA = {
     'name': 'root',
     'version': '0.1',
@@ -368,6 +384,9 @@ def get_include_paths():
 def config():
     return config_from_parts_or_dicts(PROJECT_DATA, PROFILE_DATA)
 
+@pytest.fixture
+def config_postgres():
+    return config_from_parts_or_dicts(PROJECT_DATA, POSTGRES_PROFILE_DATA)
 
 @pytest.fixture
 def manifest_fx(config):
@@ -399,8 +418,8 @@ def redshift_adapter(config, get_adapter):
 
 
 @pytest.fixture
-def postgres_adapter(config, get_adapter):
-    adapter = postgres.PostgresAdapter(config)
+def postgres_adapter(config_postgres, get_adapter):
+    adapter = postgres.PostgresAdapter(config_postgres)
     inject_adapter(adapter, postgres.Plugin)
     get_adapter.return_value = adapter
     yield adapter
@@ -521,13 +540,13 @@ def test_resolve_specific(config, manifest_extended, redshift_adapter, get_inclu
                                    'dbt', 'root']).macro is rs_macro
 
 
-def test_resolve_default(config, manifest_extended, postgres_adapter, get_include_paths):
+def test_resolve_default(config_postgres, manifest_extended, postgres_adapter, get_include_paths):
     dbt_macro = manifest_extended.macros['macro.dbt.default__some_macro']
     package_macro = manifest_extended.macros['macro.root.default__some_macro']
 
     ctx = providers.generate_runtime_model(
         model=mock_model(),
-        config=config,
+        config=config_postgres,
         manifest=manifest_extended,
     )
 
