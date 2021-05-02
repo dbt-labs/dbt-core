@@ -66,9 +66,9 @@
       {{ build_sql }}
   {% endcall %}
 
-  {% if need_swap %} 
-      {% do adapter.rename_relation(target_relation, backup_relation) %} 
-      {% do adapter.rename_relation(intermediate_relation, target_relation) %} 
+  {% if need_swap %}
+      {% do adapter.rename_relation(target_relation, backup_relation) %}
+      {% do adapter.rename_relation(intermediate_relation, target_relation) %}
   {% endif %}
 
   {% do persist_docs(target_relation, model) %}
