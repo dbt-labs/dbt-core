@@ -26,7 +26,7 @@ SCHEMA_TEST_SELECTOR: str = 'test_type:schema'
 
 
 def parse_union(
-    components: List[str], expect_exists: bool
+    components: List[str], expect_exists: bool, greedy: bool = False
 ) -> SelectionUnion:
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(
@@ -37,7 +37,7 @@ def parse_union(
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
         intersection_components: List[SelectionSpec] = [
-            SelectionCriteria.from_single_spec(part)
+            SelectionCriteria.from_single_spec(part, greedy=greedy)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
         union_components.append(SelectionIntersection(
@@ -45,7 +45,6 @@ def parse_union(
             expect_exists=expect_exists,
             raw=raw_spec,
         ))
-
     return SelectionUnion(
         components=union_components,
         expect_exists=False,
@@ -54,21 +53,21 @@ def parse_union(
 
 
 def parse_union_from_default(
-    raw: Optional[List[str]], default: List[str]
+    raw: Optional[List[str]], default: List[str], greedy: bool = False
 ) -> SelectionUnion:
     components: List[str]
     expect_exists: bool
     if raw is None:
-        return parse_union(components=default, expect_exists=False)
+        return parse_union(components=default, expect_exists=False, greedy=greedy)
     else:
-        return parse_union(components=raw, expect_exists=True)
+        return parse_union(components=raw, expect_exists=True, greedy=greedy)
 
 
 def parse_difference(
     include: Optional[List[str]], exclude: Optional[List[str]]
 ) -> SelectionDifference:
     included = parse_union_from_default(include, DEFAULT_INCLUDES)
-    excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES)
+    excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, greedy=True)
     return SelectionDifference(components=[included, excluded])
 
 

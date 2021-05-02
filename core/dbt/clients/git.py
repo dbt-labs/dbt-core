@@ -4,6 +4,7 @@ import os.path
 from dbt.clients.system import run_cmd, rmdir
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.exceptions
+from packaging import version
 
 
 def _is_commit(revision: str) -> bool:
@@ -11,11 +12,22 @@ def _is_commit(revision: str) -> bool:
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
 
 
-def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None):
+def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None):
     has_revision = revision is not None
     is_commit = _is_commit(revision or "")
 
     clone_cmd = ['git', 'clone', '--depth', '1']
+    if subdirectory:
+        logger.debug('  Subdirectory specified: {}, using sparse checkout.'.format(subdirectory))
+        out, _ = run_cmd(cwd, ['git', '--version'], env={'LC_ALL': 'C'})
+        git_version = version.parse(re.search(r"\d+\.\d+\.\d+", out.decode("utf-8")).group(0))
+        if not git_version >= version.parse("2.25.0"):
+            # 2.25.0 introduces --sparse
+            raise RuntimeError(
+                "Please update your git version to pull a dbt package "
+                "from a subdirectory: your version is {}, >= 2.25.0 needed".format(git_version)
+            )
+        clone_cmd.extend(['--filter=blob:none', '--sparse'])
 
     if has_revision and not is_commit:
         clone_cmd.extend(['--branch', revision])
@@ -24,8 +36,10 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None):
 
     if dirname is not None:
         clone_cmd.append(dirname)
-
     result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
+
+    if subdirectory:
+        run_cmd(os.path.join(cwd, dirname or ''), ['git', 'sparse-checkout', 'set', subdirectory])
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, '.git'))
@@ -84,11 +98,16 @@ def remove_remote(cwd):
 
 
 def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
-                       revision=None):
+                       revision=None, subdirectory=None):
     exists = None
     try:
-        _, err = clone(repo, cwd, dirname=dirname,
-                       remove_git_dir=remove_git_dir)
+        _, err = clone(
+            repo,
+            cwd,
+            dirname=dirname,
+            remove_git_dir=remove_git_dir,
+            subdirectory=subdirectory,
+        )
     except dbt.exceptions.CommandResultError as exc:
         err = exc.stderr.decode('utf-8')
         exists = re.match("fatal: destination path '(.+)' already exists", err)
@@ -120,4 +139,4 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
                          start_sha[:7], end_sha[:7])
     else:
         logger.debug('  Checked out at {}.', end_sha[:7])
-    return directory
+    return os.path.join(directory, subdirectory or '')
