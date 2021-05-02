@@ -15,9 +15,7 @@ from typing import (
 from typing_extensions import Protocol
 
 from dbt.adapters.base.column import Column
-from dbt.adapters.factory import (
-    get_adapter, get_adapter_package_names, get_adapter_type_names
-)
+from dbt.adapters.factory import get_adapter, get_adapter_package_names, get_adapter_type_names
 from dbt.clients import agate_helper
 from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
 from dbt.config import RuntimeConfig, Project
@@ -125,7 +123,7 @@ class BaseDatabaseWrapper:
         #  1. current adapter
         #  2. any parent adapters (dependencies)
         #  3. 'default'
-        search_prefixes = get_adapter_type_names(self._adapter.type()) + ['default']
+        search_prefixes = get_adapter_type_names(self._adapter.type()) + ["default"]
         return search_prefixes
 
     def dispatch(
