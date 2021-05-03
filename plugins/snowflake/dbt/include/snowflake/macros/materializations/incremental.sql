@@ -14,9 +14,9 @@
   {% do return(strategy) %}
 {% endmacro %}
 
-{% macro dbt_snowflake_get_incremental_sql(strategy, tmp_relation, target_relation, unique_key, dest_columns, incremental_predicates=None) %}
+{% macro dbt_snowflake_get_incremental_sql(strategy, tmp_relation, target_relation, unique_key, dest_columns, incremental_predicates=none) %}
   {% if strategy == 'merge' %}
-    {% do return(get_merge_sql(target_relation, tmp_relation, unique_key, dest_columns)) %}
+    {% do return(get_merge_sql(target_relation, tmp_relation, unique_key, dest_columns, incremental_predicates)) %}
   {% elif strategy == 'delete+insert' %}
     {% do return(get_delete_insert_merge_sql(target_relation, tmp_relation, unique_key, dest_columns, incremental_predicates)) %}
   {% else %}
@@ -30,7 +30,7 @@
 
   {%- set unique_key = config.get('unique_key') -%}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
-  {%- set incremental_predicates = config.get('incremental_predicates', default=None) -%}
+  {%- set incremental_predicates = config.get('incremental_predicates', default=none) -%}
 
   {% set target_relation = this %}
   {% set existing_relation = load_relation(this) %}

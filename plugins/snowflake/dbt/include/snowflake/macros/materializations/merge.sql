@@ -1,4 +1,4 @@
-{% macro snowflake__get_merge_sql(target, source_sql, unique_key, dest_columns, predicates) -%}
+{% macro snowflake__get_merge_sql(target, source_sql, unique_key, dest_columns, predicates, incremental_predicates=none) -%}
 
     {#
        Workaround for Snowflake not being happy with a merge on a constant-false predicate.
@@ -21,7 +21,7 @@
 
     {%- else -%}
 
-        {{ default__get_merge_sql(target, source_sql, unique_key, dest_columns, predicates) }}
+        {{ default__get_merge_sql(target, source_sql, unique_key, dest_columns, predicates, incremental_predicates) }}
 
     {%- endif -%}
 
