@@ -1,7 +1,7 @@
 
 
-{% macro get_merge_sql(target, source, unique_key, dest_columns, predicates=none) -%}
-  {{ adapter.dispatch('get_merge_sql')(target, source, unique_key, dest_columns, predicates) }}
+{% macro get_merge_sql(target, source, unique_key, dest_columns, predicates=none, incrementnal_predicates=none) -%}
+  {{ adapter.dispatch('get_merge_sql')(target, source, unique_key, dest_columns, predicates, incremental_predicates) }}
 {%- endmacro %}
 
 
@@ -15,11 +15,12 @@
 {%- endmacro %}
 
 
-{% macro default__get_merge_sql(target, source, unique_key, dest_columns, predicates) -%}
+{% macro default__get_merge_sql(target, source, unique_key, dest_columns, predicates, incremental_predictates=none) -%}
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
     {%- set update_columns = config.get('merge_update_columns', default = dest_columns | map(attribute="quoted") | list) -%}
     {%- set sql_header = config.get('sql_header', none) -%}
+    {%- set incremental_predicates = [] if incremental_predicates is none else [] + incremental_predicates -%}
 
     {% if unique_key %}
         {% set unique_key_match %}
@@ -48,6 +49,8 @@
         ({{ dest_cols_csv }})
     values
         ({{ dest_cols_csv }})
+
+    {% if incremental_predicates %} where {{ incremental_predicates | join(' and ') }} {% endif %}
 
 {% endmacro %}
 
@@ -111,6 +114,6 @@
     values
         ({{ dest_cols_csv }})
 
-    {% if incremental_predicates %} where {{ incremental_predicates | join(' and ') }} {% endif %};
+    {% if incremental_predicates %} where {{ incremental_predicates | join(' and ') }} {% endif %}
 
 {% endmacro %}
