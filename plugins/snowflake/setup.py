@@ -20,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-snowflake"
-package_version = "0.19.0"
+package_version = "0.20.0b1"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))

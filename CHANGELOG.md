@@ -1,5 +1,8 @@
 ## dbt 0.20.0 (Release TBD)
 
+## dbt 0.20.0b1 (May 03, 2021)
+
+
 ### Fixes
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
 - Auto-generated CTEs in tests and ephemeral models have lowercase names to comply with dbt coding conventions ([#3027](https://github.com/fishtown-analytics/dbt/issues/3027), [#3028](https://github.com/fishtown-analytics/dbt/issues/3028))
