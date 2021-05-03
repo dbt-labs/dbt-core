@@ -66,7 +66,7 @@
 {% endmacro %}
 
 
-{% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=None) -%}
+{% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
 
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
     {%- set incremental_predicates = [] if incremental_predicates is none else [] + incremental_predicates -%}
@@ -88,7 +88,7 @@
 
 {%- endmacro %}
 
-{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=None) -%}
+{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
     {{ common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) }}
 {% endmacro %}
 
