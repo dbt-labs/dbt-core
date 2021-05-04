@@ -1,7 +1,9 @@
 ## dbt 0.20.0 (Release TBD)
 
-## dbt 0.20.0b1 (May 03, 2021)
+### Fixes
+- Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 
+## dbt 0.20.0b1 (May 03, 2021)
 
 ### Fixes
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
@@ -87,10 +89,6 @@ Contributors:
 - Update code to use Mashumaro 2.0 ([#3138](https://github.com/fishtown-analytics/dbt/pull/3138))
 - Pin `agate<1.6.2` to avoid installation errors relating to its new dependency `PyICU` ([#3160](https://github.com/fishtown-analytics/dbt/issues/3160), [#3161](https://github.com/fishtown-analytics/dbt/pull/3161))
 - Add an event to track resource counts ([#3050](https://github.com/fishtown-analytics/dbt/issues/3050), [#3157](https://github.com/fishtown-analytics/dbt/pull/3157))
-
-### Fixes
-
-- Fix compiled sql for ephemeral models ([#3139](https://github.com/fishtown-analytics/dbt/pull/3139), [#3056](https://github.com/fishtown-analytics/dbt/pull/3056))
 
 ### Fixes
 
