@@ -1,7 +1,9 @@
 ## dbt 0.20.0 (Release TBD)
 
-## dbt 0.20.0b1 (May 03, 2021)
+### Fixes
+- Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 
+## dbt 0.20.0b1 (May 03, 2021)
 
 ### Fixes
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
