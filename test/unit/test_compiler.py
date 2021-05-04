@@ -140,7 +140,7 @@ class CompilerTest(unittest.TestCase):
             ('with __dbt__cte__ephemeral as ('
              'select * from source_table'
              '), cte as (select * from something_else) '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
         self.assertEqual(
             manifest.nodes['model.root.ephemeral'].extra_ctes_injected,
             True)
@@ -277,7 +277,7 @@ class CompilerTest(unittest.TestCase):
             ('with __dbt__cte__ephemeral as ('
              'select * from source_table'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
         self.assertTrue(
             manifest.nodes['model.root.ephemeral'].extra_ctes_injected)
 
@@ -352,7 +352,7 @@ class CompilerTest(unittest.TestCase):
                     extra_ctes_injected=False,
                     extra_ctes=[InjectedCTE(
                         id='model.root.ephemeral', sql='select * from source_table')],
-                    compiled_sql='select * from __dbt__CTE__ephemeral',
+                    compiled_sql='select * from __dbt__cte__ephemeral',
                     checksum=FileHash.from_contents(''),
                 ),
                 'model.root.ephemeral': parsed_ephemeral,
@@ -550,18 +550,18 @@ class CompilerTest(unittest.TestCase):
         )
         self.assertEqualIgnoreWhitespace(
             result.compiled_sql,
-            ('with __dbt__CTE__inner_ephemeral as ('
+            ('with __dbt__cte__inner_ephemeral as ('
              'select * from source_table'
              '), '
-             '__dbt__CTE__ephemeral as ('
-             'select * from __dbt__CTE__inner_ephemeral'
+             '__dbt__cte__ephemeral as ('
+             'select * from __dbt__cte__inner_ephemeral'
              ') '
-             'select * from __dbt__CTE__ephemeral'))
+             'select * from __dbt__cte__ephemeral'))
         self.assertEqualIgnoreWhitespace(
             manifest.nodes['model.root.ephemeral'].compiled_sql,
-            ('with __dbt__CTE__inner_ephemeral as ('
+            ('with __dbt__cte__inner_ephemeral as ('
             'select * from source_table'
             ')  '
-            'select * from __dbt__CTE__inner_ephemeral')
+            'select * from __dbt__cte__inner_ephemeral')
         )
 
