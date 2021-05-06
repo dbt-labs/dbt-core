@@ -3,6 +3,12 @@
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 
+### Under the hood
+- Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3117](https://github.com/fishtown-analytics/dbt/issues/3177))
+
+Contributors:
+- [@TeddyCr](https://github.com/TeddyCr) ([#3117](https://github.com/fishtown-analytics/dbt/issues/3177))
+
 ## dbt 0.20.0b1 (May 03, 2021)
 
 ### Fixes
