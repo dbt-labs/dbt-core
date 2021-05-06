@@ -5,6 +5,7 @@ import jinja2
 from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
+from dbt.contracts.files import FilePath
 from dbt.exceptions import CompilationException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -14,12 +15,14 @@ from dbt.utils import MACRO_PREFIX
 
 
 class MacroParser(BaseParser[ParsedMacro]):
-    def get_paths(self):
-        return FilesystemSearcher(
+    # This is only used when creating a MacroManifest separate
+    # from the normal parsing flow.
+    def get_paths(self) -> List[FilePath]:
+        return list(FilesystemSearcher(
             project=self.project,
             relative_dirs=self.project.macro_paths,
             extension='.sql',
-        )
+        ))
 
     @property
     def resource_type(self) -> NodeType:
@@ -53,7 +56,7 @@ class MacroParser(BaseParser[ParsedMacro]):
                 t for t in
                 jinja.extract_toplevel_blocks(
                     base_node.raw_sql,
-                    allowed_blocks={'macro', 'materialization'},
+                    allowed_blocks={'macro', 'materialization', 'test'},
                     collect_raw_data=False,
                 )
                 if isinstance(t, jinja.BlockTag)
@@ -90,7 +93,7 @@ class MacroParser(BaseParser[ParsedMacro]):
 
     def parse_file(self, block: FileBlock):
         # mark the file as seen, even if there are no macros in it
-        self.results.get_file(block.file)
+        self.manifest.get_file(block.file)
         source_file = block.file
 
         original_file_path = source_file.path.original_file_path
@@ -108,4 +111,4 @@ class MacroParser(BaseParser[ParsedMacro]):
         )
 
         for node in self.parse_unparsed_macros(base_node):
-            self.results.add_macro(block.file, node)
+            self.manifest.add_macro(block.file, node)

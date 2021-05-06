@@ -4,7 +4,7 @@
 {% set column_name = kwargs.get('column_name', kwargs.get('from')) %}
 
 
-select count(*) as validation_errors
+select *
 from (
     select {{ column_name }} as id from {{ model }}
 ) as child
@@ -18,7 +18,7 @@ where child.id is not null
 
 
 
-{% macro test_relationships(model, to, field) %}
+{% test relationships(model, to, field) %}
     {% set macro = adapter.dispatch('test_relationships') %}
     {{ macro(model, to, field, **kwargs) }}
-{% endmacro %}
+{% endtest %}

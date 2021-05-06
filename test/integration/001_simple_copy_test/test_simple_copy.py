@@ -52,9 +52,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results), 1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results), 7)
 
         self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
@@ -468,3 +468,51 @@ class TestQuotedDatabase(BaseTestSimpleCopy):
                 'create schema if not exists' in msg,
                 f'did not expect schema creation: {msg}'
             )
+
+
+class TestIncrementalMergeColumns(BaseTestSimpleCopy):
+    @property
+    def models(self):
+        return self.dir("models-merge-update")
+
+    @property
+    def project_config(self):
+        return {
+            "seeds": {
+                "quote_columns": False
+            }
+        }
+
+    def seed_and_run(self):
+        self.run_dbt(["seed"])
+        self.run_dbt(["run"])
+
+    @use_profile("bigquery")
+    def test__bigquery__incremental_merge_columns(self):
+        self.use_default_project({
+            "data-paths": ["seeds-merge-cols-initial"]
+        })
+        self.seed_and_run()
+        self.use_default_project({
+            "data-paths": ["seeds-merge-cols-update"]
+        })
+        self.seed_and_run()
+        self.assertTablesEqual("incremental_update_cols", "expected_result")
+
+    @use_profile("snowflake")
+    def test__snowflake__incremental_merge_columns(self):
+        self.use_default_project({
+            "data-paths": ["seeds-merge-cols-initial"],
+            "seeds": {
+                "quote_columns": False
+            }
+        })
+        self.seed_and_run()
+        self.use_default_project({
+            "data-paths": ["seeds-merge-cols-update"],
+            "seeds": {
+                "quote_columns": False
+            }
+        })
+        self.seed_and_run()
+        self.assertTablesEqual("incremental_update_cols", "expected_result")

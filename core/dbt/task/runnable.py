@@ -40,7 +40,7 @@ from dbt.exceptions import (
     FailFastException
 )
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
-from dbt.perf_utils import get_full_manifest
+from dbt.parser.manifest import ManifestLoader
 
 import dbt.exceptions
 from dbt import flags
@@ -63,7 +63,7 @@ class ManifestTask(ConfiguredTask):
             self.manifest.write(path)
 
     def load_manifest(self):
-        self.manifest = get_full_manifest(self.config)
+        self.manifest = ManifestLoader.get_full_manifest(self.config)
         self.write_manifest()
 
     def compile_manifest(self):
@@ -413,7 +413,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             logger.warning("WARNING: Nothing to do. Try checking your model "
                            "configs and model specification args")
-            return self.get_result(
+            result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),
                 elapsed_time=0.0,
@@ -421,9 +421,8 @@ class GraphRunnableTask(ManifestTask):
         else:
             with TextOnly():
                 logger.info("")
-
-        selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
-        result = self.execute_with_hooks(selected_uids)
+            selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
+            result = self.execute_with_hooks(selected_uids)
 
         if flags.WRITE_JSON:
             self.write_manifest()

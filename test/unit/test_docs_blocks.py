@@ -2,11 +2,10 @@ import os
 import unittest
 
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest, MacroManifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.node_types import NodeType
 from dbt.parser import docs
-from dbt.parser.results import ParseResult
 from dbt.parser.search import FileBlock
 
 from .utils import config_from_parts_or_dicts
@@ -144,17 +143,17 @@ class DocumentationParserTest(unittest.TestCase):
 
     def test_load_file(self):
         parser = docs.DocumentationParser(
-            results=ParseResult.rpc(),
             root_project=self.root_project_config,
+            manifest=Manifest({}, {}, {}, {}, {}, {}, [], {}),
             project=self.subdir_project_config,
-            macro_manifest=MacroManifest({}, {}))
+        )
 
         file_block = self._build_file(TEST_DOCUMENTATION_FILE, 'test_file.md')
 
         parser.parse_file(file_block)
-        results = sorted(parser.results.docs.values(), key=lambda n: n.name)
-        self.assertEqual(len(results), 2)
-        for result in results:
+        docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(docs_values), 2)
+        for result in docs_values:
             self.assertIsInstance(result, ParsedDocumentation)
             self.assertEqual(result.package_name, 'some_package')
             self.assertEqual(result.original_file_path, self.testfile_path)
@@ -162,41 +161,41 @@ class DocumentationParserTest(unittest.TestCase):
             self.assertEqual(result.resource_type, NodeType.Documentation)
             self.assertEqual(result.path, 'test_file.md')
 
-        self.assertEqual(results[0].name, 'snowplow_sessions')
-        self.assertEqual(results[1].name, 'snowplow_sessions__session_id')
+        self.assertEqual(docs_values[0].name, 'snowplow_sessions')
+        self.assertEqual(docs_values[1].name, 'snowplow_sessions__session_id')
 
     def test_load_file_extras(self):
         TEST_DOCUMENTATION_FILE + '{% model foo %}select 1 as id{% endmodel %}'
 
         parser = docs.DocumentationParser(
-            results=ParseResult.rpc(),
             root_project=self.root_project_config,
+            manifest=Manifest({}, {}, {}, {}, {}, {}, [], {}),
             project=self.subdir_project_config,
-            macro_manifest=MacroManifest({}, {}))
+        )
 
         file_block = self._build_file(TEST_DOCUMENTATION_FILE, 'test_file.md')
 
         parser.parse_file(file_block)
-        results = sorted(parser.results.docs.values(), key=lambda n: n.name)
-        self.assertEqual(len(results), 2)
-        for result in results:
+        docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(docs_values), 2)
+        for result in docs_values:
             self.assertIsInstance(result, ParsedDocumentation)
-        self.assertEqual(results[0].name, 'snowplow_sessions')
-        self.assertEqual(results[1].name, 'snowplow_sessions__session_id')
+        self.assertEqual(docs_values[0].name, 'snowplow_sessions')
+        self.assertEqual(docs_values[1].name, 'snowplow_sessions__session_id')
 
     def test_multiple_raw_blocks(self):
         parser = docs.DocumentationParser(
-            results=ParseResult.rpc(),
             root_project=self.root_project_config,
+            manifest=Manifest({}, {}, {}, {}, {}, {}, [], {}),
             project=self.subdir_project_config,
-            macro_manifest=MacroManifest({}, {}))
+        )
 
         file_block = self._build_file(MULTIPLE_RAW_BLOCKS, 'test_file.md')
 
         parser.parse_file(file_block)
-        results = sorted(parser.results.docs.values(), key=lambda n: n.name)
-        self.assertEqual(len(results), 2)
-        for result in results:
+        docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(docs_values), 2)
+        for result in docs_values:
             self.assertIsInstance(result, ParsedDocumentation)
             self.assertEqual(result.package_name, 'some_package')
             self.assertEqual(result.original_file_path, self.testfile_path)
@@ -204,7 +203,7 @@ class DocumentationParserTest(unittest.TestCase):
             self.assertEqual(result.resource_type, NodeType.Documentation)
             self.assertEqual(result.path, 'test_file.md')
 
-        self.assertEqual(results[0].name, 'other_doc')
-        self.assertEqual(results[0].block_contents, '```\n    {% docs %}other doc{% enddocs %}\n    ```')
-        self.assertEqual(results[1].name, 'some_doc')
-        self.assertEqual(results[1].block_contents, '```\n    {% docs %}some doc{% enddocs %}\n    ```', )
+        self.assertEqual(docs_values[0].name, 'other_doc')
+        self.assertEqual(docs_values[0].block_contents, '```\n    {% docs %}other doc{% enddocs %}\n    ```')
+        self.assertEqual(docs_values[1].name, 'some_doc')
+        self.assertEqual(docs_values[1].block_contents, '```\n    {% docs %}some doc{% enddocs %}\n    ```', )

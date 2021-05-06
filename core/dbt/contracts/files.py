@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
 
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 from dbt.exceptions import InternalException
 
@@ -12,6 +12,18 @@ from .util import MacroKey, SourceKey
 
 MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
 MAXIMUM_SEED_SIZE_NAME = '1MB'
+
+
+class ParseFileType(StrEnum):
+    Macro = 'macro'
+    Model = 'model'
+    Snapshot = 'snapshot'
+    Analysis = 'analysis'
+    Test = 'test'
+    Seed = 'seed'
+    Documentation = 'docs'
+    Schema = 'schema'
+    Hook = 'hook'
 
 
 @dataclass
@@ -114,6 +126,10 @@ class SourceFile(dbtClassMixin):
     """Define a source file in dbt"""
     path: Union[FilePath, RemoteFile]  # the path information
     checksum: FileHash
+    # Seems like knowing which project the file came from would be useful
+    project_name: Optional[str] = None
+    # Parse file type: i.e. which parser will process this file
+    parse_file_type: Optional[ParseFileType] = None
     # we don't want to serialize this
     _contents: Optional[str] = None
     # the unique IDs contained in this file

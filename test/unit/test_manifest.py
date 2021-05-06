@@ -20,7 +20,15 @@ from dbt.contracts.graph.parsed import (
     NodeConfig,
     ParsedSeedNode,
     ParsedSourceDefinition,
+    ParsedExposure,
 )
+
+from dbt.contracts.graph.unparsed import (
+    ExposureType,
+    ExposureOwner,
+    MaturityType
+)
+
 from dbt.contracts.graph.compiled import CompiledModelNode
 from dbt.node_types import NodeType
 import freezegun
@@ -62,6 +70,27 @@ class ManifestTest(unittest.TestCase):
             'column_types': {},
             'tags': [],
         })
+
+        self.exposures = {
+            'exposure.root.my_exposure': ParsedExposure(
+                name='my_exposure',
+                type=ExposureType.Dashboard,
+                owner=ExposureOwner(email='some@email.com'),
+                resource_type=NodeType.Exposure,
+                description='Test description',
+                maturity=MaturityType.High,
+                url='hhtp://mydashboard.com',
+                depends_on=DependsOn(nodes=['model.root.multi']),
+                refs=[['multi']],
+                sources=[],
+                fqn=['root', 'my_exposure'],
+                unique_id='exposure.root.my_exposure',
+                package_name='root',
+                root_path='',
+                path='my_exposure.sql',
+                original_file_path='my_exposure.sql'
+            )
+        }
 
         self.nested_nodes = {
             'model.snowplow.events': ParsedModelNode(
@@ -211,6 +240,8 @@ class ManifestTest(unittest.TestCase):
                 original_file_path='schema.yml',
             ),
         }
+        for exposure in self.exposures.values():
+            exposure.validate(exposure.to_dict(omit_none=True))
         for node in self.nested_nodes.values():
             node.validate(node.to_dict(omit_none=True))
         for source in self.sources.values():
@@ -319,15 +350,18 @@ class ManifestTest(unittest.TestCase):
         )
 
     def test__build_flat_graph(self):
+        exposures = copy.copy(self.exposures)
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
-                            disabled=[], files={}, exposures={}, selectors={})
+                            disabled=[], files={}, exposures=exposures, selectors={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
+        flat_exposures = flat_graph['exposures']
         flat_nodes = flat_graph['nodes']
         flat_sources = flat_graph['sources']
-        self.assertEqual(set(flat_graph), set(['nodes', 'sources']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources']))
+        self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         self.assertEqual(set(flat_sources), set(self.sources))
         for node in flat_nodes.values():
@@ -424,8 +458,11 @@ class ManifestTest(unittest.TestCase):
             checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
-                            disabled=[], files={}, exposures={}, selectors={})
+                            disabled=[], files={}, exposures=self.exposures, selectors={})
         expect = {
+            'exposures': frozenset([
+                ('root', 'my_exposure')
+            ]),
             'models': frozenset([
                 ('snowplow', 'events'),
                 ('root', 'events'),
@@ -707,7 +744,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes', 'sources']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
         for node in flat_nodes.values():
@@ -723,7 +760,7 @@ class MixedManifestTest(unittest.TestCase):
 
 class TestManifestSearch(unittest.TestCase):
     _macros = []
-    _models = []
+    _nodes = []
     _docs = []
 
     @property

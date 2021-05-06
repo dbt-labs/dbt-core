@@ -12,7 +12,7 @@ from dbt.exceptions import (
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
 from dbt.parser.search import (
-    FilesystemSearcher, BlockContents, BlockSearcher, FileBlock
+    BlockContents, BlockSearcher, FileBlock
 )
 from dbt.utils import split_path
 
@@ -20,11 +20,6 @@ from dbt.utils import split_path
 class SnapshotParser(
     SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]
 ):
-    def get_paths(self):
-        return FilesystemSearcher(
-            self.project, self.project.snapshot_paths, '.sql'
-        )
-
     def parse_from_dict(self, dct, validate=True) -> IntermediateSnapshotNode:
         if validate:
             IntermediateSnapshotNode.validate(dct)
@@ -86,4 +81,4 @@ class SnapshotParser(
         # in case there are no snapshots declared, we still want to mark this
         # file as seen. But after we've finished, because we don't want to add
         # files with syntax errors
-        self.results.get_file(file_block.file)
+        self.manifest.get_file(file_block.file)

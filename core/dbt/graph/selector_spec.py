@@ -66,6 +66,7 @@ class SelectionCriteria:
     parents_depth: Optional[int]
     children: bool
     children_depth: Optional[int]
+    greedy: bool = False
 
     def __post_init__(self):
         if self.children and self.childrens_parents:
@@ -103,7 +104,7 @@ class SelectionCriteria:
 
     @classmethod
     def selection_criteria_from_dict(
-        cls, raw: Any, dct: Dict[str, Any]
+        cls, raw: Any, dct: Dict[str, Any], greedy: bool = False
     ) -> 'SelectionCriteria':
         if 'value' not in dct:
             raise RuntimeException(
@@ -123,10 +124,11 @@ class SelectionCriteria:
             parents_depth=parents_depth,
             children=bool(dct.get('children')),
             children_depth=children_depth,
+            greedy=greedy
         )
 
     @classmethod
-    def dict_from_single_spec(cls, raw: str):
+    def dict_from_single_spec(cls, raw: str, greedy: bool = False):
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             return {'error': 'Invalid selector spec'}
@@ -146,13 +148,13 @@ class SelectionCriteria:
         return dct
 
     @classmethod
-    def from_single_spec(cls, raw: str) -> 'SelectionCriteria':
+    def from_single_spec(cls, raw: str, greedy: bool = False) -> 'SelectionCriteria':
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
             raise RuntimeException(f'Invalid selector spec "{raw}"')
 
-        return cls.selection_criteria_from_dict(raw, result.groupdict())
+        return cls.selection_criteria_from_dict(raw, result.groupdict(), greedy=greedy)
 
 
 class BaseSelectionGroup(Iterable[SelectionSpec], metaclass=ABCMeta):

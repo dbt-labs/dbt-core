@@ -70,6 +70,7 @@ class GitPackage(Package):
     git: str
     revision: Optional[RawVersion] = None
     warn_unpinned: Optional[bool] = None
+    subdirectory: Optional[str] = None
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
@@ -195,6 +196,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     snapshots: Dict[str, Any] = field(default_factory=dict)
     analyses: Dict[str, Any] = field(default_factory=dict)
     sources: Dict[str, Any] = field(default_factory=dict)
+    tests: Dict[str, Any] = field(default_factory=dict)
     vars: Optional[Dict[str, Any]] = field(
         default=None,
         metadata=dict(

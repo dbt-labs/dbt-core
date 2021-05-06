@@ -12,9 +12,8 @@ from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.compiled import (
-    CompiledDataTestNode,
-    CompiledSchemaTestNode,
     COMPILED_TYPES,
+    CompiledSchemaTestNode,
     GraphMemberNode,
     InjectedCTE,
     ManifestNode,
@@ -30,6 +29,7 @@ from dbt.graph import Graph
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.utils import pluralize
+import dbt.tracking
 
 graph_file_name = 'graph.gpickle'
 
@@ -57,6 +57,11 @@ def print_compile_stats(stats):
 
     results = {k: 0 for k in names.keys()}
     results.update(stats)
+
+    # create tracking event for resource_counts
+    if dbt.tracking.active_user is not None:
+        resource_counts = {k.pluralize(): v for k, v in results.items()}
+        dbt.tracking.track_resource_counts(resource_counts)
 
     stat_line = ", ".join([
         pluralize(ct, names.get(t)) for t, ct in results.items()
@@ -245,22 +250,19 @@ class Compiler:
 
         return str(parsed)
 
-    def _get_dbt_test_name(self) -> str:
-        return 'dbt__cte__internal_test'
-
-    # This method is called by the 'compile_node' method. Starting
-    # from the node that it is passed in, it will recursively call
-    # itself using the 'extra_ctes'.  The 'ephemeral' models do
-    # not produce SQL that is executed directly, instead they
-    # are rolled up into the models that refer to them by
-    # inserting CTEs into the SQL.
     def _recursively_prepend_ctes(
         self,
         model: NonSourceCompiledNode,
         manifest: Manifest,
         extra_context: Optional[Dict[str, Any]],
     ) -> Tuple[NonSourceCompiledNode, List[InjectedCTE]]:
-
+        """This method is called by the 'compile_node' method. Starting
+        from the node that it is passed in, it will recursively call
+        itself using the 'extra_ctes'.  The 'ephemeral' models do
+        not produce SQL that is executed directly, instead they
+        are rolled up into the models that refer to them by
+        inserting CTEs into the SQL.
+        """
         if model.compiled_sql is None:
             raise RuntimeException(
                 'Cannot inject ctes into an unparsed node', model
@@ -278,65 +280,59 @@ class Compiler:
         # gathered and then "injected" into the model.
         prepended_ctes: List[InjectedCTE] = []
 
-        dbt_test_name = self._get_dbt_test_name()
-
         # extra_ctes are added to the model by
         # RuntimeRefResolver.create_relation, which adds an
         # extra_cte for every model relation which is an
         # ephemeral model.
         for cte in model.extra_ctes:
-            if cte.id == dbt_test_name:
-                sql = cte.sql
+            if cte.id not in manifest.nodes:
+                raise InternalException(
+                    f'During compilation, found a cte reference that '
+                    f'could not be resolved: {cte.id}'
+                )
+            cte_model = manifest.nodes[cte.id]
+
+            if not cte_model.is_ephemeral_model:
+                raise InternalException(f'{cte.id} is not ephemeral')
+
+            # This model has already been compiled, so it's been
+            # through here before
+            if getattr(cte_model, 'compiled', False):
+                assert isinstance(cte_model, tuple(COMPILED_TYPES.values()))
+                cte_model = cast(NonSourceCompiledNode, cte_model)
+                new_prepended_ctes = cte_model.extra_ctes
+
+            # if the cte_model isn't compiled, i.e. first time here
             else:
-                if cte.id not in manifest.nodes:
-                    raise InternalException(
-                        f'During compilation, found a cte reference that '
-                        f'could not be resolved: {cte.id}'
+                # This is an ephemeral parsed model that we can compile.
+                # Compile and update the node
+                cte_model = self._compile_node(
+                    cte_model, manifest, extra_context)
+                # recursively call this method
+                cte_model, new_prepended_ctes = \
+                    self._recursively_prepend_ctes(
+                        cte_model, manifest, extra_context
                     )
-                cte_model = manifest.nodes[cte.id]
+                # Save compiled SQL file and sync manifest
+                self._write_node(cte_model)
+                manifest.sync_update_node(cte_model)
 
-                if not cte_model.is_ephemeral_model:
-                    raise InternalException(f'{cte.id} is not ephemeral')
+            _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-                # This model has already been compiled, so it's been
-                # through here before
-                if getattr(cte_model, 'compiled', False):
-                    assert isinstance(cte_model,
-                                      tuple(COMPILED_TYPES.values()))
-                    cte_model = cast(NonSourceCompiledNode, cte_model)
-                    new_prepended_ctes = cte_model.extra_ctes
-
-                # if the cte_model isn't compiled, i.e. first time here
-                else:
-                    # This is an ephemeral parsed model that we can compile.
-                    # Compile and update the node
-                    cte_model = self._compile_node(
-                        cte_model, manifest, extra_context)
-                    # recursively call this method
-                    cte_model, new_prepended_ctes = \
-                        self._recursively_prepend_ctes(
-                            cte_model, manifest, extra_context
-                        )
-                    # Save compiled SQL file and sync manifest
-                    self._write_node(cte_model)
-                    manifest.sync_update_node(cte_model)
-
-                _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
-
-                new_cte_name = self.add_ephemeral_prefix(cte_model.name)
-                sql = f' {new_cte_name} as (\n{cte_model.compiled_sql}\n)'
+            new_cte_name = self.add_ephemeral_prefix(cte_model.name)
+            rendered_sql = (
+                cte_model._pre_injected_sql or cte_model.compiled_sql
+            )
+            sql = f' {new_cte_name} as (\n{rendered_sql}\n)'
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        # We don't save injected_sql into compiled sql for ephemeral models
-        # because it will cause problems with processing of subsequent models.
-        # Ephemeral models do not produce executable SQL of their own.
-        if not model.is_ephemeral_model:
-            injected_sql = self._inject_ctes_into_sql(
-                model.compiled_sql,
-                prepended_ctes,
-            )
-            model.compiled_sql = injected_sql
+        injected_sql = self._inject_ctes_into_sql(
+            model.compiled_sql,
+            prepended_ctes,
+        )
+        model._pre_injected_sql = model.compiled_sql
+        model.compiled_sql = injected_sql
         model.extra_ctes_injected = True
         model.extra_ctes = prepended_ctes
         model.validate(model.to_dict(omit_none=True))
@@ -344,34 +340,6 @@ class Compiler:
         manifest.update_node(model)
 
         return model, prepended_ctes
-
-    def _add_ctes(
-        self,
-        compiled_node: NonSourceCompiledNode,
-        manifest: Manifest,
-        extra_context: Dict[str, Any],
-    ) -> NonSourceCompiledNode:
-        """Wrap the data test SQL in a CTE."""
-
-        # for data tests, we need to insert a special CTE at the end of the
-        # list containing the test query, and then have the "real" query be a
-        # select count(*) from that model.
-        # the benefit of doing it this way is that _add_ctes() can be
-        # rewritten for different adapters to handle databases that don't
-        # support CTEs, or at least don't have full support.
-        if isinstance(compiled_node, CompiledDataTestNode):
-            # the last prepend (so last in order) should be the data test body.
-            # then we can add our select count(*) from _that_ cte as the "real"
-            # compiled_sql, and do the regular prepend logic from CTEs.
-            name = self._get_dbt_test_name()
-            cte = InjectedCTE(
-                id=name,
-                sql=f' {name} as (\n{compiled_node.compiled_sql}\n)'
-            )
-            compiled_node.extra_ctes.append(cte)
-            compiled_node.compiled_sql = f'\nselect count(*) from {name}'
-
-        return compiled_node
 
     # creates a compiled_node from the ManifestNode passed in,
     # creates a "context" dictionary for jinja rendering,
@@ -410,12 +378,6 @@ class Compiler:
         compiled_node.relation_name = self._get_relation_name(node)
 
         compiled_node.compiled = True
-
-        # add ctes for specific test nodes, and also for
-        # possible future use in adapters
-        compiled_node = self._add_ctes(
-            compiled_node, manifest, extra_context
-        )
 
         return compiled_node
 
@@ -487,11 +449,6 @@ class Compiler:
             )
         return node
 
-    # This is the main entry point into this code. It's called by
-    # CompileRunner.compile, GenericRPCRunner.compile, and
-    # RunTask.get_hook_sql. It calls '_compile_node' to convert
-    # the node into a compiled node, and then calls the
-    # recursive method to "prepend" the ctes.
     def compile_node(
         self,
         node: ManifestNode,
@@ -499,6 +456,12 @@ class Compiler:
         extra_context: Optional[Dict[str, Any]] = None,
         write: bool = True,
     ) -> NonSourceCompiledNode:
+        """This is the main entry point into this code. It's called by
+        CompileRunner.compile, GenericRPCRunner.compile, and
+        RunTask.get_hook_sql. It calls '_compile_node' to convert
+        the node into a compiled node, and then calls the
+        recursive method to "prepend" the ctes.
+        """
         node = self._compile_node(node, manifest, extra_context)
 
         node, _ = self._recursively_prepend_ctes(

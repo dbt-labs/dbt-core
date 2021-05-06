@@ -204,7 +204,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             "encoded": {
                 "id": "encoded",
                 "label": "Encoded",
-                "value": "Y",
+                "value": AnyStringWith('AUTO'),
                 "description": "Indicates whether any column in the table has compression encoding defined.",
                 "include": True
             },
@@ -1006,9 +1006,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return result
 
     def unrendered_tst_config(self, **updates):
-        result = {
-            'severity': 'ERROR',
-        }
+        result = {}
         result.update(updates)
         return result
 
@@ -1354,7 +1352,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': Normalized('schema_test/not_null_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
+                    'raw_sql': "{{ test_not_null(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': None,
                     'resource_type': 'test',
@@ -1366,7 +1364,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'test.test.not_null_model_id',
                     'docs': {'show': True},
                     'compiled': True,
-                    'compiled_sql': AnyStringWith('count(*)'),
+                    'compiled_sql': AnyStringWith('where id is null'),
                     'extra_ctes_injected': True,
                     'extra_ctes': [],
                     'test_metadata': {
@@ -1441,7 +1439,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/test_nothing_model_.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
+                    'raw_sql': "{{ test.test_nothing(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': None,
                     'resource_type': 'test',
@@ -1485,7 +1483,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'patch_path': None,
                     'path': normalize('schema_test/unique_model_id.sql'),
-                    'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
+                    'raw_sql': "{{ test_unique(**_dbt_schema_test_kwargs) }}",
                     'refs': [['model']],
                     'relation_name': None,
                     'resource_type': 'test',
@@ -2142,7 +2140,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'depends_on': {'macros': []},
                     'description': 'My custom test that I wrote that does nothing',
                     'docs': {'show': True},
-                    'macro_sql': AnyStringWith('macro test_nothing'),
+                    'macro_sql': AnyStringWith('test nothing'),
                     'original_file_path': self.dir('macros/dummy_test.sql'),
                     'path': self.dir('macros/dummy_test.sql'),
                     'package_name': 'test',

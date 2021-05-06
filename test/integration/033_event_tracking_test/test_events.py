@@ -91,19 +91,39 @@ class TestEventTracking(DBTIntegrationTest):
 
         def populate(project_id, user_id, invocation_id, version):
             return [{
-                'schema': 'iglu:com.dbt/load_all_timing/jsonschema/1-0-0',
+                'schema': 'iglu:com.dbt/load_all_timing/jsonschema/1-0-2',
                 'data': {
                     'invocation_id': invocation_id,
                     'project_id': project_id,
                     'path_count': ANY,
                     'is_partial_parse_enabled': ANY,
                     'load_all_elapsed': ANY,
+                    'read_files_elapsed': ANY,
+                    'load_macros_elapsed': ANY,
                     'parse_project_elapsed': ANY,
                     'patch_sources_elapsed': ANY,
                     'process_manifest_elapsed': ANY,
                 },
             }]
         return populate
+
+    def resource_counts_context(self):
+       return [
+          {
+              'schema': 'iglu:com.dbt/resource_counts/jsonschema/1-0-0',
+              'data': {
+                  'models': ANY,
+                  'tests': ANY,
+                  'snapshots': ANY,
+                  'analyses': ANY,
+                  'macros': ANY,
+                  'operations': ANY,
+                  'seeds': ANY,
+                  'sources': ANY,
+                  'exposures': ANY,
+              }
+          }
+       ]
 
     def build_context(
         self,
@@ -233,6 +253,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -242,6 +268,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         expected_contexts = [
             self.build_context('compile', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.build_context('compile', 'end', result_type='ok')
         ]
 
@@ -347,6 +374,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='run_model',
                 label=ANY,
                 context=ANY
@@ -362,6 +395,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         expected_contexts = [
             self.build_context('seed', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             seed_context,
             self.build_context('seed', 'end', result_type='ok')
         ]
@@ -380,6 +414,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             call(
                 category='dbt',
                 action='load_project',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
+                action='resource_counts',
                 label=ANY,
                 context=ANY
             ),
@@ -412,6 +452,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         expected_contexts = [
             self.build_context('run', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.run_context(
                 hashed_contents='1e5789d34cddfbd5da47d7713aa9191c',
                 model_id='4fbacae0e1b69924b22964b457148fb8',
@@ -457,6 +498,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='run_model',
                 label=ANY,
                 context=ANY
@@ -472,6 +519,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         expected_contexts = [
             self.build_context('run', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.run_context(
                 hashed_contents='4419e809ce0995d99026299e54266037',
                 model_id='576c3d4489593f00fad42b97c278641e',
@@ -510,6 +558,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -519,6 +573,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         expected_contexts = [
             self.build_context('test', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.build_context('test', 'end', result_type='ok')
         ]
 
@@ -621,6 +676,12 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -630,6 +691,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
         expected_contexts = [
             self.build_context('run', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.build_context('run', 'end', result_type='error')
         ]
 
@@ -668,6 +730,12 @@ class TestEventTrackingSnapshot(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY
+            ),
+            call(
+                category='dbt',
                 action='run_model',
                 label=ANY,
                 context=ANY
@@ -684,6 +752,7 @@ class TestEventTrackingSnapshot(TestEventTracking):
         expected_contexts = [
             self.build_context('snapshot', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.run_context(
                 hashed_contents=ANY,
                 model_id='820793a4def8d8a38d109a9709374849',
@@ -723,6 +792,12 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
             ),
             call(
                 category='dbt',
+                action='resource_counts',
+                label=ANY,
+                context=ANY,
+            ),
+            call(
+                category='dbt',
                 action='invocation',
                 label='end',
                 context=ANY
@@ -732,6 +807,7 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
         expected_contexts = [
             self.build_context('generate', 'start'),
             self.load_context(),
+            self.resource_counts_context(),
             self.build_context('generate', 'end', result_type='ok')
         ]
 

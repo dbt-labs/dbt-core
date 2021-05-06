@@ -1,8 +1,93 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import contextlib
 import os
 import shutil
+import pytest
 import tempfile
 import yaml
+from typing import Dict
+
+
+@contextlib.contextmanager
+def change_working_directory(directory: str) -> str:
+    """
+    Context manager for changing the working directory.
+
+    Parameters
+    ----------
+    directory : str
+        The directory to which the working directory should be changed.
+
+    Yields
+    ------
+    out : str
+        The new working directory.
+    """
+    current_working_directory = os.getcwd()
+    os.chdir(directory)
+    try:
+        yield directory
+    finally:
+        os.chdir(current_working_directory)
+
+
+@contextlib.contextmanager
+def temporary_working_directory() -> str:
+    """
+    Create a temporary working directory.
+
+    Returns
+    -------
+    out : str
+        The temporary working directory.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with change_working_directory(tmpdir):
+            yield tmpdir
+
+
+def get_custom_profiles_config(database_host, custom_schema):
+    return {
+        "config": {
+            "send_anonymous_usage_stats": False
+        },
+        "test": {
+            "outputs": {
+                "default": {
+                    "type": "postgres",
+                    "threads": 1,
+                    "host": database_host,
+                    "port": 5432,
+                    "user": "root",
+                    "pass": "password",
+                    "dbname": "dbt",
+                    "schema": custom_schema
+                },
+            },
+            "target": "default",
+        }
+    }
+
+
+def create_directory_with_custom_profiles(
+    directory: str,
+    profiles: Dict
+) -> None:
+    """
+    Create directory with profiles.yml.
+
+    Parameters
+    ----------
+    directory : str
+        The directory in which a profiles file is created.
+    profiles : Dict
+        The profiles to put into the profiles.yml
+    """
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    with open(f"{directory}/profiles.yml", "w") as f:
+        yaml.safe_dump(profiles, f, default_flow_style=True)
 
 
 class ModelCopyingIntegrationTest(DBTIntegrationTest):
@@ -68,40 +153,16 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
         self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
         self.run_sql(f"CREATE SCHEMA {self.custom_schema};")
 
-        # the test framework will remove this in teardown for us.
-        if not os.path.exists('./dbt-profile'):
-            os.makedirs('./dbt-profile')
-
-        with open("./dbt-profile/profiles.yml", 'w') as f:
-            yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
+        profiles = get_custom_profiles_config(
+            self.database_host, self.custom_schema)
+        create_directory_with_custom_profiles(
+            "./dbt-profile", profiles)
 
         self.run_sql_file("seed_custom.sql")
 
     def tearDown(self):
         self.run_sql(f"DROP SCHEMA IF EXISTS {self.custom_schema} CASCADE;")
         super().tearDown()
-
-    def custom_profile_config(self):
-        return {
-            'config': {
-                'send_anonymous_usage_stats': False
-            },
-            'test': {
-                'outputs': {
-                    'default': {
-                        'type': 'postgres',
-                        'threads': 1,
-                        'host': self.database_host,
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
-                        'schema': self.custom_schema
-                    },
-                },
-                'target': 'default',
-            }
-        }
 
     @property
     def schema(self):
@@ -149,7 +210,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_dbt_commands_with_randomdir_as_project_dir(self):
-        workdir = os.getcwd()
+        workdir = self.test_root_dir
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             self._run_simple_dbt_commands(workdir)
@@ -157,7 +218,7 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_dbt_commands_with_relative_dir_as_project_dir(self):
-        workdir = os.getcwd()
+        workdir = self.test_root_dir
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             self._run_simple_dbt_commands(os.path.relpath(workdir, tmpdir))
@@ -173,3 +234,63 @@ class TestCLIInvocationWithProjectDir(ModelCopyingIntegrationTest):
         # In case of 'dbt clean' also test that the clean-targets directories were deleted.
         for target in self.config.clean_targets:
             assert not os.path.isdir(target)
+
+
+class TestCLIInvocationWithProfilesAndProjectDir(ModelCopyingIntegrationTest):
+
+    @property
+    def schema(self):
+        return "test_cli_invocation_015"
+
+    @property
+    def models(self):
+        return "models"
+
+    @property
+    def custom_schema(self):
+        return "{}_custom".format(self.unique_schema())
+
+    def _test_postgres_sub_command_with_profiles_separate_from_project_dir(
+        self,
+        dbt_sub_command: str
+    ):
+        """
+        Test if a sub command runs well when a profiles dir is separate from a
+        project dir.
+
+        """
+        profiles_dir = "./tmp-profile"
+        workdir = os.getcwd()
+        with temporary_working_directory() as tmpdir:
+
+            profiles = get_custom_profiles_config(
+                self.database_host, self.custom_schema)
+            create_directory_with_custom_profiles(profiles_dir, profiles)
+
+            project_dir = os.path.relpath(workdir, os.getcwd())
+            if os.path.exists(f"{project_dir}/profiles.yml"):
+                os.remove(f"{project_dir}/profiles.yml")
+
+            other_args = [
+                dbt_sub_command, "--profiles-dir", profiles_dir, "--project-dir", project_dir
+            ]
+            self.run_dbt(other_args, profiles_dir=False)
+
+    @use_profile("postgres")
+    def test_postgres_deps_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
+
+    @use_profile("postgres")
+    def test_postgres_run_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("run")
+
+    @use_profile("postgres")
+    def test_postgres_test_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("deps")
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("run")
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("test")
+
+    @use_profile("postgres")
+    def test_postgres_debug_with_profiles_separate_from_project_dir(self):
+        self._test_postgres_sub_command_with_profiles_separate_from_project_dir("debug")

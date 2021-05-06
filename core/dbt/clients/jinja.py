@@ -21,7 +21,7 @@ import jinja2.sandbox
 
 from dbt.utils import (
     get_dbt_macro_name, get_docs_macro_name, get_materialization_macro_name,
-    deep_map
+    get_test_macro_name, deep_map
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
@@ -408,6 +408,21 @@ class DocumentationExtension(jinja2.ext.Extension):
         return node
 
 
+class TestExtension(jinja2.ext.Extension):
+    tags = ['test']
+
+    def parse(self, parser):
+        node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
+        test_name = parser.parse_assign_target(name_only=True).name
+
+        parser.parse_signature(node)
+        node.defaults = []
+        node.name = get_test_macro_name(test_name)
+        node.body = parser.parse_statements(('name:endtest',),
+                                            drop_needle=True)
+        return node
+
+
 def _is_dunder_name(name):
     return name.startswith('__') and name.endswith('__')
 
@@ -479,6 +494,7 @@ def get_environment(
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)
+    args['extensions'].append(TestExtension)
 
     env_cls: Type[jinja2.Environment]
     text_filter: Type
@@ -647,3 +663,39 @@ def add_rendered_test_kwargs(
 
     kwargs = deep_map(_convert_function, node.test_metadata.kwargs)
     context[SCHEMA_TEST_KWARGS_NAME] = kwargs
+
+
+def statically_extract_macro_calls(string, ctx):
+    # set 'capture_macros' to capture undefined
+    env = get_environment(None, capture_macros=True)
+    parsed = env.parse(string)
+
+    standard_calls = {
+        'source': [],
+        'ref': [],
+        'config': [],
+    }
+
+    possible_macro_calls = []
+    for func_call in parsed.find_all(jinja2.nodes.Call):
+        if hasattr(func_call, 'node') and hasattr(func_call.node, 'name'):
+            func_name = func_call.node.name
+        else:
+            # This is a kludge to capture an adapter.dispatch('<macro_name>') call.
+            # Call(node=Getattr(
+            #     node=Name(name='adapter', ctx='load'), attr='dispatch', ctx='load'),
+            #     args=[Const(value='get_snapshot_unique_id')], kwargs=[],
+            #     dyn_args=None, dyn_kwargs=None)
+            if (hasattr(func_call, 'node') and hasattr(func_call.node, 'attr') and
+                    func_call.node.attr == 'dispatch'):
+                func_name = func_call.args[0].value
+            else:
+                continue
+        if func_name in standard_calls:
+            continue
+        elif ctx.get(func_name):
+            continue
+        else:
+            possible_macro_calls.append(func_name)
+
+    return possible_macro_calls

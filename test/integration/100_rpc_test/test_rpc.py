@@ -392,8 +392,8 @@ class HasRPCServer(DBTIntegrationTest):
         return stored
 
 
-@mark.flaky(rerun_filter=addr_in_use)
 class TestRPCServerCompileRun(HasRPCServer):
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_compile_sql_postgres(self):
         trivial = self.async_query(
@@ -478,6 +478,7 @@ class TestRPCServerCompileRun(HasRPCServer):
             compiled_sql=_select_from_ephemeral
         )
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_run_sql_postgres(self):
         # seed + run dbt to make models before using them!
@@ -601,7 +602,7 @@ class TestRPCServerCompileRun(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
-    @mark.flaky(rerun_filter=None)
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
         task_tags = {
@@ -691,7 +692,7 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertGreater(rowdict[1]['elapsed'], 0)
         self.assertIsNone(rowdict[1]['tags'])
 
-    @mark.flaky(rerun_filter=lambda *a, **kw: True)
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_ps_kill_longwait_postgres(self):
         request_token, request_id = self.get_sleep_query()
@@ -704,6 +705,7 @@ class TestRPCServerCompileRun(HasRPCServer):
         result_data = self.kill_and_assert(request_token, request_id)
         self.assertTrue(len(result_data['logs']) > 0)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_invalid_requests_postgres(self):
         # invalid method -> error on the initial query
@@ -759,6 +761,7 @@ class TestRPCServerCompileRun(HasRPCServer):
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_timeout_postgres(self):
         data = self.async_query(
@@ -781,7 +784,6 @@ class TestRPCServerCompileRun(HasRPCServer):
         return
 
 
-@mark.flaky(rerun_filter=addr_in_use)
 class TestRPCServerProjects(HasRPCServer):
     def assertHasResults(self, result, expected, *, missing=None, num_expected=None):
         dct = self.assertIsResult(result)
@@ -819,6 +821,7 @@ class TestRPCServerProjects(HasRPCServer):
 
         self.assertEqual(passes, pass_results)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_seed_project_postgres(self):
         # testing "dbt seed" is tricky so we'll just jam some sql in there
@@ -830,6 +833,7 @@ class TestRPCServerProjects(HasRPCServer):
         result = self.async_query('seed', show=False).json()
         self.correct_seed_result(result)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_seed_project_cli_postgres(self):
         self.run_sql_file("seed.sql")
@@ -839,6 +843,7 @@ class TestRPCServerProjects(HasRPCServer):
         result = self.async_query('cli_args', cli='seed').json()
         self.correct_seed_result(result)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_compile_project_postgres(self):
 
@@ -859,6 +864,7 @@ class TestRPCServerProjects(HasRPCServer):
             num_expected=6,
         )
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_compile_project_cli_postgres(self):
         self.run_dbt_with_vars(['compile'])
@@ -879,6 +885,7 @@ class TestRPCServerProjects(HasRPCServer):
             num_expected=6,
         )
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_run_project_postgres(self):
         result = self.async_query('run').json()
@@ -887,6 +894,7 @@ class TestRPCServerProjects(HasRPCServer):
             result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_run_project_cli_postgres(self):
         result = self.async_query('cli_args', cli='run').json()
@@ -894,6 +902,7 @@ class TestRPCServerProjects(HasRPCServer):
             result, {'descendant_model', 'multi_source_model', 'nonsource_descendant'})
         self.assertTablesEqual('multi_source_model', 'expected_multi_source')
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_test_project_postgres(self):
         self.run_dbt_with_vars(['run'])
@@ -902,6 +911,7 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertIn('results', result)
         self.assertHasTestResults(result['results'], 4)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_test_project_cli_postgres(self):
         self.run_dbt_with_vars(['run'])
@@ -910,6 +920,7 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertIn('results', result)
         self.assertHasTestResults(result['results'], 4)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     def assertManifestExists(self, nodes_length, sources_length):
         self.assertTrue(os.path.exists('target/manifest.json'))
         with open('target/manifest.json') as fp:
@@ -919,6 +930,7 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertIn('sources', manifest)
         self.assertEqual(len(manifest['sources']), sources_length)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     def assertHasDocsGenerated(self, result, expected):
         dct = self.assertIsResult(result)
         self.assertIn('state', dct)
@@ -930,11 +942,13 @@ class TestRPCServerProjects(HasRPCServer):
         sources = dct['sources']
         self.assertEqual(set(sources), expected['sources'])
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     def assertCatalogExists(self):
         self.assertTrue(os.path.exists('target/catalog.json'))
         with open('target/catalog.json') as fp:
             catalog = json.load(fp)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     def _correct_docs_generate_result(self, result):
         expected = {
             'nodes': {
@@ -956,6 +970,7 @@ class TestRPCServerProjects(HasRPCServer):
         self.assertCatalogExists()
         self.assertManifestExists(12, 5)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_docs_generate_postgres(self):
         self.run_dbt_with_vars(['run'])
@@ -965,6 +980,7 @@ class TestRPCServerProjects(HasRPCServer):
         result = self.async_query('docs.generate').json()
         self._correct_docs_generate_result(result)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_docs_generate_postgres_cli(self):
         self.run_dbt_with_vars(['run'])
@@ -974,6 +990,7 @@ class TestRPCServerProjects(HasRPCServer):
         result = self.async_query('cli_args', cli='docs generate').json()
         self._correct_docs_generate_result(result)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_deps_postgres(self):
         self.async_query('deps').json()
@@ -984,10 +1001,8 @@ class TestRPCServerProjects(HasRPCServer):
         self.async_query('cli_args', cli='deps').json()
 
 
-@mark.flaky(rerun_filter=addr_in_use)
 class TestRPCTaskManagement(HasRPCServer):
-
-    @mark.flaky(rerun_filter=lambda *a, **kw: True)
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_sighup_postgres(self):
         status = self.assertIsResult(self.query('status').json())
@@ -1035,6 +1050,7 @@ class TestRPCTaskManagement(HasRPCServer):
         self.assertRunning([alive])
         self.kill_and_assert(*alive)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_gc_by_time_postgres(self):
         # make a few normal requests
@@ -1055,6 +1071,7 @@ class TestRPCTaskManagement(HasRPCServer):
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['rows']), 0)
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_gc_by_id_postgres(self):
         # make 10 requests, then gc half of them
@@ -1095,7 +1112,6 @@ class CompletingServerProcess(ServerProcess):
         return result['result']['state'] in ('error', 'ready')
 
 
-@mark.flaky(rerun_filter=addr_in_use)
 class TestRPCServerDeps(HasRPCServer):
     ServerProcess = CompletingServerProcess
     should_seed = False
@@ -1112,7 +1128,7 @@ class TestRPCServerDeps(HasRPCServer):
         super().tearDown()
 
     @property
-    def packages_config(selF):
+    def packages_config(self):
         return {
             # this is config-version 2, but with no upper bound
             'packages': [
@@ -1143,6 +1159,7 @@ class TestRPCServerDeps(HasRPCServer):
         self.assertEqual(len(os.listdir('./dbt_modules')), 1)
         self.assertIsResult(self.async_query('compile').json())
 
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_deps_compilation_postgres(self):
         status = self._check_start_predeps()

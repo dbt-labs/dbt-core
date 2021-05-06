@@ -28,11 +28,10 @@ def _wrap_exceptions(fn):
             attempt += 1
             try:
                 return fn(*args, **kwargs)
-            except requests.exceptions.ConnectionError as exc:
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
                 if attempt < max_attempts:
                     time.sleep(1)
                     continue
-
                 raise RegistryException(
                     'Unable to connect to registry hub'
                 ) from exc
@@ -43,7 +42,7 @@ def _wrap_exceptions(fn):
 def _get(path, registry_base_url=None):
     url = _get_url(path, registry_base_url)
     logger.debug('Making package registry request: GET {}'.format(url))
-    resp = requests.get(url)
+    resp = requests.get(url, timeout=30)
     logger.debug('Response from registry: GET {} {}'.format(url,
                                                             resp.status_code))
     resp.raise_for_status()

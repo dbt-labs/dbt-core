@@ -8,7 +8,9 @@ from typing_extensions import Protocol
 
 from dbt import deprecations
 from dbt.adapters.base.column import Column
-from dbt.adapters.factory import get_adapter, get_adapter_package_names
+from dbt.adapters.factory import (
+    get_adapter, get_adapter_package_names, get_adapter_type_names
+)
 from dbt.clients import agate_helper
 from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
 from dbt.config import RuntimeConfig, Project
@@ -20,7 +22,7 @@ from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
 from dbt.contracts.connection import AdapterResponse
 from dbt.contracts.graph.manifest import (
-    Manifest, AnyManifest, Disabled, MacroManifest
+    Manifest, Disabled
 )
 from dbt.contracts.graph.compiled import (
     CompiledResource,
@@ -107,10 +109,11 @@ class BaseDatabaseWrapper:
         return self._adapter.commit_if_has_connection()
 
     def _get_adapter_macro_prefixes(self) -> List[str]:
-        # a future version of this could have plugins automatically call fall
-        # back to their dependencies' dependencies by using
-        # `get_adapter_type_names` instead of `[self.config.credentials.type]`
-        search_prefixes = [self._adapter.type(), 'default']
+        # order matters for dispatch:
+        #  1. current adapter
+        #  2. any parent adapters (dependencies)
+        #  3. 'default'
+        search_prefixes = get_adapter_type_names(self._adapter.type()) + ['default']
         return search_prefixes
 
     def dispatch(
@@ -1210,7 +1213,7 @@ class MacroContext(ProviderContext):
         self,
         model: ParsedMacro,
         config: RuntimeConfig,
-        manifest: AnyManifest,
+        manifest: Manifest,
         provider: Provider,
         search_package: Optional[str],
     ) -> None:
@@ -1300,7 +1303,7 @@ class ModelContext(ProviderContext):
 def generate_parser_model(
     model: ManifestNode,
     config: RuntimeConfig,
-    manifest: MacroManifest,
+    manifest: Manifest,
     context_config: ContextConfig,
 ) -> Dict[str, Any]:
     # The __init__ method of ModelContext also initializes
@@ -1317,7 +1320,7 @@ def generate_parser_model(
 def generate_generate_component_name_macro(
     macro: ParsedMacro,
     config: RuntimeConfig,
-    manifest: MacroManifest,
+    manifest: Manifest,
 ) -> Dict[str, Any]:
     ctx = MacroContext(
         macro, config, manifest, GenerateNameProvider(), None
@@ -1370,7 +1373,7 @@ class ExposureSourceResolver(BaseResolver):
 def generate_parse_exposure(
     exposure: ParsedExposure,
     config: RuntimeConfig,
-    manifest: MacroManifest,
+    manifest: Manifest,
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
@@ -1408,7 +1411,12 @@ class TestContext(ProviderContext):
         self.macro_resolver = macro_resolver
         self.thread_ctx = MacroStack()
         super().__init__(model, config, manifest, provider, context_config)
-        self._build_test_namespace
+        self._build_test_namespace()
+        # We need to rebuild this because it's already been built by
+        # the ProviderContext with the wrong namespace.
+        self.db_wrapper = self.provider.DatabaseWrapper(
+            self.adapter, self.namespace
+        )
 
     def _build_namespace(self):
         return {}
@@ -1421,11 +1429,17 @@ class TestContext(ProviderContext):
         depends_on_macros = []
         if self.model.depends_on and self.model.depends_on.macros:
             depends_on_macros = self.model.depends_on.macros
+        lookup_macros = depends_on_macros.copy()
+        for macro_unique_id in lookup_macros:
+            lookup_macro = self.macro_resolver.macros.get(macro_unique_id)
+            if lookup_macro:
+                depends_on_macros.extend(lookup_macro.depends_on.macros)
+
         macro_namespace = TestMacroNamespace(
-            self.macro_resolver, self.ctx, self.node, self.thread_ctx,
+            self.macro_resolver, self._ctx, self.model, self.thread_ctx,
             depends_on_macros
         )
-        self._namespace = macro_namespace
+        self.namespace = macro_namespace
 
 
 def generate_test_context(

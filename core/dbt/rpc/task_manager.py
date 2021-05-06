@@ -19,7 +19,7 @@ from dbt.contracts.rpc import (
     TaskID,
 )
 from dbt.logger import LogMessage, list_handler
-from dbt.perf_utils import get_full_manifest
+from dbt.parser.manifest import ManifestLoader
 from dbt.rpc.error import dbt_error
 from dbt.rpc.gc import GarbageCollector
 from dbt.rpc.task_handler_protocol import TaskHandlerProtocol, TaskHandlerMap
@@ -187,7 +187,7 @@ class TaskManager:
         return True
 
     def parse_manifest(self) -> None:
-        self.manifest = get_full_manifest(self.config, reset=True)
+        self.manifest = ManifestLoader.get_full_manifest(self.config, reset=True)
 
     def set_compile_exception(self, exc, logs=List[LogMessage]) -> None:
         assert self.last_parse.state == ManifestStatus.Compiling, \

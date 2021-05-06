@@ -141,9 +141,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def database_host(self):
-        if os.name == 'nt':
-            return 'localhost'
-        return 'database'
+        return os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
 
     def postgres_profile(self):
         return {
@@ -1226,3 +1224,10 @@ class AnyStringWith:
 
     def __repr__(self):
         return 'AnyStringWith<{!r}>'.format(self.contains)
+
+def bigquery_rate_limiter(err, *args):
+    msg = str(err)
+    if 'too many table update operations for this table' in msg:
+        time.sleep(1)
+        return True
+    return False

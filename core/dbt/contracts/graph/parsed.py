@@ -720,6 +720,18 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
         )
 
 
+ManifestNodes = Union[
+    ParsedAnalysisNode,
+    ParsedDataTestNode,
+    ParsedHookNode,
+    ParsedModelNode,
+    ParsedRPCNode,
+    ParsedSchemaTestNode,
+    ParsedSeedNode,
+    ParsedSnapshotNode,
+]
+
+
 ParsedResource = Union[
     ParsedDocumentation,
     ParsedMacro,
