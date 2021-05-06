@@ -413,7 +413,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             logger.warning("WARNING: Nothing to do. Try checking your model "
                            "configs and model specification args")
-            return self.get_result(
+            result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),
                 elapsed_time=0.0,
@@ -421,9 +421,8 @@ class GraphRunnableTask(ManifestTask):
         else:
             with TextOnly():
                 logger.info("")
-
-        selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
-        result = self.execute_with_hooks(selected_uids)
+            selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
+            result = self.execute_with_hooks(selected_uids)
 
         if flags.WRITE_JSON:
             self.write_manifest()
