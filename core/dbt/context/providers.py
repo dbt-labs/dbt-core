@@ -8,7 +8,9 @@ from typing_extensions import Protocol
 
 from dbt import deprecations
 from dbt.adapters.base.column import Column
-from dbt.adapters.factory import get_adapter, get_adapter_package_names
+from dbt.adapters.factory import (
+    get_adapter, get_adapter_package_names, get_adapter_type_names
+)
 from dbt.clients import agate_helper
 from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
 from dbt.config import RuntimeConfig, Project
@@ -107,10 +109,11 @@ class BaseDatabaseWrapper:
         return self._adapter.commit_if_has_connection()
 
     def _get_adapter_macro_prefixes(self) -> List[str]:
-        # a future version of this could have plugins automatically call fall
-        # back to their dependencies' dependencies by using
-        # `get_adapter_type_names` instead of `[self.config.credentials.type]`
-        search_prefixes = [self._adapter.type(), 'default']
+        # order matters for dispatch:
+        #  1. current adapter
+        #  2. any parent adapters (dependencies)
+        #  3. 'default'
+        search_prefixes = get_adapter_type_names(self._adapter.type()) + ['default']
         return search_prefixes
 
     def dispatch(

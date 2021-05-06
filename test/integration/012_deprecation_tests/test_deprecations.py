@@ -111,6 +111,14 @@ class TestAdapterMacroDeprecation(BaseTestDeprecations):
     @use_profile('redshift')
     def test_redshift_adapter_macro(self):
         self.assertEqual(deprecations.active_deprecations, set())
+        # pick up the postgres macro
+        self.run_dbt(strict=False)
+        expected = {'adapter-macro'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+        
+    @use_profile('bigquery')
+    def test_bigquery_adapter_macro(self):
+        self.assertEqual(deprecations.active_deprecations, set())
         # picked up the default -> error
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(strict=False, expect_pass=False)
@@ -147,6 +155,15 @@ class TestAdapterMacroDeprecationPackages(BaseTestDeprecations):
 
     @use_profile('redshift')
     def test_redshift_adapter_macro_pkg(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        # pick up the postgres macro
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(strict=False)
+        expected = {'adapter-macro'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+    @use_profile('bigquery')
+    def test_bigquery_adapter_macro_pkg(self):
         self.assertEqual(deprecations.active_deprecations, set())
         # picked up the default -> error
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:

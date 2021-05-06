@@ -1,6 +1,17 @@
 ## dbt 0.20.0 (Release TBD)
 
 ### Fixes
+- Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
+
+### Under the hood
+- Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3117](https://github.com/fishtown-analytics/dbt/issues/3177))
+
+Contributors:
+- [@TeddyCr](https://github.com/TeddyCr) ([#3117](https://github.com/fishtown-analytics/dbt/issues/3177))
+
+## dbt 0.20.0b1 (May 03, 2021)
+
+### Fixes
 - Fix exit code from dbt debug not returning a failure when one of the tests fail ([#3017](https://github.com/fishtown-analytics/dbt/issues/3017))
 - Auto-generated CTEs in tests and ephemeral models have lowercase names to comply with dbt coding conventions ([#3027](https://github.com/fishtown-analytics/dbt/issues/3027), [#3028](https://github.com/fishtown-analytics/dbt/issues/3028))
 - Fix incorrect error message when a selector does not match any node [#3036](https://github.com/fishtown-analytics/dbt/issues/3036))
@@ -27,6 +38,7 @@
 - Add Jinja tag for tests ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
 - Add native support for Postgres index creation ([#804](https://github.com/fishtown-analytics/dbt/issues/804), [3106](https://github.com/fishtown-analytics/dbt/pull/3106))
 - Less greedy test selection: expand to select unselected tests if and only if all parents are selected ([#2891](https://github.com/fishtown-analytics/dbt/issues/2891), [#3235](https://github.com/fishtown-analytics/dbt/pull/3235))
+- Prevent locks in Redshift during full refresh in incremental materialization. ([#2426](https://github.com/fishtown-analytics/dbt/issues/2426), [#2998](https://github.com/fishtown-analytics/dbt/pull/2998))
 
 ### Under the hood
 - Add dependabot configuration for alerting maintainers about keeping dependencies up to date and secure. ([#3061](https://github.com/fishtown-analytics/dbt/issues/3061), [#3062](https://github.com/fishtown-analytics/dbt/pull/3062))
@@ -38,7 +50,7 @@
 - Switch from externally storing parsing state in ParseResult object to using Manifest ([#3163](http://github.com/fishtown-analytics/dbt/issues/3163), [#3219](https://github.com/fishtown-analytics/dbt/pull/3219))
 - Switch from loading project files in separate parsers to loading in one place([#3244](http://github.com/fishtown-analytics/dbt/issues/3244), [#3248](https://github.com/fishtown-analytics/dbt/pull/3248))
 - Update schema/generic tests to use test materialization when executing. ([#3192](https://github.com/fishtown-analytics/dbt/issues/3192), [#3286](https://github.com/fishtown-analytics/dbt/pull/3286))
-- Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3117](https://github.com/fishtown-analytics/dbt/issues/3177))
+- For adapters that inherit from other adapters (e.g. `dbt-postgres` &rarr; `dbt-redshift`), `adapter.dispatch()` will now include parent macro implementations as viable candidates ([#2923](https://github.com/fishtown-analytics/dbt/issues/2923), [#3296](https://github.com/fishtown-analytics/dbt/pull/3296))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -59,7 +71,7 @@ Contributors:
 - [@JCZuurmond](https://github.com/JCZuurmond) ([#3133](https://github.com/fishtown-analytics/dbt/pull/3133))
 - [@dmateusp](https://github.com/dmateusp) ([#3270](https://github.com/fishtown-analytics/dbt/pull/3270), [#3267](https://github.com/fishtown-analytics/dbt/pull/3267))
 - [@monti-python](https://github.com/monti-python) ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246))
-- [@TeddyCr](https://github.com/TeddyCr) ([#3117](https://github.com/fishtown-analytics/dbt/issues/3177))
+- [@drkarthi](https://github.com/drkarthi) ([#2426](https://github.com/fishtown-analytics/dbt/issues/2426), [#2998](https://github.com/fishtown-analytics/dbt/pull/2998))
 
 ## dbt 0.19.2 (Release TBD)
 
