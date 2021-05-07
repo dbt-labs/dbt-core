@@ -147,7 +147,7 @@ class TestMacroNamespace:
             for macro_unique_id in dep_macros:
                 if macro_unique_id in self.macro_resolver.macros:
                     # Split up the macro unique_id to get the project_name
-                    (_, project_name, macro_name) = macro_unique_id.split('.')
+                    (_, project_name, macro_name) = macro_unique_id.split(".")
                     # Save the plain macro_name in the local_namespace
                     macro = self.macro_resolver.macros[macro_unique_id]
                     macro_gen = MacroGenerator(

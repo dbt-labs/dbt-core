@@ -523,8 +523,8 @@ class ManifestLoader:
                 if macro_name == macro.name:
                     continue
                 package_name = macro.package_name
-                if '.' in macro_name:
-                    package_name, macro_name = macro_name.split('.')
+                if "." in macro_name:
+                    package_name, macro_name = macro_name.split(".")
                 dep_macro_id = self.macro_resolver.get_macro_id(package_name, macro_name)
                 if dep_macro_id:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
