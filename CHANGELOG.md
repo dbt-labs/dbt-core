@@ -3,6 +3,7 @@
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 - Now generating `run_results.json` even when no nodes are selected ([#3313](https://github.com/fishtown-analytics/dbt/issues/3313), [#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
+- Fix references to macros with package names when rendering schema tests ([#3324](https://github.com/fishtown-analytics/dbt/issues/3324), [#3345](https://github.com/fishtown-analytics/dbt/pull/3345))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
