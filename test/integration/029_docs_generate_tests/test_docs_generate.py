@@ -1333,7 +1333,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': self._checksum_file(seed_path),
                     'unrendered_config': unrendered_seed_config,
                 },
-                'test.test.not_null_model_id': {
+                'test.test.not_null_model_id.580992bcfd': {
                     'alias': 'not_null_model_id',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/not_null_model_id.sql'),
                     'column_name': 'id',
@@ -1361,7 +1361,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': ['schema'],
                     'meta': {},
-                    'unique_id': 'test.test.not_null_model_id',
+                    'unique_id': 'test.test.not_null_model_id.580992bcfd',
                     'docs': {'show': True},
                     'compiled': True,
                     'compiled_sql': AnyStringWith('where id is null'),
@@ -1420,7 +1420,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'snapshot.test.snapshot_seed',
                     'unrendered_config': unrendered_snapshot_config,
                 },
-                'test.test.test_nothing_model_': {
+                'test.test.test_nothing_model_.9c8389734f': {
                     'alias': 'test_nothing_model_',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/test_nothing_model_.sql'),
                     'column_name': None,
@@ -1448,7 +1448,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': ['schema'],
                     'meta': {},
-                    'unique_id': 'test.test.test_nothing_model_',
+                    'unique_id': 'test.test.test_nothing_model_.9c8389734f',
                     'docs': {'show': True},
                     'compiled': True,
                     'compiled_sql': AnyStringWith('select 0'),
@@ -1464,7 +1464,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'checksum': {'name': 'none', 'checksum': ''},
                     'unrendered_config': unrendered_test_config,
                 },
-                'test.test.unique_model_id': {
+                'test.test.unique_model_id.0ee1634138': {
                     'alias': 'unique_model_id',
                     'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/unique_model_id.sql'),
                     'column_name': 'id',
@@ -1492,7 +1492,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': ['schema'],
                     'meta': {},
-                    'unique_id': 'test.test.unique_model_id',
+                    'unique_id': 'test.test.unique_model_id.0ee1634138',
                     'docs': {'show': True},
                     'compiled': True,
                     'compiled_sql': AnyStringWith('count(*)'),
@@ -1621,17 +1621,17 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'seed.test.seed': [],
                 'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'source.test.my_source.my_table': [],
-                'test.test.not_null_model_id': ['model.test.model'],
-                'test.test.test_nothing_model_': ['model.test.model'],
-                'test.test.unique_model_id': ['model.test.model'],
+                'test.test.not_null_model_id.580992bcfd': ['model.test.model'],
+                'test.test.test_nothing_model_.9c8389734f': ['model.test.model'],
+                'test.test.unique_model_id.0ee1634138': ['model.test.model'],
             },
             'child_map': {
                 'model.test.model': [
                     'exposure.test.notebook_exposure',
                     'exposure.test.simple_exposure',
-                    'test.test.not_null_model_id',
-                    'test.test.test_nothing_model_',
-                    'test.test.unique_model_id',
+                    'test.test.not_null_model_id.580992bcfd',
+                    'test.test.test_nothing_model_.9c8389734f',
+                    'test.test.unique_model_id.0ee1634138',
                 ],
                 'model.test.second_model': ['exposure.test.notebook_exposure'],
                 'exposure.test.notebook_exposure': [],
@@ -1641,9 +1641,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                                    'snapshot.test.snapshot_seed'],
                 'snapshot.test.snapshot_seed': [],
                 'source.test.my_source.my_table': ['exposure.test.simple_exposure'],
-                'test.test.not_null_model_id': [],
-                'test.test.test_nothing_model_': [],
-                'test.test.unique_model_id': [],
+                'test.test.not_null_model_id.580992bcfd': [],
+                'test.test.test_nothing_model_.9c8389734f': [],
+                'test.test.unique_model_id.0ee1634138': [],
             },
             'docs': {
                 'dbt.__overview__': ANY,
@@ -2921,7 +2921,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             else:
                 self.assertIn(key, expected_manifest)  # sanity check
                 self.assertEqual(manifest[key], expected_manifest[key])
-
+                
     def _quote(self, value):
         quote_char = '`' if self.adapter_type == 'bigquery' else '"'
         return '{0}{1}{0}'.format(quote_char, value)
@@ -2972,7 +2972,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'status': 'success',
                 'message': None,
                 'execution_time': AnyFloat(),
-                'unique_id': 'test.test.not_null_model_id',
+                'unique_id': 'test.test.not_null_model_id.580992bcfd',
                 'adapter_response': ANY,
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2981,7 +2981,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'status': 'success',
                 'message': None,
                 'execution_time': AnyFloat(),
-                'unique_id': 'test.test.test_nothing_model_',
+                'unique_id': 'test.test.test_nothing_model_.9c8389734f',
                 'adapter_response': ANY,
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2990,7 +2990,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'status': 'success',
                 'message': None,
                 'execution_time': AnyFloat(),
-                'unique_id': 'test.test.unique_model_id',
+                'unique_id': 'test.test.unique_model_id.0ee1634138',
                 'adapter_response': ANY,
                 'thread_id': ANY,
                 'timing': [ANY, ANY],

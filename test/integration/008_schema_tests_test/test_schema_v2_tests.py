@@ -22,7 +22,6 @@ class TestSchemaTests(DBTIntegrationTest):
 
     def run_schema_validations(self):
         args = FakeArgs()
-
         test_task = TestTask(args, self.config)
         return test_task.run()
 
@@ -377,3 +376,35 @@ class TestSchemaTestContext(DBTIntegrationTest):
                 # was rendered correctly
                 self.assertRegex(result.node.compiled_sql, r'union all')
 
+
+class TestSchemaTestNameCollision(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "name_collision"
+    
+    def run_schema_tests(self):
+        args = FakeArgs()
+        test_task = TestTask(args, self.config)
+        return test_task.run()
+
+    @use_profile('postgres')
+    def test_postgres_collision_test_names_get_hash(self):
+        """The models should produce unique IDs with a has appended"""
+        results = self.run_dbt()
+        test_results = self.run_schema_tests()
+
+        # both models and both tests run
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len(test_results), 2)
+
+        # both tests have the same unique id except for the hash
+        expected_unique_ids = [
+            'test.test.not_null_base_extension_id.140fbfb43e',
+            'test.test.not_null_base_extension_id.d95dd6d353'
+            ]
+        self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
+        self.assertIn(test_results[1].node.unique_id, expected_unique_ids)
