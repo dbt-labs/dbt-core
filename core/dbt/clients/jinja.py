@@ -416,7 +416,6 @@ class TestExtension(jinja2.ext.Extension):
         test_name = parser.parse_assign_target(name_only=True).name
 
         parser.parse_signature(node)
-        node.defaults = []
         node.name = get_test_macro_name(test_name)
         node.body = parser.parse_statements(('name:endtest',),
                                             drop_needle=True)
