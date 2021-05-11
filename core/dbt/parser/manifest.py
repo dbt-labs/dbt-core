@@ -147,7 +147,7 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     _project_index: Dict[str, ProjectLoaderInfo] = field(default_factory=dict)
 
     def __post_serialize__(self, dct):
-        del dct['_project_index']
+        del dct["_project_index"]
         return dct
 
 
@@ -470,7 +470,7 @@ class ManifestLoader:
                 project_parsed_path_count += 1
 
             # Save timing info
-            project_loader_info.parsers.append(ParserInfo(
+            project_loader_info.parsers.append(
                 ParserInfo(
                     parser=parser.resource_type,
                     parsed_path_count=project_parsed_path_count,

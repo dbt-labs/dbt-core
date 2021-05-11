@@ -109,7 +109,7 @@ def error_context(
     )
 
 
-def yaml_from_file(
+def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
     source_file: SchemaSourceFile
 ) -> Dict[str, Any]:
     """If loading the yaml fails, raise an exception.
@@ -120,8 +120,7 @@ def yaml_from_file(
     except ValidationException as e:
         reason = validator_error_message(e)
         raise ParsingException(
-            'Error reading {}: {} - {}'
-            .format(source_file.project_name, path, reason)
+            "Error reading {}: {} - {}".format(source_file.project_name, path, reason)
         )
 
 
