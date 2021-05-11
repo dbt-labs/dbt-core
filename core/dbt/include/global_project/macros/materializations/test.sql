@@ -37,9 +37,17 @@
   
   {% endif %}
 
+  {% set limit = config.get('limit') %}
+
   {% call statement('main', fetch_result=True) -%}
-    {{ main_sql }}
-  {%- endcall %}
+
+    select count(*) as validation_errors
+    from (
+      {{ main_sql }}
+      {{ "limit " ~ limit if limit }}
+    ) _dbt_internal_test
+    
+  {% endcall %}
   
   {{ return({'relations': relations}) }}
 

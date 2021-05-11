@@ -93,14 +93,17 @@ class TestRunner(CompileRunner):
         failed_rows = self.execute_test(test, manifest)
 
         severity = test.config.severity.upper()
+        error_if = test.config.error_if
+        warn_if = test.config.warn_if
         thread_id = threading.current_thread().name
+
         status = None
-        if failed_rows == 0:
-            status = TestStatus.Pass
-        elif severity == 'ERROR' or flags.WARN_ERROR:
+        if severity == "ERROR" and eval(f"{failed_rows}{error_if}"):
             status = TestStatus.Fail
+        elif eval(f"{failed_rows}{warn_if}"):
+            status = TestStatus.Fail if flags.WARN_ERROR else TestStatus.Warn
         else:
-            status = TestStatus.Warn
+            status = TestStatus.Pass
 
         return RunResult(
             node=test,

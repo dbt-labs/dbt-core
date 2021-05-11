@@ -400,7 +400,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[0].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{{ ref('my_model') }}",
+                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
                 'values': ['red', 'blue', 'green'],
             }
         )
@@ -422,7 +422,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[1].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{{ ref('my_model') }}",
+                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
                 'arg': 100,
             },
         )
@@ -441,7 +441,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             tests[2].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{{ ref('my_model') }}",
+                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
             },
         )
 

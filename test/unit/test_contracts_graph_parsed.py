@@ -988,6 +988,8 @@ def basic_parsed_schema_test_dict():
             'vars': {},
             'severity': 'ERROR',
             'schema': 'dbt_test__audit',
+            'warn_if': '>0',
+            'error_if': '>0',
         },
         'docs': {'show': True},
         'columns': {},
@@ -1060,8 +1062,10 @@ def complex_parsed_schema_test_dict():
             'tags': [],
             'vars': {},
             'severity': 'WARN',
-            'extra_key': 'extra value',
             'schema': 'dbt_test__audit',
+            'warn_if': '>0',
+            'error_if': '>0',
+            'extra_key': 'extra value'
         },
         'docs': {'show': False},
         'columns': {
