@@ -354,6 +354,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
 
         HASH_LENGTH = 10
 
+        # N.B: This function builds a hashable string from any given test_metadata dict.
+        #   it's a bit fragile for general use (only supports str, int, float, List, Dict)
+        #   but it gets the job done here without the overhead of complete ser(de).
         def get_hashable_md(
             data: Union[str, int, float, List, Dict]
         ) -> Union[str, List, Dict]:
@@ -365,8 +368,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 return str(data)
 
         hashable_metadata = repr(get_hashable_md(test_metadata))
-        hash_list = filter(None, [name, hashable_metadata])
-        hash_string = ''.join(hash_list).encode('utf-8')
+        hash_string = ''.join([name, hashable_metadata]).encode('utf-8')
         test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
 
         dct = {
