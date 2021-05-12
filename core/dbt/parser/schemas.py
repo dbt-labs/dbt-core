@@ -4,9 +4,7 @@ import pathlib
 
 from abc import ABCMeta, abstractmethod
 from hashlib import md5
-from typing import (
-    Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
-)
+from typing import Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
 
