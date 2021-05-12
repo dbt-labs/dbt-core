@@ -225,9 +225,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         # N.B: This function builds a hashable string from any given test_metadata dict.
         #   it's a bit fragile for general use (only supports str, int, float, List, Dict)
         #   but it gets the job done here without the overhead of complete ser(de).
-        def get_hashable_md(
-            data: Union[str, int, float, List, Dict]
-        ) -> Union[str, List, Dict]:
+        def get_hashable_md(data: Union[str, int, float, List, Dict]) -> Union[str, List, Dict]:
             if type(data) == dict:
                 return {k: get_hashable_md(data[k]) for k in sorted(data.keys())}  # type: ignore
             elif type(data) == list:
@@ -252,7 +250,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             "original_file_path": target.original_file_path,
             "package_name": self.project.project_name,
             "raw_sql": raw_sql,
-            'unique_id': self.generate_unique_id(name, test_hash),
+            "unique_id": self.generate_unique_id(name, test_hash),
             "config": self.config_dict(config),
             "test_metadata": test_metadata,
             "column_name": column_name,
