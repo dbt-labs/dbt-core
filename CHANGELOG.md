@@ -8,6 +8,7 @@
 - Fix unique_id generation for generic tests so tests with the same FQN but different configuration will run. ([#3254](https://github.com/fishtown-analytics/dbt/issues/3254), [#3335](https://github.com/fishtown-analytics/dbt/issues/3335))
 - Update the snowflake adapter to only comment on a column if it exists when using the persist_docs config ([#3039](https://github.com/fishtown-analytics/dbt/issues/3039), [#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
+- Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
