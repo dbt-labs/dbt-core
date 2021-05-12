@@ -234,7 +234,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                 return str(data)
 
         hashable_metadata = repr(get_hashable_md(test_metadata))
-        hash_string = ''.join([name, hashable_metadata]).encode('utf-8')
+        hash_string = "".join([name, hashable_metadata]).encode("utf-8")
         test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
 
         dct = {
