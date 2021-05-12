@@ -772,10 +772,6 @@ def raise_duplicate_resource_name(node_1, node_2):
     elif node_1.resource_type == NodeType.Documentation:
         get_func = 'doc("{}")'.format(duped_name)
     elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
-        # TODO: This causes duplicate schema test errors to be ignored!!
-        # This PR should ensure this never gets called when the tests are actually different,
-        # but removing this breaks 50+ tests that currently have the exact same schema
-        # test defined more than once. :/
         return
     else:
         get_func = '"{}"'.format(duped_name)

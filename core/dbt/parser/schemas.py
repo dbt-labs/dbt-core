@@ -4,7 +4,7 @@ import os
 from abc import ABCMeta, abstractmethod
 from hashlib import md5
 from typing import (
-    Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type, Iterator
+    Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 )
 
 from dbt.dataclass_schema import ValidationError, dbtClassMixin
@@ -352,29 +352,22 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         column_name: Optional[str],
     ) -> ParsedSchemaTestNode:
 
-        # TODO: (PR input needed) Should this be applied to all tests?
-        # In theory we already check non-schema tests for "unique" name uniqueness in
-        # core/dbt/contracts/graph/manifest.py @ _check_duplicates()
-
         HASH_LENGTH = 10
 
-        if 'schema' in tags:
-            # TODO: (PR input needed) is this a complete set of uniquie-ifying data?
-            hash_data: Iterator = filter(
-                None,
-                [
-                    name,
-                    test_metadata.get('kwargs').get('model'),  # type: ignore
-                    column_name
-                ])
-            hash_string = ''.join(hash_data).encode('utf-8')
-            test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
-            unique_id = self.generate_unique_id(
-                name,
-                test_hash
-            )
-        else:
-            unique_id = self.generate_unique_id(name)
+        def get_hashable_md(
+            data: Union[str, int, float, List, Dict]
+        ) -> Union[str, List, Dict]:
+            if type(data) == dict:
+                return {k: get_hashable_md(data[k]) for k in sorted(data.keys())}  # type: ignore
+            elif type(data) == list:
+                return [get_hashable_md(val) for val in data]  # type: ignore
+            else:
+                return str(data)
+
+        hashable_metadata = repr(get_hashable_md(test_metadata))
+        hash_list = filter(None, [name, hashable_metadata])
+        hash_string = ''.join(hash_list).encode('utf-8')
+        test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
 
         dct = {
             'alias': name,
@@ -389,7 +382,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             'original_file_path': target.original_file_path,
             'package_name': self.project.project_name,
             'raw_sql': raw_sql,
-            'unique_id': unique_id,
+            'unique_id': self.generate_unique_id(name, test_hash),
             'config': self.config_dict(config),
             'test_metadata': test_metadata,
             'column_name': column_name,

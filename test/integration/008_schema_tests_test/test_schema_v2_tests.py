@@ -403,8 +403,8 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
 
         # both tests have the same unique id except for the hash
         expected_unique_ids = [
-            'test.test.not_null_base_extension_id.140fbfb43e',
-            'test.test.not_null_base_extension_id.d95dd6d353'
+            'test.test.not_null_base_extension_id.2dbb9627b6',
+            'test.test.not_null_base_extension_id.d70fc39f40'
             ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)
