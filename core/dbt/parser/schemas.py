@@ -97,6 +97,23 @@ def error_context(
     )
 
 
+def yaml_from_file(
+    source_file: SourceFile
+) -> Optional[Dict[str, Any]]:
+    """If loading the yaml fails, raise an exception.
+    """
+    path: str = source_file.path.relative_path
+    try:
+        return load_yaml_text(source_file.contents)
+    except ValidationException as e:
+        reason = validator_error_message(e)
+        raise CompilationException(
+            'Error reading {}: {} - {}'
+            .format(source_file.project_name, path, reason)
+        )
+    return None
+
+
 class ParserRef:
     """A helper object to hold parse-time references."""
 
@@ -218,22 +235,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             raise_invalid_schema_yml_version(
                 path, 'version {} is not supported'.format(version)
             )
-
-    def _yaml_from_file(
-        self, source_file: SourceFile
-    ) -> Optional[Dict[str, Any]]:
-        """If loading the yaml fails, raise an exception.
-        """
-        path: str = source_file.path.relative_path
-        try:
-            return load_yaml_text(source_file.contents)
-        except ValidationException as e:
-            reason = validator_error_message(e)
-            raise CompilationException(
-                'Error reading {}: {} - {}'
-                .format(self.project.project_name, path, reason)
-            )
-        return None
 
     def parse_column_tests(
         self, block: TestBlock, column: UnparsedColumn
@@ -626,8 +627,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         for node in parser.parse():
             self.manifest.add_exposure(block.file, node)
 
-    def parse_file(self, block: FileBlock) -> None:
-        dct = self._yaml_from_file(block.file)
+    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+        if not dct:
+            dct = yaml_from_file(block.file)
 
         # mark the file as seen, in Manifest.files
         self.manifest.get_file(block.file)
