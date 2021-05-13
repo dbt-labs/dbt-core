@@ -1103,7 +1103,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
-                    'build_path': Normalized('target/compiled/test/models/model.sql'),
+                    'compiled_path': Normalized('target/compiled/test/models/model.sql'),
+                    'build_path': None,
                     'name': 'model',
                     'root_path': self.test_root_realpath,
                     'relation_name': relation_name_node_format.format(
@@ -1179,7 +1180,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': unrendered_model_config,
                 },
                 'model.test.second_model': {
-                    'build_path': Normalized('target/compiled/test/models/second_model.sql'),
+                    'compiled_path': Normalized('target/compiled/test/models/second_model.sql'),
+                    'build_path': None,
                     'name': 'second_model',
                     'root_path': self.test_root_realpath,
                     'relation_name': relation_name_node_format.format(
@@ -1256,6 +1258,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': unrendered_second_config
                 },
                 'seed.test.seed': {
+                    'compiled_path': None,
                     'build_path': None,
                     'compiled': True,
                     'compiled_sql': '',
@@ -1335,7 +1338,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.test.not_null_model_id.8ab00aacfe': {
                     'alias': 'not_null_model_id',
-                    'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/not_null_model_id.sql'),
+                    'compiled_path': Normalized('target/compiled/test/models/schema.yml/schema_test/not_null_model_id.sql'),
+                    'build_path': None,
                     'column_name': 'id',
                     'columns': {},
                     'config': test_config,
@@ -1380,6 +1384,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'snapshot.test.snapshot_seed': {
                     'alias': 'snapshot_seed',
+                    'compiled_path': None,
                     'build_path': None,
                     'checksum': self._checksum_file(snapshot_path),
                     'columns': {},
@@ -1422,7 +1427,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.test.test_nothing_model_.596f819934': {
                     'alias': 'test_nothing_model_',
-                    'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/test_nothing_model_.sql'),
+                    'compiled_path': Normalized('target/compiled/test/models/schema.yml/schema_test/test_nothing_model_.sql'),
+                    'build_path': None,
                     'column_name': None,
                     'columns': {},
                     'config': test_config,
@@ -1466,7 +1472,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'test.test.unique_model_id.3de6fa785f': {
                     'alias': 'unique_model_id',
-                    'build_path': Normalized('target/compiled/test/models/schema.yml/schema_test/unique_model_id.sql'),
+                    'compiled_path': Normalized('target/compiled/test/models/schema.yml/schema_test/unique_model_id.sql'),
+                    'build_path': None,
                     'column_name': 'id',
                     'columns': {},
                     'config': test_config,
@@ -1670,7 +1677,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             'nodes': {
                 'model.test.ephemeral_copy': {
                     'alias': 'ephemeral_copy',
-                    'build_path': Normalized('target/compiled/test/ref_models/ephemeral_copy.sql'),
+                    'compiled_path': Normalized('target/compiled/test/ref_models/ephemeral_copy.sql'),
+                    'build_path': None,
                     'columns': {},
                     'config': self.rendered_model_config(materialized='ephemeral'),
                     'sources': [['my_source', 'my_table']],
@@ -1709,7 +1717,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.ephemeral_summary': {
                     'alias': 'ephemeral_summary',
-                    'build_path': Normalized('target/compiled/test/ref_models/ephemeral_summary.sql'),
+                    'compiled_path': Normalized('target/compiled/test/ref_models/ephemeral_summary.sql'),
+                    'build_path': None,
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -1769,7 +1778,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.view_summary': {
                     'alias': 'view_summary',
-                    'build_path': Normalized('target/compiled/test/ref_models/view_summary.sql'),
+                    'compiled_path': Normalized('target/compiled/test/ref_models/view_summary.sql'),
+                    'build_path': None,
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -1828,6 +1838,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
+                    'compiled_path': None,
                     'build_path': None,
                     'columns': {
                         'id': {
@@ -1904,6 +1915,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'snapshot.test.snapshot_seed': {
                     'alias': 'snapshot_seed',
+                    'compiled_path': None,
                     'build_path': None,
                     'checksum': self._checksum_file(snapshot_path),
                     'columns': {},
@@ -2187,7 +2199,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
                     'fqn': ['test', 'clustered'],
-                    'build_path': Normalized('target/compiled/test/bq_models/clustered.sql'),
+                    'compiled_path': Normalized('target/compiled/test/bq_models/clustered.sql'),
+                    'build_path': None,
                     'name': 'clustered',
                     'original_file_path': clustered_sql_path,
                     'package_name': 'test',
@@ -2264,7 +2277,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.multi_clustered': {
                     'alias': 'multi_clustered',
-                    'build_path': Normalized('target/compiled/test/bq_models/multi_clustered.sql'),
+                    'compiled_path': Normalized('target/compiled/test/bq_models/multi_clustered.sql'),
+                    'build_path': None,
                     'config': self.rendered_model_config(
                         cluster_by=['first_name', 'email'],
                         materialized='table',
@@ -2350,7 +2364,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.nested_view': {
                     'alias': 'nested_view',
-                    'build_path': Normalized('target/compiled/test/bq_models/nested_view.sql'),
+                    'compiled_path': Normalized('target/compiled/test/bq_models/nested_view.sql'),
+                    'build_path': None,
                     'config': self.rendered_model_config(),
                     'sources': [],
                     'depends_on': {
@@ -2429,7 +2444,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.nested_table': {
                     'alias': 'nested_table',
-                    'build_path': Normalized('target/compiled/test/bq_models/nested_table.sql'),
+                    'compiled_path': Normalized('target/compiled/test/bq_models/nested_table.sql'),
+                    'build_path': None,
                     'config': self.rendered_model_config(materialized='table'),
                     'sources': [],
                     'depends_on': {
@@ -2466,6 +2482,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': self.unrendered_model_config(materialized='table'),
                 },
                 'seed.test.seed': {
+                    'compiled_path': None,
                     'build_path': None,
                     'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
@@ -2546,6 +2563,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'snapshot.test.snapshot_seed': {
                     'alias': 'snapshot_seed',
+                    'compiled_path': None,
                     'build_path': None,
                     'checksum': self._checksum_file(snapshot_path),
                     'columns': {},
@@ -2657,7 +2675,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
-                    'build_path': Normalized('target/compiled/test/rs_models/model.sql'),
+                    'compiled_path': Normalized('target/compiled/test/rs_models/model.sql'),
+                    'build_path': None,
                     'name': 'model',
                     'root_path': self.test_root_realpath,
                     'relation_name': '"{0}"."{1}".model'.format(
@@ -2736,6 +2755,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unrendered_config': self.unrendered_model_config(bind=False, materialized='view'),
                 },
                 'seed.test.seed': {
+                    'compiled_path': None,
                     'build_path': None,
                     'patch_path': self.dir('seed/schema.yml'),
                     'path': 'seed.csv',
@@ -2816,6 +2836,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'snapshot.test.snapshot_seed': {
                     'alias': 'snapshot_seed',
+                    'compiled_path': None,
                     'build_path': None,
                     'checksum': self._checksum_file(snapshot_path),
                     'columns': {},
