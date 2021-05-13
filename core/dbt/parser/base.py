@@ -2,7 +2,7 @@ import abc
 import itertools
 import os
 from typing import (
-    List, Dict, Any, Generic, TypeVar
+    List, Dict, Any, Generic, Optional, TypeVar
 )
 
 from dbt.dataclass_schema import ValidationError
@@ -55,11 +55,25 @@ class BaseParser(Generic[FinalValue]):
     def resource_type(self) -> NodeType:
         pass
 
-    def generate_unique_id(self, resource_name: str) -> str:
-        """Returns a unique identifier for a resource"""
-        return "{}.{}.{}".format(self.resource_type,
-                                 self.project.project_name,
-                                 resource_name)
+    def generate_unique_id(
+        self,
+        resource_name: str,
+        hash: Optional[str] = None
+    ) -> str:
+        """Returns a unique identifier for a resource
+        An optional hash may be passed in to ensure uniqueness for edge cases"""
+
+        return '.'.join(
+            filter(
+                None,
+                [
+                    self.resource_type,
+                    self.project.project_name,
+                    resource_name,
+                    hash
+                ]
+            )
+        )
 
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):

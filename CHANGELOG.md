@@ -27,6 +27,7 @@ Contributors:
 - Ensure that schema test macros are properly processed ([#3229](https://github.com/fishtown-analytics/dbt/issues/3229), [#3272](https://github.com/fishtown-analytics/dbt/pull/3272))
 - Use absolute path for profiles directory instead of a path relative to the project directory. Note: If a user supplies a relative path to the profiles directory, the value of `args.profiles_dir` will still be absolute. ([#3133](https://github.com/fishtown-analytics/dbt/issues/3133))
 - Fix FQN selector unable to find models whose name contains dots ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246))
+- Fix unique_id generation for generic tests so tests with the same FQN but different configuration will run. ([#3254](https://github.com/fishtown-analytics/dbt/issues/3254)) 
 
 ### Features
 - Support commit hashes in dbt deps package revision ([#3268](https://github.com/fishtown-analytics/dbt/issues/3268), [#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
