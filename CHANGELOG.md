@@ -4,6 +4,7 @@
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 - Now generating `run_results.json` even when no nodes are selected ([#3313](https://github.com/fishtown-analytics/dbt/issues/3313), [#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
 - Stop clobbering default keyword arguments for jinja test definitions ([#3329](https://github.com/fishtown-analytics/dbt/issues/3329), [#3340](https://github.com/fishtown-analytics/dbt/pull/3340))
+- Update the snowflake adapter to only comment on a column if it exists when using the persist_docs config ([#3039](https://github.com/fishtown-analytics/dbt/issues/3039), [#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
@@ -12,6 +13,7 @@ Contributors:
 - [@TeddyCr](https://github.com/TeddyCr) ([#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
 - [@panasenco](https://github.com/panasenco) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
 - [@peiwangdb](https://github.com/peiwangdb) ([#3344](https://github.com/fishtown-analytics/dbt/pull/3344))
+- [@elikastelein](https://github.com/elikastelein) ([#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 

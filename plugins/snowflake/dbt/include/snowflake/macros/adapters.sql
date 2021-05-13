@@ -155,9 +155,8 @@
 
 
 {% macro snowflake__alter_column_comment(relation, column_dict) -%}
-    alter {{ relation.type }} {{ relation }} alter
     {% for column_name in column_dict %}
-        {{ adapter.quote(column_name) if column_dict[column_name]['quote'] else column_name }} COMMENT $${{ column_dict[column_name]['description'] | replace('$', '[$]') }}$$ {{ ',' if not loop.last else ';' }}
+        comment if exists on column {{ relation }}.{{ adapter.quote(column_name) if column_dict[column_name]['quote'] else column_name }} is $${{ column_dict[column_name]['description'] | replace('$', '[$]') }}$$;
     {% endfor %}
 {% endmacro %}
 
