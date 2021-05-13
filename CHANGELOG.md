@@ -11,6 +11,7 @@
 Contributors:
 - [@TeddyCr](https://github.com/TeddyCr) ([#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
 - [@panasenco](https://github.com/panasenco) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
+- [@peiwangdb](https://github.com/peiwangdb) ([#3344](https://github.com/fishtown-analytics/dbt/pull/3344))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 
