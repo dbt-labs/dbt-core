@@ -356,15 +356,26 @@ class TestSchemaTestContext(DBTIntegrationTest):
             "macro-paths": ["test-context-macros"],
         }
 
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'local': 'local_utils'
+                }
+            ]
+        }
+
     @use_profile('postgres')
     def test_postgres_test_context_tests(self):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
+        self.run_dbt(['deps'])
         results = self.run_dbt(strict=False)
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
 
         results = self.run_dbt(['test'], expect_pass=False)
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
         result0 = results[0]
         result1 = results[1]
         for result in results:

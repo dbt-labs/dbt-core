@@ -23,6 +23,7 @@ class MacroCalls(unittest.TestCase):
                     *                      
                     from {{ model }} )
                 {% endmacro %}""",
+            "{% macro test_my_test(model) %} select {{ dbt_utils.current_timestamp() }} {% endmacro %}"
         ] 
 
         self.possible_macro_calls = [
@@ -31,6 +32,7 @@ class MacroCalls(unittest.TestCase):
             ['get_snapshot_unique_id'],
             ['get_columns_in_query'],
             ['get_snapshot_unique_id'],
+            ['dbt_utils.current_timestamp'],
         ]
 
     def test_macro_calls(self):
