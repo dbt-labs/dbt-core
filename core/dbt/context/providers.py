@@ -570,9 +570,7 @@ class ModelConfiguredVar(Var):
 
 
 class ParseVar(ModelConfiguredVar):
-    def get_missing_var(self, var_name):
-        # in the parser, just always return None.
-        return None
+    pass
 
 
 class RuntimeVar(ModelConfiguredVar):
