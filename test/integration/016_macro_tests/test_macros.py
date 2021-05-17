@@ -64,13 +64,6 @@ class TestInvalidMacros(DBTIntegrationTest):
     def models(self):
         return "models"
 
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            "macro-paths": ["bad-macros"]
-        }
-
     @use_profile('postgres')
     def test_postgres_invalid_macro(self):
         with pytest.raises(RuntimeError):
@@ -86,6 +79,13 @@ class TestAdapterMacroNoDestination(DBTIntegrationTest):
     @property
     def models(self):
         return "fail-missing-macro-models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["no-default-macros"]
+        }
 
     @use_profile('postgres')
     def test_postgres_invalid_macro(self):

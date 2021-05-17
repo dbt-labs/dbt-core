@@ -117,7 +117,8 @@ class BaseDatabaseWrapper:
         return search_prefixes
 
     def dispatch(
-        self, macro_name: str, packages: Optional[List[str]] = None
+            self, macro_name: str, packages: Optional[List[str]] = None,
+            macro_namespace: Optional[str] = None,
     ) -> MacroGenerator:
         search_packages: List[Optional[str]]
 
@@ -131,15 +132,22 @@ class BaseDatabaseWrapper:
             )
             raise CompilationException(msg)
 
-        if packages is None:
+        namespace = packages if packages else macro_namespace
+
+        if namespace is None:
             search_packages = [None]
-        elif isinstance(packages, str):
-            raise CompilationException(
-                f'In adapter.dispatch, got a string packages argument '
-                f'("{packages}"), but packages should be None or a list.'
-            )
+        elif isinstance(namespace, str):
+            search_packages = self._adapter.config.get_macro_search_order(namespace)
+            if not search_packages and namespace in self._adapter.config.dependencies:
+                search_packages = [namespace]
+            if not search_packages:
+                raise CompilationException(
+                    f'In adapter.dispatch, got a string packages argument '
+                    f'("{packages}"), but packages should be None or a list.'
+                )
         else:
-            search_packages = packages
+            # Not a string and not None so must be a list
+            search_packages = namespace
 
         attempts = []
 

@@ -191,6 +191,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     on_run_start: Optional[List[str]] = field(default_factory=list_str)
     on_run_end: Optional[List[str]] = field(default_factory=list_str)
     require_dbt_version: Optional[Union[List[str], str]] = None
+    dispatch: List[Dict[str, Any]] = field(default_factory=list)
     models: Dict[str, Any] = field(default_factory=dict)
     seeds: Dict[str, Any] = field(default_factory=dict)
     snapshots: Dict[str, Any] = field(default_factory=dict)
@@ -213,6 +214,13 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
             raise ValidationError(
                 f"Invalid project name: {data['name']} is a reserved word"
             )
+        # validate dispatch config
+        if 'dispatch' in data and data['dispatch']:
+            entries = data['dispatch']
+            for entry in entries:
+                if ('macro_namespace' not in entry or 'search_order' not in entry or
+                        not isinstance(entry['search_order'], list)):
+                    raise ValidationError(f"Invalid project dispatch config: {entry}")
 
 
 @dataclass

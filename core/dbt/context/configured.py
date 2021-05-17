@@ -75,8 +75,26 @@ class SchemaYamlContext(ConfiguredContext):
         )
 
 
+class MacroResolvingContext(ConfiguredContext):
+    def __init__(self, config):
+        super().__init__(config)
+
+    @contextproperty
+    def var(self) -> ConfiguredVar:
+        return ConfiguredVar(
+            self._ctx, self.config, self.config.project_name
+        )
+
+
 def generate_schema_yml(
     config: AdapterRequiredConfig, project_name: str
 ) -> Dict[str, Any]:
     ctx = SchemaYamlContext(config, project_name)
+    return ctx.to_dict()
+
+
+def generate_macro_context(
+    config: AdapterRequiredConfig,
+) -> Dict[str, Any]:
+    ctx = MacroResolvingContext(config)
     return ctx.to_dict()
