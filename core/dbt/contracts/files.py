@@ -1,7 +1,7 @@
 import hashlib
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
@@ -144,6 +144,8 @@ class SourceFile(dbtClassMixin):
     macro_patches: List[MacroKey] = field(default_factory=list)
     # any source patches in this file. The entries are package, name pairs
     source_patches: List[SourceKey] = field(default_factory=list)
+    # temporary - for schema source files only
+    dict_from_yaml: Optional[Dict[str, Any]] = None
 
     @property
     def search_key(self) -> Optional[str]:

@@ -62,7 +62,7 @@ jobs:
 - job: SnowflakeIntegrationTest
   pool:
     vmImage: 'vs2017-win2016'
-  dependsOn: PostgresIntegrationTest
+  dependsOn: UnitTest
   condition: succeeded()
   steps:
   - task: UsePythonVersion@0
@@ -87,7 +87,7 @@ jobs:
 - job: BigQueryIntegrationTest
   pool:
     vmImage: 'vs2017-win2016'
-  dependsOn: PostgresIntegrationTest
+  dependsOn: UnitTest
   condition: succeeded()
   steps:
   - task: UsePythonVersion@0
@@ -104,7 +104,7 @@ jobs:
 - job: RedshiftIntegrationTest
   pool:
     vmImage: 'vs2017-win2016'
-  dependsOn: PostgresIntegrationTest
+  dependsOn: UnitTest
   condition: succeeded()
   steps:
   - task: UsePythonVersion@0

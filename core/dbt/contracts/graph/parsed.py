@@ -179,6 +179,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     meta: Dict[str, Any] = field(default_factory=dict)
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
+    compiled_path: Optional[str] = None
     build_path: Optional[str] = None
     deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)

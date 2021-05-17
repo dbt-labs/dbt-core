@@ -393,7 +393,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[0].package_name, 'snowplow')
         self.assertTrue(tests[0].name.startswith('accepted_values_'))
         self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
-        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name])
+        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '468aa12dc7'])
         self.assertEqual(tests[0].test_metadata.name, 'accepted_values')
         self.assertIsNone(tests[0].test_metadata.namespace)
         self.assertEqual(
@@ -415,7 +415,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
         self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
         self.assertEqual(tests[1].package_name, 'snowplow')
-        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name])
+        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, 'b1daa30e01'])
         self.assertEqual(tests[1].test_metadata.name, 'test_case')
         self.assertEqual(tests[1].test_metadata.namespace, 'foreign_package')
         self.assertEqual(
@@ -434,7 +434,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[2].package_name, 'snowplow')
         self.assertTrue(tests[2].name.startswith('not_null_'))
         self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
-        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name])
+        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, 'bb12aa4687'])
         self.assertEqual(tests[2].test_metadata.name, 'not_null')
         self.assertIsNone(tests[2].test_metadata.namespace)
         self.assertEqual(

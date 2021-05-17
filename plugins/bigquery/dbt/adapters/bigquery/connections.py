@@ -309,7 +309,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        if self.profile.query_comment.job_label:
+        if self.profile.query_comment and self.profile.query_comment.job_label:
             query_comment = self.query_header.comment.query_comment
             labels = self._labels_from_query_comment(query_comment)
         else:
