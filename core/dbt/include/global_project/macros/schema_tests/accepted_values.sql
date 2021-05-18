@@ -15,7 +15,7 @@ select
 from all_values
 where {{ column_name }} not in (
     {% for value in values -%}
-        {% if quote_values -%}
+        {% if quote -%}
         '{{ value }}'
         {%- else -%}
         {{ value }}
