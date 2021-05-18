@@ -1,8 +1,4 @@
-
-{% macro default__test_accepted_values(model, values) %}
-
-{% set column_name = kwargs.get('column_name', kwargs.get('field')) %}
-{% set quote_values = kwargs.get('quote', True) %}
+{% macro default__test_accepted_values(model, column_name, values, quote=True) %}
 
 with all_values as (
 
@@ -13,30 +9,25 @@ with all_values as (
 
 ),
 
-validation_errors as (
+select
+    value_field
 
-    select
-        value_field
-
-    from all_values
-    where value_field not in (
-        {% for value in values -%}
-            {% if quote_values -%}
-            '{{ value }}'
-            {%- else -%}
-            {{ value }}
-            {%- endif -%}
-            {%- if not loop.last -%},{%- endif %}
-        {%- endfor %}
-    )
+from all_values
+where value_field not in (
+    {% for value in values -%}
+        {% if quote_values -%}
+        '{{ value }}'
+        {%- else -%}
+        {{ value }}
+        {%- endif -%}
+        {%- if not loop.last -%},{%- endif %}
+    {%- endfor %}
 )
-
-select *
-from validation_errors
 
 {% endmacro %}
 
-{% test accepted_values(model, values) %}
+
+{% test accepted_values(model, column_name, values, quote=True) %}
     {% set macro = adapter.dispatch('test_accepted_values') %}
-    {{ macro(model, values, **kwargs) }}
+    {{ macro(model, column_name, values, quote) }}
 {% endtest %}
