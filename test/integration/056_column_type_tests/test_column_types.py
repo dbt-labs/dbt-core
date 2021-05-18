@@ -1,3 +1,4 @@
+import pytest
 from test.integration.base import DBTIntegrationTest, use_profile
 
 
@@ -19,7 +20,6 @@ class TestPostgresColumnTypes(TestColumnTypes):
     @use_profile('postgres')
     def test_postgres_column_types(self):
         self.run_and_test()
-
 
 class TestRedshiftColumnTypes(TestColumnTypes):
     @property

@@ -72,42 +72,78 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
         querier.is_result(querier.async_wait(tok1))
 
 
+@pytest.mark.parametrize(
+    "packages, bad_packages",
+    # from dbt hub
+    [(
+        [{
+            'package': 'fishtown-analytics/dbt_utils',
+            'version': '0.5.0',
+        }],
+        # wrong package name
+        [{
+            'package': 'fishtown-analytics/dbt_util',
+            'version': '0.5.0',
+        }],
+    ),
+    # from git release/tag/branch
+    (
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': '0.5.0',
+        }],
+        # if you use a bad URL, git thinks it's a private repo and prompts for auth
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': 'not-a-real-revision',
+        }],
+    ),
+    # from git commit
+    (
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': 'b736cf6acdbf80d2de69b511a51c8d7fe214ee79',
+        }],
+        # don't use short commits
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': 'b736cf6',
+        }],
+    ),
+    # from git release and subdirectory
+    (
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-labs-experimental-features.git',
+            'revision': '0.0.1',
+            'subdirectory': 'materialized-views',
+        }],
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-labs-experimental-features.git',
+            'revision': '0.0.1',
+            'subdirectory': 'path/to/nonexistent/dir',
+        }],
+    ),
+    # from git commit and subdirectory
+    (
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': 'f4f84e9110db26aba22f756abbae9f1f8dbb15da',
+            'subdirectory': 'dbt_projects/dbt_utils',
+        }],
+        [{
+            'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+            'revision': 'f4f84e9110db26aba22f756abbae9f1f8dbb15da',
+            'subdirectory': 'path/to/nonexistent/dir',
+        }],
+    )],
+    ids=[
+        "from dbt hub",
+        "from git release/tag/branch",
+        "from git commit",
+        "from git release and subdirectory",
+        "from git commit and subdirectory",
+    ],
+)
 @pytest.mark.supported('postgres')
-def test_rpc_deps_packages(project_root, profiles_root, dbt_profile, unique_schema):
-    packages = [{
-        'package': 'fishtown-analytics/dbt_utils',
-        'version': '0.5.0',
-    }]
-    bad_packages = [{
-        'package': 'fishtown-analytics/dbt_util',
-        'version': '0.5.0',
-    }]
-    deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
-
-
-@pytest.mark.supported('postgres')
-def test_rpc_deps_git(project_root, profiles_root, dbt_profile, unique_schema):
-    packages = [{
-        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-        'revision': '0.5.0'
-    }]
-    # if you use a bad URL, git thinks it's a private repo and prompts for auth
-    bad_packages = [{
-        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-        'revision': 'not-a-real-revision'
-    }]
-    deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
-
-
-@pytest.mark.supported('postgres')
-def test_rpc_deps_git_commit(project_root, profiles_root, dbt_profile, unique_schema):
-    packages = [{
-        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-        'revision': 'b736cf6acdbf80d2de69b511a51c8d7fe214ee79'
-    }]
-    # don't use short commits
-    bad_packages = [{
-        'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
-        'revision': 'b736cf6'
-    }]
+def test_rpc_deps_packages(project_root, profiles_root, dbt_profile, unique_schema, packages, bad_packages):
     deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)

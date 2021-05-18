@@ -286,3 +286,29 @@ class TestSimpleSeedWithUnicode(DBTIntegrationTest):
     def test_postgres_simple_seed(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
+
+
+class TestSimpleSeedWithDots(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_seed_005"
+
+    @property
+    def models(self):
+        return "models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "data-paths": ['data-dottedseed'],
+            'seeds': {
+                'quote_columns': False,
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_simple_seed(self):
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)

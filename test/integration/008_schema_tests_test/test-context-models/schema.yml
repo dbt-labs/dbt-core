@@ -6,3 +6,6 @@ models:
       tests:
         - type_one
         - type_two
+    - name: model_c
+      tests:
+        - my_test

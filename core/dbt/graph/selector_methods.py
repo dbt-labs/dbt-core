@@ -49,25 +49,23 @@ class MethodName(StrEnum):
     Exposure = 'exposure'
 
 
-def is_selected_node(real_node, node_selector):
-    for i, selector_part in enumerate(node_selector):
+def is_selected_node(fqn: List[str], node_selector: str):
 
-        is_last = (i == len(node_selector) - 1)
+    # If qualified_name exactly matches model name (fqn's leaf), return True
+    if fqn[-1] == node_selector:
+        return True
+    # Flatten node parts. Dots in model names act as namespace separators
+    flat_fqn = [item for segment in fqn for item in segment.split('.')]
+    # Selector components cannot be more than fqn's
+    if len(flat_fqn) < len(node_selector.split('.')):
+        return False
 
+    for i, selector_part in enumerate(node_selector.split('.')):
         # if we hit a GLOB, then this node is selected
         if selector_part == SELECTOR_GLOB:
             return True
-
-        # match package.node_name or package.dir.node_name
-        elif is_last and selector_part == real_node[-1]:
-            return True
-
-        elif len(real_node) <= i:
-            return False
-
-        elif real_node[i] == selector_part:
+        elif flat_fqn[i] == selector_part:
             continue
-
         else:
             return False
 
@@ -154,31 +152,20 @@ class SelectorMethod(metaclass=abc.ABCMeta):
 
 
 class QualifiedNameSelectorMethod(SelectorMethod):
-    def node_is_match(
-        self,
-        qualified_name: List[str],
-        package_names: Set[str],
-        fqn: List[str],
-    ) -> bool:
-        """Determine if a qualfied name matches an fqn, given the set of package
+    def node_is_match(self, qualified_name: str, fqn: List[str]) -> bool:
+        """Determine if a qualified name matches an fqn for all package
         names in the graph.
 
-        :param List[str] qualified_name: The components of the selector or node
-            name, split on '.'.
-        :param Set[str] package_names: The set of pacakge names in the graph.
+        :param str qualified_name: The qualified name to match the nodes with
         :param List[str] fqn: The node's fully qualified name in the graph.
         """
-        if len(qualified_name) == 1 and fqn[-1] == qualified_name[0]:
+        unscoped_fqn = fqn[1:]
+
+        if is_selected_node(fqn, qualified_name):
             return True
-
-        if qualified_name[0] in package_names:
-            if is_selected_node(fqn, qualified_name):
-                return True
-
-        for package_name in package_names:
-            local_qualified_node_name = [package_name] + qualified_name
-            if is_selected_node(fqn, local_qualified_node_name):
-                return True
+        # Match nodes across different packages
+        elif is_selected_node(unscoped_fqn, qualified_name):
+            return True
 
         return False
 
@@ -189,15 +176,9 @@ class QualifiedNameSelectorMethod(SelectorMethod):
 
         :param str selector: The selector or node name
         """
-        qualified_name = selector.split(".")
         parsed_nodes = list(self.parsed_nodes(included_nodes))
-        package_names = {n.package_name for _, n in parsed_nodes}
         for node, real_node in parsed_nodes:
-            if self.node_is_match(
-                qualified_name,
-                package_names,
-                real_node.fqn,
-            ):
+            if self.node_is_match(selector, real_node.fqn):
                 yield node
 
 

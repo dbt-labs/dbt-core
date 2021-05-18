@@ -1051,7 +1051,7 @@ def parse_args(args, cls=DBTArgumentParser):
     parsed = p.parse_args(args)
 
     if hasattr(parsed, 'profiles_dir'):
-        parsed.profiles_dir = os.path.expanduser(parsed.profiles_dir)
+        parsed.profiles_dir = os.path.abspath(parsed.profiles_dir)
 
     if getattr(parsed, 'project_dir', None) is not None:
         expanded_user = os.path.expanduser(parsed.project_dir)

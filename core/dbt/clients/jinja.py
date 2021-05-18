@@ -416,7 +416,6 @@ class TestExtension(jinja2.ext.Extension):
         test_name = parser.parse_assign_target(name_only=True).name
 
         parser.parse_signature(node)
-        node.defaults = []
         node.name = get_test_macro_name(test_name)
         node.body = parser.parse_statements(('name:endtest',),
                                             drop_needle=True)
@@ -670,25 +669,42 @@ def statically_extract_macro_calls(string, ctx):
     env = get_environment(None, capture_macros=True)
     parsed = env.parse(string)
 
-    standard_calls = {
-        'source': [],
-        'ref': [],
-        'config': [],
-    }
-
+    standard_calls = ['source', 'ref', 'config']
     possible_macro_calls = []
     for func_call in parsed.find_all(jinja2.nodes.Call):
         if hasattr(func_call, 'node') and hasattr(func_call.node, 'name'):
             func_name = func_call.node.name
         else:
-            # This is a kludge to capture an adapter.dispatch('<macro_name>') call.
-            # Call(node=Getattr(
-            #     node=Name(name='adapter', ctx='load'), attr='dispatch', ctx='load'),
-            #     args=[Const(value='get_snapshot_unique_id')], kwargs=[],
-            #     dyn_args=None, dyn_kwargs=None)
-            if (hasattr(func_call, 'node') and hasattr(func_call.node, 'attr') and
-                    func_call.node.attr == 'dispatch'):
-                func_name = func_call.args[0].value
+            # func_call for dbt_utils.current_timestamp macro
+            # Call(
+            #   node=Getattr(
+            #     node=Name(
+            #       name='dbt_utils',
+            #       ctx='load'
+            #     ),
+            #     attr='current_timestamp',
+            #     ctx='load
+            #   ),
+            #   args=[],
+            #   kwargs=[],
+            #   dyn_args=None,
+            #   dyn_kwargs=None
+            # )
+            if (hasattr(func_call, 'node') and
+                    hasattr(func_call.node, 'node') and
+                    type(func_call.node.node).__name__ == 'Name' and
+                    hasattr(func_call.node, 'attr')):
+                package_name = func_call.node.node.name
+                macro_name = func_call.node.attr
+                if package_name == 'adapter':
+                    if macro_name == 'dispatch':
+                        # This captures an adapter.dispatch('<macro_name>') call.
+                        func_name = func_call.args[0].value
+                    else:
+                        # This skips calls such as adapter.parse_index
+                        continue
+                else:
+                    func_name = f'{package_name}.{macro_name}'
             else:
                 continue
         if func_name in standard_calls:

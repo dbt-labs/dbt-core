@@ -77,7 +77,7 @@ class ParserInfo(dbtClassMixin):
 class ProjectLoaderInfo(dbtClassMixin):
     project_name: str
     elapsed: float
-    parsers: List[ParserInfo]
+    parsers: List[ParserInfo] = field(default_factory=list)
     path_count: int = 0
 
 
@@ -93,6 +93,11 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     process_manifest_elapsed: Optional[float] = None
     load_all_elapsed: Optional[float] = None
     projects: List[ProjectLoaderInfo] = field(default_factory=list)
+    _project_index: Dict[str, ProjectLoaderInfo] = field(default_factory=dict)
+
+    def __post_serialize__(self, dct):
+        del dct['_project_index']
+        return dct
 
 
 # The ManifestLoader loads the manifest. The standard way to use the
@@ -118,12 +123,12 @@ class ManifestLoader:
         else:
             self.macro_hook = macro_hook
 
-        self._perf_info = ManifestLoaderInfo(
-            is_partial_parse_enabled=self._partial_parse_enabled()
-        )
         # State check determines whether the old_manifest and the current
         # manifest match well enough to do partial parsing
         self.manifest.state_check = self.build_manifest_state_check()
+
+        self._perf_info = self.build_perf_info()
+
         # This is a saved manifest from a previous run that's used for partial parsing
         self.old_manifest: Optional[Manifest] = self.read_saved_manifest()
 
@@ -206,29 +211,35 @@ class ManifestLoader:
         # to set the 'depends_on' information from static rendering.
         self._perf_info.load_macros_elapsed = (time.perf_counter() - start_load_macros)
 
-        # Now that the macros are parsed, parse the rest of the files.
-        # This is currently done on a per project basis,
-        # but in the future we may change that
-        start_parse_projects = time.perf_counter()
+        # Load the rest of the files except for schema yaml files
+        parser_types: List[Type[Parser]] = [
+            ModelParser, SnapshotParser, AnalysisParser, DataTestParser,
+            SeedParser, DocumentationParser, HookParser]
         for project in self.all_projects.values():
-            self.parse_project(project, project_parser_files[project.project_name])
-        self._perf_info.parse_project_elapsed = (time.perf_counter() - start_parse_projects)
+            if project.project_name not in project_parser_files:
+                continue
+            self.parse_project(project, project_parser_files[project.project_name], parser_types)
+
+        # Load yaml files
+        parser_types = [SchemaParser]
+        for project in self.all_projects.values():
+            if project.project_name not in project_parser_files:
+                continue
+            self.parse_project(project, project_parser_files[project.project_name], parser_types)
 
     # Parse every file in this project, except macros (already done)
     def parse_project(
         self,
         project: Project,
-        parser_files
+        parser_files,
+        parser_types: List[Type[Parser]],
     ) -> None:
 
-        project_parser_info: List[ParserInfo] = []
+        project_loader_info = self._perf_info._project_index[project.project_name]
         start_timer = time.perf_counter()
         total_path_count = 0
 
-        # Loop through parsers with loaded files. Note: SchemaParser must be last
-        parser_types: List[Type[Parser]] = [
-            ModelParser, SnapshotParser, AnalysisParser, DataTestParser,
-            SeedParser, DocumentationParser, SchemaParser]
+        # Loop through parsers with loaded files.
         for parser_cls in parser_types:
             parser_name = parser_cls.__name__
             # No point in creating a parser if we don't have files for it
@@ -241,13 +252,17 @@ class ManifestLoader:
 
             # Parse the project files for this parser
             parser: Parser = parser_cls(project, self.manifest, self.root_project)
-            for search_key in parser_files[parser_name]:
-                block = FileBlock(self.manifest.files[search_key])
-                self.parse_with_cache(block, parser)
+            for file_id in parser_files[parser_name]:
+                block = FileBlock(self.manifest.files[file_id])
+                if isinstance(parser, SchemaParser):
+                    dct = block.file.dict_from_yaml
+                    parser.parse_file(block, dct=dct)
+                else:
+                    parser.parse_file(block)
                 parser_path_count = parser_path_count + 1
 
             # Save timing info
-            project_parser_info.append(ParserInfo(
+            project_loader_info.parsers.append(ParserInfo(
                 parser=parser.resource_type,
                 path_count=parser_path_count,
                 elapsed=time.perf_counter() - parser_start_timer
@@ -256,20 +271,18 @@ class ManifestLoader:
 
         # HookParser doesn't run from loaded files, just dbt_project.yml,
         # so do separately
-        hook_parser = HookParser(project, self.manifest, self.root_project)
-        path = hook_parser.get_path()
-        file_block = FileBlock(load_source_file(path, ParseFileType.Hook, project.project_name))
-        self.parse_with_cache(file_block, hook_parser)
+        if HookParser in parser_types:
+            hook_parser = HookParser(project, self.manifest, self.root_project)
+            path = hook_parser.get_path()
+            file_block = FileBlock(
+                load_source_file(path, ParseFileType.Hook, project.project_name)
+            )
+            hook_parser.parse_file(file_block)
 
         # Store the performance info
         elapsed = time.perf_counter() - start_timer
-        project_info = ProjectLoaderInfo(
-            project_name=project.project_name,
-            path_count=total_path_count,
-            elapsed=elapsed,
-            parsers=project_parser_info
-        )
-        self._perf_info.projects.append(project_info)
+        project_loader_info.path_count = project_loader_info.path_count + total_path_count
+        project_loader_info.elapsed = project_loader_info.elapsed + elapsed
         self._perf_info.path_count = (
             self._perf_info.path_count + total_path_count
         )
@@ -293,7 +306,10 @@ class ManifestLoader:
                 # it ought to be an adapter prefix (postgres_) or default_
                 if macro_name == macro.name:
                     continue
-                dep_macro_id = macro_resolver.get_macro_id(macro.package_name, macro_name)
+                package_name = macro.package_name
+                if '.' in macro_name:
+                    package_name, macro_name = macro_name.split('.')
+                dep_macro_id = macro_resolver.get_macro_id(package_name, macro_name)
                 if dep_macro_id:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
@@ -466,6 +482,20 @@ class ManifestLoader:
         )
 
         return self.manifest
+
+    def build_perf_info(self):
+        mli = ManifestLoaderInfo(
+            is_partial_parse_enabled=self._partial_parse_enabled()
+        )
+        for project in self.all_projects.values():
+            project_info = ProjectLoaderInfo(
+                project_name=project.project_name,
+                path_count=0,
+                elapsed=0,
+            )
+            mli.projects.append(project_info)
+            mli._project_index[project.project_name] = project_info
+        return mli
 
     # TODO: this should be calculated per-file based on the vars() calls made in
     # parsing, so changing one var doesn't invalidate everything. also there should

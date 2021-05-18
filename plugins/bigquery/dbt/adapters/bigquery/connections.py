@@ -114,15 +114,17 @@ class BigQueryCredentials(Credentials):
         return ('method', 'database', 'schema', 'location', 'priority',
                 'timeout_seconds', 'maximum_bytes_billed')
 
-    def __post_init__(self):
+    @classmethod
+    def __pre_deserialize__(cls, d: Dict[Any, Any]) -> Dict[Any, Any]:
         # We need to inject the correct value of the database (aka project) at
         # this stage, ref
         # https://github.com/fishtown-analytics/dbt/pull/2908#discussion_r532927436.
 
         # `database` is an alias of `project` in BigQuery
-        if self.database is None:
+        if 'database' not in d:
             _, database = get_bigquery_defaults()
-            self.database = database
+            d['database'] = database
+        return d
 
 
 class BigQueryConnectionManager(BaseConnectionManager):
@@ -307,7 +309,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         logger.debug('On {}: {}', conn.name, sql)
 
-        if self.profile.query_comment.job_label:
+        if self.profile.query_comment and self.profile.query_comment.job_label:
             query_comment = self.query_header.comment.query_comment
             labels = self._labels_from_query_comment(query_comment)
         else:

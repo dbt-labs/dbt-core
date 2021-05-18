@@ -458,11 +458,46 @@ def ext_source_id_unique(ext_source):
 def view_test_nothing(view_model):
     return make_data_test('pkg', 'view_test_nothing', 'select * from {{ ref("view_model") }} limit 0', refs=[view_model])
 
+# Support dots as namespace separators
+@pytest.fixture
+def namespaced_seed():
+    return make_seed(
+        'pkg',
+        'mynamespace.seed'
+    )
 
 @pytest.fixture
-def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source, ext_model, union_model, ext_source_2, ext_source_other, ext_source_other_2, table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, view_test_nothing):
+def namespace_model(source):
+    return make_model(
+        'pkg',
+        'mynamespace.ephemeral_model',
+        'select * from {{ source("raw", "seed") }}',
+        config_kwargs={'materialized': 'ephemeral'},
+        sources=[source],
+    )
+
+@pytest.fixture
+def namespaced_union_model(seed, ext_source):
+    return make_model(
+        'pkg',
+        'mynamespace.union_model',
+        'select * from {{ ref("mynamespace.seed") }} union all select * from {{ ref("mynamespace.ephemeral_model") }}',
+        config_kwargs={'materialized': 'table'},
+        refs=[seed],
+        sources=[ext_source],
+        fqn_extras=['unions'],
+        path='subdirectory/union_model.sql',
+        tags=['unions'],
+    )
+
+
+@pytest.fixture
+def manifest(seed, source, ephemeral_model, view_model, table_model, ext_source, ext_model, union_model, ext_source_2, 
+    ext_source_other, ext_source_other_2, table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, 
+    view_test_nothing, namespaced_seed, namespace_model, namespaced_union_model):
     nodes = [seed, ephemeral_model, view_model, table_model, union_model, ext_model,
-             table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, view_test_nothing]
+             table_id_unique, table_id_not_null, view_id_unique, ext_source_id_unique, view_test_nothing,
+             namespaced_seed, namespace_model, namespaced_union_model]
     sources = [source, ext_source, ext_source_2,
                ext_source_other, ext_source_other_2]
     manifest = Manifest(
@@ -492,11 +527,12 @@ def test_select_fqn(manifest):
     assert method.arguments == []
 
     assert search_manifest_using_method(
-        manifest, method, 'pkg.unions') == {'union_model'}
+        manifest, method, 'pkg.unions') == {'union_model', 'mynamespace.union_model'}
     assert not search_manifest_using_method(manifest, method, 'ext.unions')
     # sources don't show up, because selection pretends they have no FQN. Should it?
     assert search_manifest_using_method(manifest, method, 'pkg') == {
-        'union_model', 'table_model', 'view_model', 'ephemeral_model', 'seed'}
+        'union_model', 'table_model', 'view_model', 'ephemeral_model', 'seed',
+        'mynamespace.union_model', 'mynamespace.ephemeral_model', 'mynamespace.seed'}
     assert search_manifest_using_method(
         manifest, method, 'ext') == {'ext_model'}
 
@@ -573,7 +609,9 @@ def test_select_package(manifest):
     assert method.arguments == []
 
     assert search_manifest_using_method(manifest, method, 'pkg') == {'union_model', 'table_model', 'view_model', 'ephemeral_model',
-                                                                     'seed', 'raw.seed', 'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'view_test_nothing'}
+                                                                     'seed', 'raw.seed', 'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'view_test_nothing',
+                                                                     'mynamespace.seed', 'mynamespace.ephemeral_model', 'mynamespace.union_model',
+                                                                     }
     assert search_manifest_using_method(manifest, method, 'ext') == {
         'ext_model', 'ext_raw.ext_source', 'ext_raw.ext_source_2', 'raw.ext_source', 'raw.ext_source_2', 'unique_ext_raw_ext_source_id'}
 
@@ -589,7 +627,7 @@ def test_select_config_materialized(manifest):
     assert search_manifest_using_method(manifest, method, 'view') == {
         'view_model', 'ext_model'}
     assert search_manifest_using_method(manifest, method, 'table') == {
-        'table_model', 'union_model'}
+        'table_model', 'union_model', 'mynamespace.union_model'}
 
 
 def test_select_test_name(manifest):

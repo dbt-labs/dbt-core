@@ -47,6 +47,8 @@
 
   {{ adapter.rename_relation(intermediate_relation, target_relation) }}
 
+  {% do create_indexes(target_relation) %}
+
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   {% do persist_docs(target_relation, model) %}
