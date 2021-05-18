@@ -7,7 +7,7 @@ with all_values as (
 
     from {{ model }}
 
-),
+)
 
 select
     value_field
