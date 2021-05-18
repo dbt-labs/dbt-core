@@ -10,10 +10,10 @@ with all_values as (
 )
 
 select
-    value_field
+    {{ column_name }} as value_field
 
 from all_values
-where value_field not in (
+where {{ column_name }} not in (
     {% for value in values -%}
         {% if quote_values -%}
         '{{ value }}'
