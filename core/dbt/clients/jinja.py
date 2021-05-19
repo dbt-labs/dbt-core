@@ -29,8 +29,12 @@ from dbt.contracts.graph.compiled import CompiledGenericTestNode
 from dbt.contracts.graph.parsed import ParsedGenericTestNode
 from dbt.exceptions import (
     InternalException,
-    invalid_materialization_argument, MacroReturn, JinjaRenderingException,
-    UndefinedMacroException
+    raise_compiler_error,
+    CompilationException,
+    invalid_materialization_argument,
+    MacroReturn,
+    JinjaRenderingException,
+    UndefinedMacroException,
 )
 from dbt import flags
 

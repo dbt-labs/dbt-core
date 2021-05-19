@@ -339,11 +339,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             count_packages_installed = len(tuple(self._get_project_directories()))
             if count_packages_specified > count_packages_installed:
                 raise_compiler_error(
-                    f'dbt found {count_packages_specified} package(s) '
-                    f'specified in packages.yml, but only '
-                    f'{count_packages_installed} package(s) installed '
+                    f"dbt found {count_packages_specified} package(s) "
+                    f"specified in packages.yml, but only "
+                    f"{count_packages_installed} package(s) installed "
                     f'in {self.packages_install_path}. Run "dbt deps" to '
-                    f'install package dependencies.'
+                    f"install package dependencies."
                 )
             project_paths = itertools.chain(
                 internal_packages,
