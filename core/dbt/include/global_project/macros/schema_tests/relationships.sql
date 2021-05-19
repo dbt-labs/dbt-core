@@ -1,24 +1,21 @@
 
-{% macro default__test_relationships(model, to, field) %}
+{% macro default__test_relationships(model, column_name, to, field) %}
 
-{% set column_name = kwargs.get('column_name', kwargs.get('from')) %}
+select
+    child.{{ column_name }}
 
+from {{ model }} as child
 
-select *
-from (
-    select {{ column_name }} as id from {{ model }}
-) as child
-left join (
-    select {{ field }} as id from {{ to }}
-) as parent on parent.id = child.id
-where child.id is not null
-  and parent.id is null
+left join {{ to }} as parent
+    on child.{{ column_name }} = parent.{{ field }}
+
+where child.{{ column_name }} is not null
+  and parent.{{ field }} is null
 
 {% endmacro %}
 
 
-
-{% test relationships(model, to, field) %}
+{% test relationships(model, column_name, to, field) %}
     {% set macro = adapter.dispatch('test_relationships') %}
-    {{ macro(model, to, field, **kwargs) }}
+    {{ macro(model, column_name, to, field) }}
 {% endtest %}

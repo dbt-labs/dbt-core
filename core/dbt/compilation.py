@@ -442,7 +442,7 @@ class Compiler:
         logger.debug(f'Writing injected SQL for node "{node.unique_id}"')
 
         if node.compiled_sql:
-            node.build_path = node.write_node(
+            node.compiled_path = node.write_node(
                 self.config.target_path,
                 'compiled',
                 node.compiled_sql

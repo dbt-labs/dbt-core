@@ -304,7 +304,7 @@ def print_run_result_error(
             with TextOnly():
                 logger.info("")
             logger.info("  compiled SQL at {}".format(
-                result.node.build_path))
+                result.node.compiled_path))
 
     elif result.message is not None:
         first = True

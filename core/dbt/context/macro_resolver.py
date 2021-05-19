@@ -147,15 +147,33 @@ class TestMacroNamespace:
         self.ctx = ctx
         self.node = node
         self.thread_ctx = thread_ctx
-        local_namespace = {}
+        self.local_namespace = {}
+        self.project_namespace = {}
         if depends_on_macros:
-            for macro_unique_id in depends_on_macros:
+            dep_macros = []
+            self.recursively_get_depends_on_macros(depends_on_macros, dep_macros)
+            for macro_unique_id in dep_macros:
                 if macro_unique_id in self.macro_resolver.macros:
+                    # Split up the macro unique_id to get the project_name
+                    (_, project_name, macro_name) = macro_unique_id.split('.')
+                    # Save the plain macro_name in the local_namespace
                     macro = self.macro_resolver.macros[macro_unique_id]
-                    local_namespace[macro.name] = MacroGenerator(
+                    macro_gen = MacroGenerator(
                         macro, self.ctx, self.node, self.thread_ctx,
                     )
-        self.local_namespace = local_namespace
+                    self.local_namespace[macro_name] = macro_gen
+                    # We also need the two part macro name
+                    if project_name not in self.project_namespace:
+                        self.project_namespace[project_name] = {}
+                    self.project_namespace[project_name][macro_name] = macro_gen
+
+    def recursively_get_depends_on_macros(self, depends_on_macros, dep_macros):
+        for macro_unique_id in depends_on_macros:
+            dep_macros.append(macro_unique_id)
+            if macro_unique_id in self.macro_resolver.macros:
+                macro = self.macro_resolver.macros[macro_unique_id]
+                if macro.depends_on.macros:
+                    self.recursively_get_depends_on_macros(macro.depends_on.macros, dep_macros)
 
     def get_from_package(
         self, package_name: Optional[str], name: str
