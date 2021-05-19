@@ -1012,10 +1012,10 @@ def parse_args(args, cls=DBTArgumentParser):
     # if set, will use the latest features from the static parser instead of
     # the stable static parser.
     p.add_argument(
-        '--use-experimental-parser',
-        action='store_true',
+        "--use-experimental-parser",
+        action="store_true",
         default=None,
-        help='''
+        help="""
         Enables experimental parsing features.
         """,
     )
@@ -1029,7 +1029,7 @@ def parse_args(args, cls=DBTArgumentParser):
         action="store_false",
         help="""
         Disables the static parser.
-        '''
+        """,
     )
 
     p.add_argument(
