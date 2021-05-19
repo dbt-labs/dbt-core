@@ -378,6 +378,7 @@ class FreshnessExecutionResultArtifact(
 
 
 Primitive = Union[bool, str, float, None]
+PrimitiveDict = Dict[str, Primitive]
 
 CatalogKey = NamedTuple(
     'CatalogKey',

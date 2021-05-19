@@ -308,6 +308,9 @@ class TestBuilder(Generic[Testable]):
     def error_if(self) -> Optional[str]:
         return self.modifiers.get('error_if')
 
+    def fail_calc(self) -> Optional[str]:
+        return self.modifiers.get('fail_calc')
+
     def tags(self) -> List[str]:
         tags = self.modifiers.get('tags', [])
         if isinstance(tags, str):

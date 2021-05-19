@@ -45,13 +45,10 @@ class TestDataTests(DBTIntegrationTest):
             if 'fail' in result.node.name:
                 self.assertEqual(result.status, "fail")
                 self.assertFalse(result.skipped)
-                self.assertTrue(int(result.message) > 0)
-
             # assert that actual tests pass
             else:
                 self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                self.assertEqual(int(result.message), 0)
 
         # check that all tests were run
         defined_tests = os.listdir(self.test_path)

@@ -445,26 +445,9 @@ class TestConfig(NodeConfig):
     store_failures: Optional[bool] = None
     where: Optional[str] = None
     limit: Optional[int] = None
-    warn_if: Optional[str] = ">0"
-    error_if: Optional[str] = ">0"
-
-    @classmethod
-    def validate(cls, data):
-        super().validate(data)
-        warn_if = data.get('warn_if')
-        error_if = data.get('error_if')
-
-        for evaluable in (warn_if, error_if):
-            try:
-                eval(f"1{evaluable}")
-            except (TypeError, NameError, SyntaxError):
-                raise ValidationError(
-                    f"Config value '{evaluable}' is not an evaluable string")
-
-    def finalize_and_validate(self):
-        data = self.to_dict(omit_none=True)
-        self.validate(data)
-        return self.from_dict(data)
+    fail_calc: str = "count(*)"
+    warn_if: str = "!= 0"
+    error_if: str = "!= 0"
 
 
 @dataclass

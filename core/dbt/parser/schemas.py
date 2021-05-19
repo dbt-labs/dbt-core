@@ -512,6 +512,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             if builder.error_if() is not None:
                 node.unrendered_config['error_if'] = builder.error_if()
                 node.config['error_if'] = builder.error_if()
+            if builder.fail_calc() is not None:
+                node.unrendered_config['fail_calc'] = builder.fail_calc()
+                node.config['fail_calc'] = builder.fail_calc()
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]

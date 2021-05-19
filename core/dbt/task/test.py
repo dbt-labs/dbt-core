@@ -1,5 +1,9 @@
+from agate import Table
+from dataclasses import dataclass
+from dbt import utils
+from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Union
+from typing import Dict, Any, Optional, Union
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -11,7 +15,7 @@ from dbt.contracts.graph.compiled import (
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import RunResult, TestStatus
+from dbt.contracts.results import RunResult, TestStatus, PrimitiveDict
 from dbt.context.providers import generate_runtime_model
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
@@ -25,6 +29,15 @@ from dbt.graph import (
 )
 from dbt.node_types import NodeType, RunHookType
 from dbt import flags
+
+
+@dataclass
+class TestResult(dbtClassMixin):
+    validation_errors: int
+    should_warn: bool
+    should_error: bool
+    warn_if: str
+    error_if: str
 
 
 class TestRunner(CompileRunner):
@@ -48,7 +61,7 @@ class TestRunner(CompileRunner):
         self,
         test: Union[CompiledDataTestNode, CompiledSchemaTestNode],
         manifest: Manifest
-    ) -> int:
+    ) -> TestResult:
         context = generate_runtime_model(
             test, self.config, manifest
         )
@@ -79,29 +92,41 @@ class TestRunner(CompileRunner):
         table = result['table']
         num_rows = len(table.rows)
         if num_rows != 1:
-            num_cols = len(table.columns)
-            # since we just wrapped our query in `select count(*)`, we are in
-            # big trouble!
             raise InternalException(
                 f"dbt internally failed to execute {test.unique_id}: "
-                f"Returned {num_rows} rows and {num_cols} cols, but expected "
-                f"1 row and 1 column"
+                f"Returned {num_rows} rows, but expected "
+                f"1 row"
             )
-        return int(table[0][0])
+        num_cols = len(table.columns)
+        if num_cols != 5:
+            raise InternalException(
+                f"dbt internally failed to execute {test.unique_id}: "
+                f"Returned {num_cols} columns, but expected "
+                f"5 columns"
+            )
+
+        test_result_data: PrimitiveDict = dict(zip(table.column_names, table.rows[0]))
+
+        return TestResult.from_dict(test_result_data)
 
     def execute(self, test: CompiledTestNode, manifest: Manifest):
-        failed_rows = self.execute_test(test, manifest)
+        result = self.execute_test(test, manifest)
 
         severity = test.config.severity.upper()
-        error_if = test.config.error_if
-        warn_if = test.config.warn_if
         thread_id = threading.current_thread().name
-
+        num_errors = utils.pluralize(result.validation_errors, 'result')
         status = None
-        if severity == "ERROR" and eval(f"{failed_rows}{error_if}"):
+        message = None
+        if severity == "ERROR" and result.should_error:
             status = TestStatus.Fail
-        elif eval(f"{failed_rows}{warn_if}"):
-            status = TestStatus.Fail if flags.WARN_ERROR else TestStatus.Warn
+            message = f'Got {num_errors}, configured to fail if {result.error_if}'
+        elif result.should_warn:
+            if flags.WARN_ERROR:
+                status = TestStatus.Fail
+                message = f'Got {num_errors}, configured to fail if {result.warn_if}'
+            else:
+                status = TestStatus.Warn
+                message = f'Got {num_errors}, configured to warn if {result.warn_if}'
         else:
             status = TestStatus.Pass
 
@@ -111,8 +136,8 @@ class TestRunner(CompileRunner):
             timing=[],
             thread_id=thread_id,
             execution_time=0,
-            message=int(failed_rows),
-            adapter_response={}
+            message=message,
+            adapter_response={},
         )
 
     def after_execute(self, result):

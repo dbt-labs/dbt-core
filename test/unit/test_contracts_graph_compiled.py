@@ -429,9 +429,9 @@ def basic_uncompiled_schema_test_dict():
             'vars': {},
             'severity': 'ERROR',
             'schema': 'dbt_test__audit',
-            'warn_if': '>0',
-            'error_if': '>0',
->>>>>>> 57eb4c93 (New test configs: where, limit, warn_if, error_if)
+            'warn_if': '!= 0',
+            'error_if': '!= 0',
+            'fail_calc': 'count(*)',
         },
         'deferred': False,
         'docs': {'show': True},
@@ -482,11 +482,10 @@ def basic_compiled_schema_test_dict():
             'vars': {},
             'severity': 'warn',
             'schema': 'dbt_test__audit',
-            'warn_if': '>0',
-            'error_if': '>0',
->>>>>>> 57eb4c93 (New test configs: where, limit, warn_if, error_if)
+            'warn_if': '!= 0',
+            'error_if': '!= 0',
+            'fail_calc': 'count(*)',
         },
-
         'docs': {'show': True},
         'columns': {},
         'meta': {},

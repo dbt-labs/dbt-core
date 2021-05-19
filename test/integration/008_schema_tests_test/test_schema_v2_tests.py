@@ -29,16 +29,16 @@ class TestSchemaTests(DBTIntegrationTest):
     def assertTestFailed(self, result):
         self.assertEqual(result.status, "fail")
         self.assertFalse(result.skipped)
-        self.assertTrue(
-            int(result.message) > 0,
+        self.assertIn(
+            'fail', result.message if result.message is not None else '',
             'test {} did not fail'.format(result.node.name)
         )
 
     def assertTestPassed(self, result):
         self.assertEqual(result.status, "pass")
         self.assertFalse(result.skipped)
-        self.assertEqual(
-            int(result.message), 0,
+        self.assertNotIn(
+            'fail', result.message if result.message is not None else '',
             'test {} failed'.format(result.node.name)
         )
 
@@ -57,8 +57,6 @@ class TestSchemaTests(DBTIntegrationTest):
             # assert that actual tests pass
             else:
                 self.assertTestPassed(result)
-
-        self.assertEqual(sum(x.message for x in test_results), 6)
 
     @use_profile('postgres')
     def test_postgres_schema_test_selection(self):
@@ -153,8 +151,8 @@ class TestHooksInTests(DBTIntegrationTest):
         for result in results:
             self.assertEqual(result.status, "pass")
             self.assertFalse(result.skipped)
-            self.assertEqual(
-                int(result.message), 0,
+            self.assertNotIn(
+                'fail', result.message if result.message is not None else '',
                 'test {} failed'.format(result.node.name)
             )
 
@@ -209,12 +207,14 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         test_results = self.run_schema_validations()
         self.assertEqual(len(test_results), 5)
 
-        expected_failures = ['unique', 'every_value_is_blue']
+        expected_failures = [
+            'not_null_table_copy_email',
+            'every_value_is_blue_table_copy_favorite_color'
+        ]
 
         for result in test_results:
-            if result.status == 'error':
-                self.assertTrue(result.node['name'] in expected_failures)
-        self.assertEqual(sum(x.message for x in test_results), 52)
+            if result.status == 'fail':
+                self.assertIn(result.node.name, expected_failures)
 
 
 class TestBQSchemaTests(DBTIntegrationTest):
@@ -251,20 +251,18 @@ class TestBQSchemaTests(DBTIntegrationTest):
             if 'failure' in result.node.name:
                 self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
-                self.assertTrue(
-                    int(result.message) > 0,
+                self.assertIn(
+                    'fail', str(result.message) if result.message is not None else '',
                     'test {} did not fail'.format(result.node.name)
                 )
             # assert that actual tests pass
             else:
                 self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                self.assertEqual(
-                    int(result.message), 0,
+                self.assertNotIn(
+                    'fail', str(result.message) if result.message is not None else '',
                     'test {} failed'.format(result.node.name)
                 )
-
-        self.assertEqual(sum(x.message for x in test_results), 0)
 
 
 class TestQuotedSchemaTestColumns(DBTIntegrationTest):
@@ -477,8 +475,8 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
 
         # both tests have the same unique id except for the hash
         expected_unique_ids = [
-            'test.test.not_null_base_extension_id.2dbb9627b6',
-            'test.test.not_null_base_extension_id.d70fc39f40'
-            ]
+            'test.test.not_null_base_extension_id.4a9d96018d',
+            'test.test.not_null_base_extension_id.60bbea9027'
+        ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)

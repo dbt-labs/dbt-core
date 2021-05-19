@@ -11,7 +11,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
-    NodeStatus, TableMetadata, CatalogTable, CatalogResults, Primitive,
+    NodeStatus, TableMetadata, CatalogTable, CatalogResults, PrimitiveDict,
     CatalogKey, StatsItem, StatsDict, ColumnMetadata, CatalogArtifact
 )
 from dbt.exceptions import InternalException
@@ -35,9 +35,6 @@ def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
         k[cut:]: v for k, v in source.items()
         if k.startswith(prefix)
     }
-
-
-PrimitiveDict = Dict[str, Primitive]
 
 
 def build_catalog_table(data) -> CatalogTable:

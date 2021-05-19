@@ -34,9 +34,9 @@ class TestSeverity(DBTIntegrationTest):
             ['test', '--schema'], 'false', strict=False)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'warn')
-        self.assertEqual(results[0].message, 2)
+        self.assertIn('2', results[0].message)
         self.assertEqual(results[1].status, 'warn')
-        self.assertEqual(results[1].message, 2)
+        self.assertIn('2', results[1].message)
 
     @use_profile('postgres')
     def test_postgres_severity_rendered_errors(self):
@@ -46,9 +46,9 @@ class TestSeverity(DBTIntegrationTest):
             ['test', '--schema'], 'true', strict=False, expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'fail')
-        self.assertEqual(results[0].message, 2)
+        self.assertIn('2', results[0].message)
         self.assertEqual(results[1].status, 'fail')
-        self.assertEqual(results[1].message, 2)
+        self.assertIn('2', results[1].message)
 
     @use_profile('postgres')
     def test_postgres_severity_warnings_strict(self):
@@ -58,9 +58,9 @@ class TestSeverity(DBTIntegrationTest):
             ['test', '--schema'], 'false', expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'fail')
-        self.assertEqual(results[0].message, 2)
+        self.assertIn('2', results[0].message)
         self.assertEqual(results[1].status, 'fail')
-        self.assertEqual(results[1].message, 2)
+        self.assertIn('2', results[1].message)
 
     @use_profile('postgres')
     def test_postgres_data_severity_warnings(self):
@@ -70,7 +70,7 @@ class TestSeverity(DBTIntegrationTest):
             ['test', '--data'], 'false', strict=False)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'warn')
-        self.assertEqual(results[0].message, 2)
+        self.assertIn('2', results[0].message)
 
     @use_profile('postgres')
     def test_postgres_data_severity_rendered_errors(self):
@@ -80,7 +80,7 @@ class TestSeverity(DBTIntegrationTest):
             ['test', '--data'], 'true', strict=False, expect_pass=False)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'fail')
-        self.assertEqual(results[0].message, 2)
+        self.assertIn('2', results[0].message)
 
     @use_profile('postgres')
     def test_postgres_data_severity_warnings_strict(self):
@@ -90,4 +90,4 @@ class TestSeverity(DBTIntegrationTest):
             ['test', '--data'], 'false', expect_pass=False)
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].status, 'fail')
-        self.assertEqual(results[0].message, 2)
+        self.assertIn('2', results[0].message)
