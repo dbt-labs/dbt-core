@@ -3,6 +3,7 @@
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 - Now generating `run_results.json` even when no nodes are selected ([#3313](https://github.com/fishtown-analytics/dbt/issues/3313), [#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
+- Add missing `packaging` dependency ([#3312](https://github.com/fishtown-analytics/dbt/issues/3312), [#3339](https://github.com/fishtown-analytics/dbt/pull/3339))
 - Fix references to macros with package names when rendering schema tests ([#3324](https://github.com/fishtown-analytics/dbt/issues/3324), [#3345](https://github.com/fishtown-analytics/dbt/pull/3345)
 - Stop clobbering default keyword arguments for jinja test definitions ([#3329](https://github.com/fishtown-analytics/dbt/issues/3329), [#3340](https://github.com/fishtown-analytics/dbt/pull/3340))
 - Fix unique_id generation for generic tests so tests with the same FQN but different configuration will run. ([#3254](https://github.com/fishtown-analytics/dbt/issues/3254), [#3335](https://github.com/fishtown-analytics/dbt/issues/3335))
