@@ -8,6 +8,7 @@
 - Stop clobbering default keyword arguments for jinja test definitions ([#3329](https://github.com/fishtown-analytics/dbt/issues/3329), [#3340](https://github.com/fishtown-analytics/dbt/pull/3340))
 - Fix unique_id generation for generic tests so tests with the same FQN but different configuration will run. ([#3254](https://github.com/fishtown-analytics/dbt/issues/3254), [#3335](https://github.com/fishtown-analytics/dbt/issues/3335))
 - Update the snowflake adapter to only comment on a column if it exists when using the persist_docs config ([#3039](https://github.com/fishtown-analytics/dbt/issues/3039), [#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
+- Add a better error messages for undefined macros and when there are less packages installed than specified in `packages.yml`. ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
 
@@ -19,6 +20,7 @@ Contributors:
 - [@panasenco](https://github.com/panasenco) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
 - [@peiwangdb](https://github.com/peiwangdb) ([#3344](https://github.com/fishtown-analytics/dbt/pull/3344))
 - [@elikastelein](https://github.com/elikastelein) ([#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
+- [@jaypeedevlin](https://github.com/jaypeedevlin) ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 

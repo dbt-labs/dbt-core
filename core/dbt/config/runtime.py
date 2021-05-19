@@ -328,6 +328,17 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         if self.dependencies is None:
             all_projects = {self.project_name: self}
             internal_packages = get_include_paths(self.credentials.type)
+            # raise exception if fewer installed packages than in packages.yml
+            count_packages_specified = len(self.packages.packages)  # type: ignore
+            count_packages_installed = len(tuple(self._get_project_directories()))
+            if count_packages_specified > count_packages_installed:
+                raise_compiler_error(
+                    f'dbt found {count_packages_specified} package(s) '
+                    f'specified in packages.yml, but only '
+                    f'{count_packages_installed} package(s) installed '
+                    f'in {self.modules_path}. Run "dbt deps" to '
+                    f'install package dependencies.'
+                )
             project_paths = itertools.chain(
                 internal_packages,
                 self._get_project_directories()
