@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from functools import reduce
 from itertools import dropwhile
-from tree_sitter import Language, Parser  # type: ignore
+from tree_sitter import Parser  # type: ignore
+from tree_sitter_jinja2 import JINJA2_LANGUAGE  # type: ignore
 
 
 # global values
-JINJA2_LANGUAGE = Language('./core/dbt/dbt_jinja/build/dbtjinja.so', 'dbt_jinja')
 parser = Parser()
 parser.set_language(JINJA2_LANGUAGE)
 
