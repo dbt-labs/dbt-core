@@ -722,8 +722,8 @@ class TestRPCServerCompileRun(HasRPCServer):
             task_tags={'some_tag': True, 'another_tag': 'blah blah blah'}
         ).json()
         error_data = self.assertIsErrorWith(data, 10004, 'Compilation Error', {
-            'type': 'CompilationException',
-            'message': "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined",
+            'type': 'UndefinedMacroException',
+            'message': "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined. This can happen when calling a macro that does not exist. Check for typos and/or install package dependencies with \"dbt deps\".",
             'compiled_sql': None,
             'raw_sql': 'select * from {{ reff("nonsource_descendant") }}',
             'tags': {'some_tag': True, 'another_tag': 'blah blah blah'}
@@ -1143,11 +1143,8 @@ class TestRPCServerDeps(HasRPCServer):
     def _check_start_predeps(self):
         self.assertFalse(os.path.exists('./dbt_modules'))
         status = self.assertIsResult(self.query('status').json())
-        self.assertEqual(status['state'], 'ready')
-
-        self.assertIsError(self.async_query('compile').json())
-        if os.path.exists('./dbt_modules'):
-            self.assertEqual(len(os.listdir('./dbt_modules')), 0)
+        # will return an error because defined dependency is missing
+        self.assertEqual(status['state'], 'error')
         return status
 
     def _check_deps_ok(self, status):

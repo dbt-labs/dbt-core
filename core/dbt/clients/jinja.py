@@ -29,7 +29,8 @@ from dbt.contracts.graph.compiled import CompiledSchemaTestNode
 from dbt.contracts.graph.parsed import ParsedSchemaTestNode
 from dbt.exceptions import (
     InternalException, raise_compiler_error, CompilationException,
-    invalid_materialization_argument, MacroReturn, JinjaRenderingException
+    invalid_materialization_argument, MacroReturn, JinjaRenderingException,
+    UndefinedMacroException
 )
 from dbt import flags
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -518,7 +519,7 @@ def catch_jinja(node=None) -> Iterator[None]:
         e.translated = False
         raise CompilationException(str(e), node) from e
     except jinja2.exceptions.UndefinedError as e:
-        raise CompilationException(str(e), node) from e
+        raise UndefinedMacroException(str(e), node) from e
     except CompilationException as exc:
         exc.add_node(node)
         raise
