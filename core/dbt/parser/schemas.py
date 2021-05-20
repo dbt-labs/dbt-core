@@ -493,7 +493,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 node.unrendered_config['severity'] = builder.severity()
                 node.config['severity'] = builder.severity()
             if builder.enabled() is not None:
-                node.unrendered_config['severity'] = builder.severity()
+                node.unrendered_config['enabled'] = builder.enabled()
                 node.config['enabled'] = builder.enabled()
             # note: this does not respect generate_alias_name() macro
             if builder.alias() is not None:
