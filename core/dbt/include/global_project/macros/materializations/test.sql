@@ -45,11 +45,9 @@
   {% call statement('main', fetch_result=True) -%}
 
     select
-      {{ fail_calc }} as validation_errors,
+      {{ fail_calc }} as failures,
       {{ fail_calc }} {{ warn_if }} as should_warn,
-      {{ fail_calc }} {{ error_if }} as should_error,
-      '{{ warn_if }}' as warn_if,
-      '{{ error_if }}' as error_if
+      {{ fail_calc }} {{ error_if }} as should_error
     from (
       {{ main_sql }}
       {{ "limit " ~ limit if limit }}

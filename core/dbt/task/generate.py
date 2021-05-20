@@ -190,12 +190,6 @@ def get_unique_id_mapping(
     return node_map, source_map
 
 
-def _coerce_decimal(value):
-    if isinstance(value, dbt.utils.DECIMALS):
-        return float(value)
-    return value
-
-
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
         if self.manifest is None:
@@ -248,7 +242,7 @@ class GenerateTask(CompileTask):
             catalog_table, exceptions = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
-            dict(zip(catalog_table.column_names, map(_coerce_decimal, row)))
+            dict(zip(catalog_table.column_names, map(dbt.utils._coerce_decimal, row)))
             for row in catalog_table
         ]
 

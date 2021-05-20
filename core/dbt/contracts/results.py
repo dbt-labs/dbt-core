@@ -123,6 +123,11 @@ class RunResult(NodeResult):
 
 
 @dataclass
+class TestResult(RunResult):
+    failures: int = 0
+
+
+@dataclass
 class ExecutionResult(dbtClassMixin):
     results: Sequence[BaseResult]
     elapsed_time: float

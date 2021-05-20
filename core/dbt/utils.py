@@ -420,6 +420,12 @@ def coerce_dict_str(value: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _coerce_decimal(value):
+    if isinstance(value, DECIMALS):
+        return float(value)
+    return value
+
+
 def lowercase(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None

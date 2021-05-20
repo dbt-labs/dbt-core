@@ -14,7 +14,7 @@ from dbt.contracts.graph.compiled import (
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import RunResult, TestStatus, PrimitiveDict
+from dbt.contracts.results import TestResult, TestStatus, PrimitiveDict
 from dbt.context.providers import generate_runtime_model
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
@@ -31,12 +31,10 @@ from dbt import flags
 
 
 @dataclass
-class TestResult(dbtClassMixin):
-    validation_errors: int
+class TestResultData(dbtClassMixin):
+    failures: int
     should_warn: bool
     should_error: bool
-    warn_if: str
-    error_if: str
 
 
 class TestRunner(CompileRunner):
@@ -60,7 +58,7 @@ class TestRunner(CompileRunner):
         self,
         test: Union[CompiledDataTestNode, CompiledSchemaTestNode],
         manifest: Manifest
-    ) -> TestResult:
+    ) -> TestResultData:
         context = generate_runtime_model(
             test, self.config, manifest
         )
@@ -97,45 +95,51 @@ class TestRunner(CompileRunner):
                 f"1 row"
             )
         num_cols = len(table.columns)
-        if num_cols != 5:
+        if num_cols != 3:
             raise InternalException(
                 f"dbt internally failed to execute {test.unique_id}: "
                 f"Returned {num_cols} columns, but expected "
-                f"5 columns"
+                f"3 columns"
             )
 
-        test_result_data: PrimitiveDict = dict(zip(table.column_names, table.rows[0]))
-
-        return TestResult.from_dict(test_result_data)
+        test_result_dct: PrimitiveDict = dict(
+            zip(
+                [column_name.lower() for column_name in table.column_names],
+                map(utils._coerce_decimal, table.rows[0])
+            )
+        )
+        TestResultData.validate(test_result_dct)
+        return TestResultData.from_dict(test_result_dct)
 
     def execute(self, test: CompiledTestNode, manifest: Manifest):
         result = self.execute_test(test, manifest)
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
-        num_errors = utils.pluralize(result.validation_errors, 'result')
+        num_errors = utils.pluralize(result.failures, 'result')
         status = None
         message = None
         if severity == "ERROR" and result.should_error:
             status = TestStatus.Fail
-            message = f'Got {num_errors}, configured to fail if {result.error_if}'
+            message = f'Got {num_errors}, configured to fail if {test.config.error_if}'
         elif result.should_warn:
             if flags.WARN_ERROR:
                 status = TestStatus.Fail
-                message = f'Got {num_errors}, configured to fail if {result.warn_if}'
+                message = f'Got {num_errors}, configured to fail if {test.config.warn_if}'
             else:
                 status = TestStatus.Warn
-                message = f'Got {num_errors}, configured to warn if {result.warn_if}'
+                message = f'Got {num_errors}, configured to warn if {test.config.warn_if}'
         else:
             status = TestStatus.Pass
 
-        return RunResult(
+        return TestResult(
             node=test,
             status=status,
             timing=[],
             thread_id=thread_id,
             execution_time=0,
             message=message,
+            failures=result.failures,
             adapter_response={},
         )
 

@@ -299,7 +299,7 @@ class TestBuilder(Generic[Testable]):
     def where(self) -> Optional[str]:
         return self.modifiers.get('where')
 
-    def limit(self) -> Optional[str]:
+    def limit(self) -> Optional[int]:
         return self.modifiers.get('limit')
 
     def warn_if(self) -> Optional[str]:
