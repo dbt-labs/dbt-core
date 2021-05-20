@@ -1,9 +1,8 @@
-from agate import Table
 from dataclasses import dataclass
 from dbt import utils
 from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Union
 
 from .compile import CompileRunner
 from .run import RunTask
