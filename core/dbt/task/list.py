@@ -3,7 +3,7 @@ from typing import Type
 
 from dbt.contracts.graph.parsed import (
     ParsedExposure,
-    ParsedSourceDefinition,
+    ParsedSourceDefinition
 )
 from dbt.graph import (
     parse_difference,
@@ -120,7 +120,7 @@ class ListTask(GraphRunnableTask):
 
     def run(self):
         ManifestTask._runtime_initialize(self)
-        output = self.config.args.output
+        output = self.args.output
         if output == 'selector':
             generator = self.generate_selectors
         elif output == 'name':
@@ -133,7 +133,11 @@ class ListTask(GraphRunnableTask):
             raise InternalException(
                 'Invalid output {}'.format(output)
             )
-        for result in generator():
+
+        return self.output_results(generator())
+
+    def output_results(self, results):
+        for result in results:
             self.node_results.append(result)
             print(result)
         return self.node_results
@@ -143,10 +147,10 @@ class ListTask(GraphRunnableTask):
         if self.args.models:
             return [NodeType.Model]
 
-        values = set(self.config.args.resource_types)
-        if not values:
+        if not self.args.resource_types:
             return list(self.DEFAULT_RESOURCE_VALUES)
 
+        values = set(self.args.resource_types)
         if 'default' in values:
             values.remove('default')
             values.update(self.DEFAULT_RESOURCE_VALUES)

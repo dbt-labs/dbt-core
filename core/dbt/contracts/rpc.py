@@ -64,6 +64,16 @@ class RPCCompileParameters(RPCParameters):
 
 
 @dataclass
+class RPCListParameters(RPCParameters):
+    resource_type: Optional[str] = None
+    models: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
+    select: Optional[str] = None
+    output: Optional[str] = 'json'
+
+
+@dataclass
 class RPCRunParameters(RPCParameters):
     threads: Optional[int] = None
     models: Union[None, str, List[str]] = None
@@ -188,6 +198,13 @@ class GetManifestParameters(RPCParameters):
 @dataclass
 class RemoteResult(VersionedSchema):
     logs: List[LogMessage]
+
+
+@dataclass
+@schema_version('remote-list-results', 1)
+class RemoteListResults(RemoteResult):
+    output: List[Any]
+    generated_at: datetime = field(default_factory=datetime.utcnow)
 
 
 @dataclass
