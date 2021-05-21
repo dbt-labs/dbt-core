@@ -14,7 +14,7 @@ from dbt.contracts.graph.compiled import (
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import TestResult, TestStatus, PrimitiveDict
+from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
@@ -43,9 +43,7 @@ class TestRunner(CompileRunner):
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        schema_name = self.node.schema
-        print_test_result_line(result, schema_name, self.node_index,
-                               self.num_nodes)
+        print_test_result_line(result, self.node_index, self.num_nodes)
 
     def print_start_line(self):
         description = self.describe_node()
@@ -132,14 +130,14 @@ class TestRunner(CompileRunner):
         else:
             status = TestStatus.Pass
 
-        return TestResult(
+        return RunResult(
             node=test,
             status=status,
             timing=[],
             thread_id=thread_id,
             execution_time=0,
             message=message,
-            failures=result.failures,
+            failures=int(result.failures),
             adapter_response={},
         )
 

@@ -12,7 +12,7 @@ from dbt import ui
 from dbt import utils
 
 from dbt.contracts.results import (
-    FreshnessStatus, NodeResult, NodeStatus, TestStatus
+    FreshnessStatus, NodeStatus, TestStatus
 )
 
 
@@ -115,7 +115,7 @@ def get_printable_result(
 
 
 def print_test_result_line(
-        result: NodeResult, schema_name, index: int, total: int
+        result, index: int, total: int
 ) -> None:
     model = result.node
 
@@ -128,11 +128,11 @@ def print_test_result_line(
         color = ui.green
         logger_fn = logger.info
     elif result.status == TestStatus.Warn:
-        info = 'WARN'
+        info = f'WARN {result.failures}'
         color = ui.yellow
         logger_fn = logger.warning
     elif result.status == TestStatus.Fail:
-        info = 'FAIL'
+        info = f'FAIL {result.failures}'
         color = ui.red
         logger_fn = logger.error
     else:

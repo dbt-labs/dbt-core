@@ -116,15 +116,11 @@ class RunResult(NodeResult):
             'serialize': lambda x: None, 'deserialize': lambda x: None
         }
     )
+    failures: Optional[int] = None
 
     @property
     def skipped(self):
         return self.status == RunStatus.Skipped
-
-
-@dataclass
-class TestResult(RunResult):
-    failures: int = 0
 
 
 @dataclass
