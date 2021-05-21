@@ -29,16 +29,16 @@ class TestSchemaTests(DBTIntegrationTest):
     def assertTestFailed(self, result):
         self.assertEqual(result.status, "fail")
         self.assertFalse(result.skipped)
-        self.assertIn(
-            'fail', result.message if result.message is not None else '',
+        self.assertTrue(
+            result.failures > 0,
             'test {} did not fail'.format(result.node.name)
         )
 
     def assertTestPassed(self, result):
         self.assertEqual(result.status, "pass")
         self.assertFalse(result.skipped)
-        self.assertNotIn(
-            'fail', result.message if result.message is not None else '',
+        self.assertEqual(
+            result.failures, 0,
             'test {} failed'.format(result.node.name)
         )
 
@@ -57,6 +57,7 @@ class TestSchemaTests(DBTIntegrationTest):
             # assert that actual tests pass
             else:
                 self.assertTestPassed(result)
+        self.assertEqual(sum(x.failures for x in test_results), 6)
 
     @use_profile('postgres')
     def test_postgres_schema_test_selection(self):
@@ -151,11 +152,10 @@ class TestHooksInTests(DBTIntegrationTest):
         for result in results:
             self.assertEqual(result.status, "pass")
             self.assertFalse(result.skipped)
-            self.assertNotIn(
-                'fail', result.message if result.message is not None else '',
+            self.assertEqual(
+                result.failures, 0,
                 'test {} failed'.format(result.node.name)
             )
-
 
 class TestCustomSchemaTests(DBTIntegrationTest):
 
@@ -251,19 +251,20 @@ class TestBQSchemaTests(DBTIntegrationTest):
             if 'failure' in result.node.name:
                 self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
-                self.assertIn(
-                    'fail', str(result.message) if result.message is not None else '',
+                self.assertTrue(
+                    result.failures > 0,
                     'test {} did not fail'.format(result.node.name)
                 )
             # assert that actual tests pass
             else:
                 self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                self.assertNotIn(
-                    'fail', str(result.message) if result.message is not None else '',
+                self.assertEqual(
+                    result.failures, 0,
                     'test {} failed'.format(result.node.name)
                 )
 
+        self.assertEqual(sum(x.failures for x in test_results), 0)
 
 class TestQuotedSchemaTestColumns(DBTIntegrationTest):
     @property

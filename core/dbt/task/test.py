@@ -137,8 +137,8 @@ class TestRunner(CompileRunner):
             thread_id=thread_id,
             execution_time=0,
             message=message,
-            failures=int(result.failures),
             adapter_response={},
+            failures=int(result.failures),
         )
 
     def after_execute(self, result):

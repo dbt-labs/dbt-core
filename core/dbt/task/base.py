@@ -271,7 +271,8 @@ class BaseRunner(metaclass=ABCMeta):
             timing=[],
             message=message,
             node=node,
-            adapter_response={}
+            adapter_response={},
+            failures=None
         )
 
     def compile_and_execute(self, manifest, ctx):

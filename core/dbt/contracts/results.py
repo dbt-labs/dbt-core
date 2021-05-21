@@ -95,12 +95,15 @@ class BaseResult(dbtClassMixin):
     execution_time: float
     adapter_response: Dict[str, Any]
     message: Optional[Union[str, int]]
+    failures: Optional[int]
 
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
         if 'message' not in data:
             data['message'] = None
+        if 'failures' not in data:
+            data['failures'] = None
         return data
 
 
@@ -116,7 +119,6 @@ class RunResult(NodeResult):
             'serialize': lambda x: None, 'deserialize': lambda x: None
         }
     )
-    failures: Optional[int] = None
 
     @property
     def skipped(self):
@@ -158,7 +160,8 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         thread_id=result.thread_id,
         execution_time=result.execution_time,
         message=result.message,
-        adapter_response=result.adapter_response
+        adapter_response=result.adapter_response,
+        failures=result.failures
     )
 
 
