@@ -62,6 +62,7 @@ class ManifestContext(ConfiguredContext):
         # keys in the manifest dictionary
         if isinstance(self.namespace, TestMacroNamespace):
             dct.update(self.namespace.local_namespace)
+            dct.update(self.namespace.project_namespace)
         else:
             dct.update(self.namespace)
         return dct

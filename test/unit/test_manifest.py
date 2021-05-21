@@ -40,7 +40,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
     'alias', 'tags', 'config', 'unique_id', 'refs', 'sources', 'meta',
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
-    'description', 'columns', 'fqn', 'build_path', 'patch_path', 'docs',
+    'description', 'columns', 'fqn', 'build_path', 'compiled_path', 'patch_path', 'docs',
     'deferred', 'checksum', 'unrendered_config',
 })
 

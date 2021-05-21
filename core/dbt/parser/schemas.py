@@ -2,6 +2,7 @@ import itertools
 import os
 
 from abc import ABCMeta, abstractmethod
+from hashlib import md5
 from typing import (
     Iterable, Dict, Any, Union, List, Optional, Generic, TypeVar, Type
 )
@@ -94,6 +95,23 @@ def error_context(
         'Invalid {key} config given in {path} @ {key}: {data} - {reason}'
         .format(key=key, path=path, data=data, reason=reason)
     )
+
+
+def yaml_from_file(
+    source_file: SourceFile
+) -> Optional[Dict[str, Any]]:
+    """If loading the yaml fails, raise an exception.
+    """
+    path: str = source_file.path.relative_path
+    try:
+        return load_yaml_text(source_file.contents)
+    except ValidationException as e:
+        reason = validator_error_message(e)
+        raise CompilationException(
+            'Error reading {}: {} - {}'
+            .format(source_file.project_name, path, reason)
+        )
+    return None
 
 
 class ParserRef:
@@ -218,22 +236,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 path, 'version {} is not supported'.format(version)
             )
 
-    def _yaml_from_file(
-        self, source_file: SourceFile
-    ) -> Optional[Dict[str, Any]]:
-        """If loading the yaml fails, raise an exception.
-        """
-        path: str = source_file.path.relative_path
-        try:
-            return load_yaml_text(source_file.contents)
-        except ValidationException as e:
-            reason = validator_error_message(e)
-            raise CompilationException(
-                'Error reading {}: {} - {}'
-                .format(self.project.project_name, path, reason)
-            )
-        return None
-
     def parse_column_tests(
         self, block: TestBlock, column: UnparsedColumn
     ) -> None:
@@ -351,6 +353,25 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         column_name: Optional[str],
     ) -> ParsedSchemaTestNode:
 
+        HASH_LENGTH = 10
+
+        # N.B: This function builds a hashable string from any given test_metadata dict.
+        #   it's a bit fragile for general use (only supports str, int, float, List, Dict)
+        #   but it gets the job done here without the overhead of complete ser(de).
+        def get_hashable_md(
+            data: Union[str, int, float, List, Dict]
+        ) -> Union[str, List, Dict]:
+            if type(data) == dict:
+                return {k: get_hashable_md(data[k]) for k in sorted(data.keys())}  # type: ignore
+            elif type(data) == list:
+                return [get_hashable_md(val) for val in data]  # type: ignore
+            else:
+                return str(data)
+
+        hashable_metadata = repr(get_hashable_md(test_metadata))
+        hash_string = ''.join([name, hashable_metadata]).encode('utf-8')
+        test_hash = md5(hash_string).hexdigest()[-HASH_LENGTH:]
+
         dct = {
             'alias': name,
             'schema': self.default_schema,
@@ -364,7 +385,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             'original_file_path': target.original_file_path,
             'package_name': self.project.project_name,
             'raw_sql': raw_sql,
-            'unique_id': self.generate_unique_id(name),
+            'unique_id': self.generate_unique_id(name, test_hash),
             'config': self.config_dict(config),
             'test_metadata': test_metadata,
             'column_name': column_name,
@@ -606,8 +627,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         for node in parser.parse():
             self.manifest.add_exposure(block.file, node)
 
-    def parse_file(self, block: FileBlock) -> None:
-        dct = self._yaml_from_file(block.file)
+    def parse_file(self, block: FileBlock, dct: Dict = None) -> None:
+        if not dct:
+            dct = yaml_from_file(block.file)
 
         # mark the file as seen, in Manifest.files
         self.manifest.get_file(block.file)

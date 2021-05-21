@@ -1,6 +1,7 @@
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import FilePath, ParseFileType, SourceFile, FileHash
 
+from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import FilesystemSearcher
 
 
@@ -13,6 +14,8 @@ def load_source_file(
     source_file = SourceFile(path=path, checksum=checksum,
                              parse_file_type=parse_file_type, project_name=project_name)
     source_file.contents = file_contents.strip()
+    if parse_file_type == ParseFileType.Schema:
+        source_file.dict_from_yaml = yaml_from_file(source_file)
     return source_file
 
 

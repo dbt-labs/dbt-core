@@ -22,7 +22,6 @@ class TestSchemaTests(DBTIntegrationTest):
 
     def run_schema_validations(self):
         args = FakeArgs()
-
         test_task = TestTask(args, self.config)
         return test_task.run()
 
@@ -357,15 +356,26 @@ class TestSchemaTestContext(DBTIntegrationTest):
             "macro-paths": ["test-context-macros"],
         }
 
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'local': 'local_utils'
+                }
+            ]
+        }
+
     @use_profile('postgres')
     def test_postgres_test_context_tests(self):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
+        self.run_dbt(['deps'])
         results = self.run_dbt(strict=False)
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
 
         results = self.run_dbt(['test'], expect_pass=False)
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
         result0 = results[0]
         result1 = results[1]
         for result in results:
@@ -377,3 +387,35 @@ class TestSchemaTestContext(DBTIntegrationTest):
                 # was rendered correctly
                 self.assertRegex(result.node.compiled_sql, r'union all')
 
+
+class TestSchemaTestNameCollision(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "name_collision"
+    
+    def run_schema_tests(self):
+        args = FakeArgs()
+        test_task = TestTask(args, self.config)
+        return test_task.run()
+
+    @use_profile('postgres')
+    def test_postgres_collision_test_names_get_hash(self):
+        """The models should produce unique IDs with a has appended"""
+        results = self.run_dbt()
+        test_results = self.run_schema_tests()
+
+        # both models and both tests run
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len(test_results), 2)
+
+        # both tests have the same unique id except for the hash
+        expected_unique_ids = [
+            'test.test.not_null_base_extension_id.2dbb9627b6',
+            'test.test.not_null_base_extension_id.d70fc39f40'
+            ]
+        self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
+        self.assertIn(test_results[1].node.unique_id, expected_unique_ids)

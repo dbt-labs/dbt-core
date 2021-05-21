@@ -46,6 +46,7 @@ class TestEventTracking(DBTIntegrationTest):
         expect_pass=True,
         expect_raise=False
     ):
+        self.run_dbt(["deps"])
         track_fn.reset_mock()
 
         project_id = hashlib.md5(
@@ -541,6 +542,7 @@ class TestEventTrackingSuccess(TestEventTracking):
     @use_profile("postgres")
     def test__postgres_event_tracking_tests(self):
         # TODO: dbt does not track events for tests, but it should!
+        self.run_dbt(["deps"])
         self.run_dbt(["run", "--model", "example", "example_2"])
 
         expected_calls = [

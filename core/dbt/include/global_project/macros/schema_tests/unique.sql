@@ -1,25 +1,18 @@
+{% macro default__test_unique(model, column_name) %}
 
-{% macro default__test_unique(model) %}
+select
+    {{ column_name }},
+    count(*) as n_records
 
-{% set column_name = kwargs.get('column_name', kwargs.get('arg')) %}
-
-select *
-from (
-
-    select
-        {{ column_name }}
-
-    from {{ model }}
-    where {{ column_name }} is not null
-    group by {{ column_name }}
-    having count(*) > 1
-
-) validation_errors
+from {{ model }}
+where {{ column_name }} is not null
+group by {{ column_name }}
+having count(*) > 1
 
 {% endmacro %}
 
 
-{% test unique(model) %}
+{% test unique(model, column_name) %}
     {% set macro = adapter.dispatch('test_unique') %}
-    {{ macro(model, **kwargs) }}
+    {{ macro(model, column_name) }}
 {% endtest %}
