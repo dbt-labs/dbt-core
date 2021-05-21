@@ -14,6 +14,7 @@
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
+- Added support for invoking the `list` task via the RPC server [#3311](https://github.com/fishtown-analytics/dbt/issues/3311)
 
 Contributors:
 - [@TeddyCr](https://github.com/TeddyCr) ([#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
