@@ -1,5 +1,8 @@
 ## dbt 0.20.0 (Release TBD)
 
+### Features
+- Support optional `updated_at` config parameter with `check` strategy snapshots. If not supplied, will use current timestamp (default). ([#1844](https://github.com/fishtown-analytics/dbt/issues/1844), [#3376](https://github.com/fishtown-analytics/dbt/pull/3376))
+
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 - Now generating `run_results.json` even when no nodes are selected ([#3313](https://github.com/fishtown-analytics/dbt/issues/3313), [#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
@@ -23,6 +26,7 @@ Contributors:
 - [@elikastelein](https://github.com/elikastelein) ([#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
 - [@majidaldo](https://github.com/majidaldo) ([#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - [@jaypeedevlin](https://github.com/jaypeedevlin) ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
+- [@PJGaetan](https://github.com/PJGaetan) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3376))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 
