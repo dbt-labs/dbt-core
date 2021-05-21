@@ -65,11 +65,11 @@ class RPCCompileParameters(RPCParameters):
 
 @dataclass
 class RPCListParameters(RPCParameters):
-    resource_type: Optional[str] = None
+    resource_types: Optional[List[str]] = None
     models: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
+    select: Optional[List[str]] = None
     selector: Optional[str] = None
-    select: Optional[str] = None
     output: Optional[str] = 'json'
 
 
