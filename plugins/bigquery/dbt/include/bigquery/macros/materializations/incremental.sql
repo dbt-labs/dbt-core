@@ -122,26 +122,26 @@
                 {% do exceptions.raise_compiler_error(missing_partition_msg) %}
             {% endif %}
 
-        {% set build_sql = bq_insert_overwrite(
-            tmp_relation,
-            target_relation,
-            sql,
-            unique_key,
-            partition_by,
-            partitions,
-            dest_columns) %}
+            {% set build_sql = bq_insert_overwrite(
+                tmp_relation,
+                target_relation,
+                sql,
+                unique_key,
+                partition_by,
+                partitions,
+                dest_columns) %}
 
-    {% else %}
-        {#-- wrap sql in parens to make it a subquery --#}
-        {%- set source_sql -%}
-            (
-                {{sql}}
-            )
-        {%- endset -%}
+        {% else %}
+            {#-- wrap sql in parens to make it a subquery --#}
+            {%- set source_sql -%}
+                (
+                    {{sql}}
+                )
+            {%- endset -%}
 
-    {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns) %}
+            {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns) %}
 
-    {% endif %}
+        {% endif %}
 
     {% endif %}
 
