@@ -92,6 +92,7 @@
     {%- set raw_partition_by = config.get('partition_by', none) -%}
     {%- set partition_by = adapter.parse_partition_by(raw_partition_by) -%}
     {%- set partitions = config.get('partitions', none) -%}
+    {%- set is_partition_filter_required = config.get('require_partition_filter', false) -%}
     {%- set cluster_by = config.get('cluster_by', none) -%}
 
     {{ run_hooks(pre_hooks) }}
@@ -135,11 +136,19 @@
             {#-- wrap sql in parens to make it a subquery --#}
             {%- set source_sql -%}
                 (
-                    {{sql}}
+                    {{ sql }}
                 )
             {%- endset -%}
 
-            {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns) %}
+            {% set predicates = [] %}
+            {% if is_partition_filter_required %}
+                {%- set partition_filter -%}
+                    (DBT_INTERNAL_DEST.{{ partition_by.field }} is not null or DBT_INTERNAL_DEST.{{ partition_by.field }} is null)
+                {%- endset -%}
+                {% do predicates.append(partition_filter) %}
+            {% endif %}
+
+            {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns, predicates) %}
 
         {% endif %}
 
