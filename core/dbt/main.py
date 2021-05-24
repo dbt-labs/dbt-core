@@ -998,10 +998,21 @@ def parse_args(args, cls=DBTArgumentParser):
     # if set, extract all models and blocks with the jinja block extractor, and
     # verify that we don't fail anywhere the actual jinja parser passes. The
     # reverse (passing files that ends up failing jinja) is fine.
+    # TODO remove?
     p.add_argument(
         '--test-new-parser',
         action='store_true',
         help=argparse.SUPPRESS
+    )
+
+    # if set, will use the tree-sitter-jinja2 parser and extractor instead of
+    # jinja rendering when possible.
+    p.add_argument(
+        '--use-experimental-parser',
+        action='store_true',
+        help='''
+        Uses an experimental parser to extract jinja values.
+        '''
     )
 
     subs = p.add_subparsers(title="Available sub-commands")

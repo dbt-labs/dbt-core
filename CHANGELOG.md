@@ -2,6 +2,8 @@
 
 ### Features
 - Add new test configs: `where`, `limit`, `warn_if`, `error_if`, `fail_calc` ([#3258](https://github.com/fishtown-analytics/dbt/issues/3258),[#3321](https://github.com/fishtown-analytics/dbt/issues/3321), [#3336](https://github.com/fishtown-analytics/dbt/pull/3336))
+- Support optional `updated_at` config parameter with `check` strategy snapshots. If not supplied, will use current timestamp (default). ([#1844](https://github.com/fishtown-analytics/dbt/issues/1844), [#3376](https://github.com/fishtown-analytics/dbt/pull/3376))
+- Add the opt-in `--use-experimental-parser` flag ([#3307](https://github.com/fishtown-analytics/dbt/issues/3307))
 
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
@@ -26,6 +28,7 @@ Contributors:
 - [@elikastelein](https://github.com/elikastelein) ([#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
 - [@majidaldo](https://github.com/majidaldo) ([#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - [@jaypeedevlin](https://github.com/jaypeedevlin) ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
+- [@PJGaetan](https://github.com/PJGaetan) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3376))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 
