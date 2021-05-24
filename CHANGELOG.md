@@ -15,6 +15,7 @@
 - Add a better error messages for undefined macros and when there are less packages installed than specified in `packages.yml`. ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
+- Raise better error if snapshot is missing required configurations ([#3381](https://github.com/fishtown-analytics/dbt/issues/3381), [#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
@@ -28,6 +29,7 @@ Contributors:
 - [@majidaldo](https://github.com/majidaldo) ([#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - [@jaypeedevlin](https://github.com/jaypeedevlin) ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
 - [@PJGaetan](https://github.com/PJGaetan) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3376))
+- [@jnatkins](https://github.com/jnatkins) ([#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 

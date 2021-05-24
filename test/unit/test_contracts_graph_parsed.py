@@ -1343,6 +1343,22 @@ def test_invalid_missing_check_cols(basic_check_snapshot_config_dict):
     del wrong_fields['check_cols']
     with pytest.raises(ValidationError, match=r"A snapshot configured with the check strategy"):
         SnapshotConfig.validate(wrong_fields)
+        
+def test_missing_snapshot_configs(basic_check_snapshot_config_dict):
+    wrong_fields = basic_check_snapshot_config_dict
+    del wrong_fields['strategy']
+    with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
+        SnapshotConfig.validate(wrong_fields)
+    
+    wrong_fields['strategy'] = 'timestamp'
+    del wrong_fields['unique_key']
+    with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
+        SnapshotConfig.validate(wrong_fields)
+        
+    wrong_fields['unique_key'] = 'id'
+    del wrong_fields['target_schema']
+    with pytest.raises(ValidationError, match=r"Snapshots must be configured with a 'strategy'"):
+        SnapshotConfig.validate(wrong_fields)
 
 
 def test_invalid_check_value(basic_check_snapshot_config_dict):

@@ -531,7 +531,7 @@ class TestBadSnapshot(DBTIntegrationTest):
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(['compile'], expect_pass=False)
 
-        self.assertIn('Compilation Error in model ref_snapshot', str(exc.exception))
+        self.assertIn('Snapshots must be configured with a \'strategy\'', str(exc.exception))
 
 
 class TestCheckCols(TestSimpleSnapshotFiles):
