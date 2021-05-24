@@ -416,6 +416,9 @@ def run_cmd(
         full_env.update(env)
 
     try:
+        exe_pth = shutil.which(cmd[0])
+        if exe_pth:
+            cmd = [os.path.abspath(exe_pth)] + list(cmd[1:])
         proc = subprocess.Popen(
             cmd,
             cwd=cwd,

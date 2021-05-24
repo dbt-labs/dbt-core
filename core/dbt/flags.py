@@ -13,6 +13,7 @@ FULL_REFRESH = None
 USE_CACHE = None
 WARN_ERROR = None
 TEST_NEW_PARSER = None
+USE_EXPERIMENTAL_PARSER = None
 WRITE_JSON = None
 PARTIAL_PARSE = None
 USE_COLORS = None
@@ -53,13 +54,14 @@ MP_CONTEXT = _get_context()
 
 def reset():
     global STRICT_MODE, FULL_REFRESH, USE_CACHE, WARN_ERROR, TEST_NEW_PARSER, \
-        WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS
+        USE_EXPERIMENTAL_PARSER, WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS
 
     STRICT_MODE = False
     FULL_REFRESH = False
     USE_CACHE = True
     WARN_ERROR = False
     TEST_NEW_PARSER = False
+    USE_EXPERIMENTAL_PARSER = False
     WRITE_JSON = True
     PARTIAL_PARSE = False
     MP_CONTEXT = _get_context()
@@ -68,7 +70,7 @@ def reset():
 
 def set_from_args(args):
     global STRICT_MODE, FULL_REFRESH, USE_CACHE, WARN_ERROR, TEST_NEW_PARSER, \
-        WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS
+        USE_EXPERIMENTAL_PARSER, WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS
 
     USE_CACHE = getattr(args, 'use_cache', USE_CACHE)
 
@@ -80,6 +82,7 @@ def set_from_args(args):
     )
 
     TEST_NEW_PARSER = getattr(args, 'test_new_parser', TEST_NEW_PARSER)
+    USE_EXPERIMENTAL_PARSER = getattr(args, 'use_experimental_parser', USE_EXPERIMENTAL_PARSER)
     WRITE_JSON = getattr(args, 'write_json', WRITE_JSON)
     PARTIAL_PARSE = getattr(args, 'partial_parse', None)
     MP_CONTEXT = _get_context()

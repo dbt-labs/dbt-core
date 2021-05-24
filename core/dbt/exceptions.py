@@ -289,6 +289,15 @@ class JinjaRenderingException(CompilationException):
     pass
 
 
+class UndefinedMacroException(CompilationException):
+
+    def __str__(self, prefix='! ') -> str:
+        msg = super().__str__(prefix)
+        return f'{msg}. This can happen when calling a macro that does ' \
+            'not exist. Check for typos and/or install package dependencies ' \
+            'with "dbt deps".'
+
+
 class UnknownAsyncIDException(Exception):
     CODE = 10012
     MESSAGE = 'RPC server got an unknown async ID'
