@@ -488,11 +488,10 @@ class SnapshotConfig(EmptySnapshotConfig):
     @classmethod
     def validate(cls, data):
         super().validate(data)
-        if not data.get('strategy') or not data.get('unique_key') or not \
-                data.get('target_schema'):
+        if not data.get("strategy") or not data.get("unique_key") or not data.get("target_schema"):
             raise ValidationError(
                 "Snapshots must be configured with a 'strategy', 'unique_key', "
-                "and 'target_schema'.")
+                "and 'target_schema'."
             )
         if data.get("strategy") == "check":
             if not data.get("check_cols"):
