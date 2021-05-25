@@ -128,7 +128,6 @@ class SnowflakeCredentials(Credentials):
             'Content-type': 'application/x-www-form-urlencoded;charset=utf-8'
         }
 
-        #result_is_json = False
         result_json = None
         max_iter = 20
         # Attempt to obtain JSON for 1 second before throwing an error
@@ -139,11 +138,12 @@ class SnowflakeCredentials(Credentials):
                 break
             except ValueError as e:
                 message = result.text
-                logger.debug(f"Got a non-json response ({result.status_code}): {e}, message: {message}")
-                time.sleep(0.05)
-        
+                logger.debug(f"Got a non-json response ({result.status_code}): \
+                              {e}, message: {message}")
+                sleep(0.05)
+
         if result_json is None:
-            raise DatabaseException(f"""Did not receive valid json with access_token.  
+            raise DatabaseException(f"""Did not receive valid json with access_token.
                                         Showing json response: {result_json}""")
 
         return result_json['access_token']
