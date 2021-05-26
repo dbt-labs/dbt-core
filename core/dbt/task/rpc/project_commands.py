@@ -22,6 +22,7 @@ from dbt.contracts.rpc import (
     RPCSourceFreshnessParameters,
     RPCListParameters,
 )
+from dbt.exceptions import RuntimeException
 from dbt.rpc.method import (
     Parameters, RemoteManifestMethod
 )
@@ -277,6 +278,17 @@ class RemoteListTask(
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         self.args.select = self._listify(params.select)
+
+        if self.args.models:
+            if self.args.select:
+                raise RuntimeException(
+                    '"models" and "select" are mutually exclusive arguments'
+                )
+            if self.args.resource_types:
+                raise RuntimeException(
+                    '"models" and "resource_type" are mutually exclusive '
+                    'arguments'
+                )
 
     @staticmethod
     def output_results(results):

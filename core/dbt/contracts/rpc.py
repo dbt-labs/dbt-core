@@ -68,7 +68,7 @@ class RPCListParameters(RPCParameters):
     resource_types: Optional[List[str]] = None
     models: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
-    select: Optional[List[str]] = None
+    select: Union[None, str, List[str]] = None
     selector: Optional[str] = None
     output: Optional[str] = 'json'
 
