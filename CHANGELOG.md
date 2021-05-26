@@ -1,5 +1,9 @@
 ## dbt 0.20.0 (Release TBD)
 
+### Features
+- Support optional `updated_at` config parameter with `check` strategy snapshots. If not supplied, will use current timestamp (default). ([#1844](https://github.com/fishtown-analytics/dbt/issues/1844), [#3376](https://github.com/fishtown-analytics/dbt/pull/3376))
+- Add the opt-in `--use-experimental-parser` flag ([#3307](https://github.com/fishtown-analytics/dbt/issues/3307))
+
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 - Now generating `run_results.json` even when no nodes are selected ([#3313](https://github.com/fishtown-analytics/dbt/issues/3313), [#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
@@ -11,17 +15,24 @@
 - Add a better error messages for undefined macros and when there are less packages installed than specified in `packages.yml`. ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
+- Raise better error if snapshot is missing required configurations ([#3381](https://github.com/fishtown-analytics/dbt/issues/3381), [#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
 - Added support for invoking the `list` task via the RPC server [#3311](https://github.com/fishtown-analytics/dbt/issues/3311)
+- Use shutil.which so Windows can pick up git.bat as a git executable ([#3035](https://github.com/fishtown-analytics/dbt/issues/3035), [#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
+- Add `ssh-client` and update `git` version (using buster backports) in Docker image ([#3337](https://github.com/fishtown-analytics/dbt/issues/3337), [#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
 
 Contributors:
 - [@TeddyCr](https://github.com/TeddyCr) ([#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
 - [@panasenco](https://github.com/panasenco) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
+- [@dmateusp](https://github.com/dmateusp) ([#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
 - [@peiwangdb](https://github.com/peiwangdb) ([#3344](https://github.com/fishtown-analytics/dbt/pull/3344))
 - [@elikastelein](https://github.com/elikastelein) ([#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
+- [@majidaldo](https://github.com/majidaldo) ([#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - [@jaypeedevlin](https://github.com/jaypeedevlin) ([#2999](https://github.com/fishtown-analytics/dbt/issues/2999))
+- [@PJGaetan](https://github.com/PJGaetan) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3376))
+- [@jnatkins](https://github.com/jnatkins) ([#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 
