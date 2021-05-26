@@ -38,6 +38,8 @@ class ListTask(GraphRunnableTask):
         'config',
         'resource_type',
         'source_name',
+        'original_file_path',
+        'unique_id'
     ))
 
     def __init__(self, args, config):
