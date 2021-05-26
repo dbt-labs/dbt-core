@@ -531,7 +531,7 @@ class TestBadSnapshot(DBTIntegrationTest):
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(['compile'], expect_pass=False)
 
-        self.assertIn('Compilation Error in model ref_snapshot', str(exc.exception))
+        self.assertIn('Snapshots must be configured with a \'strategy\'', str(exc.exception))
 
 
 class TestCheckCols(TestSimpleSnapshotFiles):
@@ -575,6 +575,53 @@ class TestConfiguredCheckCols(TestCheckCols):
             },
             'macro-paths': ['macros'],
         }
+
+
+class TestUpdatedAtCheckCols(TestCheckCols):
+     def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
+         revived_records = self.run_sql(
+             '''
+             select
+                 id,
+                 updated_at,
+                 dbt_valid_from
+             from {}
+             '''.format(relation_b),
+             fetch='all'
+         )
+
+         for result in revived_records:
+             # result is a tuple, the updated_at is second and dbt_valid_from is latest
+             self.assertIsInstance(result[1], datetime)
+             self.assertIsInstance(result[2], datetime)
+             self.assertEqual(result[1].replace(tzinfo=pytz.UTC), result[2].replace(tzinfo=pytz.UTC))
+
+         if columns is None:
+             columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
+         return super()._assertTablesEqualSql(relation_a, relation_b, columns=columns)
+
+     def assert_expected(self):
+         super().assert_expected()
+         self.assertTablesEqual('snapshot_checkall', 'snapshot_expected')
+
+
+     @property
+     def project_config(self):
+         return {
+             'config-version': 2,
+             "data-paths": ['data'],
+             "snapshot-paths": ['test-check-col-snapshots-noconfig'],
+             "snapshots": {
+                 "test": {
+                     "target_schema": self.unique_schema(),
+                     "unique_key": "id || '-' || first_name",
+                     "strategy": "check",
+                     "check_cols" : "all",
+                     "updated_at": "updated_at",
+                 },
+             },
+             'macro-paths': ['macros'],
+         }
 
 
 class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
