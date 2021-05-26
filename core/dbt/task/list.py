@@ -33,8 +33,8 @@ class ListTask(GraphRunnableTask):
             "tags",
             "config",
             "resource_type",
-        'original_file_path',
-        'unique_id'
+            "source_name",
+            "original_file_path",
             "unique_id",
         )
     )
