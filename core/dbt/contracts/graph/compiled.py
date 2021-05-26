@@ -119,10 +119,6 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
-    # TODO: this is unused
-    def same_column_name(self, other) -> bool:
-        return self.column_name == other.column_name
-
     def same_contents(self, other) -> bool:
         if other is None:
             return False

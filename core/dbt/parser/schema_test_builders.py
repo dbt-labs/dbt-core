@@ -343,7 +343,7 @@ class TestBuilder(Generic[Testable]):
     # of the test macro
     def build_raw_sql(self) -> str:
         return (
-            "{config}{{{{ {macro}(**{kwargs_name}) }}}}"
+            "{{{{ {macro}(**{kwargs_name}) }}}}{config}"
         ).format(
             macro=self.macro_name(),
             config=self.construct_config(),

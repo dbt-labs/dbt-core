@@ -708,6 +708,11 @@ class TestProject(BaseConfigTest):
                     'post-hook': 'grant select on {{ this }} to bi_user',
                 },
             },
+            'tests': {
+                'my_test_project': {
+                    'fail_calc': 'sum(failures)'
+                }
+            },
             'require-dbt-version': '>=0.1.0',
         })
         packages = {
@@ -767,6 +772,11 @@ class TestProject(BaseConfigTest):
                 'enabled': True,
                 'schema': 'seed_data',
                 'post-hook': 'grant select on {{ this }} to bi_user',
+            },
+        })
+        self.assertEqual(project.tests, {
+            'my_test_project': {
+                'fail_calc': 'sum(failures)'
             },
         })
         self.assertEqual(project.dbt_version,
