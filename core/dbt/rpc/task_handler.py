@@ -80,7 +80,7 @@ class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
         """task_exec runs first inside the child process"""
         if type(self.task) != RemoteListTask:
             # TODO: find another solution for this.. in theory it stops us from
-            # being able to kill ls processes
+            # being able to kill RemoteListTask processes
             signal.signal(signal.SIGTERM, sigterm_handler)
         # the first thing we do in a new process: push logging back over our
         # queue
