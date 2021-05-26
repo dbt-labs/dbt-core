@@ -96,6 +96,7 @@ class TestSchemaTests(DBTIntegrationTest):
             self.assertTestFailed(result)
 
 
+
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
@@ -156,6 +157,7 @@ class TestHooksInTests(DBTIntegrationTest):
                 result.failures, 0,
                 'test {} failed'.format(result.node.name)
             )
+
 
 class TestCustomSchemaTests(DBTIntegrationTest):
 
