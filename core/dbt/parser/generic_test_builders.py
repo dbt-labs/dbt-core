@@ -45,13 +45,13 @@ def get_nice_generic_test_name(
     # if the full name is too long, include the first 30 identifying chars plus
     # a 32-character hash of the full contents
 
-    test_identifier = '{}_{}'.format(test_type, test_name)
-    full_name = '{}_{}'.format(test_identifier, unique)
+    test_identifier = "{}_{}".format(test_type, test_name)
+    full_name = "{}_{}".format(test_identifier, unique)
 
     if len(full_name) >= 64:
         test_trunc_identifier = test_identifier[:30]
-        label = hashlib.md5(full_name.encode('utf-8')).hexdigest()
-        short_name = '{}_{}'.format(test_trunc_identifier, label)
+        label = hashlib.md5(full_name.encode("utf-8")).hexdigest()
+        short_name = "{}_{}".format(test_trunc_identifier, label)
     else:
         short_name = full_name
 

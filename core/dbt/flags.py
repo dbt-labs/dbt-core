@@ -106,7 +106,7 @@ def set_from_args(args, user_config):
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
     FULL_REFRESH = getattr(args, 'full_refresh', FULL_REFRESH)
-    STORE_FAILURES = getattr(args, 'store_failures', STORE_FAILURES)
+    STORE_FAILURES = getattr(args, "store_failures", STORE_FAILURES)
     WHICH = getattr(args, 'which', WHICH)
 
     # global cli flags with env var and user_config alternatives

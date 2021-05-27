@@ -731,11 +731,11 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        '--store-failures',
-        action='store_true',
-        help='''
+        "--store-failures",
+        action="store_true",
+        help="""
         Store test results (failing rows) in the database
-        '''
+        """,
     )
     sub.add_argument(
         '--indirect-selection',

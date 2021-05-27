@@ -129,17 +129,15 @@ class ParsedNodeMixins(dbtClassMixin):
     @property
     def should_store_failures(self):
         return self.resource_type == NodeType.Test and (
-            self.config.store_failures if self.config.store_failures is not None
+            self.config.store_failures
+            if self.config.store_failures is not None
             else flags.STORE_FAILURES
         )
 
     # will this node map to an object in the database?
     @property
     def is_relational(self):
-        return (
-            self.resource_type in NodeType.refable() or
-            self.should_store_failures
-        )
+        return self.resource_type in NodeType.refable() or self.should_store_failures
 
     @property
     def is_ephemeral(self):

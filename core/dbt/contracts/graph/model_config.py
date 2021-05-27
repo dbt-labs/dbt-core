@@ -435,7 +435,7 @@ class SeedConfig(NodeConfig):
 class TestConfig(NodeAndTestConfig):
     # this is repeated because of a different default
     schema: Optional[str] = field(
-        default='dbt_test__audit',
+        default="dbt_test__audit",
         metadata=CompareBehavior.Exclude.meta(),
     )
     materialized: str = 'test'
