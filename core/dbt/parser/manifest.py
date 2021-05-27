@@ -655,7 +655,7 @@ def _check_resource_uniqueness(
     alias_resources: Dict[str, ManifestNode] = {}
 
     for resource, node in manifest.nodes.items():
-        if node.resource_type not in NodeType.refable():
+        if not node.is_relational:
             continue
         # appease mypy - sources aren't refable!
         assert not isinstance(node, ParsedSourceDefinition)

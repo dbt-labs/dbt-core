@@ -719,6 +719,13 @@ def _build_test_subparser(subparsers, base_subparser):
         Stop execution upon a first test failure.
         '''
     )
+    sub.add_argument(
+        '--store-failures',
+        action='store_true',
+        help='''
+        Store test results (failing rows) in the database
+        '''
+    )
 
     sub.set_defaults(cls=test_task.TestTask, which='test', rpc_method='test')
     return sub

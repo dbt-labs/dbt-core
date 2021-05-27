@@ -116,6 +116,21 @@ class ParsedNodeMixins(dbtClassMixin):
         return self.resource_type in NodeType.refable()
 
     @property
+    def should_store_failures(self):
+        return self.resource_type == NodeType.Test and (
+            self.config.store_failures if self.config.store_failures is not None
+            else flags.STORE_FAILURES
+        )
+
+    # will this node map to an object in the database?
+    @property
+    def is_relational(self):
+        return (
+            self.resource_type in NodeType.refable() or
+            self.should_store_failures
+        )
+
+    @property
     def is_ephemeral(self):
         return self.config.materialized == 'ephemeral'
 
@@ -370,10 +385,14 @@ class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     config: TestConfig = field(default_factory=TestConfig)
 
     def same_config(self, other) -> bool:
-        return (
-            self.unrendered_config.get('severity') ==
-            other.unrendered_config.get('severity')
-        )
+        comparisons = [
+            self.unrendered_config.get(modifier) == other.unrendered_config.get(modifier) or (
+                self.unrendered_config.get(modifier) is None and
+                other.unrendered_config.get(modifier) is None
+            )
+            for modifier in ('severity', 'store_failures')
+        ]
+        return all(comparisons)
 
     def same_column_name(self, other) -> bool:
         return self.column_name == other.column_name

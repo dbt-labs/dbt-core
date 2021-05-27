@@ -750,7 +750,7 @@ class DataTestParserTest(BaseParserTest):
             alias='test_1',
             name='test_1',
             database='test',
-            schema='analytics',
+            schema='dbt_test__audit',
             resource_type=NodeType.Test,
             unique_id='test.snowplow.test_1',
             fqn=['snowplow', 'data_test', 'test_1'],

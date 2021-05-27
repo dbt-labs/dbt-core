@@ -455,7 +455,7 @@ class GraphRunnableTask(ManifestTask):
         for node in self.manifest.nodes.values():
             if node.unique_id not in selected_uids:
                 continue
-            if node.is_refable and not node.is_ephemeral:
+            if node.is_relational and not node.is_ephemeral:
                 relation = adapter.Relation.create_from(self.config, node)
                 result.add(relation.without_identifier())
 
@@ -525,7 +525,6 @@ class GraphRunnableTask(ManifestTask):
                 db_schema = (db_lower, schema.lower())
                 if db_schema not in existing_schemas_lowered:
                     existing_schemas_lowered.add(db_schema)
-
                     fut = tpe.submit_connected(
                         adapter, f'create_{info.database or ""}_{info.schema}',
                         create_schema, info
