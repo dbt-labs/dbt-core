@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Union
@@ -15,10 +16,13 @@ from dbt.contracts.rpc import (
     RPCTestParameters,
     RemoteCatalogResults,
     RemoteExecutionResult,
+    RemoteListResults,
     RemoteRunOperationResult,
     RPCSnapshotParameters,
     RPCSourceFreshnessParameters,
+    RPCListParameters,
 )
+from dbt.exceptions import RuntimeException
 from dbt.rpc.method import (
     Parameters, RemoteManifestMethod
 )
@@ -32,6 +36,7 @@ from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
+from dbt.task.list import ListTask
 
 from .base import RPCTask
 from .cli import HasCLI
@@ -258,3 +263,36 @@ class GetManifest(
 
     def interpret_results(self, results):
         return results.manifest is not None
+
+
+class RemoteListTask(
+    RPCCommandTask[RPCListParameters], ListTask
+):
+    METHOD_NAME = 'list'
+
+    def set_args(self, params: RPCListParameters) -> None:
+
+        self.args.output = params.output
+        self.args.resource_types = self._listify(params.resource_types)
+        self.args.models = self._listify(params.models)
+        self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
+        self.args.select = self._listify(params.select)
+
+        if self.args.models:
+            if self.args.select:
+                raise RuntimeException(
+                    '"models" and "select" are mutually exclusive arguments'
+                )
+            if self.args.resource_types:
+                raise RuntimeException(
+                    '"models" and "resource_type" are mutually exclusive '
+                    'arguments'
+                )
+
+    @staticmethod
+    def output_results(results):
+        return RemoteListResults(
+            output=[json.loads(x) for x in results],
+            logs=None
+        )
