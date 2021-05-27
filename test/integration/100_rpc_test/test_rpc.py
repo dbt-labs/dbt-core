@@ -1176,3 +1176,99 @@ class TestRPCServerDeps(HasRPCServer):
             'cli_args', cli='deps', _poll_timeout=180).json())
 
         self._check_deps_ok(status)
+
+
+class TestRPCServerList(HasRPCServer):
+    should_seed = False
+
+    @property
+    def models(self):
+        return "models"
+
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
+    @use_profile('postgres')
+    def test_list_base_postgres(self):
+        result = self.query('list').json()
+        self.assertIsResult(result)
+        self.assertEqual(len(result["result"]["output"]), 17)
+        self.assertEqual(
+            [x["name"] for x in result["result"]["output"]],
+            [
+                'descendant_model', 
+                'ephemeral_model', 
+                'multi_source_model', 
+                'nonsource_descendant', 
+                'expected_multi_source', 
+                'other_source_table', 
+                'other_table', 
+                'source', 
+                'table', 
+                'test_table', 
+                'disabled_test_table', 
+                'other_test_table', 
+                'test_table', 
+                'relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_', 
+                'source_not_null_test_source_test_table_id', 
+                'source_relationships_test_source_test_table_favorite_color__favorite_color__ref_descendant_model_', 
+                'source_unique_test_source_test_table_id'
+                ]
+        )
+
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
+    @use_profile('postgres')
+    def test_list_resource_type_postgres(self):
+        result = self.query('list', resource_types=['model']).json()
+        self.assertIsResult(result)
+        self.assertEqual(len(result["result"]["output"]), 4)
+        self.assertEqual(
+            [x['name'] for x in result["result"]["output"]],
+            [
+                'descendant_model', 
+                'ephemeral_model', 
+                'multi_source_model', 
+                'nonsource_descendant']
+        )
+
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
+    @use_profile('postgres')
+    def test_list_models_postgres(self):
+        result = self.query('list', models=['descendant_model']).json()
+        self.assertIsResult(result)
+        self.assertEqual(len(result["result"]["output"]), 1)
+        self.assertEqual(result["result"]["output"][0]["name"], 'descendant_model')
+
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
+    @use_profile('postgres')
+    def test_list_exclude_postgres(self):
+        result = self.query('list', exclude=['+descendant_model']).json()
+        self.assertIsResult(result)
+        self.assertEqual(len(result["result"]["output"]), 11)
+        self.assertEqual(
+            [x['name'] for x in result['result']['output']],
+            [
+                'ephemeral_model', 
+                'multi_source_model', 
+                'nonsource_descendant', 
+                'expected_multi_source', 
+                'other_source_table', 
+                'other_table', 
+                'source', 
+                'table', 
+                'test_table', 
+                'disabled_test_table', 
+                'other_test_table'
+                ]
+        )
+
+    @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
+    @use_profile('postgres')
+    def test_list_select_postgres(self):
+        result = self.query('list', select=[
+            'relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_'
+            ]).json()
+        self.assertIsResult(result)
+        self.assertEqual(len(result["result"]["output"]), 1)
+        self.assertEqual(
+            result["result"]["output"][0]["name"], 
+            'relationships_descendant_model_favorite_color__favorite_color__source_test_source_test_table_'
+        )

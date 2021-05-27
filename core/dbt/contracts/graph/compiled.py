@@ -120,10 +120,14 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
     config: TestConfig = field(default_factory=TestConfig)
 
     def same_config(self, other) -> bool:
-        return (
-            self.unrendered_config.get('severity') ==
-            other.unrendered_config.get('severity')
-        )
+        comparisons = [
+            self.unrendered_config.get(modifier) == other.unrendered_config.get(modifier) or (
+                self.unrendered_config.get(modifier) is None and
+                other.unrendered_config.get(modifier) is None
+            )
+            for modifier in ('severity', 'store_failures')
+        ]
+        return all(comparisons)
 
     def same_column_name(self, other) -> bool:
         return self.column_name == other.column_name

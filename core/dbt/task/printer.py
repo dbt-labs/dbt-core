@@ -306,6 +306,13 @@ def print_run_result_error(
             logger.info("  compiled SQL at {}".format(
                 result.node.compiled_path))
 
+        if result.node.should_store_failures:
+            with TextOnly():
+                logger.info("")
+            msg = f"select * from {result.node.relation_name}"
+            border = '-' * len(msg)
+            logger.info(f"  See test failures:\n  {border}\n  {msg}\n  {border}")
+
     elif result.message is not None:
         first = True
         for line in result.message.split("\n"):

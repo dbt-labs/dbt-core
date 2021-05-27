@@ -182,8 +182,7 @@ class Compiler:
 
     def _get_relation_name(self, node: ParsedNode):
         relation_name = None
-        if (node.resource_type in NodeType.refable() and
-                not node.is_ephemeral_model):
+        if node.is_relational and not node.is_ephemeral_model:
             adapter = get_adapter(self.config)
             relation_cls = adapter.Relation
             relation_name = str(relation_cls.create_from(self.config, node))

@@ -2,16 +2,16 @@
 
 with all_values as (
 
-    select distinct
-        {{ column_name }} as value_field
+    select
+        {{ column_name }} as value_field,
+        count(*) as n_records
 
     from {{ model }}
+    group by 1
 
 )
 
-select
-    value_field
-
+select *
 from all_values
 where value_field not in (
     {% for value in values -%}

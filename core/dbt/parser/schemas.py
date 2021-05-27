@@ -493,6 +493,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 node.config['severity'] = builder.severity()
             if builder.enabled() is not None:
                 node.config['enabled'] = builder.enabled()
+            # note: this does not respect generate_alias_name() macro
+            if builder.alias() is not None:
+                node.unrendered_config['alias'] = builder.alias()
+                node.config['alias'] = builder.alias()
+                node.alias = builder.alias()
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]

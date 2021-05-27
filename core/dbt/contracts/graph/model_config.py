@@ -436,8 +436,13 @@ class SeedConfig(NodeConfig):
 
 @dataclass
 class TestConfig(NodeConfig):
+    schema: Optional[str] = field(
+        default='dbt_test__audit',
+        metadata=CompareBehavior.Exclude.meta(),
+    )
     materialized: str = 'test'
     severity: Severity = Severity('ERROR')
+    store_failures: Optional[bool] = None
 
 
 @dataclass
