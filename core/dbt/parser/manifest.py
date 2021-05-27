@@ -19,12 +19,14 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
-from dbt.clients.jinja import get_rendered, statically_extract_macro_calls
+from dbt.clients.jinja import get_rendered, MacroStack
+from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
-from dbt.context.macro_resolver import MacroResolver
-from dbt.context.base import generate_base_context
+from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
+from dbt.context.configured import generate_macro_context
+from dbt.context.providers import ParseProvider
 from dbt.contracts.files import FileHash, ParseFileType
 from dbt.parser.read_files import read_files, load_source_file
 from dbt.contracts.graph.compiled import ManifestNode
@@ -298,9 +300,17 @@ class ManifestLoader:
             self.root_project.project_name,
             internal_package_names
         )
-        base_ctx = generate_base_context({})
+        macro_ctx = generate_macro_context(self.root_project)
+        macro_namespace = TestMacroNamespace(
+            macro_resolver, {}, None, MacroStack(), []
+        )
+        adapter = get_adapter(self.root_project)
+        db_wrapper = ParseProvider().DatabaseWrapper(
+            adapter, macro_namespace
+        )
         for macro in self.manifest.macros.values():
-            possible_macro_calls = statically_extract_macro_calls(macro.macro_sql, base_ctx)
+            possible_macro_calls = statically_extract_macro_calls(
+                macro.macro_sql, macro_ctx, db_wrapper)
             for macro_name in possible_macro_calls:
                 # adapter.dispatch calls can generate a call with the same name as the macro
                 # it ought to be an adapter prefix (postgres_) or default_

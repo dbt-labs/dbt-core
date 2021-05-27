@@ -145,7 +145,7 @@ class TestMacroNamespace:
     ):
         self.macro_resolver = macro_resolver
         self.ctx = ctx
-        self.node = node
+        self.node = node  # can be none
         self.thread_ctx = thread_ctx
         self.local_namespace = {}
         self.project_namespace = {}

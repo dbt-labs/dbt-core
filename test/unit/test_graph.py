@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
-from dbt.adapters.factory import reset_adapters
+from dbt.adapters.factory import reset_adapters, register_adapter
 import dbt.clients.system
 import dbt.compilation
 import dbt.exceptions
@@ -33,8 +33,6 @@ class GraphTest(unittest.TestCase):
         self.write_gpickle_patcher.stop()
         self.load_projects_patcher.stop()
         self.file_system_patcher.stop()
-        self.get_adapter_patcher.stop()
-        self.get_adapter_patcher_parser.stop()
         self.mock_filesystem_constructor.stop()
         self.mock_hook_constructor.stop()
         self.load_state_check.stop()
@@ -98,14 +96,6 @@ class GraphTest(unittest.TestCase):
             return result
         self.mock_hook_constructor = self.hook_patcher.start()
         self.mock_hook_constructor.side_effect = create_hook_patcher
-
-        # Create get_adapter patcher
-        self.get_adapter_patcher = patch('dbt.context.providers.get_adapter')
-        self.factory = self.get_adapter_patcher.start()
-        # Also patch the base class
-        self.get_adapter_patcher_parser = patch('dbt.parser.base.get_adapter')
-        self.factory_cmn = self.get_adapter_patcher_parser.start()
-        inject_plugin(PostgresPlugin)
 
         # Create load_projects patcher
         self.load_projects_patcher = patch('dbt.parser.manifest._load_projects')
@@ -181,6 +171,8 @@ class GraphTest(unittest.TestCase):
             self.mock_models.append(source_file)
 
     def load_manifest(self, config):
+        inject_plugin(PostgresPlugin)
+        register_adapter(config)
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.manifest.macros = self.macro_manifest.macros
         loader.load()
