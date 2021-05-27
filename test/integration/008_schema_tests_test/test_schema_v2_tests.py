@@ -96,7 +96,6 @@ class TestSchemaTests(DBTIntegrationTest):
             self.assertTestFailed(result)
 
 
-
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
@@ -124,6 +123,42 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         # even if strict = False!
         with self.assertRaises(CompilationException):
             self.run_dbt(strict=False)
+
+
+class TestCustomConfigSchemaTests(DBTIntegrationTest):
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("seed.sql")
+
+    @property
+    def schema(self):
+        return 'schema_tests_008'
+
+    @property
+    def models(self):
+        return "models-v2/custom-configs"
+    
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["macros-v2/custom-configs"],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_config(self):
+        """ Test that tests use configs properly. All tests for
+        this project will fail, configs are set to make test pass. """
+        results = self.run_dbt()
+        results = self.run_dbt(['test'], strict=False)
+
+        self.assertEqual(len(results), 5)
+        for result in results:
+            self.assertFalse(result.skipped)
+            self.assertEqual(
+                result.failures, 0,
+                'test {} failed'.format(result.node.name)
+            )
 
 
 class TestHooksInTests(DBTIntegrationTest):
@@ -174,6 +209,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         return {
             'packages': [
                 {
+                    "local": "./local_dependency",
+                },
+                {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
                     'revision': 'dbt/0.17.0',
                 },
@@ -207,7 +245,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()
-        self.assertEqual(len(test_results), 5)
+        self.assertEqual(len(test_results), 6)
 
         expected_failures = [
             'not_null_table_copy_email',

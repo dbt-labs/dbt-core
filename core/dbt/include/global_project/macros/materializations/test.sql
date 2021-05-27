@@ -50,7 +50,7 @@
       {{ fail_calc }} {{ error_if }} as should_error
     from (
       {{ main_sql }}
-      {{ "limit " ~ limit if limit }}
+      {{ "limit " ~ limit if limit != none }}
     ) _dbt_internal_test
 
   {% endcall %}

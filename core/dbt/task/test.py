@@ -77,7 +77,6 @@ class TestRunner(CompileRunner):
             )
 
         # generate materialization macro
-        # simple `select(*)` of the compiled test node
         macro_func = MacroGenerator(materialization_macro, context)
         # execute materialization macro
         macro_func()
@@ -117,9 +116,11 @@ class TestRunner(CompileRunner):
         num_errors = utils.pluralize(result.failures, 'result')
         status = None
         message = None
+        failures = 0
         if severity == "ERROR" and result.should_error:
             status = TestStatus.Fail
             message = f'Got {num_errors}, configured to fail if {test.config.error_if}'
+            failures = result.failures
         elif result.should_warn:
             if flags.WARN_ERROR:
                 status = TestStatus.Fail
@@ -127,6 +128,7 @@ class TestRunner(CompileRunner):
             else:
                 status = TestStatus.Warn
                 message = f'Got {num_errors}, configured to warn if {test.config.warn_if}'
+            failures = result.failures
         else:
             status = TestStatus.Pass
 
@@ -138,7 +140,7 @@ class TestRunner(CompileRunner):
             execution_time=0,
             message=message,
             adapter_response={},
-            failures=int(result.failures),
+            failures=failures,
         )
 
     def after_execute(self, result):

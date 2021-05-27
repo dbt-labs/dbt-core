@@ -570,7 +570,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True, profiles_dir=True):
         res, success = self.run_dbt_and_check(args=args, strict=strict, parser=parser, profiles_dir=profiles_dir)
-
         self.assertEqual(
             success, expect_pass,
             "dbt exit state did not match expected")
