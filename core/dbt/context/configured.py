@@ -111,9 +111,7 @@ class MacroResolvingContext(ConfiguredContext):
 
     @contextproperty
     def var(self) -> ConfiguredVar:
-        return ConfiguredVar(
-            self._ctx, self.config, self.config.project_name
-        )
+        return ConfiguredVar(self._ctx, self.config, self.config.project_name)
 
 
 def generate_schema_yml_context(

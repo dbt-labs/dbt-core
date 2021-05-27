@@ -613,7 +613,7 @@ class Project:
                 "quoting": self.quoting,
                 "models": self.models,
                 "on-run-start": self.on_run_start,
-            'dispatch': self.dispatch,
+                "on-run-end": self.on_run_end,
                 "dispatch": self.dispatch,
             'snapshots': self.snapshots,
             'sources': self.sources,
@@ -683,6 +683,6 @@ class Project:
 
     def get_macro_search_order(self, macro_namespace: str):
         for dispatch_entry in self.dispatch:
-            if dispatch_entry['macro_namespace'] == macro_namespace:
-                return dispatch_entry['search_order']
+            if dispatch_entry["macro_namespace"] == macro_namespace:
+                return dispatch_entry["search_order"]
         return None

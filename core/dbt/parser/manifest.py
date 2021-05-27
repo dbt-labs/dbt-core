@@ -505,14 +505,13 @@ class ManifestLoader:
             self.macro_resolver, {}, None, MacroStack(), []
         )
         adapter = get_adapter(self.root_project)
-        db_wrapper = ParseProvider().DatabaseWrapper(
-            adapter, macro_namespace
-        )
+        db_wrapper = ParseProvider().DatabaseWrapper(adapter, macro_namespace)
         for macro in self.manifest.macros.values():
             if macro.created_at < self.started_at:
                 continue
             possible_macro_calls = statically_extract_macro_calls(
-                macro.macro_sql, macro_ctx, db_wrapper)
+                macro.macro_sql, macro_ctx, db_wrapper
+            )
             for macro_name in possible_macro_calls:
                 # adapter.dispatch calls can generate a call with the same name as the macro
                 # it ought to be an adapter prefix (postgres_) or default_

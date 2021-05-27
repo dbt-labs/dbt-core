@@ -227,11 +227,14 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
                 f"Invalid project name: {data['name']} is a reserved word"
             )
         # validate dispatch config
-        if 'dispatch' in data and data['dispatch']:
-            entries = data['dispatch']
+        if "dispatch" in data and data["dispatch"]:
+            entries = data["dispatch"]
             for entry in entries:
-                if ('macro_namespace' not in entry or 'search_order' not in entry or
-                        not isinstance(entry['search_order'], list)):
+                if (
+                    "macro_namespace" not in entry
+                    or "search_order" not in entry
+                    or not isinstance(entry["search_order"], list)
+                ):
                     raise ValidationError(f"Invalid project dispatch config: {entry}")
 
 
