@@ -5,6 +5,7 @@ import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from io import StringIO
+from time import sleep
 from typing import Optional
 
 from cryptography.hazmat.backends import default_backend
@@ -106,6 +107,7 @@ class SnowflakeCredentials(Credentials):
                 'need a client ID a client secret, and a refresh token to get '
                 'an access token'
             )
+
         # should the full url be a config item?
         token_url = _TOKEN_REQUEST_URL.format(self.account)
         # I think this is only used to redirect on success, which we ignore
@@ -125,10 +127,25 @@ class SnowflakeCredentials(Credentials):
             'Authorization': f'Basic {auth}',
             'Content-type': 'application/x-www-form-urlencoded;charset=utf-8'
         }
-        result = requests.post(token_url, headers=headers, data=data)
-        result_json = result.json()
-        if 'access_token' not in result_json:
-            raise DatabaseException(f'Did not get a token: {result_json}')
+
+        result_json = None
+        max_iter = 20
+        # Attempt to obtain JSON for 1 second before throwing an error
+        for i in range(max_iter):
+            result = requests.post(token_url, headers=headers, data=data)
+            try:
+                result_json = result.json()
+                break
+            except ValueError as e:
+                message = result.text
+                logger.debug(f"Got a non-json response ({result.status_code}): \
+                              {e}, message: {message}")
+                sleep(0.05)
+
+        if result_json is None:
+            raise DatabaseException(f"""Did not receive valid json with access_token.
+                                        Showing json response: {result_json}""")
+
         return result_json['access_token']
 
     def _get_private_key(self):

@@ -19,13 +19,14 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
         profiles_dir=profiles_dir,
         schema=schema,
         test_kwargs={},
+        criteria='error',
     )
 
     with querier_ctx as querier:
         # we should be able to run sql queries at startup
-        querier.async_wait_for_result(querier.run_sql('select 1 as id'))
+        querier.is_error(querier.run_sql('select 1 as id'))
 
-        # the status should be something positive
+        # the status should be an error as deps wil not be defined
         querier.is_result(querier.status())
 
         # deps should pass

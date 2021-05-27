@@ -4,10 +4,15 @@ FROM $BASE_IMAGE
 ARG BASE_REQUIREMENTS_SRC_PATH
 ARG WHEEL_REQUIREMENTS_SRC_PATH
 ARG DIST_PATH
-RUN apt-get update \
+
+# We need backport packages to get a more recent version of git
+RUN printf "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/backports_git.list && \
+    apt-get update \
     && apt-get dist-upgrade -y \
     && apt-get install -y --no-install-recommends \
-    git \
+    git-man/buster-backports \
+    git/buster-backports \
+    ssh-client \
     software-properties-common \
     make \
     build-essential \
