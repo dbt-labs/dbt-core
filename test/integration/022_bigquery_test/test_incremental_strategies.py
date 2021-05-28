@@ -10,6 +10,18 @@ class TestBigQueryScripting(DBTIntegrationTest):
     def models(self):
         return "incremental-strategy-models"
 
+    @property
+    def project_config(self):
+        return {
+            "config_version": 2,
+            "seeds": {
+                "+quote_columns": False
+            },
+            "models": {
+                "require_partition_filter": True
+            }
+        }
+
     @use_profile('bigquery')
     def test__bigquery_assert_incrementals(self):
         results = self.run_dbt()
