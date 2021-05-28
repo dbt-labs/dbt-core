@@ -13,7 +13,6 @@ class TestBigQueryScripting(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "config_version": 2,
             "seeds": {
                 "+quote_columns": False
             },
