@@ -73,6 +73,9 @@ jobs:
           & $env:PGBIN\psql.exe  -U postgres -c "CREATE ROLE noaccess WITH PASSWORD '$env:NOACCESS_PASSWORD' NOSUPERUSER;"
           & $env:PGBIN\psql.exe  -U postgres -c "ALTER ROLE noaccess WITH LOGIN;"
           & $env:PGBIN\psql.exe  -U postgres -c "GRANT CONNECT ON DATABASE dbt TO noaccess;"
+      env:
+          ROOT_PASSWORD: ${{ secrets.ROOT_PASSWORD }}
+          NOACCESS_PASSWORD: ${{ secrets.NOACCESS_PASSWORD }}
       
     - name: Setup Python
       uses: actions/setup-python@v2.2.2
