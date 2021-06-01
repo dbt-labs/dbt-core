@@ -2025,6 +2025,8 @@ def minimal_parsed_exposure_dict():
         'fqn': ['test', 'exposures', 'my_exposure'],
         'unique_id': 'exposure.test.my_exposure',
         'package_name': 'test',
+        'meta': {},
+        'tags': [],
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
@@ -2053,7 +2055,9 @@ def basic_parsed_exposure_dict():
         'path': 'models/something.yml',
         'root_path': '/usr/src/app',
         'original_file_path': 'models/something.yml',
-        'description': ''
+        'description': '',
+        'meta': {},
+        'tags': []
     }
 
 
@@ -2069,7 +2073,9 @@ def basic_parsed_exposure_object():
         root_path='/usr/src/app',
         original_file_path='models/something.yml',
         owner=ExposureOwner(email='test@example.com'),
-        description=''
+        description='',
+        meta={},
+        tags=[]
     )
 
 
@@ -2086,6 +2092,11 @@ def complex_parsed_exposure_dict():
         'maturity': 'low',
         'url': 'https://example.com/analyses/1',
         'description': 'my description',
+        'meta': {
+            'tool': 'my_tool',
+            'is_something': False
+        },
+        'tags': ['my_department'],
         'depends_on': {
             'nodes': ['models.test.my_model'],
             'macros': [],
@@ -2110,6 +2121,8 @@ def complex_parsed_exposure_object():
         maturity=MaturityType.Low,
         url='https://example.com/analyses/1',
         description='my description',
+        meta={'tool': 'my_tool', 'is_something': False},
+        tags=['my_department'],
         depends_on=DependsOn(nodes=['models.test.my_model']),
         fqn=['test', 'exposures', 'my_exposure'],
         unique_id='exposure.test.my_exposure',

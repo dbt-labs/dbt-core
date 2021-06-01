@@ -687,6 +687,8 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     resource_type: NodeType = NodeType.Exposure
     description: str = ''
     maturity: Optional[MaturityType] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
@@ -699,11 +701,6 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     @property
     def search_name(self):
         return self.name
-
-    # no tags for now, but we could definitely add them
-    @property
-    def tags(self):
-        return []
 
     def same_depends_on(self, old: 'ParsedExposure') -> bool:
         return set(self.depends_on.nodes) == set(old.depends_on.nodes)
@@ -725,6 +722,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     def same_contents(self, old: Optional['ParsedExposure']) -> bool:
         # existing when it didn't before is a change!
+        # metadata/tags changes are not "changes"
         if old is None:
             return True
 

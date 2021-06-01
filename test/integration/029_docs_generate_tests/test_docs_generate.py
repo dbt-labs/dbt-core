@@ -1566,6 +1566,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'A description of the complex exposure\n',
                     'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
+                    'meta': {'tool': 'my_tool', 'languages': ['python']},
+                    'tags': ['my_department'],
                     'name': 'notebook_exposure',
                     'original_file_path': self.dir('models/schema.yml'),
                     'owner': {
@@ -1608,6 +1610,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'exposure.test.simple_exposure',
                     'url': None,
                     'maturity': None,
+                    'meta': {},
+                    'tags': []
                 }
             },
             'selectors': {},
@@ -2002,6 +2006,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'A description of the complex exposure',
                     'fqn': ['test', 'notebook_exposure'],
                     'maturity': 'medium',
+                    'meta': {'tool': 'my_tool', 'languages': ['python']},
+                    'tags': ['my_department'],
                     'name': 'notebook_exposure',
                     'original_file_path': self.dir('ref_models/schema.yml'),
                     'owner': {

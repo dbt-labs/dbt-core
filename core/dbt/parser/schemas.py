@@ -992,6 +992,8 @@ class ExposureParser(YamlReader):
             name=unparsed.name,
             type=unparsed.type,
             url=unparsed.url,
+            meta=unparsed.meta,
+            tags=unparsed.tags,
             description=unparsed.description,
             owner=unparsed.owner,
             maturity=unparsed.maturity,

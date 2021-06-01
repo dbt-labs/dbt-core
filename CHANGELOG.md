@@ -26,6 +26,7 @@
 - Added `unique_id` and `original_file_path` as keys to json responses from the `list` task ([#3356](https://github.com/fishtown-analytics/dbt/issues/3356), [#3384](https://github.com/fishtown-analytics/dbt/pull/3384))
 - Use shutil.which so Windows can pick up git.bat as a git executable ([#3035](https://github.com/fishtown-analytics/dbt/issues/3035), [#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - Add `ssh-client` and update `git` version (using buster backports) in Docker image ([#3337](https://github.com/fishtown-analytics/dbt/issues/3337), [#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
+- Add `tags` and `meta` properties to the exposure resource scheam. ([#3404](https://github.com/fishtown-analytics/dbt/pull/3405))
 
 Contributors:
 - [@TeddyCr](https://github.com/TeddyCr) ([#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
@@ -38,6 +39,7 @@ Contributors:
 - [@PJGaetan](https://github.com/PJGaetan) ([#3315](https://github.com/fishtown-analytics/dbt/pull/3376))
 - [@jnatkins](https://github.com/jnatkins) ([#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 - [@matt-winkler](https://github.com/matt-winkler) ([#3365](https://github.com/fishtown-analytics/dbt/pull/3365))
+- [@stkbailey](https://github.com/stkbailey) ([#3404](https://github.com/fishtown-analytics/dbt/pull/3405))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 
