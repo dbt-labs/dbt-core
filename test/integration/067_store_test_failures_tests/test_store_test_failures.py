@@ -39,7 +39,7 @@ class TestStoreTestFailures(DBTIntegrationTest):
         results = self.run_dbt(["test", "--store-failures"], expect_pass=False)
 
         # compare test results
-        actual = [(r.status, r.message) for r in results]
+        actual = [(r.status, r.failures) for r in results]
         expected = [('pass', 0), ('pass', 0), ('pass', 0), ('pass', 0),
                     ('fail', 2), ('fail', 2), ('fail', 2), ('fail', 10),]
         self.assertEqual(sorted(actual), sorted(expected))

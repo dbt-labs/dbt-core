@@ -20,7 +20,7 @@
     {% do relations.append(target_relation) %}
   
     {% set main_sql %}
-        select count(*) as validation_errors
+        select *
         from {{ target_relation }}
     {% endset %}
     
@@ -29,7 +29,7 @@
   {% else %}
 
       {% set main_sql %}
-          select count(*) as validation_errors
+          select *
           from (
             {{ sql }}
           ) _dbt_internal_test
@@ -53,7 +53,7 @@
       {{ "limit " ~ limit if limit != none }}
     ) _dbt_internal_test
 
-  {% endcall %}
+  {%- endcall %}
   
   {{ return({'relations': relations}) }}
 

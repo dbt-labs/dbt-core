@@ -280,12 +280,15 @@ class TestBuilder(Generic[Testable]):
             test_args['column_name'] = name
         return test_name, test_args
 
+    @property
     def enabled(self) -> Optional[bool]:
         return self.modifiers.get('enabled')
 
+    @property
     def alias(self) -> Optional[str]:
         return self.modifiers.get('alias')
 
+    @property
     def severity(self) -> Optional[str]:
         sev = self.modifiers.get('severity')
         if sev:
@@ -293,21 +296,27 @@ class TestBuilder(Generic[Testable]):
         else:
             return None
 
+    @property
     def store_failures(self) -> Optional[bool]:
         return self.modifiers.get('store_failures')
 
+    @property
     def where(self) -> Optional[str]:
         return self.modifiers.get('where')
 
+    @property
     def limit(self) -> Optional[int]:
         return self.modifiers.get('limit')
 
+    @property
     def warn_if(self) -> Optional[str]:
         return self.modifiers.get('warn_if')
 
+    @property
     def error_if(self) -> Optional[str]:
         return self.modifiers.get('error_if')
 
+    @property
     def fail_calc(self) -> Optional[str]:
         return self.modifiers.get('fail_calc')
 
@@ -346,7 +355,8 @@ class TestBuilder(Generic[Testable]):
 
     def construct_config(self) -> str:
         configs = ",".join([
-            f"{key}=" + (f"'{value}'" if isinstance(value, str) else str(value))
+            f"{key}=" + (f"'{value}'" if isinstance(value, str)
+                         else str(value))
             for key, value
             in self.modifiers.items()
         ])

@@ -445,9 +445,9 @@ class TestConfig(NodeConfig):
     store_failures: Optional[bool] = None
     where: Optional[str] = None
     limit: Optional[int] = None
-    fail_calc: str = "count(*)"
-    warn_if: str = "!= 0"
-    error_if: str = "!= 0"
+    fail_calc: str = 'count(*)'
+    warn_if: str = '!= 0'
+    error_if: str = '!= 0'
 
     @classmethod
     def same_contents(
@@ -460,7 +460,8 @@ class TestConfig(NodeConfig):
             'limit',
             'fail_calc',
             'warn_if',
-            'error_if'
+            'error_if',
+            'store_failures'
         ]
 
         seen = set()
