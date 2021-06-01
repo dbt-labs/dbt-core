@@ -67,10 +67,10 @@ jobs:
           Set-Service -InputObject $serviceName -StartupType Automatic
           Start-Service -InputObject $serviceName
           & $env:PGBIN\createdb.exe -U postgres dbt
-          & $env:PGBIN\psql.exe  -U postgres -c "CREATE ROLE root WITH PASSWORD 'password';"
+          & $env:PGBIN\psql.exe  -U postgres -c "CREATE ROLE root WITH PASSWORD '$env:ROOT_PASSWORD';"
           & $env:PGBIN\psql.exe  -U postgres -c "ALTER ROLE root WITH LOGIN;"
           & $env:PGBIN\psql.exe  -U postgres -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"
-          & $env:PGBIN\psql.exe  -U postgres -c "CREATE ROLE noaccess WITH PASSWORD 'password' NOSUPERUSER;"
+          & $env:PGBIN\psql.exe  -U postgres -c "CREATE ROLE noaccess WITH PASSWORD '$env:NOACCESS_PASSWORD' NOSUPERUSER;"
           & $env:PGBIN\psql.exe  -U postgres -c "ALTER ROLE noaccess WITH LOGIN;"
           & $env:PGBIN\psql.exe  -U postgres -c "GRANT CONNECT ON DATABASE dbt TO noaccess;"
       
