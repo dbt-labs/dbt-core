@@ -18,7 +18,7 @@
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
 - Raise better error if snapshot is missing required configurations ([#3381](https://github.com/fishtown-analytics/dbt/issues/3381), [#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 - Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350)
-- Fix adapter.dispatch macro resolution when statically extracting macros. Introduce new project-level `dispatch` config ([#3362](https://github.com/fishtown-analytics/dbt/issues/3362), [#3363](https://github.com/fishtown-analytics/dbt/pull/3363), [#3383](https://github.com/fishtown-analytics/dbt/pull/3383))
+- Fix adapter.dispatch macro resolution when statically extracting macros. Introduce new project-level `dispatch` config. Add backwards compatibility for known packages ([#3362](https://github.com/fishtown-analytics/dbt/issues/3362), [#3363](https://github.com/fishtown-analytics/dbt/pull/3363), [#3383](https://github.com/fishtown-analytics/dbt/pull/3383), [#3403](https://github.com/fishtown-analytics/dbt/pull/3403))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))

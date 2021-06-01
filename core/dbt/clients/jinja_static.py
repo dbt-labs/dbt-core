@@ -153,9 +153,16 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
                 package_name = packages_arg.node.node.name
                 macro_name = packages_arg.node.attr
                 if (macro_name.startswith('_get') and 'namespaces' in macro_name):
-                    # do the thing
+                    # noqa: https://github.com/fishtown-analytics/dbt-utils/blob/9e9407b/macros/cross_db_utils/_get_utils_namespaces.sql
                     var_name = f'{package_name}_dispatch_list'
-                    namespace_names = get_dispatch_list(ctx, var_name, [package_name])
+                    # hard code compatibility for fivetran_utils, just a teensy bit different
+                    # noqa: https://github.com/fivetran/dbt_fivetran_utils/blob/0978ba2/macros/_get_utils_namespaces.sql
+                    if package_name == 'fivetran_utils':
+                        default_packages = ['dbt_utils', 'fivetran_utils']
+                    else:
+                        default_packages = [package_name]
+
+                    namespace_names = get_dispatch_list(ctx, var_name, default_packages)
                     if namespace_names:
                         packages.extend(namespace_names)
                 else:
