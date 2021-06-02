@@ -170,9 +170,7 @@ T = TypeVar("T", bound="BaseConfig")
 
 
 @dataclass
-class BaseConfig(
-    AdditionalPropertiesAllowed, Replaceable
-):
+class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
 
     # enable syntax like: config['key']
     def __getitem__(self, key):
