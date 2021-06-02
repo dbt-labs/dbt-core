@@ -32,7 +32,7 @@
           select *
           from (
             {{ sql }}
-          ) _dbt_internal_test
+          ) dbt_internal_test
       {% endset %}
   
   {% endif %}
@@ -51,7 +51,7 @@
     from (
       {{ main_sql }}
       {{ "limit " ~ limit if limit != none }}
-    ) _dbt_internal_test
+    ) dbt_internal_test
 
   {%- endcall %}
   
