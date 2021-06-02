@@ -61,12 +61,8 @@ class ParseTask(ConfiguredTask):
             print_timestamped_line("Dependencies loaded")
             loader = ManifestLoader(root_config, projects, macro_hook)
             print_timestamped_line("ManifestLoader created")
-            loader.load()
+            manifest = loader.load()
             print_timestamped_line("Manifest loaded")
-            loader.write_manifest_for_partial_parse()
-            print_timestamped_line("Manifest for partial parse saved")
-            manifest = loader.update_manifest()
-            print_timestamped_line("Manifest updated")
             _check_manifest(manifest, root_config)
             print_timestamped_line("Manifest checked")
             manifest.build_flat_graph()
@@ -93,5 +89,6 @@ class ParseTask(ConfiguredTask):
         if self.args.write_manifest:
             print_timestamped_line('Writing manifest.')
             self.write_manifest()
+
         self.write_perf_info()
         print_timestamped_line('Done.')

@@ -78,7 +78,3 @@ class SnapshotParser(
         )
         for block in blocks:
             self.parse_node(block)
-        # in case there are no snapshots declared, we still want to mark this
-        # file as seen. But after we've finished, because we don't want to add
-        # files with syntax errors
-        self.manifest.get_file(file_block.file)

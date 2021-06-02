@@ -184,15 +184,24 @@ def compare_dicts(dict1, dict2):
         print("--- Found no differences in dictionaries")
 
 
-def assert_to_dict(obj, dct):
-    assert obj.to_dict(omit_none=True) == dct
-
-
 def assert_from_dict(obj, dct, cls=None):
     if cls is None:
         cls = obj.__class__
     cls.validate(dct)
-    assert cls.from_dict(dct) == obj
+    obj_from_dict = cls.from_dict(dct)
+    if hasattr(obj, 'created_at'):
+        obj_from_dict.created_at = 1
+        obj.created_at = 1
+    assert obj_from_dict == obj
+
+
+def assert_to_dict(obj, dct):
+    obj_to_dict = obj.to_dict(omit_none=True)
+    if 'created_at' in obj_to_dict:
+        obj_to_dict['created_at'] = 1
+    if 'created_at' in dct:
+        dct['created_at'] = 1
+    assert obj_to_dict == dct
 
 
 def assert_symmetric(obj, dct, cls=None):

@@ -1,0 +1,17 @@
+version: 2
+sources:
+  - name: seed_sources
+    schema: "{{ target.schema }}"
+    tables:
+      - name: raw_customers
+        columns:
+          - name: id
+            tests:
+              - not_null:
+                  severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
+              - unique
+          - name: first_name
+          - name: last_name
+          - name: email
+
+

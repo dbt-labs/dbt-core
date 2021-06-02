@@ -7,7 +7,7 @@ from typing import (
 from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
 from dbt.config import Project
-from dbt.contracts.files import SourceFile, FilePath
+from dbt.contracts.files import FilePath, AnySourceFile
 from dbt.exceptions import CompilationException, InternalException
 
 
@@ -15,7 +15,7 @@ from dbt.exceptions import CompilationException, InternalException
 # Could it be removed?
 @dataclass
 class FileBlock:
-    file: SourceFile
+    file: AnySourceFile
 
     @property
     def name(self):
@@ -37,7 +37,7 @@ class FileBlock:
 # difference is what 'contents' returns?
 @dataclass
 class BlockContents(FileBlock):
-    file: SourceFile  # if you remove this, mypy will get upset
+    file: AnySourceFile  # if you remove this, mypy will get upset
     block: BlockTag
 
     @property
@@ -51,7 +51,7 @@ class BlockContents(FileBlock):
 
 @dataclass
 class FullBlock(FileBlock):
-    file: SourceFile  # if you remove this, mypy will get upset
+    file: AnySourceFile  # if you remove this, mypy will get upset
     block: BlockTag
 
     @property
@@ -93,7 +93,7 @@ Block = Union[BlockContents, FullBlock]
 
 BlockSearchResult = TypeVar('BlockSearchResult', BlockContents, FullBlock)
 
-BlockSearchResultFactory = Callable[[SourceFile, BlockTag], BlockSearchResult]
+BlockSearchResultFactory = Callable[[AnySourceFile, BlockTag], BlockSearchResult]
 
 
 class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):

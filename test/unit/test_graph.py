@@ -176,7 +176,6 @@ class GraphTest(unittest.TestCase):
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.manifest.macros = self.macro_manifest.macros
         loader.load()
-        loader.update_manifest()
         return loader.manifest
 
     def test__single_model(self):

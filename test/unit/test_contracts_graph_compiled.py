@@ -11,8 +11,8 @@ from dbt.contracts.graph.parsed import (
 from dbt.node_types import NodeType
 
 from .utils import (
-    assert_from_dict,
     assert_symmetric,
+    assert_from_dict,
     assert_fails_validation,
     dict_replace,
     replace_config,
@@ -88,6 +88,7 @@ def minimal_uncompiled_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
         'original_file_path': 'models/foo.sql',
@@ -109,6 +110,7 @@ def basic_uncompiled_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
         'original_file_path': 'models/foo.sql',
@@ -152,6 +154,7 @@ def basic_compiled_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
         'original_file_path': 'models/foo.sql',
@@ -310,6 +313,7 @@ def minimal_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -402,6 +406,7 @@ def basic_uncompiled_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -454,6 +459,7 @@ def basic_compiled_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
