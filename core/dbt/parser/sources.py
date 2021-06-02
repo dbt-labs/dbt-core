@@ -1,8 +1,6 @@
 import itertools
 from pathlib import Path
-from typing import (
-    Iterable, Dict, Optional, Set, List, Any
-)
+from typing import Iterable, Dict, Optional, Set, List, Any
 from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import (
