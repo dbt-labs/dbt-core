@@ -81,7 +81,7 @@ from dbt.version import __version__
 
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
 
-PARTIAL_PARSE_FILE_NAME = 'partial_parse.msgpack'
+PARTIAL_PARSE_FILE_NAME = "partial_parse.msgpack"
 PARSING_STATE = DbtProcessState('parsing')
 
 
@@ -313,7 +313,7 @@ class ManifestLoader:
                 self.partially_parsing = False
                 self.load_and_parse_macros(project_parser_files)
 
-            self._perf_info.load_macros_elapsed = (time.perf_counter() - start_load_macros)
+            self._perf_info.load_macros_elapsed = time.perf_counter() - start_load_macros
 
             # Now that the macros are parsed, parse the rest of the files.
             # This is currently done on a per project basis.
@@ -322,14 +322,18 @@ class ManifestLoader:
             # Load the rest of the files except for schema yaml files
             parser_types: List[Type[Parser]] = [
                 ModelParser,
-                SeedParser, DocumentationParser, HookParser]
+                SnapshotParser,
+                AnalysisParser,
+                SingularTestParser,
+                SeedParser,
+                DocumentationParser,
+                HookParser,
+            ]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
                     continue
                 self.parse_project(
-                    project,
-                    project_parser_files[project.project_name],
-                    parser_types
+                    project, project_parser_files[project.project_name], parser_types
                 )
 
             # Now that we've loaded most of the nodes (except for schema tests and sources)
@@ -346,12 +350,10 @@ class ManifestLoader:
                 if project.project_name not in project_parser_files:
                     continue
                 self.parse_project(
-                    project,
-                    project_parser_files[project.project_name],
-                    parser_types
+                    project, project_parser_files[project.project_name], parser_types
                 )
 
-            self._perf_info.parse_project_elapsed = (time.perf_counter() - start_parse_projects)
+            self._perf_info.parse_project_elapsed = time.perf_counter() - start_parse_projects
 
             # patch_sources converts the UnparsedSourceDefinitions in the
             # Manifest.sources to ParsedSourceDefinition via 'patch_source'
@@ -360,9 +362,7 @@ class ManifestLoader:
             patcher = SourcePatcher(self.root_project, self.manifest)
             patcher.construct_sources()
             self.manifest.sources = patcher.sources
-            self._perf_info.patch_sources_elapsed = (
-                time.perf_counter() - start_patch
-            )
+            self._perf_info.patch_sources_elapsed = time.perf_counter() - start_patch
             # We need to rebuild disabled in order to include disabled sources
             self.manifest.rebuild_disabled_lookup()
 
@@ -378,9 +378,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
 
             # update tracking data
-            self._perf_info.process_manifest_elapsed = (
-                time.perf_counter() - start_process
-            )
+            self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
             self._perf_info.static_analysis_parsed_path_count = (
                 self.manifest._parsing_info.static_analysis_parsed_path_count
             )
@@ -538,7 +536,7 @@ class ManifestLoader:
                 self.manifest.metadata.dbt_version = __version__
             manifest_msgpack = self.manifest.to_msgpack()
             make_directory(os.path.dirname(path))
-            with open(path, 'wb') as fp:
+            with open(path, "wb") as fp:
                 fp.write(manifest_msgpack)
         except Exception:
             raise

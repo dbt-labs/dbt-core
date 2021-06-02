@@ -3,7 +3,9 @@ from copy import deepcopy
 from typing import MutableMapping, Dict, List
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import (
-    AnySourceFile, ParseFileType, parse_file_type_to_parser,
+    AnySourceFile,
+    ParseFileType,
+    parse_file_type_to_parser,
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
@@ -30,18 +32,18 @@ mg_files = (
 
 
 key_to_prefix = {
-    'models': 'model',
-    'seeds': 'seed',
-    'snapshots': 'snapshot',
-    'analyses': 'analysis',
+    "models": "model",
+    "seeds": "seed",
+    "snapshots": "snapshot",
+    "analyses": "analysis",
 }
 
 
 parse_file_type_to_key = {
-    ParseFileType.Model: 'models',
-    ParseFileType.Seed: 'seeds',
-    ParseFileType.Snapshot: 'snapshots',
-    ParseFileType.Analysis: 'analyses',
+    ParseFileType.Model: "models",
+    ParseFileType.Seed: "seeds",
+    ParseFileType.Snapshot: "snapshots",
+    ParseFileType.Analysis: "analyses",
 }
 
 
@@ -80,11 +82,11 @@ class PartialParsing:
 
     def skip_parsing(self):
         return (
-            not self.file_diff['deleted'] and
-            not self.file_diff['added'] and
-            not self.file_diff['changed'] and
-            not self.file_diff['changed_schema_files'] and
-            not self.file_diff['deleted_schema_files']
+            not self.file_diff["deleted"]
+            and not self.file_diff["added"]
+            and not self.file_diff["changed"]
+            and not self.file_diff["changed_schema_files"]
+            and not self.file_diff["deleted_schema_files"]
         )
 
     # Compare the previously saved manifest files and the just-loaded manifest
@@ -118,7 +120,7 @@ class PartialParsing:
                 # separate out changed schema files
                 if self.saved_files[file_id].parse_file_type == ParseFileType.Schema:
                     sf = self.saved_files[file_id]
-                    if type(sf).__name__ != 'SchemaSourceFile':
+                    if type(sf).__name__ != "SchemaSourceFile":
                         raise Exception(f"Serialization failure for {file_id}")
                     changed_schema_files.append(file_id)
                 else:
@@ -160,21 +162,21 @@ class PartialParsing:
             return {}
         # Need to add new files first, because changes in schema files
         # might refer to them
-        for file_id in self.file_diff['added']:
+        for file_id in self.file_diff["added"]:
             self.processing_file = file_id
             self.add_to_saved(file_id)
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
-        for file_id in self.file_diff['changed_schema_files']:
+        for file_id in self.file_diff["changed_schema_files"]:
             self.processing_file = file_id
             self.change_schema_file(file_id)
-        for file_id in self.file_diff['deleted_schema_files']:
+        for file_id in self.file_diff["deleted_schema_files"]:
             self.processing_file = file_id
             self.delete_schema_file(file_id)
-        for file_id in self.file_diff['deleted']:
+        for file_id in self.file_diff["deleted"]:
             self.processing_file = file_id
             self.delete_from_saved(file_id)
-        for file_id in self.file_diff['changed']:
+        for file_id in self.file_diff["changed"]:
             self.processing_file = file_id
             self.update_in_saved(file_id)
         return self.project_parser_files
@@ -185,14 +187,18 @@ class PartialParsing:
         parser_name = parse_file_type_to_parser[source_file.parse_file_type]
         project_name = source_file.project_name
         if not parser_name or not project_name:
-            raise Exception(f"Did not find parse_file_type or project_name "
-                            f"in SourceFile for {source_file.file_id}")
+            raise Exception(
+                f"Did not find parse_file_type or project_name "
+                f"in SourceFile for {source_file.file_id}"
+            )
         if project_name not in self.project_parser_files:
             self.project_parser_files[project_name] = {}
         if parser_name not in self.project_parser_files[project_name]:
             self.project_parser_files[project_name][parser_name] = []
-        if (file_id not in self.project_parser_files[project_name][parser_name] and
-                file_id not in self.file_diff['deleted']):
+        if (
+            file_id not in self.project_parser_files[project_name][parser_name]
+            and file_id not in self.file_diff["deleted"]
+        ):
             self.project_parser_files[project_name][parser_name].append(file_id)
 
     def already_scheduled_for_parsing(self, source_file):
@@ -220,11 +226,11 @@ class PartialParsing:
 
     def handle_added_schema_file(self, source_file):
         source_file.pp_dict = source_file.dict_from_yaml.copy()
-        if 'sources' in source_file.pp_dict:
-            for source in source_file.pp_dict['sources']:
+        if "sources" in source_file.pp_dict:
+            for source in source_file.pp_dict["sources"]:
                 # We need to remove the original source, so it can
                 # be properly patched
-                if 'overrides' in source:
+                if "overrides" in source:
                     self.remove_source_override_target(source)
 
     # Deletes for all non-schema files
@@ -381,7 +387,7 @@ class PartialParsing:
                     # test nodes are handled separately. Must be removed from schema file
                     continue
                 file_id = node.file_id
-                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     source_file = self.saved_files[file_id]
                     self.remove_mssat_file(source_file)
                     # content of non-schema files is only in new files
@@ -390,28 +396,28 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.sources:
                 source = self.saved_manifest.sources[unique_id]
                 file_id = source.file_id
-                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     schema_file = self.saved_files[file_id]
                     sources = []
-                    if 'sources' in schema_file.dict_from_yaml:
-                        sources = schema_file.dict_from_yaml['sources']
+                    if "sources" in schema_file.dict_from_yaml:
+                        sources = schema_file.dict_from_yaml["sources"]
                     source_element = self.get_schema_element(sources, source.source_name)
                     if source_element:
                         self.delete_schema_source(schema_file, source_element)
                         self.remove_tests(schema_file, 'sources', source_element['name'])
-                        self.merge_patch(schema_file, 'sources', source_element)
+                        self.merge_patch(schema_file, "sources", source_element)
             elif unique_id in self.saved_manifest.exposures:
                 exposure = self.saved_manifest.exposures[unique_id]
                 file_id = exposure.file_id
-                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     schema_file = self.saved_files[file_id]
                     exposures = []
-                    if 'exposures' in schema_file.dict_from_yaml:
-                        exposures = schema_file.dict_from_yaml['exposures']
+                    if "exposures" in schema_file.dict_from_yaml:
+                        exposures = schema_file.dict_from_yaml["exposures"]
                     exposure_element = self.get_schema_element(exposures, exposure.name)
                     if exposure_element:
                         self.delete_schema_exposure(schema_file, exposure_element)
-                        self.merge_patch(schema_file, 'exposures', exposure_element)
+                        self.merge_patch(schema_file, "exposures", exposure_element)
             elif unique_id in self.saved_manifest.metrics:
                 metric = self.saved_manifest.metrics[unique_id]
                 file_id = metric.file_id
@@ -600,17 +606,17 @@ class PartialParsing:
             env_var_changes = self.env_vars_changed_schema_files[schema_file.file_id]
 
         # models, seeds, snapshots, analyses
-        for dict_key in ['models', 'seeds', 'snapshots', 'analyses']:
+        for dict_key in ["models", "seeds", "snapshots", "analyses"]:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
-            if key_diff['changed']:
-                for elem in key_diff['changed']:
+            if key_diff["changed"]:
+                for elem in key_diff["changed"]:
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
                     self.merge_patch(schema_file, dict_key, elem)
-            if key_diff['deleted']:
-                for elem in key_diff['deleted']:
+            if key_diff["deleted"]:
+                for elem in key_diff["deleted"]:
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
-            if key_diff['added']:
-                for elem in key_diff['added']:
+            if key_diff["added"]:
+                for elem in key_diff["added"]:
                     self.merge_patch(schema_file, dict_key, elem)
             # Handle schema file updates due to env_var changes
             if dict_key in env_var_changes and dict_key in new_yaml_dict:
@@ -625,22 +631,22 @@ class PartialParsing:
         # sources
         dict_key = "sources"
         source_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
-        if source_diff['changed']:
-            for source in source_diff['changed']:
-                if 'overrides' in source:  # This is a source patch; need to re-parse orig source
+        if source_diff["changed"]:
+            for source in source_diff["changed"]:
+                if "overrides" in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
                 self.remove_tests(schema_file, dict_key, source["name"])
                 self.merge_patch(schema_file, dict_key, source)
-        if source_diff['deleted']:
-            for source in source_diff['deleted']:
-                if 'overrides' in source:  # This is a source patch; need to re-parse orig source
+        if source_diff["deleted"]:
+            for source in source_diff["deleted"]:
+                if "overrides" in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
                 self.remove_tests(schema_file, dict_key, source["name"])
-        if source_diff['added']:
-            for source in source_diff['added']:
-                if 'overrides' in source:  # This is a source patch; need to re-parse orig source
+        if source_diff["added"]:
+            for source in source_diff["added"]:
+                if "overrides" in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.merge_patch(schema_file, dict_key, source)
         # Handle schema file updates due to env_var changes
@@ -659,14 +665,14 @@ class PartialParsing:
         # macros
         dict_key = "macros"
         macro_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
-        if macro_diff['changed']:
-            for macro in macro_diff['changed']:
+        if macro_diff["changed"]:
+            for macro in macro_diff["changed"]:
                 self.delete_schema_macro_patch(schema_file, macro)
                 self.merge_patch(schema_file, dict_key, macro)
-        if macro_diff['deleted']:
-            for macro in macro_diff['deleted']:
+        if macro_diff["deleted"]:
+            for macro in macro_diff["deleted"]:
                 self.delete_schema_macro_patch(schema_file, macro)
-        if macro_diff['added']:
+        if macro_diff["added"]:
             for macro in macro_diff['added']:
                 self.merge_patch(schema_file, dict_key, macro)
         # Handle schema file updates due to env_var changes
@@ -682,15 +688,15 @@ class PartialParsing:
         # exposures
         dict_key = "exposures"
         exposure_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
-        if exposure_diff['changed']:
-            for exposure in exposure_diff['changed']:
+        if exposure_diff["changed"]:
+            for exposure in exposure_diff["changed"]:
                 self.delete_schema_exposure(schema_file, exposure)
                 self.merge_patch(schema_file, dict_key, exposure)
-        if exposure_diff['deleted']:
-            for exposure in exposure_diff['deleted']:
+        if exposure_diff["deleted"]:
+            for exposure in exposure_diff["deleted"]:
                 self.delete_schema_exposure(schema_file, exposure)
-        if exposure_diff['added']:
-            for exposure in exposure_diff['added']:
+        if exposure_diff["added"]:
+            for exposure in exposure_diff["added"]:
                 self.merge_patch(schema_file, dict_key, exposure)
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
@@ -732,15 +738,15 @@ class PartialParsing:
             saved_elements = saved_yaml_dict[key] if key in saved_yaml_dict else []
             new_elements = new_yaml_dict[key] if key in new_yaml_dict else []
         else:
-            return {'deleted': [], 'added': [], 'changed': []}
+            return {"deleted": [], "added": [], "changed": []}
         # for each set of keys, need to create a dictionary of names pointing to entry
         saved_elements_by_name = {}
         new_elements_by_name = {}
         # sources have two part names?
         for element in saved_elements:
-            saved_elements_by_name[element['name']] = element
+            saved_elements_by_name[element["name"]] = element
         for element in new_elements:
-            new_elements_by_name[element['name']] = element
+            new_elements_by_name[element["name"]] = element
 
         # now determine which elements, by name, are added, deleted or changed
         saved_element_names = set(saved_elements_by_name.keys())
@@ -769,7 +775,7 @@ class PartialParsing:
     # Merge a patch file into the pp_dict in a schema file
     def merge_patch(self, schema_file, key, patch):
         if not schema_file.pp_dict:
-            schema_file.pp_dict = {"version": schema_file.dict_from_yaml['version']}
+            schema_file.pp_dict = {"version": schema_file.dict_from_yaml["version"]}
         pp_dict = schema_file.pp_dict
         if key not in pp_dict:
             pp_dict[key] = [patch]
@@ -777,7 +783,7 @@ class PartialParsing:
             # check that this patch hasn't already been saved
             found = False
             for elem in pp_dict[key]:
-                if elem['name'] == patch['name']:
+                if elem["name"] == patch["name"]:
                     found = True
             if not found:
                 pp_dict[key].append(patch)
@@ -789,13 +795,13 @@ class PartialParsing:
     def delete_schema_mssa_links(self, schema_file, dict_key, elem):
         # find elem node unique_id in node_patches
         prefix = key_to_prefix[dict_key]
-        elem_unique_id = ''
+        elem_unique_id = ""
         for unique_id in schema_file.node_patches:
             if not unique_id.startswith(prefix):
                 continue
-            parts = unique_id.split('.')
+            parts = unique_id.split(".")
             elem_name = parts[-1]
-            if elem_name == elem['name']:
+            if elem_name == elem["name"]:
                 elem_unique_id = unique_id
                 break
 
@@ -817,7 +823,7 @@ class PartialParsing:
             schema_file.node_patches.remove(elem_unique_id)
 
         # for models, seeds, snapshots (not analyses)
-        if dict_key in ['models', 'seeds', 'snapshots']:
+        if dict_key in ["models", "seeds", "snapshots"]:
             # find related tests and remove them
             self.remove_tests(schema_file, dict_key, elem['name'])
 
@@ -831,7 +837,7 @@ class PartialParsing:
 
     def delete_schema_source(self, schema_file, source_dict):
         # both patches, tests, and source nodes
-        source_name = source_dict['name']
+        source_name = source_dict["name"]
         # There may be multiple sources for each source dict, since
         # there will be a separate source node for each table.
         # ParsedSourceDefinition name = table name, dict name is source_name
@@ -863,14 +869,15 @@ class PartialParsing:
     # exposures are created only from schema files, so just delete
     # the exposure.
     def delete_schema_exposure(self, schema_file, exposure_dict):
-        exposure_name = exposure_dict['name']
+        exposure_name = exposure_dict["name"]
         exposures = schema_file.exposures.copy()
         for unique_id in exposures:
             exposure = self.saved_manifest.exposures[unique_id]
             if unique_id in self.saved_manifest.exposures:
                 if exposure.name == exposure_name:
-                    self.deleted_manifest.exposures[unique_id] = \
-                        self.saved_manifest.exposures.pop(unique_id)
+                    self.deleted_manifest.exposures[unique_id] = self.saved_manifest.exposures.pop(
+                        unique_id
+                    )
                     schema_file.exposures.remove(unique_id)
                     fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
 
@@ -891,7 +898,7 @@ class PartialParsing:
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
-            if 'name' in element and element['name'] == elem_name:
+            if "name" in element and element["name"] == elem_name:
                 return element
         return None
 
@@ -906,10 +913,10 @@ class PartialParsing:
         return schema_file
 
     def get_source_override_file_and_dict(self, source):
-        package = source['overrides']
-        source_name = source['name']
+        package = source["overrides"]
+        source_name = source["name"]
         orig_source_schema_file = self.get_schema_file_for_source(package, source_name)
-        orig_sources = orig_source_schema_file.dict_from_yaml['sources']
+        orig_sources = orig_source_schema_file.dict_from_yaml["sources"]
         orig_source = self.get_schema_element(orig_sources, source_name)
         return (orig_source_schema_file, orig_source)
 
@@ -918,7 +925,7 @@ class PartialParsing:
         if orig_source:
             self.delete_schema_source(orig_file, orig_source)
             self.remove_tests(orig_file, 'sources', orig_source['name'])
-            self.merge_patch(orig_file, 'sources', orig_source)
+            self.merge_patch(orig_file, "sources", orig_source)
             self.add_to_pp_files(orig_file)
 
     # This builds a dictionary of files that need to be scheduled for parsing

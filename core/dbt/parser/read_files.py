@@ -1,7 +1,12 @@
 import pathlib
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
-    FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
+    FilePath,
+    ParseFileType,
+    SourceFile,
+    FileHash,
+    AnySourceFile,
+    SchemaSourceFile,
 )
 
 from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
@@ -20,7 +25,11 @@ def load_source_file(
 
     sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
     source_file = sf_cls(
-                         parse_file_type=parse_file_type, project_name=project_name)
+        path=path,
+        checksum=FileHash.empty(),
+        parse_file_type=parse_file_type,
+        project_name=project_name,
+    )
 
     skip_loading_schema_file = False
     if (

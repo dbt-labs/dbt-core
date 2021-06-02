@@ -68,14 +68,14 @@ def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
 
 
 class DocLookup(dbtClassMixin):
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
     def get_unique_id(self, key, package: Optional[PackageName]):
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
         unique_id = self.get_unique_id(key, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
@@ -101,7 +101,7 @@ class DocLookup(dbtClassMixin):
 
 
 class SourceLookup(dbtClassMixin):
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
@@ -149,7 +149,7 @@ class RefableLookup(dbtClassMixin):
     def get_unique_id(self, key, package: Optional[PackageName]):
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
         unique_id = self.get_unique_id(key, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
@@ -582,19 +582,19 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     env_vars: MutableMapping[str, str] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _source_lookup: Optional[SourceLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _ref_lookup: Optional[RefableLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _disabled_lookup: Optional[DisabledLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
     _analysis_lookup: Optional[AnalysisLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
@@ -1160,8 +1160,8 @@ def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
         raise_duplicate_resource_name(value, src[value.unique_id])
 
 
-K_T = TypeVar('K_T')
-V_T = TypeVar('V_T')
+K_T = TypeVar("K_T")
+V_T = TypeVar("V_T")
 
 
 def _expect_value(key: K_T, src: Mapping[K_T, V_T], old_file: SourceFile, name: str) -> V_T:

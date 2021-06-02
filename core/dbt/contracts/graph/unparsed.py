@@ -25,7 +25,7 @@ class UnparsedBaseNode(dbtClassMixin, Replaceable):
 
     @property
     def file_id(self):
-        return f'{self.package_name}://{self.original_file_path}'
+        return f"{self.package_name}://{self.original_file_path}"
 
 
 @dataclass
@@ -126,7 +126,7 @@ class HasYamlMetadata(dbtClassMixin):
 
     @property
     def file_id(self):
-        return f'{self.package_name}://{self.original_file_path}'
+        return f"{self.package_name}://{self.original_file_path}"
 
 
 @dataclass

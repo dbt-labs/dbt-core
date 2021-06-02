@@ -23,20 +23,20 @@ class ParseFileType(StrEnum):
     Seed = "seed"
     Documentation = "docs"
     Schema = "schema"
-    Hook = 'hook'   # not a real filetype, from dbt_project.yml
+    Hook = "hook"  # not a real filetype, from dbt_project.yml
 
 
 parse_file_type_to_parser = {
-    ParseFileType.Macro: 'MacroParser',
-    ParseFileType.Model: 'ModelParser',
-    ParseFileType.Snapshot: 'SnapshotParser',
-    ParseFileType.Analysis: 'AnalysisParser',
+    ParseFileType.Macro: "MacroParser",
+    ParseFileType.Model: "ModelParser",
+    ParseFileType.Snapshot: "SnapshotParser",
+    ParseFileType.Analysis: "AnalysisParser",
     ParseFileType.SingularTest: "SingularTestParser",
     ParseFileType.GenericTest: "GenericTestParser",
-    ParseFileType.Seed: 'SeedParser',
-    ParseFileType.Documentation: 'DocumentationParser',
-    ParseFileType.Schema: 'SchemaParser',
-    ParseFileType.Hook: 'HookParser',
+    ParseFileType.Seed: "SeedParser",
+    ParseFileType.Documentation: "DocumentationParser",
+    ParseFileType.Schema: "SchemaParser",
+    ParseFileType.Hook: "HookParser",
 }
 
 
@@ -153,7 +153,7 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
     def file_id(self):
         if isinstance(self.path, RemoteFile):
             return None
-        return f'{self.project_name}://{self.path.original_file_path}'
+        return f"{self.project_name}://{self.path.original_file_path}"
 
     def _serialize(self):
         dct = self.to_dict()
@@ -161,7 +161,7 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
 
     @classmethod
     def _deserialize(cls, dct: Dict[str, int]):
-        if dct['parse_file_type'] == 'schema':
+        if dct["parse_file_type"] == "schema":
             sf = SchemaSourceFile.from_dict(dct)
         else:
             sf = SourceFile.from_dict(dct)
@@ -176,8 +176,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
                 del dct[key]
         # remove contents. Schema files will still have 'dict_from_yaml'
         # from the contents
-        if 'contents' in dct:
-            del dct['contents']
+        if "contents" in dct:
+            del dct["contents"]
         return dct
 
 
@@ -202,7 +202,7 @@ class SourceFile(BaseSourceFile):
     # TODO: do this a different way. This remote file kludge isn't going
     # to work long term
     @classmethod
-    def remote(cls, contents: str, project_name: str) -> 'SourceFile':
+    def remote(cls, contents: str, project_name: str) -> "SourceFile":
         self = cls(
             path=RemoteFile(),
             checksum=FileHash.from_contents(contents),

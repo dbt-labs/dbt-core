@@ -245,7 +245,6 @@ T = TypeVar("T", bound="ParsedNode")
 
 @dataclass
 class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
-
     def _serialize(self):
         return self.to_dict()
 
@@ -261,27 +260,27 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         # The serialized ParsedNodes do not differ from each other
         # in fields that would allow 'from_dict' to distinguis
         # between them.
-        resource_type = dct['resource_type']
-        if resource_type == 'model':
+        resource_type = dct["resource_type"]
+        if resource_type == "model":
             return ParsedModelNode.from_dict(dct)
-        elif resource_type == 'analysis':
+        elif resource_type == "analysis":
             return ParsedAnalysisNode.from_dict(dct)
-        elif resource_type == 'seed':
+        elif resource_type == "seed":
             return ParsedSeedNode.from_dict(dct)
-        elif resource_type == 'rpc':
+        elif resource_type == "rpc":
             return ParsedRPCNode.from_dict(dct)
         elif resource_type == 'sql':
             return ParsedSqlNode.from_dict(dct)
-        elif resource_type == 'test':
-            if 'test_metadata' in dct:
+        elif resource_type == "test":
+            if "test_metadata" in dct:
                 return ParsedGenericTestNode.from_dict(dct)
             else:
                 return ParsedSingularTestNode.from_dict(dct)
-        elif resource_type == 'operation':
+        elif resource_type == "operation":
             return ParsedHookNode.from_dict(dct)
-        elif resource_type == 'seed':
+        elif resource_type == "seed":
             return ParsedSeedNode.from_dict(dct)
-        elif resource_type == 'snapshot':
+        elif resource_type == "snapshot":
             return ParsedSnapshotNode.from_dict(dct)
         else:
             return cls.from_dict(dct)

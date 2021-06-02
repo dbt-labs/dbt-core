@@ -122,16 +122,14 @@ class SourcePatcher:
         )
 
     # This converts an UnpatchedSourceDefinition to a ParsedSourceDefinition
-    def parse_source(
-        self, target: UnpatchedSourceDefinition
-    ) -> ParsedSourceDefinition:
+    def parse_source(self, target: UnpatchedSourceDefinition) -> ParsedSourceDefinition:
         source = target.source
         table = target.table
         refs = ParserRef.from_target(table)
         unique_id = target.unique_id
-        description = table.description or ''
+        description = table.description or ""
         meta = table.meta or {}
-        source_description = source.description or ''
+        source_description = source.description or ""
         loaded_at_field = table.loaded_at_field or source.loaded_at_field
 
         freshness = merge_freshness(source.freshness, table.freshness)
@@ -156,8 +154,7 @@ class SourcePatcher:
 
         if not isinstance(config, SourceConfig):
             raise InternalException(
-                f'Calculated a {type(config)} for a source, but expected '
-                f'a SourceConfig'
+                f"Calculated a {type(config)} for a source, but expected " f"a SourceConfig"
             )
 
         default_database = self.root_project.credentials.database
@@ -249,10 +246,7 @@ class SourcePatcher:
             column_name = None
         else:
             column_name = column.name
-            should_quote = (
-                column.quote or
-                (column.quote is None and target.quote_columns)
-            )
+            should_quote = column.quote or (column.quote is None and target.quote_columns)
             if should_quote:
                 column_name = get_adapter(self.root_project).quote(column_name)
 
@@ -278,9 +272,7 @@ class SourcePatcher:
         if rendered:
             generator = ContextConfigGenerator(self.root_project)
         else:
-            generator = UnrenderedConfigGenerator(
-                self.root_project
-            )
+            generator = UnrenderedConfigGenerator(self.root_project)
 
         return generator.calculate_node_config(
             config_call_dict={},
