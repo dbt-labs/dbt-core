@@ -1,11 +1,11 @@
-import abc
 import enum
 from dataclasses import dataclass, field
 from itertools import chain, islice
+from mashumaro import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
     Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
-    TypeVar, Callable, Iterable, Generic, cast, AbstractSet
+    TypeVar, Callable, Iterable, Generic, cast, AbstractSet, ClassVar
 )
 from typing_extensions import Protocol
 from uuid import UUID
@@ -19,22 +19,21 @@ from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition, ManifestNodes
 )
 from dbt.contracts.graph.unparsed import SourcePatch
-from dbt.contracts.files import SourceFile, FileHash, RemoteFile
+from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
 from dbt.contracts.util import (
-    BaseArtifactMetadata, MacroKey, SourceKey, ArtifactMixin, schema_version
+    BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
 )
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
-    InternalException, CompilationException,
+    CompilationException,
     raise_duplicate_resource_name, raise_compiler_error, warn_or_error,
-    raise_invalid_patch, raise_duplicate_patch_name,
+    raise_duplicate_patch_name,
     raise_duplicate_macro_patch_name, raise_duplicate_source_patch_name,
 )
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.ui import line_wrap_message
-from dbt import deprecations
 from dbt import flags
 from dbt import tracking
 import dbt.utils
@@ -46,72 +45,70 @@ RefName = str
 UniqueID = str
 
 
-K_T = TypeVar('K_T')
-V_T = TypeVar('V_T')
-
-
-class PackageAwareCache(Generic[K_T, V_T]):
-    def __init__(self, manifest: 'Manifest'):
-        self.storage: Dict[K_T, Dict[PackageName, UniqueID]] = {}
-        self._manifest = manifest
-        self.populate()
-
-    @abc.abstractmethod
-    def populate(self):
-        pass
-
-    @abc.abstractmethod
-    def perform_lookup(self, unique_id: UniqueID) -> V_T:
-        pass
-
-    def find_cached_value(
-        self, key: K_T, package: Optional[PackageName]
-    ) -> Optional[V_T]:
-        unique_id = self.find_unique_id_for_package(key, package)
-        if unique_id is not None:
-            return self.perform_lookup(unique_id)
+def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
+    if key not in storage:
         return None
 
-    def find_unique_id_for_package(
-        self, key: K_T, package: Optional[PackageName]
-    ) -> Optional[UniqueID]:
-        if key not in self.storage:
+    pkg_dct: Mapping[PackageName, UniqueID] = storage[key]
+
+    if package is None:
+        if not pkg_dct:
             return None
-
-        pkg_dct: Mapping[PackageName, UniqueID] = self.storage[key]
-
-        if package is None:
-            if not pkg_dct:
-                return None
-            else:
-                return next(iter(pkg_dct.values()))
-        elif package in pkg_dct:
-            return pkg_dct[package]
         else:
-            return None
+            return next(iter(pkg_dct.values()))
+    elif package in pkg_dct:
+        return pkg_dct[package]
+    else:
+        return None
 
 
-class DocCache(PackageAwareCache[DocName, ParsedDocumentation]):
+class DocLookup(dbtClassMixin):
+    def __init__(self, manifest: 'Manifest'):
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, key, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, key, package)
+
+    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+        unique_id = self.get_unique_id(key, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
     def add_doc(self, doc: ParsedDocumentation):
         if doc.name not in self.storage:
             self.storage[doc.name] = {}
         self.storage[doc.name][doc.package_name] = doc.unique_id
 
-    def populate(self):
-        for doc in self._manifest.docs.values():
+    def populate(self, manifest):
+        for doc in manifest.docs.values():
             self.add_doc(doc)
 
     def perform_lookup(
-        self, unique_id: UniqueID
+        self, unique_id: UniqueID, manifest
     ) -> ParsedDocumentation:
-        if unique_id not in self._manifest.docs:
+        if unique_id not in manifest.docs:
             raise dbt.exceptions.InternalException(
                 f'Doc {unique_id} found in cache but not found in manifest'
             )
-        return self._manifest.docs[unique_id]
+        return manifest.docs[unique_id]
 
 
-class SourceCache(PackageAwareCache[SourceKey, ParsedSourceDefinition]):
+class SourceLookup(dbtClassMixin):
+    def __init__(self, manifest: 'Manifest'):
+        self.storage: Dict[Tuple[str, str], Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, key, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, key, package)
+
+    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+        unique_id = self.get_unique_id(key, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
     def add_source(self, source: ParsedSourceDefinition):
         key = (source.source_name, source.name)
         if key not in self.storage:
@@ -119,47 +116,63 @@ class SourceCache(PackageAwareCache[SourceKey, ParsedSourceDefinition]):
 
         self.storage[key][source.package_name] = source.unique_id
 
-    def populate(self):
-        for source in self._manifest.sources.values():
+    def populate(self, manifest):
+        for source in manifest.sources.values():
             if hasattr(source, 'source_name'):
                 self.add_source(source)
 
     def perform_lookup(
-        self, unique_id: UniqueID
+        self, unique_id: UniqueID, manifest: 'Manifest'
     ) -> ParsedSourceDefinition:
-        if unique_id not in self._manifest.sources:
+        if unique_id not in manifest.sources:
             raise dbt.exceptions.InternalException(
                 f'Source {unique_id} found in cache but not found in manifest'
             )
-        return self._manifest.sources[unique_id]
+        return manifest.sources[unique_id]
 
 
-class RefableCache(PackageAwareCache[RefName, ManifestNode]):
+class RefableLookup(dbtClassMixin):
+    # model, seed, snapshot
+    _lookup_types: ClassVar[set] = set(NodeType.refable())
+
     # refables are actually unique, so the Dict[PackageName, UniqueID] will
     # only ever have exactly one value, but doing 3 dict lookups instead of 1
     # is not a big deal at all and retains consistency
     def __init__(self, manifest: 'Manifest'):
-        self._cached_types = set(NodeType.refable())
-        super().__init__(manifest)
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, key, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, key, package)
+
+    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
+        unique_id = self.get_unique_id(key, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
 
     def add_node(self, node: ManifestNode):
-        if node.resource_type in self._cached_types:
+        if node.resource_type in self._lookup_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
             self.storage[node.name][node.package_name] = node.unique_id
 
-    def populate(self):
-        for node in self._manifest.nodes.values():
+    def populate(self, manifest):
+        for node in manifest.nodes.values():
             self.add_node(node)
 
     def perform_lookup(
-        self, unique_id: UniqueID
+        self, unique_id: UniqueID, manifest
     ) -> ManifestNode:
-        if unique_id not in self._manifest.nodes:
+        if unique_id not in manifest.nodes:
             raise dbt.exceptions.InternalException(
                 f'Node {unique_id} found in cache but not found in manifest'
             )
-        return self._manifest.nodes[unique_id]
+        return manifest.nodes[unique_id]
+
+
+class AnalysisLookup(RefableLookup):
+    _lookup_types: ClassVar[set] = set(NodeType.Analysis)
 
 
 def _search_packages(
@@ -514,39 +527,55 @@ class MacroMethods:
 
 @dataclass
 class ManifestStateCheck(dbtClassMixin):
-    vars_hash: FileHash
-    profile_hash: FileHash
-    project_hashes: MutableMapping[str, FileHash]
+    vars_hash: FileHash = field(default_factory=FileHash.empty)
+    profile_hash: FileHash = field(default_factory=FileHash.empty)
+    project_hashes: MutableMapping[str, FileHash] = field(default_factory=dict)
 
 
 @dataclass
-class Manifest(MacroMethods):
+class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     """The manifest for the full graph, after parsing and during compilation.
     """
     # These attributes are both positional and by keyword. If an attribute
     # is added it must all be added in the __reduce_ex__ method in the
     # args tuple in the right position.
-    nodes: MutableMapping[str, ManifestNode]
-    sources: MutableMapping[str, ParsedSourceDefinition]
-    macros: MutableMapping[str, ParsedMacro]
-    docs: MutableMapping[str, ParsedDocumentation]
-    exposures: MutableMapping[str, ParsedExposure]
-    selectors: MutableMapping[str, Any]
-    disabled: List[CompileResultNode]
-    files: MutableMapping[str, SourceFile]
+    nodes: MutableMapping[str, ManifestNode] = field(default_factory=dict)
+    sources: MutableMapping[str, ParsedSourceDefinition] = field(default_factory=dict)
+    macros: MutableMapping[str, ParsedMacro] = field(default_factory=dict)
+    docs: MutableMapping[str, ParsedDocumentation] = field(default_factory=dict)
+    exposures: MutableMapping[str, ParsedExposure] = field(default_factory=dict)
+    selectors: MutableMapping[str, Any] = field(default_factory=dict)
+    disabled: List[CompileResultNode] = field(default_factory=list)
+    files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
-    state_check: Optional[ManifestStateCheck] = None
+    state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     # Moved from the ParseResult object
-    macro_patches: MutableMapping[MacroKey, ParsedMacroPatch] = field(default_factory=dict)
-    patches: MutableMapping[str, ParsedNodePatch] = field(default_factory=dict)
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     # following is from ParseResult
     _disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
-    _docs_cache: Optional[DocCache] = None
-    _sources_cache: Optional[SourceCache] = None
-    _refs_cache: Optional[RefableCache] = None
-    _lock: Lock = field(default_factory=flags.MP_CONTEXT.Lock)
+    _doc_lookup: Optional[DocLookup] = field(
+        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _source_lookup: Optional[SourceLookup] = field(
+        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _ref_lookup: Optional[RefableLookup] = field(
+        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _analysis_lookup: Optional[AnalysisLookup] = field(
+        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _lock: Lock = field(
+        default_factory=flags.MP_CONTEXT.Lock,
+        metadata={'serialize': lambda x: None, 'deserialize': lambda x: flags.MP_CONTEXT.Lock}
+    )
+
+    def __pre_serialize__(self):
+        # serialization won't work with anything except an empty source_patches because
+        # tuple keys are not supported, so ensure it's empty
+        self.source_patches = {}
+        return self
 
     def sync_update_node(
         self, new_node: NonSourceCompiledNode
@@ -662,102 +691,59 @@ class Manifest(MacroMethods):
             resource_fqns[resource_type_plural].add(tuple(resource.fqn))
         return resource_fqns
 
-    def add_nodes(self, new_nodes: Mapping[str, ManifestNode]):
-        """Add the given dict of new nodes to the manifest."""
-        for unique_id, node in new_nodes.items():
-            if unique_id in self.nodes:
-                raise_duplicate_resource_name(node, self.nodes[unique_id])
-            self.nodes[unique_id] = node
-            # fixup the cache if it exists.
-            if self._refs_cache is not None:
-                if node.resource_type in NodeType.refable():
-                    self._refs_cache.add_node(node)
-
+    # This is called by 'parse_patch' in the NodePatchParser
     def add_patch(
-        self, source_file: SourceFile, patch: ParsedNodePatch,
+        self, source_file: SchemaSourceFile, patch: ParsedNodePatch,
     ) -> None:
+        if patch.yaml_key in ['models', 'seeds', 'snapshots']:
+            unique_id = self.ref_lookup.get_unique_id(patch.name, None)
+        elif patch.yaml_key == 'analyses':
+            unique_id = self.analysis_lookup.get_unique_id(patch.name, None)
+        else:
+            raise dbt.exceptions.InternalException(
+                f'Unexpected yaml_key {patch.yaml_key} for patch in '
+                f'file {source_file.path.original_file_path}'
+            )
+        if unique_id is None:
+            # This will usually happen when a node is disabled
+            return
+
         # patches can't be overwritten
-        if patch.name in self.patches:
-            raise_duplicate_patch_name(patch, self.patches[patch.name])
-        self.patches[patch.name] = patch
-        self.get_file(source_file).patches.append(patch.name)
+        node = self.nodes.get(unique_id)
+        if node:
+            if node.patch_path:
+                package_name, existing_file_path = node.patch_path.split('://')
+                raise_duplicate_patch_name(patch, existing_file_path)
+            source_file.append_patch(patch.yaml_key, unique_id)
+            node.patch(patch)
 
     def add_macro_patch(
-        self, source_file: SourceFile, patch: ParsedMacroPatch,
+        self, source_file: SchemaSourceFile, patch: ParsedMacroPatch,
     ) -> None:
         # macros are fully namespaced
-        key = (patch.package_name, patch.name)
-        if key in self.macro_patches:
-            raise_duplicate_macro_patch_name(patch, self.macro_patches[key])
-        self.macro_patches[key] = patch
-        self.get_file(source_file).macro_patches.append(key)
+        unique_id = f'macro.{patch.package_name}.{patch.name}'
+        macro = self.macros.get(unique_id)
+        if not macro:
+            warn_or_error(
+                f'WARNING: Found documentation for macro "{patch.name}" '
+                f'which was not found'
+            )
+            return
+        if macro.patch_path:
+            package_name, existing_file_path = macro.patch_path.split('://')
+            raise_duplicate_macro_patch_name(patch, existing_file_path)
+        source_file.macro_patches.append(unique_id)
+        macro.patch(patch)
 
     def add_source_patch(
-        self, source_file: SourceFile, patch: SourcePatch,
+        self, source_file: SchemaSourceFile, patch: SourcePatch,
     ) -> None:
         # source patches must be unique
         key = (patch.overrides, patch.name)
         if key in self.source_patches:
             raise_duplicate_source_patch_name(patch, self.source_patches[key])
         self.source_patches[key] = patch
-        self.get_file(source_file).source_patches.append(key)
-
-    def patch_macros(self) -> None:
-        for macro in self.macros.values():
-            key = (macro.package_name, macro.name)
-            patch = self.macro_patches.pop(key, None)
-            if not patch:
-                continue
-            macro.patch(patch)
-
-        if self.macro_patches:
-            for patch in self.macro_patches.values():
-                warn_or_error(
-                    f'WARNING: Found documentation for macro "{patch.name}" '
-                    f'which was not found'
-                )
-
-    def patch_nodes(self) -> None:
-        """Patch nodes with the given dict of patches. Note that this consumes
-        the input!
-        This relies on the fact that all nodes have unique _name_ fields, not
-        just unique unique_id fields.
-        """
-        # because we don't have any mapping from node _names_ to nodes, and we
-        # only have the node name in the patch, we have to iterate over all the
-        # nodes looking for matching names. We could use a NameSearcher if we
-        # were ok with doing an O(n*m) search (one nodes scan per patch)
-        # Q: could we save patches by node unique_ids instead, or convert
-        # between names and node ids?
-        for node in self.nodes.values():
-            patch = self.patches.pop(node.name, None)
-            if not patch:
-                continue
-
-            expected_key = node.resource_type.pluralize()
-            if expected_key != patch.yaml_key:
-                if patch.yaml_key == 'models':
-                    deprecations.warn(
-                        'models-key-mismatch',
-                        patch=patch, node=node, expected_key=expected_key
-                    )
-                else:
-                    raise_invalid_patch(
-                        node, patch.yaml_key, patch.original_file_path
-                    )
-
-            node.patch(patch)
-
-        # If anything is left in self.patches, it means that the node for
-        # that patch wasn't found.
-        if self.patches:
-            for patch in self.patches.values():
-                # since patches aren't nodes, we can't use the existing
-                # target_not_found warning
-                logger.debug((
-                    'WARNING: Found documentation for resource "{}" which was '
-                    'not found or is disabled').format(patch.name)
-                )
+        source_file.source_patches.append(key)
 
     def get_used_schemas(self, resource_types=None):
         return frozenset({
@@ -787,14 +773,18 @@ class Manifest(MacroMethods):
             state_check=_deepcopy(self.state_check),
         )
 
-    def writable_manifest(self):
+    def build_parent_and_child_maps(self):
         edge_members = list(chain(
             self.nodes.values(),
             self.sources.values(),
             self.exposures.values(),
         ))
         forward_edges, backward_edges = build_edges(edge_members)
+        self.child_map = forward_edges
+        self.parent_map = backward_edges
 
+    def writable_manifest(self):
+        self.build_parent_and_child_maps()
         return WritableManifest(
             nodes=self.nodes,
             sources=self.sources,
@@ -804,18 +794,15 @@ class Manifest(MacroMethods):
             selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,
-            child_map=forward_edges,
-            parent_map=backward_edges,
+            child_map=self.child_map,
+            parent_map=self.parent_map,
         )
-
-    # When 'to_dict' is called on the Manifest, it substitues a
-    # WritableManifest
-    def __pre_serialize__(self):
-        return self.writable_manifest()
 
     def write(self, path):
         self.writable_manifest().write(path)
 
+    # Called in dbt.compilation.Linker.write_graph and
+    # dbt.graph.queue.get and ._include_in_cost
     def expect(self, unique_id: str) -> GraphMemberNode:
         if unique_id in self.nodes:
             return self.nodes[unique_id]
@@ -830,29 +817,31 @@ class Manifest(MacroMethods):
             )
 
     @property
-    def docs_cache(self) -> DocCache:
-        if self._docs_cache is not None:
-            return self._docs_cache
-        cache = DocCache(self)
-        self._docs_cache = cache
-        return cache
+    def doc_lookup(self) -> DocLookup:
+        if self._doc_lookup is None:
+            self._doc_lookup = DocLookup(self)
+        return self._doc_lookup
 
     @property
-    def source_cache(self) -> SourceCache:
-        if self._sources_cache is not None:
-            return self._sources_cache
-        cache = SourceCache(self)
-        self._sources_cache = cache
-        return cache
+    def source_lookup(self) -> SourceLookup:
+        if self._source_lookup is None:
+            self._source_lookup = SourceLookup(self)
+        return self._source_lookup
 
     @property
-    def refs_cache(self) -> RefableCache:
-        if self._refs_cache is not None:
-            return self._refs_cache
-        cache = RefableCache(self)
-        self._refs_cache = cache
-        return cache
+    def ref_lookup(self) -> RefableLookup:
+        if self._ref_lookup is None:
+            self._ref_lookup = RefableLookup(self)
+        return self._ref_lookup
 
+    @property
+    def analysis_lookup(self) -> AnalysisLookup:
+        if self._analysis_lookup is None:
+            self._analysis_lookup = AnalysisLookup(self)
+        return self._analysis_lookup
+
+    # Called by dbt.parser.manifest._resolve_refs_for_exposure
+    # and dbt.parser.manifest._process_refs_for_node
     def resolve_ref(
         self,
         target_model_name: str,
@@ -868,7 +857,7 @@ class Manifest(MacroMethods):
             current_project, node_package, target_model_package
         )
         for pkg in candidates:
-            node = self.refs_cache.find_cached_value(target_model_name, pkg)
+            node = self.ref_lookup.find(target_model_name, pkg, self)
 
             if node is not None and node.config.enabled:
                 return node
@@ -883,6 +872,8 @@ class Manifest(MacroMethods):
             return Disabled(disabled)
         return None
 
+    # Called by dbt.parser.manifest._resolve_sources_for_exposure
+    # and dbt.parser.manifest._process_source_for_node
     def resolve_source(
         self,
         target_source_name: str,
@@ -897,7 +888,7 @@ class Manifest(MacroMethods):
         disabled: Optional[ParsedSourceDefinition] = None
 
         for pkg in candidates:
-            source = self.source_cache.find_cached_value(key, pkg)
+            source = self.source_lookup.find(key, pkg, self)
             if source is not None and source.config.enabled:
                 return source
 
@@ -910,6 +901,7 @@ class Manifest(MacroMethods):
             return Disabled(disabled)
         return None
 
+    # Called by DocsRuntimeContext.doc
     def resolve_doc(
         self,
         name: str,
@@ -926,11 +918,12 @@ class Manifest(MacroMethods):
         )
 
         for pkg in candidates:
-            result = self.docs_cache.find_cached_value(name, pkg)
+            result = self.doc_lookup.find(name, pkg, self)
             if result is not None:
                 return result
         return None
 
+    # Called by RunTask.defer_to_manifest
     def merge_from_artifact(
         self,
         adapter,
@@ -964,13 +957,6 @@ class Manifest(MacroMethods):
         )
 
     # Methods that were formerly in ParseResult
-    def get_file(self, source_file: SourceFile) -> SourceFile:
-        key = source_file.search_key
-        if key is None:
-            return source_file
-        if key not in self.files:
-            self.files[key] = source_file
-        return self.files[key]
 
     def add_macro(self, source_file: SourceFile, macro: ParsedMacro):
         if macro.unique_id in self.macros:
@@ -997,10 +983,10 @@ class Manifest(MacroMethods):
             raise_compiler_error(msg)
 
         self.macros[macro.unique_id] = macro
-        self.get_file(source_file).macros.append(macro.unique_id)
+        source_file.macros.append(macro.unique_id)
 
     def has_file(self, source_file: SourceFile) -> bool:
-        key = source_file.search_key
+        key = source_file.file_id
         if key is None:
             return False
         if key not in self.files:
@@ -1009,26 +995,29 @@ class Manifest(MacroMethods):
         return my_checksum == source_file.checksum
 
     def add_source(
-        self, source_file: SourceFile, source: UnpatchedSourceDefinition
+        self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition
     ):
         # sources can't be overwritten!
         _check_duplicates(source, self.sources)
         self.sources[source.unique_id] = source  # type: ignore
-        self.get_file(source_file).sources.append(source.unique_id)
+        source_file.sources.append(source.unique_id)
 
     def add_node_nofile(self, node: ManifestNodes):
         # nodes can't be overwritten!
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
 
-    def add_node(self, source_file: SourceFile, node: ManifestNodes):
+    def add_node(self, source_file: AnySourceFile, node: ManifestNodes):
         self.add_node_nofile(node)
-        self.get_file(source_file).nodes.append(node.unique_id)
+        if isinstance(source_file, SchemaSourceFile):
+            source_file.tests.append(node.unique_id)
+        else:
+            source_file.nodes.append(node.unique_id)
 
-    def add_exposure(self, source_file: SourceFile, exposure: ParsedExposure):
+    def add_exposure(self, source_file: SchemaSourceFile, exposure: ParsedExposure):
         _check_duplicates(exposure, self.exposures)
         self.exposures[exposure.unique_id] = exposure
-        self.get_file(source_file).exposures.append(exposure.unique_id)
+        source_file.exposures.append(exposure.unique_id)
 
     def add_disabled_nofile(self, node: CompileResultNode):
         if node.unique_id in self._disabled:
@@ -1036,137 +1025,18 @@ class Manifest(MacroMethods):
         else:
             self._disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: SourceFile, node: CompileResultNode):
+    def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode):
         self.add_disabled_nofile(node)
-        self.get_file(source_file).nodes.append(node.unique_id)
+        if isinstance(source_file, SchemaSourceFile):
+            source_file.tests.append(node.unique_id)
+        else:
+            source_file.nodes.append(node.unique_id)
 
     def add_doc(self, source_file: SourceFile, doc: ParsedDocumentation):
         _check_duplicates(doc, self.docs)
         self.docs[doc.unique_id] = doc
-        self.get_file(source_file).docs.append(doc.unique_id)
+        source_file.docs.append(doc.unique_id)
 
-    def _get_disabled(
-        self,
-        unique_id: str,
-        match_file: SourceFile,
-    ) -> List[CompileResultNode]:
-        if unique_id not in self._disabled:
-            raise InternalException(
-                'called _get_disabled with id={}, but it does not exist'
-                .format(unique_id)
-            )
-        return [
-            n for n in self._disabled[unique_id]
-            if n.original_file_path == match_file.path.original_file_path
-        ]
-
-    # This is only used by 'sanitized_update' which processes "old_manifest"
-    def _process_node(
-        self,
-        node_id: str,
-        source_file: SourceFile,
-        old_file: SourceFile,
-        old_manifest: Any,
-    ) -> None:
-        """Nodes are a special kind of complicated - there can be multiple
-        with the same name, as long as all but one are disabled.
-
-        Only handle nodes where the matching node has the same resource type
-        as the current parser.
-        """
-        source_path = source_file.path.original_file_path
-        found: bool = False
-        if node_id in old_manifest.nodes:
-            old_node = old_manifest.nodes[node_id]
-            if old_node.original_file_path == source_path:
-                self.add_node(source_file, old_node)
-                found = True
-
-        if node_id in old_manifest._disabled:
-            matches = old_manifest._get_disabled(node_id, source_file)
-            for match in matches:
-                self.add_disabled(source_file, match)
-                found = True
-
-        if not found:
-            raise CompilationException(
-                'Expected to find "{}" in cached "manifest.nodes" or '
-                '"manifest.disabled" based on cached file information: {}!'
-                .format(node_id, old_file)
-            )
-
-    # This is called by ManifestLoader._get_cached/parse_with_cache,
-    # which handles updating the ManifestLoader results with information
-    # from the "old_manifest", i.e. the pickle file if the checksums are
-    # the same.
-    def sanitized_update(
-        self,
-        source_file: SourceFile,
-        old_manifest: Any,
-        resource_type: NodeType,
-    ) -> bool:
-
-        if isinstance(source_file.path, RemoteFile):
-            return False
-
-        old_file = old_manifest.get_file(source_file)
-        for doc_id in old_file.docs:
-            doc = _expect_value(doc_id, old_manifest.docs, old_file, "docs")
-            self.add_doc(source_file, doc)
-
-        for macro_id in old_file.macros:
-            macro = _expect_value(
-                macro_id, old_manifest.macros, old_file, "macros"
-            )
-            self.add_macro(source_file, macro)
-
-        for source_id in old_file.sources:
-            source = _expect_value(
-                source_id, old_manifest.sources, old_file, "sources"
-            )
-            self.add_source(source_file, source)
-
-        # because we know this is how we _parsed_ the node, we can safely
-        # assume if it's disabled it was done by the project or file, and
-        # we can keep our old data
-        # the node ID could be in old_manifest.disabled AND in old_manifest.nodes.
-        # In that case, we have to make sure the path also matches.
-        for node_id in old_file.nodes:
-            # cheat: look at the first part of the node ID and compare it to
-            # the parser resource type. On a mismatch, bail out.
-            if resource_type != node_id.split('.')[0]:
-                continue
-            self._process_node(node_id, source_file, old_file, old_manifest)
-
-        for exposure_id in old_file.exposures:
-            exposure = _expect_value(
-                exposure_id, old_manifest.exposures, old_file, "exposures"
-            )
-            self.add_exposure(source_file, exposure)
-
-        # Note: There shouldn't be any patches in here after the cleanup.
-        # The pickled Manifest should have had all patches applied.
-        patched = False
-        for name in old_file.patches:
-            patch = _expect_value(
-                name, old_manifest.patches, old_file, "patches"
-            )
-            self.add_patch(source_file, patch)
-            patched = True
-        if patched:
-            self.get_file(source_file).patches.sort()
-
-        macro_patched = False
-        for key in old_file.macro_patches:
-            macro_patch = _expect_value(
-                key, old_manifest.macro_patches, old_file, "macro_patches"
-            )
-            self.add_macro_patch(source_file, macro_patch)
-            macro_patched = True
-        if macro_patched:
-            self.get_file(source_file).macro_patches.sort()
-
-        return True
     # end of methods formerly in ParseResult
 
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
@@ -1189,13 +1059,11 @@ class Manifest(MacroMethods):
             self.metadata,
             self.flat_graph,
             self.state_check,
-            self.macro_patches,
-            self.patches,
             self.source_patches,
             self._disabled,
-            self._docs_cache,
-            self._sources_cache,
-            self._refs_cache,
+            self._doc_lookup,
+            self._source_lookup,
+            self._ref_lookup,
         )
         return self.__class__, args
 
@@ -1264,6 +1132,10 @@ def _check_duplicates(
 ):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])
+
+
+K_T = TypeVar('K_T')
+V_T = TypeVar('V_T')
 
 
 def _expect_value(

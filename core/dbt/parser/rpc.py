@@ -42,7 +42,7 @@ class RPCCallParser(SimpleSQLParser[ParsedRPCNode]):
         return os.path.join('rpc', block.name)
 
     def parse_remote(self, sql: str, name: str) -> ParsedRPCNode:
-        source_file = SourceFile.remote(contents=sql)
+        source_file = SourceFile.remote(sql, self.project.project_name)
         contents = RPCBlock(rpc_name=name, file=source_file)
         return self.parse_node(contents)
 

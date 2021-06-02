@@ -5,7 +5,7 @@ import jinja2
 from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
-from dbt.contracts.files import FilePath
+from dbt.contracts.files import FilePath, SourceFile
 from dbt.exceptions import CompilationException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -92,12 +92,10 @@ class MacroParser(BaseParser[ParsedMacro]):
             yield node
 
     def parse_file(self, block: FileBlock):
-        # mark the file as seen, even if there are no macros in it
-        self.manifest.get_file(block.file)
+        assert isinstance(block.file, SourceFile)
         source_file = block.file
-
+        assert isinstance(source_file.contents, str)
         original_file_path = source_file.path.original_file_path
-
         logger.debug("Parsing {}".format(original_file_path))
 
         # this is really only used for error messages
