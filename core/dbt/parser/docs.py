@@ -3,6 +3,7 @@ from typing import Iterable, Optional
 import re
 
 from dbt.clients.jinja import get_rendered
+from dbt.contracts.files import SourceFile
 from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.node_types import NodeType
 from dbt.parser.base import Parser
@@ -46,6 +47,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         return [doc]
 
     def parse_file(self, file_block: FileBlock):
+        assert isinstance(file_block.file, SourceFile)
         searcher: Iterable[BlockContents] = BlockSearcher(
             source=[file_block],
             allowed_blocks={'docs'},

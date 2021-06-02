@@ -144,7 +144,7 @@ class DocumentationParserTest(unittest.TestCase):
     def test_load_file(self):
         parser = docs.DocumentationParser(
             root_project=self.root_project_config,
-            manifest=Manifest({}, {}, {}, {}, {}, {}, [], {}),
+            manifest=Manifest(),
             project=self.subdir_project_config,
         )
 
@@ -169,7 +169,7 @@ class DocumentationParserTest(unittest.TestCase):
 
         parser = docs.DocumentationParser(
             root_project=self.root_project_config,
-            manifest=Manifest({}, {}, {}, {}, {}, {}, [], {}),
+            manifest=Manifest(),
             project=self.subdir_project_config,
         )
 
@@ -186,7 +186,7 @@ class DocumentationParserTest(unittest.TestCase):
     def test_multiple_raw_blocks(self):
         parser = docs.DocumentationParser(
             root_project=self.root_project_config,
-            manifest=Manifest({}, {}, {}, {}, {}, {}, [], {}),
+            manifest=Manifest(),
             project=self.subdir_project_config,
         )
 
