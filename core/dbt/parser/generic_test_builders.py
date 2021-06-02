@@ -432,9 +432,7 @@ class TestBuilder(Generic[Testable]):
     # this is the 'raw_sql' that's used in 'render_update' and execution
     # of the test macro
     def build_raw_sql(self) -> str:
-        return (
-            "{{{{ {macro}(**{kwargs_name}) }}}}{config}"
-        ).format(
+        return ("{{{{ {macro}(**{kwargs_name}) }}}}{config}").format(
             macro=self.macro_name(),
             config=self.construct_config(),
             kwargs_name=GENERIC_TEST_KWARGS_NAME,
