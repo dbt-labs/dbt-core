@@ -104,9 +104,7 @@ class DocLookup(dbtClassMixin):
         for doc in manifest.docs.values():
             self.add_doc(doc)
 
-    def perform_lookup(
-        self, unique_id: UniqueID, manifest
-    ) -> ParsedDocumentation:
+    def perform_lookup(self, unique_id: UniqueID, manifest) -> ParsedDocumentation:
         if unique_id not in manifest.docs:
             raise dbt.exceptions.InternalException(
                 f"Doc {unique_id} found in cache but not found in manifest"
@@ -139,9 +137,7 @@ class SourceLookup(dbtClassMixin):
             if hasattr(source, "source_name"):
                 self.add_source(source)
 
-    def perform_lookup(
-        self, unique_id: UniqueID, manifest: 'Manifest'
-    ) -> ParsedSourceDefinition:
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ParsedSourceDefinition:
         if unique_id not in manifest.sources:
             raise dbt.exceptions.InternalException(
                 f"Source {unique_id} found in cache but not found in manifest"
