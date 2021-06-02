@@ -41,9 +41,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
-from dbt.contracts.util import (
-    BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
-)
+from dbt.contracts.util import BaseArtifactMetadata, SourceKey, ArtifactMixin, schema_version
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationException,
