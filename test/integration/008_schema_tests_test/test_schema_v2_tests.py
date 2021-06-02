@@ -30,7 +30,7 @@ class TestSchemaTests(DBTIntegrationTest):
         self.assertEqual(result.status, "fail")
         self.assertFalse(result.skipped)
         self.assertTrue(
-            int(result.message) > 0,
+            result.failures > 0,
             'test {} did not fail'.format(result.node.name)
         )
 
@@ -38,7 +38,7 @@ class TestSchemaTests(DBTIntegrationTest):
         self.assertEqual(result.status, "pass")
         self.assertFalse(result.skipped)
         self.assertEqual(
-            int(result.message), 0,
+            result.failures, 0,
             'test {} failed'.format(result.node.name)
         )
 
@@ -57,8 +57,7 @@ class TestSchemaTests(DBTIntegrationTest):
             # assert that actual tests pass
             else:
                 self.assertTestPassed(result)
-
-        self.assertEqual(sum(x.message for x in test_results), 6)
+        self.assertEqual(sum(x.failures for x in test_results), 6)
 
     @use_profile('postgres')
     def test_postgres_schema_test_selection(self):
@@ -126,6 +125,42 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
             self.run_dbt(strict=False)
 
 
+class TestCustomConfigSchemaTests(DBTIntegrationTest):
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("seed.sql")
+
+    @property
+    def schema(self):
+        return 'schema_tests_008'
+
+    @property
+    def models(self):
+        return "models-v2/custom-configs"
+    
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["macros-v2/custom-configs"],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_config(self):
+        """ Test that tests use configs properly. All tests for
+        this project will fail, configs are set to make test pass. """
+        results = self.run_dbt()
+        results = self.run_dbt(['test'], strict=False)
+
+        self.assertEqual(len(results), 5)
+        for result in results:
+            self.assertFalse(result.skipped)
+            self.assertEqual(
+                result.failures, 0,
+                'test {} failed'.format(result.node.name)
+            )
+
+
 class TestHooksInTests(DBTIntegrationTest):
 
     @property
@@ -154,7 +189,7 @@ class TestHooksInTests(DBTIntegrationTest):
             self.assertEqual(result.status, "pass")
             self.assertFalse(result.skipped)
             self.assertEqual(
-                int(result.message), 0,
+                result.failures, 0,
                 'test {} failed'.format(result.node.name)
             )
 
@@ -173,6 +208,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
     def packages_config(self):
         return {
             'packages': [
+                {
+                    "local": "./local_dependency",
+                },
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
                     'revision': 'dbt/0.17.0',
@@ -207,14 +245,16 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()
-        self.assertEqual(len(test_results), 5)
+        self.assertEqual(len(test_results), 6)
 
-        expected_failures = ['unique', 'every_value_is_blue']
+        expected_failures = [
+            'not_null_table_copy_email',
+            'every_value_is_blue_table_copy_favorite_color'
+        ]
 
         for result in test_results:
-            if result.status == 'error':
-                self.assertTrue(result.node['name'] in expected_failures)
-        self.assertEqual(sum(x.message for x in test_results), 52)
+            if result.status == 'fail':
+                self.assertIn(result.node.name, expected_failures)
 
 
 class TestBQSchemaTests(DBTIntegrationTest):
@@ -252,7 +292,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
                 self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
                 self.assertTrue(
-                    int(result.message) > 0,
+                    result.failures > 0,
                     'test {} did not fail'.format(result.node.name)
                 )
             # assert that actual tests pass
@@ -260,12 +300,11 @@ class TestBQSchemaTests(DBTIntegrationTest):
                 self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
                 self.assertEqual(
-                    int(result.message), 0,
+                    result.failures, 0,
                     'test {} failed'.format(result.node.name)
                 )
 
-        self.assertEqual(sum(x.message for x in test_results), 0)
-
+        self.assertEqual(sum(x.failures for x in test_results), 0)
 
 class TestQuotedSchemaTestColumns(DBTIntegrationTest):
     @property
@@ -477,8 +516,8 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
 
         # both tests have the same unique id except for the hash
         expected_unique_ids = [
-            'test.test.not_null_base_extension_id.2dbb9627b6',
-            'test.test.not_null_base_extension_id.d70fc39f40'
-            ]
+            'test.test.not_null_base_extension_id.4a9d96018d',
+            'test.test.not_null_base_extension_id.60bbea9027'
+        ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)

@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: table_copy
+    description: "A copy of the table"
+    # passes
+    tests:
+      - where
+      - error_if
+      - warn_if
+      - limit
+      - fail_calc

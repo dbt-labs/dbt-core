@@ -12,7 +12,7 @@ from dbt import ui
 from dbt import utils
 
 from dbt.contracts.results import (
-    FreshnessStatus, NodeResult, NodeStatus, TestStatus
+    FreshnessStatus, NodeStatus, TestStatus
 )
 
 
@@ -115,7 +115,7 @@ def get_printable_result(
 
 
 def print_test_result_line(
-        result: NodeResult, schema_name, index: int, total: int
+        result, index: int, total: int
 ) -> None:
     model = result.node
 
@@ -128,11 +128,11 @@ def print_test_result_line(
         color = ui.green
         logger_fn = logger.info
     elif result.status == TestStatus.Warn:
-        info = 'WARN {}'.format(result.message)
+        info = f'WARN {result.failures}'
         color = ui.yellow
         logger_fn = logger.warning
     elif result.status == TestStatus.Fail:
-        info = 'FAIL {}'.format(result.message)
+        info = f'FAIL {result.failures}'
         color = ui.red
         logger_fn = logger.error
     else:
@@ -291,14 +291,10 @@ def print_run_result_error(
             result.node.name,
             result.node.original_file_path))
 
-        try:
-            # if message is int, must be rows returned for a test
-            int(result.message)
-        except ValueError:
-            logger.error("  Status: {}".format(result.status))
+        if result.message:
+            logger.error(f"  {result.message}")
         else:
-            num_rows = utils.pluralize(result.message, 'result')
-            logger.error("  Got {}, expected 0.".format(num_rows))
+            logger.error(f"  Status: {result.status}")
 
         if result.node.build_path is not None:
             with TextOnly():

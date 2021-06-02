@@ -25,7 +25,7 @@ class TestChangingPartitions(DBTIntegrationTest):
         for result in test_results:
             self.assertEqual(result.status, 'pass')
             self.assertFalse(result.skipped)
-            self.assertEqual(int(result.message), 0)
+            self.assertEqual(result.failures, 0)
 
     @use_profile('bigquery')
     def test_bigquery_add_partition(self):

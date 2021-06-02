@@ -190,7 +190,10 @@ class TestBuilder(Generic[Testable]):
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
     # kwargs representing test configs
-    MODIFIER_ARGS = ('severity', 'tags', 'enabled', 'store_failures')
+    MODIFIER_ARGS = (
+        'severity', 'tags', 'enabled', 'where', 'limit', 'warn_if', 'error_if',
+        'fail_calc', 'store_failures'
+    )
 
     def __init__(
         self,
@@ -277,12 +280,15 @@ class TestBuilder(Generic[Testable]):
             test_args['column_name'] = name
         return test_name, test_args
 
+    @property
     def enabled(self) -> Optional[bool]:
         return self.modifiers.get('enabled')
 
+    @property
     def alias(self) -> Optional[str]:
         return self.modifiers.get('alias')
 
+    @property
     def severity(self) -> Optional[str]:
         sev = self.modifiers.get('severity')
         if sev:
@@ -290,8 +296,29 @@ class TestBuilder(Generic[Testable]):
         else:
             return None
 
+    @property
     def store_failures(self) -> Optional[bool]:
         return self.modifiers.get('store_failures')
+
+    @property
+    def where(self) -> Optional[str]:
+        return self.modifiers.get('where')
+
+    @property
+    def limit(self) -> Optional[int]:
+        return self.modifiers.get('limit')
+
+    @property
+    def warn_if(self) -> Optional[str]:
+        return self.modifiers.get('warn_if')
+
+    @property
+    def error_if(self) -> Optional[str]:
+        return self.modifiers.get('error_if')
+
+    @property
+    def fail_calc(self) -> Optional[str]:
+        return self.modifiers.get('fail_calc')
 
     def tags(self) -> List[str]:
         tags = self.modifiers.get('tags', [])
@@ -328,7 +355,8 @@ class TestBuilder(Generic[Testable]):
 
     def construct_config(self) -> str:
         configs = ",".join([
-            f"{key}=" + (f"'{value}'" if isinstance(value, str) else str(value))
+            f"{key}=" + (f"'{value}'" if isinstance(value, str)
+                         else str(value))
             for key, value
             in self.modifiers.items()
         ])
@@ -341,7 +369,7 @@ class TestBuilder(Generic[Testable]):
     # of the test macro
     def build_raw_sql(self) -> str:
         return (
-            "{config}{{{{ {macro}(**{kwargs_name}) }}}}"
+            "{{{{ {macro}(**{kwargs_name}) }}}}{config}"
         ).format(
             macro=self.macro_name(),
             config=self.construct_config(),
@@ -349,10 +377,13 @@ class TestBuilder(Generic[Testable]):
         )
 
     def build_model_str(self):
+        targ = self.target
+        cfg_where = "config.get('where')"
         if isinstance(self.target, UnparsedNodeUpdate):
-            fmt = "{{{{ ref('{0.name}') }}}}"
+            identifier = self.target.name
+            target_str = f"{{{{ ref('{targ.name}') }}}}"
         elif isinstance(self.target, UnpatchedSourceDefinition):
-            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
-        else:
-            raise self._bad_type()
-        return fmt.format(self.target)
+            identifier = self.target.table.name
+            target_str = f"{{{{ source('{targ.source.name}', '{targ.table.name}') }}}}"
+        filtered = f"(select * from {target_str} where {{{{{cfg_where}}}}}) {identifier}"
+        return f"{{% if {cfg_where} %}}{filtered}{{% else %}}{target_str}{{% endif %}}"

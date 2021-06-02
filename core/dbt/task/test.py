@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from dbt import utils
+from dbt.dataclass_schema import dbtClassMixin
 import threading
 from typing import Dict, Any, Union
 
@@ -11,7 +14,7 @@ from dbt.contracts.graph.compiled import (
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import RunResult, TestStatus
+from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
@@ -27,15 +30,20 @@ from dbt.node_types import NodeType, RunHookType
 from dbt import flags
 
 
+@dataclass
+class TestResultData(dbtClassMixin):
+    failures: int
+    should_warn: bool
+    should_error: bool
+
+
 class TestRunner(CompileRunner):
     def describe_node(self):
         node_name = self.node.name
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        schema_name = self.node.schema
-        print_test_result_line(result, schema_name, self.node_index,
-                               self.num_nodes)
+        print_test_result_line(result, self.node_index, self.num_nodes)
 
     def print_start_line(self):
         description = self.describe_node()
@@ -48,7 +56,7 @@ class TestRunner(CompileRunner):
         self,
         test: Union[CompiledDataTestNode, CompiledSchemaTestNode],
         manifest: Manifest
-    ) -> int:
+    ) -> TestResultData:
         context = generate_runtime_model(
             test, self.config, manifest
         )
@@ -69,7 +77,6 @@ class TestRunner(CompileRunner):
             )
 
         # generate materialization macro
-        # simple `select(*)` of the compiled test node
         macro_func = MacroGenerator(materialization_macro, context)
         # execute materialization macro
         macro_func()
@@ -79,28 +86,51 @@ class TestRunner(CompileRunner):
         table = result['table']
         num_rows = len(table.rows)
         if num_rows != 1:
-            num_cols = len(table.columns)
-            # since we just wrapped our query in `select count(*)`, we are in
-            # big trouble!
             raise InternalException(
                 f"dbt internally failed to execute {test.unique_id}: "
-                f"Returned {num_rows} rows and {num_cols} cols, but expected "
-                f"1 row and 1 column"
+                f"Returned {num_rows} rows, but expected "
+                f"1 row"
             )
-        return int(table[0][0])
+        num_cols = len(table.columns)
+        if num_cols != 3:
+            raise InternalException(
+                f"dbt internally failed to execute {test.unique_id}: "
+                f"Returned {num_cols} columns, but expected "
+                f"3 columns"
+            )
+
+        test_result_dct: PrimitiveDict = dict(
+            zip(
+                [column_name.lower() for column_name in table.column_names],
+                map(utils._coerce_decimal, table.rows[0])
+            )
+        )
+        TestResultData.validate(test_result_dct)
+        return TestResultData.from_dict(test_result_dct)
 
     def execute(self, test: CompiledTestNode, manifest: Manifest):
-        failed_rows = self.execute_test(test, manifest)
+        result = self.execute_test(test, manifest)
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
+        num_errors = utils.pluralize(result.failures, 'result')
         status = None
-        if failed_rows == 0:
-            status = TestStatus.Pass
-        elif severity == 'ERROR' or flags.WARN_ERROR:
+        message = None
+        failures = 0
+        if severity == "ERROR" and result.should_error:
             status = TestStatus.Fail
+            message = f'Got {num_errors}, configured to fail if {test.config.error_if}'
+            failures = result.failures
+        elif result.should_warn:
+            if flags.WARN_ERROR:
+                status = TestStatus.Fail
+                message = f'Got {num_errors}, configured to fail if {test.config.warn_if}'
+            else:
+                status = TestStatus.Warn
+                message = f'Got {num_errors}, configured to warn if {test.config.warn_if}'
+            failures = result.failures
         else:
-            status = TestStatus.Warn
+            status = TestStatus.Pass
 
         return RunResult(
             node=test,
@@ -108,8 +138,9 @@ class TestRunner(CompileRunner):
             timing=[],
             thread_id=thread_id,
             execution_time=0,
-            message=int(failed_rows),
-            adapter_response={}
+            message=message,
+            adapter_response={},
+            failures=failures,
         )
 
     def after_execute(self, result):

@@ -201,7 +201,8 @@ class ModelRunner(CompileRunner):
             thread_id=threading.current_thread().name,
             execution_time=0,
             message=str(result.response),
-            adapter_response=adapter_response
+            adapter_response=adapter_response,
+            failures=result.get('failures')
         )
 
     def _materialization_relations(

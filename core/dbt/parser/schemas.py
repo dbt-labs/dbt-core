@@ -488,16 +488,33 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         if (macro_unique_id in
                 ['macro.dbt.test_not_null', 'macro.dbt.test_unique']):
             self.update_parsed_node(node, config)
-            if builder.severity() is not None:
-                node.unrendered_config['severity'] = builder.severity()
-                node.config['severity'] = builder.severity()
-            if builder.enabled() is not None:
-                node.config['enabled'] = builder.enabled()
+            # manually set configs
             # note: this does not respect generate_alias_name() macro
-            if builder.alias() is not None:
-                node.unrendered_config['alias'] = builder.alias()
-                node.config['alias'] = builder.alias()
-                node.alias = builder.alias()
+            if builder.alias is not None:
+                node.unrendered_config['alias'] = builder.alias
+                node.config['alias'] = builder.alias
+                node.alias = builder.alias
+            if builder.severity is not None:
+                node.unrendered_config['severity'] = builder.severity
+                node.config['severity'] = builder.severity
+            if builder.enabled is not None:
+                node.unrendered_config['enabled'] = builder.enabled
+                node.config['enabled'] = builder.enabled
+            if builder.where is not None:
+                node.unrendered_config['where'] = builder.where
+                node.config['where'] = builder.where
+            if builder.limit is not None:
+                node.unrendered_config['limit'] = builder.limit
+                node.config['limit'] = builder.limit
+            if builder.warn_if is not None:
+                node.unrendered_config['warn_if'] = builder.warn_if
+                node.config['warn_if'] = builder.warn_if
+            if builder.error_if is not None:
+                node.unrendered_config['error_if'] = builder.error_if
+                node.config['error_if'] = builder.error_if
+            if builder.fail_calc is not None:
+                node.unrendered_config['fail_calc'] = builder.fail_calc
+                node.config['fail_calc'] = builder.fail_calc
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]

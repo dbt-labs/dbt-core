@@ -20,7 +20,7 @@
     {% do relations.append(target_relation) %}
   
     {% set main_sql %}
-        select count(*) as validation_errors
+        select *
         from {{ target_relation }}
     {% endset %}
     
@@ -29,7 +29,7 @@
   {% else %}
 
       {% set main_sql %}
-          select count(*) as validation_errors
+          select *
           from (
             {{ sql }}
           ) _dbt_internal_test
@@ -37,8 +37,22 @@
   
   {% endif %}
 
+  {% set limit = config.get('limit') %}
+  {% set fail_calc = config.get('fail_calc') %}
+  {% set warn_if = config.get('warn_if') %}
+  {% set error_if = config.get('error_if') %}
+
   {% call statement('main', fetch_result=True) -%}
-    {{ main_sql }}
+
+    select
+      {{ fail_calc }} as failures,
+      {{ fail_calc }} {{ warn_if }} as should_warn,
+      {{ fail_calc }} {{ error_if }} as should_error
+    from (
+      {{ main_sql }}
+      {{ "limit " ~ limit if limit != none }}
+    ) _dbt_internal_test
+
   {%- endcall %}
   
   {{ return({'relations': relations}) }}

@@ -215,7 +215,7 @@ class BaseRunner(metaclass=ABCMeta):
         return result
 
     def _build_run_result(self, node, start_time, status, timing_info, message,
-                          agate_table=None, adapter_response=None):
+                          agate_table=None, adapter_response=None, failures=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         if adapter_response is None:
@@ -228,7 +228,8 @@ class BaseRunner(metaclass=ABCMeta):
             message=message,
             node=node,
             agate_table=agate_table,
-            adapter_response=adapter_response
+            adapter_response=adapter_response,
+            failures=failures
         )
 
     def error_result(self, node, message, start_time, timing_info):
@@ -257,7 +258,8 @@ class BaseRunner(metaclass=ABCMeta):
             timing_info=timing_info,
             message=result.message,
             agate_table=result.agate_table,
-            adapter_response=result.adapter_response
+            adapter_response=result.adapter_response,
+            failures=result.failures
         )
 
     def skip_result(self, node, message):
@@ -269,7 +271,8 @@ class BaseRunner(metaclass=ABCMeta):
             timing=[],
             message=message,
             node=node,
-            adapter_response={}
+            adapter_response={},
+            failures=None
         )
 
     def compile_and_execute(self, manifest, ctx):
