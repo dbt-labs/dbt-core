@@ -995,9 +995,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         my_checksum = self.files[key].checksum
         return my_checksum == source_file.checksum
 
-    def add_source(
-        self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition
-    ):
+    def add_source(self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition):
         # sources can't be overwritten!
         _check_duplicates(source, self.sources)
         self.sources[source.unique_id] = source  # type: ignore
