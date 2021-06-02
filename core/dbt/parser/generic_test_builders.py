@@ -191,7 +191,7 @@ class TestBuilder(Generic[Testable]):
     )
     # args in the test entry representing test configs
     CONFIG_ARGS = (
-        'severity', 'tags', 'enabled', 'where', 'limit', 'warn_if', 'error_if',
+        "severity",
         "tags",
         "enabled",
         "where",

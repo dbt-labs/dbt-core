@@ -116,8 +116,8 @@ class BaseResult(dbtClassMixin):
         data = super().__pre_deserialize__(data)
         if "message" not in data:
             data["message"] = None
-        if 'failures' not in data:
-            data['failures'] = None
+        if "failures" not in data:
+            data["failures"] = None
         return data
 
 
@@ -173,7 +173,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         execution_time=result.execution_time,
         message=result.message,
         adapter_response=result.adapter_response,
-        failures=result.failures
+        failures=result.failures,
     )
 
 

@@ -443,23 +443,21 @@ class TestConfig(NodeAndTestConfig):
     store_failures: Optional[bool] = None
     where: Optional[str] = None
     limit: Optional[int] = None
-    fail_calc: str = 'count(*)'
-    warn_if: str = '!= 0'
-    error_if: str = '!= 0'
+    fail_calc: str = "count(*)"
+    warn_if: str = "!= 0"
+    error_if: str = "!= 0"
 
     @classmethod
-    def same_contents(
-        cls, unrendered: Dict[str, Any], other: Dict[str, Any]
-    ) -> bool:
+    def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
         """This is like __eq__, except it explicitly checks certain fields."""
         modifiers = [
-            'severity',
-            'where',
-            'limit',
-            'fail_calc',
-            'warn_if',
-            'error_if',
-            'store_failures'
+            "severity",
+            "where",
+            "limit",
+            "fail_calc",
+            "warn_if",
+            "error_if",
+            "store_failures",
         ]
 
         seen = set()

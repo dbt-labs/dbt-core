@@ -27,7 +27,7 @@ class CompileRunner(BaseRunner):
             execution_time=0,
             message=None,
             adapter_response={},
-            failures=None
+            failures=None,
         )
 
     def compile(self, manifest):

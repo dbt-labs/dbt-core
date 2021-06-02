@@ -223,7 +223,7 @@ class ModelRunner(CompileRunner):
             execution_time=0,
             message=str(result.response),
             adapter_response=adapter_response,
-            failures=result.get('failures')
+            failures=result.get("failures"),
         )
 
     def _materialization_relations(self, result: Any, model) -> List[BaseRelation]:
