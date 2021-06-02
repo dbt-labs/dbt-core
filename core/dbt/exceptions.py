@@ -943,12 +943,7 @@ def raise_duplicate_patch_name(patch_1, existing_patch_path):
 def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
     package_name = patch_1.package_name
     name = patch_1.name
-    fix = _fix_dupe_msg(
-        patch_1.original_file_path,
-        existing_patch_path,
-        name,
-        'macros'
-    )
+    fix = _fix_dupe_msg(patch_1.original_file_path, existing_patch_path, name, "macros")
     raise_compiler_error(
         f"dbt found two schema.yml entries for the same macro in package "
         f"{package_name} named {name}. Macros may only be described a single "
