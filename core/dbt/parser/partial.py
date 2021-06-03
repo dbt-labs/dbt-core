@@ -435,7 +435,7 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
-                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     source_file = self.saved_files[file_id]
                     self.delete_macro_file(source_file)
                     self.saved_files[file_id] = deepcopy(self.new_files[file_id])
@@ -495,11 +495,11 @@ class PartialParsing:
                 if file_id in self.saved_files:
                     schema_file = self.saved_files[file_id]
                     macro_patches = []
-                    if 'macros' in schema_file.dict_from_yaml:
-                        macro_patches = schema_file.dict_from_yaml['macros']
+                    if "macros" in schema_file.dict_from_yaml:
+                        macro_patches = schema_file.dict_from_yaml["macros"]
                     macro_patch = self.get_schema_element(macro_patches, base_macro.name)
                     self.delete_schema_macro_patch(schema_file, macro_patch)
-                    self.merge_patch(schema_file, 'macros', macro_patch)
+                    self.merge_patch(schema_file, "macros", macro_patch)
             # The macro may have already been removed by handling macro children
             if unique_id in source_file.macros:
                 source_file.macros.remove(unique_id)
@@ -675,7 +675,7 @@ class PartialParsing:
             for macro in macro_diff["deleted"]:
                 self.delete_schema_macro_patch(schema_file, macro)
         if macro_diff["added"]:
-            for macro in macro_diff['added']:
+            for macro in macro_diff["added"]:
                 self.merge_patch(schema_file, dict_key, macro)
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
