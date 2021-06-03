@@ -452,7 +452,7 @@ class RunTask(CompileTask):
             resource_types=[NodeType.Model],
         )
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return ModelRunner
 
     def task_end_messages(self, results):
