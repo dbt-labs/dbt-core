@@ -43,6 +43,13 @@ class DBTDeprecation:
             active_deprecations.add(self.name)
 
 
+class DispatchPackagesDeprecation(DBTDeprecation):
+    _name = 'dispatch-packages'
+    _description = '''\
+    to fill in: "{macro_name}"
+    '''
+
+
 class MaterializationReturnDeprecation(DBTDeprecation):
     _name = 'materialization-return'
 
@@ -155,6 +162,7 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
+    DispatchPackagesDeprecation(),
     MaterializationReturnDeprecation(),
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),

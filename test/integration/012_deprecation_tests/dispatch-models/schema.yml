@@ -1,0 +1,22 @@
+version: 2
+models:
+- name: foo_alias
+  tests:
+  - expect_value:
+      field: tablename
+      value: foo
+- name: ref_foo_alias
+  tests:
+  - expect_value:
+      field: tablename
+      value: ref_foo_alias
+- name: alias_in_project
+  tests:
+  - expect_value:
+      field: tablename
+      value: project_alias
+- name: alias_in_project_with_override
+  tests:
+  - expect_value:
+      field: tablename
+      value: override_alias

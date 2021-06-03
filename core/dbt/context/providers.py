@@ -117,8 +117,10 @@ class BaseDatabaseWrapper:
         return search_prefixes
 
     def dispatch(
-            self, macro_name: str, packages: Optional[List[str]] = None,
-            macro_namespace: Optional[str] = None,
+        self,
+        macro_name: str,
+        macro_namespace: Optional[str] = None,
+        packages: Optional[List[str]] = None,
     ) -> MacroGenerator:
         search_packages: List[Optional[str]]
 
@@ -131,6 +133,9 @@ class BaseDatabaseWrapper:
                 f'packages=["{suggest_package}"])`?'
             )
             raise CompilationException(msg)
+
+        if packages is not None:
+            deprecations.warn('dispatch-packages', macro_name=macro_name)
 
         namespace = packages if packages else macro_namespace
 
@@ -1190,14 +1195,13 @@ class ProviderContext(ManifestContext):
         """
         deprecations.warn('adapter-macro', macro_name=name)
         original_name = name
-        package_names: Optional[List[str]] = None
+        package_name = None
         if '.' in name:
             package_name, name = name.split('.', 1)
-            package_names = [package_name]
 
         try:
             macro = self.db_wrapper.dispatch(
-                macro_name=name, packages=package_names
+                macro_name=name, macro_namespace=package_name
             )
         except CompilationException as exc:
             raise CompilationException(
