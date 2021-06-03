@@ -822,17 +822,26 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._doc_lookup = DocLookup(self)
         return self._doc_lookup
 
+    def rebuild_doc_lookup(self):
+        self._doc_lookup = DocLookup(self)
+
     @property
     def source_lookup(self) -> SourceLookup:
         if self._source_lookup is None:
             self._source_lookup = SourceLookup(self)
         return self._source_lookup
 
+    def rebuild_source_lookup(self):
+        self._source_lookup = SourceLookup(self)
+
     @property
     def ref_lookup(self) -> RefableLookup:
         if self._ref_lookup is None:
             self._ref_lookup = RefableLookup(self)
         return self._ref_lookup
+
+    def rebuild_ref_lookup(self):
+        self._ref_lookup = RefableLookup(self)
 
     @property
     def analysis_lookup(self) -> AnalysisLookup:

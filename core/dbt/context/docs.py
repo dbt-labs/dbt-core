@@ -57,14 +57,19 @@ class DocsRuntimeContext(SchemaYamlContext):
         else:
             doc_invalid_args(self.node, args)
 
+        # ParsedDocumentation
         target_doc = self.manifest.resolve_doc(
             doc_name,
             doc_package_name,
             self._project_name,
             self.node.package_name,
         )
-
-        if target_doc is None:
+        if target_doc:
+            file_id = target_doc.file_id
+            if file_id in self.manifest.files:
+                source_file = self.manifest.files[file_id]
+                source_file.add_node(self.node.unique_id)
+        else:
             doc_target_not_found(self.node, doc_name, doc_package_name)
 
         return target_doc.block_contents
