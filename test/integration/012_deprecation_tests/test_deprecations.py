@@ -186,4 +186,4 @@ class TestDispatchPackagesDeprecation(BaseTestDeprecations):
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(strict=True)
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
-        assert 'to fill in: "string_literal"' in exc_str
+        assert 'Raised during dispatch for: string_literal' in exc_str

@@ -46,9 +46,11 @@ class DBTDeprecation:
 class DispatchPackagesDeprecation(DBTDeprecation):
     _name = 'dispatch-packages'
     _description = '''\
-    to fill in: "{macro_name}"
-    '''
+    The "packages" argument of adapter.dispatch() has been deprecated. Use the "macro_namespace" argument instead.
 
+    Raised during dispatch for: {macro_name}
+    Read details: https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch
+    '''
 
 class MaterializationReturnDeprecation(DBTDeprecation):
     _name = 'materialization-return'
