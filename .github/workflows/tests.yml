@@ -4,17 +4,18 @@ name: dbt Tests
 
 # Triggers
 on:
-  # Triggers the workflow on push or pull request events but only for the develop branch
+  # Triggers the workflow on push or pull request events and also adds a manual trigger
   push:
-    branches: [ develop ]
-  pull_request:
+    branches: 
+      - 'develop' 
+      - '*.latest' 
+      - 'releases/*'
+  pull_request_target:
     branches: 
       - 'develop' 
       - '*.latest' 
       - 'pr/*'
       - 'releases/*'
-  pull_request_target:  
-    branches: [ develop ]
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 

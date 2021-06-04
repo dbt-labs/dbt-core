@@ -96,7 +96,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
         possible_macro_calls.append(func_name)
 
     # packages positional argument
-    packages = []
+    packages = None
     macro_namespace = None
     packages_arg = None
     packages_arg_type = None
@@ -163,6 +163,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
                         default_packages = [package_name]
 
                     namespace_names = get_dispatch_list(ctx, var_name, default_packages)
+                    packages = []
                     if namespace_names:
                         packages.extend(namespace_names)
                 else:
@@ -190,21 +191,23 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
                     default_namespaces.append(item.value)
             if namespace_var:
                 namespace_names = get_dispatch_list(ctx, namespace_var, default_namespaces)
+                packages = []
                 if namespace_names:
                     packages.extend(namespace_names)
 
     if db_wrapper:
-        if not packages:
-            if macro_namespace:
-                packages = macro_namespace
-            else:
-                packages = None  # empty list behaves differently than None...
-        macro = db_wrapper.dispatch(func_name, packages).macro
+        macro = db_wrapper.dispatch(
+            func_name,
+            packages=packages,
+            macro_namespace=macro_namespace
+        ).macro
         func_name = f'{macro.package_name}.{macro.name}'
         possible_macro_calls.append(func_name)
     else:  # this is only for test/unit/test_macro_calls.py
         if macro_namespace:
             packages = [macro_namespace]
+        if packages is None:
+            packages = []
         for package_name in packages:
             possible_macro_calls.append(f'{package_name}.{func_name}')
 
