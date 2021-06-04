@@ -144,7 +144,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
             macro_namespace = packages_arg.value
 
     if db_wrapper:
-        macro = db_wrapper.dispatch(
+        macro = db_wrapper.dispatch(func_name, macro_namespace=macro_namespace).macro
             func_name,
             macro_namespace=macro_namespace
         ).macro
