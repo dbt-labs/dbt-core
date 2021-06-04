@@ -25,7 +25,8 @@
 
 ### Docs
 - Reversed the rendering direction of relationship tests so that the test renders in the model it is defined in ([docs#181](https://github.com/fishtown-analytics/dbt-docs/issues/181), [docs#183](https://github.com/fishtown-analytics/dbt-docs/pull/183))
-- Support dots in model names: display them in the graphs ([docs#184](https://github.com/fishtown-analytics/dbt-docs/issues/184))
+- Support dots in model names: display them in the graphs ([docs#184](https://github.com/fishtown-analytics/dbt-docs/issues/184), [docs#185](https://github.com/fishtown-analytics/dbt-docs/issues/185))
+- Render meta tags for sources ([docs#192](https://github.com/fishtown-analytics/dbt-docs/issues/192), [docs#193](https://github.com/fishtown-analytics/dbt-docs/issues/193))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
@@ -50,6 +51,7 @@ Contributors:
 - [@stkbailey](https://github.com/stkbailey) ([#3404](https://github.com/fishtown-analytics/dbt/pull/3405))
 - [@mascah](https://github.com/mascah) ([docs#181](https://github.com/fishtown-analytics/dbt-docs/issues/181), [docs#183](https://github.com/fishtown-analytics/dbt-docs/pull/183))
 - [@monti-python](https://github.com/monti-python) ([docs#184](https://github.com/fishtown-analytics/dbt-docs/issues/184))
+- [@diegodewilde](https://github.com/diegodewilde) ([docs#193](https://github.com/fishtown-analytics/dbt-docs/issues/193))
 
 ## dbt 0.20.0b1 (May 03, 2021)
 
