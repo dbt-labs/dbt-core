@@ -36,6 +36,7 @@
 - Add `ssh-client` and update `git` version (using buster backports) in Docker image ([#3337](https://github.com/fishtown-analytics/dbt/issues/3337), [#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
 - Add `tags` and `meta` properties to the exposure resource schema. ([#3404](https://github.com/fishtown-analytics/dbt/issues/3404), [#3405](https://github.com/fishtown-analytics/dbt/pull/3405))
 - Update test sub-query alias ([#3398](https://github.com/fishtown-analytics/dbt/issues/3398), [#3414](https://github.com/fishtown-analytics/dbt/pull/3414)) 
+- Bump schema versions for run results and manifest artifacts ([#3422](https://github.com/fishtown-analytics/dbt/issues/3422), [#3421](https://github.com/fishtown-analytics/dbt/pull/3421))
 - Add deprecation warning for using `packages` argument with `adapter.dispatch` ([#3419](https://github.com/fishtown-analytics/dbt/issues/3419), [#3420](https://github.com/fishtown-analytics/dbt/pull/3420))
 
 Contributors:
