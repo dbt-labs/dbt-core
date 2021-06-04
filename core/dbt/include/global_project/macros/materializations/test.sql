@@ -28,12 +28,7 @@
   
   {% else %}
 
-      {% set main_sql %}
-          select *
-          from (
-            {{ sql }}
-          ) dbt_internal_test
-      {% endset %}
+      {% set main_sql = sql %}
   
   {% endif %}
 
