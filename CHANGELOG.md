@@ -8,6 +8,8 @@
 - Add the opt-in `--use-experimental-parser` flag ([#3307](https://github.com/fishtown-analytics/dbt/issues/3307), [#3374](https://github.com/fishtown-analytics/dbt/issues/3374))
 - Store test failures in the database ([#517](https://github.com/fishtown-analytics/dbt/issues/517), [#903](https://github.com/fishtown-analytics/dbt/issues/903), [#2593](https://github.com/fishtown-analytics/dbt/issues/2593), [#3316](https://github.com/fishtown-analytics/dbt/issues/3316))
 - Add new test configs: `where`, `limit`, `warn_if`, `error_if`, `fail_calc` ([#3258](https://github.com/fishtown-analytics/dbt/issues/3258), [#3321](https://github.com/fishtown-analytics/dbt/issues/3321), [#3336](https://github.com/fishtown-analytics/dbt/pull/3336))
+- Move partial parsing to end of parsing and implement new partial parsing method. ([#3217](https://github.com/fishtown-analytics/dbt/issues/3217), [#3364](https://github.com/fishtown-analytics/dbt/pull/3364))
+- Save doc file node references and use in partial parsing. ([#3425](https://github.com/fishtown-analytics/dbt/issues/3425), [#3432](https://github.com/fishtown-analytics/dbt/pull/3432))
 
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))

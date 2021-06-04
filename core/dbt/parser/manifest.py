@@ -255,8 +255,8 @@ class ManifestLoader:
             # load up the Lookup objects to resolve them by name, so the SourceFiles store
             # the unique_id instead of the name. Sources are loaded from yaml files, so
             # aren't in place yet
-            self.manifest.ref_lookup
-            self.manifest.doc_lookup
+            self.manifest.rebuild_ref_lookup()
+            self.manifest.rebuild_doc_lookup()
 
             # Load yaml files
             parser_types = [SchemaParser]
@@ -281,9 +281,6 @@ class ManifestLoader:
             self._perf_info.patch_sources_elapsed = (
                 time.perf_counter() - start_patch
             )
-
-            self.manifest._source_lookup = None
-            self.manifest.source_lookup
 
             # ParseResults had a 'disabled' attribute which was a dictionary
             # which is now named '_disabled'. This used to copy from

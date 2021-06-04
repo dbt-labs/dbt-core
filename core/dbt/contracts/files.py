@@ -202,6 +202,10 @@ class SourceFile(BaseSourceFile):
         self.contents = ''
         return self
 
+    def add_node(self, value):
+        if value not in self.nodes:
+            self.nodes.append(value)
+
     # TODO: do this a different way. This remote file kludge isn't going
     # to work long term
     @classmethod
