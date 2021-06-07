@@ -607,7 +607,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _lock: Lock = field(
         default_factory=flags.MP_CONTEXT.Lock,
-        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
     def __pre_serialize__(self):
