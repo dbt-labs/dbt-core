@@ -26,7 +26,8 @@
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
 - Raise better error if snapshot is missing required configurations ([#3381](https://github.com/fishtown-analytics/dbt/issues/3381), [#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
-- Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350)
+- Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350))
+- Fix deserialization of Manifest lock attribute ([#3435](https://github.com/fishtown-analytics/dbt/issues/3435), [#3445](https://github.com/fishtown-analytics/dbt/pull/3445))
 
 ### Docs
 - Reversed the rendering direction of relationship tests so that the test renders in the model it is defined in ([docs#181](https://github.com/fishtown-analytics/dbt-docs/issues/181), [docs#183](https://github.com/fishtown-analytics/dbt-docs/pull/183))
