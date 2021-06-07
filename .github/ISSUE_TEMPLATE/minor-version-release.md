@@ -1,0 +1,24 @@
+---
+name: Minor version release
+about: Creates a tracking checklist of items for a minor version release
+title: "[Tracking] v#.##.# release "
+labels: ''
+assignees: ''
+
+---
+
+### Engineering TODOs:
+- [ ] dbt-release workflow 
+- [ ] Create new protected `x.latest` branch 
+- [ ] Create a platform issue to update dbt Cloud
+- [ ] Generate schema updates
+- [ ] Bump plugin versions (dbt-spark + dbt-presto), add compatibility as needed
+   - [ ]  Spark 
+   - [ ]  Presto
+- [ ] Create a platform issue to update dbt-spark versions to dbt Cloud 
+
+### Product TODOs:
+- [ ] Merge PRs into next.docs.getdbt.com
+- [ ] Release new minor version of dbt-utils with new version compatibility
+- [ ] Publish discourse (draft here)
+- [ ] Announce in dbt Slack
