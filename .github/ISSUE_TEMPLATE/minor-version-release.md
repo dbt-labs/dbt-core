@@ -18,7 +18,7 @@ assignees: ''
 - [ ] Create a platform issue to update dbt-spark versions to dbt Cloud 
 
 ### Product TODOs:
-- [ ] Merge PRs into next.docs.getdbt.com
+- [ ] Finalize migration guide (next.docs.getdbt.com)
 - [ ] Release new version of dbt-utils with new dbt version compatibility. If there are breaking changes requiring a minor version, plan upgrades of other packages that depend on dbt-utils.
 - [ ] Publish discourse
 - [ ] Announce in dbt Slack
