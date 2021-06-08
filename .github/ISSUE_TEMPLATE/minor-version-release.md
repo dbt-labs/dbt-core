@@ -11,7 +11,7 @@ assignees: ''
 - [ ] dbt-release workflow 
 - [ ] Create new protected `x.latest` branch 
 - [ ] Create a platform issue to update dbt Cloud
-- [ ] Generate schema updates
+- [ ] Determine if schemas have changed. If so, generate new schemas and push to schemas.getdbt.com
 - [ ] Bump plugin versions (dbt-spark + dbt-presto), add compatibility as needed
    - [ ]  Spark 
    - [ ]  Presto
