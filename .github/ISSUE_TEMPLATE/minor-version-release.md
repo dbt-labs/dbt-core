@@ -20,5 +20,5 @@ assignees: ''
 ### Product TODOs:
 - [ ] Merge PRs into next.docs.getdbt.com
 - [ ] Release new minor version of dbt-utils with new version compatibility
-- [ ] Publish discourse (draft here)
+- [ ] Publish discourse
 - [ ] Announce in dbt Slack
