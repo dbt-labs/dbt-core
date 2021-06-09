@@ -1,3 +1,15 @@
+## dbt 0.21.0
+
+### Features
+
+### Fixes
+- Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
+
+### Under the hood
+
+Contributors:
+- [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
+
 ## dbt 0.20.0 (Release TBD)
 
 ## dbt 0.20.0rc1 (June 04, 2021)
