@@ -10,17 +10,6 @@ class TestBigQueryScripting(DBTIntegrationTest):
     def models(self):
         return "incremental-strategy-models"
 
-    @property
-    def project_config(self):
-        return {
-            "seeds": {
-                "+quote_columns": False
-            },
-            "models": {
-                "require_partition_filter": True
-            }
-        }
-
     @use_profile('bigquery')
     def test__bigquery_assert_incrementals(self):
         results = self.run_dbt()
@@ -38,3 +27,17 @@ class TestBigQueryScripting(DBTIntegrationTest):
         self.assertTablesEqual('incremental_overwrite_partitions', 'incremental_overwrite_date_expected')
         self.assertTablesEqual('incremental_overwrite_day', 'incremental_overwrite_day_expected')
         self.assertTablesEqual('incremental_overwrite_range', 'incremental_overwrite_range_expected')
+
+
+class TestBigQueryPartitionFilterScripting(TestBigQueryScripting):
+
+    @property
+    def project_config(self):
+        return {
+            "seeds": {
+                "+quote_columns": False
+            },
+            "models": {
+                "require_partition_filter": True
+            }
+        }
