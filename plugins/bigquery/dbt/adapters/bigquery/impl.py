@@ -794,7 +794,7 @@ class BigQueryAdapter(BaseAdapter):
             labels = config.get('labels', {})
             opts['labels'] = list(labels.items())
 
-        if config.get('require_partition_filter'):
+        if config.get('require_partition_filter') and not temporary:
             opts['require_partition_filter'] = config.get(
                 'require_partition_filter')
 
