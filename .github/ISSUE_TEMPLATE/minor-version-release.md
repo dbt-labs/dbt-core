@@ -7,18 +7,23 @@ assignees: ''
 
 ---
 
-### Engineering TODOs:
-- [ ] dbt-release workflow 
-- [ ] Create new protected `x.latest` branch 
-- [ ] Create a platform issue to update dbt Cloud
-- [ ] Determine if schemas have changed. If so, generate new schemas and push to schemas.getdbt.com
-- [ ] Bump plugin versions (dbt-spark + dbt-presto), add compatibility as needed
+### Release Core
+- [ ] [Engineering] dbt-release workflow 
+- [ ] [Engineering] Create new protected `x.latest` branch 
+- [ ] [Product] Finalize migration guide (next.docs.getdbt.com)
+
+### Release Cloud
+- [ ] [Engineering] Create a platform issue to update dbt Cloud and verify it is completed
+- [ ] [Engineering] Determine if schemas have changed. If so, generate new schemas and push to schemas.getdbt.com
+
+### Announce
+- [ ] [Product] Publish discourse
+- [ ] [Product] Announce in dbt Slack
+
+### Post-release
+- [ ] [Engineering] Bump plugin versions (dbt-spark + dbt-presto), add compatibility as needed
    - [ ]  Spark 
    - [ ]  Presto
-- [ ] Create a platform issue to update dbt-spark versions to dbt Cloud 
-
-### Product TODOs:
-- [ ] Finalize migration guide (next.docs.getdbt.com)
-- [ ] Release new version of dbt-utils with new dbt version compatibility. If there are breaking changes requiring a minor version, plan upgrades of other packages that depend on dbt-utils.
-- [ ] Publish discourse
-- [ ] Announce in dbt Slack
+- [ ] [Engineering] Create a platform issue to update dbt-spark versions to dbt Cloud 
+- [ ] [Product] Release new version of dbt-utils with new dbt version compatibility. If there are breaking changes requiring a minor version, plan upgrades of other packages that depend on dbt-utils.
+- [ ] [Engineering] If this isn't a final release, create an epic for the next release
