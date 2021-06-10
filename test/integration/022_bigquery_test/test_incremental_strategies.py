@@ -3,6 +3,12 @@ from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 class TestBigQueryScripting(DBTIntegrationTest):
 
     @property
+    def project_config(self):
+        return {
+            'macro-paths': ['macros']
+        }
+
+    @property
     def schema(self):
         return "bigquery_test_022"
 
@@ -34,6 +40,7 @@ class TestBigQueryPartitionFilterScripting(TestBigQueryScripting):
     @property
     def project_config(self):
         return {
+            'macro-paths': ['macros'],
             "seeds": {
                 "+quote_columns": False
             },
