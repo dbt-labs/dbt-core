@@ -102,17 +102,35 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
     
     @use_profile('postgres')
-    def test__postgres__run_incremental_sync_all_columns(self):
-        select = 'model_a incremental_sync_all_columns incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns'
+    def test__postgres__run_incremental_sync_all_columns_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_alter_types'
         compare_target = 'incremental_sync_all_columns_target'
         exclude = None
         expected = [
             'select_from_a',
-            'select_from_incremental_sync_all_columns',
+            'select_from_incremental_sync_all_columns_alter_types',
             'select_from_incremental_sync_all_columns_target',
             'unique_model_a_id',
-            'unique_incremental_sync_all_columns_id',
+            'unique_incremental_sync_all_columns_alter_types_id',
+            'unique_incremental_sync_all_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    @use_profile('postgres')
+    def test__postgres__run_incremental_sync_all_columns_no_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_no_alter_types'
+        compare_target = 'incremental_sync_all_columns_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_sync_all_columns_no_alter_types',
+            'select_from_incremental_sync_all_columns_target',
+            'unique_model_a_id',
+            'unique_incremental_sync_all_columns_no_alter_types_id',
             'unique_incremental_sync_all_columns_target_id'
         ]
             
@@ -157,17 +175,35 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
     
     @use_profile('snowflake')
-    def test__snowflake__run_incremental_sync_all_columns(self):
-        select = 'model_a incremental_sync_all_columns incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns'
+    def test__snowflake__run_incremental_sync_all_columns_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_alter_types'
         compare_target = 'incremental_sync_all_columns_target'
         exclude = None
         expected = [
             'select_from_a',
-            'select_from_incremental_sync_all_columns',
+            'select_from_incremental_sync_all_columns_alter_types',
             'select_from_incremental_sync_all_columns_target',
             'unique_model_a_id',
-            'unique_incremental_sync_all_columns_id',
+            'unique_incremental_sync_all_columns_alter_types_id',
+            'unique_incremental_sync_all_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    @use_profile('snowflake')
+    def test__snowflake__run_incremental_sync_all_columns_no_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_no_alter_types'
+        compare_target = 'incremental_sync_all_columns_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_sync_all_columns_no_alter_types',
+            'select_from_incremental_sync_all_columns_target',
+            'unique_model_a_id',
+            'unique_incremental_sync_all_columns_no_alter_types_id',
             'unique_incremental_sync_all_columns_target_id'
         ]
             
@@ -212,17 +248,35 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
     
     @use_profile('bigquery')
-    def test__bigquery__run_incremental_sync_all_columns(self):
-        select = 'model_a incremental_sync_all_columns incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns'
+    def test__bigquery__run_incremental_sync_all_columns_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_alter_types'
         compare_target = 'incremental_sync_all_columns_target'
         exclude = None
         expected = [
             'select_from_a',
-            'select_from_incremental_sync_all_columns',
+            'select_from_incremental_sync_all_columns_alter_types',
             'select_from_incremental_sync_all_columns_target',
             'unique_model_a_id',
-            'unique_incremental_sync_all_columns_id',
+            'unique_incremental_sync_all_columns_alter_types_id',
+            'unique_incremental_sync_all_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    @use_profile('bigquery')
+    def test__bigquery__run_incremental_sync_all_columns_no_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_no_alter_types'
+        compare_target = 'incremental_sync_all_columns_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_sync_all_columns_no_alter_types',
+            'select_from_incremental_sync_all_columns_target',
+            'unique_model_a_id',
+            'unique_incremental_sync_all_columns_no_alter_types_id',
             'unique_incremental_sync_all_columns_target_id'
         ]
             

@@ -1,0 +1,1 @@
+select * from {{ ref('incremental_sync_all_columns_no_alter_types') }} where false

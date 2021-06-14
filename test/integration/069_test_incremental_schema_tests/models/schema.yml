@@ -36,7 +36,14 @@ models:
         tests:
           - unique
  
-  - name: incremental_sync_all_columns
+  - name: incremental_sync_all_columns_alter_types
+    columns:
+      - name: id
+        tags: [column_level_tag]
+        tests:
+          - unique
+  
+  - name: incremental_sync_all_columns_no_alter_types
     columns:
       - name: id
         tags: [column_level_tag]
