@@ -76,6 +76,7 @@ def populated_node_config_dict():
         'tags': [],
         'vars': {},
         'extra': 'even more',
+        'on_schema_change': 'ignore',
     }
 
 
