@@ -7,7 +7,7 @@ from dbt.task.list import ListTask
 class TestSelectionExpansion(DBTIntegrationTest):
     @property
     def schema(self):
-        return "test_selection_expansion_065"
+        return "test_selection_expansion_066"
 
     @property
     def models(self):

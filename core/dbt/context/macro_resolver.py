@@ -145,7 +145,7 @@ class TestMacroNamespace:
     ):
         self.macro_resolver = macro_resolver
         self.ctx = ctx
-        self.node = node
+        self.node = node  # can be none
         self.thread_ctx = thread_ctx
         self.local_namespace = {}
         self.project_namespace = {}
@@ -169,6 +169,8 @@ class TestMacroNamespace:
 
     def recursively_get_depends_on_macros(self, depends_on_macros, dep_macros):
         for macro_unique_id in depends_on_macros:
+            if macro_unique_id in dep_macros:
+                continue
             dep_macros.append(macro_unique_id)
             if macro_unique_id in self.macro_resolver.macros:
                 macro = self.macro_resolver.macros[macro_unique_id]

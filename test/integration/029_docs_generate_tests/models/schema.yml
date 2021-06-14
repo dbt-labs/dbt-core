@@ -74,4 +74,9 @@ exposures:
     description: >
       A description of the complex exposure
     maturity: medium
+    meta:
+      tool: 'my_tool'
+      languages:
+        - python
+    tags: ['my_department']
     url: http://example.com/notebook/1

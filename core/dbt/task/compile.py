@@ -24,7 +24,8 @@ class CompileRunner(BaseRunner):
             thread_id=threading.current_thread().name,
             execution_time=0,
             message=None,
-            adapter_response={}
+            adapter_response={},
+            failures=None
         )
 
     def compile(self, manifest):

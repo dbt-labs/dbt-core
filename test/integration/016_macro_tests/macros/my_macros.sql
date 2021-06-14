@@ -15,13 +15,6 @@
 {% endmacro %}
 
 
-{# there is no default__dispatch_to_nowhere! #}
-{% macro dispatch_to_nowhere() %}
-	{% set macro = adapter.dispatch('dispatch_to_nowhere') %}
-	{{ macro() }}
-{% endmacro %}
-
-
 {% macro dispatch_to_parent() %}
 	{% set macro = adapter.dispatch('dispatch_to_parent') %}
 	{{ macro() }}

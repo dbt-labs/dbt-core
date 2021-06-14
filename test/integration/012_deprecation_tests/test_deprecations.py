@@ -60,27 +60,6 @@ class TestMaterializationReturnDeprecation(BaseTestDeprecations):
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
-class TestModelsKeyMismatchDeprecation(BaseTestDeprecations):
-    @property
-    def models(self):
-        return self.dir('models-key-mismatch')
-
-    @use_profile('postgres')
-    def test_postgres_deprecations_fail(self):
-        # this should fail at compile_time
-        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(strict=True)
-        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
-        self.assertIn('"seed" is a seed node, but it is specified in the models section', exc_str)
-
-    @use_profile('postgres')
-    def test_postgres_deprecations(self):
-        self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
-        expected = {'models-key-mismatch'}
-        self.assertEqual(expected, deprecations.active_deprecations)
-
-
 class TestAdapterMacroDeprecation(BaseTestDeprecations):
     @property
     def models(self):
@@ -170,3 +149,41 @@ class TestAdapterMacroDeprecationPackages(BaseTestDeprecations):
             self.run_dbt(strict=False, expect_pass=False)
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'not allowed' in exc_str  # we saw the default macro
+
+
+class TestDispatchPackagesDeprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('dispatch-models')
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": [self.dir('dispatch-macros')],
+            "models": {
+                "test": {
+                    "alias_in_project": {
+                        "alias": 'project_alias',
+                    },
+                    "alias_in_project_with_override": {
+                        "alias": 'project_alias',
+                    },
+                }
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_adapter_macro(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(strict=False)
+        expected = {'dispatch-packages'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+    @use_profile('postgres')
+    def test_postgres_adapter_macro_fail(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(strict=True)
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        assert 'Raised during dispatch for: string_literal' in exc_str

@@ -404,6 +404,8 @@ def pluralize(count, string: Union[str, NodeType]):
     return f'{count} {pluralized}'
 
 
+# Note that this only affects hologram json validation.
+# It has no effect on mashumaro serialization.
 def restrict_to(*restrictions):
     """Create the metadata for a restricted dataclass field"""
     return {'restrict': list(restrictions)}
@@ -418,6 +420,12 @@ def coerce_dict_str(value: Any) -> Optional[Dict[str, Any]]:
         return value
     else:
         return None
+
+
+def _coerce_decimal(value):
+    if isinstance(value, DECIMALS):
+        return float(value)
+    return value
 
 
 def lowercase(value: Optional[str]) -> Optional[str]:

@@ -112,7 +112,7 @@ class PostgresAdapter(SQLAdapter):
                 self.cache.add_link(referenced, dependent)
 
     def _get_catalog_schemas(self, manifest):
-        # postgres/redshift only allow one database (the main one)
+        # postgres only allow one database (the main one)
         schemas = super()._get_catalog_schemas(manifest)
         try:
             return schemas.flatten()

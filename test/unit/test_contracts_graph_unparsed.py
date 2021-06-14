@@ -585,6 +585,8 @@ class TestUnparsedExposure(ContractTestCase):
                 'email': 'name@example.com',
             },
             'maturity': 'medium',
+            'meta': {'tool': 'my_tool'},
+            'tags': ['my_department'],
             'url': 'https://example.com/dashboards/1',
             'description': 'A exposure',
             'depends_on': [
@@ -601,6 +603,8 @@ class TestUnparsedExposure(ContractTestCase):
             maturity=MaturityType.Medium,
             url='https://example.com/dashboards/1',
             description='A exposure',
+            meta={'tool': 'my_tool'},
+            tags=['my_department'],
             depends_on=['ref("my_model")', 'source("raw", "source_table")'],
         )
         dct = self.get_ok_dict()
@@ -647,4 +651,9 @@ class TestUnparsedExposure(ContractTestCase):
         self.assert_fails_validation(tst)
 
         del tst['owner']
+        self.assert_fails_validation(tst)
+
+    def test_bad_tags(self):
+        tst = self.get_ok_dict()
+        tst['tags'] = [123]
         self.assert_fails_validation(tst)

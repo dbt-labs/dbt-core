@@ -117,7 +117,10 @@ class BaseDatabaseWrapper:
         return search_prefixes
 
     def dispatch(
-        self, macro_name: str, packages: Optional[List[str]] = None
+        self,
+        macro_name: str,
+        macro_namespace: Optional[str] = None,
+        packages: Optional[List[str]] = None,
     ) -> MacroGenerator:
         search_packages: List[Optional[str]]
 
@@ -131,15 +134,25 @@ class BaseDatabaseWrapper:
             )
             raise CompilationException(msg)
 
-        if packages is None:
+        if packages is not None:
+            deprecations.warn('dispatch-packages', macro_name=macro_name)
+
+        namespace = packages if packages else macro_namespace
+
+        if namespace is None:
             search_packages = [None]
-        elif isinstance(packages, str):
-            raise CompilationException(
-                f'In adapter.dispatch, got a string packages argument '
-                f'("{packages}"), but packages should be None or a list.'
-            )
+        elif isinstance(namespace, str):
+            search_packages = self._adapter.config.get_macro_search_order(namespace)
+            if not search_packages and namespace in self._adapter.config.dependencies:
+                search_packages = [namespace]
+            if not search_packages:
+                raise CompilationException(
+                    f'In adapter.dispatch, got a string packages argument '
+                    f'("{packages}"), but packages should be None or a list.'
+                )
         else:
-            search_packages = packages
+            # Not a string and not None so must be a list
+            search_packages = namespace
 
         attempts = []
 
@@ -1182,14 +1195,13 @@ class ProviderContext(ManifestContext):
         """
         deprecations.warn('adapter-macro', macro_name=name)
         original_name = name
-        package_names: Optional[List[str]] = None
+        package_name = None
         if '.' in name:
             package_name, name = name.split('.', 1)
-            package_names = [package_name]
 
         try:
             macro = self.db_wrapper.dispatch(
-                macro_name=name, packages=package_names
+                macro_name=name, macro_namespace=package_name
             )
         except CompilationException as exc:
             raise CompilationException(

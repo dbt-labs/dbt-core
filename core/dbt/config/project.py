@@ -349,6 +349,7 @@ class PartialProject(RenderComponents):
         if cfg.quoting is not None:
             quoting = cfg.quoting.to_dict(omit_none=True)
 
+        dispatch: List[Dict[str, Any]]
         models: Dict[str, Any]
         seeds: Dict[str, Any]
         snapshots: Dict[str, Any]
@@ -356,6 +357,7 @@ class PartialProject(RenderComponents):
         tests: Dict[str, Any]
         vars_value: VarProvider
 
+        dispatch = cfg.dispatch
         models = cfg.models
         seeds = cfg.seeds
         snapshots = cfg.snapshots
@@ -402,6 +404,7 @@ class PartialProject(RenderComponents):
             models=models,
             on_run_start=on_run_start,
             on_run_end=on_run_end,
+            dispatch=dispatch,
             seeds=seeds,
             snapshots=snapshots,
             dbt_version=dbt_version,
@@ -513,6 +516,7 @@ class Project:
     models: Dict[str, Any]
     on_run_start: List[str]
     on_run_end: List[str]
+    dispatch: List[Dict[str, Any]]
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]
     sources: Dict[str, Any]
@@ -572,6 +576,7 @@ class Project:
             'models': self.models,
             'on-run-start': self.on_run_start,
             'on-run-end': self.on_run_end,
+            'dispatch': self.dispatch,
             'seeds': self.seeds,
             'snapshots': self.snapshots,
             'sources': self.sources,
@@ -647,3 +652,9 @@ class Project:
                 f'{list(self.selectors)}'
             )
         return self.selectors[name]
+
+    def get_macro_search_order(self, macro_namespace: str):
+        for dispatch_entry in self.dispatch:
+            if dispatch_entry['macro_namespace'] == macro_namespace:
+                return dispatch_entry['search_order']
+        return None

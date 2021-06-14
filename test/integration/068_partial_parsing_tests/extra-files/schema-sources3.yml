@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: seed_sources
+    schema: "{{ target.schema }}"
+    tables:
+      - name: raw_customers
+        columns:
+          - name: id
+            tests:
+              - not_null:
+                  severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
+              - unique
+          - name: first_name
+          - name: last_name
+          - name: email
+
+exposures:
+  - name: proxy_for_dashboard
+    description: "This is for the XXX dashboard"
+    type: "dashboard"
+    owner:
+      name: "Dashboard Tester"
+      email: "tester@dashboard.com"
+    depends_on:
+      - ref("model_one")
+      - source("seed_sources", "raw_customers")
+

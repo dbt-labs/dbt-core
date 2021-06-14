@@ -33,3 +33,4 @@
     select {{ validation_message }} as validation_error
     where {{ eq }} = 0
 {% endtest %}
+

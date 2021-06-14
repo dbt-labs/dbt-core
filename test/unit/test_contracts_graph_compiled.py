@@ -11,8 +11,8 @@ from dbt.contracts.graph.parsed import (
 from dbt.node_types import NodeType
 
 from .utils import (
-    assert_from_dict,
     assert_symmetric,
+    assert_from_dict,
     assert_fails_validation,
     dict_replace,
     replace_config,
@@ -88,6 +88,7 @@ def minimal_uncompiled_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
         'original_file_path': 'models/foo.sql',
@@ -109,6 +110,7 @@ def basic_uncompiled_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
         'original_file_path': 'models/foo.sql',
@@ -153,6 +155,7 @@ def basic_compiled_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Model),
         'path': '/root/models/foo.sql',
         'original_file_path': 'models/foo.sql',
@@ -312,6 +315,7 @@ def minimal_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -320,7 +324,7 @@ def minimal_schema_test_dict():
         'unique_id': 'model.test.foo',
         'fqn': ['test', 'models', 'foo'],
         'database': 'test_db',
-        'schema': 'test_schema',
+        'schema': 'dbt_test__audit',
         'alias': 'bar',
         'test_metadata': {
             'name': 'foo',
@@ -349,7 +353,7 @@ def basic_uncompiled_schema_test_node():
         depends_on=DependsOn(),
         description='',
         database='test_db',
-        schema='test_schema',
+        schema='dbt_test__audit',
         alias='bar',
         tags=[],
         config=TestConfig(),
@@ -381,7 +385,7 @@ def basic_compiled_schema_test_node():
         deferred=False,
         description='',
         database='test_db',
-        schema='test_schema',
+        schema='dbt_test__audit',
         alias='bar',
         tags=[],
         config=TestConfig(severity='warn'),
@@ -404,6 +408,7 @@ def basic_uncompiled_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -416,7 +421,7 @@ def basic_uncompiled_schema_test_dict():
         'depends_on': {'macros': [], 'nodes': []},
         'database': 'test_db',
         'description': '',
-        'schema': 'test_schema',
+        'schema': 'dbt_test__audit',
         'alias': 'bar',
         'tags': [],
         'config': {
@@ -430,7 +435,11 @@ def basic_uncompiled_schema_test_dict():
             'tags': [],
             'vars': {},
             'severity': 'ERROR',
-            'on_schema_change': 'ignore'
+            'schema': 'dbt_test__audit',
+            'warn_if': '!= 0',
+            'error_if': '!= 0',
+            'fail_calc': 'count(*)',
+            'on_schema_change': 'ignore',
         },
         'deferred': False,
         'docs': {'show': True},
@@ -453,6 +462,7 @@ def basic_compiled_schema_test_dict():
     return {
         'name': 'foo',
         'root_path': '/root/',
+        'created_at': 1,
         'resource_type': str(NodeType.Test),
         'path': '/root/x/path.sql',
         'original_file_path': '/root/path.sql',
@@ -466,7 +476,7 @@ def basic_compiled_schema_test_dict():
         'deferred': False,
         'database': 'test_db',
         'description': '',
-        'schema': 'test_schema',
+        'schema': 'dbt_test__audit',
         'alias': 'bar',
         'tags': [],
         'config': {
@@ -480,9 +490,12 @@ def basic_compiled_schema_test_dict():
             'tags': [],
             'vars': {},
             'severity': 'warn',
-            'on_schema_change': 'ignore'
+            'schema': 'dbt_test__audit',
+            'warn_if': '!= 0',
+            'error_if': '!= 0',
+            'fail_calc': 'count(*)',
+            'on_schema_change': 'ignore',
         },
-
         'docs': {'show': True},
         'columns': {},
         'meta': {},

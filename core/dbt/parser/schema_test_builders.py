@@ -41,16 +41,21 @@ def get_nice_schema_test_name(
     clean_flat_args = [re.sub('[^0-9a-zA-Z_]+', '_', arg) for arg in flat_args]
     unique = "__".join(clean_flat_args)
 
-    cutoff = 32
-    if len(unique) <= cutoff:
-        label = unique
+    # for the file path + alias, the name must be <64 characters
+    # if the full name is too long, include the first 30 identifying chars plus
+    # a 32-character hash of the full contents
+
+    test_identifier = '{}_{}'.format(test_type, test_name)
+    full_name = '{}_{}'.format(test_identifier, unique)
+
+    if len(full_name) >= 64:
+        test_trunc_identifier = test_identifier[:30]
+        label = hashlib.md5(full_name.encode('utf-8')).hexdigest()
+        short_name = '{}_{}'.format(test_trunc_identifier, label)
     else:
-        label = hashlib.md5(unique.encode('utf-8')).hexdigest()
+        short_name = full_name
 
-    filename = '{}_{}_{}'.format(test_type, test_name, label)
-    name = '{}_{}_{}'.format(test_type, test_name, unique)
-
-    return filename, name
+    return short_name, full_name
 
 
 @dataclass
@@ -185,7 +190,10 @@ class TestBuilder(Generic[Testable]):
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
     # kwargs representing test configs
-    MODIFIER_ARGS = ('severity', 'tags', 'enabled')
+    MODIFIER_ARGS = (
+        'severity', 'tags', 'enabled', 'where', 'limit', 'warn_if', 'error_if',
+        'fail_calc', 'store_failures'
+    )
 
     def __init__(
         self,
@@ -231,6 +239,10 @@ class TestBuilder(Generic[Testable]):
         self.compiled_name: str = compiled_name
         self.fqn_name: str = fqn_name
 
+        # use hashed name as alias if too long
+        if compiled_name != fqn_name:
+            self.modifiers['alias'] = compiled_name
+
     def _bad_type(self) -> TypeError:
         return TypeError('invalid target type "{}"'.format(type(self.target)))
 
@@ -268,15 +280,45 @@ class TestBuilder(Generic[Testable]):
             test_args['column_name'] = name
         return test_name, test_args
 
+    @property
     def enabled(self) -> Optional[bool]:
         return self.modifiers.get('enabled')
 
+    @property
+    def alias(self) -> Optional[str]:
+        return self.modifiers.get('alias')
+
+    @property
     def severity(self) -> Optional[str]:
         sev = self.modifiers.get('severity')
         if sev:
             return sev.upper()
         else:
             return None
+
+    @property
+    def store_failures(self) -> Optional[bool]:
+        return self.modifiers.get('store_failures')
+
+    @property
+    def where(self) -> Optional[str]:
+        return self.modifiers.get('where')
+
+    @property
+    def limit(self) -> Optional[int]:
+        return self.modifiers.get('limit')
+
+    @property
+    def warn_if(self) -> Optional[str]:
+        return self.modifiers.get('warn_if')
+
+    @property
+    def error_if(self) -> Optional[str]:
+        return self.modifiers.get('error_if')
+
+    @property
+    def fail_calc(self) -> Optional[str]:
+        return self.modifiers.get('fail_calc')
 
     def tags(self) -> List[str]:
         tags = self.modifiers.get('tags', [])
@@ -313,7 +355,8 @@ class TestBuilder(Generic[Testable]):
 
     def construct_config(self) -> str:
         configs = ",".join([
-            f"{key}=" + (f"'{value}'" if isinstance(value, str) else str(value))
+            f"{key}=" + (f"'{value}'" if isinstance(value, str)
+                         else str(value))
             for key, value
             in self.modifiers.items()
         ])
@@ -326,7 +369,7 @@ class TestBuilder(Generic[Testable]):
     # of the test macro
     def build_raw_sql(self) -> str:
         return (
-            "{config}{{{{ {macro}(**{kwargs_name}) }}}}"
+            "{{{{ {macro}(**{kwargs_name}) }}}}{config}"
         ).format(
             macro=self.macro_name(),
             config=self.construct_config(),
@@ -334,10 +377,13 @@ class TestBuilder(Generic[Testable]):
         )
 
     def build_model_str(self):
+        targ = self.target
+        cfg_where = "config.get('where')"
         if isinstance(self.target, UnparsedNodeUpdate):
-            fmt = "{{{{ ref('{0.name}') }}}}"
+            identifier = self.target.name
+            target_str = f"{{{{ ref('{targ.name}') }}}}"
         elif isinstance(self.target, UnpatchedSourceDefinition):
-            fmt = "{{{{ source('{0.source.name}', '{0.table.name}') }}}}"
-        else:
-            raise self._bad_type()
-        return fmt.format(self.target)
+            identifier = self.target.table.name
+            target_str = f"{{{{ source('{targ.source.name}', '{targ.table.name}') }}}}"
+        filtered = f"(select * from {target_str} where {{{{{cfg_where}}}}}) {identifier}"
+        return f"{{% if {cfg_where} %}}{filtered}{{% else %}}{target_str}{{% endif %}}"

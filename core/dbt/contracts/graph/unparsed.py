@@ -25,6 +25,10 @@ class UnparsedBaseNode(dbtClassMixin, Replaceable):
     path: str
     original_file_path: str
 
+    @property
+    def file_id(self):
+        return f'{self.package_name}://{self.original_file_path}'
+
 
 @dataclass
 class HasSQL:
@@ -115,6 +119,10 @@ class HasYamlMetadata(dbtClassMixin):
     original_file_path: str
     yaml_key: str
     package_name: str
+
+    @property
+    def file_id(self):
+        return f'{self.package_name}://{self.original_file_path}'
 
 
 @dataclass
@@ -348,6 +356,10 @@ class UnparsedDocumentation(dbtClassMixin, Replaceable):
     original_file_path: str
 
     @property
+    def file_id(self):
+        return f'{self.package_name}://{self.original_file_path}'
+
+    @property
     def resource_type(self):
         return NodeType.Documentation
 
@@ -413,5 +425,7 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     owner: ExposureOwner
     description: str = ''
     maturity: Optional[MaturityType] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)

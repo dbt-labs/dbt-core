@@ -1,5 +1,7 @@
 from dbt.clients.system import load_file_contents
-from dbt.contracts.files import FilePath, ParseFileType, SourceFile, FileHash
+from dbt.contracts.files import (
+    FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
+)
 
 from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import FilesystemSearcher
@@ -8,14 +10,15 @@ from dbt.parser.search import FilesystemSearcher
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
         path: FilePath, parse_file_type: ParseFileType,
-        project_name: str) -> SourceFile:
+        project_name: str) -> AnySourceFile:
     file_contents = load_file_contents(path.absolute_path, strip=False)
     checksum = FileHash.from_contents(file_contents)
-    source_file = SourceFile(path=path, checksum=checksum,
-                             parse_file_type=parse_file_type, project_name=project_name)
+    sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
+    source_file = sf_cls(path=path, checksum=checksum,
+                         parse_file_type=parse_file_type, project_name=project_name)
     source_file.contents = file_contents.strip()
     if parse_file_type == ParseFileType.Schema:
-        source_file.dict_from_yaml = yaml_from_file(source_file)
+        source_file.dfy = yaml_from_file(source_file)
     return source_file
 
 
@@ -58,8 +61,8 @@ def read_files_for_parser(project, files, dirs, extension, parse_ft):
         project, dirs, extension, parse_ft
     )
     for sf in source_files:
-        files[sf.search_key] = sf
-        parser_files.append(sf.search_key)
+        files[sf.file_id] = sf
+        parser_files.append(sf.file_id)
     return parser_files
 
 

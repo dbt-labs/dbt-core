@@ -144,7 +144,7 @@
     {% if now is none or now is undefined -%}
         {%- do exceptions.raise_compiler_error('Could not get a snapshot start time from the database') -%}
     {%- endif %}
-    {% set updated_at = snapshot_string_as_time(now) %}
+    {% set updated_at = config.get('updated_at', snapshot_string_as_time(now)) %}
 
     {% set column_added = false %}
 

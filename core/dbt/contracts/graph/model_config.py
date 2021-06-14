@@ -2,14 +2,13 @@ from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
 from typing import (
-    Any, List, Optional, Dict, MutableMapping, Union, Type,
-    TypeVar, Callable,
+    Any, List, Optional, Dict, Union, Type, TypeVar
 )
 from dbt.dataclass_schema import (
     dbtClassMixin, ValidationError, register_pattern,
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
-from dbt.exceptions import CompilationException, InternalException
+from dbt.exceptions import InternalException
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -182,52 +181,28 @@ T = TypeVar('T', bound='BaseConfig')
 
 @dataclass
 class BaseConfig(
-    AdditionalPropertiesAllowed, Replaceable, MutableMapping[str, Any]
+    AdditionalPropertiesAllowed, Replaceable
 ):
-    # Implement MutableMapping so this config will behave as some macros expect
-    # during parsing (notably, syntax like `{{ node.config['schema'] }}`)
+
+    # enable syntax like: config['key']
     def __getitem__(self, key):
-        """Handle parse-time use of `config` as a dictionary, making the extra
-        values available during parsing.
-        """
+        return self.get(key)
+
+    # like doing 'get' on a dictionary
+    def get(self, key, default=None):
         if hasattr(self, key):
             return getattr(self, key)
-        else:
+        elif key in self._extra:
             return self._extra[key]
+        else:
+            return default
 
+    # enable syntax like: config['key'] = value
     def __setitem__(self, key, value):
         if hasattr(self, key):
             setattr(self, key, value)
         else:
             self._extra[key] = value
-
-    def __delitem__(self, key):
-        if hasattr(self, key):
-            msg = (
-                'Error, tried to delete config key "{}": Cannot delete '
-                'built-in keys'
-            ).format(key)
-            raise CompilationException(msg)
-        else:
-            del self._extra[key]
-
-    def _content_iterator(self, include_condition: Callable[[Field], bool]):
-        seen = set()
-        for fld, _ in self._get_fields():
-            seen.add(fld.name)
-            if include_condition(fld):
-                yield fld.name
-
-        for key in self._extra:
-            if key not in seen:
-                seen.add(key)
-                yield key
-
-    def __iter__(self):
-        yield from self._content_iterator(include_condition=lambda f: True)
-
-    def __len__(self):
-        return len(self._get_fields()) + len(self._extra)
 
     @staticmethod
     def compare_key(
@@ -438,8 +413,42 @@ class SeedConfig(NodeConfig):
 
 @dataclass
 class TestConfig(NodeConfig):
+    schema: Optional[str] = field(
+        default='dbt_test__audit',
+        metadata=CompareBehavior.Exclude.meta(),
+    )
     materialized: str = 'test'
     severity: Severity = Severity('ERROR')
+    store_failures: Optional[bool] = None
+    where: Optional[str] = None
+    limit: Optional[int] = None
+    fail_calc: str = 'count(*)'
+    warn_if: str = '!= 0'
+    error_if: str = '!= 0'
+
+    @classmethod
+    def same_contents(
+        cls, unrendered: Dict[str, Any], other: Dict[str, Any]
+    ) -> bool:
+        """This is like __eq__, except it explicitly checks certain fields."""
+        modifiers = [
+            'severity',
+            'where',
+            'limit',
+            'fail_calc',
+            'warn_if',
+            'error_if',
+            'store_failures'
+        ]
+
+        seen = set()
+        for _, target_name in cls._get_fields():
+            key = target_name
+            seen.add(key)
+            if key in modifiers:
+                if not cls.compare_key(unrendered, other, key):
+                    return False
+        return True
 
 
 @dataclass
@@ -459,6 +468,11 @@ class SnapshotConfig(EmptySnapshotConfig):
     @classmethod
     def validate(cls, data):
         super().validate(data)
+        if not data.get('strategy') or not data.get('unique_key') or not \
+                data.get('target_schema'):
+            raise ValidationError(
+                "Snapshots must be configured with a 'strategy', 'unique_key', "
+                "and 'target_schema'.")
         if data.get('strategy') == 'check':
             if not data.get('check_cols'):
                 raise ValidationError(

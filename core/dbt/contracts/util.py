@@ -14,7 +14,6 @@ from dbt.version import __version__
 from dbt.tracking import get_invocation_id
 from dbt.dataclass_schema import dbtClassMixin
 
-MacroKey = Tuple[str, str]
 SourceKey = Tuple[str, str]
 
 

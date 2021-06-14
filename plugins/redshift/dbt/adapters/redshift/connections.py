@@ -49,6 +49,7 @@ class RedshiftCredentials(PostgresCredentials):
     keepalives_idle: int = 240
     autocreate: bool = False
     db_groups: List[str] = field(default_factory=list)
+    ra3_node: Optional[bool] = False
 
     @property
     def type(self):

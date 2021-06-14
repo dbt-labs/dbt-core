@@ -1,0 +1,5 @@
+version: 2
+
+models:
+    - name: model_one
+      description: "The first model"

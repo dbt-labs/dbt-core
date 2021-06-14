@@ -1,0 +1,38 @@
+version: 2
+
+models:
+    - name: model_one
+      description: "{{ doc('customer_table') }}"
+
+macros:
+    - name: my_macro
+      description: "{{ doc('customer_table') }}"
+
+sources:
+  - name: seed_sources
+    description: "{{ doc('customer_table') }}"
+    schema: "{{ target.schema }}"
+    tables:
+      - name: raw_customers
+        columns:
+          - name: id
+            tests:
+              - not_null:
+                  severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
+              - unique
+          - name: first_name
+          - name: last_name
+          - name: email
+
+exposures:
+  - name: proxy_for_dashboard
+    description: "{{ doc('customer_table') }}"
+    type: "dashboard"
+    owner:
+      name: "Dashboard Tester"
+      email: "tester@dashboard.com"
+    depends_on:
+      - ref("model_one")
+      - ref("raw_customers")
+      - source("seed_sources", "raw_customers")
+

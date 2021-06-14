@@ -38,7 +38,7 @@ from dbt.rpc.logger import (
     QueueTimeoutMessage,
 )
 from dbt.rpc.method import RemoteMethod
-
+from dbt.task.rpc.project_commands import RemoteListTask
 
 # we use this in typing only...
 from queue import Queue  # noqa
@@ -78,7 +78,10 @@ class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
 
     def task_exec(self) -> None:
         """task_exec runs first inside the child process"""
-        signal.signal(signal.SIGTERM, sigterm_handler)
+        if type(self.task) != RemoteListTask:
+            # TODO: find another solution for this.. in theory it stops us from
+            # being able to kill RemoteListTask processes
+            signal.signal(signal.SIGTERM, sigterm_handler)
         # the first thing we do in a new process: push logging back over our
         # queue
         handler = QueueLogHandler(self.queue)

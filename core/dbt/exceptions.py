@@ -854,11 +854,11 @@ def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
         )
 
 
-def raise_duplicate_patch_name(patch_1, patch_2):
+def raise_duplicate_patch_name(patch_1, existing_patch_path):
     name = patch_1.name
     fix = _fix_dupe_msg(
         patch_1.original_file_path,
-        patch_2.original_file_path,
+        existing_patch_path,
         name,
         'resource',
     )
@@ -869,12 +869,12 @@ def raise_duplicate_patch_name(patch_1, patch_2):
     )
 
 
-def raise_duplicate_macro_patch_name(patch_1, patch_2):
+def raise_duplicate_macro_patch_name(patch_1, existing_patch_path):
     package_name = patch_1.package_name
     name = patch_1.name
     fix = _fix_dupe_msg(
         patch_1.original_file_path,
-        patch_2.original_file_path,
+        existing_patch_path,
         name,
         'macros'
     )

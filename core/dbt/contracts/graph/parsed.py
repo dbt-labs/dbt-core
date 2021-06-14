@@ -1,5 +1,7 @@
 import os
+import time
 from dataclasses import dataclass, field
+from mashumaro.types import SerializableType
 from pathlib import Path
 from typing import (
     Optional,
@@ -116,6 +118,21 @@ class ParsedNodeMixins(dbtClassMixin):
         return self.resource_type in NodeType.refable()
 
     @property
+    def should_store_failures(self):
+        return self.resource_type == NodeType.Test and (
+            self.config.store_failures if self.config.store_failures is not None
+            else flags.STORE_FAILURES
+        )
+
+    # will this node map to an object in the database?
+    @property
+    def is_relational(self):
+        return (
+            self.resource_type in NodeType.refable() or
+            self.should_store_failures
+        )
+
+    @property
     def is_ephemeral(self):
         return self.config.materialized == 'ephemeral'
 
@@ -131,7 +148,9 @@ class ParsedNodeMixins(dbtClassMixin):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
-        self.patch_path: Optional[str] = patch.original_file_path
+        self.patch_path: Optional[str] = patch.file_id
+        # update created_at so process_docs will run in partial parsing
+        self.created_at = int(time.time())
         self.description = patch.description
         self.columns = patch.columns
         self.meta = patch.meta
@@ -183,6 +202,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     build_path: Optional[str] = None
     deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
+    created_at: int = field(default_factory=lambda: int(time.time()))
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if (os.path.basename(self.path) ==
@@ -204,7 +224,39 @@ T = TypeVar('T', bound='ParsedNode')
 
 
 @dataclass
-class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
+class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
+
+    def _serialize(self):
+        return self.to_dict()
+
+    @classmethod
+    def _deserialize(cls, dct: Dict[str, int]):
+        # The serialized ParsedNodes do not differ from each other
+        # in fields that would allow 'from_dict' to distinguis
+        # between them.
+        resource_type = dct['resource_type']
+        if resource_type == 'model':
+            return ParsedModelNode.from_dict(dct)
+        elif resource_type == 'analysis':
+            return ParsedAnalysisNode.from_dict(dct)
+        elif resource_type == 'seed':
+            return ParsedSeedNode.from_dict(dct)
+        elif resource_type == 'rpc':
+            return ParsedRPCNode.from_dict(dct)
+        elif resource_type == 'test':
+            if 'test_metadata' in dct:
+                return ParsedSchemaTestNode.from_dict(dct)
+            else:
+                return ParsedDataTestNode.from_dict(dct)
+        elif resource_type == 'operation':
+            return ParsedHookNode.from_dict(dct)
+        elif resource_type == 'seed':
+            return ParsedSeedNode.from_dict(dct)
+        elif resource_type == 'snapshot':
+            return ParsedSnapshotNode.from_dict(dct)
+        else:
+            return cls.from_dict(dct)
+
     def _persist_column_docs(self) -> bool:
         return bool(self.config.persist_docs.get('columns'))
 
@@ -369,15 +421,6 @@ class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
-    def same_config(self, other) -> bool:
-        return (
-            self.unrendered_config.get('severity') ==
-            other.unrendered_config.get('severity')
-        )
-
-    def same_column_name(self, other) -> bool:
-        return self.column_name == other.column_name
-
     def same_contents(self, other) -> bool:
         if other is None:
             return False
@@ -442,13 +485,15 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
+    created_at: int = field(default_factory=lambda: int(time.time()))
 
     def local_vars(self):
         return {}
 
     def patch(self, patch: ParsedMacroPatch):
-        self.patch_path: Optional[str] = patch.original_file_path
+        self.patch_path: Optional[str] = patch.file_id
         self.description = patch.description
+        self.created_at = int(time.time())
         self.meta = patch.meta
         self.docs = patch.docs
         self.arguments = patch.arguments
@@ -568,6 +613,7 @@ class ParsedSourceDefinition(
     patch_path: Optional[Path] = None
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
+    created_at: int = field(default_factory=lambda: int(time.time()))
 
     def same_database_representation(
         self, other: 'ParsedSourceDefinition'
@@ -668,10 +714,13 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     resource_type: NodeType = NodeType.Exposure
     description: str = ''
     maturity: Optional[MaturityType] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
+    created_at: int = field(default_factory=lambda: int(time.time()))
 
     @property
     def depends_on_nodes(self):
@@ -680,11 +729,6 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     @property
     def search_name(self):
         return self.name
-
-    # no tags for now, but we could definitely add them
-    @property
-    def tags(self):
-        return []
 
     def same_depends_on(self, old: 'ParsedExposure') -> bool:
         return set(self.depends_on.nodes) == set(old.depends_on.nodes)
@@ -706,6 +750,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     def same_contents(self, old: Optional['ParsedExposure']) -> bool:
         # existing when it didn't before is a change!
+        # metadata/tags changes are not "changes"
         if old is None:
             return True
 

@@ -119,15 +119,6 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
-    def same_config(self, other) -> bool:
-        return (
-            self.unrendered_config.get('severity') ==
-            other.unrendered_config.get('severity')
-        )
-
-    def same_column_name(self, other) -> bool:
-        return self.column_name == other.column_name
-
     def same_contents(self, other) -> bool:
         if other is None:
             return False

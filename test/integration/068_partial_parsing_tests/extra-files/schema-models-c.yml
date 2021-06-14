@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: seed_source
+    description: "This is a source override"
+    overrides: local_dep
+    schema: "{{ var('schema_override', target.schema) }}"
+    tables:
+      - name: "seed"
+        columns:
+          - name: id
+            tests:
+              - unique
+              - not_null

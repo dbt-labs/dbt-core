@@ -94,13 +94,16 @@ class BaseResult(dbtClassMixin):
     thread_id: str
     execution_time: float
     adapter_response: Dict[str, Any]
-    message: Optional[Union[str, int]]
+    message: Optional[str]
+    failures: Optional[int]
 
     @classmethod
     def __pre_deserialize__(cls, data):
         data = super().__pre_deserialize__(data)
         if 'message' not in data:
             data['message'] = None
+        if 'failures' not in data:
+            data['failures'] = None
         return data
 
 
@@ -157,7 +160,8 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         thread_id=result.thread_id,
         execution_time=result.execution_time,
         message=result.message,
-        adapter_response=result.adapter_response
+        adapter_response=result.adapter_response,
+        failures=result.failures
     )
 
 
@@ -180,7 +184,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version('run-results', 1)
+@schema_version('run-results', 2)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -378,6 +382,7 @@ class FreshnessExecutionResultArtifact(
 
 
 Primitive = Union[bool, str, float, None]
+PrimitiveDict = Dict[str, Primitive]
 
 CatalogKey = NamedTuple(
     'CatalogKey',

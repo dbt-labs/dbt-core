@@ -36,14 +36,13 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
             if 'dupe' in result.node.name:
                 self.assertEqual(result.status, 'fail')
                 self.assertFalse(result.skipped)
-                self.assertTrue(int(result.message) > 0)
+                self.assertTrue(result.failures > 0)
 
             # assert that actual tests pass
             else:
                 self.assertEqual(result.status, 'pass')
                 self.assertFalse(result.skipped)
-                # message = # of failing rows
-                self.assertEqual(int(result.message), 0)
+                self.assertEqual(result.failures, 0)
 
 
 class TestSimpleBigQueryRun(TestBaseBigQueryRun):
