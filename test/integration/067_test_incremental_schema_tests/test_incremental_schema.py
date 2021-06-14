@@ -63,7 +63,8 @@ class TestSelectionExpansion(DBTIntegrationTest):
         assert len(tests_run) == len(expected_tests)
         assert sorted(tests_run) == sorted(expected_tests)
         self.assertTablesEqual(compare_source, compare_source)
-
+    
+    ######################### POSTGRES TESTS #########################
     @use_profile('postgres')
     def test__postgres__run_incremental_ignore(self):
         select = 'model_a incremental_ignore incremental_ignore_target'
@@ -113,6 +114,25 @@ class TestSelectionExpansion(DBTIntegrationTest):
             'unique_model_a_id',
             'unique_incremental_sync_all_columns_id',
             'unique_incremental_sync_all_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    ######################### SNOWFLAKE TESTS #########################
+    @use_profile('snowflake')
+    def test__snowflake__run_incremental_ignore(self):
+        select = 'model_a incremental_ignore incremental_ignore_target'
+        compare_source = 'incremental_ignore'
+        compare_target = 'incremental_ignore_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_ignore',
+            'select_from_incremental_ignore_target',
+            'unique_model_a_id',
+            'unique_incremental_ignore_id',
+            'unique_incremental_ignore_target_id'
         ]
             
         self.list_tests_and_assert(select, exclude, expected)
