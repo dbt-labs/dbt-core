@@ -128,10 +128,6 @@
   {% do adapter.rename_relation(from_relation, to_relation) %}
 {% endmacro %}
 
-{% macro alter_relation_add_columns(relation, add_columns = none) -%}
-  {{ return(adapter.dispatch('alter_relation_add_columns')(relation, add_columns)) }}
-{% endmacro %}
-
 {% macro bigquery__alter_relation_add_columns(relation, add_columns) %}
   
   {% set sql -%}
@@ -145,10 +141,6 @@
 
   {{ return(run_query(sql)) }}
 
-{% endmacro %}
-
-{% macro alter_relation_drop_columns(relation, add_columns = none) -%}
-  {{ return(adapter.dispatch('alter_relation_drop_columns')(relation, add_columns)) }}
 {% endmacro %}
 
 {% macro bigquery__alter_relation_drop_columns(relation, drop_columns) %}
