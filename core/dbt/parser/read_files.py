@@ -69,18 +69,24 @@ def validate_yaml(file_path, dct):
     for key in schema_file_keys:
         if key in dct:
             if not isinstance(dct[key], list):
-                msg = (f"The schema file at {file_path} is "
-                       f"invalid because the value of '{key}' is not a list")
+                msg = (
+                    f"The schema file at {file_path} is "
+                    f"invalid because the value of '{key}' is not a list"
+                )
                 raise ParsingException(msg)
             for element in dct[key]:
                 if not isinstance(element, dict):
-                    msg = (f"The schema file at {file_path} is "
-                           f"invalid because a list element for '{key}' is not a dictionary")
+                    msg = (
+                        f"The schema file at {file_path} is "
+                        f"invalid because a list element for '{key}' is not a dictionary"
+                    )
                     raise ParsingException(msg)
-                if 'name' not in element:
-                    msg = (f"The schema file at {file_path} is "
-                           f"invalid because a list element for '{key}' does not have a "
-                           "name attribute.")
+                if "name" not in element:
+                    msg = (
+                        f"The schema file at {file_path} is "
+                        f"invalid because a list element for '{key}' does not have a "
+                        "name attribute."
+                    )
                     raise ParsingException(msg)
 
 

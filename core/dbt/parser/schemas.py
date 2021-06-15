@@ -79,8 +79,13 @@ UnparsedSchemaYaml = Union[
 TestDef = Union[str, Dict[str, Any]]
 
 schema_file_keys = (
-    'models', 'seeds', 'snapshots', 'sources',
-    'macros', 'analyses', 'exposures',
+    "models",
+    "seeds",
+    "snapshots",
+    "sources",
+    "macros",
+    "analyses",
+    "exposures",
 )
 
 
@@ -549,23 +554,17 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                     self.manifest.add_metric(yaml_block.file, metric_node)
 
 
-def check_format_version(
-    file_path, yaml_dct
-) -> None:
-    if 'version' not in yaml_dct:
-        raise_invalid_schema_yml_version(file_path, 'no version is specified')
+def check_format_version(file_path, yaml_dct) -> None:
+    if "version" not in yaml_dct:
+        raise_invalid_schema_yml_version(file_path, "no version is specified")
 
-    version = yaml_dct['version']
+    version = yaml_dct["version"]
     # if it's not an integer, the version is malformed, or not
     # set. Either way, only 'version: 2' is supported.
     if not isinstance(version, int):
-        raise_invalid_schema_yml_version(
-            file_path, 'the version is not an integer'
-        )
+        raise_invalid_schema_yml_version(file_path, "the version is not an integer")
     if version != 2:
-        raise_invalid_schema_yml_version(
-            file_path, 'version {} is not supported'.format(version)
-        )
+        raise_invalid_schema_yml_version(file_path, "version {} is not supported".format(version))
 
 
 Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
