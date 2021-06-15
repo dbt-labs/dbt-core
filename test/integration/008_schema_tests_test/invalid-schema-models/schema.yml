@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  name: model
+  columns:
+    - name: Id
+      quote: true
+      tests:
+        - unique
+        - not_null
