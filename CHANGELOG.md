@@ -12,6 +12,10 @@ Contributors:
 
 ## dbt 0.20.0 (Release TBD)
 
+### Fixes
+
+- Handle quoted values within test configs, such as `where` ([#3458](https://github.com/fishtown-analytics/dbt/issues/3458), [#3459](https://github.com/fishtown-analytics/dbt/pull/3459))
+
 ## dbt 0.20.0rc1 (June 04, 2021)
 
 
