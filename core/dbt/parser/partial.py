@@ -404,7 +404,7 @@ class PartialParsing:
                     source_element = self.get_schema_element(sources, source.source_name)
                     if source_element:
                         self.delete_schema_source(schema_file, source_element)
-                        self.remove_tests(schema_file, 'sources', source_element['name'])
+                        self.remove_tests(schema_file, "sources", source_element["name"])
                         self.merge_patch(schema_file, "sources", source_element)
             elif unique_id in self.saved_manifest.exposures:
                 exposure = self.saved_manifest.exposures[unique_id]
@@ -462,7 +462,7 @@ class PartialParsing:
             if unique_id in referencing_nodes:
                 continue
             referencing_nodes.append(unique_id)
-            if unique_id.startswith('macro.'):
+            if unique_id.startswith("macro."):
                 self.recursively_gather_macro_references(unique_id, referencing_nodes)
 
     def handle_macro_file_links(self, source_file, follow_references=False):
@@ -535,7 +535,7 @@ class PartialParsing:
                                 self.merge_patch(schema_file, 'sources', patch)
                 else:
                     file_id = node.file_id
-                    if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                    if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                         source_file = self.saved_files[file_id]
                         self.remove_mssat_file(source_file)
                         # content of non-schema files is only in new files
@@ -544,7 +544,7 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
-                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     source_file = self.saved_files[file_id]
                     self.delete_macro_file(source_file)
                     self.saved_files[file_id] = deepcopy(self.new_files[file_id])
@@ -825,7 +825,7 @@ class PartialParsing:
         # for models, seeds, snapshots (not analyses)
         if dict_key in ["models", "seeds", "snapshots"]:
             # find related tests and remove them
-            self.remove_tests(schema_file, dict_key, elem['name'])
+            self.remove_tests(schema_file, dict_key, elem["name"])
 
     def remove_tests(self, schema_file, dict_key, name):
         tests = schema_file.get_tests(dict_key, name)
@@ -924,7 +924,7 @@ class PartialParsing:
         (orig_file, orig_source) = self.get_source_override_file_and_dict(source_dict)
         if orig_source:
             self.delete_schema_source(orig_file, orig_source)
-            self.remove_tests(orig_file, 'sources', orig_source['name'])
+            self.remove_tests(orig_file, "sources", orig_source["name"])
             self.merge_patch(orig_file, "sources", orig_source)
             self.add_to_pp_files(orig_file)
 

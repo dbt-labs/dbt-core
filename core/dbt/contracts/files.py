@@ -260,8 +260,8 @@ class SchemaSourceFile(BaseSourceFile):
         self.node_patches.append(unique_id)
 
     def add_test(self, node_unique_id, test_from):
-        name = test_from['name']
-        key = test_from['key']
+        name = test_from["name"]
+        key = test_from["key"]
         if key not in self.tests:
             self.tests[key] = {}
         if name not in self.tests[key]:

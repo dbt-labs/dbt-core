@@ -78,7 +78,7 @@ class SourcePatcher:
                     self.manifest.add_disabled_nofile(test)
                 # save the test unique_id in the schema_file, so we can
                 # process in partial parsing
-                test_from = {"key": 'sources', "name": patched.source.name}
+                test_from = {"key": "sources", "name": patched.source.name}
                 schema_file.add_test(test.unique_id, test_from)
 
             # Convert UnpatchedSourceDefinition to a ParsedSourceDefinition

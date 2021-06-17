@@ -301,7 +301,7 @@ def build_node_edges(nodes: List[ManifestNode]):
 # Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
     forward_edges: Dict[str, List[str]] = {
-        n.unique_id: [] for n in nodes if n.unique_id.startswith('macro') or n.depends_on.macros
+        n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on.macros
     }
     for node in nodes:
         for unique_id in node.depends_on.macros:
@@ -773,10 +773,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.parent_map = backward_edges
 
     def build_macro_child_map(self):
-        edge_members = list(chain(
-            self.nodes.values(),
-            self.macros.values(),
-        ))
+        edge_members = list(
+            chain(
+                self.nodes.values(),
+                self.macros.values(),
+            )
+        )
         forward_edges = build_macro_edges(edge_members)
         return forward_edges
 
