@@ -424,8 +424,15 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             tags=block.tags,
             column_name=block.column_name,
         )
-        self.add_result_node(block, node)
+        self.add_test_node(block, node)
         return node
+
+    def add_test_node(self, block: SchemaTestBlock, node: ParsedSchemaTestNode):
+        test_from = {"key": block.target.yaml_key, "name": block.target.name}
+        if node.config.enabled:
+            self.manifest.add_node(block.file, node, test_from)
+        else:
+            self.manifest.add_disabled(block.file, node, test_from)
 
     def render_with_context(
         self, node: ParsedSchemaTestNode, config: ContextConfig,
