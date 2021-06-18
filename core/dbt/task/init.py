@@ -40,7 +40,8 @@ There's a link to our Slack group in the GitHub Readme. Happy modeling!
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
         logger.debug("Starter project path: " + starter_project_directory)
-        shutil.copytree(starter_project_directory, project_name, ignore=shutil.ignore_patterns(IGNORE_FILE))
+        shutil.copytree(starter_project_directory, project_name,
+                        ignore=shutil.ignore_patterns(IGNORE_FILE))
 
     def create_profiles_dir(self, profiles_dir):
         if not os.path.exists(profiles_dir):
