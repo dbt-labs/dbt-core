@@ -215,6 +215,29 @@ class TestPostgresAdapter(unittest.TestCase):
             application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_ssl_parameters(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(sslmode="verify-ca")
+        self.config.credentials = self.config.credentials.replace(sslcert="service.crt")
+        self.config.credentials = self.config.credentials.replace(sslkey="service.key")
+        self.config.credentials = self.config.credentials.replace(sslrootcert="ca.crt")
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=10,
+            sslmode="verify-ca",
+            sslcert="service.crt",
+            sslkey="service.key",
+            sslrootcert="ca.crt",
+            application_name='dbt')
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_schema_with_space(self, psycopg2):
         self.config.credentials = self.config.credentials.replace(search_path="test test")
         connection = self.adapter.acquire_connection('dummy')

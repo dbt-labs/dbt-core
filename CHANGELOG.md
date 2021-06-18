@@ -19,6 +19,7 @@ Contributors:
 ### Under the hood
 
 - Dispatch the core SQL statement of the new test materialization, to benefit adapter maintainers ([#3465](https://github.com/fishtown-analytics/dbt/pull/3465), [#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
+- Add optional `sslcert`, `sslkey`, and `sslrootcert` arguments to the Postgres connector. ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 
 Contributors:
 - [@swanderz](https://github.com/swanderz) ([#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
