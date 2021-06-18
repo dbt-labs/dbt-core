@@ -433,13 +433,14 @@ class SchemaSearchMap(Dict[InformationSchema, Set[Optional[str]]]):
             for schema in schemas:
                 yield information_schema_name, schema
 
-    def flatten(self):
+    def flatten(self, allow_multiple_databases: bool = False):
         new = self.__class__()
 
-        # make sure we don't have duplicates
-        seen = {r.database.lower() for r in self if r.database}
-        if len(seen) > 1:
-            dbt.exceptions.raise_compiler_error(str(seen))
+        # make sure we don't have multiple databases if allow_multiple_databases is set to False
+        if not allow_multiple_databases:
+            seen = {r.database.lower() for r in self if r.database}
+            if len(seen) > 1:
+                dbt.exceptions.raise_compiler_error(str(seen))
 
         for information_schema_name, schema in self.search():
             path = {

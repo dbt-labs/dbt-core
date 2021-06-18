@@ -119,4 +119,8 @@ class TestDocs(DBTIntegrationTest):
         self.assertEqual(manifest.macros[macro_id].description, 'This table contains customer data')
         self.assertEqual(manifest.exposures[exposure_id].description, 'This table contains customer data')
 
+        # check that _lock is working
+        with manifest._lock:
+            self.assertIsNotNone(manifest._lock)
+
 

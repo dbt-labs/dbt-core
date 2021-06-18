@@ -568,7 +568,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _lock: Lock = field(
         default_factory=flags.MP_CONTEXT.Lock,
-        metadata={'serialize': lambda x: None, 'deserialize': lambda x: flags.MP_CONTEXT.Lock}
+        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
 
     def __pre_serialize__(self):
@@ -576,6 +576,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         # tuple keys are not supported, so ensure it's empty
         self.source_patches = {}
         return self
+
+    @classmethod
+    def __post_deserialize__(cls, obj):
+        obj._lock = flags.MP_CONTEXT.Lock()
+        return obj
 
     def sync_update_node(
         self, new_node: NonSourceCompiledNode

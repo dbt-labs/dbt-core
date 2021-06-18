@@ -76,10 +76,10 @@ setup(
         'tree-sitter==0.19.0',
         'tree-sitter-jinja2==0.1.0a1',
         'typing-extensions>=3.7.4,<3.11',
-        'werkzeug>=0.15,<2.0',
+        'werkzeug>=0.15,<3.0',
         # the following are all to match snowflake-connector-python
         'requests<3.0.0',
-        'idna>=2.5,<3',
+        'idna>=2.5,<4',
         'cffi>=1.9,<2.0.0',
     ],
     zip_safe=False,

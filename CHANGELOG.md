@@ -1,4 +1,27 @@
+## dbt 0.21.0
+
+### Features
+
+### Fixes
+- Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
+
+### Under the hood
+
+Contributors:
+- [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
+
 ## dbt 0.20.0 (Release TBD)
+
+### Fixes
+
+- Handle quoted values within test configs, such as `where` ([#3458](https://github.com/fishtown-analytics/dbt/issues/3458), [#3459](https://github.com/fishtown-analytics/dbt/pull/3459))
+
+### Under the hood
+
+- Dispatch the core SQL statement of the new test materialization, to benefit adapter maintainers ([#3465](https://github.com/fishtown-analytics/dbt/pull/3465), [#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
+
+Contributors:
+- [@swanderz](https://github.com/swanderz) ([#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
 
 ## dbt 0.20.0rc1 (June 04, 2021)
 
@@ -26,7 +49,10 @@
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
 - Raise better error if snapshot is missing required configurations ([#3381](https://github.com/fishtown-analytics/dbt/issues/3381), [#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
+- Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350))
+- Fix deserialization of Manifest lock attribute ([#3435](https://github.com/fishtown-analytics/dbt/issues/3435), [#3445](https://github.com/fishtown-analytics/dbt/pull/3445))
 - Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350)
+- Fix infinite recursion when parsing schema tests due to loops in macro calls ([#3444](https://github.com/fishtown-analytics/dbt/issues/3344), [#3454](https://github.com/fishtown-analytics/dbt/pull/3454))
 
 ### Docs
 - Reversed the rendering direction of relationship tests so that the test renders in the model it is defined in ([docs#181](https://github.com/fishtown-analytics/dbt-docs/issues/181), [docs#183](https://github.com/fishtown-analytics/dbt-docs/pull/183))
