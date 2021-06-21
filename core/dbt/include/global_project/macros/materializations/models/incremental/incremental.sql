@@ -17,9 +17,9 @@
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation. This has to happen before
   -- BEGIN, in a separate transaction
-  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier, 
+  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier,
                                                                   schema=schema,
-                                                                  database=database) %}                                               
+                                                                  database=database) %}
   {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier,
                                                             schema=schema,
                                                             database=database) %}
