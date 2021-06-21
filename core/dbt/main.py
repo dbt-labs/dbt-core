@@ -377,6 +377,7 @@ def _build_init_subparser(subparsers, base_subparser):
     sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
     return sub
 
+
 def _build_build_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
         'build',
@@ -386,7 +387,7 @@ def _build_build_subparser(subparsers, base_subparser):
         '''
     )
     sub.set_defaults(
-        cls=build_task.BuildTask, 
+        cls=build_task.BuildTask,
         which='build',
         rpc_method='build'
     )
@@ -399,6 +400,7 @@ def _build_build_subparser(subparsers, base_subparser):
         '''
     )
     return sub
+
 
 def _build_clean_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
