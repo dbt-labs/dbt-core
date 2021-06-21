@@ -70,6 +70,11 @@ UnparsedSchemaYaml = Union[
 
 TestDef = Union[str, Dict[str, Any]]
 
+schema_file_keys = (
+    'models', 'seeds', 'snapshots', 'sources',
+    'macros', 'analyses', 'exposures',
+)
+
 
 def error_context(
     path: str,
@@ -199,25 +204,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         if validate:
             ParsedSchemaTestNode.validate(dct)
         return ParsedSchemaTestNode.from_dict(dct)
-
-    def _check_format_version(
-        self, yaml: YamlBlock
-    ) -> None:
-        path = yaml.path.relative_path
-        if 'version' not in yaml.data:
-            raise_invalid_schema_yml_version(path, 'no version is specified')
-
-        version = yaml.data['version']
-        # if it's not an integer, the version is malformed, or not
-        # set. Either way, only 'version: 2' is supported.
-        if not isinstance(version, int):
-            raise_invalid_schema_yml_version(
-                path, 'the version is not an integer'
-            )
-        if version != 2:
-            raise_invalid_schema_yml_version(
-                path, 'version {} is not supported'.format(version)
-            )
 
     def parse_column_tests(
         self, block: TestBlock, column: UnparsedColumn
@@ -514,9 +500,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
 
-            # checks version
-            self._check_format_version(yaml_block)
-
             parser: YamlDocsReader
 
             # There are 7 kinds of parsers:
@@ -563,6 +546,25 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 exp_parser = ExposureParser(self, yaml_block)
                 for node in exp_parser.parse():
                     self.manifest.add_exposure(yaml_block.file, node)
+
+
+def check_format_version(
+    file_path, yaml_dct
+) -> None:
+    if 'version' not in yaml_dct:
+        raise_invalid_schema_yml_version(file_path, 'no version is specified')
+
+    version = yaml_dct['version']
+    # if it's not an integer, the version is malformed, or not
+    # set. Either way, only 'version: 2' is supported.
+    if not isinstance(version, int):
+        raise_invalid_schema_yml_version(
+            file_path, 'the version is not an integer'
+        )
+    if version != 2:
+        raise_invalid_schema_yml_version(
+            file_path, 'version {} is not supported'.format(version)
+        )
 
 
 Parsed = TypeVar(
