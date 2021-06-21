@@ -6,12 +6,13 @@
 - Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
 
 ### Under the hood
-
 - Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
+- Add optional `sslcert`, `sslkey`, and `sslrootcert` profile arguments to the Postgres connector. ([#3472](https://github.com/fishtown-analytics/dbt/pull/3472), [#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 
 Contributors:
 - [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
 - [@tconbeer](https://github.com/tconbeer) [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
+- [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 
 ## dbt 0.20.0 (Release TBD)
 
