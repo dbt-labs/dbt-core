@@ -1,11 +1,10 @@
+import networkx as nx  # type: ignore
 import threading
+
 from queue import PriorityQueue
 from typing import (
-    Dict, Set, Optional
+    Set, Optional
 )
-
-import networkx as nx
-from networkx.algorithms.shortest_paths.unweighted import predecessor  # type: ignore
 
 from .graph import UniqueId
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedExposure
@@ -38,7 +37,8 @@ class GraphQueue:
         # this lock controls most things
         self.lock = threading.Lock()
         # store the 'score' of each node as a number. Lower is higher priority.
-        self._scores = {y:x for x,y in enumerate(nx.topological_sort(self.graph))}  # TODO: incorporate _include_in_cost
+        # TODO: incorporate _include_in_cost (or remove dead code, still needed?)
+        self._scores = {y: x for x, y in enumerate(nx.topological_sort(self.graph))}
         # populate the initial queue
         self._find_new_additions()
         # awaits after task end
