@@ -1,5 +1,4 @@
 import os
-import pytest
 import tempfile
 import unittest
 from unittest import mock
@@ -103,7 +102,6 @@ class LinkerTest(unittest.TestCase):
         self.assert_would_join(queue)
         self.assertTrue(queue.empty())
 
-    @pytest.mark.skip('TODO: determine if needed (in theory we never have disjoint graphs)')
     def test_linker_add_disjoint_dependencies(self):
         actual_deps = [('A', 'B')]
         additional_node = 'Z'
