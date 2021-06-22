@@ -351,25 +351,21 @@ def _build_init_subparser(subparsers, base_subparser):
 
 def _build_build_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'build',
+        "build",
         parents=[base_subparser],
-        help='''
+        help="""
         Run all Seeds, Models, Snapshots, and tests in DAG order
-        '''
+        """,
     )
-    sub.set_defaults(
-        cls=build_task.BuildTask,
-        which='build',
-        rpc_method='build'
-    )
+    sub.set_defaults(cls=build_task.BuildTask, which="build", rpc_method="build")
     sub.add_argument(
-        '-x',
-        '--fail-fast',
+        "-x",
+        "--fail-fast",
         dest="sub_fail_fast",
-        action='store_true',
-        help='''
+        action="store_true",
+        help="""
         Stop execution upon a first failure.
-        '''
+        """,
     )
     sub.add_argument(
         '--store-failures',

@@ -44,9 +44,7 @@ class BuildTask(RunTask):
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
-            raise InternalException(
-                'manifest and graph must be set to get node selection'
-            )
+            raise InternalException("manifest and graph must be set to get node selection")
 
         resource_types = self.resource_types
 
