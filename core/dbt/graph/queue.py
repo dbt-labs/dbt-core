@@ -1,10 +1,10 @@
+import networkx as nx  # type: ignore
 import threading
+
 from queue import PriorityQueue
 from typing import (
-    Dict, Set, Optional
+    Set, Optional
 )
-
-import networkx as nx  # type: ignore
 
 from .graph import UniqueId
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedExposure
@@ -37,7 +37,8 @@ class GraphQueue:
         # this lock controls most things
         self.lock = threading.Lock()
         # store the 'score' of each node as a number. Lower is higher priority.
-        self._scores = self._calculate_scores()
+        # TODO: incorporate _include_in_cost (or remove dead code, still needed?)
+        self._scores = {y: x for x, y in enumerate(nx.topological_sort(self.graph))}
         # populate the initial queue
         self._find_new_additions()
         # awaits after task end
@@ -55,32 +56,6 @@ class GraphQueue:
         if node.is_ephemeral:
             return False
         return True
-
-    def _calculate_scores(self) -> Dict[UniqueId, int]:
-        """Calculate the 'value' of each node in the graph based on how many
-        blocking descendants it has. We use this score for the internal
-        priority queue's ordering, so the quality of this metric is important.
-
-        The score is stored as a negative number because the internal
-        PriorityQueue picks lowest values first.
-
-        We could do this in one pass over the graph instead of len(self.graph)
-        passes but this is easy. For large graphs this may hurt performance.
-
-        This operates on the graph, so it would require a lock if called from
-        outside __init__.
-
-        :return Dict[str, int]: The score dict, mapping unique IDs to integer
-            scores. Lower scores are higher priority.
-        """
-        scores = {}
-        for node in self.graph.nodes():
-            score = -1 * len([
-                d for d in nx.descendants(self.graph, node)
-                if self._include_in_cost(d)
-            ])
-            scores[node] = score
-        return scores
 
     def get(
         self, block: bool = True, timeout: Optional[float] = None

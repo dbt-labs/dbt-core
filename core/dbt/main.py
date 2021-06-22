@@ -11,6 +11,7 @@ from pathlib import Path
 import dbt.version
 import dbt.flags as flags
 import dbt.task.run as run_task
+import dbt.task.build as build_task
 import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
 import dbt.task.clean as clean_task
@@ -374,6 +375,30 @@ def _build_init_subparser(subparsers, base_subparser):
         ''',
     )
     sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
+    return sub
+
+
+def _build_build_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
+        'build',
+        parents=[base_subparser],
+        help='''
+        Runs the whole shebang!  @TODO: better description
+        '''
+    )
+    sub.set_defaults(
+        cls=build_task.BuildTask,
+        which='build',
+        rpc_method='build'
+    )
+    sub.add_argument(
+        '-x',
+        '--fail-fast',
+        action='store_true',
+        help='''
+        Stop execution upon a first failure.
+        '''
+    )
     return sub
 
 
@@ -1038,6 +1063,7 @@ def parse_args(args, cls=DBTArgumentParser):
     _build_deps_subparser(subs, base_subparser)
     _build_list_subparser(subs, base_subparser)
 
+    build_sub = _build_build_subparser(subs, base_subparser)
     snapshot_sub = _build_snapshot_subparser(subs, base_subparser)
     rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
@@ -1051,7 +1077,7 @@ def parse_args(args, cls=DBTArgumentParser):
                           rpc_sub, seed_sub, parse_sub)
     # --models, --exclude
     # list_sub sets up its own arguments.
-    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
+    _add_selection_arguments(build_sub, run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
     # --defer
     _add_defer_argument(run_sub, test_sub)

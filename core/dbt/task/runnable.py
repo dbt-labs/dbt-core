@@ -127,7 +127,7 @@ class GraphRunnableTask(ManifestTask):
 
         self.job_queue = self.get_graph_queue()
 
-        # we use this a couple times. order does not matter.
+        # we use this a couple of times. order does not matter.
         self._flattened_nodes = []
         for uid in self.job_queue.get_selected_nodes():
             if uid in self.manifest.nodes:
@@ -148,7 +148,7 @@ class GraphRunnableTask(ManifestTask):
     def raise_on_first_error(self):
         return False
 
-    def get_runner_type(self):
+    def get_runner_type(self, node):
         raise NotImplementedException('Not Implemented')
 
     def result_path(self):
@@ -165,7 +165,7 @@ class GraphRunnableTask(ManifestTask):
             run_count = self.run_count
             num_nodes = self.num_nodes
 
-        cls = self.get_runner_type()
+        cls = self.get_runner_type(node)  # TODO: reduce this to just node.resource_type?
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
