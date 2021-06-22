@@ -57,7 +57,7 @@ python-dateutil==2.8.1
 python-slugify==4.0.0
 pytimeparse==1.1.8
 pytz==2020.1
-PyYAML==5.3.1
+PyYAML==5.4
 requests==2.22.0
 rsa==4.0
 s3transfer==0.3.3
