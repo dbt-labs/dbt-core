@@ -38,17 +38,7 @@ setup(
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
-    package_data={
-        'dbt': [
-            'include/index.html',
-            'include/global_project/dbt_project.yml',
-            'include/global_project/docs/*.md',
-            'include/global_project/macros/*.sql',
-            'include/global_project/macros/**/*.sql',
-            'include/global_project/macros/**/**/*.sql',
-            'py.typed',
-        ]
-    },
+    include_package_data = True,
     test_suite='test',
     entry_points={
         'console_scripts': [
