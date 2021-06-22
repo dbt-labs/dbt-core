@@ -9,7 +9,12 @@
                                                 type='view') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
                                                       schema=schema, database=database, type='view') -%}
-
+  -- the intermediate_relation should not already exist in the database; get_relation
+  -- will return None in that case. Otherwise, we get a relation that we can drop
+  -- later, before we try to use this name for the current operation
+  {%- set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier, 
+                                                                   schema=schema,
+                                                                   database=database) -%}
   /*
      This relation (probably) doesn't exist yet. If it does exist, it's a leftover from
      a previous run, and we're going to try to drop it immediately. At the end of this
@@ -27,14 +32,16 @@
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
                                                 schema=schema, database=database,
                                                 type=backup_relation_type) -%}
-
-  {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
+  -- as above, the backup_relation should not already exist
+  {%- set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier,
+                                                             schema=schema,
+                                                             database=database) -%}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
-  -- drop the temp relations if they exists for some reason
-  {{ adapter.drop_relation(intermediate_relation) }}
-  {{ adapter.drop_relation(backup_relation) }}
+  -- drop the temp relations if they exist already in the database
+  {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
+  {{ drop_relation_if_exists(preexisting_backup_relation) }}
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}

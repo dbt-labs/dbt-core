@@ -148,7 +148,9 @@ class ParsedNodeMixins(dbtClassMixin):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
-        self.patch_path: Optional[str] = patch.file_id()
+        self.patch_path: Optional[str] = patch.file_id
+        # update created_at so process_docs will run in partial parsing
+        self.created_at = int(time.time())
         self.description = patch.description
         self.columns = patch.columns
         self.meta = patch.meta
@@ -489,8 +491,9 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         return {}
 
     def patch(self, patch: ParsedMacroPatch):
-        self.patch_path: Optional[str] = patch.file_id()
+        self.patch_path: Optional[str] = patch.file_id
         self.description = patch.description
+        self.created_at = int(time.time())
         self.meta = patch.meta
         self.docs = patch.docs
         self.arguments = patch.arguments

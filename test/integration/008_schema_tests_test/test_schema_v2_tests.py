@@ -420,17 +420,19 @@ class TestSchemaTestContext(DBTIntegrationTest):
         run_result = self.run_dbt(['test'], expect_pass=False)
         results = run_result.results
         results = sorted(results, key=lambda r: r.node.name)
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 5)
         # call_pkg_macro_model_c_
         self.assertEqual(results[0].status, TestStatus.Fail)
         # pkg_and_dispatch_model_c_
         self.assertEqual(results[1].status, TestStatus.Fail)
+        # my_datediff
+        self.assertRegex(results[2].node.compiled_sql, r'1000')
         # type_one_model_a_
-        self.assertEqual(results[2].status, TestStatus.Fail)
-        self.assertRegex(results[2].node.compiled_sql, r'union all')
-        # type_two_model_a_
         self.assertEqual(results[3].status, TestStatus.Fail)
-        self.assertEqual(results[3].node.config.severity, 'WARN')
+        self.assertRegex(results[3].node.compiled_sql, r'union all')
+        # type_two_model_a_
+        self.assertEqual(results[4].status, TestStatus.Fail)
+        self.assertEqual(results[4].node.config.severity, 'WARN')
 
 class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
     @property
@@ -521,3 +523,20 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
         ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)
+
+
+class TestInvalidSchema(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "invalid-schema-models"
+
+    @use_profile('postgres')
+    def test_postgres_invalid_schema_file(self):
+        with self.assertRaises(CompilationException) as exc:
+            results = self.run_dbt()
+        self.assertRegex(str(exc.exception), r"'models' is not a list")
+

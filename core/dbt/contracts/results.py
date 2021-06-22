@@ -94,7 +94,7 @@ class BaseResult(dbtClassMixin):
     thread_id: str
     execution_time: float
     adapter_response: Dict[str, Any]
-    message: Optional[Union[str, int]]
+    message: Optional[str]
     failures: Optional[int]
 
     @classmethod
@@ -184,7 +184,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version('run-results', 1)
+@schema_version('run-results', 2)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)

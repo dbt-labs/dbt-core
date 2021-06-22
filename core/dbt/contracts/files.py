@@ -156,20 +156,11 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
 
     def _serialize(self):
         dct = self.to_dict()
-        if 'pp_files' in dct:
-            del dct['pp_files']
-        if 'pp_test_index' in dct:
-            del dct['pp_test_index']
         return dct
 
     @classmethod
     def _deserialize(cls, dct: Dict[str, int]):
         if dct['parse_file_type'] == 'schema':
-            # TODO: why are these keys even here
-            if 'pp_files' in dct:
-                del dct['pp_files']
-            if 'pp_test_index' in dct:
-                del dct['pp_test_index']
             sf = SchemaSourceFile.from_dict(dct)
         else:
             sf = SourceFile.from_dict(dct)
@@ -201,6 +192,10 @@ class SourceFile(BaseSourceFile):
         self = cls(path=path, checksum=FileHash.path(path.original_file_path))
         self.contents = ''
         return self
+
+    def add_node(self, value):
+        if value not in self.nodes:
+            self.nodes.append(value)
 
     # TODO: do this a different way. This remote file kludge isn't going
     # to work long term
@@ -251,10 +246,10 @@ class SchemaSourceFile(BaseSourceFile):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if 'pp_files' in dct:
-            del dct['pp_files']
-        if 'pp_test_index' in dct:
-            del dct['pp_test_index']
+        # Remove partial parsing specific data
+        for key in ('pp_files', 'pp_test_index', 'pp_dict'):
+            if key in dct:
+                del dct[key]
         return dct
 
     def append_patch(self, yaml_key, unique_id):

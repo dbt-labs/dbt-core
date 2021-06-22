@@ -57,7 +57,7 @@ class SourcePatcher:
     # with SourcePatches to produce ParsedSourceDefinitions.
     def construct_sources(self) -> None:
         for unique_id, unpatched in self.manifest.sources.items():
-            schema_file = self.manifest.files[unpatched.file_id()]
+            schema_file = self.manifest.files[unpatched.file_id]
             if isinstance(unpatched, ParsedSourceDefinition):
                 # In partial parsing, there will be ParsedSourceDefinitions
                 # which must be retained.

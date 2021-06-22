@@ -3,7 +3,8 @@ from dbt.contracts.files import (
     FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
 )
 
-from dbt.parser.schemas import yaml_from_file
+from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
+from dbt.exceptions import CompilationException
 from dbt.parser.search import FilesystemSearcher
 
 
@@ -17,9 +18,34 @@ def load_source_file(
     source_file = sf_cls(path=path, checksum=checksum,
                          parse_file_type=parse_file_type, project_name=project_name)
     source_file.contents = file_contents.strip()
-    if parse_file_type == ParseFileType.Schema:
-        source_file.dfy = yaml_from_file(source_file)
+    if parse_file_type == ParseFileType.Schema and source_file.contents:
+        dfy = yaml_from_file(source_file)
+        validate_yaml(source_file.path.original_file_path, dfy)
+        source_file.dfy = dfy
     return source_file
+
+
+# Do some minimal validation of the yaml in a schema file.
+# Check version, that key values are lists and that each element in
+# the lists has a 'name' key
+def validate_yaml(file_path, dct):
+    check_format_version(file_path, dct)
+    for key in schema_file_keys:
+        if key in dct:
+            if not isinstance(dct[key], list):
+                msg = (f"The schema file at {file_path} is "
+                       f"invalid because the value of '{key}' is not a list")
+                raise CompilationException(msg)
+            for element in dct[key]:
+                if not isinstance(element, dict):
+                    msg = (f"The schema file at {file_path} is "
+                           f"invalid because a list element for '{key}' is not a dictionary")
+                    raise CompilationException(msg)
+                if 'name' not in element:
+                    msg = (f"The schema file at {file_path} is "
+                           f"invalid because a list element for '{key}' does not have a "
+                           "name attribute.")
+                    raise CompilationException(msg)
 
 
 # Special processing for big seed files
