@@ -94,9 +94,7 @@ class GraphQueue:
             A dictionary consisting of `node name`:`score` pairs.
         """
         # split graph by connected subgraphs
-        subgraphs = (
-            graph.subgraph(x) for x in nx.connected_components(nx.Graph(graph))
-        )
+        subgraphs = (graph.subgraph(x) for x in nx.connected_components(nx.Graph(graph)))
 
         # score all nodes in all subgraphs
         scores = {}
