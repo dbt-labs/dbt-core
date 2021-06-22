@@ -1,16 +1,52 @@
+## dbt 0.21.0
+
+### Features
+
+### Fixes
+- Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
+
+### Under the hood
+- Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
+- Add optional `sslcert`, `sslkey`, and `sslrootcert` profile arguments to the Postgres connector. ([#3472](https://github.com/fishtown-analytics/dbt/pull/3472), [#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
+
+Contributors:
+- [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
+- [@tconbeer](https://github.com/tconbeer) [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
+- [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
+
 ## dbt 0.20.0 (Release TBD)
+
+### Fixes
+
+- Handle quoted values within test configs, such as `where` ([#3458](https://github.com/fishtown-analytics/dbt/issues/3458), [#3459](https://github.com/fishtown-analytics/dbt/pull/3459))
+
+### Under the hood
+
+- Dispatch the core SQL statement of the new test materialization, to benefit adapter maintainers ([#3465](https://github.com/fishtown-analytics/dbt/pull/3465), [#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
+- Minimal validation of yaml dictionaries prior to partial parsing ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246), [#3460](https://github.com/fishtown-analytics/dbt/pull/3460))
+
+Contributors:
+- [@swanderz](https://github.com/swanderz) ([#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
+
+## dbt 0.20.0rc1 (June 04, 2021)
+
+
+### Breaking changes
+- Fix adapter.dispatch macro resolution when statically extracting macros. Introduce new project-level `dispatch` config. The `packages` argument to `dispatch` no longer supports macro calls; there is backwards compatibility for existing packages. The argument will no longer be supported in a future release, instead provide the `macro_namespace` argument. ([#3362](https://github.com/fishtown-analytics/dbt/issues/3362), [#3363](https://github.com/fishtown-analytics/dbt/pull/3363), [#3383](https://github.com/fishtown-analytics/dbt/pull/3383), [#3403](https://github.com/fishtown-analytics/dbt/pull/3403))
 
 ### Features
 - Support optional `updated_at` config parameter with `check` strategy snapshots. If not supplied, will use current timestamp (default). ([#1844](https://github.com/fishtown-analytics/dbt/issues/1844), [#3376](https://github.com/fishtown-analytics/dbt/pull/3376))
-- Add the opt-in `--use-experimental-parser` flag ([#3307](https://github.com/fishtown-analytics/dbt/issues/3307))
+- Add the opt-in `--use-experimental-parser` flag ([#3307](https://github.com/fishtown-analytics/dbt/issues/3307), [#3374](https://github.com/fishtown-analytics/dbt/issues/3374))
 - Store test failures in the database ([#517](https://github.com/fishtown-analytics/dbt/issues/517), [#903](https://github.com/fishtown-analytics/dbt/issues/903), [#2593](https://github.com/fishtown-analytics/dbt/issues/2593), [#3316](https://github.com/fishtown-analytics/dbt/issues/3316))
-- Add new test configs: `where`, `limit`, `warn_if`, `error_if`, `fail_calc` ([#3258](https://github.com/fishtown-analytics/dbt/issues/3258),[#3321](https://github.com/fishtown-analytics/dbt/issues/3321), [#3336](https://github.com/fishtown-analytics/dbt/pull/3336))
+- Add new test configs: `where`, `limit`, `warn_if`, `error_if`, `fail_calc` ([#3258](https://github.com/fishtown-analytics/dbt/issues/3258), [#3321](https://github.com/fishtown-analytics/dbt/issues/3321), [#3336](https://github.com/fishtown-analytics/dbt/pull/3336))
+- Move partial parsing to end of parsing and implement new partial parsing method. ([#3217](https://github.com/fishtown-analytics/dbt/issues/3217), [#3364](https://github.com/fishtown-analytics/dbt/pull/3364))
+- Save doc file node references and use in partial parsing. ([#3425](https://github.com/fishtown-analytics/dbt/issues/3425), [#3432](https://github.com/fishtown-analytics/dbt/pull/3432))
 
 ### Fixes
 - Fix compiled sql for ephemeral models ([#3317](https://github.com/fishtown-analytics/dbt/issues/3317), [#3318](https://github.com/fishtown-analytics/dbt/pull/3318))
 - Now generating `run_results.json` even when no nodes are selected ([#3313](https://github.com/fishtown-analytics/dbt/issues/3313), [#3315](https://github.com/fishtown-analytics/dbt/pull/3315))
 - Add missing `packaging` dependency ([#3312](https://github.com/fishtown-analytics/dbt/issues/3312), [#3339](https://github.com/fishtown-analytics/dbt/pull/3339))
-- Fix references to macros with package names when rendering schema tests ([#3324](https://github.com/fishtown-analytics/dbt/issues/3324), [#3345](https://github.com/fishtown-analytics/dbt/pull/3345)
+- Fix references to macros with package names when rendering schema tests ([#3324](https://github.com/fishtown-analytics/dbt/issues/3324), [#3345](https://github.com/fishtown-analytics/dbt/pull/3345))
 - Stop clobbering default keyword arguments for jinja test definitions ([#3329](https://github.com/fishtown-analytics/dbt/issues/3329), [#3340](https://github.com/fishtown-analytics/dbt/pull/3340))
 - Fix unique_id generation for generic tests so tests with the same FQN but different configuration will run. ([#3254](https://github.com/fishtown-analytics/dbt/issues/3254), [#3335](https://github.com/fishtown-analytics/dbt/issues/3335))
 - Update the snowflake adapter to only comment on a column if it exists when using the persist_docs config ([#3039](https://github.com/fishtown-analytics/dbt/issues/3039), [#3149](https://github.com/fishtown-analytics/dbt/pull/3149))
@@ -18,8 +54,15 @@
 - Separate `compiled_path` from `build_path`, and print the former alongside node error messages ([#1985](https://github.com/fishtown-analytics/dbt/issues/1985), [#3327](https://github.com/fishtown-analytics/dbt/pull/3327))
 - Fix exception caused when running `dbt debug` with BigQuery connections ([#3314](https://github.com/fishtown-analytics/dbt/issues/3314), [#3351](https://github.com/fishtown-analytics/dbt/pull/3351))
 - Raise better error if snapshot is missing required configurations ([#3381](https://github.com/fishtown-analytics/dbt/issues/3381), [#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
+- Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350))
+- Fix deserialization of Manifest lock attribute ([#3435](https://github.com/fishtown-analytics/dbt/issues/3435), [#3445](https://github.com/fishtown-analytics/dbt/pull/3445))
 - Fix `dbt run` errors caused from receiving non-JSON responses from Snowflake with Oauth ([#3350](https://github.com/fishtown-analytics/dbt/issues/3350)
-- Fix adapter.dispatch macro resolution when statically extracting macros. Introduce new project-level `dispatch` config. Add backwards compatibility for known packages ([#3362](https://github.com/fishtown-analytics/dbt/issues/3362), [#3363](https://github.com/fishtown-analytics/dbt/pull/3363), [#3383](https://github.com/fishtown-analytics/dbt/pull/3383), [#3403](https://github.com/fishtown-analytics/dbt/pull/3403))
+- Fix infinite recursion when parsing schema tests due to loops in macro calls ([#3444](https://github.com/fishtown-analytics/dbt/issues/3344), [#3454](https://github.com/fishtown-analytics/dbt/pull/3454))
+
+### Docs
+- Reversed the rendering direction of relationship tests so that the test renders in the model it is defined in ([docs#181](https://github.com/fishtown-analytics/dbt-docs/issues/181), [docs#183](https://github.com/fishtown-analytics/dbt-docs/pull/183))
+- Support dots in model names: display them in the graphs ([docs#184](https://github.com/fishtown-analytics/dbt-docs/issues/184), [docs#185](https://github.com/fishtown-analytics/dbt-docs/issues/185))
+- Render meta tags for sources ([docs#192](https://github.com/fishtown-analytics/dbt-docs/issues/192), [docs#193](https://github.com/fishtown-analytics/dbt-docs/issues/193))
 
 ### Under the hood
 - Added logic for registry requests to raise a timeout error after a response hangs out for 30 seconds and 5 attempts have been made to reach the endpoint ([#3177](https://github.com/fishtown-analytics/dbt/issues/3177), [#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
@@ -29,6 +72,8 @@
 - Add `ssh-client` and update `git` version (using buster backports) in Docker image ([#3337](https://github.com/fishtown-analytics/dbt/issues/3337), [#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
 - Add `tags` and `meta` properties to the exposure resource schema. ([#3404](https://github.com/fishtown-analytics/dbt/issues/3404), [#3405](https://github.com/fishtown-analytics/dbt/pull/3405))
 - Update test sub-query alias ([#3398](https://github.com/fishtown-analytics/dbt/issues/3398), [#3414](https://github.com/fishtown-analytics/dbt/pull/3414)) 
+- Bump schema versions for run results and manifest artifacts ([#3422](https://github.com/fishtown-analytics/dbt/issues/3422), [#3421](https://github.com/fishtown-analytics/dbt/pull/3421))
+- Add deprecation warning for using `packages` argument with `adapter.dispatch` ([#3419](https://github.com/fishtown-analytics/dbt/issues/3419), [#3420](https://github.com/fishtown-analytics/dbt/pull/3420))
 
 Contributors:
 - [@TeddyCr](https://github.com/TeddyCr) ([#3275](https://github.com/fishtown-analytics/dbt/pull/3275))
@@ -42,8 +87,17 @@ Contributors:
 - [@jnatkins](https://github.com/jnatkins) ([#3385](https://github.com/fishtown-analytics/dbt/pull/3385))
 - [@matt-winkler](https://github.com/matt-winkler) ([#3365](https://github.com/fishtown-analytics/dbt/pull/3365))
 - [@stkbailey](https://github.com/stkbailey) ([#3404](https://github.com/fishtown-analytics/dbt/pull/3405))
+- [@mascah](https://github.com/mascah) ([docs#181](https://github.com/fishtown-analytics/dbt-docs/issues/181), [docs#183](https://github.com/fishtown-analytics/dbt-docs/pull/183))
+- [@monti-python](https://github.com/monti-python) ([docs#184](https://github.com/fishtown-analytics/dbt-docs/issues/184))
+- [@diegodewilde](https://github.com/diegodewilde) ([docs#193](https://github.com/fishtown-analytics/dbt-docs/issues/193))
 
 ## dbt 0.20.0b1 (May 03, 2021)
+
+### Breaking changes
+
+- Add Jinja tag for generic test definitions. Replacement for macros prefixed `test_` ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
+- Update schema/generic tests to expect a set of rows instead of a single numeric value, and to use test materialization when executing. ([#3192](https://github.com/fishtown-analytics/dbt/issues/3192), [#3286](https://github.com/fishtown-analytics/dbt/pull/3286))
+- **Plugin maintainers:** For adapters that inherit from other adapters (e.g. `dbt-postgres` &rarr; `dbt-redshift`), `adapter.dispatch()` will now include parent macro implementations as viable candidates ([#2923](https://github.com/fishtown-analytics/dbt/issues/2923), [#3296](https://github.com/fishtown-analytics/dbt/pull/3296))
 
 ### Features
 - Support commit hashes in dbt deps package revision ([#3268](https://github.com/fishtown-analytics/dbt/issues/3268), [#3270](https://github.com/fishtown-analytics/dbt/pull/3270))
@@ -55,7 +109,6 @@ Contributors:
 - Set application_name for Postgres connections ([#885](https://github.com/fishtown-analytics/dbt/issues/885), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
 - Support disabling schema tests, and configuring tests from `dbt_project.yml` ([#3252](https://github.com/fishtown-analytics/dbt/issues/3252),
 [#3253](https://github.com/fishtown-analytics/dbt/issues/3253), [#3257](https://github.com/fishtown-analytics/dbt/pull/3257))
-- Add Jinja tag for tests ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
 - Add native support for Postgres index creation ([#804](https://github.com/fishtown-analytics/dbt/issues/804), [3106](https://github.com/fishtown-analytics/dbt/pull/3106))
 - Less greedy test selection: expand to select unselected tests if and only if all parents are selected ([#2891](https://github.com/fishtown-analytics/dbt/issues/2891), [#3235](https://github.com/fishtown-analytics/dbt/pull/3235))
 - Prevent locks in Redshift during full refresh in incremental materialization. ([#2426](https://github.com/fishtown-analytics/dbt/issues/2426), [#2998](https://github.com/fishtown-analytics/dbt/pull/2998))
@@ -83,8 +136,6 @@ Contributors:
 - Add a new materialization for tests, update data tests to use test materialization when executing. ([#3154](https://github.com/fishtown-analytics/dbt/issues/3154), [#3181](https://github.com/fishtown-analytics/dbt/pull/3181))
 - Switch from externally storing parsing state in ParseResult object to using Manifest ([#3163](http://github.com/fishtown-analytics/dbt/issues/3163), [#3219](https://github.com/fishtown-analytics/dbt/pull/3219))
 - Switch from loading project files in separate parsers to loading in one place([#3244](http://github.com/fishtown-analytics/dbt/issues/3244), [#3248](https://github.com/fishtown-analytics/dbt/pull/3248))
-- Update schema/generic tests to use test materialization when executing. ([#3192](https://github.com/fishtown-analytics/dbt/issues/3192), [#3286](https://github.com/fishtown-analytics/dbt/pull/3286))
-- For adapters that inherit from other adapters (e.g. `dbt-postgres` &rarr; `dbt-redshift`), `adapter.dispatch()` will now include parent macro implementations as viable candidates ([#2923](https://github.com/fishtown-analytics/dbt/issues/2923), [#3296](https://github.com/fishtown-analytics/dbt/pull/3296))
 
 Contributors:
 - [@yu-iskw](https://github.com/yu-iskw) ([#2928](https://github.com/fishtown-analytics/dbt/pull/2928))
@@ -109,9 +160,11 @@ Contributors:
 
 ## dbt 0.19.2 (Release TBD)
 
+### Breaking changes
+- Fix adapter.dispatch macro resolution when statically extracting macros. Introduce new project-level `dispatch` config. The `packages` argument to `dispatch` no longer supports macro calls; there is backwards compatibility for existing packages. The argument will no longer be supported in a future release, instead provide the `macro_namespace` argument. ([#3362](https://github.com/fishtown-analytics/dbt/issues/3362), [#3363](https://github.com/fishtown-analytics/dbt/pull/3363), [#3383](https://github.com/fishtown-analytics/dbt/pull/3383), [#3403](https://github.com/fishtown-analytics/dbt/pull/3403))
+
 ### Fixes
-- Ensure that schema test macros are properly processed ([#3229](https://github.com/fishtown-analytics/dbt/issues/3229), [#3272](https://github.com/fishtown-analytics/dbt/pull/3272))
-- Fix regression for default project/database for BigQuery connections ([#3218](https://github.com/fishtown-analytics/dbt/issues/3218), [#3305](https://github.com/fishtown-analytics/dbt/pull/3305))
+- Fix references to macros with package names when rendering schema tests ([#3324](https://github.com/fishtown-analytics/dbt/issues/3324), [#3345](https://github.com/fishtown-analytics/dbt/pull/3345))
 
 ## dbt 0.19.1 (March 31, 2021)
 

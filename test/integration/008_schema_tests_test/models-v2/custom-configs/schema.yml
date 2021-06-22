@@ -10,3 +10,5 @@ models:
       - warn_if
       - limit
       - fail_calc
+      - where:  # test override + weird quoting
+          where: "\"favorite_color\" = 'red'"

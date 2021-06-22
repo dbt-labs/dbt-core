@@ -2,18 +2,20 @@ import os
 import shutil
 
 import dbt.config
-import dbt.clients.git
 import dbt.clients.system
 from dbt.adapters.factory import load_plugin, get_include_paths
 from dbt.exceptions import RuntimeException
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
+
 from dbt.task.base import BaseTask
 
-STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
-STARTER_BRANCH = 'dbt-yml-config-version-2'
 DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'
+
+# This file is not needed for the starter project but exists for finding the resource path
+IGNORE_FILE = "__init__.py"
 
 ON_COMPLETE_MESSAGE = """
 Your new dbt project "{project_name}" was created! If this is your first time
@@ -36,14 +38,10 @@ There's a link to our Slack group in the GitHub Readme. Happy modeling!
 
 
 class InitTask(BaseTask):
-    def clone_starter_repo(self, project_name):
-        dbt.clients.git.clone(
-            STARTER_REPO,
-            cwd='.',
-            dirname=project_name,
-            remove_git_dir=True,
-            revision=STARTER_BRANCH,
-        )
+    def copy_starter_repo(self, project_name):
+        logger.debug("Starter project path: " + starter_project_directory)
+        shutil.copytree(starter_project_directory, project_name,
+                        ignore=shutil.ignore_patterns(IGNORE_FILE))
 
     def create_profiles_dir(self, profiles_dir):
         if not os.path.exists(profiles_dir):
@@ -98,7 +96,7 @@ class InitTask(BaseTask):
                 project_dir
             ))
 
-        self.clone_starter_repo(project_dir)
+        self.copy_starter_repo(project_dir)
 
         addendum = self.get_addendum(project_dir, profiles_dir, sample_adapter)
         logger.info(addendum)

@@ -10,3 +10,4 @@ models:
       tests:
         - call_pkg_macro
         - local_utils.pkg_and_dispatch
+        - my_datediff

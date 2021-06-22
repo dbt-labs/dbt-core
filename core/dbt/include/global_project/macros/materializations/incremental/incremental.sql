@@ -6,6 +6,22 @@
   {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
 
+  {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
+  {% set backup_identifier = model['name'] + "__dbt_backup" %}
+
+  -- the intermediate_ and backup_ relations should not already exist in the database; get_relation
+  -- will return None in that case. Otherwise, we get a relation that we can drop
+  -- later, before we try to use this name for the current operation. This has to happen before
+  -- BEGIN, in a separate transaction
+  {% set preexisting_intermediate_relation = adapter.get_relation(identifier=tmp_identifier, 
+                                                                  schema=schema,
+                                                                  database=database) %}                                               
+  {% set preexisting_backup_relation = adapter.get_relation(identifier=backup_identifier,
+                                                            schema=schema,
+                                                            database=database) %}
+  {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
+  {{ drop_relation_if_exists(preexisting_backup_relation) }}
+
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
   -- `BEGIN` happens here:
@@ -15,15 +31,8 @@
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
   {% elif existing_relation.is_view or should_full_refresh() %}
-      {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
-      {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
-      {% set backup_identifier = model['name'] + "__dbt_backup" %}
-
       {% set intermediate_relation = existing_relation.incorporate(path={"identifier": tmp_identifier}) %}
       {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier}) %}
-
-      {% do adapter.drop_relation(intermediate_relation) %}
-      {% do adapter.drop_relation(backup_relation) %}
 
       {% set build_sql = create_table_as(False, intermediate_relation, sql) %}
       {% set need_swap = true %}
