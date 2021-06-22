@@ -71,7 +71,7 @@ click_type_mapping = {
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
         fire_event(StarterProjectPath(dir=starter_project_directory))
-        shutil.copytree(starter_project_directory, project_name,
+        shutil.copytree(
                         ignore=shutil.ignore_patterns(*IGNORE_FILES))
 
     def create_profiles_dir(self, profiles_dir: str) -> bool:
