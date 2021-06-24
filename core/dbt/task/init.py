@@ -35,7 +35,7 @@ from dbt.include.starter_project import PACKAGE_PATH as starter_project_director
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
-SLACK_URL = 'https://community.getdbt.com/'
+SLACK_URL = "https://community.getdbt.com/"
 
 # This file is not needed for the starter project but exists for finding the resource path
 IGNORE_FILES = ["__init__.py", "__pycache__"]
@@ -124,7 +124,7 @@ class InitTask(BaseTask):
             project_name=project_name,
             profiles_path=profiles_path,
             docs_url=DOCS_URL,
-            slack_url=SLACK_URL
+            slack_url=SLACK_URL,
         )
 
     def generate_target_from_input(
