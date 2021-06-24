@@ -501,6 +501,7 @@ class ModelParserTest(BaseParserTest):
             original_file_path=normalize('models/nested/model_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=NodeConfig(materialized='table'),
+            meta={'is_statically_extractable': True},
             path=normalize('nested/model_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
