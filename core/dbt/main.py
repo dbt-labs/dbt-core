@@ -367,7 +367,6 @@ def _build_init_subparser(subparsers, base_subparser):
     )
     sub.add_argument(
         '--adapter',
-        default='redshift',
         type=str,
         help='''
         Write sample profiles.yml for which adapter
