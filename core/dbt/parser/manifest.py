@@ -31,7 +31,7 @@ from dbt.parser.read_files import read_files, load_source_file
 from dbt.parser.partial import PartialParsing
 from dbt.contracts.graph.compiled import ManifestNode
 from dbt.contracts.graph.manifest import (
-    Manifest, Disabled, MacroManifest, ManifestStateCheck
+    Manifest, Disabled, MacroManifest, ManifestStateCheck, ParsingInfo
 )
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
@@ -210,12 +210,15 @@ class ManifestLoader:
                 # files are different, we need to create a new set of
                 # project_parser_files.
                 project_parser_files = partial_parsing.get_parsing_files()
-                self.manifest = self.saved_manifest
                 self.partially_parsing = True
+
+            self.manifest = self.saved_manifest
+
+        if self.manifest._parsing_info is None:
+            self.manifest._parsing_info = ParsingInfo()
 
         if skip_parsing:
             logger.info("Partial parsing enabled, no changes found, skipping parsing")
-            self.manifest = self.saved_manifest
         else:
             # Load Macros
             # We need to parse the macros first, so they're resolvable when
@@ -304,10 +307,11 @@ class ManifestLoader:
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
+
+            # update tracking data
             self._perf_info.process_manifest_elapsed = (
                 time.perf_counter() - start_process
             )
-            # update tracking data with static parsing info
             self._perf_info.static_analysis_parsed_path_count = (
                 self.manifest._parsing_info.static_analysis_parsed_path_count
             )
