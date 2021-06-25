@@ -91,6 +91,7 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     static_analysis_path_count: int = 0
     static_analysis_parsed_path_count: int = 0
     is_partial_parse_enabled: Optional[bool] = None
+    is_static_analysis_enabled: Optional[bool] = None
     read_files_elapsed: Optional[float] = None
     load_macros_elapsed: Optional[float] = None
     parse_project_elapsed: Optional[float] = None
@@ -307,16 +308,12 @@ class ManifestLoader:
                 time.perf_counter() - start_process
             )
             # update tracking data with static parsing info
-            statically_extracted_nodes = [
-                node for node in self.manifest.nodes.values()
-                if node.meta.pop('is_statically_extracted', False) is True
-            ]
-            statically_extractable_nodes = [
-                node for node in self.manifest.nodes.values()
-                if node.meta.pop('is_statically_extractable', False) is True
-            ]
-            self._perf_info.static_analysis_parsed_path_count = len(statically_extracted_nodes)
-            self._perf_info.static_analysis_path_count = len(statically_extractable_nodes)
+            self._perf_info.static_analysis_parsed_path_count = (
+                self.manifest._parsing_info.static_analysis_parsed_path_count
+            )
+            self._perf_info.static_analysis_path_count = (
+                self.manifest._parsing_info.static_analysis_path_count
+            )
 
             # write out the fully parsed manifest
             self.write_manifest_for_partial_parse()
@@ -516,7 +513,8 @@ class ManifestLoader:
 
     def build_perf_info(self):
         mli = ManifestLoaderInfo(
-            is_partial_parse_enabled=self._partial_parse_enabled()
+            is_partial_parse_enabled=self._partial_parse_enabled(),
+            is_static_analysis_enabled=flags.USE_EXPERIMENTAL_PARSER
         )
         for project in self.all_projects.values():
             project_info = ProjectLoaderInfo(
@@ -629,7 +627,7 @@ class ManifestLoader:
             "is_partial_parse_enabled": (
                 self._perf_info.is_partial_parse_enabled
             ),
-            "is_static_analysis_enabled": flags.USE_EXPERIMENTAL_PARSER,
+            "is_static_analysis_enabled": self._perf_info.is_static_analysis_enabled,
             "static_analysis_path_count": self._perf_info.static_analysis_path_count,
             "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,
         })

@@ -24,7 +24,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def render_update(
         self, node: ParsedModelNode, config: ContextConfig
     ) -> None:
-        node.meta["is_statically_extractable"] = True
+        self.manifest._parsing_info.static_analysis_path_count += 1
 
         # normal dbt run
         if not flags.USE_EXPERIMENTAL_PARSER:
@@ -64,7 +64,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 for configv in res['configs']:
                     node.config[configv[0]] = configv[1]
 
-                node.meta['is_statically_extracted'] = True
+                self.manifest._parsing_info.static_analysis_parsed_path_count += 1
 
             else:
                 super().render_update(node, config)
