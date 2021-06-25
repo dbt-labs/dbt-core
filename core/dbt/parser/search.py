@@ -65,14 +65,14 @@ class FullBlock(FileBlock):
 
 class FilesystemSearcher(Iterable[FilePath]):
     def __init__(
-        self, project: Project, relative_dirs: List[str], extension: str
+        self, project: Project, relative_dirs: List[str], extension_regex: str
     ) -> None:
         self.project = project
         self.relative_dirs = relative_dirs
-        self.extension = extension
+        self.extension_regex = extension_regex
 
     def __iter__(self) -> Iterator[FilePath]:
-        ext = "[!.#~]*" + self.extension
+        ext = "[^.]*" + self.extension_regex
 
         root = self.project.project_root
 

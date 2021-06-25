@@ -1,5 +1,4 @@
 import errno
-import fnmatch
 import json
 import os
 import os.path
@@ -29,14 +28,14 @@ else:
 def find_matching(
     root_path: str,
     relative_paths_to_search: List[str],
-    file_pattern: str,
+    file_regex: str,
 ) -> List[Dict[str, str]]:
     """
     Given an absolute `root_path`, a list of relative paths to that
-    absolute root path (`relative_paths_to_search`), and a `file_pattern`
-    like '*.sql', returns information about the files. For example:
+    absolute root path (`relative_paths_to_search`), and a `file_regex`
+    like '.*\\.sql', returns information about the files. For example:
 
-    > find_matching('/root/path', ['models'], '*.sql')
+    > find_matching('/root/path', ['models'], '.*\\.sql')
 
       [ { 'absolute_path': '/root/path/models/model_one.sql',
           'relative_path': 'model_one.sql',
@@ -47,8 +46,7 @@ def find_matching(
     """
     matching = []
     root_path = os.path.normpath(root_path)
-    regex = fnmatch.translate(file_pattern)
-    reobj = re.compile(regex, re.IGNORECASE)
+    reobj = re.compile(file_regex, re.IGNORECASE)
 
     for relative_path_to_search in relative_paths_to_search:
         absolute_path_to_search = os.path.join(
@@ -61,7 +59,7 @@ def find_matching(
                 relative_path = os.path.relpath(
                     absolute_path, absolute_path_to_search
                 )
-                if reobj.match(local_file):
+                if reobj.fullmatch(local_file):
                     matching.append({
                         'searched_path': relative_path_to_search,
                         'absolute_path': absolute_path,

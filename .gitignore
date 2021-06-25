@@ -85,7 +85,6 @@ target/
 
 # pycharm
 .idea/
-venv/
 
 # AWS credentials
 .aws/
@@ -94,3 +93,7 @@ venv/
 
 # vscode
 .vscode/
+
+# Virtual environments
+venv/
+.venv/

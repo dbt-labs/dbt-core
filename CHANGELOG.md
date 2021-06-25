@@ -1,6 +1,7 @@
 ## dbt 0.21.0 (Release TBD)
 
 ### Features
+- Now supports the `.sql.jinja` file extension in addition to the current `.sql` file extension. With the same behaviour. ([#3484](https://github.com/fishtown-analytics/dbt/issues/3484), [#3498](https://github.com/fishtown-analytics/dbt/pull/3498))
 
 ### Fixes
 - Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))

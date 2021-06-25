@@ -65,10 +65,10 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
 
 # Use the FilesystemSearcher to get a bunch of FilePaths, then turn
 # them into a bunch of FileSource objects
-def get_source_files(project, paths, extension, parse_file_type):
+def get_source_files(project, paths, extension_regex, parse_file_type):
     # file path list
     fp_list = list(FilesystemSearcher(
-        project, paths, extension
+        project, paths, extension_regex
     ))
     # file block list
     fb_list = []
@@ -81,10 +81,10 @@ def get_source_files(project, paths, extension, parse_file_type):
     return fb_list
 
 
-def read_files_for_parser(project, files, dirs, extension, parse_ft):
+def read_files_for_parser(project, files, dirs, extension_regex, parse_ft):
     parser_files = []
     source_files = get_source_files(
-        project, dirs, extension, parse_ft
+        project, dirs, extension_regex, parse_ft
     )
     for sf in source_files:
         files[sf.file_id] = sf
@@ -97,47 +97,48 @@ def read_files_for_parser(project, files, dirs, extension, parse_ft):
 # the various projects? Is the root project always last? Do the
 # non-root projects need to be done separately in order?
 def read_files(project, files, parser_files):
-
     project_files = {}
 
+    sql_template_extensions = r'\.sql(\.jinja)?'
+
     project_files['MacroParser'] = read_files_for_parser(
-        project, files, project.macro_paths, '.sql', ParseFileType.Macro,
+        project, files, project.macro_paths, sql_template_extensions,
+        ParseFileType.Macro,
     )
 
     project_files['ModelParser'] = read_files_for_parser(
-        project, files, project.source_paths, '.sql', ParseFileType.Model,
+        project, files, project.source_paths, sql_template_extensions,
+        ParseFileType.Model,
     )
 
     project_files['SnapshotParser'] = read_files_for_parser(
-        project, files, project.snapshot_paths, '.sql', ParseFileType.Snapshot,
+        project, files, project.snapshot_paths, sql_template_extensions,
+        ParseFileType.Snapshot,
     )
 
     project_files['AnalysisParser'] = read_files_for_parser(
-        project, files, project.analysis_paths, '.sql', ParseFileType.Analysis,
+        project, files, project.analysis_paths, sql_template_extensions,
+        ParseFileType.Analysis,
     )
 
     project_files['DataTestParser'] = read_files_for_parser(
-        project, files, project.test_paths, '.sql', ParseFileType.Test,
+        project, files, project.test_paths, sql_template_extensions,
+        ParseFileType.Test,
     )
 
     project_files['SeedParser'] = read_files_for_parser(
-        project, files, project.data_paths, '.csv', ParseFileType.Seed,
+        project, files, project.data_paths, r'\.csv', ParseFileType.Seed,
     )
 
     project_files['DocumentationParser'] = read_files_for_parser(
-        project, files, project.docs_paths, '.md', ParseFileType.Documentation,
+        project, files, project.docs_paths, r'\.md',
+        ParseFileType.Documentation,
     )
 
     project_files['SchemaParser'] = read_files_for_parser(
-        project, files, project.all_source_paths, '.yml', ParseFileType.Schema,
+        project, files, project.all_source_paths, r'\.ya?ml',
+        ParseFileType.Schema,
     )
-
-    # Also read .yaml files for schema files. Might be better to change
-    # 'read_files_for_parser' accept an array in the future.
-    yaml_files = read_files_for_parser(
-        project, files, project.all_source_paths, '.yaml', ParseFileType.Schema,
-    )
-    project_files['SchemaParser'].extend(yaml_files)
 
     # Store the parser files for this particular project
     parser_files[project.project_name] = project_files

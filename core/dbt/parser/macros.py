@@ -21,7 +21,7 @@ class MacroParser(BaseParser[ParsedMacro]):
         return list(FilesystemSearcher(
             project=self.project,
             relative_dirs=self.project.macro_paths,
-            extension='.sql',
+            extension_regex=r'\.sql(\.jinja)?',
         ))
 
     @property

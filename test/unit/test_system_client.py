@@ -148,7 +148,7 @@ class TestFindMatching(unittest.TestCase):
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
             out = dbt.clients.system.find_matching(
-                self.base_dir, [relative_path], '*.sql'
+                self.base_dir, [relative_path], '.*\.sql'
             )
             expected_output = [{
                 'searched_path': relative_path,
@@ -162,7 +162,7 @@ class TestFindMatching(unittest.TestCase):
             file_path = os.path.dirname(named_file.name)
             relative_path = os.path.basename(file_path)
             out = dbt.clients.system.find_matching(
-                self.base_dir, [relative_path], '*.sql'
+                self.base_dir, [relative_path], '.*\.sql'
             )
             expected_output = [{
                 'searched_path': relative_path,
@@ -175,7 +175,7 @@ class TestFindMatching(unittest.TestCase):
         with NamedTemporaryFile(
             prefix='sql-files', suffix='.SQLT', dir=self.tempdir
         ):
-            out = dbt.clients.system.find_matching(self.tempdir, [''], '*.sql')
+            out = dbt.clients.system.find_matching(self.tempdir, [''], r'.*\.sql')
             self.assertEqual(out, [])
 
     def tearDown(self):
