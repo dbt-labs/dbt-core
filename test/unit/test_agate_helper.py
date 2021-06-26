@@ -133,3 +133,24 @@ class TestAgateHelper(unittest.TestCase):
         assert isinstance(result.column_types[1], agate.data_types.Text)
         assert isinstance(result.column_types[2], agate.data_types.Text)
         self.assertEqual(len(result), 6)
+
+    def test_nocast_string_types(self):
+        # String fields should not be coerced into a representative type
+        # See: https://github.com/fishtown-analytics/dbt/issues/2984
+
+        column_names = ['a', 'b', 'c', 'd', 'e']
+        result_set = [
+            {'a': '0005', 'b': '01T00000aabbccdd', 'c': 'true', 'd': 10, 'e': False},
+            {'a': '0006', 'b': '01T00000aabbccde', 'c': 'false', 'd': 11, 'e': True},
+        ]
+
+        tbl = agate_helper.table_from_data_flat(data=result_set, column_names=column_names)
+        self.assertEqual(len(tbl), len(result_set))
+
+        expected = [
+            ['0005', '01T00000aabbccdd', 'true', Decimal(10), False],
+            ['0006', '01T00000aabbccde', 'false', Decimal(11), True],
+        ]
+
+        for i, row in enumerate(tbl):
+            self.assertEqual(list(row), expected[i])

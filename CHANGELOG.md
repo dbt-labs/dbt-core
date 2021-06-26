@@ -21,6 +21,7 @@ Contributors:
 ### Fixes
 
 - Handle quoted values within test configs, such as `where` ([#3458](https://github.com/fishtown-analytics/dbt/issues/3458), [#3459](https://github.com/fishtown-analytics/dbt/pull/3459))
+- Fix type coercion issues when fetching query result sets ([#2984](https://github.com/fishtown-analytics/dbt/issues/2984), [#3499](https://github.com/fishtown-analytics/dbt/pull/3499))
 
 ### Under the hood
 
