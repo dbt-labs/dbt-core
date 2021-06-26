@@ -44,8 +44,7 @@ class ISODateTime(agate.data_types.DateTime):
 
 
 def build_type_tester(
-    text_columns: Iterable[str],
-    string_null_values: Optional[Iterable[str]] = ('null', '')
+    text_columns: Iterable[str], string_null_values: Optional[Iterable[str]] = ("null", "")
 ) -> agate.TypeTester:
 
     types = [
@@ -80,10 +79,7 @@ def table_from_rows(
     else:
         # If text_only_columns are present, prevent coercing empty string or
         # literal 'null' strings to a None representation.
-        column_types = build_type_tester(
-            text_only_columns,
-            string_null_values=()
-        )
+        column_types = build_type_tester(text_only_columns, string_null_values=())
 
     return agate.Table(rows, column_names, column_types=column_types)
 
@@ -128,9 +124,7 @@ def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
         rows.append(row)
 
     return table_from_rows(
-        rows=rows,
-        column_names=column_names,
-        text_only_columns=text_only_columns
+        rows=rows, column_names=column_names, text_only_columns=text_only_columns
     )
 
 
