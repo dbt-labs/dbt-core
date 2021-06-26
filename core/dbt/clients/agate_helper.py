@@ -55,14 +55,9 @@ def build_type_tester(
         agate.data_types.Boolean(
             true_values=("true",), false_values=("false",), null_values=("null", "")
         ),
-                                 false_values=('false',),
-                                 null_values=('null', '')),
-        agate.data_types.Text(null_values=string_null_values)
+        agate.data_types.Text(null_values=string_null_values),
     ]
-    force = {
-        k: agate.data_types.Text(null_values=string_null_values)
-        for k in text_columns
-    }
+    force = {k: agate.data_types.Text(null_values=string_null_values) for k in text_columns}
     return agate.TypeTester(force=force, types=types)
 
 
