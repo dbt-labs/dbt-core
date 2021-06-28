@@ -109,10 +109,7 @@ def error_context(
 
 
 def yaml_from_file(source_file: SchemaSourceFile) -> Dict[str, Any]:
-    source_file: SchemaSourceFile
-) -> Dict[str, Any]:
-    """If loading the yaml fails, raise an exception.
-    """
+    """If loading the yaml fails, raise an exception."""
     path = source_file.path.relative_path
     try:
         return load_yaml_text(source_file.contents)
