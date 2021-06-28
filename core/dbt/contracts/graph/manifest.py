@@ -526,6 +526,12 @@ class MacroMethods:
 
 
 @dataclass
+class ParsingInfo:
+    static_analysis_parsed_path_count: int = 0
+    static_analysis_path_count: int = 0
+
+
+@dataclass
 class ManifestStateCheck(dbtClassMixin):
     vars_hash: FileHash = field(default_factory=FileHash.empty)
     profile_hash: FileHash = field(default_factory=FileHash.empty)
@@ -565,6 +571,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _analysis_lookup: Optional[AnalysisLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _parsing_info: ParsingInfo = field(
+        default_factory=ParsingInfo,
+        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
     _lock: Lock = field(
         default_factory=flags.MP_CONTEXT.Lock,

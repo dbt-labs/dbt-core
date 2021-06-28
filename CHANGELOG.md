@@ -1,4 +1,4 @@
-## dbt 0.21.0
+## dbt 0.21.0 (Release TBD)
 
 ### Features
 
@@ -10,6 +10,7 @@
 - Add optional `sslcert`, `sslkey`, and `sslrootcert` profile arguments to the Postgres connector. ([#3472](https://github.com/fishtown-analytics/dbt/pull/3472), [#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 - Move the example project used by `dbt init` into `dbt` repository, to avoid cloning an external repo ([#3005](https://github.com/fishtown-analytics/dbt/pull/3005), [#3474](https://github.com/fishtown-analytics/dbt/pull/3474))
 - Better interaction between `dbt init` and adapters. Avoid raising errors while initializing a project ([#2814](https://github.com/fishtown-analytics/dbt/pull/2814), [#3483](https://github.com/fishtown-analytics/dbt/pull/3483))
+- Update project loading event data to include experimental parser information. ([#3438](https://github.com/fishtown-analytics/dbt/issues/3438), [#3495](https://github.com/fishtown-analytics/dbt/pull/3495))
 
 Contributors:
 - [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))

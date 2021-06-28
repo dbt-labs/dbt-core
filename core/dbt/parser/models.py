@@ -2,7 +2,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.parsed import ParsedModelNode
 import dbt.flags as flags
 from dbt.node_types import NodeType
-from dbt.parser.base import IntermediateNode, SimpleSQLParser
+from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
 from dbt.tree_sitter_jinja.extractor import extract_from_source
 
@@ -22,8 +22,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         return block.path.relative_path
 
     def render_update(
-        self, node: IntermediateNode, config: ContextConfig
+        self, node: ParsedModelNode, config: ContextConfig
     ) -> None:
+        self.manifest._parsing_info.static_analysis_path_count += 1
 
         # normal dbt run
         if not flags.USE_EXPERIMENTAL_PARSER:
@@ -62,6 +63,8 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                     node.sources.append([sourcev[0], sourcev[1]])
                 for configv in res['configs']:
                     node.config[configv[0]] = configv[1]
+
+                self.manifest._parsing_info.static_analysis_parsed_path_count += 1
 
             else:
                 super().render_update(node, config)

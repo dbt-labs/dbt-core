@@ -31,7 +31,7 @@ from dbt.parser.read_files import read_files, load_source_file
 from dbt.parser.partial import PartialParsing
 from dbt.contracts.graph.compiled import ManifestNode
 from dbt.contracts.graph.manifest import (
-    Manifest, Disabled, MacroManifest, ManifestStateCheck
+    Manifest, Disabled, MacroManifest, ManifestStateCheck, ParsingInfo
 )
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
@@ -71,7 +71,7 @@ DEFAULT_PARTIAL_PARSE = False
 class ParserInfo(dbtClassMixin):
     parser: str
     elapsed: float
-    path_count: int = 0
+    parsed_path_count: int = 0
 
 
 # Part of saved performance info
@@ -80,14 +80,18 @@ class ProjectLoaderInfo(dbtClassMixin):
     project_name: str
     elapsed: float
     parsers: List[ParserInfo] = field(default_factory=list)
-    path_count: int = 0
+    parsed_path_count: int = 0
 
 
 # Part of saved performance info
 @dataclass
 class ManifestLoaderInfo(dbtClassMixin, Writable):
     path_count: int = 0
+    parsed_path_count: int = 0
+    static_analysis_path_count: int = 0
+    static_analysis_parsed_path_count: int = 0
     is_partial_parse_enabled: Optional[bool] = None
+    is_static_analysis_enabled: Optional[bool] = None
     read_files_elapsed: Optional[float] = None
     load_macros_elapsed: Optional[float] = None
     parse_project_elapsed: Optional[float] = None
@@ -134,8 +138,6 @@ class ManifestLoader:
         # We need to know if we're actually partially parsing. It could
         # have been enabled, but not happening because of some issue.
         self.partially_parsing = False
-
-        self._perf_info = self.build_perf_info()
 
         # This is a saved manifest from a previous run that's used for partial parsing
         self.saved_manifest: Optional[Manifest] = self.read_manifest_for_partial_parse()
@@ -184,7 +186,6 @@ class ManifestLoader:
 
     # This is where the main action happens
     def load(self):
-
         # Read files creates a dictionary of projects to a dictionary
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
@@ -196,6 +197,7 @@ class ManifestLoader:
         project_parser_files = {}
         for project in self.all_projects.values():
             read_files(project, self.manifest.files, project_parser_files)
+        self._perf_info.path_count = len(self.manifest.files)
         self._perf_info.read_files_elapsed = (time.perf_counter() - start_read_files)
 
         skip_parsing = False
@@ -208,13 +210,15 @@ class ManifestLoader:
                 # files are different, we need to create a new set of
                 # project_parser_files.
                 project_parser_files = partial_parsing.get_parsing_files()
-                self.manifest = self.saved_manifest
                 self.partially_parsing = True
+
+            self.manifest = self.saved_manifest
+
+        if self.manifest._parsing_info is None:
+            self.manifest._parsing_info = ParsingInfo()
 
         if skip_parsing:
             logger.info("Partial parsing enabled, no changes found, skipping parsing")
-            self.manifest = self.saved_manifest
-
         else:
             # Load Macros
             # We need to parse the macros first, so they're resolvable when
@@ -230,6 +234,8 @@ class ManifestLoader:
                 for file_id in parser_files['MacroParser']:
                     block = FileBlock(self.manifest.files[file_id])
                     parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
             # Look at changed macros and update the macro.depends_on.macros
             self.macro_depends_on()
             self._perf_info.load_macros_elapsed = (time.perf_counter() - start_load_macros)
@@ -301,8 +307,16 @@ class ManifestLoader:
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name)
             self.process_docs(self.root_project)
+
+            # update tracking data
             self._perf_info.process_manifest_elapsed = (
                 time.perf_counter() - start_process
+            )
+            self._perf_info.static_analysis_parsed_path_count = (
+                self.manifest._parsing_info.static_analysis_parsed_path_count
+            )
+            self._perf_info.static_analysis_path_count = (
+                self.manifest._parsing_info.static_analysis_path_count
             )
 
             # write out the fully parsed manifest
@@ -321,7 +335,7 @@ class ManifestLoader:
 
         project_loader_info = self._perf_info._project_index[project.project_name]
         start_timer = time.perf_counter()
-        total_path_count = 0
+        total_parsed_path_count = 0
 
         # Loop through parsers with loaded files.
         for parser_cls in parser_types:
@@ -331,7 +345,7 @@ class ManifestLoader:
                 continue
 
             # Initialize timing info
-            parser_path_count = 0
+            project_parsed_path_count = 0
             parser_start_timer = time.perf_counter()
 
             # Parse the project files for this parser
@@ -347,15 +361,15 @@ class ManifestLoader:
                     parser.parse_file(block, dct=dct)
                 else:
                     parser.parse_file(block)
-                parser_path_count = parser_path_count + 1
+                project_parsed_path_count = project_parsed_path_count + 1
 
             # Save timing info
             project_loader_info.parsers.append(ParserInfo(
                 parser=parser.resource_type,
-                path_count=parser_path_count,
+                parsed_path_count=project_parsed_path_count,
                 elapsed=time.perf_counter() - parser_start_timer
             ))
-            total_path_count = total_path_count + parser_path_count
+            total_parsed_path_count = total_parsed_path_count + project_parsed_path_count
 
         # HookParser doesn't run from loaded files, just dbt_project.yml,
         # so do separately
@@ -372,10 +386,12 @@ class ManifestLoader:
 
         # Store the performance info
         elapsed = time.perf_counter() - start_timer
-        project_loader_info.path_count = project_loader_info.path_count + total_path_count
+        project_loader_info.parsed_path_count = (
+            project_loader_info.parsed_path_count + total_parsed_path_count
+        )
         project_loader_info.elapsed = project_loader_info.elapsed + elapsed
-        self._perf_info.path_count = (
-            self._perf_info.path_count + total_path_count
+        self._perf_info.parsed_path_count = (
+            self._perf_info.parsed_path_count + total_parsed_path_count
         )
 
     # Loop through macros in the manifest and statically parse
@@ -501,12 +517,12 @@ class ManifestLoader:
 
     def build_perf_info(self):
         mli = ManifestLoaderInfo(
-            is_partial_parse_enabled=self._partial_parse_enabled()
+            is_partial_parse_enabled=self._partial_parse_enabled(),
+            is_static_analysis_enabled=flags.USE_EXPERIMENTAL_PARSER
         )
         for project in self.all_projects.values():
             project_info = ProjectLoaderInfo(
                 project_name=project.project_name,
-                path_count=0,
                 elapsed=0,
             )
             mli.projects.append(project_info)
@@ -603,6 +619,7 @@ class ManifestLoader:
             "invocation_id": invocation_id,
             "project_id": self.root_project.hashed_name(),
             "path_count": self._perf_info.path_count,
+            "parsed_path_count": self._perf_info.parsed_path_count,
             "read_files_elapsed": self._perf_info.read_files_elapsed,
             "load_macros_elapsed": self._perf_info.load_macros_elapsed,
             "parse_project_elapsed": self._perf_info.parse_project_elapsed,
@@ -614,6 +631,9 @@ class ManifestLoader:
             "is_partial_parse_enabled": (
                 self._perf_info.is_partial_parse_enabled
             ),
+            "is_static_analysis_enabled": self._perf_info.is_static_analysis_enabled,
+            "static_analysis_path_count": self._perf_info.static_analysis_path_count,
+            "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,
         })
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
