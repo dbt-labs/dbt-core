@@ -40,9 +40,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
 
-    def render_update(
-        self, node: ParsedModelNode, config: ContextConfig
-    ) -> None:
+    def render_update(self, node: ParsedModelNode, config: ContextConfig) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
         if not flags.STATIC_PARSER:
