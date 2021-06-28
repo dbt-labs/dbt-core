@@ -808,9 +808,7 @@ class ManifestLoader:
                 "static_analysis_path_count": self._perf_info.static_analysis_path_count,
                 "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,  # noqa: E501
             }
-            "static_analysis_path_count": self._perf_info.static_analysis_path_count,
-            "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,
-        })
+        )
 
     # Takes references in 'refs' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
