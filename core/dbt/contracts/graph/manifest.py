@@ -603,7 +603,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
-        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
     _lock: Lock = field(
         default_factory=flags.MP_CONTEXT.Lock,

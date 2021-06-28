@@ -45,7 +45,11 @@ from dbt.parser.read_files import read_files, load_source_file
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.compiled import ManifestNode
 from dbt.contracts.graph.manifest import (
-    Manifest, Disabled, MacroManifest, ManifestStateCheck, ParsingInfo
+    Manifest,
+    Disabled,
+    MacroManifest,
+    ManifestStateCheck,
+    ParsingInfo,
 )
 from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
@@ -459,7 +463,7 @@ class ManifestLoader:
             # Save timing info
             project_loader_info.parsers.append(ParserInfo(
                 ParserInfo(
-                parsed_path_count=project_parsed_path_count,
+                    parser=parser.resource_type,
                     parsed_path_count=project_parsed_path_count,
                     elapsed=time.perf_counter() - parser_start_timer,
                 )
@@ -780,7 +784,7 @@ class ManifestLoader:
             {
                 "invocation_id": invocation_id,
                 "project_id": self.root_project.hashed_name(),
-            "parsed_path_count": self._perf_info.parsed_path_count,
+                "path_count": self._perf_info.path_count,
                 "parsed_path_count": self._perf_info.parsed_path_count,
                 "read_files_elapsed": self._perf_info.read_files_elapsed,
                 "load_macros_elapsed": self._perf_info.load_macros_elapsed,
@@ -792,7 +796,7 @@ class ManifestLoader:
                 "is_static_analysis_enabled": self._perf_info.is_static_analysis_enabled,
                 "static_analysis_path_count": self._perf_info.static_analysis_path_count,
                 "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,  # noqa: E501
-            "is_static_analysis_enabled": self._perf_info.is_static_analysis_enabled,
+            }
             "static_analysis_path_count": self._perf_info.static_analysis_path_count,
             "static_analysis_parsed_path_count": self._perf_info.static_analysis_parsed_path_count,
         })
