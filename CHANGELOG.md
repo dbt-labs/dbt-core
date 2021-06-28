@@ -9,6 +9,7 @@
 - Dispatch the core SQL statement of the new test materialization, to benefit adapter maintainers ([#3465](https://github.com/fishtown-analytics/dbt/pull/3465), [#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
 - Minimal validation of yaml dictionaries prior to partial parsing ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246), [#3460](https://github.com/fishtown-analytics/dbt/pull/3460))
 - Add partial parsing tests and improve partial parsing handling of macros ([#3449](https://github.com/fishtown-analytics/dbt/issues/3449), [#3505](https://github.com/fishtown-analytics/dbt/pull/3505))
+- Update project loading event data to include experimental parser information. ([#3438](https://github.com/fishtown-analytics/dbt/issues/3438), [#3495](https://github.com/fishtown-analytics/dbt/pull/3495))
 
 Contributors:
 - [@swanderz](https://github.com/swanderz) ([#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
