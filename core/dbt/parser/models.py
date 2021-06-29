@@ -4,7 +4,7 @@ import dbt.flags as flags
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
-from dbt.tree_sitter_jinja.extractor import extract_from_source
+from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -32,15 +32,14 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # if the --use-experimental-parser flag was set
         else:
+            try:
+                # run dbt jinja extractor (powered by tree-sitter + rust)
+                # throws an exception if it can't parse the source
+                res = py_extract_from_source(node.raw_sql)
 
-            # run dbt-jinja extractor (powered by tree-sitter)
-            res = extract_from_source(node.raw_sql)
-
-            # if it doesn't need python jinja, fit the refs, sources, and configs
-            # into the node. Down the line the rest of the node will be updated with
-            # this information. (e.g. depends_on etc.)
-            if not res['python_jinja']:
-
+                # since it doesn't need python jinja, fit the refs, sources, and configs
+                # into the node. Down the line the rest of the node will be updated with
+                # this information. (e.g. depends_on etc.)
                 config_calls = []
                 for c in res['configs']:
                     config_calls.append({c[0]: c[1]})
@@ -66,5 +65,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
                 self.manifest._parsing_info.static_analysis_parsed_path_count += 1
 
-            else:
+            # exception was thrown by dbt jinja extractor meaning it can't
+            # handle this source. fall back to python jinja rendering.
+            except ExtractionError:
                 super().render_update(node, config)
