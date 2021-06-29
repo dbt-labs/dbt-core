@@ -23,6 +23,10 @@ Contributors:
 
 - Handle quoted values within test configs, such as `where` ([#3458](https://github.com/fishtown-analytics/dbt/issues/3458), [#3459](https://github.com/fishtown-analytics/dbt/pull/3459))
 
+### Docs
+
+- Display `tags` on exposures ([docs#194](https://github.com/fishtown-analytics/dbt-docs/issues/194), [docs#195](https://github.com/fishtown-analytics/dbt-docs/issues/195))
+
 ### Under the hood
 
 - Swap experimental parser implementation to use Rust [#3497](https://github.com/fishtown-analytics/dbt/pull/3497)
@@ -32,6 +36,7 @@ Contributors:
 
 Contributors:
 - [@swanderz](https://github.com/swanderz) ([#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
+- [@stkbailey](https://github.com/stkbailey) ([docs#195](https://github.com/fishtown-analytics/dbt-docs/issues/195))
 
 ## dbt 0.20.0rc1 (June 04, 2021)
 
