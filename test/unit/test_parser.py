@@ -335,7 +335,7 @@ class SchemaParserSourceTest(SchemaParserTest):
 
         file_id = 'snowplow://' + normalize('models/test_one.yml')
         self.assertIn(file_id, self.parser.manifest.files)
-        self.assertEqual(self.parser.manifest.files[file_id].tests, [])
+        self.assertEqual(self.parser.manifest.files[file_id].tests, {})
         self.assertEqual(self.parser.manifest.files[file_id].sources,
                          ['source.snowplow.my_source.my_table'])
         self.assertEqual(self.parser.manifest.files[file_id].source_patches, [])
@@ -465,8 +465,8 @@ class SchemaParserModelsTest(SchemaParserTest):
 
         file_id = 'snowplow://' + normalize('models/test_one.yml')
         self.assertIn(file_id, self.parser.manifest.files)
-        self.assertEqual(sorted(self.parser.manifest.files[file_id].tests),
-                         [t.unique_id for t in tests])
+        schema_file_test_ids = self.parser.manifest.files[file_id].get_all_test_ids()
+        self.assertEqual(sorted(schema_file_test_ids), [t.unique_id for t in tests])
         self.assertEqual(self.parser.manifest.files[file_id].node_patches, ['model.root.my_model'])
 
 
