@@ -2,17 +2,14 @@
   <img src="https://raw.githubusercontent.com/fishtown-analytics/dbt/6c6649f9129d5d108aa3b0526f634cd8f3a9d1ed/etc/dbt-logo-full.svg" alt="dbt logo" width="500"/>
 </p>
 <p align="center">
-  <a href="https://codeclimate.com/github/fishtown-analytics/dbt">
-    <img src="https://codeclimate.com/github/fishtown-analytics/dbt/badges/gpa.svg" alt="Code Climate"/>
+  <a href="https://github.com/dbt-labs/dbt/actions/workflows/tests.yml">
+    <img src="https://github.com/dbt-labs/dbt/actions/workflows/tests.yml/badge.svg" alt="GitHub Actions"/>
   </a>
-  <a href="https://circleci.com/gh/fishtown-analytics/dbt/tree/master">
-    <img src="https://circleci.com/gh/fishtown-analytics/dbt/tree/master.svg?style=svg"  alt="CircleCI" />
+  <a href="https://circleci.com/gh/dbt-labs/dbt/tree/master">
+    <img src="https://circleci.com/gh/dbt-labs/dbt/tree/master.svg?style=svg"  alt="CircleCI" />
   </a>
-  <a href="https://ci.appveyor.com/project/DrewBanin/dbt/branch/development">
-    <img src="https://ci.appveyor.com/api/projects/status/v01rwd3q91jnwp9m/branch/development?svg=true" alt="AppVeyor" />
-  </a>
-  <a href="https://community.getdbt.com">
-    <img src="https://community.getdbt.com/badge.svg" alt="Slack" />
+  <a href="https://dev.azure.com/fishtown-analytics/dbt/_build">
+    <img src="https://dev.azure.com/fishtown-analytics/dbt/_apis/build/status/fishtown-analytics.dbt?branchName=develop" alt="Azure Pipelines" />
   </a>
 </p>
 
