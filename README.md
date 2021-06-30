@@ -33,11 +33,11 @@ These select statements, or "models", form a dbt project. Models frequently buil
 ## Join the dbt Community
 
 - Be part of the conversation in the [dbt Community Slack](http://community.getdbt.com/)
-- Read more on the [dbt Community Discourse](https://discourse.getdbt.com).
+- Read more on the [dbt Community Discourse](https://discourse.getdbt.com)
 
 ## Reporting bugs and contributing code
 
-- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt/issues/new).
+- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt/issues/new)
 - Want to help us build dbt? Check out the [Contributing Guide](https://github.com/dbt-labs/dbt/blob/HEAD/CONTRIBUTING.md)
 
 ## Code of Conduct
