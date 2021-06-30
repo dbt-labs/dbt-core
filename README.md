@@ -5,8 +5,8 @@
   <a href="https://github.com/dbt-labs/dbt/actions/workflows/tests.yml">
     <img src="https://github.com/dbt-labs/dbt/actions/workflows/tests.yml/badge.svg" alt="GitHub Actions"/>
   </a>
-  <a href="https://circleci.com/gh/dbt-labs/dbt/tree/master">
-    <img src="https://circleci.com/gh/dbt-labs/dbt/tree/master.svg?style=svg"  alt="CircleCI" />
+  <a href="https://circleci.com/gh/dbt-labs/dbt/tree/develop">
+    <img src="https://circleci.com/gh/dbt-labs/dbt/tree/develop.svg?style=svg"  alt="CircleCI" />
   </a>
   <a href="https://dev.azure.com/fishtown-analytics/dbt/_build">
     <img src="https://dev.azure.com/fishtown-analytics/dbt/_apis/build/status/fishtown-analytics.dbt?branchName=develop" alt="Azure Pipelines" />
