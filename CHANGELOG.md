@@ -1725,7 +1725,7 @@ Full installation instructions for macOS, Windows, and Linux can be found [here]
 #### macOS Installation Instructions
 ```bash
 brew update
-brew tap fishtown-analytics/dbt
+brew tap dbt-labs/dbt
 brew install dbt
 ```
 
