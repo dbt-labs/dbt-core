@@ -97,7 +97,7 @@ class BaseContextConfigGenerator(Generic[T]):
             result = {}
             for key, value in level_config.items():
                 if key.startswith('+'):
-                    result[key[1:]] = deepcopy(value)
+                    result[key[1:].strip()] = deepcopy(value)
                 elif not isinstance(value, dict):
                     result[key] = deepcopy(value)
 
