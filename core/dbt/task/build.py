@@ -11,8 +11,7 @@ from dbt.node_types import NodeType
 
 
 class BuildTask(CompileTask):
-    """
-    The Build task processes all assets of a given process and attempts to 'build'
+    """The Build task processes all assets of a given process and attempts to 'build'
     them in an opinionated fashion.  Every resource type outlined in RUNNER_MAP
     will be processed by the mapped runner class.
 
