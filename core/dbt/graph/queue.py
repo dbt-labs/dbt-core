@@ -31,6 +31,8 @@ class GraphQueue:
         self.in_progress: Set[UniqueId] = set()
         # things that are in the queue
         self.queued: Set[UniqueId] = set()
+        # things that have completed processing
+        self.done: Set[UniqueId] = set()
         # this lock controls most things
         self.lock = threading.Lock()
         # store the 'score' of each node as a number. Lower is higher priority.
@@ -161,10 +163,54 @@ class GraphQueue:
         """Find any nodes in the graph that need to be added to the internal
         queue and add them.
 
-        Callers must hold the lock.
+        N.B. Nodes will not be added to the inner queue until the following
+        conditions are met:
+
+         - `node` is not a test
+         - `node` has a parent
+         - `node` has siblings that are tests
+         - those tests have not completed running
+
+        This ensure that if the tests fail, GraphRunnableTask._handle_result()
+        will be able to mark any downstream nodes from the failing test for skipping.
+        It will ensure this _without_ blocking progress on other parts of the graph
+        that don't have pending tests
+
+        Without this logic the nodes that need to be skipped may already be added to
+        the queue/already running.  No bueno.
         """
         for node, in_degree in self.graph.in_degree():
             if not self._already_known(node) and in_degree == 0:
+                full_node = self.manifest.expect(node)
+                parents = full_node.depends_on_nodes
+
+                siblings: List[str] = []
+                for parent in parents:
+                    siblings = [
+                        *siblings,
+                        *self.manifest.child_map[
+                            self.manifest.expect(parent).unique_id
+                        ]
+                    ]
+
+                test_siblings = set()
+                for sibling in siblings:
+                    if self.manifest.expect(sibling).resource_type == NodeType.Test:
+                        test_siblings.add(sibling)
+
+                tests_complete = set()
+                for done in self.done:
+                    if self.manifest.expect(done).resource_type == NodeType.Test:
+                        tests_complete.add(done)
+
+                if (
+                    full_node.resource_type != NodeType.Test and  # is not a test
+                    full_node.depends_on.nodes != [] and  # has a parent
+                    test_siblings != {} and  # has siblings
+                    test_siblings.intersection(tests_complete) != test_siblings  # tests != done
+                ):
+                    continue
+
                 self.inner.put((self._scores[node], node))
                 self.queued.add(node)
 
@@ -177,6 +223,7 @@ class GraphQueue:
         """
         with self.lock:
             self.in_progress.remove(node_id)
+            self.done.add(node_id)
             self.graph.remove_node(node_id)
             self._find_new_additions()
             self.inner.task_done()
