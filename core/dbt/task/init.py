@@ -72,7 +72,8 @@ class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
         fire_event(StarterProjectPath(dir=starter_project_directory))
         shutil.copytree(
-                        ignore=shutil.ignore_patterns(*IGNORE_FILES))
+            starter_project_directory, project_name, ignore=shutil.ignore_patterns(*IGNORE_FILES)
+        )
 
     def create_profiles_dir(self, profiles_dir: str) -> bool:
         """Create the user's profiles directory if it doesn't already exist."""
