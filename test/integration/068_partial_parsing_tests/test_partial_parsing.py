@@ -90,12 +90,14 @@ class TestModels(DBTIntegrationTest):
         self.assertNotIn(unique_test_id, manifest.nodes.keys())
         self.assertEqual(len(results), 1)
 
-        # go back to previous version of schema file, removing patch and test for model three
+        # go back to previous version of schema file, removing patch, test, and model for model three
         shutil.copyfile('extra-files/models-schema1.yml', 'models-a/schema.yml')
+        os.remove(normalize('models-a/model_three.sql'))
         results = self.run_dbt(["--partial-parse", "run"])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 2)
 
         # remove schema file, still have 3 models
+        shutil.copyfile('extra-files/model_three.sql', 'models-a/model_three.sql')
         os.remove(normalize('models-a/schema.yml'))
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
