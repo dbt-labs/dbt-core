@@ -1,2 +1,2 @@
 select
-   count(*) from ref(customers) where id > 100
+   * from {{ ref('customers') }} where customer_id > 100

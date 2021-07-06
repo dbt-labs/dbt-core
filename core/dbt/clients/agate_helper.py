@@ -35,7 +35,11 @@ class ISODateTime(agate.data_types.DateTime):
         )
 
 
-def build_type_tester(text_columns: Iterable[str]) -> agate.TypeTester:
+def build_type_tester(
+    text_columns: Iterable[str],
+    string_null_values: Optional[Iterable[str]] = ('null', '')
+) -> agate.TypeTester:
+
     types = [
         agate.data_types.Number(null_values=('null', '')),
         agate.data_types.Date(null_values=('null', ''),
@@ -46,10 +50,10 @@ def build_type_tester(text_columns: Iterable[str]) -> agate.TypeTester:
         agate.data_types.Boolean(true_values=('true',),
                                  false_values=('false',),
                                  null_values=('null', '')),
-        agate.data_types.Text(null_values=('null', ''))
+        agate.data_types.Text(null_values=string_null_values)
     ]
     force = {
-        k: agate.data_types.Text(null_values=('null', ''))
+        k: agate.data_types.Text(null_values=string_null_values)
         for k in text_columns
     }
     return agate.TypeTester(force=force, types=types)
@@ -66,7 +70,13 @@ def table_from_rows(
     if text_only_columns is None:
         column_types = DEFAULT_TYPE_TESTER
     else:
-        column_types = build_type_tester(text_only_columns)
+        # If text_only_columns are present, prevent coercing empty string or
+        # literal 'null' strings to a None representation.
+        column_types = build_type_tester(
+            text_only_columns,
+            string_null_values=()
+        )
+
     return agate.Table(rows, column_names, column_types=column_types)
 
 
@@ -86,19 +96,34 @@ def table_from_data(data, column_names: Iterable[str]) -> agate.Table:
 
 
 def table_from_data_flat(data, column_names: Iterable[str]) -> agate.Table:
-    "Convert list of dictionaries into an Agate table"
+    """
+    Convert a list of dictionaries into an Agate table. This method does not
+    coerce string values into more specific types (eg. '005' will not be
+    coerced to '5'). Additionally, this method does not coerce values to
+    None (eg. '' or 'null' will retain their string literal representations).
+    """
 
     rows = []
+    text_only_columns = set()
     for _row in data:
         row = []
-        for value in list(_row.values()):
+        for col_name in column_names:
+            value = _row[col_name]
             if isinstance(value, (dict, list, tuple)):
-                row.append(json.dumps(value, cls=dbt.utils.JSONEncoder))
-            else:
-                row.append(value)
+                # Represent container types as json strings
+                value = json.dumps(value, cls=dbt.utils.JSONEncoder)
+                text_only_columns.add(col_name)
+            elif isinstance(value, str):
+                text_only_columns.add(col_name)
+            row.append(value)
+
         rows.append(row)
 
-    return table_from_rows(rows=rows, column_names=column_names)
+    return table_from_rows(
+        rows=rows,
+        column_names=column_names,
+        text_only_columns=text_only_columns
+    )
 
 
 def empty_table():
