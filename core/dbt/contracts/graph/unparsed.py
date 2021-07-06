@@ -130,7 +130,7 @@ class HasYamlMetadata(dbtClassMixin):
 
 
 @dataclass
-class HasConfig():
+class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
 
 

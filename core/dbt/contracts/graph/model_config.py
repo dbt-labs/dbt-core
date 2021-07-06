@@ -271,7 +271,7 @@ class BaseConfig(
     # 'meta' moved here from node
     mergebehavior = {
         "append": ['pre-hook', 'pre_hook', 'post-hook', 'post_hook', 'tags'],
-        "update": ['quoting', 'column_types', 'meta'],
+        "update": ["quoting", "column_types", "meta"],
     }
 
     @classmethod
@@ -375,9 +375,7 @@ class NodeAndTestConfig(BaseConfig):
     )
     tags: Union[List[str], str] = field(
         default_factory=list_str,
-        metadata=metas(ShowBehavior.Hide,
-                       MergeBehavior.Append,
-                       CompareBehavior.Exclude),
+        metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
     )
     meta: Dict[str, Any] = field(
         default_factory=dict,

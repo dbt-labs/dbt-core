@@ -250,8 +250,8 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
         return self.to_dict()
 
     def __post_serialize__(self, dct):
-        if 'config_call_dict' in dct:
-            del dct['config_call_dict']
+        if "config_call_dict" in dct:
+            del dct["config_call_dict"]
         if '_event_status' in dct:
             del dct['_event_status']
         return dct
@@ -287,15 +287,15 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return cls.from_dict(dct)
 
     def _persist_column_docs(self) -> bool:
-        if hasattr(self.config, 'persist_docs'):
+        if hasattr(self.config, "persist_docs"):
             assert isinstance(self.config, NodeConfig)
-            return bool(self.config.persist_docs.get('columns'))
+            return bool(self.config.persist_docs.get("columns"))
         return False
 
     def _persist_relation_docs(self) -> bool:
-        if hasattr(self.config, 'persist_docs'):
+        if hasattr(self.config, "persist_docs"):
             assert isinstance(self.config, NodeConfig)
-            return bool(self.config.persist_docs.get('relation'))
+            return bool(self.config.persist_docs.get("relation"))
         return False
 
     def same_body(self: T, other: T) -> bool:

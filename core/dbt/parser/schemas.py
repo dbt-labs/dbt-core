@@ -51,7 +51,7 @@ from dbt.exceptions import (
     warn_invalid_patch, validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException,
     JSONValidationException,
-    raise_duplicate_macro_patch_name, InternalException,
+    raise_invalid_schema_yml_version,
     raise_duplicate_source_patch_name, warn_or_error,
 )
 from dbt.node_types import NodeType
@@ -811,7 +811,7 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 # target_type: UnparsedNodeUpdate, UnparsedAnalysisUpdate,
                 # or UnparsedMacroUpdate
                 self._target_type().validate(data)
-                if self.key != 'macros':
+                if self.key != "macros":
                     # macros don't have the 'config' key support yet
                     self.normalize_meta_attribute(data, path)
                 node = self._target_type().from_dict(data)
@@ -824,17 +824,18 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
     # We want to raise an error if 'meta' is in two places, and move 'meta'
     # from toplevel to config if necessary
     def normalize_meta_attribute(self, data, path):
-        if 'meta' in data:
-            if 'config' in data and 'meta' in data['config']:
+        if "meta" in data:
+            if "config" in data and "meta" in data["config"]:
                 raise ParsingException(
                     f"""
                     In {path}: found meta dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
-                """.strip())
+                """.strip()
+                )
             else:
-                if 'config' not in data:
-                    data['config'] = {}
-                data['config']['meta'] = data.pop('meta')
+                if "config" not in data:
+                    data["config"] = {}
+                data["config"]["meta"] = data.pop("meta")
 
     def patch_node_config(self, node, patch):
         # Get the ContextConfig that's used in calculating the config
@@ -873,7 +874,7 @@ class NodePatchParser(
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
-        if patch.yaml_key in ['models', 'seeds', 'snapshots']:
+        if patch.yaml_key in ["models", "seeds", "snapshots"]:
             unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
             if unique_id:
                 resource_type = NodeType(unique_id.split('.')[0])
@@ -881,12 +882,12 @@ class NodePatchParser(
                     warn_invalid_patch(patch, resource_type)
                     return
 
-        elif patch.yaml_key == 'analyses':
+        elif patch.yaml_key == "analyses":
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
         else:
             raise InternalException(
-                f'Unexpected yaml_key {patch.yaml_key} for patch in '
-                f'file {source_file.path.original_file_path}'
+                f"Unexpected yaml_key {patch.yaml_key} for patch in "
+                f"file {source_file.path.original_file_path}"
             )
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
@@ -910,7 +911,7 @@ class NodePatchParser(
         node = self.manifest.nodes.get(unique_id)
         if node:
             if node.patch_path:
-                package_name, existing_file_path = node.patch_path.split('://')
+                package_name, existing_file_path = node.patch_path.split("://")
                 raise_duplicate_patch_name(patch, existing_file_path)
             source_file.append_patch(patch.yaml_key, unique_id)
             # If this patch has config changes, re-calculate the node config
@@ -960,7 +961,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file = self.yaml.file
         # macros are fully namespaced
-        unique_id = f'macro.{patch.package_name}.{patch.name}'
+        unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
             msg = f'Found patch for macro "{patch.name}" ' \
@@ -968,7 +969,7 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             warn_or_error(msg, log_fmt=warning_tag('{}'))
             return
         if macro.patch_path:
-            package_name, existing_file_path = macro.patch_path.split('://')
+            package_name, existing_file_path = macro.patch_path.split("://")
             raise_duplicate_macro_patch_name(patch, existing_file_path)
         source_file.macro_patches[patch.name] = unique_id
         macro.patch(patch)

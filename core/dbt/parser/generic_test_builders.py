@@ -192,7 +192,18 @@ class TestBuilder(Generic[Testable]):
     # args in the test entry representing test configs
     CONFIG_ARGS = (
         'severity', 'tags', 'enabled', 'where', 'limit', 'warn_if', 'error_if',
-        'fail_calc', 'store_failures', 'meta', 'database', 'schema', 'alias',
+        "tags",
+        "enabled",
+        "where",
+        "limit",
+        "warn_if",
+        "error_if",
+        "fail_calc",
+        "store_failures",
+        "meta",
+        "database",
+        "schema",
+        "alias",
     )
 
     def __init__(
@@ -235,19 +246,19 @@ class TestBuilder(Generic[Testable]):
         for key in self.CONFIG_ARGS:
             value = self.args.pop(key, None)
             # 'modifier' config could be either top level arg or in config
-            if value and 'config' in self.args and key in self.args['config']:
+            if value and "config" in self.args and key in self.args["config"]:
                 raise_compiler_error(
-                    'Test cannot have the same key at the top-level and in config'
+                    "Test cannot have the same key at the top-level and in config"
                 )
-            if not value and 'config' in self.args:
-                value = self.args['config'].pop(key, None)
+            if not value and "config" in self.args:
+                value = self.args["config"].pop(key, None)
             if isinstance(value, str):
                 value = get_rendered(value, render_ctx, native=True)
             if value is not None:
                 self.config[key] = value
 
-        if 'config' in self.args:
-            del self.args['config']
+        if "config" in self.args:
+            del self.args["config"]
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -257,8 +268,8 @@ class TestBuilder(Generic[Testable]):
         self.fqn_name: str = fqn_name
 
         # use hashed name as alias if too long
-        if compiled_name != fqn_name and 'alias' not in self.config:
-            self.config['alias'] = compiled_name
+        if compiled_name != fqn_name and "alias" not in self.config:
+            self.config["alias"] = compiled_name
 
     def _bad_type(self) -> TypeError:
         return TypeError('invalid target type "{}"'.format(type(self.target)))
@@ -299,15 +310,15 @@ class TestBuilder(Generic[Testable]):
 
     @property
     def enabled(self) -> Optional[bool]:
-        return self.config.get('enabled')
+        return self.config.get("enabled")
 
     @property
     def alias(self) -> Optional[str]:
-        return self.config.get('alias')
+        return self.config.get("alias")
 
     @property
     def severity(self) -> Optional[str]:
-        sev = self.config.get('severity')
+        sev = self.config.get("severity")
         if sev:
             return sev.upper()
         else:
@@ -315,70 +326,70 @@ class TestBuilder(Generic[Testable]):
 
     @property
     def store_failures(self) -> Optional[bool]:
-        return self.config.get('store_failures')
+        return self.config.get("store_failures")
 
     @property
     def where(self) -> Optional[str]:
-        return self.config.get('where')
+        return self.config.get("where")
 
     @property
     def limit(self) -> Optional[int]:
-        return self.config.get('limit')
+        return self.config.get("limit")
 
     @property
     def warn_if(self) -> Optional[str]:
-        return self.config.get('warn_if')
+        return self.config.get("warn_if")
 
     @property
     def error_if(self) -> Optional[str]:
-        return self.config.get('error_if')
+        return self.config.get("error_if")
 
     @property
     def fail_calc(self) -> Optional[str]:
-        return self.config.get('fail_calc')
+        return self.config.get("fail_calc")
 
     @property
     def meta(self) -> Optional[dict]:
-        return self.config.get('meta')
+        return self.config.get("meta")
 
     @property
     def database(self) -> Optional[str]:
-        return self.config.get('database')
+        return self.config.get("database")
 
     @property
     def schema(self) -> Optional[str]:
-        return self.config.get('schema')
+        return self.config.get("schema")
 
     def get_static_config(self):
         config = {}
         if self.alias is not None:
-            config['alias'] = self.alias
+            config["alias"] = self.alias
         if self.severity is not None:
-            config['severity'] = self.severity
+            config["severity"] = self.severity
         if self.enabled is not None:
-            config['enabled'] = self.enabled
+            config["enabled"] = self.enabled
         if self.where is not None:
-            config['where'] = self.where
+            config["where"] = self.where
         if self.limit is not None:
-            config['limit'] = self.limit
+            config["limit"] = self.limit
         if self.warn_if is not None:
-            config['warn_if'] = self.warn_if
+            config["warn_if"] = self.warn_if
         if self.error_if is not None:
             config['error_if'] = self.error_if
         if self.fail_calc is not None:
-            config['fail_calc'] = self.fail_calc
+            config["fail_calc"] = self.fail_calc
         if self.store_failures is not None:
-            config['store_failures'] = self.store_failures
+            config["store_failures"] = self.store_failures
         if self.meta is not None:
-            config['meta'] = self.meta
+            config["meta"] = self.meta
         if self.database is not None:
-            config['database'] = self.database
+            config["database"] = self.database
         if self.schema is not None:
-            config['schema'] = self.schema
+            config["schema"] = self.schema
         return config
 
     def tags(self) -> List[str]:
-        tags = self.config.get('tags', [])
+        tags = self.config.get("tags", [])
         if isinstance(tags, str):
             tags = [tags]
         if not isinstance(tags, list):
@@ -417,7 +428,7 @@ class TestBuilder(Generic[Testable]):
                 else str(value)
             )
             for key, value
-            in self.config.items()
+                    else str(value)
         ])
         if configs:
             return f"{{{{ config({configs}) }}}}"

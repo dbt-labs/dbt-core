@@ -123,7 +123,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: Dict[str, Any] = None
+        patch_config_dict: Dict[str, Any] = None,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
 
@@ -192,7 +192,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: dict = None
+        patch_config_dict: dict = None,
     ) -> Dict[str, Any]:
         config = self.calculate_node_config(
             config_call_dict=config_call_dict,
@@ -200,7 +200,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             resource_type=resource_type,
             project_name=project_name,
             base=base,
-            patch_config_dict=patch_config_dict
+            patch_config_dict=patch_config_dict,
         )
         finalized = config.finalize_and_validate()
         return finalized.to_dict(omit_none=True)
@@ -217,7 +217,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
-        patch_config_dict: dict = None
+        patch_config_dict: dict = None,
     ) -> Dict[str, Any]:
         return self.calculate_node_config(
             config_call_dict=config_call_dict,
@@ -225,7 +225,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
             resource_type=resource_type,
             project_name=project_name,
             base=base,
-            patch_config_dict=patch_config_dict
+            patch_config_dict=patch_config_dict,
         )
 
     def initial_result(self, resource_type: NodeType, base: bool) -> Dict[str, Any]:
@@ -295,5 +295,5 @@ class ContextConfig:
             resource_type=self._resource_type,
             project_name=self._project_name,
             base=base,
-            patch_config_dict=patch_config_dict
+            patch_config_dict=patch_config_dict,
         )

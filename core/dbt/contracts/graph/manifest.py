@@ -14,7 +14,7 @@ from dbt.contracts.graph.compiled import (
     CompileResultNode, ManifestNode, NonSourceCompiledNode, GraphMemberNode
 )
 from dbt.contracts.graph.parsed import (
-    ParsedMacro, ParsedDocumentation,
+    ParsedMacro,
     ParsedDocumentation,
     ParsedSourceDefinition,
     ParsedExposure,
@@ -31,7 +31,8 @@ from dbt.contracts.util import (
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationException,
-    raise_duplicate_resource_name, raise_compiler_error,
+    raise_duplicate_resource_name,
+    raise_compiler_error,
 )
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event

@@ -290,8 +290,11 @@ class ConfiguredParser(
         self._update_node_alias(parsed_node, config_dict)
 
     def update_parsed_node_config(
-        self, parsed_node: IntermediateNode, config: ContextConfig,
-        context=None, patch_config_dict=None
+        self,
+        parsed_node: IntermediateNode,
+        config: ContextConfig,
+        context=None,
+        patch_config_dict=None,
     ) -> None:
         """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
@@ -312,8 +315,8 @@ class ConfiguredParser(
 
         # If we have meta in the config, copy to node level, for backwards
         # compatibility with earlier node-only config.
-        if 'meta' in config_dict and config_dict['meta']:
-            parsed_node.meta = config_dict['meta']
+        if "meta" in config_dict and config_dict["meta"]:
+            parsed_node.meta = config_dict["meta"]
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
