@@ -22,8 +22,7 @@ from dbt.context.providers import (
     generate_parse_exposure, generate_test_context
 )
 from dbt.context.macro_resolver import MacroResolver
-from dbt.contracts.files import FileHash
-from dbt.contracts.graph.manifest import SchemaSourceFile
+from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ColumnInfo,
@@ -47,7 +46,10 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException,
-    CompilationException,
+    CompilationException, raise_duplicate_patch_name,
+    raise_duplicate_macro_patch_name, InternalException,
+    raise_duplicate_source_patch_name,
+    warn_or_error,
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
@@ -314,8 +316,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         # is not necessarily this package's name
         fqn = self.get_fqn(fqn_path, builder.fqn_name)
 
-        # this is the config that is used in render_update
-        config = self.initial_config(fqn)
+        # this is the ContextConfig that is used in render_update
+        config: ContextConfig = self.initial_config(fqn)
 
         metadata = {
             'namespace': builder.namespace,
@@ -356,37 +358,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         node.depends_on.add_macro(macro_unique_id)
         if (macro_unique_id in
                 ['macro.dbt.test_not_null', 'macro.dbt.test_unique']):
-            self.update_parsed_node(node, config)
-            # manually set configs
-            # note: this does not respect generate_alias_name() macro
-            if builder.alias is not None:
-                node.unrendered_config['alias'] = builder.alias
-                node.config['alias'] = builder.alias
-                node.alias = builder.alias
-            if builder.severity is not None:
-                node.unrendered_config['severity'] = builder.severity
-                node.config['severity'] = builder.severity
-            if builder.enabled is not None:
-                node.unrendered_config['enabled'] = builder.enabled
-                node.config['enabled'] = builder.enabled
-            if builder.where is not None:
-                node.unrendered_config['where'] = builder.where
-                node.config['where'] = builder.where
-            if builder.limit is not None:
-                node.unrendered_config['limit'] = builder.limit
-                node.config['limit'] = builder.limit
-            if builder.warn_if is not None:
-                node.unrendered_config['warn_if'] = builder.warn_if
-                node.config['warn_if'] = builder.warn_if
-            if builder.error_if is not None:
-                node.unrendered_config['error_if'] = builder.error_if
-                node.config['error_if'] = builder.error_if
-            if builder.fail_calc is not None:
-                node.unrendered_config['fail_calc'] = builder.fail_calc
-                node.config['fail_calc'] = builder.fail_calc
-            if builder.store_failures is not None:
-                node.unrendered_config['store_failures'] = builder.store_failures
-                node.config['store_failures'] = builder.store_failures
+            config_call_dict = builder.get_static_config()
+            config._config_call_dict = config_call_dict
+            # This sets the config from dbt_project
+            self.update_parsed_node_config(node, config)
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]
@@ -406,7 +381,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 get_rendered(
                     node.raw_sql, context, node, capture_macros=True
                 )
-                self.update_parsed_node(node, config)
+                self.update_parsed_node_config(node, config)
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
                 msg = validator_error_message(exc)
@@ -674,7 +649,14 @@ class SourceParser(YamlDocsReader):
             if is_override:
                 data['path'] = self.yaml.path.original_file_path
                 patch = self._target_from_dict(SourcePatch, data)
-                self.manifest.add_source_patch(self.yaml.file, patch)
+                assert isinstance(self.yaml.file, SchemaSourceFile)
+                source_file = self.yaml.file
+                # source patches must be unique
+                key = (patch.overrides, patch.name)
+                if key in self.manifest.source_patches:
+                    raise_duplicate_source_patch_name(patch, self.manifest.source_patches[key])
+                self.manifest.source_patches[key] = patch
+                source_file.source_patches.append(key)
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
                 self.add_source_definitions(source)
@@ -771,12 +753,42 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
                 # target_type: UnparsedNodeUpdate, UnparsedAnalysisUpdate,
                 # or UnparsedMacroUpdate
                 self._target_type().validate(data)
+                if self.key != 'macros':
+                    # macros don't have the 'config' key support yet
+                    self.normalize_meta_attribute(data, path)
                 node = self._target_type().from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(path, self.key, data, exc)
                 raise CompilationException(msg) from exc
             else:
                 yield node
+
+    # We want to raise an error if 'meta' is in two places, and move 'meta'
+    # from toplevel to config if necessary
+    def normalize_meta_attribute(self, data, path):
+        if 'meta' in data:
+            if 'config' in data and 'meta' in data['config']:
+                raise CompilationException(f"""
+                    In {path}: found meta dictionary in 'config' dictionary and as top-level key.
+                    Remove the top-level key and define it under 'config' dictionary only.
+                """.strip())
+            else:
+                if 'config' not in data:
+                    data['config'] = {}
+                data['config']['meta'] = data.pop('meta')
+
+    def patch_node_config(self, node, patch):
+        # Get the ContextConfig that's used in calculating the config
+        # This must match the model resource_type that's being patched
+        config = ContextConfig(
+            self.schema_parser.root_project,
+            node.fqn,
+            node.resource_type,
+            self.schema_parser.project.project_name,
+        )
+        # We need to re-apply the config_call_dict after the patch config
+        config._config_call_dict = node.config_call_dict
+        self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
 
 
 class NodePatchParser(
@@ -786,6 +798,9 @@ class NodePatchParser(
     def parse_patch(
         self, block: TargetBlock[NodeTarget], refs: ParserRef
     ) -> None:
+        # We're not passing the ParsedNodePatch around anymore, so we
+        # could possibly skip creating one. Leaving here for now for
+        # code consistency.
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -795,8 +810,35 @@ class NodePatchParser(
             columns=refs.column_info,
             meta=block.target.meta,
             docs=block.target.docs,
+            config=block.target.config,
         )
-        self.manifest.add_patch(self.yaml.file, patch)
+        assert isinstance(self.yaml.file, SchemaSourceFile)
+        source_file: SchemaSourceFile = self.yaml.file
+        if patch.yaml_key in ['models', 'seeds', 'snapshots']:
+            unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
+        elif patch.yaml_key == 'analyses':
+            unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
+        else:
+            raise InternalException(
+                f'Unexpected yaml_key {patch.yaml_key} for patch in '
+                f'file {source_file.path.original_file_path}'
+            )
+        if unique_id is None:
+            # This will usually happen when a node is disabled
+            return
+
+        # patches can't be overwritten
+        node = self.manifest.nodes.get(unique_id)
+        if node:
+            if node.patch_path:
+                package_name, existing_file_path = node.patch_path.split('://')
+                raise_duplicate_patch_name(patch, existing_file_path)
+            source_file.append_patch(patch.yaml_key, unique_id)
+            # If this patch has config changes, re-calculate the node config
+            # with the patch config
+            if patch.config:
+                self.patch_node_config(node, patch)
+            node.patch(patch)
 
 
 class TestablePatchParser(NodePatchParser[UnparsedNodeUpdate]):
@@ -834,8 +876,24 @@ class MacroPatchParser(NonSourceParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             description=block.target.description,
             meta=block.target.meta,
             docs=block.target.docs,
+            config=block.target.config,
         )
-        self.manifest.add_macro_patch(self.yaml.file, patch)
+        assert isinstance(self.yaml.file, SchemaSourceFile)
+        source_file = self.yaml.file
+        # macros are fully namespaced
+        unique_id = f'macro.{patch.package_name}.{patch.name}'
+        macro = self.manifest.macros.get(unique_id)
+        if not macro:
+            warn_or_error(
+                f'WARNING: Found patch for macro "{patch.name}" '
+                f'which was not found'
+            )
+            return
+        if macro.patch_path:
+            package_name, existing_file_path = macro.patch_path.split('://')
+            raise_duplicate_macro_patch_name(patch, existing_file_path)
+        source_file.macro_patches[patch.name] = unique_id
+        macro.patch(patch)
 
 
 class ExposureParser(YamlReader):

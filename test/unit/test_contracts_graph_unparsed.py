@@ -258,6 +258,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'loader': '',
             'meta': {},
             'tags': [],
+            'config': {},
         }
         self.assert_from_dict(minimum, from_dict)
         self.assert_to_dict(minimum, to_dict)
@@ -281,6 +282,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'tables': [],
             'meta': {},
             'tags': [],
+            'config': {},
         }
         self.assert_symmetric(empty, dct)
 
@@ -338,6 +340,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                 },
             ],
             'tags': [],
+            'config': {},
         }
         self.assert_from_dict(source, from_dict)
         self.assert_symmetric(source, to_dict)
@@ -406,6 +409,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             'docs': {'show': True},
             'tests': [],
             'meta': {},
+            'config': {},
         }
         self.assert_from_dict(minimum, from_dict)
         self.assert_to_dict(minimum, to_dict)
@@ -468,6 +472,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                 },
             ],
             'docs': {'show': False},
+            'config': {},
         }
         self.assert_symmetric(update, dct)
         pickle.loads(pickle.dumps(update))
