@@ -278,11 +278,7 @@ class ContextConfig:
                 config_call_dict[k] = v
 
     def build_config_dict(
-        self,
-        base: bool = False,
-        *,
-        rendered: bool = True,
-        patch_config_dict: dict = None
+        self, base: bool = False, *, rendered: bool = True, patch_config_dict: dict = None
     ) -> Dict[str, Any]:
         if rendered:
             src = ContextConfigGenerator(self._active_project)
