@@ -109,7 +109,9 @@ class CompiledSnapshotNode(CompiledNode):
 @dataclass
 class CompiledDataTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
-    config: TestConfig = field(default_factory=TestConfig)
+    # Was not able to make mypy happy and keep the code working. We need to
+    # refactor the various configs.
+    config: TestConfig = field(default_factory=TestConfig)  # type:ignore
 
 
 @dataclass
@@ -117,7 +119,9 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
     # keep this in sync with ParsedSchemaTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
-    config: TestConfig = field(default_factory=TestConfig)
+    # Was not able to make mypy happy and keep the code working. We need to
+    # refactor the various configs.
+    config: TestConfig = field(default_factory=TestConfig)  # type:ignore
 
     def same_contents(self, other) -> bool:
         if other is None:

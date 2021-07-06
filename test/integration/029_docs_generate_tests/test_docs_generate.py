@@ -903,13 +903,13 @@ class TestDocsGenerate(DBTIntegrationTest):
             'materialized': 'view',
             'pre-hook': [],
             'post-hook': [],
-            'vars': {},
             'column_types': {},
             'quoting': {},
             'tags': [],
             'persist_docs': {},
             'full_refresh': None,
             'on_schema_change': 'ignore',
+            'meta': {},
         }
         result.update(updates)
         return result
@@ -924,7 +924,6 @@ class TestDocsGenerate(DBTIntegrationTest):
             'persist_docs': {},
             'pre-hook': [],
             'post-hook': [],
-            'vars': {},
             'column_types': {},
             'quoting': {},
             'tags': [],
@@ -934,6 +933,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'database': None,
             'schema': None,
             'alias': None,
+            'meta': {},
         }
         result.update(updates)
         return result
@@ -952,7 +952,6 @@ class TestDocsGenerate(DBTIntegrationTest):
             'materialized': 'snapshot',
             'pre-hook': [],
             'post-hook': [],
-            'vars': {},
             'column_types': {},
             'quoting': {},
             'tags': [],
@@ -963,6 +962,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'check_cols': 'all',
             'unique_key': 'id',
             'target_schema': None,
+            'meta': {},
         }
         result.update(updates)
         return result
@@ -979,14 +979,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     def rendered_tst_config(self, **updates):
         result = {
-            'column_types': {},
             'enabled': True,
             'materialized': 'test',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
-            'vars': {},
             'tags': [],
             'severity': 'ERROR',
             'store_failures': None,
@@ -995,11 +989,10 @@ class TestDocsGenerate(DBTIntegrationTest):
             'fail_calc': 'count(*)',
             'where': None,
             'limit': None,
-            'full_refresh': None,
-            'on_schema_change': 'ignore',
             'database': None,
             'schema': 'dbt_test__audit',
             'alias': None,
+            'meta': {},
         }
         result.update(updates)
         return result

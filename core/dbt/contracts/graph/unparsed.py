@@ -126,12 +126,17 @@ class HasYamlMetadata(dbtClassMixin):
 
 
 @dataclass
-class UnparsedAnalysisUpdate(HasColumnDocs, HasDocs, HasYamlMetadata):
+class HasConfig():
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedAnalysisUpdate(HasConfig, HasColumnDocs, HasDocs, HasYamlMetadata):
     pass
 
 
 @dataclass
-class UnparsedNodeUpdate(HasColumnTests, HasTests, HasYamlMetadata):
+class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasTests, HasYamlMetadata):
     quote_columns: Optional[bool] = None
 
 
@@ -143,7 +148,7 @@ class MacroArgument(dbtClassMixin):
 
 
 @dataclass
-class UnparsedMacroUpdate(HasDocs, HasYamlMetadata):
+class UnparsedMacroUpdate(HasConfig, HasDocs, HasYamlMetadata):
     arguments: List[MacroArgument] = field(default_factory=list)
 
 
@@ -261,6 +266,7 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     loaded_at_field: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def yaml_key(self) -> 'str':

@@ -125,6 +125,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
+        patch_config_dict: Dict[str, Any] = None
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
 
@@ -133,6 +134,12 @@ class BaseContextConfigGenerator(Generic[T]):
         project_configs = self._project_configs(own_config, fqn, resource_type)
         for fqn_config in project_configs:
             result = self._update_from_config(result, fqn_config)
+
+        # When schema files patch config, it has lower precedence than
+        # config in the models (config_call_dict), so we add the patch_config_dict
+        # before the config_call_dict
+        if patch_config_dict:
+            result = self._update_from_config(result, patch_config_dict)
 
         # config_calls are created in the 'experimental' model parser and
         # the ParseConfigObject (via add_config_call)
@@ -153,6 +160,7 @@ class BaseContextConfigGenerator(Generic[T]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
+        patch_config_dict: Dict[str, Any],
     ) -> Dict[str, Any]:
         ...
 
@@ -192,6 +200,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
+        patch_config_dict: dict = None
     ) -> Dict[str, Any]:
         config = self.calculate_node_config(
             config_call_dict=config_call_dict,
@@ -199,6 +208,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             resource_type=resource_type,
             project_name=project_name,
             base=base,
+            patch_config_dict=patch_config_dict
         )
         finalized = config.finalize_and_validate()
         return finalized.to_dict(omit_none=True)
@@ -215,6 +225,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         resource_type: NodeType,
         project_name: str,
         base: bool,
+        patch_config_dict: dict = None
     ) -> Dict[str, Any]:
         return self.calculate_node_config(
             config_call_dict=config_call_dict,
@@ -222,6 +233,7 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
             resource_type=resource_type,
             project_name=project_name,
             base=base,
+            patch_config_dict=patch_config_dict
         )
 
     def initial_result(
@@ -284,6 +296,7 @@ class ContextConfig:
         base: bool = False,
         *,
         rendered: bool = True,
+        patch_config_dict: dict = None
     ) -> Dict[str, Any]:
         if rendered:
             src = ContextConfigGenerator(self._active_project)
@@ -296,4 +309,5 @@ class ContextConfig:
             resource_type=self._resource_type,
             project_name=self._project_name,
             base=base,
+            patch_config_dict=patch_config_dict
         )

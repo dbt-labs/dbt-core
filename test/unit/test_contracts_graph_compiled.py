@@ -136,8 +136,8 @@ def basic_uncompiled_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -181,8 +181,8 @@ def basic_compiled_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -203,7 +203,6 @@ def test_basic_uncompiled_model(minimal_uncompiled_dict, basic_uncompiled_dict, 
     assert node.empty is False
     assert node.is_refable is True
     assert node.is_ephemeral is False
-    assert node.local_vars() == {}
 
     assert_from_dict(node, minimal_uncompiled_dict, CompiledModelNode)
     pickle.loads(pickle.dumps(node))
@@ -216,7 +215,6 @@ def test_basic_compiled_model(basic_compiled_dict, basic_compiled_model):
     assert node.empty is False
     assert node.is_refable is True
     assert node.is_ephemeral is False
-    assert node.local_vars() == {}
 
 
 def test_invalid_extra_fields_model(minimal_uncompiled_dict):
@@ -425,21 +423,15 @@ def basic_uncompiled_schema_test_dict():
         'alias': 'bar',
         'tags': [],
         'config': {
-            'column_types': {},
             'enabled': True,
             'materialized': 'test',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
             'tags': [],
-            'vars': {},
             'severity': 'ERROR',
             'schema': 'dbt_test__audit',
             'warn_if': '!= 0',
             'error_if': '!= 0',
             'fail_calc': 'count(*)',
-            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -480,21 +472,15 @@ def basic_compiled_schema_test_dict():
         'alias': 'bar',
         'tags': [],
         'config': {
-            'column_types': {},
             'enabled': True,
             'materialized': 'test',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
             'tags': [],
-            'vars': {},
             'severity': 'warn',
             'schema': 'dbt_test__audit',
             'warn_if': '!= 0',
             'error_if': '!= 0',
             'fail_calc': 'count(*)',
-            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -524,7 +510,6 @@ def test_basic_uncompiled_schema_test(basic_uncompiled_schema_test_node, basic_u
     assert node.empty is False
     assert node.is_refable is False
     assert node.is_ephemeral is False
-    assert node.local_vars() == {}
 
     assert_from_dict(node, minimum, CompiledSchemaTestNode)
 
@@ -537,7 +522,6 @@ def test_basic_compiled_schema_test(basic_compiled_schema_test_node, basic_compi
     assert node.empty is False
     assert node.is_refable is False
     assert node.is_ephemeral is False
-    assert node.local_vars() == {}
 
 
 def test_invalid_extra_schema_test_fields(minimal_schema_test_dict):

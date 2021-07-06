@@ -14,7 +14,7 @@ from dbt.contracts.graph.compiled import (
     CompileResultNode, ManifestNode, NonSourceCompiledNode, GraphMemberNode
 )
 from dbt.contracts.graph.parsed import (
-    ParsedMacro, ParsedDocumentation, ParsedNodePatch, ParsedMacroPatch,
+    ParsedMacro, ParsedDocumentation,
     ParsedSourceDefinition, ParsedExposure, HasUniqueID,
     UnpatchedSourceDefinition, ManifestNodes
 )
@@ -26,9 +26,7 @@ from dbt.contracts.util import (
 from dbt.dataclass_schema import dbtClassMixin
 from dbt.exceptions import (
     CompilationException,
-    raise_duplicate_resource_name, raise_compiler_error, warn_or_error,
-    raise_duplicate_patch_name,
-    raise_duplicate_macro_patch_name, raise_duplicate_source_patch_name,
+    raise_duplicate_resource_name, raise_compiler_error,
 )
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -717,60 +715,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 resource_fqns[resource_type_plural] = set()
             resource_fqns[resource_type_plural].add(tuple(resource.fqn))
         return resource_fqns
-
-    # This is called by 'parse_patch' in the NodePatchParser
-    def add_patch(
-        self, source_file: SchemaSourceFile, patch: ParsedNodePatch,
-    ) -> None:
-        if patch.yaml_key in ['models', 'seeds', 'snapshots']:
-            unique_id = self.ref_lookup.get_unique_id(patch.name, None)
-        elif patch.yaml_key == 'analyses':
-            unique_id = self.analysis_lookup.get_unique_id(patch.name, None)
-        else:
-            raise dbt.exceptions.InternalException(
-                f'Unexpected yaml_key {patch.yaml_key} for patch in '
-                f'file {source_file.path.original_file_path}'
-            )
-        if unique_id is None:
-            # This will usually happen when a node is disabled
-            return
-
-        # patches can't be overwritten
-        node = self.nodes.get(unique_id)
-        if node:
-            if node.patch_path:
-                package_name, existing_file_path = node.patch_path.split('://')
-                raise_duplicate_patch_name(patch, existing_file_path)
-            source_file.append_patch(patch.yaml_key, unique_id)
-            node.patch(patch)
-
-    def add_macro_patch(
-        self, source_file: SchemaSourceFile, patch: ParsedMacroPatch,
-    ) -> None:
-        # macros are fully namespaced
-        unique_id = f'macro.{patch.package_name}.{patch.name}'
-        macro = self.macros.get(unique_id)
-        if not macro:
-            warn_or_error(
-                f'WARNING: Found documentation for macro "{patch.name}" '
-                f'which was not found'
-            )
-            return
-        if macro.patch_path:
-            package_name, existing_file_path = macro.patch_path.split('://')
-            raise_duplicate_macro_patch_name(patch, existing_file_path)
-        source_file.macro_patches[patch.name] = unique_id
-        macro.patch(patch)
-
-    def add_source_patch(
-        self, source_file: SchemaSourceFile, patch: SourcePatch,
-    ) -> None:
-        # source patches must be unique
-        key = (patch.overrides, patch.name)
-        if key in self.source_patches:
-            raise_duplicate_source_patch_name(patch, self.source_patches[key])
-        self.source_patches[key] = patch
-        source_file.source_patches.append(key)
 
     def get_used_schemas(self, resource_types=None):
         return frozenset({
