@@ -10,7 +10,7 @@
 ### Under the hood
 - Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
 - Add optional `sslcert`, `sslkey`, and `sslrootcert` profile arguments to the Postgres connector. ([#3472](https://github.com/fishtown-analytics/dbt/pull/3472), [#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
-- Move the example project used by `dbt init` into `dbt` repository, to avoid cloning an external repo ([#3005](https://github.com/fishtown-analytics/dbt/pull/3005), [#3474](https://github.com/fishtown-analytics/dbt/pull/3474))
+- Move the example project used by `dbt init` into `dbt` repository, to avoid cloning an external repo ([#3005](https://github.com/fishtown-analytics/dbt/pull/3005), [#3474](https://github.com/fishtown-analytics/dbt/pull/3474), [#3536](https://github.com/fishtown-analytics/dbt/pull/3536))
 - Better interaction between `dbt init` and adapters. Avoid raising errors while initializing a project ([#2814](https://github.com/fishtown-analytics/dbt/pull/2814), [#3483](https://github.com/fishtown-analytics/dbt/pull/3483))
 - Update project loading event data to include experimental parser information. ([#3438](https://github.com/fishtown-analytics/dbt/issues/3438), [#3495](https://github.com/fishtown-analytics/dbt/pull/3495))
 

@@ -16,7 +16,7 @@ DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'
 SLACK_URL = 'https://community.getdbt.com/'
 
 # This file is not needed for the starter project but exists for finding the resource path
-IGNORE_FILE = "__init__.py"
+IGNORE_FILES = ["__init__.py", "__pycache__"]
 
 ON_COMPLETE_MESSAGE = """
 Your new dbt project "{project_name}" was created! If this is your first time
@@ -44,7 +44,7 @@ class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
         logger.debug("Starter project path: " + starter_project_directory)
         shutil.copytree(starter_project_directory, project_name,
-                        ignore=shutil.ignore_patterns(IGNORE_FILE))
+                        ignore=shutil.ignore_patterns(*IGNORE_FILES))
 
     def create_profiles_dir(self, profiles_dir):
         if not os.path.exists(profiles_dir):
