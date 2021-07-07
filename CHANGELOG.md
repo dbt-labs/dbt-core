@@ -22,6 +22,10 @@ Contributors:
 
 ## dbt 0.20.0 (Release TBD)
 
+### Fixes
+
+- Avoid slowdown in column-level `persist_docs` on Snowflake, while preserving the error-avoidance from [#3149](https://github.com/fishtown-analytics/dbt/issues/3149) ([#3541](https://github.com/fishtown-analytics/dbt/issues/3541), [#3543](https://github.com/fishtown-analytics/dbt/pull/3543))
+
 ## dbt 0.20.0rc2 (June 30, 2021)
 
 ### Fixes
