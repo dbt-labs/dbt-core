@@ -222,6 +222,10 @@ class PartialParsing:
         self.remove_node_in_saved(new_source_file, unique_id)
 
     def remove_node_in_saved(self, source_file, unique_id):
+        # Has already been deleted by another action
+        if unique_id not in self.saved_manifest.nodes:
+            return
+
         # delete node in saved
         node = self.saved_manifest.nodes.pop(unique_id)
         self.deleted_manifest.nodes[unique_id] = node
