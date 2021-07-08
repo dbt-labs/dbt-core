@@ -288,7 +288,7 @@ class GraphRunnableTask(ManifestTask):
         else:
             self.manifest.update_node(node)
 
-        if result.status in (NodeStatus.Error, NodeStatus.Fail):
+        if result.status == NodeStatus.Error:
             if is_ephemeral:
                 cause = result
             else:
@@ -357,14 +357,6 @@ class GraphRunnableTask(ManifestTask):
     def _mark_dependent_errors(self, node_id, result, cause):
         if self.graph is None:
             raise InternalException('graph is None in _mark_dependent_errors')
-
-        # If the trigger for marking dependents to skip was a failed test, use the
-        # parent of the test (AKA the node that was tested) to determine dependent
-        # nodes, not the test itself
-        if self.manifest.expect(node_id).resource_type == NodeType.Test:
-            #  Does this work?  We're expecting a test node will only ever test one other node.
-            node_id = self.graph.ancestors(node_id, 1).pop()
-
         for dep_node_id in self.graph.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
