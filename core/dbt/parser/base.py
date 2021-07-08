@@ -282,7 +282,7 @@ class ConfiguredParser(
     ) -> None:
         # Overwrite node config
         final_config_dict = parsed_node.config.to_dict(omit_none=True)
-        final_config_dict.update(config_dict)
+        final_config_dict.update({k.strip(): v for (k, v) in config_dict.items()})
         # re-mangle hooks, in case we got new ones
         self._mangle_hooks(final_config_dict)
         parsed_node.config = parsed_node.config.from_dict(final_config_dict)

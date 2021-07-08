@@ -21,7 +21,7 @@ assignees: ''
 - [ ] [Product] Announce in dbt Slack
 
 ### Post-release
-- [ ] [Engineering] Bump plugin versions (dbt-spark + dbt-presto), add compatibility as needed
+- [ ] [Engineering] [Bump plugin versions](https://www.notion.so/fishtownanalytics/Releasing-b97c5ea9a02949e79e81db3566bbc8ef#59571f5bc1a040d9a8fd096e23d2c7db) (dbt-spark + dbt-presto), add compatibility as needed
    - [ ]  Spark 
    - [ ]  Presto
 - [ ] [Engineering] Create a platform issue to update dbt-spark versions to dbt Cloud 

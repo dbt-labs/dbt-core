@@ -214,7 +214,7 @@ class SourceFile(BaseSourceFile):
 class SchemaSourceFile(BaseSourceFile):
     dfy: Dict[str, Any] = field(default_factory=dict)
     # these are in the manifest.nodes dictionary
-    tests: List[str] = field(default_factory=list)
+    tests: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     # node patches contain models, seeds, snapshots, analyses
@@ -254,6 +254,45 @@ class SchemaSourceFile(BaseSourceFile):
 
     def append_patch(self, yaml_key, unique_id):
         self.node_patches.append(unique_id)
+
+    def add_test(self, node_unique_id, test_from):
+        name = test_from['name']
+        key = test_from['key']
+        if key not in self.tests:
+            self.tests[key] = {}
+        if name not in self.tests[key]:
+            self.tests[key][name] = []
+        self.tests[key][name].append(node_unique_id)
+
+    def remove_tests(self, yaml_key, name):
+        if yaml_key in self.tests:
+            if name in self.tests[yaml_key]:
+                del self.tests[yaml_key][name]
+
+    def get_tests(self, yaml_key, name):
+        if yaml_key in self.tests:
+            if name in self.tests[yaml_key]:
+                return self.tests[yaml_key][name]
+        return []
+
+    def get_key_and_name_for_test(self, test_unique_id):
+        yaml_key = None
+        block_name = None
+        for key in self.tests.keys():
+            for name in self.tests[key]:
+                for unique_id in self.tests[key][name]:
+                    if unique_id == test_unique_id:
+                        yaml_key = key
+                        block_name = name
+                        break
+        return (yaml_key, block_name)
+
+    def get_all_test_ids(self):
+        test_ids = []
+        for key in self.tests.keys():
+            for name in self.tests[key]:
+                test_ids.extend(self.tests[key][name])
+        return test_ids
 
 
 AnySourceFile = Union[SchemaSourceFile, SourceFile]
