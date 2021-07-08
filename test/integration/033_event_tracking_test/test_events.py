@@ -83,10 +83,7 @@ class TestEventTracking(DBTIntegrationTest):
             else:
                 populated_contexts.append(context)
 
-        self.assertEqual(
-            ordered_contexts,
-            populated_contexts
-        )
+        return ordered_contexts == populated_contexts
 
     def load_context(self):
 
@@ -277,11 +274,13 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('compile', 'end', result_type='ok')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["compile", "--vars", "sensitive_thing: abc"],
             expected_calls,
             expected_contexts
         )
+
+        self.assertTrue(test_result)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_deps(self):
@@ -337,7 +336,8 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('deps', 'end', result_type='ok')
         ]
 
-        self.run_event_test(["deps"], expected_calls, expected_contexts)
+        test_result = self.run_event_test(["deps"], expected_calls, expected_contexts)
+        self.assertTrue(test_result)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_seed(self):
@@ -405,7 +405,8 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('seed', 'end', result_type='ok')
         ]
 
-        self.run_event_test(["seed"], expected_calls, expected_contexts)
+        test_result = self.run_event_test(["seed"], expected_calls, expected_contexts)
+        self.assertTrue(test_result)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_models(self):
@@ -477,11 +478,13 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('run', 'end', result_type='ok')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["run", "--model", "example", "example_2"],
             expected_calls,
             expected_contexts
         )
+
+        self.assertTrue(test_result)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_model_error(self):
@@ -536,12 +539,14 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('run', 'end', result_type='ok')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["run", "--model", "model_error"],
             expected_calls,
             expected_contexts,
             expect_pass=False
         )
+
+        self.assertTrue(test_result)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_tests(self):
@@ -583,12 +588,14 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('test', 'end', result_type='ok')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["test"],
             expected_calls,
             expected_contexts,
             expect_pass=False
         )
+
+        self.assertTrue(test_result)
 
 
 class TestEventTrackingCompilationError(TestEventTracking):
@@ -621,13 +628,15 @@ class TestEventTrackingCompilationError(TestEventTracking):
             self.build_context('compile', 'end', result_type='error')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["compile"],
             expected_calls,
             expected_contexts,
             expect_pass=False,
             expect_raise=True
         )
+
+        self.assertTrue(test_result)
 
 
 class TestEventTrackingUnableToConnect(TestEventTracking):
@@ -701,12 +710,14 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             self.build_context('run', 'end', result_type='error')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["run", "--target", "noaccess", "--models", "example"],
             expected_calls,
             expected_contexts,
             expect_pass=False
         )
+
+        self.assertTrue(test_result)
 
 
 class TestEventTrackingSnapshot(TestEventTracking):
@@ -770,11 +781,13 @@ class TestEventTrackingSnapshot(TestEventTracking):
             self.build_context('snapshot', 'end', result_type='ok')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["snapshot"],
             expected_calls,
             expected_contexts
         )
+
+        self.assertTrue(test_result)
 
 
 class TestEventTrackingCatalogGenerate(TestEventTracking):
@@ -817,8 +830,10 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
             self.build_context('generate', 'end', result_type='ok')
         ]
 
-        self.run_event_test(
+        test_result = self.run_event_test(
             ["docs", "generate"],
             expected_calls,
             expected_contexts
         )
+
+        self.assertTrue(test_result)
