@@ -31,6 +31,10 @@ Contributors:
 
 - Update dbt logo and links ([docs#197](https://github.com/fishtown-analytics/dbt-docs/issues/197))
 
+### Under the hood
+
+- Add tracking for experimental parser accuracy ([3503](https://github.com/dbt-labs/dbt/pull/3503), [3553](https://github.com/dbt-labs/dbt/pull/3553))
+
 ## dbt 0.20.0rc2 (June 30, 2021)
 
 ### Fixes
@@ -43,7 +47,6 @@ Contributors:
 
 ### Under the hood
 
-- Add tracking for experimental parser accuracy ([3553](https://github.com/dbt-labs/dbt/pull/3553))
 - Swap experimental parser implementation to use Rust [#3497](https://github.com/fishtown-analytics/dbt/pull/3497)
 - Dispatch the core SQL statement of the new test materialization, to benefit adapter maintainers ([#3465](https://github.com/fishtown-analytics/dbt/pull/3465), [#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
 - Minimal validation of yaml dictionaries prior to partial parsing ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246), [#3460](https://github.com/fishtown-analytics/dbt/pull/3460))
