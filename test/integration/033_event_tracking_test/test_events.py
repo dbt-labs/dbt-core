@@ -10,6 +10,17 @@ import dbt.tracking
 import dbt.utils
 
 
+# immutably creates a new array with the value inserted at the index
+def inserted(value, index, arr):
+    x = []
+    for i in range(0, len(arr)):
+        if i == index:
+            x.append(value)
+            x.append(arr[i])
+        else:
+            x.append(arr[i])
+        return x
+
 class TestEventTracking(DBTIntegrationTest):
     maxDiff = None
 
@@ -240,7 +251,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
     @use_profile("postgres")
     def test__postgres_event_tracking_compile(self):
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -267,6 +278,17 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
         ]
 
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
+
         expected_contexts = [
             self.build_context('compile', 'start'),
             self.load_context(),
@@ -274,13 +296,19 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('compile', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["compile", "--vars", "sensitive_thing: abc"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["compile", "--vars", "sensitive_thing: abc"],
+            expected_calls_B,
+            expected_contexts
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_deps(self):
@@ -364,7 +392,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 },
             }]
 
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -396,6 +424,17 @@ class TestEventTrackingSuccess(TestEventTracking):
                 context=ANY
             ),
         ]
+
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
 
         expected_contexts = [
             self.build_context('seed', 'start'),
@@ -405,12 +444,14 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('seed', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(["seed"], expected_calls, expected_contexts)
-        self.assertTrue(test_result)
+        test_result_A = self.run_event_test(["seed"], expected_calls_A, expected_contexts)
+        test_result_A = self.run_event_test(["seed"], expected_calls_B, expected_contexts)
+        
+        self.assertTrue(test_result_A or test_result_B)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_models(self):
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -448,6 +489,17 @@ class TestEventTrackingSuccess(TestEventTracking):
                 context=ANY
             ),
         ]
+
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
 
         hashed = '20ff78afb16c8b3b8f83861b1d3b99bd'
         # this hashed contents field changes on azure postgres tests, I believe
@@ -478,20 +530,26 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('run', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["run", "--model", "example", "example_2"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["run", "--model", "example", "example_2"],
+            expected_calls_A,
+            expected_contexts
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_model_error(self):
         # cmd = ["run", "--model", "model_error"]
         # self.run_event_test(cmd, event_run_model_error, expect_pass=False)
 
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -524,6 +582,17 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
         ]
 
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
+
         expected_contexts = [
             self.build_context('run', 'start'),
             self.load_context(),
@@ -539,14 +608,21 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('run', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["run", "--model", "model_error"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts,
             expect_pass=False
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["run", "--model", "model_error"],
+            expected_calls_B,
+            expected_contexts,
+            expect_pass=False
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
 
     @use_profile("postgres")
     def test__postgres_event_tracking_tests(self):
@@ -554,7 +630,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         self.run_dbt(["deps"])
         self.run_dbt(["run", "--model", "example", "example_2"])
 
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -581,6 +657,17 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
         ]
 
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
+
         expected_contexts = [
             self.build_context('test', 'start'),
             self.load_context(),
@@ -588,14 +675,21 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('test', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["test"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts,
             expect_pass=False
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["test"],
+            expected_calls_A,
+            expected_contexts,
+            expect_pass=False
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
 
 
 class TestEventTrackingCompilationError(TestEventTracking):
@@ -676,7 +770,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
 
     @use_profile("postgres")
     def test__postgres_event_tracking_unable_to_connect(self):
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -703,6 +797,17 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             ),
         ]
 
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
+
         expected_contexts = [
             self.build_context('run', 'start'),
             self.load_context(),
@@ -710,14 +815,21 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             self.build_context('run', 'end', result_type='error')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["run", "--target", "noaccess", "--models", "example"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts,
             expect_pass=False
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["run", "--target", "noaccess", "--models", "example"],
+            expected_calls_B,
+            expected_contexts,
+            expect_pass=False
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
 
 
 class TestEventTrackingSnapshot(TestEventTracking):
@@ -732,7 +844,7 @@ class TestEventTrackingSnapshot(TestEventTracking):
     def test__postgres_event_tracking_snapshot(self):
         self.run_dbt(["run", "--models", "snapshottable"])
 
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -765,6 +877,17 @@ class TestEventTrackingSnapshot(TestEventTracking):
             ),
         ]
 
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
+
         # the model here has a raw_sql that contains the schema, which changes
         expected_contexts = [
             self.build_context('snapshot', 'start'),
@@ -781,13 +904,19 @@ class TestEventTrackingSnapshot(TestEventTracking):
             self.build_context('snapshot', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["snapshot"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["snapshot"],
+            expected_calls_B,
+            expected_contexts
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
 
 
 class TestEventTrackingCatalogGenerate(TestEventTracking):
@@ -796,7 +925,7 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
         # create a model for the catalog
         self.run_dbt(["run", "--models", "example"])
 
-        expected_calls = [
+        expected_calls_A = [
             call(
                 category='dbt',
                 action='invocation',
@@ -823,6 +952,17 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
             ),
         ]
 
+        expected_calls_B = inserted(
+            call(
+                category='dbt',
+                action='experimental_parser',
+                label=ANY,
+                context=ANY
+            ),
+            3,
+            expected_calls_A
+        )
+
         expected_contexts = [
             self.build_context('generate', 'start'),
             self.load_context(),
@@ -830,10 +970,16 @@ class TestEventTrackingCatalogGenerate(TestEventTracking):
             self.build_context('generate', 'end', result_type='ok')
         ]
 
-        test_result = self.run_event_test(
+        test_result_A = self.run_event_test(
             ["docs", "generate"],
-            expected_calls,
+            expected_calls_A,
             expected_contexts
         )
 
-        self.assertTrue(test_result)
+        test_result_B = self.run_event_test(
+            ["docs", "generate"],
+            expected_calls_B,
+            expected_contexts
+        )
+
+        self.assertTrue(test_result_A or test_result_B)
