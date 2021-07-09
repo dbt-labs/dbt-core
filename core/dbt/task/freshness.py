@@ -19,7 +19,7 @@ from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import print_timestamped_line
 from dbt.node_types import NodeType
 
-from dbt.graph import NodeSelector, SelectionSpec, parse_difference
+from dbt.graph import ResourceTypeSelector, SelectionSpec, parse_difference
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 
 
@@ -117,7 +117,7 @@ class FreshnessRunner(BaseRunner):
         return self.node
 
 
-class FreshnessSelector(NodeSelector):
+class FreshnessSelector(ResourceTypeSelector):
     def node_is_match(self, node):
         if not super().node_is_match(node):
             return False
@@ -137,11 +137,10 @@ class FreshnessTask(GraphRunnableTask):
         return False
 
     def get_selection_spec(self) -> SelectionSpec:
-        include = [
-            'source:{}'.format(s)
-            for s in (self.args.selected or ['*'])
-        ]
-        spec = parse_difference(include, None)
+        if self.args.selector_name:
+            spec = self.config.get_selector(self.args.selector_name)
+        else:
+            spec = parse_difference(self.args.select, self.args.exclude)
         return spec
 
     def get_node_selector(self):
@@ -153,6 +152,7 @@ class FreshnessTask(GraphRunnableTask):
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
+            resource_types=[NodeType.Source]
         )
 
     def get_runner_type(self, _):

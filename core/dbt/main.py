@@ -41,6 +41,7 @@ class DBTVersion(argparse.Action):
     """This is very very similar to the builtin argparse._Version action,
     except it just calls dbt.version.get_version_information().
     """
+
     def __init__(self,
                  option_strings,
                  version=None,
@@ -764,16 +765,6 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         ''',
     )
     sub.add_argument(
-        '-s',
-        '--select',
-        required=False,
-        nargs='+',
-        help='''
-        Specify the sources to snapshot freshness
-        ''',
-        dest='selected'
-    )
-    sub.add_argument(
         '-o',
         '--output',
         required=False,
@@ -795,6 +786,13 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         which='snapshot-freshness',
         rpc_method='snapshot-freshness',
     )
+    _add_select_argument(
+        sub,
+        dest='select',
+        metavar='SELECTOR',
+        required=False,
+    )
+    _add_common_selector_arguments(sub)
     return sub
 
 

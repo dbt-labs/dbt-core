@@ -231,7 +231,9 @@ class RemoteSourceFreshnessTask(
     METHOD_NAME = 'snapshot-freshness'
 
     def set_args(self, params: RPCSourceFreshnessParameters) -> None:
-        self.args.selected = self._listify(params.select)
+        self.args.select = self._listify(params.select)
+        self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
         if params.threads is not None:
             self.args.threads = params.threads
         self.args.output = None

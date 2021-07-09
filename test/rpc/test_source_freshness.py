@@ -65,10 +65,10 @@ def test_source_freshness(
         project.write_seeds(project_root, remove=True)
         querier.async_wait_for_result(querier.seed())
         # should warn
-        warn_results = querier.async_wait_for_result(querier.snapshot_freshness(select='test_source.test_table'))
+        warn_results = querier.async_wait_for_result(querier.snapshot_freshness(select='source:test_source.test_table'))
         assert len(warn_results['results']) == 1
         assert warn_results['results'][0]['status'] == 'warn'
-        warn_results = querier.async_wait_for_result(querier.cli_args('source snapshot-freshness -s test_source.test_table'))
+        warn_results = querier.async_wait_for_result(querier.cli_args('source snapshot-freshness -s source:test_source.test_table'))
         assert len(warn_results['results']) == 1
         assert warn_results['results'][0]['status'] == 'warn'
 
@@ -76,9 +76,9 @@ def test_source_freshness(
         project.write_seeds(project_root, remove=True)
         querier.async_wait_for_result(querier.seed())
         # should pass!
-        pass_results = querier.async_wait_for_result(querier.snapshot_freshness(select=['test_source.test_table']))
+        pass_results = querier.async_wait_for_result(querier.snapshot_freshness(select=['source:test_source.test_table']))
         assert len(pass_results['results']) == 1
         assert pass_results['results'][0]['status'] == 'pass'
-        pass_results = querier.async_wait_for_result(querier.cli_args('source snapshot-freshness --select test_source.test_table'))
+        pass_results = querier.async_wait_for_result(querier.cli_args('source snapshot-freshness --select source:test_source.test_table'))
         assert len(pass_results['results']) == 1
         assert pass_results['results'][0]['status'] == 'pass'
