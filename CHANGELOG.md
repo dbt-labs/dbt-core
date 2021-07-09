@@ -25,6 +25,7 @@ Contributors:
 ### Fixes
 
 - Avoid slowdown in column-level `persist_docs` on Snowflake, while preserving the error-avoidance from [#3149](https://github.com/fishtown-analytics/dbt/issues/3149) ([#3541](https://github.com/fishtown-analytics/dbt/issues/3541), [#3543](https://github.com/fishtown-analytics/dbt/pull/3543))
+- Partial parsing: handle already deleted nodes when schema block also deleted ([#3516](http://github.com/fishown-analystics/dbt/issues/3516), [#3522](http://github.com/fishown-analystics/dbt/issues/3522))
 
 ### Docs
 
@@ -46,7 +47,6 @@ Contributors:
 - Dispatch the core SQL statement of the new test materialization, to benefit adapter maintainers ([#3465](https://github.com/fishtown-analytics/dbt/pull/3465), [#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
 - Minimal validation of yaml dictionaries prior to partial parsing ([#3246](https://github.com/fishtown-analytics/dbt/issues/3246), [#3460](https://github.com/fishtown-analytics/dbt/pull/3460))
 - Add partial parsing tests and improve partial parsing handling of macros ([#3449](https://github.com/fishtown-analytics/dbt/issues/3449), [#3505](https://github.com/fishtown-analytics/dbt/pull/3505))
-- Partial parsing: handle already deleted nodes when schema block also deleted ([#3516](http://github.com/fishown-analystics/dbt/issues/3516))
 
 Contributors:
 - [@swanderz](https://github.com/swanderz) ([#3461](https://github.com/fishtown-analytics/dbt/pull/3461))
