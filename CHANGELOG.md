@@ -31,6 +31,10 @@ Contributors:
 
 - Update dbt logo and links ([docs#197](https://github.com/fishtown-analytics/dbt-docs/issues/197))
 
+### Under the hood
+
+- Add tracking for experimental parser accuracy ([3503](https://github.com/dbt-labs/dbt/pull/3503), [3553](https://github.com/dbt-labs/dbt/pull/3553))
+
 ## dbt 0.20.0rc2 (June 30, 2021)
 
 ### Fixes
