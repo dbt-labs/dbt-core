@@ -42,7 +42,7 @@ RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
 LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
 RESOURCE_COUNTS = "iglu:com.dbt/resource_counts/jsonschema/1-0-0"
-EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
+EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 PARTIAL_PARSER = "iglu:com.dbt/partial_parser/jsonschema/1-0-1"
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
@@ -432,16 +432,16 @@ def track_invalid_invocation(config=None, args=None, result_type=None):
 
 def track_experimental_parser_sample(options):
     context = [SelfDescribingJson(EXPERIMENTAL_PARSER, options)]
-    assert active_user is not None, \
+    assert (
         active_user is not None
     ), "Cannot track experimental parser info when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='experimental_parser',
+        category="dbt",
+        action="experimental_parser",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
