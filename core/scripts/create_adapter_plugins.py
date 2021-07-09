@@ -14,12 +14,12 @@ macro-paths: ["macros"]
 
 SETUP_PY_TEMPLATE = '''
 #!/usr/bin/env python
-from setuptools import find_packages
-from setuptools import setup
+from setuptools import find_namespace_packages, setup
 
 package_name = "dbt-{adapter}"
+# make sure this always matches dbt/adapters/{adapter}/__version__.py
 package_version = "{version}"
-description = """The {adapter} adapter plugin for dbt (data build tool)"""
+description = """The {adapter} adapter plugin for dbt"""
 
 setup(
     name=package_name,
@@ -29,17 +29,17 @@ setup(
     author={author_name},
     author_email={author_email},
     url={url},
-    packages=find_packages(),
-    package_data={{
-        'dbt': [
-{package_data}
-        ]
-    }},
+    packages=find_namespace_packages(include=['dbt', 'dbt.*']),
+    include_package_data=True,
     install_requires=[
         "{dbt_core_str}",{dependencies}
     ]
 )
 '''.lstrip()
+
+
+MANIFEST_IN_TEMPLATE = "recursive-include dbt/include *.sql *.yml *.md"
+
 
 ADAPTER_INIT_TEMPLATE = '''
 from dbt.adapters.{adapter}.connections import {title_adapter}ConnectionManager
@@ -115,6 +115,44 @@ PACKAGE_PATH = os.path.dirname(__file__)
 """.lstrip()
 
 
+SAMPLE_PROFILE_TEMPLATE = '''
+default:
+  outputs:
+    dev:
+      type: {adapter}
+      # Add sample credentials here, like:
+      # host: <host>
+      # port: <port_num>
+      # username: <user>
+      # password: <pass>
+  target: dev
+'''
+
+
+DBTSPEC_TEMPLATE = '''
+# See https://github.com/fishtown-analytics/dbt-adapter-tests
+# for installation and use
+
+target:
+  type: {adapter}
+  # Add CI credentials here, like:
+  # host: localhost
+  # port: 5432
+  # username: root
+  # password: pass
+sequences:
+  test_dbt_empty: empty
+  test_dbt_base: base
+  test_dbt_ephemeral: ephemeral
+  test_dbt_incremental: incremental
+  test_dbt_snapshot_strategy_timestamp: snapshot_strategy_timestamp
+  test_dbt_snapshot_strategy_check_cols: snapshot_strategy_check_cols
+  test_dbt_data_test: data_test
+  test_dbt_schema_test: schema_test
+  test_dbt_ephemeral_data_tests: data_test_ephemeral_models
+'''
+
+
 class Builder:
     def __init__(self, args):
         self.args = args
@@ -131,6 +169,7 @@ class Builder:
         self.write_setup()
         self.write_adapter()
         self.write_include()
+        self.write_test_spec()
 
     def include_paths(self):
         return [
@@ -162,9 +201,9 @@ class Builder:
             url=self.args.url,
             dbt_core_str=dbt_core_str,
             dependencies=self.args.dependency,
-            package_data=package_data,
         )
         self.dest_path('setup.py').write_text(setup_py_contents)
+        self.dest_path('MANIFEST.in').write_text(MANIFEST_IN_TEMPLATE)
 
     def _make_adapter_kwargs(self):
         if self.args.sql:
@@ -197,10 +236,12 @@ class Builder:
             adapter=self.adapter,
             title_adapter=self.args.title_case
         )
+        version_text = f'{self.args.package_version}'
         connections_text = ADAPTER_CONNECTIONS_TEMPLATE.format(**kwargs)
         impl_text = ADAPTER_IMPL_TEMPLATE.format(**kwargs)
 
         (adapters_dest / '__init__.py').write_text(init_text)
+        (adapters_dest / '__version__.py').write_text(version_text)
         (adapters_dest / 'connections.py').write_text(connections_text)
         (adapters_dest / 'impl.py').write_text(impl_text)
 
@@ -214,14 +255,25 @@ class Builder:
             adapter=self.adapter,
             version=self.args.project_version,
         )
+        sample_profiles_text = SAMPLE_PROFILE_TEMPLATE.format(
+            adapter=self.adapter
+        )
         catalog_macro_text = CATALOG_MACRO_TEMPLATE.format(
             adapter=self.adapter
         )
 
         (include_dest / '__init__.py').write_text(INCLUDE_INIT_TEXT)
         (include_dest / 'dbt_project.yml').write_text(dbt_project_text)
+        (include_dest / 'sample_profiles.yml').write_text(sample_profiles_text)
         # make sure something satisfies the 'include/macros/*.sql' in setup.py
         (macros_dest / 'catalog.sql').write_text(catalog_macro_text)
+
+    def write_test_spec(self):
+        test_dest = self.dest_path('test')
+        test_dest.mkdir(parents=True, exist_ok=True)
+        spec_file = f'{self.adapter}.dbtspec'
+        spec_text = DBTSPEC_TEMPLATE.format(adapter=self.adapter)
+        (test_dest / spec_file).write_text(spec_text)
 
 
 def parse_args(argv=None):
@@ -232,12 +284,12 @@ def parse_args(argv=None):
     parser.add_argument('adapter')
     parser.add_argument('--title-case', '-t', default=None)
     parser.add_argument('--dependency', action='append')
-    parser.add_argument('--dbt-core-version', default='0.16.1rc1')
+    parser.add_argument('--dbt-core-version', default='0.20.0rc2')
     parser.add_argument('--email')
     parser.add_argument('--author')
     parser.add_argument('--url')
     parser.add_argument('--sql', action='store_true')
-    parser.add_argument('--package-version', default='0.0.1')
+    parser.add_argument('--package-version', default='0.20.0rc2')
     parser.add_argument('--project-version', default='1.0')
     parser.add_argument(
         '--no-dependency', action='store_false', dest='set_dependency'
