@@ -115,7 +115,7 @@ PACKAGE_PATH = os.path.dirname(__file__)
 """.lstrip()
 
 
-SAMPLE_PROFILE_TEMPLATE = '''
+SAMPLE_PROFILE_TEMPLATE = """
 default:
   outputs:
     dev:
@@ -126,10 +126,10 @@ default:
       # username: <user>
       # password: <pass>
   target: dev
-'''
+"""
 
 
-DBTSPEC_TEMPLATE = '''
+DBTSPEC_TEMPLATE = """
 # See https://github.com/dbt-labs/dbt-adapter-tests
 # for installation and use
 
@@ -150,7 +150,7 @@ sequences:
   test_dbt_data_test: data_test
   test_dbt_schema_test: schema_test
   test_dbt_ephemeral_data_tests: data_test_ephemeral_models
-'''
+"""
 
 
 class Builder:
@@ -203,7 +203,7 @@ class Builder:
             dependencies=self.args.dependency,
         )
         self.dest_path('setup.py').write_text(setup_py_contents)
-        self.dest_path('MANIFEST.in').write_text(MANIFEST_IN_TEMPLATE)
+        self.dest_path("MANIFEST.in").write_text(MANIFEST_IN_TEMPLATE)
 
     def _make_adapter_kwargs(self):
         if self.args.sql:
@@ -242,12 +242,12 @@ class Builder:
             adapter=self.adapter,
             title_adapter=self.args.title_case
         )
-        version_text = f'{self.args.package_version}'
+        version_text = f"{self.args.package_version}"
         connections_text = ADAPTER_CONNECTIONS_TEMPLATE.format(**kwargs)
         impl_text = ADAPTER_IMPL_TEMPLATE.format(**kwargs)
 
         (adapters_dest / '__init__.py').write_text(init_text)
-        (adapters_dest / '__version__.py').write_text(version_text)
+        (adapters_dest / "__version__.py").write_text(version_text)
         (adapters_dest / 'connections.py').write_text(connections_text)
         (adapters_dest / 'impl.py').write_text(impl_text)
 
@@ -261,7 +261,7 @@ class Builder:
             adapter=self.adapter,
             version=self.args.project_version,
         )
-        sample_profiles_text = SAMPLE_PROFILE_TEMPLATE.format(
+        sample_profiles_text = SAMPLE_PROFILE_TEMPLATE.format(adapter=self.adapter)
             adapter=self.adapter
         )
         catalog_macro_text = CATALOG_MACRO_TEMPLATE.format(
@@ -270,14 +270,14 @@ class Builder:
 
         (include_dest / '__init__.py').write_text(INCLUDE_INIT_TEXT)
         (include_dest / 'dbt_project.yml').write_text(dbt_project_text)
-        (include_dest / 'sample_profiles.yml').write_text(sample_profiles_text)
+        (include_dest / "sample_profiles.yml").write_text(sample_profiles_text)
         # make sure something satisfies the 'include/macros/*.sql' in setup.py
         (macros_dest / 'catalog.sql').write_text(catalog_macro_text)
 
     def write_test_spec(self):
-        test_dest = self.dest_path('test')
+        test_dest = self.dest_path("test")
         test_dest.mkdir(parents=True, exist_ok=True)
-        spec_file = f'{self.adapter}.dbtspec'
+        spec_file = f"{self.adapter}.dbtspec"
         spec_text = DBTSPEC_TEMPLATE.format(adapter=self.adapter)
         (test_dest / spec_file).write_text(spec_text)
 
