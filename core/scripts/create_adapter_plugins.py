@@ -249,11 +249,7 @@ class Builder:
             version=self.args.project_version,
         )
         sample_profiles_text = SAMPLE_PROFILE_TEMPLATE.format(adapter=self.adapter)
-            adapter=self.adapter
-        )
-        catalog_macro_text = CATALOG_MACRO_TEMPLATE.format(
-            adapter=self.adapter
-        )
+        catalog_macro_text = CATALOG_MACRO_TEMPLATE.format(adapter=self.adapter)
 
         (include_dest / "__init__.py").write_text(INCLUDE_INIT_TEXT)
         (include_dest / "dbt_project.yml").write_text(dbt_project_text)
