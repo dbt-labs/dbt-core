@@ -383,7 +383,7 @@ def _build_build_subparser(subparsers, base_subparser):
         'build',
         parents=[base_subparser],
         help='''
-        Runs the whole shebang!  @TODO: better description
+        Run all Seeds, Models, Snapshots, and tests in DAG order
         '''
     )
     sub.set_defaults(

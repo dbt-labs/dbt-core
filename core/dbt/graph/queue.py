@@ -34,7 +34,6 @@ class GraphQueue:
         # this lock controls most things
         self.lock = threading.Lock()
         # store the 'score' of each node as a number. Lower is higher priority.
-        # TODO: incorporate _include_in_cost (or remove dead code, still needed?)
         self._scores = self._get_scores(self.graph)
         # populate the initial queue
         self._find_new_additions()

@@ -19,7 +19,6 @@ class BuildTask(CompileTask):
     as run_model_runner.
     """
 
-    # TODO: is this list complete?
     RUNNER_MAP = {
         NodeType.Model: run_model_runner,
         NodeType.Snapshot: snapshot_model_runner,

@@ -12,6 +12,7 @@ from .printer import (
     print_run_end_messages,
     print_cancel_line,
 )
+
 from dbt import ui
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
@@ -39,7 +40,7 @@ from dbt.exceptions import (
     RuntimeException,
     FailFastException,
 )
-from dbt.node_types import NodeType
+
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
 from dbt.parser.manifest import ManifestLoader
 
@@ -166,7 +167,7 @@ class GraphRunnableTask(ManifestTask):
             run_count = self.run_count
             num_nodes = self.num_nodes
 
-        cls = self.get_runner_type(node)  # TODO: reduce this to just node.resource_type?
+        cls = self.get_runner_type(node)
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
