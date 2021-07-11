@@ -2,48 +2,24 @@
    
    {% if on_schema_change not in ['sync_all_columns', 'append_new_columns', 'fail', 'ignore'] %}
      
-     {% set log_message = 'invalid value for on_schema_change (%s) specified. Setting default value of %s.' % (on_schema_change, default) %}
-     {% do log(log_message, info=true) %}
+     {% set log_message = 'Invalid value for on_schema_change (%s) specified. Setting default value of %s.' % (on_schema_change, default) %}
+     {% do log(log_message) %}
      
      {{ return(default) }}
 
    {% else %}
+
      {{ return(on_schema_change) }}
    
    {% endif %}
 
 {% endmacro %}
 
-{% macro incremental_validate_alter_column_types(alter_column_types, default=False) %}
-   
-   {% if alter_column_types not in [True, False] %}
-     
-     {% set log_message = 'invalid value for alter_column_types (%s) specified. Setting default value of %s.' % (alter_column_types, default) %}
-     {% do log(log_message, info=true) %}
-
-     {{ return(default) }}
-
-   {% else %}
-     {{ return(alter_column_types) }}
-   
-   {% endif %}
-
-{% endmacro %}
-
-{% macro get_column_names(columns) %}
-  
-  {# -- this needs the | list or comparisons downstream don't work against the generators which come out of map() #}
-  {% set result = columns | map(attribute = 'column') | list %}
-
-  {{ return(result) }}
-
-{% endmacro %}
-
 {% macro diff_columns(source_columns, target_columns) %}
 
   {% set result = [] %}
-  {% set source_names = get_column_names(source_columns) %}
-  {% set target_names = get_column_names(target_columns) %}
+  {% set source_names = source_columns | map(attribute = 'column') | list %}
+  {% set target_names = target_columns | map(attribute = 'column') | list %}
    
    {# --check whether the name attribute exists in the target - this does not perform a data type check #}
    {% for sc in source_columns %}
@@ -72,6 +48,7 @@
 
 {% endmacro %}
 
+
 {% macro check_for_schema_changes(source_relation, target_relation) %}
   
   {% set schema_changed = False %}
@@ -90,45 +67,48 @@
   {% elif new_target_types != [] %}
     {% set schema_changed = True %}
   {% endif %}
+  
+  {% set changes_dict = {
+    'schema_changed': schema_changed,
+    'source_not_in_target': source_not_in_target,
+    'target_not_in_source': target_not_in_source,
+    'new_target_types': new_target_types
+  } %}
 
-  {% do log('schema changed: %s' % schema_changed, info=true) %}
-  {% do log('source_not_in_target: %s' % source_not_in_target, info=true) %}
-  {% do log('target_not_in_source: %s' % target_not_in_source, info=true) %}
+  {% set msg %}
+    In {{ target_relation }}:
+        Schema changed: {{ schema_changed }}
+        Source columns not in target: {{ source_not_in_target }}
+        Target columns not in source: {{ target_not_in_source }}
+        New column types: {{ new_target_types }}
+  {% endset %}
+  
+  {% do log(msg) %}
 
-  {{ 
-    return({
-      'schema_changed': schema_changed,
-      'source_not_in_target': source_not_in_target,
-      'target_not_in_source': target_not_in_source,
-      'new_target_types': new_target_types
-    }) 
-  }}
+  {{ return(changes_dict) }}
 
 {% endmacro %}
 
-{% macro sync_schemas(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
 
+{% macro sync_column_schemas(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
+  
   {%- set add_to_target_arr = schema_changes_dict['source_not_in_target'] -%}
-  {%- set remove_from_target_arr = schema_changes_dict['target_not_in_source'] -%}
-  {%- set new_target_types = schema_changes_dict['new_target_types'] -%}
 
   {%- if on_schema_change == 'append_new_columns'-%}
      {%- if add_to_target_arr | length > 0 -%}
-       {%- do alter_relation_add_columns(target_relation, add_to_target_arr) -%}
+       {%- do alter_relation_add_remove_columns(target_relation, add_to_target_arr, none) -%}
      {%- endif -%}
   
   {% elif on_schema_change == 'sync_all_columns' %}
-     {% if add_to_target_arr | length > 0 %} 
-       {%- do alter_relation_add_columns(target_relation, add_to_target_arr) -%}
-     {% endif %}
-
-     {% if remove_from_target_arr | length > 0 %}
-       {%- do alter_relation_drop_columns(target_relation, remove_from_target_arr) -%}
+     {%- set remove_from_target_arr = schema_changes_dict['target_not_in_source'] -%}
+     {%- set new_target_types = schema_changes_dict['new_target_types'] -%}
+  
+     {% if add_to_target_arr | length > 0 or remove_from_target_arr | length > 0 %} 
+       {%- do alter_relation_add_remove_columns(target_relation, add_to_target_arr, remove_from_target_arr) -%}
      {% endif %}
 
      {% if alter_column_types == True and new_target_types != [] %}
        {% for ntt in new_target_types %}
-         {% do log(ntt, info=true) %}
          {% set column_name = ntt['column_name'] %}
          {% set new_type = ntt['new_type'] %}
          {% do alter_column_type(target_relation, column_name, new_type) %}
@@ -137,47 +117,45 @@
   
   {% endif %}
 
-  {{ 
-      return(
-             {
-              'columns_added': add_to_target_arr,
-              'columns_removed': remove_from_target_arr,
-              'data_types_changed': new_target_types
-             }
-          )
-  }}
+  {% set schema_change_message %}
+    In {{ target_relation }}:
+        Schema change approach: {{ on_schema_change }}
+        Columns added: {{ add_to_target_arr }}
+        Columns removed: {{ remove_from_target_arr }}
+        Data types changed: {{ new_target_types }}
+  {% endset %}
+  
+  {% do log(schema_change_message) %}
   
 {% endmacro %}
 
-{% macro process_schema_changes(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
-      
-    {% if on_schema_change=='fail' %}
-      
-      {{ 
-        exceptions.raise_compiler_error("The source and target schemas on this incremental model are out of sync!
-             You can specify one of ['fail', 'ignore', 'append_new_columns', 'sync_all_columns'] in the on_schema_change config to control this behavior.
-             Please re-run the incremental model with full_refresh set to True to update the target schema.
-             Alternatively, you can update the schema manually and re-run the process.") 
-      }}
-    
-    {# -- unless we ignore, run the sync operation per the config #}
-    {% else %}
-      
-      {% set schema_changes = sync_schemas(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
-      {% set columns_added = schema_changes['columns_added'] %}
-      {% set columns_removed = schema_changes['columns_removed'] %}
-      {% set data_types_changed = schema_changes['data_types_changed'] %}
 
-      {% if on_schema_change == 'append_new_columns' %}
-        {% do log('columns added: ' + columns_added|join(', '), info=true) %}
+{% macro process_schema_changes(on_schema_change, alter_column_types, source_relation, target_relation) %}
+    
+    {% if on_schema_change != 'ignore' %}
+    
+      {% set schema_changes_dict = check_for_schema_changes(source_relation, target_relation) %}
       
-      {% elif on_schema_change == 'sync_all_columns' %}
-        {% do log('columns added: ' + columns_added|join(', '), info=true) %}
-        {% do log('columns removed: ' + columns_removed|join(', '), info=true) %}
-        {% do log('data types changed: ' + data_types_changed|join(', '), info=true) %}
+      {% if schema_changes_dict['schema_changed'] %}
+    
+        {% if on_schema_change == 'fail' %}
+        
+          {% set fail_msg %}
+              The source and target schemas on this incremental model are out of sync!
+              Please re-run the incremental model with `full_refresh: True` to update the target schema.
+              Alternatively, you can update the schema manually and re-run the process.
+          {% endset %}
+          
+          {% do exceptions.raise_compiler_error(fail_msg) %}
+        
+        {# -- unless we ignore, run the sync operation per the config #}
+        {% else %}
+          
+          {% do sync_column_schemas(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
+        
+        {% endif %}
       
       {% endif %}
-      
     
     {% endif %}
 

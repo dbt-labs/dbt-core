@@ -1207,6 +1207,7 @@ def basic_timestamp_snapshot_config_dict():
         'updated_at': 'last_update',
         'target_database': 'some_snapshot_db',
         'target_schema': 'some_snapshot_schema',
+        'on_schema_change': 'ignore',
     }
 
 
@@ -1239,6 +1240,7 @@ def complex_timestamp_snapshot_config_dict():
         'extra': 'even more',
         'strategy': 'timestamp',
         'updated_at': 'last_update',
+        'on_schema_change': 'ignore',
     }
 
 
@@ -1295,6 +1297,7 @@ def basic_check_snapshot_config_dict():
         'unique_key': 'id',
         'strategy': 'check',
         'check_cols': 'all',
+        'on_schema_change': 'ignore',
     }
 
 
@@ -1327,6 +1330,7 @@ def complex_set_snapshot_config_dict():
         'extra': 'even more',
         'strategy': 'check',
         'check_cols': ['a', 'b'],
+        'on_schema_change': 'ignore',
     }
 
 

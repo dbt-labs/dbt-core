@@ -1,8 +1,5 @@
 from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 
-from dbt.task.test import TestTask
-from dbt.task.list import ListTask
-
 
 class TestSelectionExpansion(DBTIntegrationTest):
     @property
@@ -63,222 +60,161 @@ class TestSelectionExpansion(DBTIntegrationTest):
         assert len(tests_run) == len(expected_tests)
         assert sorted(tests_run) == sorted(expected_tests)
         self.assertTablesEqual(compare_source, compare_source)
+
+    def run_incremental_ignore(self):
+        select = 'model_a incremental_ignore incremental_ignore_target'
+        compare_source = 'incremental_ignore'
+        compare_target = 'incremental_ignore_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_ignore',
+            'select_from_incremental_ignore_target',
+            'unique_model_a_id',
+            'unique_incremental_ignore_id',
+            'unique_incremental_ignore_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    def run_incremental_append_new_columns(self):
+        select = 'model_a incremental_append_new_columns incremental_append_new_columns_target'
+        compare_source = 'incremental_append_new_columns'
+        compare_target = 'incremental_append_new_columns_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_append_new_columns',
+            'select_from_incremental_append_new_columns_target',
+            'unique_model_a_id',
+            'unique_incremental_append_new_columns_id',
+            'unique_incremental_append_new_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    def run_incremental_sync_all_columns_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_alter_types'
+        compare_target = 'incremental_sync_all_columns_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_sync_all_columns_alter_types',
+            'select_from_incremental_sync_all_columns_target',
+            'unique_model_a_id',
+            'unique_incremental_sync_all_columns_alter_types_id',
+            'unique_incremental_sync_all_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+    
+    def run_incremental_sync_all_columns_no_alter_types(self):
+        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns_no_alter_types'
+        compare_target = 'incremental_sync_all_columns_target'
+        exclude = None
+        expected = [
+            'select_from_a',
+            'select_from_incremental_sync_all_columns_no_alter_types',
+            'select_from_incremental_sync_all_columns_target',
+            'unique_model_a_id',
+            'unique_incremental_sync_all_columns_no_alter_types_id',
+            'unique_incremental_sync_all_columns_target_id'
+        ]
+            
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+        
+    def run_incremental_fail_on_schema_change(self):
+        select = 'model_a incremental_fail'
+        results_one = self.run_dbt(['run', '--models', select, '--full-refresh'])
+        results_two = self.run_dbt(['run', '--models', select], expect_pass = False)
+        self.assertIn('Compilation Error', results_two[1].message)
     
     ######################### POSTGRES TESTS #########################
     @use_profile('postgres')
     def test__postgres__run_incremental_ignore(self):
-        select = 'model_a incremental_ignore incremental_ignore_target'
-        compare_source = 'incremental_ignore'
-        compare_target = 'incremental_ignore_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_ignore',
-            'select_from_incremental_ignore_target',
-            'unique_model_a_id',
-            'unique_incremental_ignore_id',
-            'unique_incremental_ignore_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_ignore()
+
     @use_profile('postgres')
     def test__postgres__run_incremental_append_new_columns(self):
-        select = 'model_a incremental_append_new_columns incremental_append_new_columns_target'
-        compare_source = 'incremental_append_new_columns'
-        compare_target = 'incremental_append_new_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_append_new_columns',
-            'select_from_incremental_append_new_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_append_new_columns_id',
-            'unique_incremental_append_new_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_append_new_columns()
+
     @use_profile('postgres')
     def test__postgres__run_incremental_sync_all_columns_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_sync_all_columns_alter_types()
+
     @use_profile('postgres')
     def test__postgres__run_incremental_sync_all_columns_no_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_no_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_no_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_no_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+        self.run_incremental_sync_all_columns_no_alter_types()
+        
+    @use_profile('postgres')
+    def test__postgres__run_incremental_fail_on_schema_change(self):
+        self.run_incremental_fail_on_schema_change()
     
+    ######################### REDSHIFT TESTS #########################
+    @use_profile('redshift')
+    def test__redshift__run_incremental_ignore(self):
+        self.run_incremental_ignore()
+
+    @use_profile('redshift')
+    def test__redshift__run_incremental_append_new_columns(self):
+        self.run_incremental_append_new_columns()
+
+    @use_profile('redshift')
+    def test__redshift__run_incremental_sync_all_columns_alter_types(self):
+        self.run_incremental_sync_all_columns_alter_types()
+
+    @use_profile('redshift')
+    def test__redshift__run_incremental_sync_all_columns_no_alter_types(self):
+        self.run_incremental_sync_all_columns_no_alter_types()
+
+    @use_profile('redshift')
+    def test__redshift__run_incremental_fail_on_schema_change(self):
+        self.run_incremental_fail_on_schema_change()
+
     ######################### SNOWFLAKE TESTS #########################
     @use_profile('snowflake')
     def test__snowflake__run_incremental_ignore(self):
-        select = 'model_a incremental_ignore incremental_ignore_target'
-        compare_source = 'incremental_ignore'
-        compare_target = 'incremental_ignore_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_ignore',
-            'select_from_incremental_ignore_target',
-            'unique_model_a_id',
-            'unique_incremental_ignore_id',
-            'unique_incremental_ignore_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_ignore()
+
     @use_profile('snowflake')
     def test__snowflake__run_incremental_append_new_columns(self):
-        select = 'model_a incremental_append_new_columns incremental_append_new_columns_target'
-        compare_source = 'incremental_append_new_columns'
-        compare_target = 'incremental_append_new_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_append_new_columns',
-            'select_from_incremental_append_new_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_append_new_columns_id',
-            'unique_incremental_append_new_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_append_new_columns()
+
     @use_profile('snowflake')
     def test__snowflake__run_incremental_sync_all_columns_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_sync_all_columns_alter_types()
+
     @use_profile('snowflake')
     def test__snowflake__run_incremental_sync_all_columns_no_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_no_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_no_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_no_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_sync_all_columns_no_alter_types()
+
+    @use_profile('snowflake')
+    def test__snowflake__run_incremental_fail_on_schema_change(self):
+        self.run_incremental_fail_on_schema_change()
+        
     ######################### BIGQUERY TESTS #########################
     @use_profile('bigquery')
     def test__bigquery__run_incremental_ignore(self):
-        select = 'model_a incremental_ignore incremental_ignore_target'
-        compare_source = 'incremental_ignore'
-        compare_target = 'incremental_ignore_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_ignore',
-            'select_from_incremental_ignore_target',
-            'unique_model_a_id',
-            'unique_incremental_ignore_id',
-            'unique_incremental_ignore_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_ignore()
+
     @use_profile('bigquery')
     def test__bigquery__run_incremental_append_new_columns(self):
-        select = 'model_a incremental_append_new_columns incremental_append_new_columns_target'
-        compare_source = 'incremental_append_new_columns'
-        compare_target = 'incremental_append_new_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_append_new_columns',
-            'select_from_incremental_append_new_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_append_new_columns_id',
-            'unique_incremental_append_new_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_append_new_columns()
+
     @use_profile('bigquery')
     def test__bigquery__run_incremental_sync_all_columns_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+        self.run_incremental_sync_all_columns_alter_types()
+
     @use_profile('bigquery')
     def test__bigquery__run_incremental_sync_all_columns_no_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_no_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_no_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_no_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
+        self.run_incremental_sync_all_columns_no_alter_types()
+        
+    @use_profile('bigquery')
+    def test__bigquery__un_incremental_fail_on_schema_change(self):
+        self.run_incremental_fail_on_schema_change()

@@ -15,7 +15,9 @@
 {% endmacro %}
 
 
-{% macro bq_insert_overwrite(tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns) %}
+{% macro bq_insert_overwrite(
+    tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists
+) %}
 
   {% if partitions is not none and partitions != [] %} {# static #}
 
@@ -52,8 +54,13 @@
           where {{ partition_by.field }} is not null
       );
 
-      -- 1. create a temp table
-      {{ create_table_as(True, tmp_relation, sql) }}
+      {# have we already created the temp table to check for schema changes? #}
+      {% if not tmp_relation_exists %}
+        -- 1. create a temp table
+        {{ create_table_as(True, tmp_relation, sql) }}
+      {% else %}
+        -- 1. temp table already exists, we used it to check for schema changes
+      {% endif %}
 
       -- 2. define partitions to update
       set (dbt_partitions_for_replacement) = (
@@ -77,14 +84,9 @@
 {% endmacro %}
 
 
-{% macro bq_generate_build_sql(strategy, 
-                               tmp_relation, 
-                               target_relation, 
-                               sql, 
-                               unique_key, 
-                               partition_by, 
-                               partitions, 
-                               dest_columns) %}
+{% macro bq_generate_incremental_build_sql(
+    strategy, tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists
+) %}
   {#-- if partitioned, use BQ scripting to get the range of partition values to be updated --#}
   {% if strategy == 'insert_overwrite' %}
 
@@ -96,20 +98,20 @@
     {% endif %}
 
     {% set build_sql = bq_insert_overwrite(
-            tmp_relation,
-            target_relation,
-            sql,
-            unique_key,
-            partition_by,
-            partitions,
-            dest_columns) %}
+        tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, on_schema_change
+    ) %}
 
-  {% else %}
-       {#-- wrap sql in parens to make it a subquery --#}
-       {%- set source_sql -%}
-         (
-           {{sql}}
-         )
+  {% else %} {# strategy == 'merge' #}
+    {%- set source_sql -%}
+      {%- if tmp_relation_exists -%}
+        (
+          select * from {{ tmp_relation }}
+        )
+      {%- else -%} {#-- wrap sql in parens to make it a subquery --#}
+        (
+          {{sql}}
+        )
+      {%- endif -%}
     {%- endset -%}
 
     {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns) %}
@@ -138,13 +140,9 @@
   {%- set cluster_by = config.get('cluster_by', none) -%}
 
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
-  {% set alter_column_types = incremental_validate_alter_column_types(config.get('alter_column_types'), default=False) %}
+  {% set alter_column_types = config.get('alter_column_types', false) %}
 
   {{ run_hooks(pre_hooks) }}
-
-  {# -- first check whether we want to full refresh for source view or config reasons #}
-  {% set trigger_full_refresh = (full_refresh_mode or existing_relation.is_view) %}
-  {% do log('full refresh mode: %s' % trigger_full_refresh) %}
 
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
@@ -163,30 +161,17 @@
       {% set build_sql = create_table_as(False, target_relation, sql) %}
   
   {% else %}
-    {% set tmp_sql %}
-      select * from ({{ sql }}) where false limit 0
-    {% endset %}
-    {% do run_query(create_table_as(True, tmp_relation, tmp_sql)) %}
-    {% do adapter.expand_target_column_types(
-           from_relation=tmp_relation,
-           to_relation=target_relation) %}
-    
-    {% if on_schema_change != 'ignore' %}
-      {% set schema_changes_dict = check_for_schema_changes(tmp_relation, target_relation) %}
-      {% if schema_changes_dict['schema_changed'] %}
-        {% do process_schema_changes(on_schema_change, alter_column_types, existing_relation, schema_changes_dict) %}
-      {% endif %}
+    {% set tmp_relation_exists = false %}
+    {% if on_schema_change != 'ignore' %} {# Check first, since otherwise we may not build a temp table #}
+      {% do run_query(create_table_as(True, tmp_relation, sql)) %}
+      {% set tmp_relation_exists = true %}
+      {% do process_schema_changes(on_schema_change, alter_column_types, tmp_relation, existing_relation) %}
     {% endif %}
     
     {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
-    {% set build_sql = bq_generate_build_sql(strategy, 
-                               tmp_relation, 
-                               target_relation, 
-                               sql, 
-                               unique_key, 
-                               partition_by, 
-                               partitions, 
-                               dest_columns) %}
+    {% set build_sql = bq_generate_incremental_build_sql(
+        strategy, tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists
+    ) %}
 
   {% endif %}
 
