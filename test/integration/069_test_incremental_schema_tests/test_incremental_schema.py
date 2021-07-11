@@ -95,34 +95,17 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
     
-    def run_incremental_sync_all_columns_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_alter_types'
+    def run_incremental_sync_all_columns(self):
+        select = 'model_a incremental_sync_all_columns incremental_sync_all_columns_target'
+        compare_source = 'incremental_sync_all_columns'
         compare_target = 'incremental_sync_all_columns_target'
         exclude = None
         expected = [
             'select_from_a',
-            'select_from_incremental_sync_all_columns_alter_types',
+            'select_from_incremental_sync_all_columns',
             'select_from_incremental_sync_all_columns_target',
             'unique_model_a_id',
-            'unique_incremental_sync_all_columns_alter_types_id',
-            'unique_incremental_sync_all_columns_target_id'
-        ]
-            
-        self.list_tests_and_assert(select, exclude, expected)
-        self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
-    def run_incremental_sync_all_columns_no_alter_types(self):
-        select = 'model_a incremental_sync_all_columns_no_alter_types incremental_sync_all_columns_target'
-        compare_source = 'incremental_sync_all_columns_no_alter_types'
-        compare_target = 'incremental_sync_all_columns_target'
-        exclude = None
-        expected = [
-            'select_from_a',
-            'select_from_incremental_sync_all_columns_no_alter_types',
-            'select_from_incremental_sync_all_columns_target',
-            'unique_model_a_id',
-            'unique_incremental_sync_all_columns_no_alter_types_id',
+            'unique_incremental_sync_all_columns_id',
             'unique_incremental_sync_all_columns_target_id'
         ]
             
@@ -145,12 +128,8 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_incremental_append_new_columns()
 
     @use_profile('postgres')
-    def test__postgres__run_incremental_sync_all_columns_alter_types(self):
-        self.run_incremental_sync_all_columns_alter_types()
-
-    @use_profile('postgres')
-    def test__postgres__run_incremental_sync_all_columns_no_alter_types(self):
-        self.run_incremental_sync_all_columns_no_alter_types()
+    def test__postgres__run_incremental_sync_all_columns(self):
+        self.run_incremental_sync_all_columns()
         
     @use_profile('postgres')
     def test__postgres__run_incremental_fail_on_schema_change(self):
@@ -166,12 +145,8 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_incremental_append_new_columns()
 
     @use_profile('redshift')
-    def test__redshift__run_incremental_sync_all_columns_alter_types(self):
-        self.run_incremental_sync_all_columns_alter_types()
-
-    @use_profile('redshift')
-    def test__redshift__run_incremental_sync_all_columns_no_alter_types(self):
-        self.run_incremental_sync_all_columns_no_alter_types()
+    def test__redshift__run_incremental_sync_all_columns(self):
+        self.run_incremental_sync_all_columns()
 
     @use_profile('redshift')
     def test__redshift__run_incremental_fail_on_schema_change(self):
@@ -187,12 +162,8 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_incremental_append_new_columns()
 
     @use_profile('snowflake')
-    def test__snowflake__run_incremental_sync_all_columns_alter_types(self):
-        self.run_incremental_sync_all_columns_alter_types()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_sync_all_columns_no_alter_types(self):
-        self.run_incremental_sync_all_columns_no_alter_types()
+    def test__snowflake__run_incremental_sync_all_columns(self):
+        self.run_incremental_sync_all_columns()
 
     @use_profile('snowflake')
     def test__snowflake__run_incremental_fail_on_schema_change(self):
@@ -208,12 +179,8 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_incremental_append_new_columns()
 
     @use_profile('bigquery')
-    def test__bigquery__run_incremental_sync_all_columns_alter_types(self):
-        self.run_incremental_sync_all_columns_alter_types()
-
-    @use_profile('bigquery')
-    def test__bigquery__run_incremental_sync_all_columns_no_alter_types(self):
-        self.run_incremental_sync_all_columns_no_alter_types()
+    def test__bigquery__run_incremental_sync_all_columns(self):
+        self.run_incremental_sync_all_columns()
         
     @use_profile('bigquery')
     def test__bigquery__un_incremental_fail_on_schema_change(self):

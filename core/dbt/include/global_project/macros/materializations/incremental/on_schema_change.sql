@@ -90,7 +90,7 @@
 {% endmacro %}
 
 
-{% macro sync_column_schemas(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
+{% macro sync_column_schemas(on_schema_change, target_relation, schema_changes_dict) %}
   
   {%- set add_to_target_arr = schema_changes_dict['source_not_in_target'] -%}
 
@@ -107,7 +107,7 @@
        {%- do alter_relation_add_remove_columns(target_relation, add_to_target_arr, remove_from_target_arr) -%}
      {% endif %}
 
-     {% if alter_column_types == True and new_target_types != [] %}
+     {% if new_target_types != [] %}
        {% for ntt in new_target_types %}
          {% set column_name = ntt['column_name'] %}
          {% set new_type = ntt['new_type'] %}
@@ -130,7 +130,7 @@
 {% endmacro %}
 
 
-{% macro process_schema_changes(on_schema_change, alter_column_types, source_relation, target_relation) %}
+{% macro process_schema_changes(on_schema_change, source_relation, target_relation) %}
     
     {% if on_schema_change != 'ignore' %}
     
@@ -151,7 +151,7 @@
         {# -- unless we ignore, run the sync operation per the config #}
         {% else %}
           
-          {% do sync_column_schemas(on_schema_change, alter_column_types, target_relation, schema_changes_dict) %}
+          {% do sync_column_schemas(on_schema_change, target_relation, schema_changes_dict) %}
         
         {% endif %}
       

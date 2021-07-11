@@ -140,7 +140,6 @@
   {%- set cluster_by = config.get('cluster_by', none) -%}
 
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
-  {% set alter_column_types = config.get('alter_column_types', false) %}
 
   {{ run_hooks(pre_hooks) }}
 
@@ -165,7 +164,7 @@
     {% if on_schema_change != 'ignore' %} {# Check first, since otherwise we may not build a temp table #}
       {% do run_query(create_table_as(True, tmp_relation, sql)) %}
       {% set tmp_relation_exists = true %}
-      {% do process_schema_changes(on_schema_change, alter_column_types, tmp_relation, existing_relation) %}
+      {% do process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
     {% endif %}
     
     {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}

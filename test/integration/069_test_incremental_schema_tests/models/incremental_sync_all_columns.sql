@@ -2,8 +2,7 @@
     config(
         materialized='incremental',
         unique_key='id',
-        on_schema_change='sync_all_columns',
-        alter_column_types=True
+        on_schema_change='sync_all_columns'
         
     )
 }}

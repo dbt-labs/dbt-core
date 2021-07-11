@@ -9,7 +9,6 @@
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
-  {% set alter_column_types = config.get('alter_column_types', false) %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -44,7 +43,7 @@
     {% do adapter.expand_target_column_types(
              from_relation=tmp_relation,
              to_relation=target_relation) %}
-    {% do process_schema_changes(on_schema_change, alter_column_types, tmp_relation, existing_relation) %}
+    {% do process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
     {% set build_sql = incremental_upsert(tmp_relation, target_relation, unique_key=unique_key) %}
   
   {% endif %}

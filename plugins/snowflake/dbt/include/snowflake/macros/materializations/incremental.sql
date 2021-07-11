@@ -38,7 +38,6 @@
   {#-- Validate early so we don't run SQL if the strategy is invalid --#}
   {% set strategy = dbt_snowflake_validate_get_incremental_strategy(config) -%}
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
-  {% set alter_column_types = config.get('alter_column_types', False) %}
 
   -- setup
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
@@ -63,7 +62,7 @@
     {% do adapter.expand_target_column_types(
            from_relation=tmp_relation,
            to_relation=target_relation) %}
-    {% do process_schema_changes(on_schema_change, alter_column_types, tmp_relation, existing_relation) %}
+    {% do process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
     {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
     {% set build_sql = dbt_snowflake_get_incremental_sql(strategy, tmp_relation, target_relation, unique_key, dest_columns) %}
   
