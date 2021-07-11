@@ -72,7 +72,7 @@ class FilesystemSearcher(Iterable[FilePath]):
         self.extension_regex = extension_regex
 
     def __iter__(self) -> Iterator[FilePath]:
-        ext = "[^.]*" + self.extension_regex
+        ext = ".*" + self.extension_regex
 
         root = self.project.project_root
 

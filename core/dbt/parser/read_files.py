@@ -99,7 +99,7 @@ def read_files_for_parser(project, files, dirs, extension_regex, parse_ft):
 def read_files(project, files, parser_files):
     project_files = {}
 
-    sql_template_extensions = r'\.sql(\.jinja)?'
+    sql_template_extensions = r'\.sql(\.jinja)?$'
 
     project_files['MacroParser'] = read_files_for_parser(
         project, files, project.macro_paths, sql_template_extensions,
@@ -127,16 +127,16 @@ def read_files(project, files, parser_files):
     )
 
     project_files['SeedParser'] = read_files_for_parser(
-        project, files, project.data_paths, r'\.csv', ParseFileType.Seed,
+        project, files, project.data_paths, r'\.csv$', ParseFileType.Seed,
     )
 
     project_files['DocumentationParser'] = read_files_for_parser(
-        project, files, project.docs_paths, r'\.md',
+        project, files, project.docs_paths, r'\.md$',
         ParseFileType.Documentation,
     )
 
     project_files['SchemaParser'] = read_files_for_parser(
-        project, files, project.all_source_paths, r'\.ya?ml',
+        project, files, project.all_source_paths, r'\.ya?ml$',
         ParseFileType.Schema,
     )
 
