@@ -408,6 +408,10 @@ class StateSelectorMethod(SelectorMethod):
         return modified
 
     def recursively_check_macros_modified(self, node):
+        # check if there are any changes in macros the first time
+        if self.modified_macros is None:
+            self.modified_macros = self._macros_modified()
+        
         for macro_uid in node.depends_on.macros:
             if macro_uid in self.modified_macros:
                 return True
@@ -418,24 +422,27 @@ class StateSelectorMethod(SelectorMethod):
                 return False
         return False
 
-    def check_modified(
-        self,
-        old: Optional[SelectorTarget],
-        new: SelectorTarget,
-    ) -> bool:
-        # check if there are any changes in macros, if so, log them the first time
-        if self.modified_macros is None:
-            self.modified_macros = self._macros_modified()
-
+    def check_modified(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         different_contents = not new.same_contents(old)
         upstream_macro_change = self.recursively_check_macros_modified(new)
         return different_contents or upstream_macro_change  # type: ignore
+        
+    def check_modified_contents(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        return not new.same_contents(old)
+        
+    def check_modified_configs(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        return not new.same_config(old)
+        
+    def check_modified_persisted_descriptions(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        return not new.same_persisted_description(old)
+        
+    def check_modified_database_representations(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        return not new.same_database_representation(old)
 
-    def check_new(
-        self,
-        old: Optional[SelectorTarget],
-        new: SelectorTarget,
-    ) -> bool:
+    def check_modified_macros(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        return self.recursively_check_macros_modified(new)
+
+    def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return old is None
 
     def search(
@@ -447,8 +454,13 @@ class StateSelectorMethod(SelectorMethod):
             )
 
         state_checks = {
-            'modified': self.check_modified,
             'new': self.check_new,
+            'modified': self.check_modified,
+            'modified.contents': self.check_modified_contents,
+            'modified.configs': self.check_modified_configs,
+            'modified.persisted_descriptions': self.check_modified_persisted_descriptions,
+            'modified.database_representations': self.check_modified_database_representations,
+            'modified.macros': self.check_modified_macros,
         }
         if selector in state_checks:
             checker = state_checks[selector]
