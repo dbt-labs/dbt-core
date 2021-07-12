@@ -381,7 +381,7 @@ class TestTypeSelectorMethod(SelectorMethod):
 class StateSelectorMethod(SelectorMethod):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.macros_were_modified: Optional[List[str]] = None
+        self.modified_macros: Optional[List[str]] = None
 
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
@@ -394,38 +394,42 @@ class StateSelectorMethod(SelectorMethod):
 
         modified = []
         for uid, macro in new_macros.items():
-            name = f'{macro.package_name}.{macro.name}'
             if uid in old_macros:
                 old_macro = old_macros[uid]
                 if macro.macro_sql != old_macro.macro_sql:
-                    modified.append(f'{name} changed')
+                    modified.append(uid)
             else:
-                modified.append(f'{name} added')
+                modified.append(uid)
 
         for uid, macro in old_macros.items():
             if uid not in new_macros:
-                modified.append(f'{macro.package_name}.{macro.name} removed')
+                modified.append(uid)
 
-        return modified[:3]
+        return modified
+
+    def recursively_check_macros_modified(self, node):
+        for macro_uid in node.depends_on.macros:
+            if macro_uid in self.modified_macros:
+                return True
+            macro = self.manifest.macros[macro_uid]
+            if len(macro.depends_on.macros) > 0:
+                return self.recursively_check_macros_modified(macro)
+            else:
+                return False
+        return False
 
     def check_modified(
         self,
         old: Optional[SelectorTarget],
         new: SelectorTarget,
     ) -> bool:
-        # check if there are any changes in macros, if so, log a warning the
-        # first time
-        if self.macros_were_modified is None:
-            self.macros_were_modified = self._macros_modified()
-            if self.macros_were_modified:
-                log_str = ', '.join(self.macros_were_modified)
-                logger.warning(warning_tag(
-                    f'During a state comparison, dbt detected a change in '
-                    f'macros. This will not be marked as a modification. Some '
-                    f'macros: {log_str}'
-                ))
+        # check if there are any changes in macros, if so, log them the first time
+        if self.modified_macros is None:
+            self.modified_macros = self._macros_modified()
 
-        return not new.same_contents(old)  # type: ignore
+        different_contents = not new.same_contents(old)
+        upstream_macro_change = self.recursively_check_macros_modified(new)
+        return different_contents or upstream_macro_change  # type: ignore
 
     def check_new(
         self,
