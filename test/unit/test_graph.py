@@ -1,21 +1,20 @@
 import os
 import unittest
 from unittest.mock import MagicMock, patch
-import pytest
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
-from dbt.adapters.factory import reset_adapters, register_adapter
+
 import dbt.clients.system
 import dbt.compilation
+import dbt.config
 import dbt.exceptions
 import dbt.flags
 import dbt.parser
-import dbt.config
-import dbt.utils
 import dbt.parser.manifest
+import dbt.utils
+from dbt.adapters.factory import reset_adapters, register_adapter
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest, MacroManifest, ManifestStateCheck
-from dbt.parser.base import BaseParser
+from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
 
 try:
@@ -174,17 +173,23 @@ class GraphTest(unittest.TestCase):
     def load_manifest(self, config):
         inject_plugin(PostgresPlugin)
         register_adapter(config)
-        loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
+        loader = dbt.parser.manifest.ManifestLoader(
+            config, {config.project_name: config},
+        )
         loader.manifest.macros = self.macro_manifest.macros
         loader.load()
         return loader.manifest
 
+    def test__single_model_with_jinja_extension(self):
+        self.__single_model(True)
 
-    @pytest.mark.parametrize('with_jinja_extension', [True, False])
-    def test__single_model(self, with_jinja_extension):
+    def test__single_model(self):
+        self.__single_model(False)
+
+    def __single_model(self, with_jinja_extension: bool):
         self.use_models(
             {
-                'model_one': 'select * from events',
+                'model_one': 'SELECT * FROM events',
             },
             sql_dot_jinja=with_jinja_extension,
         )
@@ -203,12 +208,17 @@ class GraphTest(unittest.TestCase):
             list(linker.edges()),
             [])
 
-    @pytest.mark.parametrize('with_jinja_extension', [True, False])
-    def test__two_models_simple_ref(self,with_jinja_extension):
+    def test__two_models_simple_ref(self):
+        self.__two_models_simple_ref(False)
+
+    def test__two_models_simple_ref_with_jinja_extension(self):
+        self.__two_models_simple_ref(True)
+
+    def __two_models_simple_ref(self, with_jinja_extension):
         self.use_models(
             {
-                'model_one': 'select * from events',
-                'model_two': "select * from {{ref('model_one')}}",
+                'model_one': 'SELECT * FROM events',
+                'model_two': "SELECT * FROM {{ref('model_one')}}",
             },
             sql_dot_jinja=with_jinja_extension
         )
@@ -228,17 +238,23 @@ class GraphTest(unittest.TestCase):
 
         self.assertCountEqual(
             linker.edges(),
-            [('model.test_models_compile.model_one', 'model.test_models_compile.model_two',)]
+            [('model.test_models_compile.model_one',
+              'model.test_models_compile.model_two',)]
         )
 
-    @pytest.mark.parametrize('with_jinja_extension', [True, False])
-    def test__model_materializations(self, with_jinja_extension):
+    def test__model_materializations(self):
+        self.__model_materializations(False)
+
+    def test__model_materializations_with_jinja_extension(self):
+        self.__model_materializations(True)
+
+    def __model_materializations(self, with_jinja_extension):
         self.use_models(
             {
-                'model_one': 'select * from events',
-                'model_two': "select * from {{ref('model_one')}}",
-                'model_three': "select * from events",
-                'model_four': "select * from events",
+                'model_one': 'SELECT * FROM events',
+                'model_two': "SELECT * FROM {{ref('model_one')}}",
+                'model_three': "SELECT * FROM events",
+                'model_four': "SELECT * FROM events",
             },
             sql_dot_jinja=with_jinja_extension,
         )
