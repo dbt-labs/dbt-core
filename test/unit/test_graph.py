@@ -1,7 +1,7 @@
 import os
 import unittest
 from unittest.mock import MagicMock, patch
-from pytest.mark import parametrize
+import pytest
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.adapters.factory import reset_adapters, register_adapter
@@ -180,7 +180,7 @@ class GraphTest(unittest.TestCase):
         return loader.manifest
 
 
-    @parametrize('with_jinja_extension', [True, False])
+    @pytest.mark.parametrize('with_jinja_extension', [True, False])
     def test__single_model(self, with_jinja_extension):
         self.use_models(
             {
@@ -203,7 +203,7 @@ class GraphTest(unittest.TestCase):
             list(linker.edges()),
             [])
 
-    @parametrize('with_jinja_extension', [True, False])
+    @pytest.mark.parametrize('with_jinja_extension', [True, False])
     def test__two_models_simple_ref(self,with_jinja_extension):
         self.use_models(
             {
@@ -231,7 +231,7 @@ class GraphTest(unittest.TestCase):
             [('model.test_models_compile.model_one', 'model.test_models_compile.model_two',)]
         )
 
-    @parametrize('with_jinja_extension', [True, False])
+    @pytest.mark.parametrize('with_jinja_extension', [True, False])
     def test__model_materializations(self, with_jinja_extension):
         self.use_models(
             {
