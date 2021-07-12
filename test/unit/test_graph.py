@@ -1,6 +1,7 @@
 import os
 import unittest
 from unittest.mock import MagicMock, patch
+from pytest.mark import parametrize
 
 from dbt.adapters.postgres import Plugin as PostgresPlugin
 from dbt.adapters.factory import reset_adapters, register_adapter
@@ -158,12 +159,12 @@ class GraphTest(unittest.TestCase):
     def get_compiler(self, project):
         return dbt.compilation.Compiler(project)
 
-    def use_models(self, models):
+    def use_models(self, models, sql_dot_jinja: bool=False):
         for k, v in models.items():
             path = FilePath(
                 searched_path='models',
                 project_root=os.path.normcase(os.getcwd()),
-                relative_path='{}.sql'.format(k),
+                relative_path=f'{k}.sql{".jinja" if sql_dot_jinja else ""}',
             )
             # FileHash can't be empty or 'search_key' will be None
             source_file = SourceFile(path=path, checksum=FileHash.from_contents('abc'))
@@ -178,10 +179,15 @@ class GraphTest(unittest.TestCase):
         loader.load()
         return loader.manifest
 
-    def test__single_model(self):
-        self.use_models({
-            'model_one': 'select * from events',
-        })
+
+    @parametrize('with_jinja_extension', [True, False])
+    def test__single_model(self, with_jinja_extension):
+        self.use_models(
+            {
+                'model_one': 'select * from events',
+            },
+            sql_dot_jinja=with_jinja_extension,
+        )
 
         config = self.get_config()
         manifest = self.load_manifest(config)
@@ -197,11 +203,15 @@ class GraphTest(unittest.TestCase):
             list(linker.edges()),
             [])
 
-    def test__two_models_simple_ref(self):
-        self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
-        })
+    @parametrize('with_jinja_extension', [True, False])
+    def test__two_models_simple_ref(self,with_jinja_extension):
+        self.use_models(
+            {
+                'model_one': 'select * from events',
+                'model_two': "select * from {{ref('model_one')}}",
+            },
+            sql_dot_jinja=with_jinja_extension
+        )
 
         config = self.get_config()
         manifest = self.load_manifest(config)
@@ -221,13 +231,17 @@ class GraphTest(unittest.TestCase):
             [('model.test_models_compile.model_one', 'model.test_models_compile.model_two',)]
         )
 
-    def test__model_materializations(self):
-        self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
-            'model_three': "select * from events",
-            'model_four': "select * from events",
-        })
+    @parametrize('with_jinja_extension', [True, False])
+    def test__model_materializations(self, with_jinja_extension):
+        self.use_models(
+            {
+                'model_one': 'select * from events',
+                'model_two': "select * from {{ref('model_one')}}",
+                'model_three': "select * from events",
+                'model_four': "select * from events",
+            },
+            sql_dot_jinja=with_jinja_extension,
+        )
 
         cfg = {
             "models": {
