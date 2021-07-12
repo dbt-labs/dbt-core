@@ -228,7 +228,7 @@ class RemoteSourceFreshnessTask(
     RPCCommandTask[RPCSourceFreshnessParameters],
     FreshnessTask
 ):
-    METHOD_NAME = 'snapshot-freshness'
+    METHOD_NAME = 'source-freshness'
 
     def set_args(self, params: RPCSourceFreshnessParameters) -> None:
         self.args.select = self._listify(params.select)
@@ -237,6 +237,13 @@ class RemoteSourceFreshnessTask(
         if params.threads is not None:
             self.args.threads = params.threads
         self.args.output = None
+
+
+class RemoteSourceSnapshotFreshnessTask(
+    RemoteSourceFreshnessTask
+):
+    """ Deprecated task method name, aliases to `source-freshness` """
+    METHOD_NAME = 'snapshot-freshness'
 
 
 # this is a weird and special method.
