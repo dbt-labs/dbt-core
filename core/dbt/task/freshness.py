@@ -137,9 +137,15 @@ class FreshnessTask(GraphRunnableTask):
         return False
 
     def get_selection_spec(self) -> SelectionSpec:
+        """Generates a selection spec from task arguments to use when processing
+        graph. A SelectionSpec describes what nodes to select when creating 
+        queue from graph of nodes.
+        """
         if self.args.selector_name:
+            # use pre-defined selector (--selector) to create selection spec
             spec = self.config.get_selector(self.args.selector_name)
         else:
+            # use --select and --exclude args to create selection spec
             spec = parse_difference(self.args.select, self.args.exclude)
         return spec
 

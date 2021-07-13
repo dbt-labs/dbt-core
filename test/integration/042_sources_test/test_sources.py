@@ -313,8 +313,9 @@ class TestSourceFreshness(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_source_snapshot_freshness(self):
-        """ Ensures that the deprecated command `source snapshot-freshness`
-        aliases to `source freshness` command """
+        """Ensures that the deprecated command `source snapshot-freshness`
+        aliases to `source freshness` command.
+        """
         self.freshness_start_time = datetime.utcnow()
         results = self.run_dbt_with_vars(
             ['source', 'snapshot-freshness', '-o', 'target/error_source.json'],
@@ -356,6 +357,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_source_freshness_selection_select(self):
+        """Tests node selection using the --select argument."""
         self._set_updated_at_to(timedelta(hours=-2))
         self.freshness_start_time = datetime.utcnow()
         # select source directly
@@ -369,6 +371,8 @@ class TestSourceFreshness(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_source_freshness_selection_exclude(self):
+        """Tests node selection using the --select argument. It 'excludes' the 
+        only source in the project so it should return no results."""
         self._set_updated_at_to(timedelta(hours=-2))
         self.freshness_start_time = datetime.utcnow()
         # exclude source directly
@@ -380,6 +384,10 @@ class TestSourceFreshness(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_source_freshness_selection_graph_operation(self):
+        """Tests node selection using the --select argument with graph
+        operations. `+descendant_model` == select all nodes `descendant_model`
+        depends on.
+        """
         self._set_updated_at_to(timedelta(hours=-2))
         self.freshness_start_time = datetime.utcnow()
         # select model ancestors
