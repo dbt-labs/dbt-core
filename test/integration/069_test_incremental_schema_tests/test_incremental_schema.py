@@ -4,7 +4,7 @@ from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 class TestSelectionExpansion(DBTIntegrationTest):
     @property
     def schema(self):
-        return "test_incremental_schema_067"
+        return "test_incremental_schema_069"
 
     @property
     def models(self):
@@ -59,7 +59,7 @@ class TestSelectionExpansion(DBTIntegrationTest):
         tests_run = [r.node.name for r in results]
         assert len(tests_run) == len(expected_tests)
         assert sorted(tests_run) == sorted(expected_tests)
-        self.assertTablesEqual(compare_source, compare_source)
+        self.assertTablesEqual(compare_source, compare_target)
 
     def run_incremental_ignore(self):
         select = 'model_a incremental_ignore incremental_ignore_target'
@@ -183,5 +183,5 @@ class TestSelectionExpansion(DBTIntegrationTest):
         self.run_incremental_sync_all_columns()
         
     @use_profile('bigquery')
-    def test__bigquery__un_incremental_fail_on_schema_change(self):
+    def test__bigquery__run_incremental_fail_on_schema_change(self):
         self.run_incremental_fail_on_schema_change()

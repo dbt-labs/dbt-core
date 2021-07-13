@@ -142,8 +142,10 @@
         
           {% set fail_msg %}
               The source and target schemas on this incremental model are out of sync!
-              Please re-run the incremental model with `full_refresh: True` to update the target schema.
-              Alternatively, you can update the schema manually and re-run the process.
+              They can be reconciled in several ways: 
+                - set the `on_schema_change` config to either append_new_columns or sync_all_columns, depending on your situation.
+                - Re-run the incremental model with `full_refresh: True` to update the target schema.
+                - update the schema manually and re-run the process.
           {% endset %}
           
           {% do exceptions.raise_compiler_error(fail_msg) %}
