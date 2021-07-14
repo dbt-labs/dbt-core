@@ -11,9 +11,9 @@ with source_data as (
 {% set string_type = 'string' if target.type == 'bigquery' else 'varchar(10)' %}
 
 select id
-       ,CAST(field1 as {{string_type}}) AS field1
+       ,cast(field1 as {{string_type}}) as field1
        --,field2
-       ,CAST(CASE WHEN id <= 3 THEN NULL ELSE field3 END AS {{string_type}}) AS field3
-       ,CASE WHEN id <= 3 THEN NULL ELSE field4 END AS field4
+       ,cast(case when id <= 3 then null else field3 end as {{string_type}}) as field3
+       ,cast(case when id <= 3 then null else field4 end as {{string_type}}) as field4
 
 from source_data

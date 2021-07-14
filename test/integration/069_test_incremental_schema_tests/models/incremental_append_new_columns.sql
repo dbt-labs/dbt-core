@@ -14,6 +14,6 @@ SELECT id, field1, field2, field3, field4 FROM source_data WHERE id NOT IN (SELE
 
 {% else %}
 
-SELECT id, field1, field2 FROm source_data LIMIT 3
+SELECT id, field1, field2 FROM source_data LIMIT 3
 
 {% endif %}

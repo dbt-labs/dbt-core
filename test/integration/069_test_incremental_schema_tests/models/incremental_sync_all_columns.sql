@@ -14,13 +14,16 @@ WITH source_data AS (SELECT * FROM {{ ref('model_a') }} )
 {% if is_incremental() %}
 
 SELECT id, 
-       cast(field1 as {{string_type}}) as field1, -- to validate type changes on existing column
+       cast(field1 as {{string_type}}) as field1, 
        cast(field3 as {{string_type}}) as field3, -- to validate new fields
-       field4 -- to validate new fields
+       cast(field4 as {{string_type}}) AS field4 -- to validate new fields
 FROM source_data WHERE id NOT IN (SELECT id from {{ this }} )
 
 {% else %}
 
-SELECT id, field1, field2 FROM source_data WHERE id <= 3
+SELECT id, 
+       cast(field1 as {{string_type}}) as field1, 
+       cast(field2 as {{string_type}}) as field2
+FROM source_data LIMIT 3
 
 {% endif %}
