@@ -17,3 +17,4 @@ select id
        ,cast(case when id <= 3 then null else field4 end as {{string_type}}) as field4
 
 from source_data
+order by id 
