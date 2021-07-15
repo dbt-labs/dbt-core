@@ -23,7 +23,7 @@ Contributors:
 ## dbt 0.20.1 (Release TBD)
 
 ### Fixes
-- Fix `where` config with `relationships` test by refactoring test SQL ([#3579](https://github.com/fishtown-analytics/dbt/issues/3579), [#3579](https://github.com/fishtown-analytics/dbt/pull/3579))
+- Fix `where` config with `relationships` test by refactoring test SQL ([#3579](https://github.com/fishtown-analytics/dbt/issues/3579), [#3583](https://github.com/fishtown-analytics/dbt/pull/3583))
 
 ## dbt 0.20.0 (July 12, 2021)
 
