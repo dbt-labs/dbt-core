@@ -1,6 +1,7 @@
 ## dbt 0.21.0
 
-### Features
+### Features 
+- Introduce `on_schema_change` config to detect and handle schema changes on incremental models ([#1132](https://github.com/fishtown-analytics/dbt/issues/1132), [#3288](https://github.com/fishtown-analytics/dbt/issues/3288))
 
 ### Fixes
 - Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
@@ -9,6 +10,7 @@
 
 Contributors:
 - [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
+- [@matt-winkler](https://github.com/matt-winkler) ([#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
 
 ## dbt 0.20.0 (Release TBD)
 
@@ -93,11 +95,7 @@ Contributors:
 - Set application_name for Postgres connections ([#885](https://github.com/fishtown-analytics/dbt/issues/885), [#3182](https://github.com/fishtown-analytics/dbt/pull/3182))
 - Support disabling schema tests, and configuring tests from `dbt_project.yml` ([#3252](https://github.com/fishtown-analytics/dbt/issues/3252),
 [#3253](https://github.com/fishtown-analytics/dbt/issues/3253), [#3257](https://github.com/fishtown-analytics/dbt/pull/3257))
-<<<<<<< HEAD
 - Add Jinja tag for tests ([#1173](https://github.com/fishtown-analytics/dbt/issues/1173), [#3261](https://github.com/fishtown-analytics/dbt/pull/3261))
-- Support detecting schema changes on incremental models ([#1132](https://github.com/fishtown-analytics/dbt/issues/1132), [#3288](https://github.com/fishtown-analytics/dbt/issues/3288))
-=======
->>>>>>> develop
 - Add native support for Postgres index creation ([#804](https://github.com/fishtown-analytics/dbt/issues/804), [3106](https://github.com/fishtown-analytics/dbt/pull/3106))
 - Less greedy test selection: expand to select unselected tests if and only if all parents are selected ([#2891](https://github.com/fishtown-analytics/dbt/issues/2891), [#3235](https://github.com/fishtown-analytics/dbt/pull/3235))
 - Prevent locks in Redshift during full refresh in incremental materialization. ([#2426](https://github.com/fishtown-analytics/dbt/issues/2426), [#2998](https://github.com/fishtown-analytics/dbt/pull/2998))

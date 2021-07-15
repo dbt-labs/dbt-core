@@ -8,10 +8,13 @@ with source_data as (
 
 )
 
+{% set string_type = 'string' if target.type == 'bigquery' else 'varchar(10)' %}
+
 select id
-       ,field1
-       -- ,field2
-       ,CASE WHEN id <= 3 THEN NULL ELSE field3 END AS field3
-       ,CASE WHEN id <= 3 THEN NULL ELSE field4 END AS field4
+       ,cast(field1 as {{string_type}}) as field1
+       --,field2
+       ,cast(case when id <= 3 then null else field3 end as {{string_type}}) as field3
+       ,cast(case when id <= 3 then null else field4 end as {{string_type}}) as field4
 
 from source_data
+order by id 

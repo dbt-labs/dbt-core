@@ -159,32 +159,6 @@
 
 {% endmacro %}
 
-{% macro bigquery__alter_relation_add_remove_columns(relation, add_columns = none, remove_columns = none) -%}
-
-  {% set sql -%}
-    
-      alter {{ relation.type }} {{ relation }}
-          {% if add_columns %}
-             
-            {% for column in add_columns %}
-              add column {{ column.name }} {{ column.data_type }}{{ ',' if not loop.last }}
-            {% endfor %}
-          {% endif %}
-          
-          {{ ', ' if add_columns and remove_columns }}
-          
-          {% if remove_columns %}
-            {% for column in remove_columns %}
-              drop column {{ column.name }}{{ ',' if not loop.last }}
-            {% endfor %}
-          {% endif %}
-          
-  {%- endset %}
-
-  {{ return(run_query(sql)) }}
-
-{% endmacro %}
-
 
 {% macro bigquery__alter_column_type(relation, column_name, new_column_type) -%}
   {#
