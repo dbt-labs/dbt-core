@@ -20,7 +20,7 @@ Contributors:
 - [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
 
-## dbt 0.20.0 (Release TBD)
+## dbt 0.20.0 (July 12, 2021)
 
 ### Fixes
 
