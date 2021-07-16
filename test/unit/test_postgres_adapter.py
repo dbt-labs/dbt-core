@@ -41,7 +41,6 @@ class TestPostgresAdapter(unittest.TestCase):
                     'pass': 'password',
                     'port': 5432,
                     'schema': 'public',
-                    'connect_timeout': 15,
                 }
             },
             'target': 'test'
@@ -110,6 +109,37 @@ class TestPostgresAdapter(unittest.TestCase):
         master.handle.get_backend_pid.assert_not_called()
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_default_connect_timeout(self, psycopg2):
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=10,
+            application_name='dbt')
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_changed_connect_timeout(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(connect_timeout=30)
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=30,
+            application_name='dbt')
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_default_keepalive(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
@@ -121,7 +151,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -137,7 +167,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             keepalives_idle=256,
             application_name='dbt')
 
@@ -153,7 +183,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -169,7 +199,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             application_name='myapp')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -194,7 +224,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             application_name='dbt',
             options="-c search_path=test")
 
@@ -211,7 +241,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             sslmode="require",
             application_name='dbt')
 
@@ -231,7 +261,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             sslmode="verify-ca",
             sslcert="service.crt",
             sslkey="service.key",
@@ -251,7 +281,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             application_name='dbt',
             options="-c search_path=test\ test")
 
@@ -268,7 +298,7 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            connect_timeout=15,
+            connect_timeout=10,
             application_name='dbt')
 
     @mock.patch.object(PostgresAdapter, 'execute_macro')
