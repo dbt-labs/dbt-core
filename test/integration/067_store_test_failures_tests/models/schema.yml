@@ -13,7 +13,8 @@ models:
     columns:
       - name: id
         tests:
-          - unique
+          - unique:
+              store_failures: true
           - not_null
       - name: first_name
         tests:
