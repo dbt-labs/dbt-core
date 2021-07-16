@@ -20,10 +20,13 @@ Contributors:
 - [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
 
+
 ## dbt 0.20.1 (Release TBD)
 
 ### Fixes
-- Fix `where` config with `relationships` test by refactoring test SQL ([#3579](https://github.com/fishtown-analytics/dbt/issues/3579), [#3583](https://github.com/fishtown-analytics/dbt/pull/3583))
+- Fix `store_failures` config when defined as a modifier for `unique` and `not_null` tests ([#3575](https://github.com/fishtown-analytics/dbt/issues/3575), [#3577](https://github.com/fishtown-analytics/dbt/pull/3577))
+- Fix `where` config with `relationships` test by refactoring test SQL. Note: The default `relationships` test now includes CTEs, and may need reimplementing on adapters that don't support CTEs nested inside subqueries. ([#3579](https://github.com/fishtown-analytics/dbt/issues/3579), [#3583](https://github.com/fishtown-analytics/dbt/pull/3583))
+
 
 ## dbt 0.20.0 (July 12, 2021)
 
