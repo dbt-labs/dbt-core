@@ -1,0 +1,140 @@
+
+# Schedule triggers
+on:
+  # TODO this is just while developing
+  pull_request:
+    branches:
+      - 'develop' 
+      - 'performance-regression-testing'
+  schedule:
+    # runs every day at 10:05pm
+    - cron:  '5 22 * * *'
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+
+  # runs any tests associated with the runner
+  # these tests make sure the runner logic is correct
+  # if there are no tests, it still quickly builds the project to fail fast
+  test-rust:
+    name: Test Runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path performance/runner/Cargo.toml
+
+  # build an optimized binary to be used as the runner in later steps
+  build-rust:
+    needs: [test-rust]
+    name: Build Runner
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --manifest-path performance/runner/Cargo.toml
+      - uses: actions/upload-artifact@v2
+        with:
+          name: runner
+          path: performance/runner/target/release/runner
+
+  # run the performance measurements on the current or default branch
+  measure-dev:
+    needs: [build-rust]
+    name: Measure Dev Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout dev
+        uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2.2.2
+        with:
+          python-version: '3.8'
+      - name: install dbt
+        run: pip install -r dev-requirements.txt -r editable-requirements.txt
+      - name: install hyperfine
+        run: wget https://github.com/sharkdp/hyperfine/releases/download/v1.11.0/hyperfine_1.11.0_amd64.deb && sudo dpkg -i hyperfine_1.11.0_amd64.deb
+      - uses: actions/download-artifact@v2
+        with:
+          name: runner
+      - name: change permissions
+        run: chmod +x ./runner
+      - name: run
+        run: ./runner ${{ github.workspace }}/performance/projects/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: dev-results
+          path: performance/results/
+
+  # run the performance measurements on the latest release branch
+  measure-latest:
+    needs: [build-rust]
+    name: Measure Latest Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout latest
+        uses: actions/checkout@v2
+        with:
+          ref: '0.20.latest'
+      - name: Setup Python
+        uses: actions/setup-python@v2.2.2
+        with:
+          python-version: '3.8'
+      - name: move repo up a level
+        run: mkdir ${{ github.workspace }}/../latest/ && cp -r ${{ github.workspace }} ${{ github.workspace }}/../latest
+      - name: debug line
+        run: ls ${{ github.workspace }}/../latest/dbt/
+      # installation creates egg-links so we have to preserve source
+      - name: install dbt from new location
+        run: cd ${{ github.workspace }}/../latest/dbt/ && pip install -r dev-requirements.txt -r editable-requirements.txt
+      # checkout the current branch to get all the target projects
+      # this deletes the old checked out code which is why we had to copy before
+      - name: checkout dev
+        uses: actions/checkout@v2
+      - name: install hyperfine
+        run: wget https://github.com/sharkdp/hyperfine/releases/download/v1.11.0/hyperfine_1.11.0_amd64.deb && sudo dpkg -i hyperfine_1.11.0_amd64.deb
+      - uses: actions/download-artifact@v2
+        with:
+          name: runner
+      - name: change permissions
+        run: chmod +x ./runner
+      - name: run runner
+        run: ./runner ${{ github.workspace }}/performance/projects/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: latest-results
+          path: performance/results/
+
+  compare-results:
+    needs: [measure-dev, measure-latest]
+    name: Compare Results
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: dev-results
+      - name: ls result files
+        run: ls
+      - uses: actions/download-artifact@v2
+        with:
+          name: latest-results
+      - name: ls result files
+        run: ls
+      # TODO actually compare
