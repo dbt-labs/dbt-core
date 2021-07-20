@@ -5,7 +5,7 @@ import textwrap
 from base64 import b64encode
 
 import requests
-from werkzeug import redirect
+from werkzeug.utils import redirect
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
