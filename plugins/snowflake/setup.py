@@ -47,7 +47,7 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'snowflake-connector-python[secure-local-storage]~=2.4.1',
+        'snowflake-connector-python[secure-local-storage]>=2.4.1,<2.6.0',
         'requests<3.0.0',
         'cryptography>=3.2,<4',
     ],
