@@ -38,5 +38,5 @@ class SnapshotTask(RunTask):
             resource_types=[NodeType.Snapshot],
         )
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return SnapshotRunner

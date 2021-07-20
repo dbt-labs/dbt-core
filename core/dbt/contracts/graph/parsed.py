@@ -592,7 +592,8 @@ class ParsedSourceDefinition(
     UnparsedBaseNode,
     HasUniqueID,
     HasRelationMetadata,
-    HasFqn
+    HasFqn,
+
 ):
     name: str
     source_name: str
@@ -688,6 +689,10 @@ class ParsedSourceDefinition(
     @property
     def depends_on_nodes(self):
         return []
+
+    @property
+    def depends_on(self):
+        return {'nodes': []}
 
     @property
     def refs(self):

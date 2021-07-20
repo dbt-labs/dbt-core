@@ -78,6 +78,7 @@ class TestStatus(StrEnum):
     Error = NodeStatus.Error
     Fail = NodeStatus.Fail
     Warn = NodeStatus.Warn
+    Skipped = NodeStatus.Skipped
 
 
 class FreshnessStatus(StrEnum):

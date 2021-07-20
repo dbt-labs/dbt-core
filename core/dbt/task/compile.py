@@ -56,7 +56,7 @@ class CompileTask(GraphRunnableTask):
             resource_types=NodeType.executable(),
         )
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return CompileRunner
 
     def task_end_messages(self, results):
