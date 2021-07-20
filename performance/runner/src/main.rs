@@ -1,4 +1,5 @@
 use std::{env, fs, io};
+use std::path::Path;
 use std::process::{Command, ExitStatus, exit};
 
 
@@ -19,10 +20,10 @@ fn main() {
     // TODO args lib
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("please provide the git project directory root");
+        println!("please provide the target projects directory");
         exit(1);
     }
-    let git_directory = &args[1];
+    let projects_directory = &args[1];
 
     // to add a new metric to the test suite, simply define it in this list:
     let metrics: Vec<Metric> = vec![
@@ -30,7 +31,8 @@ fn main() {
     ];
 
     // list out all projects
-    let project_entries = fs::read_dir([&git_directory, "performance/projects"].join("")).unwrap();
+    let path = Path::new(&projects_directory);
+    let project_entries = fs::read_dir(path).unwrap();
 
     let results: Result<Vec<ExitStatus>, io::Error > = project_entries.map(|entry| {
         metrics.clone().into_iter().map(|metric| {
@@ -43,7 +45,7 @@ fn main() {
                 .arg(metric.prepare)
                 .arg(metric.cmd)
                 .arg("--export-json")
-                .arg([&git_directory, "/performance/results/", &metric.outfile(project_name)].join(""))
+                .arg([&projects_directory, "/", &metric.outfile(project_name)].join(""))
                 // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
                 .arg("--show-output")
                 .status() // use spawn() here instead for more information
