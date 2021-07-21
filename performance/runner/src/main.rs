@@ -46,7 +46,7 @@ fn main() {
                 .arg("--warmup 1")
                 .arg("--prepare")
                 .arg(metric.prepare)
-                .arg([metric.cmd, " --profiles-dir ", &projects_directory, "/config/"].join(""))
+                .arg([metric.cmd, " --profiles-dir ", &projects_directory, "/../project_config/"].join(""))
                 .arg("--export-json")
                 .arg([&projects_directory, "/", &metric.outfile(project_name)].join(""))
                 // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
