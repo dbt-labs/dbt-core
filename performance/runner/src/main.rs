@@ -41,6 +41,9 @@ fn main() {
 
             Command::new("hyperfine")
                 .current_dir(&path)
+                // warms filesystem caches by running the command first without counting it.
+                // alternatively we could clear them before each run
+                .arg("--warmup 1")
                 .arg("--prepare")
                 .arg(metric.prepare)
                 .arg([metric.cmd, " --profiles-dir ", &projects_directory, "/config/"].join(""))
