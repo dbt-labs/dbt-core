@@ -1,1 +1,1 @@
-recursive-include dbt/include *.py *.sql *.yml *.html *.md
+recursive-include dbt/include *.py *.sql *.yml *.html *.md .gitkeep .gitignore

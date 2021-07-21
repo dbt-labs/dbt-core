@@ -152,7 +152,7 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         results = self.run_dbt(['test'], strict=False)
 
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         for result in results:
             self.assertFalse(result.skipped)
             self.assertEqual(
@@ -523,3 +523,20 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
         ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)
+
+
+class TestInvalidSchema(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "invalid-schema-models"
+
+    @use_profile('postgres')
+    def test_postgres_invalid_schema_file(self):
+        with self.assertRaises(CompilationException) as exc:
+            results = self.run_dbt()
+        self.assertRegex(str(exc.exception), r"'models' is not a list")
+

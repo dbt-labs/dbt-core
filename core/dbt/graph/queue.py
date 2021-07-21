@@ -1,10 +1,8 @@
-import threading
-from queue import PriorityQueue
-from typing import (
-    Dict, Set, Optional
-)
-
 import networkx as nx  # type: ignore
+import threading
+
+from queue import PriorityQueue
+from typing import Dict, Set, List, Generator, Optional
 
 from .graph import UniqueId
 from dbt.contracts.graph.parsed import ParsedSourceDefinition, ParsedExposure
@@ -21,9 +19,8 @@ class GraphQueue:
     that separate threads do not call `.empty()` or `__len__()` and `.get()` at
     the same time, as there is an unlocked race!
     """
-    def __init__(
-        self, graph: nx.DiGraph, manifest: Manifest, selected: Set[UniqueId]
-    ):
+
+    def __init__(self, graph: nx.DiGraph, manifest: Manifest, selected: Set[UniqueId]):
         self.graph = graph
         self.manifest = manifest
         self._selected = selected
@@ -37,7 +34,7 @@ class GraphQueue:
         # this lock controls most things
         self.lock = threading.Lock()
         # store the 'score' of each node as a number. Lower is higher priority.
-        self._scores = self._calculate_scores()
+        self._scores = self._get_scores(self.graph)
         # populate the initial queue
         self._find_new_additions()
         # awaits after task end
@@ -56,30 +53,59 @@ class GraphQueue:
             return False
         return True
 
-    def _calculate_scores(self) -> Dict[UniqueId, int]:
-        """Calculate the 'value' of each node in the graph based on how many
-        blocking descendants it has. We use this score for the internal
-        priority queue's ordering, so the quality of this metric is important.
+    @staticmethod
+    def _grouped_topological_sort(
+        graph: nx.DiGraph,
+    ) -> Generator[List[str], None, None]:
+        """Topological sort of given graph that groups ties.
 
-        The score is stored as a negative number because the internal
-        PriorityQueue picks lowest values first.
+        Adapted from `nx.topological_sort`, this function returns a topo sort of a graph however
+        instead of arbitrarily ordering ties in the sort order, ties are grouped together in
+        lists.
 
-        We could do this in one pass over the graph instead of len(self.graph)
-        passes but this is easy. For large graphs this may hurt performance.
+        Args:
+            graph: The graph to be sorted.
 
-        This operates on the graph, so it would require a lock if called from
-        outside __init__.
-
-        :return Dict[str, int]: The score dict, mapping unique IDs to integer
-            scores. Lower scores are higher priority.
+        Returns:
+            A generator that yields lists of nodes, one list per graph depth level.
         """
+        indegree_map = {v: d for v, d in graph.in_degree() if d > 0}
+        zero_indegree = [v for v, d in graph.in_degree() if d == 0]
+
+        while zero_indegree:
+            yield zero_indegree
+            new_zero_indegree = []
+            for v in zero_indegree:
+                for _, child in graph.edges(v):
+                    indegree_map[child] -= 1
+                    if not indegree_map[child]:
+                        new_zero_indegree.append(child)
+            zero_indegree = new_zero_indegree
+
+    def _get_scores(self, graph: nx.DiGraph) -> Dict[str, int]:
+        """Scoring nodes for processing order.
+
+        Scores are calculated by the graph depth level. Lowest score (0) should be processed first.
+
+        Args:
+            graph: The graph to be scored.
+
+        Returns:
+            A dictionary consisting of `node name`:`score` pairs.
+        """
+        # split graph by connected subgraphs
+        subgraphs = (
+            graph.subgraph(x) for x in nx.connected_components(nx.Graph(graph))
+        )
+
+        # score all nodes in all subgraphs
         scores = {}
-        for node in self.graph.nodes():
-            score = -1 * len([
-                d for d in nx.descendants(self.graph, node)
-                if self._include_in_cost(d)
-            ])
-            scores[node] = score
+        for subgraph in subgraphs:
+            grouped_nodes = self._grouped_topological_sort(subgraph)
+            for level, group in enumerate(grouped_nodes):
+                for node in group:
+                    scores[node] = level
+
         return scores
 
     def get(
@@ -133,8 +159,6 @@ class GraphQueue:
     def _find_new_additions(self) -> None:
         """Find any nodes in the graph that need to be added to the internal
         queue and add them.
-
-        Callers must hold the lock.
         """
         for node, in_degree in self.graph.in_degree():
             if not self._already_known(node) and in_degree == 0:

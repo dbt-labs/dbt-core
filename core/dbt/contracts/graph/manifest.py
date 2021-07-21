@@ -243,7 +243,7 @@ def _sort_values(dct):
     return {k: sorted(v) for k, v in dct.items()}
 
 
-def build_edges(nodes: List[ManifestNode]):
+def build_node_edges(nodes: List[ManifestNode]):
     """Build the forward and backward edges on the given list of ParsedNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
@@ -257,6 +257,18 @@ def build_edges(nodes: List[ManifestNode]):
             if unique_id in forward_edges.keys():
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges), _sort_values(backward_edges)
+
+
+# Build a map of children of macros
+def build_macro_edges(nodes: List[Any]):
+    forward_edges: Dict[str, List[str]] = {
+        n.unique_id: [] for n in nodes if n.unique_id.startswith('macro') or n.depends_on.macros
+    }
+    for node in nodes:
+        for unique_id in node.depends_on.macros:
+            if unique_id in forward_edges.keys():
+                forward_edges[unique_id].append(node.unique_id)
+    return _sort_values(forward_edges)
 
 
 def _deepcopy(value):
@@ -526,6 +538,12 @@ class MacroMethods:
 
 
 @dataclass
+class ParsingInfo:
+    static_analysis_parsed_path_count: int = 0
+    static_analysis_path_count: int = 0
+
+
+@dataclass
 class ManifestStateCheck(dbtClassMixin):
     vars_hash: FileHash = field(default_factory=FileHash.empty)
     profile_hash: FileHash = field(default_factory=FileHash.empty)
@@ -565,6 +583,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     )
     _analysis_lookup: Optional[AnalysisLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _parsing_info: ParsingInfo = field(
+        default_factory=ParsingInfo,
+        metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
     _lock: Lock = field(
         default_factory=flags.MP_CONTEXT.Lock,
@@ -784,9 +806,17 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.sources.values(),
             self.exposures.values(),
         ))
-        forward_edges, backward_edges = build_edges(edge_members)
+        forward_edges, backward_edges = build_node_edges(edge_members)
         self.child_map = forward_edges
         self.parent_map = backward_edges
+
+    def build_macro_child_map(self):
+        edge_members = list(chain(
+            self.nodes.values(),
+            self.macros.values(),
+        ))
+        forward_edges = build_macro_edges(edge_members)
+        return forward_edges
 
     def writable_manifest(self):
         self.build_parent_and_child_maps()
@@ -1021,10 +1051,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
 
-    def add_node(self, source_file: AnySourceFile, node: ManifestNodes):
+    def add_node(self, source_file: AnySourceFile, node: ManifestNodes, test_from=None):
         self.add_node_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
-            source_file.tests.append(node.unique_id)
+            assert test_from
+            source_file.add_test(node.unique_id, test_from)
         else:
             source_file.nodes.append(node.unique_id)
 
@@ -1039,10 +1070,11 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         else:
             self._disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode):
+    def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode, test_from=None):
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
-            source_file.tests.append(node.unique_id)
+            assert test_from
+            source_file.add_test(node.unique_id, test_from)
         else:
             source_file.nodes.append(node.unique_id)
 

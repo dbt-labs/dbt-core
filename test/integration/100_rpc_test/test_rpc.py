@@ -1002,6 +1002,8 @@ class TestRPCServerProjects(HasRPCServer):
 
 
 class TestRPCTaskManagement(HasRPCServer):
+    """
+    TODO: fix flaky test: issue #3475 
     @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_sighup_postgres(self):
@@ -1049,7 +1051,7 @@ class TestRPCTaskManagement(HasRPCServer):
         self.kill_and_assert(*dead)
         self.assertRunning([alive])
         self.kill_and_assert(*alive)
-
+    """
     @mark.flaky(rerun_filter=addr_in_use, max_runs=3)
     @use_profile('postgres')
     def test_gc_by_time_postgres(self):

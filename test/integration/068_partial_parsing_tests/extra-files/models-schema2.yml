@@ -5,5 +5,7 @@ models:
       description: "The first model"
     - name: model_three
       description: "The third model"
-      tests:
-          - unique
+      columns:
+        - name: id
+          tests:
+            - unique

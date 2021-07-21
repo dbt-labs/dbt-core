@@ -1,0 +1,12 @@
+version: 2
+
+models:
+    - name: model_one
+      description: "The first model"
+    - name: model_three
+      description: "The third model"
+      tests:
+          - unique
+macros:
+    - name: do_something
+      description: "This is a test macro"

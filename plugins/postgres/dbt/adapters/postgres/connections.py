@@ -23,6 +23,9 @@ class PostgresCredentials(Credentials):
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
     sslmode: Optional[str] = None
+    sslcert: Optional[str] = None
+    sslkey: Optional[str] = None
+    sslrootcert: Optional[str] = None
     application_name: Optional[str] = 'dbt'
 
     _ALIASES = {
@@ -93,6 +96,15 @@ class PostgresConnectionManager(SQLConnectionManager):
 
         if credentials.sslmode:
             kwargs['sslmode'] = credentials.sslmode
+
+        if credentials.sslcert is not None:
+            kwargs["sslcert"] = credentials.sslcert
+
+        if credentials.sslkey is not None:
+            kwargs["sslkey"] = credentials.sslkey
+
+        if credentials.sslrootcert is not None:
+            kwargs["sslrootcert"] = credentials.sslrootcert
 
         if credentials.application_name:
             kwargs['application_name'] = credentials.application_name

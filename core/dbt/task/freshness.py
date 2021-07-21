@@ -155,7 +155,7 @@ class FreshnessTask(GraphRunnableTask):
             previous_state=self.previous_state,
         )
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return FreshnessRunner
 
     def write_result(self, result):

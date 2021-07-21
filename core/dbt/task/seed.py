@@ -57,7 +57,7 @@ class SeedTask(RunTask):
             resource_types=[NodeType.Seed],
         )
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return SeedRunner
 
     def task_end_messages(self, results):

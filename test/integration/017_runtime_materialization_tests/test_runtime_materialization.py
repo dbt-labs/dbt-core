@@ -63,6 +63,22 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTableDoesNotExist('view__dbt_tmp')
         self.assertTablesEqual("seed", "view")
 
+        # Again, but with a __dbt_backup view
+        self.run_sql_file("create_view__dbt_backup.sql")
+        results = self.run_dbt(['run', '--model', 'view'])
+        self.assertEqual(len(results), 1)
+
+        self.assertTableDoesNotExist('view__dbt_backup')
+        self.assertTablesEqual("seed", "view")
+
+        # Again, but against the incremental materialization
+        self.run_sql_file("create_incremental__dbt_tmp.sql")
+        results = self.run_dbt(['run', '--model', 'incremental', '--full-refresh'])
+        self.assertEqual(len(results), 1)
+
+        self.assertTableDoesNotExist('incremental__dbt_tmp')
+        self.assertTablesEqual("seed", "incremental")
+
 
 class TestRuntimeMaterializationWithConfig(TestRuntimeMaterialization):
     @property

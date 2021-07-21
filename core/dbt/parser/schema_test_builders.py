@@ -355,8 +355,10 @@ class TestBuilder(Generic[Testable]):
 
     def construct_config(self) -> str:
         configs = ",".join([
-            f"{key}=" + (f"'{value}'" if isinstance(value, str)
-                         else str(value))
+            f"{key}=" + (
+                ("\"" + value.replace('\"', '\\\"') + "\"") if isinstance(value, str)
+                else str(value)
+            )
             for key, value
             in self.modifiers.items()
         ])
