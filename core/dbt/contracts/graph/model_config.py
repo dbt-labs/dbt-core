@@ -390,7 +390,7 @@ class NodeConfig(NodeAndTestConfig):
     )
     full_refresh: Optional[bool] = None
     unique_key: Optional[Union[str, List[str]]] = None
-    on_schema_change: Optional[str] = 'ignore'
+    on_schema_change: Optional[str] = "ignore"
 
     @classmethod
     def __pre_deserialize__(cls, data):

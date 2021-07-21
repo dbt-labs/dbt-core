@@ -59,7 +59,7 @@
       {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
     {% endif %}
     {% set build_sql = get_delete_insert_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) %}
-  
+
   {% endif %}
 
   {% call statement("main") %}
