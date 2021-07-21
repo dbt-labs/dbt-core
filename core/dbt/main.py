@@ -736,12 +736,12 @@ def _build_test_subparser(subparsers, base_subparser):
 
 def _build_source_freshness_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'freshness',
+        "freshness",
         parents=[base_subparser],
         help="""
         Snapshots the current freshness of the project's sources
         """,
-        aliases=['snapshot-freshness'],
+        aliases=["snapshot-freshness"],
     )
     sub.add_argument(
         "-o",
@@ -762,13 +762,13 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
     )
     sub.set_defaults(
         cls=freshness_task.FreshnessTask,
-        which='source-freshness',
-        rpc_method='source-freshness',
+        which="source-freshness",
+        rpc_method="source-freshness",
     )
     sub.add_argument(
         "-s",
         "--select",
-        dest='select',
+        dest="select",
         nargs="+",
         help="""
             Specify the nodes to include.

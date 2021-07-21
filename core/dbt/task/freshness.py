@@ -202,7 +202,7 @@ class FreshnessTask(GraphRunnableTask):
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
-            resource_types=[NodeType.Source]
+            resource_types=[NodeType.Source],
         )
 
     def get_runner_type(self, _):
