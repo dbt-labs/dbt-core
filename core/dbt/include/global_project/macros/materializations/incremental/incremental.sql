@@ -38,23 +38,16 @@
 
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
-<<<<<<< HEAD
-  
-  {% elif trigger_full_refresh %}
+{% elif trigger_full_refresh %}
       {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
       {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
       {% set backup_identifier = model['name'] + '__dbt_backup' %}
-
-=======
-  {% elif existing_relation.is_view or should_full_refresh() %}
->>>>>>> develop
       {% set intermediate_relation = existing_relation.incorporate(path={"identifier": tmp_identifier}) %}
       {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier}) %}
 
       {% set build_sql = create_table_as(False, intermediate_relation, sql) %}
       {% set need_swap = true %}
       {% do to_drop.append(backup_relation) %}
-  
   {% else %}
     {% do run_query(create_table_as(True, tmp_relation, sql)) %}
     {% do adapter.expand_target_column_types(
