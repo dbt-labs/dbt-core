@@ -458,14 +458,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        source_ref = self.table_ref(
-            source.database, source.schema, source.table, conn)
+        source_ref = []
+        for src_table in source:
+            source_ref.append(self.table_ref(
+                src_table.database, src_table.schema, src_table.table, conn))
         destination_ref = self.table_ref(
             destination.database, destination.schema, destination.table, conn)
 
         logger.debug(
-            'Copying table "{}" to "{}" with disposition: "{}"',
-            source_ref.path, destination_ref.path, write_disposition)
+            'Copying table(s) "{}" to "{}" with disposition: "{}"',
+            ', '.join(src_ref.path for src_ref in source_ref), destination_ref.path, write_disposition)
 
         def copy_and_results():
             job_config = google.cloud.bigquery.CopyJobConfig(
@@ -477,7 +479,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
-                source_ref.path, destination_ref.path),
+                ', '.join(src_ref.path for src_ref in source_ref), destination_ref.path),
             conn=conn, fn=copy_and_results)
 
     @staticmethod
