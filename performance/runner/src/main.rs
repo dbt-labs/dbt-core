@@ -43,7 +43,8 @@ fn main() {
                 .current_dir(&path)
                 // warms filesystem caches by running the command first without counting it.
                 // alternatively we could clear them before each run
-                .arg("--warmup 1")
+                .arg("--warmup")
+                .arg("1")
                 .arg("--prepare")
                 .arg(metric.prepare)
                 .arg([metric.cmd, " --profiles-dir ", &projects_directory, "/../project_config/"].join(""))
@@ -58,7 +59,7 @@ fn main() {
     // only exit with status code 0 if everything ran as expected
     match results {
         // if dispatch of any of the commands failed, panic with that error
-        Err(e) => panic!("{}", e),
+        Err(e) => panic!("{:?}", e),
         Ok(statuses) => {
             for status in statuses {
                 match status.code() {
