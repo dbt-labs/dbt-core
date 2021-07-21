@@ -1,4 +1,4 @@
-# This is a workflow to run our unit and integration tests for windows and mac
+# This is a workflow to run our integration tests for windows and mac
 
 name: dbt Tests
 
@@ -20,45 +20,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  Linting:
-    runs-on: ubuntu-latest #no need to run on every OS
-    steps:
-    - uses: actions/checkout@v2
-    - name: Setup Python
-      uses: actions/setup-python@v2.2.2
-      with:
-        python-version: '3.8'
-        architecture: 'x64'
-
-    - name: 'Install dependencies'
-      run: python -m pip install --upgrade pip && pip install tox
-      
-    - name: 'Linting'
-      run: tox -e mypy,flake8 -- -v
-      
-  UnitTest:
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v2
-    - name: Setup Python
-      uses: actions/setup-python@v2.2.2
-      with:
-        python-version: '3.8'
-        architecture: 'x64'
-
-    - name: 'Install dependencies'
-      run: python -m pip install --upgrade pip && pip install tox
-
-    - name: 'Run unit tests'
-      run: python -m tox -e py -- -v
-      
   PostgresIntegrationTest:
     runs-on: 'windows-latest' #TODO: Add Mac support
     environment: 'Postgres'
-    needs: UnitTest
     steps:
     - uses: actions/checkout@v2
     - name: 'Install postgresql and set up database'
@@ -98,7 +62,6 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     environment: 'Snowflake'
-    needs: UnitTest
     steps:
       - uses: actions/checkout@v2
       - name: Setup Python
@@ -132,7 +95,6 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     environment: 'Bigquery'
-    needs: UnitTest
     steps:
       - uses: actions/checkout@v2
       - name: Setup Python
@@ -156,7 +118,6 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     environment: 'Redshift'
-    needs: UnitTest
     steps:
       - uses: actions/checkout@v2
       - name: Setup Python
