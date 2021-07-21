@@ -56,6 +56,8 @@ ENV_KEY_NAME = 'KEY' if os.name == 'nt' else 'key'
 class ManifestTest(unittest.TestCase):
     def setUp(self):
         dbt.flags.STRICT_MODE = True
+        # TODO: why is this needed for tests in this module to pass?
+        tracking.active_user = None
 
         self.maxDiff = None
 
