@@ -186,6 +186,8 @@ class RPCRunOperationParameters(RPCParameters):
 class RPCSourceFreshnessParameters(RPCParameters):
     threads: Optional[int] = None
     select: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
 
 
 @dataclass
