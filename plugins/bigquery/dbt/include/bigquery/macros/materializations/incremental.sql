@@ -15,7 +15,9 @@
 {% endmacro %}
 
 
-{% macro bq_insert_overwrite(tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns) %}
+{% macro bq_insert_overwrite(
+    tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists
+) %}
 
   {% if partitions is not none and partitions != [] %} {# static #}
 
@@ -52,8 +54,13 @@
           where {{ partition_by.field }} is not null
       );
 
-      -- 1. create a temp table
-      {{ create_table_as(True, tmp_relation, sql) }}
+      {# have we already created the temp table to check for schema changes? #}
+      {% if not tmp_relation_exists %}
+        -- 1. create a temp table
+        {{ create_table_as(True, tmp_relation, sql) }}
+      {% else %}
+        -- 1. temp table already exists, we used it to check for schema changes
+      {% endif %}
 
       -- 2. define partitions to update
       set (dbt_partitions_for_replacement) = (
@@ -77,6 +84,44 @@
 {% endmacro %}
 
 
+{% macro bq_generate_incremental_build_sql(
+    strategy, tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists
+) %}
+  {#-- if partitioned, use BQ scripting to get the range of partition values to be updated --#}
+  {% if strategy == 'insert_overwrite' %}
+
+    {% set missing_partition_msg -%}
+      The 'insert_overwrite' strategy requires the `partition_by` config.
+    {%- endset %}
+    {% if partition_by is none %}
+      {% do exceptions.raise_compiler_error(missing_partition_msg) %}
+    {% endif %}
+
+    {% set build_sql = bq_insert_overwrite(
+        tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, on_schema_change
+    ) %}
+
+  {% else %} {# strategy == 'merge' #}
+    {%- set source_sql -%}
+      {%- if tmp_relation_exists -%}
+        (
+          select * from {{ tmp_relation }}
+        )
+      {%- else -%} {#-- wrap sql in parens to make it a subquery --#}
+        (
+          {{sql}}
+        )
+      {%- endif -%}
+    {%- endset -%}
+
+    {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns) %}
+
+  {% endif %}
+
+  {{ return(build_sql) }}
+
+{% endmacro %}
+
 {% materialization incremental, adapter='bigquery' -%}
 
   {%- set unique_key = config.get('unique_key') -%}
@@ -94,14 +139,18 @@
   {%- set partitions = config.get('partitions', none) -%}
   {%- set cluster_by = config.get('cluster_by', none) -%}
 
+  {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
+
   {{ run_hooks(pre_hooks) }}
 
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
+  
   {% elif existing_relation.is_view %}
       {#-- There's no way to atomically replace a view with a table on BQ --#}
       {{ adapter.drop_relation(existing_relation) }}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
+  
   {% elif full_refresh_mode %}
       {#-- If the partition/cluster config has changed, then we must drop and recreate --#}
       {% if not adapter.is_replaceable(existing_relation, partition_by, cluster_by) %}
@@ -109,39 +158,19 @@
           {{ adapter.drop_relation(existing_relation) }}
       {% endif %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
+  
   {% else %}
-     {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
-
-     {#-- if partitioned, use BQ scripting to get the range of partition values to be updated --#}
-     {% if strategy == 'insert_overwrite' %}
-
-        {% set missing_partition_msg -%}
-          The 'insert_overwrite' strategy requires the `partition_by` config.
-        {%- endset %}
-        {% if partition_by is none %}
-          {% do exceptions.raise_compiler_error(missing_partition_msg) %}
-        {% endif %}
-
-        {% set build_sql = bq_insert_overwrite(
-            tmp_relation,
-            target_relation,
-            sql,
-            unique_key,
-            partition_by,
-            partitions,
-            dest_columns) %}
-
-     {% else %}
-       {#-- wrap sql in parens to make it a subquery --#}
-       {%- set source_sql -%}
-         (
-           {{sql}}
-         )
-       {%- endset -%}
-
-       {% set build_sql = get_merge_sql(target_relation, source_sql, unique_key, dest_columns) %}
-
-     {% endif %}
+    {% set tmp_relation_exists = false %}
+    {% if on_schema_change != 'ignore' %} {# Check first, since otherwise we may not build a temp table #}
+      {% do run_query(create_table_as(True, tmp_relation, sql)) %}
+      {% set tmp_relation_exists = true %}
+      {% do process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
+    {% endif %}
+    
+    {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
+    {% set build_sql = bq_generate_incremental_build_sql(
+        strategy, tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists
+    ) %}
 
   {% endif %}
 

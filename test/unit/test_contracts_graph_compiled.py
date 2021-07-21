@@ -137,6 +137,7 @@ def basic_uncompiled_dict():
             'quoting': {},
             'tags': [],
             'vars': {},
+            'on_schema_change': 'ignore'
         },
         'docs': {'show': True},
         'columns': {},
@@ -181,6 +182,7 @@ def basic_compiled_dict():
             'quoting': {},
             'tags': [],
             'vars': {},
+            'on_schema_change': 'ignore'
         },
         'docs': {'show': True},
         'columns': {},
@@ -437,6 +439,7 @@ def basic_uncompiled_schema_test_dict():
             'warn_if': '!= 0',
             'error_if': '!= 0',
             'fail_calc': 'count(*)',
+            'on_schema_change': 'ignore',
         },
         'deferred': False,
         'docs': {'show': True},
@@ -491,6 +494,7 @@ def basic_compiled_schema_test_dict():
             'warn_if': '!= 0',
             'error_if': '!= 0',
             'fail_calc': 'count(*)',
+            'on_schema_change': 'ignore',
         },
         'docs': {'show': True},
         'columns': {},
