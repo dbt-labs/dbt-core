@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-
+use serde_json::Result;
+use std::path::Path;
+use std::process::exit;
+use std::{env, fs};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Measurement {
@@ -20,34 +23,33 @@ struct Measurements {
 }
 
 fn main() {
-    let data = r#"{
-"results": [
-    {
-    "command": "dbt parse --no-version-check",
-    "mean": 3.050361809595,
-    "stddev": 0.04615108237908544,
-    "median": 3.034926999095,
-    "user": 2.7580889199999996,
-    "system": 0.22864483500000002,
-    "min": 3.005364834595,
-    "max": 3.145752726595,
-    "times": [
-        3.023607223595,
-        3.0423504165949997,
-        3.145752726595,
-        3.114517602595,
-        3.062246401595,
-        3.051930277595,
-        3.027503581595,
-        3.013381462595,
-        3.005364834595,
-        3.016963568595
-    ]
+    // TODO args lib
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        println!("please provide the results directory");
+        exit(1);
     }
-]
-}"#;
-    
-    let measurements: Measurements = serde_json::from_str(data).unwrap();
+    let results_directory = &args[1];
 
-    println!("{:?}", measurements);
+    let path = Path::new(&results_directory);
+    let result_files = fs::read_dir(path).unwrap();
+    let x: Result<Vec<Measurements>> = result_files
+        .into_iter()
+        .map(|f| {
+            f.unwrap().path()
+        })
+        .filter(|filename| {
+            filename
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map_or(false, |ext| ext.ends_with("json"))
+        })
+        .map(|filename| {
+            println!("{:?}", filename);
+            let contents = fs::read_to_string(filename).unwrap();
+            serde_json::from_str::<Measurements>(&contents)
+        })
+        .collect();
+
+    println!("{:?}", x);
 }
