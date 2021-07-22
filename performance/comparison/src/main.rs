@@ -44,6 +44,12 @@ fn regression(base: &Measurement, latest: &Measurement) -> Option<Regression> {
     }
 }
 
+struct MeasurementGroup {
+    branch: String,
+    run: String,
+    measurement: Measurement,
+}
+
 fn main() {
     // TODO args lib
     let args: Vec<String> = env::args().collect();
@@ -55,7 +61,7 @@ fn main() {
 
     let path = Path::new(&results_directory);
     let result_files = fs::read_dir(path).unwrap();
-    let x: Result<Vec<(String, String, Measurement)>> = result_files
+    let x: Result<Vec<MeasurementGroup>> = result_files
         .into_iter()
         .map(|f| f.unwrap().path())
         .filter(|filename| {
@@ -73,7 +79,11 @@ fn main() {
             let parts: Vec<&str> = filepath.split("_").collect();
 
             // the way we're running these, the files will each contain exactly one measurement
-            results.map(|r| (parts[0].to_owned(), parts[1..].join(""), r.clone()))
+            results.map(|r| MeasurementGroup {
+                branch: parts[0].to_owned(),
+                run: parts[1..].join(""),
+                measurement: r.clone(),
+            })
         })
         .collect();
 
