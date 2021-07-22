@@ -77,7 +77,7 @@ jobs:
       - name: change permissions
         run: chmod +x ./runner
       - name: run
-        run: ./runner ${{ github.workspace }}/performance/projects/
+        run: ./runner ${{ github.workspace }}/performance/projects/ dev
       - uses: actions/upload-artifact@v2
         with:
           name: dev-results
@@ -116,7 +116,7 @@ jobs:
       - name: change permissions
         run: chmod +x ./runner
       - name: run runner
-        run: ./runner ${{ github.workspace }}/performance/projects/
+        run: ./runner ${{ github.workspace }}/performance/projects/ latest
       - uses: actions/upload-artifact@v2
         with:
           name: latest-results
