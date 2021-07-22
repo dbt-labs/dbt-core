@@ -27,14 +27,18 @@ import dbt.task.serve as serve_task
 import dbt.task.snapshot as snapshot_task
 import dbt.task.test as test_task
 from dbt.profiler import profiler
-from dbt.task.rpc.server import RPCServerTask
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
 import dbt.tracking
 
 from dbt.utils import ExitCodes
 from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
-from dbt.exceptions import RuntimeException, InternalException
+from dbt.exceptions import (
+    RuntimeException,
+    InternalException,
+    NotImplementedException,
+    FailedToConnectException
+)
 
 
 class DBTVersion(argparse.Action):
@@ -109,14 +113,6 @@ class DBTArgumentParser(argparse.ArgumentParser):
         )
 
         return mutex_group
-
-
-class RPCArgumentParser(DBTArgumentParser):
-    def exit(self, status=0, message=None):
-        if status == 0:
-            return
-        else:
-            raise TypeError(message)
 
 
 def main(args=None):
@@ -210,8 +206,8 @@ def track_run(task):
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="ok"
         )
-    except (dbt.exceptions.NotImplementedException,
-            dbt.exceptions.FailedToConnectException) as e:
+    except (NotImplementedException,
+            FailedToConnectException) as e:
         logger.error('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
@@ -796,36 +792,6 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
     return sub
 
 
-def _build_rpc_subparser(subparsers, base_subparser):
-    sub = subparsers.add_parser(
-        'rpc',
-        parents=[base_subparser],
-        help='''
-        Start a json-rpc server
-        ''',
-    )
-    sub.add_argument(
-        '--host',
-        default='0.0.0.0',
-        help='''
-        Specify the host to listen on for the rpc server.
-        ''',
-    )
-    sub.add_argument(
-        '--port',
-        default=8580,
-        type=int,
-        help='''
-        Specify the port number for the rpc server.
-        ''',
-    )
-    sub.set_defaults(cls=RPCServerTask, which='rpc', rpc_method=None)
-    # the rpc task does a 'compile', so we need these attributes to exist, but
-    # we don't want users to be allowed to set them.
-    sub.set_defaults(models=None, exclude=None)
-    return sub
-
-
 def _build_list_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
         'list',
@@ -1124,7 +1090,6 @@ def parse_args(args, cls=DBTArgumentParser):
 
     build_sub = _build_build_subparser(subs, base_subparser)
     snapshot_sub = _build_snapshot_subparser(subs, base_subparser)
-    rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
     parse_sub = _build_parse_subparser(subs, base_subparser)
@@ -1133,7 +1098,7 @@ def parse_args(args, cls=DBTArgumentParser):
     seed_sub = _build_seed_subparser(subs, base_subparser)
     # --threads, --no-version-check
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                          rpc_sub, seed_sub, parse_sub, build_sub)
+                          seed_sub, parse_sub, build_sub)
     # --select, --exclude
     # list_sub sets up its own arguments.
     _add_selection_arguments(
