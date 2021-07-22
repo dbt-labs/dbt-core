@@ -54,7 +54,7 @@ fn main() {
                         .arg(metric.prepare)
                         .arg([metric.cmd, " --profiles-dir ", "../../project_config/"].join(""))
                         .arg("--export-json")
-                        .arg([&projects_directory, "/", &metric.outfile(project_name)].join(""))
+                        .arg(["../../results/", &metric.outfile(project_name)].join(""))
                         // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
                         .arg("--show-output")
                         .status() // use spawn() here instead for more information
