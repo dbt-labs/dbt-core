@@ -22,6 +22,28 @@ struct Measurements {
     results: Vec<Measurement>,
 }
 
+struct Regression {
+    threshold: f64,
+    difference: f64,
+    base: Measurement,
+    latest: Measurement,
+}
+
+fn regression(base: &Measurement, latest: &Measurement) -> Option<Regression> {
+    let threshold = 1.05; // 5% regression threshold
+    let difference = latest.median / base.median;
+    if difference > threshold {
+        Some(Regression {
+            threshold: threshold,
+            difference: difference,
+            base: base.clone(),
+            latest: latest.clone(),
+        })
+    } else {
+        None
+    }
+}
+
 fn main() {
     // TODO args lib
     let args: Vec<String> = env::args().collect();
@@ -33,11 +55,9 @@ fn main() {
 
     let path = Path::new(&results_directory);
     let result_files = fs::read_dir(path).unwrap();
-    let x: Result<Vec<Measurements>> = result_files
+    let x: Result<Vec<Measurement>> = result_files
         .into_iter()
-        .map(|f| {
-            f.unwrap().path()
-        })
+        .map(|f| f.unwrap().path())
         .filter(|filename| {
             filename
                 .extension()
@@ -47,9 +67,17 @@ fn main() {
         .map(|filename| {
             println!("{:?}", filename);
             let contents = fs::read_to_string(filename).unwrap();
-            serde_json::from_str::<Measurements>(&contents)
+            let measurements: Result<Measurements> = serde_json::from_str(&contents);
+            // the way we're running these, the files will each contain exactly one measurement
+            measurements.map(|x| x.results[0].clone())
         })
         .collect();
+
+    // TODO exit(1) when Regression is present
+    match x {
+        Err(e) => panic!("{}", e),
+        Ok(_) => (),
+    }
 
     println!("{:?}", x);
 }
