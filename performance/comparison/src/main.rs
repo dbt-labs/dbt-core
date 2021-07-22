@@ -55,7 +55,7 @@ fn main() {
 
     let path = Path::new(&results_directory);
     let result_files = fs::read_dir(path).unwrap();
-    let x: Result<Vec<Measurement>> = result_files
+    let x: Result<Vec<(String, String, Measurement)>> = result_files
         .into_iter()
         .map(|f| f.unwrap().path())
         .filter(|filename| {
@@ -66,12 +66,21 @@ fn main() {
         })
         .map(|filename| {
             println!("{:?}", filename);
-            let contents = fs::read_to_string(filename).unwrap();
+            let contents = fs::read_to_string(&filename).unwrap();
             let measurements: Result<Measurements> = serde_json::from_str(&contents);
+            let results = measurements.map(|x| x.results[0].clone());
+            let filepath = filename.into_os_string().into_string().unwrap();
+            let parts: Vec<&str> = filepath.split("_").collect();
+
             // the way we're running these, the files will each contain exactly one measurement
-            measurements.map(|x| x.results[0].clone())
+            results.map(|r| (parts[0].to_owned(), parts[1..].join(""), r.clone()))
         })
         .collect();
+
+    // TODO
+    // - group by project and metric
+    // - each group will have 2 measurements for each branch
+    // - perfrom regressions on each pair
 
     // TODO exit(1) when Regression is present
     match x {
