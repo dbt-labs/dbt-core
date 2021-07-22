@@ -445,7 +445,7 @@ class TestEventTrackingSuccess(TestEventTracking):
         ]
 
         test_result_A = self.run_event_test(["seed"], expected_calls_A, expected_contexts)
-        test_result_A = self.run_event_test(["seed"], expected_calls_B, expected_contexts)
+        test_result_B = self.run_event_test(["seed"], expected_calls_B, expected_contexts)
         
         self.assertTrue(test_result_A or test_result_B)
 
