@@ -404,12 +404,21 @@ class PartialParsing:
                         patch_list = []
                         if key in schema_file.dict_from_yaml:
                             patch_list = schema_file.dict_from_yaml[key]
-                        node_patch = self.get_schema_element(patch_list, name)
-                        if node_patch:
-                            self.delete_schema_mssa_links(schema_file, key, node_patch)
-                            self.merge_patch(schema_file, key, node_patch)
-                            if unique_id in schema_file.node_patches:
-                                schema_file.node_patches.remove(unique_id)
+                        patch = self.get_schema_element(patch_list, name)
+                        if patch:
+                            if key in ['models', 'seeds', 'snapshots']:
+                                self.delete_schema_mssa_links(schema_file, key, patch)
+                                self.merge_patch(schema_file, key, patch)
+                                if unique_id in schema_file.node_patches:
+                                    schema_file.node_patches.remove(unique_id)
+                            elif key == 'sources':
+                                # re-schedule source
+                                if 'overrides' in patch:
+                                    # This is a source patch; need to re-parse orig source
+                                    self.remove_source_override_target(patch)
+                                self.delete_schema_source(schema_file, patch)
+                                self.remove_tests(schema_file, 'sources', patch['name'])
+                                self.merge_patch(schema_file, 'sources', patch)
                 else:
                     file_id = node.file_id
                     if file_id in self.saved_files and file_id not in self.file_diff['deleted']:

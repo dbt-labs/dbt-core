@@ -211,6 +211,7 @@ class TestSources(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': ['seed'],
             'test-paths': ['tests'],
+            'macro-paths': ['macros-b'],
             'analysis-paths': ['analysis'],
             'seeds': {
                 'quote_columns': False,
@@ -237,6 +238,8 @@ class TestSources(DBTIntegrationTest):
             os.remove(normalize('tests/my_test.sql'))
         if os.path.exists(normalize('analysis/my_analysis.sql')):
             os.remove(normalize('analysis/my_analysis.sql'))
+        if os.path.exists(normalize('macros-b/tests.sql')):
+            os.remove(normalize('macros-b/tests.sql'))
 
 
     @use_profile('postgres')
@@ -244,6 +247,7 @@ class TestSources(DBTIntegrationTest):
         # initial run
         self.run_dbt(['clean'])
         shutil.copyfile('extra-files/raw_customers.csv', 'seed/raw_customers.csv')
+        shutil.copyfile('extra-files/sources-tests1.sql', 'macros-b/tests.sql')
         results = self.run_dbt(["run"])
         self.assertEqual(len(results), 1)
 
@@ -324,7 +328,7 @@ class TestSources(DBTIntegrationTest):
         shutil.copyfile('extra-files/my_test.sql', 'tests/my_test.sql')
         results = self.run_dbt(["--partial-parse", "test"])
         manifest = get_manifest()
-        self.assertEqual(len(manifest.nodes), 8)
+        self.assertEqual(len(manifest.nodes), 9)
         test_id = 'test.test.my_test'
         self.assertIn(test_id, manifest.nodes)
 
@@ -337,13 +341,17 @@ class TestSources(DBTIntegrationTest):
         os.remove(normalize('tests/my_test.sql'))
         results = self.run_dbt(["--partial-parse", "test"])
         manifest = get_manifest()
-        self.assertEqual(len(manifest.nodes), 8)
+        self.assertEqual(len(manifest.nodes), 9)
 
         # Remove analysis
         os.remove(normalize('analysis/my_analysis.sql'))
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
-        self.assertEqual(len(manifest.nodes), 7)
+        self.assertEqual(len(manifest.nodes), 8)
+
+        # Change source test
+        shutil.copyfile('extra-files/sources-tests2.sql', 'macros-b/tests.sql')
+        results = self.run_dbt(["--partial-parse", "run"])
 
 
 class TestPartialParsingDependency(DBTIntegrationTest):
