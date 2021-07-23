@@ -445,7 +445,13 @@ class PartialParsing:
         new_schema_file = self.new_files[file_id]
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
-        saved_schema_file.pp_dict = {"version": saved_yaml_dict['version']}
+        if 'version' in new_yaml_dict:
+            # despite the fact that this goes in the saved_schema_file, it
+            # should represent the new yaml dictionary, and should produce
+            # an error if the updated yaml file doesn't have a version
+            saved_schema_file.pp_dict = {"version": new_yaml_dict['version']}
+        else:
+            saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
         # copy from new schema_file to saved_schema_file to preserve references
