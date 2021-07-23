@@ -256,7 +256,6 @@ def run_from_args(parsed):
 
     with track_run(task):
         results = task.run()
-
     return task, results
 
 
@@ -361,7 +360,7 @@ def _build_init_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        'project_name',
+        '--project_name',
         type=str,
         help='''
         Name of the new project

@@ -1,0 +1,14 @@
+type: bigquery
+_choose_method:
+  _oauth:
+    method: oauth
+  _service_account:
+    method: service-account
+    keyfile: [/path/to/bigquery/keyfile.json]
+project: [GCP project id]
+dataset: [the name of your dbt dataset]
+threads: [1 or more]
+timeout_seconds: 300
+location: [one of US or EU]
+priority: interactive
+retries: 1

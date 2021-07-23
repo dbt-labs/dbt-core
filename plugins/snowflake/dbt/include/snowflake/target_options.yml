@@ -1,0 +1,15 @@
+type: snowflake
+account: '[account id + region (if applicable)]'
+user: '[username]'
+_choose_authentication_type:
+  password:
+    password: '[password]'
+  keypair:
+    private_key_path: '[path/to/private.key]'
+    private_key_passphrase: '[passphrase for the private key, if key is encrypted]'
+role: '[user role]'
+database: '[database name]'
+warehouse: '[warehouse name]'
+schema: '[dbt schema]'
+threads: '[1 or more]'
+client_session_keep_alive: False

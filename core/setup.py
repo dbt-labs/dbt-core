@@ -52,6 +52,7 @@ setup(
         'Jinja2==2.11.3',
         'PyYAML>=3.11',
         'agate>=1.6,<1.6.2',
+        'click>=8,<9',
         'colorama>=0.3.9,<0.4.5',
         'dataclasses>=0.6,<0.9;python_version<"3.7"',
         'hologram==0.0.14',

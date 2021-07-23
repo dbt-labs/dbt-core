@@ -1,0 +1,8 @@
+type: postgres
+threads: [1 or more]
+host: [host]
+port: [port]
+user: [dev_username]
+pass: [dev_password]
+dbname: [dbname]
+schema: [dev_schema]
