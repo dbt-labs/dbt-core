@@ -195,8 +195,7 @@ class BaseConfig(AdditionalPropertiesAllowed, Replaceable):
     def __delitem__(self, key):
         if hasattr(self, key):
             msg = (
-                'Error, tried to delete config key "{}": Cannot delete '
-                'built-in keys'
+                'Error, tried to delete config key "{}": Cannot delete ' "built-in keys"
             ).format(key)
             raise CompilationException(msg)
         else:
