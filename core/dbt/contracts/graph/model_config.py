@@ -1,9 +1,7 @@
 from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
-from typing import (
-    Any, List, Optional, Dict, Union, Type, TypeVar, Callable
-)
+from typing import Any, List, Optional, Dict, Union, Type, TypeVar, Callable
 from dbt.dataclass_schema import (
     dbtClassMixin,
     ValidationError,
