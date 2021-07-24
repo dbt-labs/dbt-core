@@ -4,7 +4,7 @@ import itertools
 from dbt.exceptions import VersionsNotCompatibleException
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier, \
     VersionRange, reduce_versions, versions_compatible, \
-    resolve_to_specific_version
+    resolve_to_specific_version, filter_installable
 
 
 def create_range(start_version_string, end_version_string):
@@ -172,3 +172,14 @@ class TestSemver(unittest.TestCase):
                 create_range('>=1.0.0', '<1.2.0'),
                 ['1.0.0', '1.1.0a1', '1.1.0', '1.2.0a1', '1.2.0']),
             '1.1.0')
+
+    def test__filter_installable(self):
+        assert filter_installable(
+            ['1.0.0', '1.1.0', '1.2.0a1'],
+            install_prerelease=True
+        ) == ['1.0.0', '1.1.0', '1.2.0a1']
+
+        assert filter_installable(
+            ['1.0.0', '1.1.0', '1.2.0a1'],
+            install_prerelease=False
+        ) == ['1.0.0', '1.1.0']

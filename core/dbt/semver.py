@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import re
+from typing import List
 
 from packaging import version as packaging_version
 
@@ -424,10 +425,23 @@ def resolve_to_specific_version(requested_range, available_versions):
         version = VersionSpecifier.from_version_string(version_string)
 
         if(versions_compatible(version,
-                               requested_range.start,
-                               requested_range.end) and
+           requested_range.start, requested_range.end) and
            (max_version is None or max_version.compare(version) < 0)):
             max_version = version
             max_version_string = version_string
 
     return max_version_string
+
+
+def filter_installable(
+        versions: List[str],
+        install_prerelease: bool
+) -> List[str]:
+    if install_prerelease:
+        return versions
+    installable = []
+    for version_string in versions:
+        version = VersionSpecifier.from_version_string(version_string)
+        if not version.prerelease:
+            installable.append(version_string)
+    return installable
