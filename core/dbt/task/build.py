@@ -1,6 +1,4 @@
-from .compile import CompileTask
-
-from .run import ModelRunner as run_model_runner
+from .run import RunTask, ModelRunner as run_model_runner
 from .snapshot import SnapshotRunner as snapshot_model_runner
 from .seed import SeedRunner as seed_runner
 from .test import TestRunner as test_runner
@@ -10,7 +8,7 @@ from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
 
 
-class BuildTask(CompileTask):
+class BuildTask(RunTask):
     """The Build task processes all assets of a given process and attempts to 'build'
     them in an opinionated fashion.  Every resource type outlined in RUNNER_MAP
     will be processed by the mapped runner class.
