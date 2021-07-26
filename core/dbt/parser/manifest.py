@@ -379,10 +379,10 @@ class ManifestLoader:
         if not self.partially_parsing and HookParser in parser_types:
             hook_parser = HookParser(project, self.manifest, self.root_project)
             path = hook_parser.get_path()
-            file_block = FileBlock(
-                load_source_file(path, ParseFileType.Hook, project.project_name)
-            )
-            hook_parser.parse_file(file_block)
+            file = load_source_file(path, ParseFileType.Hook, project.project_name)
+            if file:
+                file_block = FileBlock(file)
+                hook_parser.parse_file(file_block)
 
         # Store the performance info
         elapsed = time.perf_counter() - start_timer
