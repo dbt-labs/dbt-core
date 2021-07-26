@@ -147,6 +147,18 @@ class PartialParsing:
                 file_id not in self.file_diff['deleted']):
             self.project_parser_files[project_name][parser_name].append(file_id)
 
+    def already_scheduled_for_parsing(self, source_file):
+        file_id = source_file.file_id
+        project_name = source_file.project_name
+        if project_name not in self.project_parser_files:
+            return False
+        parser_name = parse_file_type_to_parser[source_file.parse_file_type]
+        if parser_name not in self.project_parser_files[project_name]:
+            return False
+        if file_id not in self.project_parser_files[project_name][parser_name]:
+            return False
+        return True
+
     # Add new files, including schema files
     def add_to_saved(self, file_id):
         # add file object to saved manifest.files
@@ -211,6 +223,9 @@ class PartialParsing:
     # Updated schema files should have been processed already.
     def update_mssat_in_saved(self, new_source_file, old_source_file):
 
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
+
         # These files only have one node.
         unique_id = old_source_file.nodes[0]
 
@@ -251,12 +266,16 @@ class PartialParsing:
                         schema_file.node_patches.remove(unique_id)
 
     def update_macro_in_saved(self, new_source_file, old_source_file):
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
         self.handle_macro_file_links(old_source_file, follow_references=True)
         file_id = new_source_file.file_id
         self.saved_files[file_id] = new_source_file
         self.add_to_pp_files(new_source_file)
 
     def update_doc_in_saved(self, new_source_file, old_source_file):
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
         self.delete_doc_node(old_source_file)
         self.saved_files[new_source_file.file_id] = new_source_file
         self.add_to_pp_files(new_source_file)
