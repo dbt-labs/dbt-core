@@ -868,9 +868,9 @@ class PartialParsing:
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
         macro_unique_id = None
-        if macro['name'] in schema_file.macro_patches:
-            macro_unique_id = schema_file.macro_patches[macro['name']]
-            del schema_file.macro_patches[macro['name']]
+        if macro["name"] in schema_file.macro_patches:
+            macro_unique_id = schema_file.macro_patches[macro["name"]]
+            del schema_file.macro_patches[macro["name"]]
         if macro_unique_id and macro_unique_id in self.saved_manifest.macros:
             macro = self.saved_manifest.macros.pop(macro_unique_id)
             self.deleted_manifest.macros[macro_unique_id] = macro
