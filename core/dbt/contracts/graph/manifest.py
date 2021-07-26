@@ -759,7 +759,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split('://')
             raise_duplicate_macro_patch_name(patch, existing_file_path)
-        source_file.macro_patches.append(unique_id)
+        source_file.macro_patches[patch.name] = unique_id
         macro.patch(patch)
 
     def add_source_patch(

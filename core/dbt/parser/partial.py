@@ -668,19 +668,17 @@ class PartialParsing:
 
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
-        for unique_id in schema_file.macro_patches:
-            parts = unique_id.split('.')
-            macro_name = parts[-1]
-            if macro_name == macro['name']:
-                macro_unique_id = unique_id
-                break
+        macro_unique_id = None
+        if macro['name'] in schema_file.macro_patches:
+            macro_unique_id = schema_file.macro_patches[macro['name']]
+            del schema_file.macro_patches[macro['name']]
         if macro_unique_id and macro_unique_id in self.saved_manifest.macros:
             macro = self.saved_manifest.macros.pop(macro_unique_id)
             self.deleted_manifest.macros[macro_unique_id] = macro
             macro_file_id = macro.file_id
-            self.add_to_pp_files(self.saved_files[macro_file_id])
-        if macro_unique_id in schema_file.macro_patches:
-            schema_file.macro_patches.remove(macro_unique_id)
+            if macro_file_id in self.new_files:
+                self.saved_files[macro_file_id] = self.new_files[macro_file_id]
+                self.add_to_pp_files(self.saved_files[macro_file_id])
 
     # exposures are created only from schema files, so just delete
     # the exposure.
