@@ -10,7 +10,7 @@ on:
       - 'develop' 
       - '*.latest' 
       - 'releases/*'
-  pull_request_target: # Trigger for all PRs
+  pull_request: # Trigger for all PRs
   workflow_dispatch: # Allow manual triggers
 
 jobs:
