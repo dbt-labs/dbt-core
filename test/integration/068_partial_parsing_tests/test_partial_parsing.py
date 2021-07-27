@@ -168,6 +168,16 @@ class TestModels(DBTIntegrationTest):
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
 
+        # Add an empty schema file
+        shutil.copyfile('extra-files/empty_schema.yml', 'models-a/eschema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
+        # Add version to empty schema file
+        shutil.copyfile('extra-files/empty_schema_with_version.yml', 'models-a/eschema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
     def tearDown(self):
         if os.path.exists(normalize('models-a/model_two.sql')):
             os.remove(normalize('models-a/model_two.sql'))
@@ -181,6 +191,8 @@ class TestModels(DBTIntegrationTest):
             os.remove(normalize('target/partial_parse.msgpack'))
         if os.path.exists(normalize('macros/my_macro.sql')):
             os.remove(normalize('macros/my_macro.sql'))
+        if os.path.exists(normalize('models-a/eschema.yml')):
+            os.remove(normalize('models-a/eschema.yml'))
 
 
 class TestSources(DBTIntegrationTest):
