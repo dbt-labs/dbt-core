@@ -79,7 +79,7 @@
     (
         select {{ dest_cols_csv }}
         from {{ source }}
-    );
+    )
 
 {%- endmacro %}
 
