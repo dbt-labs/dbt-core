@@ -39,11 +39,7 @@
   {% set strategy = dbt_snowflake_validate_get_incremental_strategy(config) -%}
   {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
 
-  -- setup
-  {{ run_hooks(pre_hooks, inside_transaction=False) }}
-
-  -- `BEGIN` happens here:
-  {{ run_hooks(pre_hooks, inside_transaction=True) }}
+  {{ run_hooks(pre_hooks) }}
 
   {% if existing_relation is none %}
     {% set build_sql = create_table_as(False, target_relation, sql) %}
@@ -72,12 +68,7 @@
     {{ build_sql }}
   {%- endcall -%}
 
-  {{ run_hooks(post_hooks, inside_transaction=True) }}
-
-  -- `COMMIT` happens here
-  {{ adapter.commit() }}
-
-  {{ run_hooks(post_hooks, inside_transaction=False) }}
+  {{ run_hooks(post_hooks) }}
 
   {% set target_relation = target_relation.incorporate(type='table') %}
   {% do persist_docs(target_relation, model) %}

@@ -224,7 +224,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 schema=creds.schema,
                 warehouse=creds.warehouse,
                 role=creds.role,
-                autocommit=False,
+                autocommit=True,
                 client_session_keep_alive=creds.client_session_keep_alive,
                 application='dbt',
                 **creds.auth_args()
@@ -274,6 +274,23 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             rows_affected=cursor.rowcount,
             code=code
         )
+
+    # disable transactional logic by default on Snowflake
+    # except for DML statements where explicitly defined
+    def add_begin_query(self, *args, **kwargs):
+        pass
+
+    def add_commit_query(self, *args, **kwargs):
+        pass
+
+    def begin(self):
+        pass
+
+    def commit(self):
+        pass
+
+    def clear_transaction(self):
+        pass
 
     @classmethod
     def _split_queries(cls, sql):
@@ -352,15 +369,3 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             )
 
         return connection, cursor
-
-    @classmethod
-    def _rollback_handle(cls, connection):
-        """On snowflake, rolling back the handle of an aborted session raises
-        an exception.
-        """
-        try:
-            connection.handle.rollback()
-        except snowflake.connector.errors.ProgrammingError as e:
-            msg = str(e)
-            if 'Session no longer exists' not in msg:
-                raise

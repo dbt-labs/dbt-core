@@ -9,10 +9,7 @@
                                                 schema=schema,
                                                 database=database, type='table') -%}
 
-  {{ run_hooks(pre_hooks, inside_transaction=False) }}
-
-  -- `BEGIN` happens here:
-  {{ run_hooks(pre_hooks, inside_transaction=True) }}
+  {{ run_hooks(pre_hooks) }}
 
   {#-- Drop the relation if it was a view to "convert" it in a table. This may lead to
     -- downtime, but it should be a relatively infrequent occurrence  #}
@@ -26,12 +23,7 @@
     {{ create_table_as(false, target_relation, sql) }}
   {%- endcall %}
 
-  {{ run_hooks(post_hooks, inside_transaction=True) }}
-
-  -- `COMMIT` happens here
-  {{ adapter.commit() }}
-
-  {{ run_hooks(post_hooks, inside_transaction=False) }}
+  {{ run_hooks(post_hooks) }}
 
   {% do persist_docs(target_relation, model) %}
 

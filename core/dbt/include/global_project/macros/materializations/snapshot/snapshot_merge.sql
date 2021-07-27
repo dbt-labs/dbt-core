@@ -21,7 +21,6 @@
      and DBT_INTERNAL_SOURCE.dbt_change_type = 'insert'
         then insert ({{ insert_cols_csv }})
         values ({{ insert_cols_csv }})
-    ;
-{% endmacro %}
 
+{% endmacro %}
 
