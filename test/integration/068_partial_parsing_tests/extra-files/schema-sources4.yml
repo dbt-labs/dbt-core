@@ -11,6 +11,7 @@ sources:
               - not_null:
                   severity: "{{ 'error' if target.name == 'prod' else 'warn' }}"
               - unique
+              - every_value_is_blue
           - name: first_name
           - name: last_name
           - name: email
