@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::exit;
 use std::{env, fs};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Measurement {
     command: String,
     mean: f64,
@@ -17,11 +17,12 @@ struct Measurement {
     times: Vec<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Measurements {
     results: Vec<Measurement>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct Regression {
     threshold: f64,
     difference: f64,
@@ -34,8 +35,8 @@ fn regression(base: &Measurement, latest: &Measurement) -> Option<Regression> {
     let difference = latest.median / base.median;
     if difference > threshold {
         Some(Regression {
-            threshold: threshold,
-            difference: difference,
+            threshold,
+            difference,
             base: base.clone(),
             latest: latest.clone(),
         })
@@ -44,6 +45,7 @@ fn regression(base: &Measurement, latest: &Measurement) -> Option<Regression> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct MeasurementGroup {
     branch: String,
     run: String,
@@ -61,7 +63,7 @@ fn main() {
 
     let path = Path::new(&results_directory);
     let result_files = fs::read_dir(path).unwrap();
-    let x: Result<Vec<MeasurementGroup>> = result_files
+    let measurements: Result<Vec<MeasurementGroup>> = result_files
         .into_iter()
         .map(|f| f.unwrap().path())
         .filter(|filename| {
@@ -90,13 +92,15 @@ fn main() {
     // TODO
     // - group by project and metric
     // - each group will have 2 measurements for each branch
-    // - perfrom regressions on each pair
+    // - perform regressions on each pair
+    // dev_parse_02_mini_project_dont_merge.json
+    // dev_parse_01_mini_project_dont_merge.json
 
     // TODO exit(1) when Regression is present
-    match x {
+    match measurements {
         Err(e) => panic!("{}", e),
         Ok(_) => (),
     }
 
-    println!("{:?}", x);
+    println!("{:?}", measurements);
 }
