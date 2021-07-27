@@ -41,14 +41,11 @@ DEBUG_LOG_FORMAT = (
     "{record.time:%Y-%m-%d %H:%M:%S.%f%z} " "({record.thread_name}): " "{record.message}"
 )
 
-SECRET_ENV_PREFIX = 'DBT_ENV_SECRET_'
+SECRET_ENV_PREFIX = "DBT_ENV_SECRET_"
 
 
 def get_secret_env() -> List[str]:
-    return [
-        v for k, v in os.environ.items()
-        if k.startswith(SECRET_ENV_PREFIX)
-    ]
+    return [v for k, v in os.environ.items() if k.startswith(SECRET_ENV_PREFIX)]
 
 
 ExceptionInformation = str
@@ -487,7 +484,7 @@ class LogManager(logbook.NestedSetup):
             self._file_handler,
             self._relevel_processor,
             self._state_processor,
-            self._scrub_processor
+                self._state_processor,
         ])
 
     def push_application(self):
