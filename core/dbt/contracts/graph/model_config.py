@@ -2,13 +2,13 @@ from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
 from typing import (
-    Any, List, Optional, Dict, Union, Type, TypeVar
+    Any, List, Optional, Dict, Union, Type, TypeVar, Callable
 )
 from dbt.dataclass_schema import (
     dbtClassMixin, ValidationError, register_pattern,
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
-from dbt.exceptions import InternalException
+from dbt.exceptions import InternalException, CompilationException
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -203,6 +203,34 @@ class BaseConfig(
             setattr(self, key, value)
         else:
             self._extra[key] = value
+
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            msg = (
+                'Error, tried to delete config key "{}": Cannot delete '
+                'built-in keys'
+            ).format(key)
+            raise CompilationException(msg)
+        else:
+            del self._extra[key]
+
+    def _content_iterator(self, include_condition: Callable[[Field], bool]):
+        seen = set()
+        for fld, _ in self._get_fields():
+            seen.add(fld.name)
+            if include_condition(fld):
+                yield fld.name
+
+        for key in self._extra:
+            if key not in seen:
+                seen.add(key)
+                yield key
+
+    def __iter__(self):
+        yield from self._content_iterator(include_condition=lambda f: True)
+
+    def __len__(self):
+        return len(self._get_fields()) + len(self._extra)
 
     @staticmethod
     def compare_key(
