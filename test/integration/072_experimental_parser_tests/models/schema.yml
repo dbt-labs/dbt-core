@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: my_src
+    schema: "{{ target.schema }}"
+    tables:
+      - name: my_tbl
+
+models:
+  - name: model_a
+    columns:
+      - name: fun
