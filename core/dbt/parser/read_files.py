@@ -6,12 +6,13 @@ from dbt.contracts.files import (
 from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
 from dbt.exceptions import CompilationException
 from dbt.parser.search import FilesystemSearcher
+from typing import Optional
 
 
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
         path: FilePath, parse_file_type: ParseFileType,
-        project_name: str) -> AnySourceFile:
+        project_name: str) -> Optional[AnySourceFile]:
     file_contents = load_file_contents(path.absolute_path, strip=False)
     checksum = FileHash.from_contents(file_contents)
     sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
@@ -20,8 +21,11 @@ def load_source_file(
     source_file.contents = file_contents.strip()
     if parse_file_type == ParseFileType.Schema and source_file.contents:
         dfy = yaml_from_file(source_file)
-        validate_yaml(source_file.path.original_file_path, dfy)
-        source_file.dfy = dfy
+        if dfy:
+            validate_yaml(source_file.path.original_file_path, dfy)
+            source_file.dfy = dfy
+        else:
+            source_file = None
     return source_file
 
 
@@ -76,8 +80,10 @@ def get_source_files(project, paths, extension, parse_file_type):
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
         else:
-            fb_list.append(load_source_file(
-                fp, parse_file_type, project.project_name))
+            file = load_source_file(fp, parse_file_type, project.project_name)
+            # only append the list if it has contents. added to fix #3568
+            if file:
+                fb_list.append(file)
     return fb_list
 
 
