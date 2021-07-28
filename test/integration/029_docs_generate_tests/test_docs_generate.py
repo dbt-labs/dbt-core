@@ -909,6 +909,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'tags': [],
             'persist_docs': {},
             'full_refresh': None,
+            'on_schema_change': 'ignore',
         }
         result.update(updates)
         return result
@@ -929,6 +930,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'tags': [],
             'quote_columns': True,
             'full_refresh': None,
+            'on_schema_change': 'ignore',
             'database': None,
             'schema': None,
             'alias': None,
@@ -956,10 +958,11 @@ class TestDocsGenerate(DBTIntegrationTest):
             'tags': [],
             'persist_docs': {},
             'full_refresh': None,
+            'on_schema_change': 'ignore',
             'strategy': 'check',
             'check_cols': 'all',
             'unique_key': 'id',
-            'target_schema': None
+            'target_schema': None,
         }
         result.update(updates)
         return result
@@ -993,6 +996,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'where': None,
             'limit': None,
             'full_refresh': None,
+            'on_schema_change': 'ignore',
             'database': None,
             'schema': 'dbt_test__audit',
             'alias': None,

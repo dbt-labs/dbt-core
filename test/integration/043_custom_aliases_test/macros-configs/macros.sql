@@ -4,7 +4,7 @@
     {%- if custom_alias_name is none -%}
         {{ node.name }}
     {%- else -%}
-        custom_{{ node.config['alias'] | trim }}
+        custom_{{ node.config['alias'] if 'alias' in node.config else '' | trim }}
     {%- endif -%}
 {%- endmacro %}
 

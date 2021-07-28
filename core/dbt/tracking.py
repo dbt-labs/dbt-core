@@ -30,7 +30,7 @@ RPC_REQUEST_SPEC = 'iglu:com.dbt/rpc_request/jsonschema/1-0-1'
 DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
 LOAD_ALL_TIMING_SPEC = 'iglu:com.dbt/load_all_timing/jsonschema/1-0-3'
 RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
-
+EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
 
@@ -419,6 +419,20 @@ def track_invalid_invocation(
         category="dbt",
         action='invocation',
         label='invalid',
+        context=context
+    )
+
+
+def track_experimental_parser_sample(options):
+    context = [SelfDescribingJson(EXPERIMENTAL_PARSER, options)]
+    assert active_user is not None, \
+        'Cannot track project loading time when active user is None'
+
+    track(
+        active_user,
+        category='dbt',
+        action='experimental_parser',
+        label=active_user.invocation_id,
         context=context
     )
 

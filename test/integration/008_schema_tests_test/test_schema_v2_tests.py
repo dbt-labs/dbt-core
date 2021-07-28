@@ -152,7 +152,7 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         results = self.run_dbt(['test'], strict=False)
 
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         for result in results:
             self.assertFalse(result.skipped)
             self.assertEqual(

@@ -1,22 +1,12 @@
 version: 2.1
 jobs:
-  unit:
+  build-wheels:
     docker: &test_only
       - image: fishtownanalytics/test-container:12
         environment:
           DBT_INVOCATION_ENV: circle
           DOCKER_TEST_DATABASE_HOST: "database"
           TOX_PARALLEL_NO_SPINNER: 1
-    steps:
-      - checkout
-      - run: tox -p -e py36,py37,py38
-  lint:
-    docker: *test_only
-    steps:
-      - checkout
-      - run: tox -e mypy,flake8 -- -v
-  build-wheels:
-    docker: *test_only
     steps:
       - checkout
       - run:
@@ -99,24 +89,12 @@ workflows:
   version: 2
   test-everything:
     jobs:
-      - lint
-      - unit
-      - integration-postgres:
-          requires:
-            - unit
-      - integration-redshift:
-          requires:
-            - unit
-      - integration-bigquery:
-          requires:
-            - unit
-      - integration-snowflake:
-          requires:
-            - unit
+      - integration-postgres
+      - integration-redshift
+      - integration-bigquery
+      - integration-snowflake
       - build-wheels:
           requires:
-            - lint
-            - unit
             - integration-postgres
             - integration-redshift
             - integration-bigquery

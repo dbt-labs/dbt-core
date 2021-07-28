@@ -12,3 +12,11 @@ models:
       - fail_calc
       - where:  # test override + weird quoting
           where: "\"favorite_color\" = 'red'"
+    columns:
+      - name: id
+        tests:
+          # relationships with where
+          - relationships:
+              to: ref('table_copy')  # itself
+              field: id
+              where: 1=1

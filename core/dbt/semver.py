@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 import re
+from typing import List
+
+from packaging import version as packaging_version
 
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
@@ -125,12 +128,26 @@ class VersionSpecifier(VersionSpecification):
         if self.is_unbounded or other.is_unbounded:
             return 0
 
-        for key in ['major', 'minor', 'patch']:
-            comparison = int(getattr(self, key)) - int(getattr(other, key))
-
-            if comparison > 0:
+        for key in ['major', 'minor', 'patch', 'prerelease']:
+            (a, b) = (getattr(self, key), getattr(other, key))
+            if key == 'prerelease':
+                if a is None and b is None:
+                    continue
+                if a is None:
+                    if self.matcher == Matchers.LESS_THAN:
+                        # If 'a' is not a pre-release but 'b' is, and b must be
+                        # less than a, return -1 to prevent installations of
+                        # pre-releases with greater base version than a
+                        # maximum specified non-pre-release version.
+                        return -1
+                    # Otherwise, stable releases are considered greater than
+                    # pre-release
+                    return 1
+                if b is None:
+                    return -1
+            if packaging_version.parse(a) > packaging_version.parse(b):
                 return 1
-            elif comparison < 0:
+            elif packaging_version.parse(a) < packaging_version.parse(b):
                 return -1
 
         equal = ((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
@@ -408,10 +425,23 @@ def resolve_to_specific_version(requested_range, available_versions):
         version = VersionSpecifier.from_version_string(version_string)
 
         if(versions_compatible(version,
-                               requested_range.start,
-                               requested_range.end) and
+           requested_range.start, requested_range.end) and
            (max_version is None or max_version.compare(version) < 0)):
             max_version = version
             max_version_string = version_string
 
     return max_version_string
+
+
+def filter_installable(
+        versions: List[str],
+        install_prerelease: bool
+) -> List[str]:
+    if install_prerelease:
+        return versions
+    installable = []
+    for version_string in versions:
+        version = VersionSpecifier.from_version_string(version_string)
+        if not version.prerelease:
+            installable.append(version_string)
+    return installable
