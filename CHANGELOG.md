@@ -39,10 +39,16 @@ Contributors:
 
 ## dbt 0.20.1 (Release TBD)
 
+### Features
+- Adds `install-prerelease` parameter to hub packages in `packages.yml`. When set to `True`, allows prerelease packages to be installed. By default, this parameter is False unless explicitly set to True.
+
 ### Fixes
 - Fix `store_failures` config when defined as a modifier for `unique` and `not_null` tests ([#3575](https://github.com/fishtown-analytics/dbt/issues/3575), [#3577](https://github.com/fishtown-analytics/dbt/pull/3577))
 - Fix `where` config with `relationships` test by refactoring test SQL. Note: The default `relationships` test now includes CTEs, and may need reimplementing on adapters that don't support CTEs nested inside subqueries. ([#3579](https://github.com/fishtown-analytics/dbt/issues/3579), [#3583](https://github.com/fishtown-analytics/dbt/pull/3583))
+- Fix `dbt deps` version comparison logic which was causing incorrect pre-release package versions to be installed. ([#3578](https://github.com/dbt-labs/dbt/issues/3578), [#3609](https://github.com/dbt-labs/dbt/issues/3609))
 
+Contributors:
+- [@NiallRees](https://github.com/NiallRees) ([#3623](https://github.com/dbt-labs/dbt/pull/3623))
 
 ## dbt 0.20.0 (July 12, 2021)
 
@@ -124,7 +130,7 @@ Contributors:
 - Use shutil.which so Windows can pick up git.bat as a git executable ([#3035](https://github.com/fishtown-analytics/dbt/issues/3035), [#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - Add `ssh-client` and update `git` version (using buster backports) in Docker image ([#3337](https://github.com/fishtown-analytics/dbt/issues/3337), [#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
 - Add `tags` and `meta` properties to the exposure resource schema. ([#3404](https://github.com/fishtown-analytics/dbt/issues/3404), [#3405](https://github.com/fishtown-analytics/dbt/pull/3405))
-- Update test sub-query alias ([#3398](https://github.com/fishtown-analytics/dbt/issues/3398), [#3414](https://github.com/fishtown-analytics/dbt/pull/3414)) 
+- Update test sub-query alias ([#3398](https://github.com/fishtown-analytics/dbt/issues/3398), [#3414](https://github.com/fishtown-analytics/dbt/pull/3414))
 - Bump schema versions for run results and manifest artifacts ([#3422](https://github.com/fishtown-analytics/dbt/issues/3422), [#3421](https://github.com/fishtown-analytics/dbt/pull/3421))
 - Add deprecation warning for using `packages` argument with `adapter.dispatch` ([#3419](https://github.com/fishtown-analytics/dbt/issues/3419), [#3420](https://github.com/fishtown-analytics/dbt/pull/3420))
 
