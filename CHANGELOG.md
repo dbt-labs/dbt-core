@@ -48,7 +48,7 @@ Contributors:
 - Fix `dbt deps` version comparison logic which was causing incorrect pre-release package versions to be installed. ([#3578](https://github.com/dbt-labs/dbt/issues/3578), [#3609](https://github.com/dbt-labs/dbt/issues/3609))
 
 Contributors:
-- [@NiallRees](https://github.com/NiallRees) ([#3623](https://github.com/dbt-labs/dbt/pull/3623))
+- [@NiallRees](https://github.com/NiallRees) ([#3624](https://github.com/dbt-labs/dbt/pull/3624))
 
 ## dbt 0.20.0 (July 12, 2021)
 
