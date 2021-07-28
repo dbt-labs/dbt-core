@@ -125,9 +125,9 @@ class VersionSpecifier(VersionSpecification):
         if self.is_unbounded or other.is_unbounded:
             return 0
 
-        for key in ['major', 'minor', 'patch', 'prerelease']:
+        for key in ["major", "minor", "patch", "prerelease"]:
             (a, b) = (getattr(self, key), getattr(other, key))
-            if key == 'prerelease':
+            if key == "prerelease":
                 if a is None and b is None:
                     continue
                 if a is None:
@@ -424,7 +424,7 @@ def resolve_to_specific_version(requested_range, available_versions):
         version = VersionSpecifier.from_version_string(version_string)
 
         if versions_compatible(version, requested_range.start, requested_range.end) and (
-           requested_range.start, requested_range.end) and
+            max_version is None or max_version.compare(version) < 0
         ):
             max_version = version
             max_version_string = version_string
@@ -432,10 +432,7 @@ def resolve_to_specific_version(requested_range, available_versions):
     return max_version_string
 
 
-def filter_installable(
-        versions: List[str],
-        install_prerelease: bool
-) -> List[str]:
+def filter_installable(versions: List[str], install_prerelease: bool) -> List[str]:
     installable = []
     installable_dict = {}
     for version_string in versions:

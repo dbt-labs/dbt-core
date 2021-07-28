@@ -88,10 +88,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
 
 class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]):
     def __init__(
-        self,
-        package: str,
-        versions: List[semver.VersionSpecifier],
-        install_prerelease: bool
+        self, package: str, versions: List[semver.VersionSpecifier], install_prerelease: bool
     ) -> None:
         super().__init__(package)
         self.versions = versions
@@ -110,7 +107,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
         return cls(
             package=contract.package,
             versions=versions,
-            install_prerelease=contract.install_prerelease
+            install_prerelease=contract.install_prerelease,
         )
 
     def incorporate(self, other: "RegistryUnpinnedPackage") -> "RegistryUnpinnedPackage":
