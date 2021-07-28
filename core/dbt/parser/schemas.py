@@ -171,15 +171,15 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             self.project.config_version == 2
         )
         if all_v_2:
-            ctx = generate_schema_yml(
+            self.render_ctx = generate_schema_yml(
                 self.root_project, self.project.project_name
             )
         else:
-            ctx = generate_target_context(
+            self.render_ctx = generate_target_context(
                 self.root_project, self.root_project.cli_vars
             )
 
-        self.raw_renderer = SchemaYamlRenderer(ctx)
+        self.raw_renderer = SchemaYamlRenderer(self.render_ctx)
 
         internal_package_names = get_adapter_package_names(
             self.root_project.credentials.type
@@ -287,17 +287,13 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         tags: List[str],
         column_name: Optional[str],
     ) -> ParsedSchemaTestNode:
-
-        render_ctx = generate_target_context(
-            self.root_project, self.root_project.cli_vars
-        )
         try:
             builder = TestBuilder(
                 test=test,
                 target=target,
                 column_name=column_name,
                 package_name=target.package_name,
-                render_ctx=render_ctx,
+                render_ctx=self.render_ctx,
             )
         except CompilationException as exc:
             context = _trimmed(str(target))
