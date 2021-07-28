@@ -20,7 +20,7 @@ Contributors:
 - [@tconbeer](https://github.com/tconbeer) [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
 - [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
-- [@danielefrigo](https://github.com/danielefrigo) ([#2161](https://github.com/dbt-labs/dbt/issues/2161))
+- [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt/pull/3547))
 
 ## dbt 0.20.0 (Release TBD)
 
