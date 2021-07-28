@@ -1,12 +1,22 @@
 ## dbt 0.21.0 (Release TBD)
 
+### Breaking changes
+- Add full node selection to source freshness command and align selection syntax with other tasks (`dbt source freshness --select source_name` --> `dbt source freshness --select source:souce_name`) and rename `dbt source snapshot-freshness` -> `dbt source freshness`. ([#2987](https://github.com/dbt-labs/dbt/issues/2987), [#3554](https://github.com/dbt-labs/dbt/pull/3554))
+- **dbt-snowflake:** Turn off transactions and turn on `autocommit` by default. Explicitly specify `begin` and `commit` for DML statements in incremental and snapshot materializations. Note that this may affect user-space code that depends on tranactions.
+
 ### Features
-- Add `dbt build` command to run models, tests, seeds, and snapshots in DAG order. ([#2743] (https://github.com/dbt-labs/dbt/issues/2743), [#3490] (https://github.com/dbt-labs/dbt/issues/3490))
+- Add `dbt build` command to run models, tests, seeds, and snapshots in DAG order. ([#2743] (https://github.com/dbt-labs/dbt/issues/2743), [#3490] (https://github.com/dbt-labs/dbt/issues/3490), [#3608](https://github.com/dbt-labs/dbt/issues/3608))
+- Introduce `on_schema_change` config to detect and handle schema changes on incremental models ([#1132](https://github.com/fishtown-analytics/dbt/issues/1132), [#3387](https://github.com/fishtown-analytics/dbt/issues/3387))
 
 ### Fixes
+- Fix exception on yml files with all comments [3568](https://github.com/dbt-labs/dbt/issues/3568)
 - Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
 - Fix type coercion issues when fetching query result sets ([#2984](https://github.com/fishtown-analytics/dbt/issues/2984), [#3499](https://github.com/fishtown-analytics/dbt/pull/3499))
 - Handle whitespace after a plus sign on the project config ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
+- Partial parsing: don't reprocess SQL file already scheduled ([#3589](https://github.com/dbt-labs/dbt/issues/3589), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
+- Handle interator functions in model config ([#3573](https://github.com/dbt-labs/dbt/issues/3573))
+- Partial parsing: fix error after changing empty yaml file ([#3567](https://gith7ub.com/dbt-labs/dbt/issues/3567), [#3618](https://github.com/dbt-labs/dbt/pull/3618))
+- Partial parsing: handle source tests when changing test macro ([#3584](https://github.com/dbt-labs/dbt/issues/3584), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
 
 ### Under the hood
 - Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
@@ -14,12 +24,14 @@
 - Move the example project used by `dbt init` into `dbt` repository, to avoid cloning an external repo ([#3005](https://github.com/fishtown-analytics/dbt/pull/3005), [#3474](https://github.com/fishtown-analytics/dbt/pull/3474), [#3536](https://github.com/fishtown-analytics/dbt/pull/3536))
 - Better interaction between `dbt init` and adapters. Avoid raising errors while initializing a project ([#2814](https://github.com/fishtown-analytics/dbt/pull/2814), [#3483](https://github.com/fishtown-analytics/dbt/pull/3483))
 - Update `create_adapter_plugins` script to include latest accessories, and stay up to date with latest dbt-core version ([#3002](https://github.com/fishtown-analytics/dbt/issues/3002), [#3509](https://github.com/fishtown-analytics/dbt/pull/3509))
+- Scrub environment secrets from logs and console output ([#3617](https://github.com/dbt-labs/dbt/pull/3617))
 
 ### Dependencies
 - Require `werkzeug>=1`
 
 Contributors:
 - [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
+- [@matt-winkler](https://github.com/matt-winkler) ([#3387](https://github.com/dbt-labs/dbt/pull/3387))
 - [@tconbeer](https://github.com/tconbeer) [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
 - [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
@@ -32,10 +44,16 @@ Contributors:
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in config)
   - to let copy several source tables into single target table at a time
 
+### Features
+- Adds `install-prerelease` parameter to hub packages in `packages.yml`. When set to `True`, allows prerelease packages to be installed. By default, this parameter is False unless explicitly set to True.
+
 ### Fixes
 - Fix `store_failures` config when defined as a modifier for `unique` and `not_null` tests ([#3575](https://github.com/fishtown-analytics/dbt/issues/3575), [#3577](https://github.com/fishtown-analytics/dbt/pull/3577))
 - Fix `where` config with `relationships` test by refactoring test SQL. Note: The default `relationships` test now includes CTEs, and may need reimplementing on adapters that don't support CTEs nested inside subqueries. ([#3579](https://github.com/fishtown-analytics/dbt/issues/3579), [#3583](https://github.com/fishtown-analytics/dbt/pull/3583))
+- Fix `dbt deps` version comparison logic which was causing incorrect pre-release package versions to be installed. ([#3578](https://github.com/dbt-labs/dbt/issues/3578), [#3609](https://github.com/dbt-labs/dbt/issues/3609))
 
+Contributors:
+- [@NiallRees](https://github.com/NiallRees) ([#3623](https://github.com/dbt-labs/dbt/pull/3623))
 
 ## dbt 0.20.0 (July 12, 2021)
 
@@ -117,7 +135,7 @@ Contributors:
 - Use shutil.which so Windows can pick up git.bat as a git executable ([#3035](https://github.com/fishtown-analytics/dbt/issues/3035), [#3134](https://github.com/fishtown-analytics/dbt/issues/3134))
 - Add `ssh-client` and update `git` version (using buster backports) in Docker image ([#3337](https://github.com/fishtown-analytics/dbt/issues/3337), [#3338](https://github.com/fishtown-analytics/dbt/pull/3338))
 - Add `tags` and `meta` properties to the exposure resource schema. ([#3404](https://github.com/fishtown-analytics/dbt/issues/3404), [#3405](https://github.com/fishtown-analytics/dbt/pull/3405))
-- Update test sub-query alias ([#3398](https://github.com/fishtown-analytics/dbt/issues/3398), [#3414](https://github.com/fishtown-analytics/dbt/pull/3414)) 
+- Update test sub-query alias ([#3398](https://github.com/fishtown-analytics/dbt/issues/3398), [#3414](https://github.com/fishtown-analytics/dbt/pull/3414))
 - Bump schema versions for run results and manifest artifacts ([#3422](https://github.com/fishtown-analytics/dbt/issues/3422), [#3421](https://github.com/fishtown-analytics/dbt/pull/3421))
 - Add deprecation warning for using `packages` argument with `adapter.dispatch` ([#3419](https://github.com/fishtown-analytics/dbt/issues/3419), [#3420](https://github.com/fishtown-analytics/dbt/pull/3420))
 

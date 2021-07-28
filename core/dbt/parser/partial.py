@@ -147,6 +147,18 @@ class PartialParsing:
                 file_id not in self.file_diff['deleted']):
             self.project_parser_files[project_name][parser_name].append(file_id)
 
+    def already_scheduled_for_parsing(self, source_file):
+        file_id = source_file.file_id
+        project_name = source_file.project_name
+        if project_name not in self.project_parser_files:
+            return False
+        parser_name = parse_file_type_to_parser[source_file.parse_file_type]
+        if parser_name not in self.project_parser_files[project_name]:
+            return False
+        if file_id not in self.project_parser_files[project_name][parser_name]:
+            return False
+        return True
+
     # Add new files, including schema files
     def add_to_saved(self, file_id):
         # add file object to saved manifest.files
@@ -211,6 +223,9 @@ class PartialParsing:
     # Updated schema files should have been processed already.
     def update_mssat_in_saved(self, new_source_file, old_source_file):
 
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
+
         # These files only have one node.
         unique_id = old_source_file.nodes[0]
 
@@ -251,12 +266,16 @@ class PartialParsing:
                         schema_file.node_patches.remove(unique_id)
 
     def update_macro_in_saved(self, new_source_file, old_source_file):
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
         self.handle_macro_file_links(old_source_file, follow_references=True)
         file_id = new_source_file.file_id
         self.saved_files[file_id] = new_source_file
         self.add_to_pp_files(new_source_file)
 
     def update_doc_in_saved(self, new_source_file, old_source_file):
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
         self.delete_doc_node(old_source_file)
         self.saved_files[new_source_file.file_id] = new_source_file
         self.add_to_pp_files(new_source_file)
@@ -385,12 +404,21 @@ class PartialParsing:
                         patch_list = []
                         if key in schema_file.dict_from_yaml:
                             patch_list = schema_file.dict_from_yaml[key]
-                        node_patch = self.get_schema_element(patch_list, name)
-                        if node_patch:
-                            self.delete_schema_mssa_links(schema_file, key, node_patch)
-                            self.merge_patch(schema_file, key, node_patch)
-                            if unique_id in schema_file.node_patches:
-                                schema_file.node_patches.remove(unique_id)
+                        patch = self.get_schema_element(patch_list, name)
+                        if patch:
+                            if key in ['models', 'seeds', 'snapshots']:
+                                self.delete_schema_mssa_links(schema_file, key, patch)
+                                self.merge_patch(schema_file, key, patch)
+                                if unique_id in schema_file.node_patches:
+                                    schema_file.node_patches.remove(unique_id)
+                            elif key == 'sources':
+                                # re-schedule source
+                                if 'overrides' in patch:
+                                    # This is a source patch; need to re-parse orig source
+                                    self.remove_source_override_target(patch)
+                                self.delete_schema_source(schema_file, patch)
+                                self.remove_tests(schema_file, 'sources', patch['name'])
+                                self.merge_patch(schema_file, 'sources', patch)
                 else:
                     file_id = node.file_id
                     if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
@@ -426,7 +454,13 @@ class PartialParsing:
         new_schema_file = self.new_files[file_id]
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
-        saved_schema_file.pp_dict = {"version": saved_yaml_dict['version']}
+        if 'version' in new_yaml_dict:
+            # despite the fact that this goes in the saved_schema_file, it
+            # should represent the new yaml dictionary, and should produce
+            # an error if the updated yaml file doesn't have a version
+            saved_schema_file.pp_dict = {"version": new_yaml_dict['version']}
+        else:
+            saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
         # copy from new schema_file to saved_schema_file to preserve references

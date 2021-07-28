@@ -41,6 +41,7 @@ class DBTVersion(argparse.Action):
     """This is very very similar to the builtin argparse._Version action,
     except it just calls dbt.version.get_version_information().
     """
+
     def __init__(self,
                  option_strings,
                  version=None,
@@ -755,23 +756,14 @@ def _build_test_subparser(subparsers, base_subparser):
     return sub
 
 
-def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
+def _build_source_freshness_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'snapshot-freshness',
+        'freshness',
         parents=[base_subparser],
         help='''
         Snapshots the current freshness of the project's sources
         ''',
-    )
-    sub.add_argument(
-        '-s',
-        '--select',
-        required=False,
-        nargs='+',
-        help='''
-        Specify the sources to snapshot freshness
-        ''',
-        dest='selected'
+        aliases=['snapshot-freshness'],
     )
     sub.add_argument(
         '-o',
@@ -792,9 +784,16 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
     )
     sub.set_defaults(
         cls=freshness_task.FreshnessTask,
-        which='snapshot-freshness',
-        rpc_method='snapshot-freshness',
+        which='source-freshness',
+        rpc_method='source-freshness',
     )
+    _add_select_argument(
+        sub,
+        dest='select',
+        metavar='SELECTOR',
+        required=False,
+    )
+    _add_common_selector_arguments(sub)
     return sub
 
 
@@ -1084,7 +1083,7 @@ def parse_args(args, cls=DBTArgumentParser):
     _add_table_mutability_arguments(run_sub, compile_sub)
 
     _build_docs_serve_subparser(docs_subs, base_subparser)
-    _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
+    _build_source_freshness_subparser(source_subs, base_subparser)
     _build_run_operation_subparser(subs, base_subparser)
 
     if len(args) == 0:

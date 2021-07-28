@@ -12,6 +12,7 @@ import dbt.parser
 import dbt.config
 import dbt.utils
 import dbt.parser.manifest
+from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
 from dbt.contracts.graph.manifest import Manifest, MacroManifest, ManifestStateCheck
 from dbt.parser.base import BaseParser
@@ -43,6 +44,7 @@ class GraphTest(unittest.TestCase):
         # create various attributes
         dbt.flags.STRICT_MODE = True
         self.graph_result = None
+        tracking.do_not_track()
         self.profile = {
             'outputs': {
                 'test': {

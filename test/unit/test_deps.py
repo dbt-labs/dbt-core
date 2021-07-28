@@ -121,7 +121,7 @@ class TestHubPackage(unittest.TestCase):
             'fishtown-analytics-test/a',
         ]
         self.get_available_versions.return_value = [
-            '0.1.2', '0.1.3'
+            '0.1.2', '0.1.3', '0.1.4a1'
         ]
         self.package_version.return_value = {
             'id': 'fishtown-analytics-test/a/0.1.2',
@@ -301,6 +301,89 @@ class TestHubPackage(unittest.TestCase):
         c_pinned = c.resolved()
         self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
         self.assertEqual(c_pinned.version, '0.1.2')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+    def test_resolve_ranges_install_prerelease_default_false(self):
+        a_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='>0.1.2'
+        )
+        b_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='<0.1.5'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'fishtown-analytics-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='5',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c_pinned.version, '0.1.3')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+    def test_resolve_ranges_install_prerelease_true(self):
+        a_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='>0.1.2',
+            install_prerelease=True
+        )
+        b_contract = RegistryPackage(
+            package='fishtown-analytics-test/a',
+            version='<0.1.5'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'fishtown-analytics-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='5',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c_pinned.version, '0.1.4a1')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
 

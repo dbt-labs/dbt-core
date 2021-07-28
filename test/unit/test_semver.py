@@ -4,7 +4,7 @@ import itertools
 from dbt.exceptions import VersionsNotCompatibleException
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier, \
     VersionRange, reduce_versions, versions_compatible, \
-    resolve_to_specific_version
+    resolve_to_specific_version, filter_installable
 
 
 def create_range(start_version_string, end_version_string):
@@ -42,6 +42,8 @@ class TestSemver(unittest.TestCase):
             versions_compatible('0.0.1', '0.0.2'))
         self.assertTrue(
             versions_compatible('>0.0.1', '0.0.2'))
+        self.assertFalse(
+            versions_compatible('0.4.5a1', '0.4.5a2'))
 
     def test__reduce_versions(self):
         self.assertVersionSetResult(
@@ -134,3 +136,50 @@ class TestSemver(unittest.TestCase):
                 create_range(None, '<=0.0.5'),
                 ['0.0.3', '0.1.4', '0.0.5']),
             '0.0.5')
+
+        self.assertEqual(
+            resolve_to_specific_version(
+                create_range('=0.4.5a2', '=0.4.5a2'),
+                ['0.4.5a1', '0.4.5a2']),
+            '0.4.5a2')
+
+        self.assertEqual(
+            resolve_to_specific_version(
+                create_range('=0.7.6', '=0.7.6'),
+                ['0.7.6-b1', '0.7.6']),
+            '0.7.6')
+
+        self.assertEqual(
+            resolve_to_specific_version(
+                create_range('>=1.0.0', None),
+                ['1.0.0', '1.1.0a1', '1.1.0', '1.2.0a1']),
+            '1.2.0a1')
+
+        self.assertEqual(
+            resolve_to_specific_version(
+                create_range('>=1.0.0', '<1.2.0'),
+                ['1.0.0', '1.1.0a1', '1.1.0', '1.2.0a1']),
+            '1.1.0')
+
+        self.assertEqual(
+            resolve_to_specific_version(
+                create_range('>=1.0.0', None),
+                ['1.0.0', '1.1.0a1', '1.1.0', '1.2.0a1', '1.2.0']),
+            '1.2.0')
+
+        self.assertEqual(
+            resolve_to_specific_version(
+                create_range('>=1.0.0', '<1.2.0'),
+                ['1.0.0', '1.1.0a1', '1.1.0', '1.2.0a1', '1.2.0']),
+            '1.1.0')
+
+    def test__filter_installable(self):
+        assert filter_installable(
+            ['1.0.0', '1.1.0', '1.2.0a1'],
+            install_prerelease=True
+        ) == ['1.0.0', '1.1.0', '1.2.0a1']
+
+        assert filter_installable(
+            ['1.0.0', '1.1.0', '1.2.0a1'],
+            install_prerelease=False
+        ) == ['1.0.0', '1.1.0']

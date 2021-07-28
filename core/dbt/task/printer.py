@@ -87,9 +87,12 @@ def print_hook_end_line(
 
 
 def print_skip_line(
-    model, schema: str, relation: str, index: int, num_models: int
+    node, schema: str, relation: str, index: int, num_models: int
 ) -> None:
-    msg = 'SKIP relation {}.{}'.format(schema, relation)
+    if node.resource_type in NodeType.refable():
+        msg = f'SKIP relation {schema}.{relation}'
+    else:
+        msg = f'SKIP {node.resource_type} {node.name}'
     print_fancy_output_line(
         msg, ui.yellow('SKIP'), logger.info, index, num_models)
 

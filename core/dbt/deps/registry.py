@@ -71,10 +71,14 @@ class RegistryUnpinnedPackage(
     RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]
 ):
     def __init__(
-        self, package: str, versions: List[semver.VersionSpecifier]
+        self,
+        package: str,
+        versions: List[semver.VersionSpecifier],
+        install_prerelease: bool
     ) -> None:
         super().__init__(package)
         self.versions = versions
+        self.install_prerelease = install_prerelease
 
     def _check_in_index(self):
         index = registry.index_cached()
@@ -91,13 +95,18 @@ class RegistryUnpinnedPackage(
             semver.VersionSpecifier.from_version_string(v)
             for v in raw_version
         ]
-        return cls(package=contract.package, versions=versions)
+        return cls(
+            package=contract.package,
+            versions=versions,
+            install_prerelease=contract.install_prerelease
+        )
 
     def incorporate(
         self, other: 'RegistryUnpinnedPackage'
     ) -> 'RegistryUnpinnedPackage':
         return RegistryUnpinnedPackage(
             package=self.package,
+            install_prerelease=self.install_prerelease,
             versions=self.versions + other.versions,
         )
 
@@ -111,12 +120,16 @@ class RegistryUnpinnedPackage(
             raise DependencyException(new_msg) from e
 
         available = registry.get_available_versions(self.package)
+        installable = semver.filter_installable(
+            available,
+            self.install_prerelease
+        )
 
         # for now, pick a version and then recurse. later on,
         # we'll probably want to traverse multiple options
         # so we can match packages. not going to make a difference
         # right now.
-        target = semver.resolve_to_specific_version(range_, available)
+        target = semver.resolve_to_specific_version(range_, installable)
         if not target:
-            package_version_not_found(self.package, range_, available)
+            package_version_not_found(self.package, range_, installable)
         return RegistryPinnedPackage(package=self.package, version=target)

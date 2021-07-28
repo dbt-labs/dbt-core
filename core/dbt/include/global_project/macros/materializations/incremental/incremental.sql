@@ -5,6 +5,10 @@
 
   {% set target_relation = this.incorporate(type='table') %}
   {% set existing_relation = load_relation(this) %}
+  {% set tmp_relation = make_temp_relation(target_relation) %}
+  {%- set full_refresh_mode = (should_full_refresh()) -%}
+
+  {% set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') %}
 
   {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
   {% set backup_identifier = model['name'] + "__dbt_backup" %}
@@ -28,9 +32,16 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   {% set to_drop = [] %}
+
+  {# -- first check whether we want to full refresh for source view or config reasons #}
+  {% set trigger_full_refresh = (full_refresh_mode or existing_relation.is_view) %}
+
   {% if existing_relation is none %}
       {% set build_sql = create_table_as(False, target_relation, sql) %}
-  {% elif existing_relation.is_view or should_full_refresh() %}
+{% elif trigger_full_refresh %}
+      {#-- Make sure the backup doesn't exist so we don't encounter issues with the rename below #}
+      {% set tmp_identifier = model['name'] + '__dbt_tmp' %}
+      {% set backup_identifier = model['name'] + '__dbt_backup' %}
       {% set intermediate_relation = existing_relation.incorporate(path={"identifier": tmp_identifier}) %}
       {% set backup_relation = existing_relation.incorporate(path={"identifier": backup_identifier}) %}
 
@@ -38,12 +49,13 @@
       {% set need_swap = true %}
       {% do to_drop.append(backup_relation) %}
   {% else %}
-      {% set tmp_relation = make_temp_relation(target_relation) %}
-      {% do run_query(create_table_as(True, tmp_relation, sql)) %}
-      {% do adapter.expand_target_column_types(
+    {% do run_query(create_table_as(True, tmp_relation, sql)) %}
+    {% do adapter.expand_target_column_types(
              from_relation=tmp_relation,
              to_relation=target_relation) %}
-      {% set build_sql = incremental_upsert(tmp_relation, target_relation, unique_key=unique_key) %}
+    {% do process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
+    {% set build_sql = incremental_upsert(tmp_relation, target_relation, unique_key=unique_key) %}
+  
   {% endif %}
 
   {% call statement("main") %}

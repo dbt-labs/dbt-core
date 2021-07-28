@@ -513,7 +513,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def get_columns_in_relation(
         self, relation: BaseRelation
     ) -> List[BaseColumn]:
-        """Get a list of the columns in the given Relation."""
+        """Get a list of the columns in the given Relation. """
         raise NotImplementedException(
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
