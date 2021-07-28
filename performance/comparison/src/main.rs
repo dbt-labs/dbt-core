@@ -87,8 +87,8 @@ fn main() {
     }
     let results_directory = &args[1];
 
-    let foo = measurements_from_files(Path::new(&results_directory));
-    foo.map(|x| detect_regressions(x));
+    let measurements = measurements_from_files(Path::new(&results_directory));
+    let regressions = measurements.map(|x| detect_regressions(x));
 
     // let measurements: Result<Vec<(&str, Vec<MeasurementGroup>)>> = result_files
     //     .into_iter()
@@ -132,5 +132,10 @@ fn main() {
     //     Err(&e) => panic!("{}", &e),
     //     Ok(_) => (),
     // }
-    foo.clone().map(|f| println!("{:?}", f)).unwrap();
+
+    // print the regressions or throw
+    match regressions {
+        Err(e) => panic!("{}", e),
+        Ok(rs) => println!("{:?}", rs)
+    }
 }
