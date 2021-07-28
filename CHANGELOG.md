@@ -16,8 +16,9 @@
 - Fix table and view materialization issue when switching from one to the other ([#2161](https://github.com/dbt-labs/dbt/issues/2161)), [#3547](https://github.com/dbt-labs/dbt/pull/3547))
 - Partial parsing: don't reprocess SQL file already scheduled ([#3589](https://github.com/dbt-labs/dbt/issues/3589), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
 - Handle interator functions in model config ([#3573](https://github.com/dbt-labs/dbt/issues/3573))
-- Partial parsing: fix error after changing empty yaml file ([#3567](https://gith7ub.com/dbt-labs/dbt/issues/3567), [#3618](https://github.com/dbt-labs/dbt/pull/3618))
+- Partial parsing: fix error after changing empty yaml file ([#3567](https://github.com/dbt-labs/dbt/issues/3567), [#3618](https://github.com/dbt-labs/dbt/pull/3618))
 - Partial parsing: handle source tests when changing test macro ([#3584](https://github.com/dbt-labs/dbt/issues/3584), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
+- Partial parsing: schedule new macro file for parsing when macro patching ([#3627](https://github.com/dbt-labs/dbt/issues/3627), [#3627](https://github.com/dbt-labs/dbt/pull/3627))
 
 ### Under the hood
 - Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
