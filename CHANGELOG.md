@@ -13,6 +13,7 @@
 - Fix docs generation for cross-db sources in REDSHIFT RA3 node ([#3236](https://github.com/fishtown-analytics/dbt/issues/3236), [#3408](https://github.com/fishtown-analytics/dbt/pull/3408))
 - Fix type coercion issues when fetching query result sets ([#2984](https://github.com/fishtown-analytics/dbt/issues/2984), [#3499](https://github.com/fishtown-analytics/dbt/pull/3499))
 - Handle whitespace after a plus sign on the project config ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
+- Fix table and view materialization issue when switching from one to the other ([#2161](https://github.com/dbt-labs/dbt/issues/2161)), [#3547](https://github.com/dbt-labs/dbt/pull/3547))
 - Partial parsing: don't reprocess SQL file already scheduled ([#3589](https://github.com/dbt-labs/dbt/issues/3589), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
 - Handle interator functions in model config ([#3573](https://github.com/dbt-labs/dbt/issues/3573))
 - Partial parsing: fix error after changing empty yaml file ([#3567](https://gith7ub.com/dbt-labs/dbt/issues/3567), [#3618](https://github.com/dbt-labs/dbt/pull/3618))
@@ -35,6 +36,7 @@ Contributors:
 - [@tconbeer](https://github.com/tconbeer) [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
 - [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/fishtown-analytics/dbt/pull/3473))
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
+- [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt/pull/3547))
 
 
 ## dbt 0.20.1 (Release TBD)
