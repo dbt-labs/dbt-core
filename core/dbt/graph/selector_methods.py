@@ -421,19 +421,19 @@ class StateSelectorMethod(SelectorMethod):
         return False
 
     def check_modified(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        different_contents = not new.same_contents(old)
+        different_contents = not new.same_contents(old)  # type: ignore
         upstream_macro_change = self.recursively_check_macros_modified(new)
-        return different_contents or upstream_macro_change  # type: ignore
+        return different_contents or upstream_macro_change
 
     def check_modified_body(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         if hasattr(new, "same_body"):
-            return not new.same_body(old)
+            return not new.same_body(old)  # type: ignore
         else:
             return False
 
     def check_modified_configs(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         if hasattr(new, "same_config"):
-            return not new.same_config(old)
+            return not new.same_config(old)  # type: ignore
         else:
             return False
 
@@ -441,7 +441,7 @@ class StateSelectorMethod(SelectorMethod):
         self, old: Optional[SelectorTarget], new: SelectorTarget
     ) -> bool:
         if hasattr(new, "same_persisted_description"):
-            return not new.same_persisted_description(old)
+            return not new.same_persisted_description(old)  # type: ignore
         else:
             return False
 
@@ -449,7 +449,7 @@ class StateSelectorMethod(SelectorMethod):
         self, old: Optional[SelectorTarget], new: SelectorTarget
     ) -> bool:
         if hasattr(new, "same_database_representation"):
-            return not new.same_database_representation(old)
+            return not new.same_database_representation(old)  # type: ignore
         else:
             return False
 
