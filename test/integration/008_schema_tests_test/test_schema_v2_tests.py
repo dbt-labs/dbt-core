@@ -331,14 +331,14 @@ class TestQuotedSchemaTestColumns(DBTIntegrationTest):
         self.assertEqual(len(results), 2)
 
 
-class TestVarsSchemaTests(DBTIntegrationTest):
+class TestCliVarsSchemaTests(DBTIntegrationTest):
     @property
     def schema(self):
         return "schema_tests_008"
 
     @property
     def models(self):
-        return "models-v2/render_test_arg_models"
+        return "models-v2/render_test_cli_arg_models"
 
     @property
     def project_config(self):
@@ -355,6 +355,32 @@ class TestVarsSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         self.run_dbt(['test'], expect_pass=False)
 
+
+class TestConfiguredVarsSchemaTests(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "models-v2/render_test_configured_arg_models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["macros-v2/macros"],
+            'vars': {
+                'myvar': 'foo'
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_argument_rendering(self):
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(['test'])
+        self.assertEqual(len(results), 1)
 
 class TestSchemaCaseInsensitive(DBTIntegrationTest):
     @property
