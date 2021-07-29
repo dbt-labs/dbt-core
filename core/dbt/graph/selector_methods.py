@@ -22,13 +22,11 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
 )
 from dbt.contracts.state import PreviousState
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import (
     InternalException,
     RuntimeException,
 )
 from dbt.node_types import NodeType
-from dbt.ui import warning_tag
 
 
 SELECTOR_GLOB = '*'
@@ -426,26 +424,30 @@ class StateSelectorMethod(SelectorMethod):
         different_contents = not new.same_contents(old)
         upstream_macro_change = self.recursively_check_macros_modified(new)
         return different_contents or upstream_macro_change  # type: ignore
-        
+
     def check_modified_body(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         if hasattr(new, "same_body"):
             return not new.same_body(old)
         else:
             return False
-        
+
     def check_modified_configs(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         if hasattr(new, "same_config"):
             return not new.same_config(old)
         else:
             return False
-        
-    def check_modified_persisted_descriptions(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+
+    def check_modified_persisted_descriptions(
+        self, old: Optional[SelectorTarget], new: SelectorTarget
+    ) -> bool:
         if hasattr(new, "same_persisted_description"):
             return not new.same_persisted_description(old)
         else:
             return False
-        
-    def check_modified_database_representations(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+
+    def check_modified_database_representations(
+        self, old: Optional[SelectorTarget], new: SelectorTarget
+    ) -> bool:
         if hasattr(new, "same_database_representation"):
             return not new.same_database_representation(old)
         else:
