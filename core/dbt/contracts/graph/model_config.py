@@ -270,7 +270,7 @@ class BaseConfig(
     # This is used in 'add_config_call' to created the combined config_call_dict.
     # 'meta' moved here from node
     mergebehavior = {
-        "append": ['pre-hook', 'pre_hook', 'post-hook', 'post_hook', 'tags'],
+        "append": ["pre-hook", "pre_hook", "post-hook", "post_hook", "tags"],
         "update": ["quoting", "column_types", "meta"],
     }
 

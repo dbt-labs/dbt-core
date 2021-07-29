@@ -265,11 +265,11 @@ class ContextConfig:
         for k, v in opts.items():
             # MergeBehavior for post-hook and pre-hook is to collect all
             # values, instead of overwriting
-            if k in BaseConfig.mergebehavior['append']:
+            if k in BaseConfig.mergebehavior["append"]:
                 if not isinstance(v, list):
                     v = [v]
-            if k in BaseConfig.mergebehavior['update'] and not isinstance(v, dict):
-                raise InternalException(f'expected dict, got {v}')
+            if k in BaseConfig.mergebehavior["update"] and not isinstance(v, dict):
+                raise InternalException(f"expected dict, got {v}")
             if k in config_call_dict and isinstance(config_call_dict[k], list):
                 config_call_dict[k].extend(v)
             elif k in config_call_dict and isinstance(config_call_dict[k], dict):
