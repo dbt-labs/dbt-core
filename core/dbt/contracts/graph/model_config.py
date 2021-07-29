@@ -267,8 +267,14 @@ class BaseConfig(
                     return False
         return True
 
+    # This is used in 'add_config_call' to created the combined config_call_dict.
+    mergebehavior = {
+        "append": ['pre-hook', 'pre_hook', 'post-hook', 'post_hook', 'tags'],
+        "update": ['quoting', 'column_types'],
+    }
+
     @classmethod
-    def _extract_dict(
+    def _merge_dicts(
         cls, src: Dict[str, Any], data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Find all the items in data that match a target_field on this class,
@@ -314,10 +320,10 @@ class BaseConfig(
 
         adapter_config_cls = get_config_class_by_name(adapter_type)
 
-        self_merged = self._extract_dict(dct, data)
+        self_merged = self._merge_dicts(dct, data)
         dct.update(self_merged)
 
-        adapter_merged = adapter_config_cls._extract_dict(dct, data)
+        adapter_merged = adapter_config_cls._merge_dicts(dct, data)
         dct.update(adapter_merged)
 
         # any remaining fields must be "clobber"
@@ -350,6 +356,8 @@ class SourceConfig(BaseConfig):
 
 @dataclass
 class NodeConfig(BaseConfig):
+    # Note: if any new fields are added with MergeBehavior, also update the
+    # 'mergebehavior' dictionary
     enabled: bool = True
     materialized: str = 'view'
     persist_docs: Dict[str, Any] = field(default_factory=dict)
