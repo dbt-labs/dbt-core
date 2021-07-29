@@ -9,7 +9,7 @@ assignees: ''
 
 ### Release Core
 - [ ] [Engineering] Follow [dbt-release workflow](https://www.notion.so/dbtlabs/Releasing-b97c5ea9a02949e79e81db3566bbc8ef#03ff37da697d4d8ba63d24fae1bfa817) 
-- [ ] [Engineering] Verify new release branch is creted in the repo
+- [ ] [Engineering] Verify new release branch is created in the repo
 - [ ] [Product] Finalize migration guide (next.docs.getdbt.com)
 
 ### Release Cloud
