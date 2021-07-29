@@ -411,7 +411,7 @@ class StateSelectorMethod(SelectorMethod):
         # check if there are any changes in macros the first time
         if self.modified_macros is None:
             self.modified_macros = self._macros_modified()
-        
+
         for macro_uid in node.depends_on.macros:
             if macro_uid in self.modified_macros:
                 return True
@@ -427,17 +427,29 @@ class StateSelectorMethod(SelectorMethod):
         upstream_macro_change = self.recursively_check_macros_modified(new)
         return different_contents or upstream_macro_change  # type: ignore
         
-    def check_modified_contents(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return not new.same_contents(old)
+    def check_modified_body(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        if hasattr(new, "same_body"):
+            return not new.same_body(old)
+        else:
+            return False
         
     def check_modified_configs(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return not new.same_config(old)
+        if hasattr(new, "same_config"):
+            return not new.same_config(old)
+        else:
+            return False
         
     def check_modified_persisted_descriptions(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return not new.same_persisted_description(old)
+        if hasattr(new, "same_persisted_description"):
+            return not new.same_persisted_description(old)
+        else:
+            return False
         
     def check_modified_database_representations(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return not new.same_database_representation(old)
+        if hasattr(new, "same_database_representation"):
+            return not new.same_database_representation(old)
+        else:
+            return False
 
     def check_modified_macros(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return self.recursively_check_macros_modified(new)
@@ -456,7 +468,7 @@ class StateSelectorMethod(SelectorMethod):
         state_checks = {
             'new': self.check_new,
             'modified': self.check_modified,
-            'modified.contents': self.check_modified_contents,
+            'modified.body': self.check_modified_body,
             'modified.configs': self.check_modified_configs,
             'modified.persisted_descriptions': self.check_modified_persisted_descriptions,
             'modified.database_representations': self.check_modified_database_representations,
