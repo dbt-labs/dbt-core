@@ -12,6 +12,7 @@
 - Partial parsing: handle source tests when changing test macro ([#3584](https://github.com/dbt-labs/dbt/issues/3584), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
 - Fix `dbt deps` version comparison logic which was causing incorrect pre-release package versions to be installed. ([#3578](https://github.com/dbt-labs/dbt/issues/3578), [#3609](https://github.com/dbt-labs/dbt/issues/3609))
 - Partial parsing: schedule new macro file for parsing when macro patching ([#3627](https://github.com/dbt-labs/dbt/issues/3627), [#3627](https://github.com/dbt-labs/dbt/pull/3627))
+- Use `SchemaParser`'s render context to render test configs in order to support `var()` configured at the project level and passed in from the cli ([#3564](https://github.com/dbt-labs/dbt/issues/3564). [#3646](https://github.com/dbt-labs/dbt/pull/3646))
 
 ### Docs
 - Fix docs site crash if `relationships` test has one dependency instead of two ([docs#207](https://github.com/dbt-labs/dbt-docs/issues/207), ([docs#208](https://github.com/dbt-labs/dbt-docs/issues/208)))
