@@ -19,6 +19,7 @@
 - Partial parsing: fix error after changing empty yaml file ([#3567](https://github.com/dbt-labs/dbt/issues/3567), [#3618](https://github.com/dbt-labs/dbt/pull/3618))
 - Partial parsing: handle source tests when changing test macro ([#3584](https://github.com/dbt-labs/dbt/issues/3584), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
 - Partial parsing: schedule new macro file for parsing when macro patching ([#3627](https://github.com/dbt-labs/dbt/issues/3627), [#3627](https://github.com/dbt-labs/dbt/pull/3627))
+- Use `SchemaParser`'s render context to render test configs in order to support `var()` configured at the project level and passed in from the cli ([#3564](https://github.com/dbt-labs/dbt/issues/3564). [#3646](https://github.com/dbt-labs/dbt/pull/3646))
 
 ### Under the hood
 - Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
