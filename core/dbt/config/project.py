@@ -9,9 +9,7 @@ from typing_extensions import Protocol, runtime_checkable
 import hashlib
 import os
 
-from dbt.clients.system import resolve_path_from_base
-from dbt.clients.system import path_exists
-from dbt.clients.system import load_file_contents
+from dbt.clients.storage_adapter import StorageAdapter as SA
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import QueryComment
 from dbt.exceptions import DbtProjectError
@@ -77,16 +75,16 @@ class IsFQNResource(Protocol):
 
 
 def _load_yaml(path):
-    contents = load_file_contents(path)
+    contents = SA.adapter.load_file_contents(path)
     return load_yaml_text(contents)
 
 
 def package_data_from_root(project_root):
-    package_filepath = resolve_path_from_base(
+    package_filepath = SA.adapter.resolve_path_from_base(
         'packages.yml', project_root
     )
 
-    if path_exists(package_filepath):
+    if SA.adapter.path_exists(package_filepath):
         packages_dict = _load_yaml(package_filepath)
     else:
         packages_dict = None
@@ -149,7 +147,7 @@ def _raw_project_from(project_root: str) -> Dict[str, Any]:
     project_yaml_filepath = os.path.join(project_root, 'dbt_project.yml')
 
     # get the project.yml contents
-    if not path_exists(project_yaml_filepath):
+    if not SA.adapter.path_exists(project_yaml_filepath):  # type: ignore # noqa
         raise DbtProjectError(
             'no dbt_project.yml found at expected path {}'
             .format(project_yaml_filepath)
