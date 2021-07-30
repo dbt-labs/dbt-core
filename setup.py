@@ -37,9 +37,9 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
 
-    author="Fishtown Analytics",
-    author_email="info@fishtownanalytics.com",
-    url="https://github.com/fishtown-analytics/dbt",
+    author="dbt Labs",
+    author_email="info@dbtlabs.com",
+    url="https://github.com/dbt-labs/dbt",
     packages=[],
     install_requires=[
         'dbt-core=={}'.format(package_version),

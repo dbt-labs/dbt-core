@@ -24,7 +24,7 @@ Please note that all contributors to `dbt` must sign the [Contributor License Ag
 
 ### Defining the problem
 
-If you have an idea for a new feature or if you've discovered a bug in `dbt`, the first step is to open an issue. Please check the list of [open issues](https://github.com/fishtown-analytics/dbt/issues) before creating a new one. If you find a relevant issue, please add a comment to the open issue instead of creating a new one. There are hundreds of open issues in this repository and it can be hard to know where to look for a relevant open issue. **The `dbt` maintainers are always happy to point contributors in the right direction**, so please err on the side of documenting your idea in a new issue if you are unsure where a problem statement belongs.
+If you have an idea for a new feature or if you've discovered a bug in `dbt`, the first step is to open an issue. Please check the list of [open issues](https://github.com/dbt-labs/dbt/issues) before creating a new one. If you find a relevant issue, please add a comment to the open issue instead of creating a new one. There are hundreds of open issues in this repository and it can be hard to know where to look for a relevant open issue. **The `dbt` maintainers are always happy to point contributors in the right direction**, so please err on the side of documenting your idea in a new issue if you are unsure where a problem statement belongs.
 
 > **Note:** All community-contributed Pull Requests _must_ be associated with an open issue. If you submit a Pull Request that does not pertain to an open issue, you will be asked to create an issue describing the problem before the Pull Request can be reviewed.
 
@@ -36,7 +36,7 @@ After you open an issue, a `dbt` maintainer will follow up by commenting on your
 
 If an issue is appropriately well scoped and describes a beneficial change to the `dbt` codebase, then anyone may submit a Pull Request to implement the functionality described in the issue. See the sections below on how to do this.
 
-The `dbt` maintainers will add a `good first issue` label if an issue is suitable for a first-time contributor. This label often means that the required code change is small, limited to one database adapter, or a net-new addition that does not impact existing functionality. You can see the list of currently open issues on the [Contribute](https://github.com/fishtown-analytics/dbt/contribute) page.
+The `dbt` maintainers will add a `good first issue` label if an issue is suitable for a first-time contributor. This label often means that the required code change is small, limited to one database adapter, or a net-new addition that does not impact existing functionality. You can see the list of currently open issues on the [Contribute](https://github.com/dbt-labs/dbt/contribute) page.
 
 Here's a good workflow:
 - Comment on the open issue, expressing your interest in contributing the required code change
@@ -52,15 +52,15 @@ The `dbt` maintainers use labels to categorize open issues. Some labels indicate
 
 | tag | description |
 | --- | ----------- |
-| [triage](https://github.com/fishtown-analytics/dbt/labels/triage) | This is a new issue which has not yet been reviewed by a `dbt` maintainer. This label is removed when a maintainer reviews and responds to the issue. |
-| [bug](https://github.com/fishtown-analytics/dbt/labels/bug) | This issue represents a defect or regression in `dbt` |
-| [enhancement](https://github.com/fishtown-analytics/dbt/labels/enhancement) | This issue represents net-new functionality in `dbt` |
-| [good first issue](https://github.com/fishtown-analytics/dbt/labels/good%20first%20issue) | This issue does not require deep knowledge of the `dbt` codebase to implement. This issue is appropriate for a first-time contributor. |
-| [help wanted](https://github.com/fishtown-analytics/`dbt`/labels/help%20wanted) / [discussion](https://github.com/fishtown-analytics/dbt/labels/discussion) | Conversation around this issue in ongoing, and there isn't yet a clear path forward. Input from community members is most welcome. |
-| [duplicate](https://github.com/fishtown-analytics/dbt/issues/duplicate) | This issue is functionally identical to another open issue. The `dbt` maintainers will close this issue and encourage community members to focus conversation on the other one. |
-| [snoozed](https://github.com/fishtown-analytics/dbt/labels/snoozed) | This issue describes a good idea, but one which will probably not be addressed in a six-month time horizon. The `dbt` maintainers will revist these issues periodically and re-prioritize them accordingly. |
-| [stale](https://github.com/fishtown-analytics/dbt/labels/stale) | This is an old issue which has not recently been updated. Stale issues will periodically be closed by `dbt` maintainers, but they can be re-opened if the discussion is restarted. |
-| [wontfix](https://github.com/fishtown-analytics/dbt/labels/wontfix) | This issue does not require a code change in the `dbt` repository, or the maintainers are unwilling/unable to merge a Pull Request which implements the behavior described in the issue. |
+| [triage](https://github.com/dbt-labs/dbt/labels/triage) | This is a new issue which has not yet been reviewed by a `dbt` maintainer. This label is removed when a maintainer reviews and responds to the issue. |
+| [bug](https://github.com/dbt-labs/dbt/labels/bug) | This issue represents a defect or regression in `dbt` |
+| [enhancement](https://github.com/dbt-labs/dbt/labels/enhancement) | This issue represents net-new functionality in `dbt` |
+| [good first issue](https://github.com/dbt-labs/dbt/labels/good%20first%20issue) | This issue does not require deep knowledge of the `dbt` codebase to implement. This issue is appropriate for a first-time contributor. |
+| [help wanted](https://github.com/dbt-labs/dbt/labels/help%20wanted) / [discussion](https://github.com/dbt-labs/dbt/labels/discussion) | Conversation around this issue in ongoing, and there isn't yet a clear path forward. Input from community members is most welcome. |
+| [duplicate](https://github.com/dbt-labs/dbt/issues/duplicate) | This issue is functionally identical to another open issue. The `dbt` maintainers will close this issue and encourage community members to focus conversation on the other one. |
+| [snoozed](https://github.com/dbt-labs/dbt/labels/snoozed) | This issue describes a good idea, but one which will probably not be addressed in a six-month time horizon. The `dbt` maintainers will revist these issues periodically and re-prioritize them accordingly. |
+| [stale](https://github.com/dbt-labs/dbt/labels/stale) | This is an old issue which has not recently been updated. Stale issues will periodically be closed by `dbt` maintainers, but they can be re-opened if the discussion is restarted. |
+| [wontfix](https://github.com/dbt-labs/dbt/labels/wontfix) | This issue does not require a code change in the `dbt` repository, or the maintainers are unwilling/unable to merge a Pull Request which implements the behavior described in the issue. |
 
 #### Branching Strategy
 
@@ -78,17 +78,17 @@ You will need `git` in order to download and modify the `dbt` source code. On ma
 
 ### External contributors
 
-If you are not a member of the `fishtown-analytics` GitHub organization, you can contribute to `dbt` by forking the `dbt` repository. For a detailed overview on forking, check out the [GitHub docs on forking](https://help.github.com/en/articles/fork-a-repo). In short, you will need to:
+If you are not a member of the `dbt-labs` GitHub organization, you can contribute to `dbt` by forking the `dbt` repository. For a detailed overview on forking, check out the [GitHub docs on forking](https://help.github.com/en/articles/fork-a-repo). In short, you will need to:
 
 1. fork the `dbt` repository
 2. clone your fork locally
 3. check out a new branch for your proposed changes
 4. push changes to your fork
-5. open a pull request against `fishtown-analytics/dbt` from your forked repository
+5. open a pull request against `dbt-labs/dbt` from your forked repository
 
 ### Core contributors
 
-If you are a member of the `fishtown-analytics` GitHub organization, you will have push access to the `dbt` repo. Rather than forking `dbt` to make your changes, just clone the repository, check out a new branch, and push directly to that branch.
+If you are a member of the `dbt-labs` GitHub organization, you will have push access to the `dbt` repo. Rather than forking `dbt` to make your changes, just clone the repository, check out a new branch, and push directly to that branch.
 
 ## Setting up an environment
 
@@ -155,7 +155,7 @@ Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as
 
 Getting the `dbt` integration tests set up in your local environment will be very helpful as you start to make changes to your local version of `dbt`. The section that follows outlines some helpful tips for setting up the test environment.
 
-Since `dbt` works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, Fishtown Analytics provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on [_Submitting a Pull Request_](#submitting-a-pull-request) below for more information on this CI setup.
+Since `dbt` works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, dbt Labs provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on [_Submitting a Pull Request_](#submitting-a-pull-request) below for more information on this CI setup.
 
 ### Initial setup
 
@@ -224,7 +224,7 @@ python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 > is a list of useful command-line options for `pytest` to use while developing.
 ## Submitting a Pull Request
 
-Fishtown Analytics provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `fishtown-analytics/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines.
+dbt Labs provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `dbt-labs/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines.
 
 A `dbt` maintainer will review your PR. They may suggest code revision for style or clarity, or request that you add unit or integration test(s). These are good things! We believe that, with a little bit of help, anyone can contribute high-quality code.
 
