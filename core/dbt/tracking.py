@@ -454,7 +454,12 @@ def track_partial_parser(options):
 
 def flush():
     logger.debug("Flushing usage events")
-    tracker.flush()
+    try:
+        tracker.flush()
+    except Exception:
+        logger.debug(
+            "An error was encountered while trying to flush usage events"
+        )
 
 
 def disable_tracking():
