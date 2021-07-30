@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from dataclasses import field
 import os
 from typing import (
-    Dict, Optional, Mapping, Callable, Any, List, Type, Union
+    Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
 )
 import time
 
@@ -59,11 +59,21 @@ from dbt.parser.sources import SourcePatcher
 from dbt.ui import warning_tag
 from dbt.version import __version__
 
-from dbt.dataclass_schema import dbtClassMixin
+from dbt.dataclass_schema import StrEnum, dbtClassMixin
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.msgpack'
 PARSING_STATE = DbtProcessState('parsing')
 DEFAULT_PARTIAL_PARSE = False
+
+
+class ReparseReason(StrEnum):
+    version_mismatch = '01_version_mismatch'
+    file_not_found = '02_file_not_found'
+    vars_changed = '03_vars_changed'
+    profile_changed = '04_profile_changed'
+    deps_changed = '05_deps_changed'
+    project_config_changed = '06_project_config_changed'
+    load_file_failure = '07_load_file_failure'
 
 
 # Part of saved performance info
@@ -441,24 +451,28 @@ class ManifestLoader:
         except Exception:
             raise
 
-    def matching_parse_results(self, manifest: Manifest) -> bool:
+    def is_partial_parsable(self, manifest: Manifest) -> Tuple[bool, Optional[str]]:
         """Compare the global hashes of the read-in parse results' values to
         the known ones, and return if it is ok to re-use the results.
         """
         valid = True
+        reparse_reason = None
 
         if manifest.metadata.dbt_version != __version__:
             logger.info("Unable to do partial parsing because of a dbt version mismatch")
-            return False  # If the version is wrong, the other checks might not work
+            # If the version is wrong, the other checks might not work
+            return False, ReparseReason.version_mismatch
         if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
             logger.info("Unable to do partial parsing because config vars, "
                         "config profile, or config target have changed")
             valid = False
+            reparse_reason = ReparseReason.vars_changed
         if self.manifest.state_check.profile_hash != manifest.state_check.profile_hash:
             # Note: This should be made more granular. We shouldn't need to invalidate
             # partial parsing if a non-used profile section has changed.
             logger.info("Unable to do partial parsing because profile has changed")
             valid = False
+            reparse_reason = ReparseReason.profile_changed
 
         missing_keys = {
             k for k in self.manifest.state_check.project_hashes
@@ -467,6 +481,7 @@ class ManifestLoader:
         if missing_keys:
             logger.info("Unable to do partial parsing because a project dependency has been added")
             valid = False
+            reparse_reason = ReparseReason.deps_changed
 
         for key, new_value in self.manifest.state_check.project_hashes.items():
             if key in manifest.state_check.project_hashes:
@@ -475,7 +490,8 @@ class ManifestLoader:
                     logger.info("Unable to do partial parsing because "
                                 "a project config has changed")
                     valid = False
-        return valid
+                    reparse_reason = ReparseReason.project_config_changed
+        return valid, reparse_reason
 
     def _partial_parse_enabled(self):
         # if the CLI is set, follow that
@@ -494,6 +510,8 @@ class ManifestLoader:
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
 
+        reparse_reason = None
+
         if os.path.exists(path):
             try:
                 with open(path, 'rb') as fp:
@@ -502,7 +520,8 @@ class ManifestLoader:
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
-                if self.matching_parse_results(manifest):
+                is_partial_parseable, reparse_reason = self.is_partial_parsable(manifest)
+                if is_partial_parseable:
                     return manifest
             except Exception as exc:
                 logger.debug(
@@ -510,8 +529,13 @@ class ManifestLoader:
                     .format(path, exc),
                     exc_info=True
                 )
+                reparse_reason = ReparseReason.load_file_failure
         else:
             logger.info(f"Unable to do partial parsing because {path} not found")
+            reparse_reason = ReparseReason.file_not_found
+
+        # this event is only fired if a full reparse is needed
+        dbt.tracking.track_partial_parser({'full_reparse_reason': reparse_reason})
 
         return None
 
