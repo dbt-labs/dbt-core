@@ -3,9 +3,7 @@ from dataclasses import field
 from datetime import datetime
 import os
 import traceback
-from typing import (
-    Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
-)
+from typing import Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
 from itertools import chain
 import time
 
