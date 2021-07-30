@@ -362,7 +362,8 @@ class PartialParsing:
         for unique_id in macros:
             if unique_id not in self.saved_manifest.macros:
                 # This happens when a macro has already been removed
-                source_file.macros.remove(unique_id)
+                if unique_id in source_file.macros:
+                    source_file.macros.remove(unique_id)
                 continue
 
             base_macro = self.saved_manifest.macros.pop(unique_id)
@@ -388,7 +389,9 @@ class PartialParsing:
                     macro_patch = self.get_schema_element(macro_patches, base_macro.name)
                     self.delete_schema_macro_patch(schema_file, macro_patch)
                     self.merge_patch(schema_file, 'macros', macro_patch)
-            source_file.macros.remove(unique_id)
+            # The macro may have already been removed by handling macro children
+            if unique_id in source_file.macros:
+                source_file.macros.remove(unique_id)
 
     # similar to schedule_nodes_for_parsing but doesn't do sources and exposures
     # and handles schema tests
