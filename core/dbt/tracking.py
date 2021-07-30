@@ -438,7 +438,8 @@ def track_invalid_invocation(config=None, args=None, result_type=None):
 def track_experimental_parser_sample(options):
     context = [SelfDescribingJson(EXPERIMENTAL_PARSER, options)]
     assert active_user is not None, \
-        'Cannot track experimental parser info when active user is None'
+        active_user is not None
+    ), "Cannot track experimental parser info when active user is None"
 
     track(
         active_user,
@@ -451,15 +452,14 @@ def track_experimental_parser_sample(options):
 
 def track_partial_parser(options):
     context = [SelfDescribingJson(PARTIAL_PARSER, options)]
-    assert active_user is not None, \
-        'Cannot track partial parser info when active user is None'
+    assert active_user is not None, "Cannot track partial parser info when active user is None"
 
     track(
         active_user,
-        category='dbt',
-        action='partial_parser',
+        category="dbt",
+        action="partial_parser",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 

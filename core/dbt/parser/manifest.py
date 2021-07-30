@@ -99,13 +99,13 @@ PARSING_STATE = DbtProcessState("parsing")
 
 
 class ReparseReason(StrEnum):
-    version_mismatch = '01_version_mismatch'
-    file_not_found = '02_file_not_found'
-    vars_changed = '03_vars_changed'
-    profile_changed = '04_profile_changed'
-    deps_changed = '05_deps_changed'
-    project_config_changed = '06_project_config_changed'
-    load_file_failure = '07_load_file_failure'
+    version_mismatch = "01_version_mismatch"
+    file_not_found = "02_file_not_found"
+    vars_changed = "03_vars_changed"
+    profile_changed = "04_profile_changed"
+    deps_changed = "05_deps_changed"
+    project_config_changed = "06_project_config_changed"
+    load_file_failure = "07_load_file_failure"
     exception = '08_exception'
     proj_env_vars_changed = "09_project_env_vars_changed"
     prof_env_vars_changed = "10_profile_env_vars_changed"
@@ -661,7 +661,7 @@ class ManifestLoader:
             reparse_reason = ReparseReason.file_not_found
 
         # this event is only fired if a full reparse is needed
-        dbt.tracking.track_partial_parser({'full_reparse_reason': reparse_reason})
+        dbt.tracking.track_partial_parser({"full_reparse_reason": reparse_reason})
 
         return None
 
