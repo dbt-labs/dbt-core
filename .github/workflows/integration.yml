@@ -1,0 +1,187 @@
+# what? - This workflow runs integration tests for supported OS and python versions and core adapters.
+# why? - This checks the functionality of dbt from a user's perspective, provides code coverage, and
+# attempts to prevent functional regressions.
+# when? - This workflow will run on ever push to a protected branch, for all pull requests, and
+# when manually triggered.
+
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  pull_request_target:
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  pre-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      has-permission: ${{ steps.check-user.outputs.has-permission }}
+      pr-labels: ${{ steps.get-pr-labels.outputs.pr-labels || [] }}
+      paths: ${{ steps.check-changes.outputs }}
+    steps:
+      - name: Check user permission
+        id: check-user
+        uses: scherermichael-oss/action-has-permission@master
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get PR labels
+        id: get-pr-labels
+        if: github.event_name == 'pull_request_target'
+        run: >-
+          echo "::set-output pr-labels=${{ github.event.pull_request.labels.*.name }}"
+      - name: Check if relevant files changed
+        uses: dorny/paths-filter@v2
+        id: check-changes
+        with:
+          filters: |
+            postgres:
+              - 'core/**'
+              - 'plugins/postgres/**'
+            snowflake:
+              - 'core/**'
+              - 'plugins/snowflake/**'
+            bigquery:
+              - 'core/**'
+              - 'plugins/bigquery/**'
+            redshift:
+              - 'core/**'
+              - 'plugins/redshift/**'
+              - 'plugins/postgres/**'
+
+  test:
+    name: ${{ matrix.adapter }} ${{ matrix.python-version }} / ${{ matrix.os }}
+
+    # For PRs, only run python3.9 and ubuntu-latest and:
+    # 1. all push and workflow dispatch events, or
+    # 2. when user has repo write permissions, only run tests for relevant code changes, or
+    # 3. if PR and has an "ok to test" label, only run tests for relevant code changes, or
+    # 4. if PR and has a "test all" label, or
+    # 5. if PR and has a "test ${adapter}" label, only run tests for that adapter
+    if: >-
+      (
+        github.event_name != 'pull_request_target' &&
+        !contains(['macos-latest', 'windows-latest'], matrix.os) &&
+        !contains([3.6, 3.7, 3.8], matrix.python-version)
+      ) && (
+        contains(['push', 'workflow_dispatch'], github.event_name) ||
+
+        (jobs.pre-checks.outputs.has-permission &&
+          contains(jobs.pre-checks.outputs.paths.changes, matrix.adapter)) ||
+
+        (contains(jobs.pre-checks.outputs.pr-labels, 'ok to test') &&
+          contains(jobs.pre-checks.outputs.paths.changes, matrix.adapter)) ||
+
+        contains(jobs.pre-checks.outputs.pr-labels, 'test all') ||
+
+        contains(jobs.pre-checks.outputs.pr-labels, format('test {0}', matrix.adapter))
+      )
+
+    needs: pre-checks
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        adapter: [postgres, snowflake, redshift, bigquery]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+        tox-cmd: "tox -- -v --color=yes"
+
+    env:
+      TOXENV: integration-${{ matrix.adapter }}
+
+    steps:
+      - name: Check out the repository (pull request)
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check out the repository (push, workflow_dispatch)
+        if: contains(['push', 'workflow_dispatch'], github.event_name)
+        uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Upgrade pip
+        run: |
+          pip install --upgrade pip
+          pip --version
+
+      - name: Install tox
+        run: |
+          pip install tox
+
+      - name: Run tox
+        if: matrix.adapter == 'postgres'
+        env:
+          POSTGRES_TEST_HOST: ${{ secrets.POSTGRES_TEST_HOST }}
+          POSTGRES_TEST_PORT: ${{ secrets.POSTGRES_TEST_PORT }}
+          POSTGRES_TEST_USER: ${{ secrets.POSTGRES_TEST_USER }}
+          POSTGRES_TEST_PASS: ${{ secrets.POSTGRES_TEST_PASS }}
+          POSTGRES_TEST_DATABASE: ${{ secrets.POSTGRES_TEST_DATABASE }}
+        run: ${{ matrix.tox-cmd }}
+
+      - name: Run tox
+        if: matrix.adapter == 'redshift'
+        env:
+          REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
+          REDSHIFT_TEST_PASS: ${{ secrets.REDSHIFT_TEST_PASS }}
+          REDSHIFT_TEST_USER: ${{ secrets.REDSHIFT_TEST_USER }}
+          REDSHIFT_TEST_PORT: ${{ secrets.REDSHIFT_TEST_PORT }}
+          REDSHIFT_TEST_HOST: ${{ secrets.REDSHIFT_TEST_HOST }}
+        run: ${{ matrix.tox-cmd }}
+
+      - name: Run tox
+        if: matrix.adapter == 'snowflake'
+        env:
+          SNOWFLAKE_TEST_ACCOUNT: ${{ secrets.SNOWFLAKE_TEST_ACCOUNT }}
+          SNOWFLAKE_TEST_PASSWORD: ${{ secrets.SNOWFLAKE_TEST_PASSWORD }}
+          SNOWFLAKE_TEST_USER: ${{ secrets.SNOWFLAKE_TEST_USER }}
+          SNOWFLAKE_TEST_WAREHOUSE: ${{ secrets.SNOWFLAKE_TEST_WAREHOUSE }}
+          SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN: ${{ secrets.SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN }}
+          SNOWFLAKE_TEST_OAUTH_CLIENT_ID: ${{ secrets.SNOWFLAKE_TEST_OAUTH_CLIENT_ID }}
+          SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET: ${{ secrets.SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET }}
+          SNOWFLAKE_TEST_ALT_DATABASE: ${{ secrets.SNOWFLAKE_TEST_ALT_DATABASE }}
+          SNOWFLAKE_TEST_ALT_WAREHOUSE: ${{ secrets.SNOWFLAKE_TEST_ALT_WAREHOUSE }}
+          SNOWFLAKE_TEST_DATABASE: ${{ secrets.SNOWFLAKE_TEST_DATABASE }}
+          SNOWFLAKE_TEST_QUOTED_DATABASE: ${{ secrets.SNOWFLAKE_TEST_QUOTED_DATABASE }}
+          SNOWFLAKE_TEST_ROLE: ${{ secrets.SNOWFLAKE_TEST_ROLE }}
+        run: ${{ matrix.tox-cmd }}
+
+      - name: Run tox
+        if: matrix.adapter == 'bigquery'
+        env:
+          BIGQUERY_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_SERVICE_ACCOUNT_JSON }}
+          BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
+        run: ${{ matrix.tox-cmd }}
+
+  post-checks:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Needs permission PR comment
+        if: >-
+          needs.test.result == 'skipped' &&
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.head.repo.full_name != github.repository
+
+        uses: unsplash/comment-on-pr@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          msg: |
+            "You do not have permissions to run integration tests, @dbt-labs/core "\
+            "needs to label this PR with `ok to test` in order to run integration tests!"
+          check_for_duplicate_msg: true

@@ -141,7 +141,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def database_host(self):
-        return os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
+        # TODO: rm
+        return os.getenv('POSTGRES_TEST_HOST', 'localhost')
 
     def postgres_profile(self):
         return {
@@ -153,21 +154,21 @@ class DBTIntegrationTest(unittest.TestCase):
                     'default2': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': self.database_host,
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
+                        'host': os.getenv('POSTGRES_TEST_HOST', 'localhost'),
+                        'port': int(os.getenv('POSTGRES_TEST_PORT', 5432)),
+                        'user': os.getenv('POSTGRES_TEST_USER', 'root'),
+                        'pass': os.getenv('POSTGRES_TEST_PASS', 'password'),
+                        'dbname': os.getenv('POSTGRES_TEST_DATABASE', 'dbt'),
                         'schema': self.unique_schema()
                     },
                     'noaccess': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': self.database_host,
-                        'port': 5432,
+                        'host': os.getenv('POSTGRES_TEST_HOST', 'localhost'),
+                        'port': int(os.getenv('POSTGRES_TEST_PORT', 5432)),
                         'user': 'noaccess',
                         'pass': 'password',
-                        'dbname': 'dbt',
+                        'dbname': os.getenv('POSTGRES_TEST_DATABASE', 'dbt'),
                         'schema': self.unique_schema()
                     }
                 },
