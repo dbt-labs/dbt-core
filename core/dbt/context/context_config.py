@@ -120,7 +120,7 @@ class BaseContextConfigGenerator(Generic[T]):
 
     def calculate_node_config(
         self,
-        config_calls: List[Dict[str, Any]],
+        config_call_dict: Dict[str, Any],
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
@@ -134,8 +134,9 @@ class BaseContextConfigGenerator(Generic[T]):
         for fqn_config in project_configs:
             result = self._update_from_config(result, fqn_config)
 
-        for config_call in config_calls:
-            result = self._update_from_config(result, config_call)
+        # config_calls are created in the 'experimental' model parser and
+        # the ParseConfigObject (via add_config_call)
+        result = self._update_from_config(result, config_call_dict)
 
         if own_config.project_name != self._active_project.project_name:
             for fqn_config in self._active_project_configs(fqn, resource_type):
@@ -147,7 +148,7 @@ class BaseContextConfigGenerator(Generic[T]):
     @abstractmethod
     def calculate_node_config_dict(
         self,
-        config_calls: List[Dict[str, Any]],
+        config_call_dict: Dict[str, Any],
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
@@ -186,14 +187,14 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
 
     def calculate_node_config_dict(
         self,
-        config_calls: List[Dict[str, Any]],
+        config_call_dict: Dict[str, Any],
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
         base: bool,
     ) -> Dict[str, Any]:
         config = self.calculate_node_config(
-            config_calls=config_calls,
+            config_call_dict=config_call_dict,
             fqn=fqn,
             resource_type=resource_type,
             project_name=project_name,
@@ -209,14 +210,14 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
 
     def calculate_node_config_dict(
         self,
-        config_calls: List[Dict[str, Any]],
+        config_call_dict: Dict[str, Any],
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
         base: bool,
     ) -> Dict[str, Any]:
         return self.calculate_node_config(
-            config_calls=config_calls,
+            config_call_dict=config_call_dict,
             fqn=fqn,
             resource_type=resource_type,
             project_name=project_name,
@@ -251,14 +252,32 @@ class ContextConfig:
         resource_type: NodeType,
         project_name: str,
     ) -> None:
-        self._config_calls: List[Dict[str, Any]] = []
+        self._config_call_dict: Dict[str, Any] = {}
         self._active_project = active_project
         self._fqn = fqn
         self._resource_type = resource_type
         self._project_name = project_name
 
-    def update_in_model_config(self, opts: Dict[str, Any]) -> None:
-        self._config_calls.append(opts)
+    def add_config_call(self, opts: Dict[str, Any]) -> None:
+        dct = self._config_call_dict
+        self._add_config_call(dct, opts)
+
+    @classmethod
+    def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
+        for k, v in opts.items():
+            # MergeBehavior for post-hook and pre-hook is to collect all
+            # values, instead of overwriting
+            if k in BaseConfig.mergebehavior['append']:
+                if not isinstance(v, list):
+                    v = [v]
+            if k in BaseConfig.mergebehavior['update'] and not isinstance(v, dict):
+                raise InternalException(f'expected dict, got {v}')
+            if k in config_call_dict and isinstance(config_call_dict[k], list):
+                config_call_dict[k].extend(v)
+            elif k in config_call_dict and isinstance(config_call_dict[k], dict):
+                config_call_dict[k].update(v)
+            else:
+                config_call_dict[k] = v
 
     def build_config_dict(
         self,
@@ -272,7 +291,7 @@ class ContextConfig:
             src = UnrenderedConfigGenerator(self._active_project)
 
         return src.calculate_node_config_dict(
-            config_calls=self._config_calls,
+            config_call_dict=self._config_call_dict,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,

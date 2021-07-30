@@ -279,7 +279,7 @@ class Config(Protocol):
         ...
 
 
-# `config` implementations
+# Implementation of "config(..)" calls in models
 class ParseConfigObject(Config):
     def __init__(self, model, context_config: Optional[ContextConfig]):
         self.model = model
@@ -316,7 +316,7 @@ class ParseConfigObject(Config):
             raise RuntimeException(
                 'At parse time, did not receive a context config'
             )
-        self.context_config.update_in_model_config(opts)
+        self.context_config.add_config_call(opts)
         return ''
 
     def set(self, name, value):
