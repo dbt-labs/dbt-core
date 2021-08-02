@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest] #, macos-latest, windows-latest]
+        os: [ubuntu-latest]
         tox-env: [unit, mypy]
         python-version: [3.6, 3.7, 3.8, 3.9]
         include:
@@ -62,5 +62,4 @@ jobs:
         run: |
           pip install tox
       - name: Run tox
-        run: |
-          tox -- -v --color=yes
+        run: tox -- -v -color=yes
