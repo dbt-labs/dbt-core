@@ -1,10 +1,12 @@
-#!/bin/bash
+#!/bin/bash 
+
+set -eo pipefail
 
 DBT_PATH="$( cd "$(dirname "$0")/.." ; pwd -P )"
 
 PYTHON_BIN=${PYTHON_BIN:-python}
 
-echo $PYTHON_BIN
+echo "$PYTHON_BIN"
 
 set -x
 
