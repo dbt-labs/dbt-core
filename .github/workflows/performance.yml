@@ -127,14 +127,29 @@ jobs:
     name: Compare Results
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: "test rust comparator"
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release --manifest-path performance/comparison/Cargo.toml
+      - name: "build runnable rust comparator"
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --manifest-path performance/comparison/Cargo.toml
       - uses: actions/download-artifact@v2
         with:
           name: dev-results
-      - name: ls result files
-        run: ls
       - uses: actions/download-artifact@v2
         with:
           name: latest-results
       - name: ls result files
         run: ls
-      # TODO actually compare
+      - name: "run comparator"
+        run: ./performance/comparison/target/release/comparison performance/results/
