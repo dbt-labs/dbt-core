@@ -16,6 +16,10 @@ on:
       - "github-actions"
   workflow_dispatch:
 
+concurrency: 
+  group: integration-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: ${{ matrix.adapter }} ${{ matrix.python-version }} / ${{ matrix.os }}

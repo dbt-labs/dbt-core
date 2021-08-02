@@ -15,6 +15,10 @@ on:
   workflow_dispatch:
   pull_request:
 
+concurrency: 
+  group: build-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: ${{ matrix.python-version }} / ${{ matrix.os }}

@@ -13,6 +13,10 @@ on:
 
 permissions: read-all
 
+concurrency: 
+  group: integration-slim-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pre-checks:
     runs-on: ubuntu-latest
