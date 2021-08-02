@@ -1,9 +1,6 @@
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::path::{
-    Path,
-    PathBuf
-};
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::{env, fs, io};
 use thiserror::Error;
@@ -91,10 +88,10 @@ fn measurements_from_files(
             println!("{:?}", filename);
             fs::read_to_string(&filename)
                 .or_else(|e| Err(TestError::BadFileContentsErr(filename.clone(), e)))
-                .and_then(|contents|
+                .and_then(|contents| {
                     serde_json::from_str::<Measurements>(&contents)
                         .or_else(|e| Err(TestError::BadJSONErr(filename.clone(), e)))
-                )
+                })
                 .map(|m| (filename, m))
         })
         .collect()
@@ -102,14 +99,19 @@ fn measurements_from_files(
 
 // given a list of filename-measurement pairs, detect any regressions by grouping
 // measurements together by filename
-fn detect_regressions(measurements: &[(PathBuf, Measurement)]) -> Result<Vec<Regression>, TestError> {
+fn detect_regressions(
+    measurements: &[(PathBuf, Measurement)],
+) -> Result<Vec<Regression>, TestError> {
     let mut measurement_groups: Vec<MeasurementGroup> = measurements
         .into_iter()
         .map(|(p, m)| {
             p.file_name()
                 .ok_or_else(|| TestError::MissingFilenameErr(p.to_path_buf()))
-                .and_then(|name| name.to_str().ok_or_else(|| TestError::FilenameNotUnicodeErr(p.to_path_buf())))
-                    .map(|name| {
+                .and_then(|name| {
+                    name.to_str()
+                        .ok_or_else(|| TestError::FilenameNotUnicodeErr(p.to_path_buf()))
+                })
+                .map(|name| {
                     let parts: Vec<&str> = name.split("_").collect();
                     MeasurementGroup {
                         version: parts[0].to_owned(),
@@ -119,13 +121,12 @@ fn detect_regressions(measurements: &[(PathBuf, Measurement)]) -> Result<Vec<Reg
                 })
         })
         .collect::<Result<Vec<MeasurementGroup>, TestError>>()?;
-    
-    measurement_groups
-        .sort_by(|x, y| (&x.run, &x.version).cmp(&(&y.run, &y.version)));
+
+    measurement_groups.sort_by(|x, y| (&x.run, &x.version).cmp(&(&y.run, &y.version)));
 
     // locking up mutation
     let sorted_measurement_groups = measurement_groups;
-    
+
     let x: Vec<Regression> = sorted_measurement_groups
         .into_iter()
         .group_by(|x| (x.run.clone(), x.version.clone()))
@@ -136,7 +137,7 @@ fn detect_regressions(measurements: &[(PathBuf, Measurement)]) -> Result<Vec<Reg
         })
         .flatten()
         .collect();
-    
+
     Ok(x)
 }
 
@@ -149,15 +150,15 @@ fn main() {
     }
     let results_directory = &args[1];
 
-    let regressions = measurements_from_files(Path::new(&results_directory))
-        .and_then(|v| {
-            let v_next: Vec<(PathBuf, Measurement)> = v.into_iter()
-                // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
-                .map(|(p, ms)| (p, ms.results[0].clone()))
-                .collect();
-            
-            detect_regressions(&v_next)
-        });
+    let regressions = measurements_from_files(Path::new(&results_directory)).and_then(|v| {
+        let v_next: Vec<(PathBuf, Measurement)> = v
+            .into_iter()
+            // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
+            .map(|(p, ms)| (p, ms.results[0].clone()))
+            .collect();
+
+        detect_regressions(&v_next)
+    });
 
     match regressions {
         Err(e) => panic!("{}", e),
@@ -169,8 +170,7 @@ fn main() {
                 }
                 println!("the above regressions were found.");
                 exit(1)
-            },
+            }
         },
-        
     }
 }
