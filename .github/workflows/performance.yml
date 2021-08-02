@@ -76,7 +76,7 @@ jobs:
   # build an optimized binary to be used as the comparator in later steps
   build-comparator:
     needs: [test-comparator]
-    name: Build Runner
+    name: Build Comparator
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: "-D warnings"
