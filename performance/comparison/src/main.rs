@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::{env, fs, io};
+use std::borrow::Cow;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -156,6 +157,11 @@ fn main() {
             // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
             .map(|(p, ms)| (p, ms.results[0].clone()))
             .collect();
+
+        println!("checking regressions with the following measurements:");
+        for (path, _) in &v_next {
+            println!("{}", path.file_name().map(|x| x.to_string_lossy()).unwrap_or(Cow::from("unknown file")))
+        }
 
         detect_regressions(&v_next)
     });
