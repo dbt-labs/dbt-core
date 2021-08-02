@@ -40,16 +40,16 @@ struct MeasurementGroup {
 
 #[derive(Error, Debug)]
 enum TestError {
-    #[error("BadJSONErr: JSON in file cannot be deserialized as expected.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.to_string())]
-    BadJSONErr(PathBuf, serde_json::Error),
-    #[error("ReadErr: The file cannot be read. \nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.to_string())]
-    ReadErr(PathBuf, io::Error),
-    #[error("MissingFilenameErr: The path provided does not specify a file. \nFilepath: {}\n", .0.to_string_lossy().into_owned())]
+    #[error("BadJSONErr: JSON in file cannot be deserialized as expected.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
+    BadJSONErr(PathBuf, Option<serde_json::Error>),
+    #[error("ReadErr: The file cannot be read.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
+    ReadErr(PathBuf, Option<io::Error>),
+    #[error("MissingFilenameErr: The path provided does not specify a file.\nFilepath: {}", .0.to_string_lossy().into_owned())]
     MissingFilenameErr(PathBuf),
     #[error("FilenameNotUnicodeErr: The filename is not expressible in unicode. Consider renaming the file.\nFilepath: {}", .0.to_string_lossy().into_owned())]
     FilenameNotUnicodeErr(PathBuf),
-    #[error("FilenameNotUnicodeErr: The filename is not expressible in unicode. Consider renaming the file.\nFilepath: {}", .0.to_string_lossy().into_owned())]
-    BadFileContentsErr(PathBuf, io::Error),
+    #[error("BadFileContentsErr: Check that the file exists and is readable.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
+    BadFileContentsErr(PathBuf, Option<io::Error>),
 }
 
 fn regression(baseline: &Measurement, latest: &Measurement) -> Option<Regression> {
@@ -73,7 +73,7 @@ fn measurements_from_files(
     results_directory: &Path,
 ) -> Result<Vec<(PathBuf, Measurements)>, TestError> {
     let result_files = fs::read_dir(results_directory)
-        .or_else(|e| Err(TestError::ReadErr(results_directory.to_path_buf(), e)))?;
+        .or_else(|e| Err(TestError::ReadErr(results_directory.to_path_buf(), Some(e))))?;
 
     result_files
         .into_iter()
@@ -87,10 +87,10 @@ fn measurements_from_files(
         .map(|filename| {
             println!("{:?}", filename);
             fs::read_to_string(&filename)
-                .or_else(|e| Err(TestError::BadFileContentsErr(filename.clone(), e)))
+                .or_else(|e| Err(TestError::BadFileContentsErr(filename.clone(), Some(e))))
                 .and_then(|contents| {
                     serde_json::from_str::<Measurements>(&contents)
-                        .or_else(|e| Err(TestError::BadJSONErr(filename.clone(), e)))
+                        .or_else(|e| Err(TestError::BadJSONErr(filename.clone(), Some(e))))
                 })
                 .map(|m| (filename, m))
         })
@@ -173,4 +173,48 @@ fn main() {
             }
         },
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_messages() {
+        let pairs = vec![
+            (
+                TestError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
+                r#"BadJSONErr: JSON in file cannot be deserialized as expected.
+Filepath: dummy/path/file.json
+Originating Exception:None"#
+            ),
+            (
+                TestError::ReadErr(Path::new("dummy/path/file.json").to_path_buf(), None),
+                r#"ReadErr: The file cannot be read.
+Filepath: dummy/path/file.json
+Originating Exception:None"#
+            ),
+            (
+                TestError::MissingFilenameErr(Path::new("dummy/path/no_file/").to_path_buf()),
+                r#"MissingFilenameErr: The path provided does not specify a file.
+Filepath: dummy/path/no_file/"#
+            ),
+            (
+                TestError::FilenameNotUnicodeErr(Path::new("dummy/path/no_file/").to_path_buf()),
+                r#"FilenameNotUnicodeErr: The filename is not expressible in unicode. Consider renaming the file.
+Filepath: dummy/path/no_file/"#
+            ),
+            (
+                TestError::BadFileContentsErr(Path::new("dummy/path/filenotexist.json").to_path_buf(), None),
+                r#"BadFileContentsErr: Check that the file exists and is readable.
+Filepath: dummy/path/filenotexist.json
+Originating Exception:None"#
+            ),
+        ];
+
+        for (err, msg) in pairs {
+            assert_eq!(format!("{}", err), msg)
+        }
+    }
+
 }
