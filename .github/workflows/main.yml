@@ -62,4 +62,4 @@ jobs:
         run: |
           pip install tox
       - name: Run tox
-        run: tox -- -v -color=yes
+        run: tox -- -v --color=yes
