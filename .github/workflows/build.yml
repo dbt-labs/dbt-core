@@ -43,9 +43,12 @@ jobs:
         shell: bash
         run: ./scripts/build-dist.sh
 
+      - name: Show dists generated
+        run: ls -lh dist/
+
       - name: Install wheel dists
         run: |
-          pip install --force-reinstall --find-links=dist/ dist/*.whl
+          pip install --force-reinstall --find-links=dist/ ./dist/*.whl
 
       - name: Check wheel dist
         run: |
@@ -53,7 +56,7 @@ jobs:
 
       - name: Install source dists
         run: |
-          pip install --force-reinstall --find-links=dist/ dist/*.gz
+          pip install --force-reinstall --find-links=dist/ ./dist/*.gz
 
       - name: Check source dist
         run: |
