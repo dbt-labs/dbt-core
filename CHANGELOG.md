@@ -56,6 +56,9 @@ Contributors:
 ### Docs
 - Fix docs site crash if `relationships` test has one dependency instead of two ([docs#207](https://github.com/dbt-labs/dbt-docs/issues/207), ([docs#208](https://github.com/dbt-labs/dbt-docs/issues/208)))
 
+### Under the hood
+- Handle exceptions from anonymous usage tracking for users of `dbt-snowflake` on Apple M1 chips ([#3162](https://github.com/dbt-labs/dbt/issues/3162), [#3661](https://github.com/dbt-labs/dbt/issues/3661))
+
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#3624](https://github.com/dbt-labs/dbt/pull/3624))
 
