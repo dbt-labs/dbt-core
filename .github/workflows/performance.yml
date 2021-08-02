@@ -17,7 +17,7 @@ jobs:
   # runs any tests associated with the runner
   # these tests make sure the runner logic is correct
   # if there are no tests, it still quickly builds the project to fail fast
-  test-rust:
+  test-runner:
     name: Test Runner
     runs-on: ubuntu-latest
     steps:
@@ -32,9 +32,27 @@ jobs:
           command: test
           args: --manifest-path performance/runner/Cargo.toml
 
+  # runs any tests associated with the comparator
+  # these tests make sure the comparison logic is correct
+  # if there are no tests, it still quickly builds the project to fail fast
+  test-comparator:
+    name: Test Comparator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path performance/comparison/Cargo.toml
+
   # build an optimized binary to be used as the runner in later steps
-  build-rust:
-    needs: [test-rust]
+  build-runner:
+    needs: [test-runner]
     name: Build Runner
     runs-on: ubuntu-latest
     env:
@@ -55,9 +73,32 @@ jobs:
           name: runner
           path: performance/runner/target/release/runner
 
+  # build an optimized binary to be used as the comparator in later steps
+  build-comparator:
+    needs: [test-comparator]
+    name: Build Runner
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --manifest-path performance/comparison/Cargo.toml
+      - uses: actions/upload-artifact@v2
+        with:
+          name: comparison
+          path: performance/comparison/target/release/comparison
+
   # run the performance measurements on the current or default branch
   measure-dev:
-    needs: [build-rust]
+    needs: [build-runner, build-comparator]
     name: Measure Dev Branch
     runs-on: ubuntu-latest
     steps:
@@ -85,7 +126,7 @@ jobs:
 
   # run the performance measurements on the latest release branch
   measure-latest:
-    needs: [build-rust]
+    needs: [build-runner, build-comparator]
     name: Measure Latest Branch
     runs-on: ubuntu-latest
     steps:
@@ -133,16 +174,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: "test rust comparator"
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --release --manifest-path performance/comparison/Cargo.toml
-      - name: "build runnable rust comparator"
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --manifest-path performance/comparison/Cargo.toml
       - uses: actions/download-artifact@v2
         with:
           name: dev-results
@@ -151,5 +182,10 @@ jobs:
           name: latest-results
       - name: ls result files
         run: ls
-      - name: "run comparator"
-        run: ./performance/comparison/target/release/comparison performance/results/
+      - uses: actions/download-artifact@v2
+        with:
+          name: comparator
+      - name: change permissions
+        run: chmod +x ./comparison
+      - name: run comparator
+        run: ./comparison performance/results/
