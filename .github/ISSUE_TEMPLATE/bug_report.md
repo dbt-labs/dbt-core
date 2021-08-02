@@ -30,7 +30,7 @@ If applicable, add screenshots or log output to help explain your problem.
 - [ ] redshift
 - [ ] bigquery
 - [ ] snowflake
-- [ ] other (specify: \***\*\_\_\_\_\*\***)
+- [ ] other (please specify)
 
 **The output of `dbt --version`:**
 
