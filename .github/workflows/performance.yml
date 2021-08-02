@@ -125,6 +125,8 @@ jobs:
           path: performance/results/
 
   # run the performance measurements on the latest release branch
+  # this part takes by far the longest, so we do everything we can first
+  # so the job fails fast.
   measure-latest:
     needs: [build-runner, build-comparator]
     name: Measure Latest Branch
@@ -163,6 +165,8 @@ jobs:
           name: latest-results
           path: performance/results/
 
+  # run the comparison app on the result output generated from measuring
+  # the two branches. Exits with non-zero code if a regression is detected.
   compare-results:
     needs: [measure-dev, measure-latest]
     name: Compare Results

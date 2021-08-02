@@ -142,6 +142,7 @@ fn detect_regressions(
     Ok(x)
 }
 
+// TODO merge runner and comparison projects into one with two sub commands
 fn main() {
     // TODO args lib
     let args: Vec<String> = env::args().collect();
@@ -160,6 +161,7 @@ fn main() {
 
         println!("checking regressions with the following measurements:");
         for (path, _) in &v_next {
+            // TODO this printed nothing. What's the size of this vector?
             println!("{}", path.file_name().map(|x| x.to_string_lossy()).unwrap_or(Cow::from("unknown file")))
         }
 
