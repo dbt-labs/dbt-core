@@ -17,8 +17,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency: 
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
+  test:
     name: ${{ matrix.tox-env }} ${{ matrix.python-version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
