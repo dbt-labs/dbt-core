@@ -17,7 +17,7 @@ assignees: ''
 - [ ] [Engineering] Determine if schemas have changed. If so, generate new schemas and push to schemas.getdbt.com
 
 ### Announce
-- [ ] [Product] Publish discourse
+- [ ] [Product] Update discourse
 - [ ] [Product] Announce in dbt Slack
 
 ### Post-release
