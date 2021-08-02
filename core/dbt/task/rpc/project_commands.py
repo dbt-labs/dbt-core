@@ -308,6 +308,7 @@ class RemoteListTask(
             logs=None
         )
 
+
 class RemoteBuildProjectTask(RPCCommandTask[RPCBuildParameters], BuildTask):
     METHOD_NAME = 'build'
 
