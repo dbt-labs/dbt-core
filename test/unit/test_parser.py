@@ -7,6 +7,7 @@ import yaml
 
 import dbt.flags
 import dbt.parser
+from dbt import tracking
 from dbt.exceptions import CompilationException
 from dbt.parser import (
     ModelParser, MacroParser, DataTestParser, SchemaParser,
@@ -69,6 +70,9 @@ class BaseParserTest(unittest.TestCase):
     def setUp(self):
         dbt.flags.STRICT_MODE = True
         dbt.flags.WARN_ERROR = True
+        # HACK: this is needed since tracking events can 
+        # be sent when using the model parser
+        tracking.do_not_track()
 
         self.maxDiff = None
 
