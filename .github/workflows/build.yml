@@ -1,0 +1,64 @@
+# what? -
+# why? -
+# when? -
+
+name: Build
+
+on:
+  push:
+    branches:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.python-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Upgrade pip and setuptools
+        run: |
+          pip install --upgrade pip setuptools
+          pip --version
+
+      - name: Build dist
+        shell: bash
+        run: ./scripts/build-dist.sh
+
+      - name: Install wheel dists
+        run: |
+          pip install --force-reinstall --find-links=dist/ dist/*.whl
+
+      - name: Check wheel dist
+        run: |
+          dbt --version
+
+      - name: Install source dists
+        run: |
+          pip install --force-reinstall --find-links=dist/ dist/*.gz
+
+      - name: Check source dist
+        run: |
+          dbt --version
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist/
