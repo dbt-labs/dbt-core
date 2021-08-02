@@ -6,7 +6,6 @@
 # when? - This workflow will run for all pull requests and forked pull requests. This workflow will run
 # for pull requests, and will run for forked pull requests when the `ok to test` label is present.
 
-# TODO: check if user signed cla maybe?
 name: Integration Tests (slim)
 
 on:
@@ -58,7 +57,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         adapter: [postgres, snowflake, redshift, bigquery]
         python-version: [3.8]
-        tox-cmd: ["tox -- -v -color=yes"]
+        tox-cmd: ["tox -- -v -color=yes -n4"]
 
     env:
       TOXENV: integration-${{ matrix.adapter }}
