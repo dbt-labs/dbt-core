@@ -11,6 +11,7 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
+      - "github-actions"
   workflow_dispatch:
   pull_request:
 
