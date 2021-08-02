@@ -24,5 +24,4 @@ assignees: ''
    - [ ]  [Spark](https://github.com/dbt-labs/dbt-spark) 
    - [ ]  [Presto](https://github.com/dbt-labs/dbt-presto)
 - [ ] [Engineering] Create a platform issue to update dbt-spark versions to dbt Cloud. [Example issue](https://github.com/dbt-labs/dbt-cloud/issues/3481)
-- [ ] [Product] Release new version of dbt-utils with new dbt version compatibility. If there are breaking changes requiring a minor version, plan upgrades of other packages that depend on dbt-utils.
 - [ ] [Engineering] Create an epic for the RC release
