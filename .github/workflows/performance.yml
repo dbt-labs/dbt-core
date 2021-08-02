@@ -184,7 +184,7 @@ jobs:
         run: ls
       - uses: actions/download-artifact@v2
         with:
-          name: comparator
+          name: comparison
       - name: change permissions
         run: chmod +x ./comparison
       - name: run comparator
