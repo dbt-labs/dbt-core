@@ -44,6 +44,7 @@ jobs:
         run: ./scripts/build-dist.sh
 
       - name: Show dists generated
+        shell: bash
         run: ls -lh dist/
 
       - name: Install wheel dists
