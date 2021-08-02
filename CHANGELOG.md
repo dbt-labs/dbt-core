@@ -21,10 +21,9 @@
 - Better interaction between `dbt init` and adapters. Avoid raising errors while initializing a project ([#2814](https://github.com/fishtown-analytics/dbt/pull/2814), [#3483](https://github.com/fishtown-analytics/dbt/pull/3483))
 - Update `create_adapter_plugins` script to include latest accessories, and stay up to date with latest dbt-core version ([#3002](https://github.com/fishtown-analytics/dbt/issues/3002), [#3509](https://github.com/fishtown-analytics/dbt/pull/3509))
 - Scrub environment secrets from logs and console output ([#3617](https://github.com/dbt-labs/dbt/pull/3617))
-- Add tracking for determine why `dbt` needs to re-parse entire project when partial parsing is enabled ([#3572](https://github.com/dbt-labs/dbt/issues/3572), [#3652](https://github.com/dbt-labs/dbt/pull/3652))
 
 ### Dependencies
-- Require `werkzeug>=1`
+- Require `werkzeug>=1` ([#3590](https://github.com/dbt-labs/dbt/pull/3590))
 
 Contributors:
 - [@kostek-pl](https://github.com/kostek-pl) ([#3236](https://github.com/fishtown-analytics/dbt/pull/3408))
@@ -47,18 +46,19 @@ Contributors:
 - Fix `dbt deps` version comparison logic which was causing incorrect pre-release package versions to be installed. ([#3578](https://github.com/dbt-labs/dbt/issues/3578), [#3609](https://github.com/dbt-labs/dbt/issues/3609))
 - Fix exception on yml files with all comments ([#3568](https://github.com/dbt-labs/dbt/issues/3568), [#3630](https://github.com/dbt-labs/dbt/issues/3630))
 - Partial parsing: don't reprocess SQL file already scheduled ([#3589](https://github.com/dbt-labs/dbt/issues/3589), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
-- Handle interator functions in model config ([#3573](https://github.com/dbt-labs/dbt/issues/3573))
+- Handle interator functions in model config ([#3573](https://github.com/dbt-labs/dbt/issues/3573), [#3619](https://github.com/dbt-labs/dbt/issues/3619))
 - Partial parsing: fix error after changing empty yaml file ([#3567](https://github.com/dbt-labs/dbt/issues/3567), [#3618](https://github.com/dbt-labs/dbt/pull/3618))
 - Partial parsing: handle source tests when changing test macro ([#3584](https://github.com/dbt-labs/dbt/issues/3584), [#3620](https://github.com/dbt-labs/dbt/pull/3620))
 - Partial parsing: schedule new macro file for parsing when macro patching ([#3627](https://github.com/dbt-labs/dbt/issues/3627), [#3627](https://github.com/dbt-labs/dbt/pull/3627))
-- Use `SchemaParser`'s render context to render test configs in order to support `var()` configured at the project level and passed in from the cli ([#3564](https://github.com/dbt-labs/dbt/issues/3564). [#3646](https://github.com/dbt-labs/dbt/pull/3646))
-- Partial parsing: check unique_ids when recursively removing macros ([#3636](https://github.com/dbt-labs/dbt/issues/3636))
+- Use `SchemaParser`'s render context to render test configs in order to support `var()` configured at the project level and passed in from the cli ([#3564](https://github.com/dbt-labs/dbt/issues/3564), [#3646](https://github.com/dbt-labs/dbt/pull/3646))
+- Partial parsing: check unique_ids when recursively removing macros ([#3636](https://github.com/dbt-labs/dbt/issues/3636), [#3659](https://github.com/dbt-labs/dbt/issues/3659))
 
 ### Docs
 - Fix docs site crash if `relationships` test has one dependency instead of two ([docs#207](https://github.com/dbt-labs/dbt-docs/issues/207), ([docs#208](https://github.com/dbt-labs/dbt-docs/issues/208)))
 
 ### Under the hood
 - Handle exceptions from anonymous usage tracking for users of `dbt-snowflake` on Apple M1 chips ([#3162](https://github.com/dbt-labs/dbt/issues/3162), [#3661](https://github.com/dbt-labs/dbt/issues/3661))
+- Add tracking for determine why `dbt` needs to re-parse entire project when partial parsing is enabled ([#3572](https://github.com/dbt-labs/dbt/issues/3572), [#3652](https://github.com/dbt-labs/dbt/pull/3652))
 
 Contributors:
 - [@NiallRees](https://github.com/NiallRees) ([#3624](https://github.com/dbt-labs/dbt/pull/3624))
