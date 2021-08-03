@@ -51,6 +51,8 @@ pub enum TestError {
     FilenameNotUnicodeErr(PathBuf),
     #[error("BadFileContentsErr: Check that the file exists and is readable.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
     BadFileContentsErr(PathBuf, Option<io::Error>),
+    #[error("NoResultsErr: The results directory has no json files in it.\nFilepath: {}", .0.to_string_lossy().into_owned())]
+    NoResultsErr(PathBuf),
 }
 
 fn regression(baseline: &Measurement, latest: &Measurement) -> Option<Regression> {
@@ -144,6 +146,12 @@ fn calculate_regressions(
 
 pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestError> {
     measurements_from_files(Path::new(&results_directory)).and_then(|v| {
+        // exit early with an Err if there are no results to process
+        match v[..] {
+            [] => Err(TestError::NoResultsErr(results_directory.clone())),
+            _ => Ok(())
+        }?;
+
         let v_next: Vec<(PathBuf, Measurement)> = v
             .into_iter()
             // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
@@ -151,7 +159,6 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestE
             .collect();
 
         println!("checking regressions with the following measurements:");
-        println!("length: {}", &v_next.len());
         for (path, _) in &v_next {
             // TODO this printed nothing. What's the size of this vector?
             println!("{}", path.file_name().map(|x| x.to_string_lossy()).unwrap_or(Cow::from("unknown file")))
@@ -208,6 +215,11 @@ Filepath: dummy/path/no_file/"#
                 r#"BadFileContentsErr: Check that the file exists and is readable.
 Filepath: dummy/path/filenotexist.json
 Originating Exception:None"#
+            ),
+            (
+                TestError::NoResultsErr(Path::new("dummy/path/no_file/").to_path_buf()),
+                r#"NoResultsErr: The results directory has no json files in it.
+Filepath: dummy/path/no_file/"#
             ),
         ];
 
