@@ -244,7 +244,7 @@ class DBTIntegrationTest(unittest.TestCase):
         }
 
     def bigquery_profile(self):
-        credentials_json_str = os.getenv('BIGQUERY_SERVICE_ACCOUNT_JSON').replace("'", '')
+        credentials_json_str = os.getenv('BIGQUERY_TEST_SERVICE_ACCOUNT_JSON').replace("'", '')
         credentials = json.loads(credentials_json_str)
         project_id = credentials.get('project_id')
 
