@@ -30,13 +30,13 @@ pub enum Regression {
         threshold: f64,
         difference: f64,
         baseline: f64,
-        latest: f64,
+        dev: f64,
     },
     StandardDeviation {
         threshold: f64,
         difference: f64,
         baseline: f64,
-        latest: f64,
+        dev: f64,
     },
 }
 
@@ -67,12 +67,12 @@ pub enum TestError {
     BadGroupSizeErr(usize, Vec<MeasurementGroup>),
 }
 
-fn regression(baseline: &Measurement, latest: &Measurement) -> Vec<Regression> {
+fn regression(baseline: &Measurement, dev: &Measurement) -> Vec<Regression> {
     let median_threshold = 1.05; // 5% regression threshold
-    let median_difference = latest.median / baseline.median;
+    let median_difference = dev.median / baseline.median;
 
     let stddev_threshold = 1.05; // 5% regression threshold
-    let stddev_difference = latest.stddev / baseline.stddev;
+    let stddev_difference = dev.stddev / baseline.stddev;
 
     let mut regressions = vec![];
 
@@ -82,7 +82,7 @@ fn regression(baseline: &Measurement, latest: &Measurement) -> Vec<Regression> {
                 threshold: median_threshold,
                 difference: median_difference,
                 baseline: baseline.median.clone(),
-                latest: latest.median.clone(),
+                dev: dev.median.clone(),
             }
         )
     };
@@ -93,7 +93,7 @@ fn regression(baseline: &Measurement, latest: &Measurement) -> Vec<Regression> {
                 threshold: stddev_threshold,
                 difference: stddev_difference,
                 baseline: baseline.stddev.clone(),
-                latest: latest.stddev.clone(),
+                dev: dev.stddev.clone(),
             }
         )
     };

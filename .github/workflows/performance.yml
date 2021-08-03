@@ -86,9 +86,9 @@ jobs:
   # run the performance measurements on the latest release branch
   # this part takes by far the longest, so we do everything we can first
   # so the job fails fast.
-  measure-latest:
+  measure-baseline:
     needs: [build-runner]
-    name: Measure Latest Branch
+    name: Measure Baseline Branch
     runs-on: ubuntu-latest
     steps:
       - name: checkout latest
@@ -100,12 +100,12 @@ jobs:
         with:
           python-version: '3.8'
       - name: move repo up a level
-        run: mkdir ${{ github.workspace }}/../latest/ && cp -r ${{ github.workspace }} ${{ github.workspace }}/../latest
+        run: mkdir ${{ github.workspace }}/../baseline/ && cp -r ${{ github.workspace }} ${{ github.workspace }}/../baseline
       - name: "[debug] ls new dbt location"
-        run: ls ${{ github.workspace }}/../latest/dbt/
+        run: ls ${{ github.workspace }}/../baseline/dbt/
       # installation creates egg-links so we have to preserve source
       - name: install dbt from new location
-        run: cd ${{ github.workspace }}/../latest/dbt/ && pip install -r dev-requirements.txt -r editable-requirements.txt
+        run: cd ${{ github.workspace }}/../baseline/dbt/ && pip install -r dev-requirements.txt -r editable-requirements.txt
       # checkout the current branch to get all the target projects
       # this deletes the old checked out code which is why we had to copy before
       - name: checkout dev
@@ -118,16 +118,16 @@ jobs:
       - name: change permissions
         run: chmod +x ./runner
       - name: run runner
-        run: ./runner measure -b latest -p ${{ github.workspace }}/performance/projects/
+        run: ./runner measure -b baseline -p ${{ github.workspace }}/performance/projects/
       - uses: actions/upload-artifact@v2
         with:
-          name: latest-results
+          name: baseline-results
           path: performance/results/
 
   # detect regressions on the output generated from measuring
   # the two branches. Exits with non-zero code if a regression is detected.
   calculate-regressions:
-    needs: [measure-dev, measure-latest]
+    needs: [measure-dev, measure-baseline]
     name: Compare Results
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +137,7 @@ jobs:
           name: dev-results
       - uses: actions/download-artifact@v2
         with:
-          name: latest-results
+          name: baseline-results
       - name: "[debug] ls result files"
         run: ls
       - uses: actions/download-artifact@v2
