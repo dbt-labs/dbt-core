@@ -1,22 +1,24 @@
+# **This is not a trusted workflow.**
 # **what?** - This workflow runs integration tests for supported OS,
 # python versions and core adapters. It will only run tests for
 # related file changes. Use the `test all` and `test ${adapter}`
-# label to manually run all or additional tests. Requires secrets to run
-# against different warehouses. Use `ok to test` label to mark PRs from
-# forked repositories that should run integration tests.
-# **why?** - This checks the functionality of dbt from a user's perspective, provides code coverage, and
-# attempts to prevent functional regressions.
-# **when?** - This workflow will run for all pull requests.
+# label to manually run all or additional tests. Use `ok to test`
+# label to mark PRs from forked repositories that are safe to run integration
+# tests for. Requires secrets to run against different warehouses.
+# **why?** - This checks the functionality of dbt from a user's perspective,
+# provides code coverage, and attempts to catch functional regressions.
+# **when?** - This workflow will run for all pull requests (including those
+# forks).
 
-name: Integration Tests (slim)
+name: PR Integration Tests
 
 on:
-  pull_request:
+  pull_request_target:
 
 permissions: read-all
 
 concurrency:
-  group: integration-slim-${{ github.event_name }}-${{ github.ref }}
+  group: integration-pr-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
