@@ -1,6 +1,7 @@
 ## dbt 0.21.0 (Release TBD)
 
 ### Under the hood
+
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 
 ## dbt 0.21.0b2 (August 19, 2021)
@@ -19,8 +20,7 @@
 
 - Add `build` RPC method, and a subset of flags for `build` task ([#3595](https://github.com/dbt-labs/dbt/issues/3595), [#3674](https://github.com/dbt-labs/dbt/pull/3674))
 - Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
-
-## dbt 0.21.0b1 (August 03, 2021)
+- Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 
 ### Breaking changes
 
@@ -48,6 +48,7 @@
 - Better interaction between `dbt init` and adapters. Avoid raising errors while initializing a project ([#2814](https://github.com/fishtown-analytics/dbt/pull/2814), [#3483](https://github.com/fishtown-analytics/dbt/pull/3483))
 - Update `create_adapter_plugins` script to include latest accessories, and stay up to date with latest dbt-core version ([#3002](https://github.com/fishtown-analytics/dbt/issues/3002), [#3509](https://github.com/fishtown-analytics/dbt/pull/3509))
 - Scrub environment secrets from logs and console output ([#3617](https://github.com/dbt-labs/dbt/pull/3617))
+- Add tracking for determine why `dbt` needs to re-parse entire project when partial parsing is enabled ([#3572](https://github.com/dbt-labs/dbt/issues/3572), [#3652](https://github.com/dbt-labs/dbt/pull/3652))
 
 ### Dependencies
 
@@ -65,26 +66,24 @@ Contributors:
 ## dbt 0.20.2 (Release TBD)
 
 ### Under the hood
-<<<<<<< HEAD
+
 - Better error handling for BigQuery job labels that are too long. ([#3612](https://github.com/dbt-labs/dbt/pull/3612), [#3703](https://github.com/dbt-labs/dbt/pull/3703))
 - Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
 
 ### Fixes
+
 - Fix bug in finding analysis nodes when applying analysis patch ([#3764](https://github.com/dbt-labs/dbt/issues/3764), [#3767](https://github.com/dbt-labs/dbt/pull/3767))
 
 Contributors:
-- [@sungchun12](https://github.com/sungchun12) ([#3703](https://github.com/dbt-labs/dbt/pull/3703))
 
+- [@sungchun12](https://github.com/sungchun12) ([#3703](https://github.com/dbt-labs/dbt/pull/3703))
 
 ## dbt 0.20.2rc1 (August 16, 2021)
 
-
 ### Under the hood
+
 - Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
 - Check for existence of test node when removing. ([#3711](https://github.com/dbt-labs/dbt/issues/3711), [#3750](https://github.com/dbt-labs/dbt/pull/3750))
-
-
-=======
 
 - Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
 - Better error handling for BigQuery job labels that are too long. [#3703](https://github.com/dbt-labs/dbt/pull/3703)
@@ -94,9 +93,7 @@ Contributors:
 - Check for existence of test node when removing. ([#3711](https://github.com/dbt-labs/dbt/issues/3711), [#3750](https://github.com/dbt-labs/dbt/pull/3750))
 - Fix bug in finding analysis nodes when applying analysis patch ([#3764](https://github.com/dbt-labs/dbt/issues/3764), [#3767](https://github.com/dbt-labs/dbt/pull/3767))
 
->>>>>>> e84c78d3 (add changelog)
 ## dbt 0.20.1 (August 11, 2021)
-
 
 ## dbt 0.20.1rc1 (August 02, 2021)
 
