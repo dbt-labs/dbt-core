@@ -3,6 +3,7 @@ extern crate structopt;
 mod calculate;
 mod measure;
 
+use crate::calculate::Calculation;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::process::exit;
@@ -37,6 +38,8 @@ fn gracefully_exit_or<A, B, E: Display>(f: &dyn Fn(A) -> B, r: Result<A, E>) -> 
     }
 }
 
+// This is where all the printing, exiting, and error displaying 
+// should happen. Module functions should only return values.
 fn main() {
     match Opt::from_args() {
         Opt::Measure { projects_dir, branch_name } => {
@@ -46,10 +49,33 @@ fn main() {
             )
         },
         Opt::Calculate { results_dir } => {
-            gracefully_exit_or(
-                &calculate::exit_properly,
+            let calculations = gracefully_exit_or(
+                &|x| x,
                 calculate::regressions(&results_dir)
-            )
+            );
+
+            println!(":: All Calculations ::\n");
+            for c in &calculations {
+                println!("{:#?}", c);
+            }
+            println!("");
+
+            let regressions: Vec<Calculation> = calculations
+                .into_iter()
+                .filter(|c| c.regression)
+                .collect();
+
+            match regressions[..] {
+                [] => println!("congrats! no regressions :)"),
+                _ => {
+                    println!(":: Regressions Found ::\n");
+                    for r in regressions {
+                        println!("{:#?}", r);
+                    }
+                    println!("");
+                    exit(1)
+                }
+            }
         },
     }
 }
