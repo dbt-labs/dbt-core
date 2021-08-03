@@ -98,8 +98,9 @@ fn main() {
                 [] => println!("congrats! no regressions :)"),
                 _ => {
                     println!(":: Regressions Found ::\n");
+                    println!("");
                     for r in regressions {
-                        println!("{:#?}", r);
+                        println!("{:#?}\n", r);
                     }
                     println!("");
                     exit(1)
