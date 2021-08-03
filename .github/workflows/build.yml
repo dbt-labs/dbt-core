@@ -1,5 +1,6 @@
 # **what?** - This workflow builds python packages and ensures they can be
-# installed on support OS and python versions. Does not require secrets.
+# installed on support OS and python versions. This workflow should not require
+# any secrets.
 # **why?** - Ensure that dbt and its dependencies are able to be packaged
 # and installed.
 # **when?** - This will run when pushing to protected branches, pull requests,
