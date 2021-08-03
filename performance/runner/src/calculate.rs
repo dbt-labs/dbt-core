@@ -25,11 +25,19 @@ struct Measurements {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Regression {
-    threshold: f64,
-    difference: f64,
-    baseline: Measurement,
-    latest: Measurement,
+pub enum Regression {
+    Median {
+        threshold: f64,
+        difference: f64,
+        baseline: f64,
+        latest: f64,
+    },
+    StandardDeviation {
+        threshold: f64,
+        difference: f64,
+        baseline: f64,
+        latest: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,19 +67,38 @@ pub enum TestError {
     BadGroupSizeErr(usize, Vec<MeasurementGroup>),
 }
 
-fn regression(baseline: &Measurement, latest: &Measurement) -> Option<Regression> {
-    let threshold = 1.05; // 5% regression threshold
-    let difference = latest.median / baseline.median;
-    if difference > threshold {
-        Some(Regression {
-            threshold,
-            difference,
-            baseline: baseline.clone(),
-            latest: latest.clone(),
-        })
-    } else {
-        None
-    }
+fn regression(baseline: &Measurement, latest: &Measurement) -> Vec<Regression> {
+    let median_threshold = 1.05; // 5% regression threshold
+    let median_difference = latest.median / baseline.median;
+
+    let stddev_threshold = 1.05; // 5% regression threshold
+    let stddev_difference = latest.stddev / baseline.stddev;
+
+    let mut regressions = vec![];
+
+    if median_difference > median_threshold {
+        regressions.push(
+            Regression::Median {
+                threshold: median_threshold,
+                difference: median_difference,
+                baseline: baseline.median.clone(),
+                latest: latest.median.clone(),
+            }
+        )
+    };
+
+    if stddev_difference > stddev_threshold {
+        regressions.push(
+            Regression::StandardDeviation {
+                threshold: stddev_threshold,
+                difference: stddev_difference,
+                baseline: baseline.stddev.clone(),
+                latest: latest.stddev.clone(),
+            }
+        )
+    };
+
+    regressions
 }
 
 // given a directory, read all files in the directory and return each
@@ -140,8 +167,8 @@ fn calculate_regressions(
         .map(|(_, group)| {
             let g: Vec<MeasurementGroup> = group.collect();
             match g.len() {
-                2 => regression(&g[0].measurement, &g[1].measurement).map(Ok),
-                i => Some(Err(TestError::BadGroupSizeErr(i, g))),
+                2 => regression(&g[0].measurement, &g[1].measurement).into_iter().map(Ok).collect(),
+                i => vec![Err(TestError::BadGroupSizeErr(i, g))],
             }
         })
         .flatten()
@@ -180,7 +207,7 @@ pub fn exit_properly(regressions: Vec<Regression>) {
         [] => println!("congrats! no regressions"),
         _ => {
             for r in regressions {
-                println!("{:?}", r);
+                println!("{:#?}", r);
             }
             println!("the above regressions were found.");
             exit(1)
