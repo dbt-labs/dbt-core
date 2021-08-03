@@ -7,43 +7,43 @@ use std::borrow::Cow;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct Measurement {
-    command: String,
-    mean: f64,
-    stddev: f64,
-    median: f64,
-    user: f64,
-    system: f64,
-    min: f64,
-    max: f64,
-    times: Vec<f64>,
+pub struct Measurement {
+    pub command: String,
+    pub mean: f64,
+    pub stddev: f64,
+    pub median: f64,
+    pub user: f64,
+    pub system: f64,
+    pub min: f64,
+    pub max: f64,
+    pub times: Vec<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct Measurements {
-    results: Vec<Measurement>,
+pub struct Measurements {
+    pub results: Vec<Measurement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Data {
-    threshold: f64,
-    difference: f64,
-    baseline: f64,
-    dev: f64,
+pub struct Data {
+    pub threshold: f64,
+    pub difference: f64,
+    pub baseline: f64,
+    pub dev: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Calculation {
-    metric: String,
-    regression: bool,
-    data: Data,
+    pub metric: String,
+    pub regression: bool,
+    pub data: Data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeasurementGroup {
-    version: String,
-    run: String,
-    measurement: Measurement,
+    pub version: String,
+    pub run: String,
+    pub measurement: Measurement,
 }
 
 #[derive(Error, Debug)]
@@ -188,29 +188,8 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, Test
             .map(|(p, ms)| (p, ms.results[0].clone()))
             .collect();
 
-        println!("checking regressions with the following measurements:");
-        for (path, _) in &v_next {
-            // TODO this printed nothing. What's the size of this vector?
-            println!("{}", path.file_name().map(|x| x.to_string_lossy()).unwrap_or(Cow::from("unknown file")))
-        }
-
         calculate_regressions(&v_next)
     })
-}
-
-pub fn exit_properly(calculations: Vec<Calculation>) {
-    let regressions = calculations.into_iter().filter(|c| c.regression).collect::<Vec<Calculation>>();
-    match regressions[..] {
-        [] => println!("congrats! no regressions"),
-        _ => {
-            for r in regressions {
-                println!("{:#?}", r);
-            }
-            println!("");
-            println!("the above regressions were found.");
-            exit(1)
-        }
-    }
 }
 
 #[cfg(test)]
