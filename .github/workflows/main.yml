@@ -31,7 +31,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         tox-env: [unit, mypy]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.6, 3.7, 3.8] # TODO: add support unit testing python 3.9
         include:
           - os: ubuntu-latest
             tox-env: flake8
