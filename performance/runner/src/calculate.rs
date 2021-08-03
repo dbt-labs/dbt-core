@@ -22,7 +22,7 @@ pub struct Measurements {
     pub results: Vec<Measurement>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Data {
     pub threshold: f64,
     pub difference: f64,
@@ -30,7 +30,7 @@ pub struct Data {
     pub dev: f64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Calculation {
     pub metric: String,
     pub regression: bool,

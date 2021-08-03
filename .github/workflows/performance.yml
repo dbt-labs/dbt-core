@@ -147,3 +147,7 @@ jobs:
         run: chmod +x ./runner
       - name: run calculation
         run: ./runner calculate -r ./
+      - uses: actions/upload-artifact@v2
+        with:
+          name: final-calculations
+          path: ./final_calculations.json
