@@ -151,6 +151,7 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestE
             .collect();
 
         println!("checking regressions with the following measurements:");
+        println!("length: {}", &v_next.len());
         for (path, _) in &v_next {
             // TODO this printed nothing. What's the size of this vector?
             println!("{}", path.file_name().map(|x| x.to_string_lossy()).unwrap_or(Cow::from("unknown file")))
