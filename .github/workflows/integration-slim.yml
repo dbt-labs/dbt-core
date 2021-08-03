@@ -23,7 +23,10 @@ jobs:
   pre-checks:
     runs-on: ubuntu-latest
     outputs:
-      changes: ${{ steps.check-changes.outputs }}
+      has-postgres-changes: ${{ steps.check-changes.outputs.postgres == 'true' }}
+      has-snowflake-changes: ${{ steps.check-changes.outputs.snowflake == 'true' }}
+      has-bigquery-changes: ${{ steps.check-changes.outputs.bigquery == 'true' }}
+      has-redshift-changes: ${{ steps.check-changes.outputs.redshift == 'true' }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
@@ -102,7 +105,7 @@ jobs:
         if: >-
           matrix.adapter == 'postgres' &&
           (
-            needs.pre-checks.outputs.postgres == 'true' ||
+            needs.pre-checks.outputs.has-postgres-changes ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test postgres')
           )
@@ -112,7 +115,7 @@ jobs:
         if: >-
           matrix.adapter == 'redshift' &&
           (
-            needs.pre-checks.outputs.redshift == 'true' ||
+            needs.pre-checks.outputs.has-redshift-changes ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test redshift')
           )
@@ -128,7 +131,7 @@ jobs:
         if: >-
           matrix.adapter == 'snowflake' &&
           (
-            needs.pre-checks.outputs.snowflake == 'true' ||
+            needs.pre-checks.outputs.has-snowflake-changes ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test snowflake')
           )
@@ -151,7 +154,7 @@ jobs:
         if: >-
           matrix.adapter == 'bigquery' &&
           (
-            needs.pre-checks.outputs.bigquery == 'true' ||
+            needs.pre-checks.outputs.has-bigquery-changes ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test bigquery')
           )
