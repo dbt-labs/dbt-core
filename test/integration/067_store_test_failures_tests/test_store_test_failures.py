@@ -9,6 +9,13 @@ class TestStoreTestFailures(DBTIntegrationTest):
     def schema(self):
         return "test_store_test_failures_067"
 
+    def tearDown(self):
+        test_audit_schema = self.unique_schema() + "_dbt_test__audit"
+        with self.adapter.connection_named('__test'):
+            self._drop_schema_named(self.default_database, test_audit_schema)
+
+        super().tearDown()
+
     @property
     def models(self):
         return "models"
