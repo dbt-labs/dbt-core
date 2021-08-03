@@ -121,7 +121,7 @@ fn calculate_regressions(
                     let parts: Vec<&str> = name.split("_").collect();
                     MeasurementGroup {
                         version: parts[0].to_owned(),
-                        run: parts[1..].join(""),
+                        run: parts[1..].join("_"),
                         measurement: m.clone(),
                     }
                 })
@@ -135,7 +135,7 @@ fn calculate_regressions(
 
     let x: Vec<Regression> = sorted_measurement_groups
         .into_iter()
-        .group_by(|x| (x.run.clone(), x.version.clone()))
+        .group_by(|x| x.run.clone())
         .into_iter()
         .map(|(_, group)| {
             let g: Vec<MeasurementGroup> = group.collect();
