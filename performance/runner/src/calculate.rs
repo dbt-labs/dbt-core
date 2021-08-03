@@ -160,8 +160,8 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestE
     })
 }
 
-pub fn exit_properly(regressions: &[Regression]) {
-    match regressions {
+pub fn exit_properly(regressions: Vec<Regression>) {
+    match regressions[..] {
         [] => println!("congrats! no regressions"),
         _ => {
             for r in regressions {
