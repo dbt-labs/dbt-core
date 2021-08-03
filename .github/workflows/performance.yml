@@ -146,7 +146,7 @@ jobs:
         run: ls
       - uses: actions/download-artifact@v2
         with:
-          name: comparison
+          name: runner
       - name: change permissions
         run: chmod +x ./runner
       - name: run calculation
