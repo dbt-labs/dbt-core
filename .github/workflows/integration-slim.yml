@@ -92,6 +92,40 @@ jobs:
           pg_isready
           sudo -u postgres bash test/setup_db.sh
 
+      - name: Set up postgres (macos)
+        if: |
+          matrix.adapter == 'postgres' &&
+          runner.os == 'macOS'
+        run: |
+          brew services start postgresql
+          echo "Check PostgreSQL service is running"
+          i=10
+          COMMAND='pg_isready'
+          while [ $i -gt 0 ]; do
+              echo "Check PostgreSQL service status"
+              eval $COMMAND && break
+              ((i--))
+              if [ $i == 0 ]; then
+                  echo "PostgreSQL service not ready, all attempts exhausted"
+                  exit 1
+              fi
+              echo "PostgreSQL service not ready, wait 10 more sec, attempts left: $i"
+              sleep 10
+          done
+          createuser -s postgres
+          bash test/setup_db.sh
+
+      - name: Set up postgres (windows)
+        if: |
+          matrix.adapter == 'postgres' &&
+          runner.os == 'Windows'
+        run: |
+          $pgService = Get-Service -Name postgresql*
+          Set-Service -InputObject $pgService -Status running -StartupType automatic
+          Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
+          $env:Path += ";$env:PGBIN"
+          bash test/setup_db.sh
+
       - name: Upgrade pip
         run: |
           pip install --upgrade pip
