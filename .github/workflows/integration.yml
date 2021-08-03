@@ -1,8 +1,10 @@
-# what? - This workflow runs all integration tests for supported OS and python versions and core adapters.
-# Requires secrets to run against different warehouses.
-# why? - This checks the functionality of dbt from a user's perspective, provides code coverage, and
-# attempts to prevent functional regressions.
-# when? - This workflow will run on every push to a protected branch and when manually triggered.
+# **what?** - This workflow runs all integration tests for supported OS
+# and python versions and core adapters. Requires secrets to run against
+# different warehouses.
+# **why?** - This checks the functionality of dbt from a user's perspective,
+# provides code coverage, and attempts to catch functional regressions.
+# **when?** - This workflow will run on every push to a protected branch
+# and when manually triggered.
 
 name: Integration Tests
 
@@ -13,10 +15,9 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
-      - "github-actions"
   workflow_dispatch:
 
-concurrency: 
+concurrency:
   group: integration-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
@@ -28,8 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        adapter: [postgres] # [postgres, snowflake, redshift, bigquery]
-        python-version: [3.8] # [3.6, 3.7, 3.8, 3.9]
+        adapter: [postgres, snowflake, redshift, bigquery]
+        python-version: [3.6, 3.7, 3.8, 3.9]
 
     env:
       TOXENV: integration-${{ matrix.adapter }}

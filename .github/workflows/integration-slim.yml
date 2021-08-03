@@ -1,19 +1,21 @@
-# what? - This workflow runs integration tests for supported OS and python versions and core adapters.
-# It will only run tests for related file changes. Supports a `test all` label and a `test ${adapter}`
-# label to manually run all or other tests. Requires secrets to run against different warehouses.
-# why? - This checks the functionality of dbt from a user's perspective, provides code coverage, and
+# **what?** - This workflow runs integration tests for supported OS,
+# python versions and core adapters. It will only run tests for
+# related file changes. Use the `test all` and `test ${adapter}`
+# label to manually run all or additional tests. Requires secrets to run
+# against different warehouses. Use `ok to test` label to mark PRs from
+# forked repositories that should run integration tests.
+# **why?** - This checks the functionality of dbt from a user's perspective, provides code coverage, and
 # attempts to prevent functional regressions.
-# when? - This workflow will run for all pull requests and forked pull requests. This workflow will run
-# for pull requests, and will run for forked pull requests when the `ok to test` label is present.
+# **when?** - This workflow will run for all pull requests.
 
 name: Integration Tests (slim)
 
 on:
-  pull_request_target:
+  pull_request:
 
 permissions: read-all
 
-concurrency: 
+concurrency:
   group: integration-slim-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
@@ -21,7 +23,7 @@ jobs:
   pre-checks:
     runs-on: ubuntu-latest
     outputs:
-      changes: ${{ steps.check-changes.outputs.changes }}
+      changes: ${{ steps.check-changes.outputs }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
@@ -31,6 +33,7 @@ jobs:
         uses: dorny/paths-filter@v2
         id: check-changes
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             postgres:
               - 'core/**'
@@ -61,10 +64,10 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         adapter: [postgres, snowflake, redshift, bigquery]
         python-version: [3.8]
-        tox-cmd: ["tox -- -v -color=yes -n4"]
 
     env:
       TOXENV: integration-${{ matrix.adapter }}
+      PYTEST_ADDOPTS: "-v --color=yes -n4"
 
     steps:
       - name: Check out the repository
@@ -99,17 +102,17 @@ jobs:
         if: >-
           matrix.adapter == 'postgres' &&
           (
-            contains(jobs.pre-checks.outputs.changes, 'postgres' ||
+            needs.pre-checks.outputs.postgres == 'true' ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test postgres')
           )
-        run: ${{ matrix.tox-cmd }}
+        run: tox
 
       - name: Run tox (redshift)
         if: >-
           matrix.adapter == 'redshift' &&
           (
-            contains(jobs.pre-checks.outputs.changes, 'redshift' ||
+            needs.pre-checks.outputs.redshift == 'true' ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test redshift')
           )
@@ -119,13 +122,13 @@ jobs:
           REDSHIFT_TEST_USER: ${{ secrets.REDSHIFT_TEST_USER }}
           REDSHIFT_TEST_PORT: ${{ secrets.REDSHIFT_TEST_PORT }}
           REDSHIFT_TEST_HOST: ${{ secrets.REDSHIFT_TEST_HOST }}
-        run: ${{ matrix.tox-cmd }}
+        run: tox
 
       - name: Run tox (snowflake)
         if: >-
           matrix.adapter == 'snowflake' &&
           (
-            contains(jobs.pre-checks.outputs.changes, 'snowflake' ||
+            needs.pre-checks.outputs.snowflake == 'true' ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test snowflake')
           )
@@ -142,24 +145,26 @@ jobs:
           SNOWFLAKE_TEST_DATABASE: ${{ secrets.SNOWFLAKE_TEST_DATABASE }}
           SNOWFLAKE_TEST_QUOTED_DATABASE: ${{ secrets.SNOWFLAKE_TEST_QUOTED_DATABASE }}
           SNOWFLAKE_TEST_ROLE: ${{ secrets.SNOWFLAKE_TEST_ROLE }}
-        run: ${{ matrix.tox-cmd }}
+        run: tox
 
       - name: Run tox (bigquery)
         if: >-
           matrix.adapter == 'bigquery' &&
           (
-            contains(jobs.pre-checks.outputs.changes, 'bigquery' ||
+            needs.pre-checks.outputs.bigquery == 'true' ||
             contains(github.event.pull_request.labels.*.name, 'test all') ||
             contains(github.event.pull_request.labels.*.name, 'test bigquery')
           )
         env:
           BIGQUERY_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_SERVICE_ACCOUNT_JSON }}
           BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
-        run: ${{ matrix.tox-cmd }}
+        run: tox
 
   post-checks:
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      pull-requests: write
     steps:
       - name: Needs permission PR comment
         if: >-
