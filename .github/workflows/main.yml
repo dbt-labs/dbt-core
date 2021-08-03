@@ -1,6 +1,6 @@
 # **what?** - This workflow contains unit tests for supported OS and
 # python versions as well as static code checks. This workflow
-# requires no secrets.
+# should require no secrets.
 # **why?** - To ensure all code being merged into the project passes a
 # minimum threshold of quality.
 # **when?** - This workflow will run on ever push to a protected
