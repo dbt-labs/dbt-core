@@ -1,8 +1,10 @@
-# what? - This workflow contains unit tests for supported OS and python versions as well as
-# static code checks. This workflow requires no secrets.
-# why? - To ensure code being merged into the project passes a minimum threshold of quality.
-# when? - This workflow will run on ever push to a protected branch, for all pull requests, and
-# when manually triggered.
+# **what?** - This workflow contains unit tests for supported OS and
+# python versions as well as static code checks. This workflow
+# requires no secrets.
+# **why?** - To ensure all code being merged into the project passes a
+# minimum threshold of quality.
+# **when?** - This workflow will run on ever push to a protected
+# branch, for all pull requests, and when manually triggered.
 
 name: CI
 
@@ -13,11 +15,10 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
-      - "github-actions"
   pull_request:
   workflow_dispatch:
 
-concurrency: 
+concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 

@@ -1,0 +1,12 @@
+{
+  "number": 3669,
+  "pull_request": {
+    "number": 3669,
+    "head": {
+      "ref": "github-actions"
+    },
+    "base": {
+      "ref": "develop"
+    }
+  }
+}
