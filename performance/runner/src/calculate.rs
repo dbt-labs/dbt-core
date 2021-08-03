@@ -62,9 +62,11 @@ pub enum TestError {
     OddResultsCountErr(usize, PathBuf),
     #[error("BadGroupSizeErr: Expected two results per group, one for each branch-project pair.\nCount: {}\nGroup: {:?}", .0, .1.into_iter().map(|group| (&group.version[..], &group.run[..])).collect::<Vec<(&str, &str)>>())]
     BadGroupSizeErr(usize, Vec<MeasurementGroup>),
+    #[error("BadBranchNameErr: Branch names must be 'baseline' and 'dev'.\nFound: {}, {}", .0, .1)]
+    BadBranchNameErr(String, String),
 }
 
-fn calculate(metric: &str, baseline: &Measurement, dev: &Measurement) -> Vec<Calculation> {
+fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Calculation> {
     let median_threshold = 1.05; // 5% regression threshold
     let median_difference = dev.median / baseline.median;
 
@@ -159,9 +161,20 @@ fn calculate_regressions(
         .group_by(|x| x.run.clone())
         .into_iter()
         .map(|(_, group)| {
-            let g: Vec<MeasurementGroup> = group.collect();
+            let mut g: Vec<MeasurementGroup> = group.collect();
+            g.sort_by(|x, y| x.version.cmp(&y.version));
+
             match g.len() {
-                2 => calculate(&g[0].run, &g[0].measurement, &g[1].measurement).into_iter().map(Ok).collect(),
+                2 => {
+                    let dev = &g[0];
+                    let baseline = &g[1];
+                    
+                    if dev.version == "dev" && baseline.version == "baseline" {
+                        calculate(&dev.run, &dev.measurement, &baseline.measurement).into_iter().map(Ok).collect()
+                    } else {
+                        vec![Err(TestError::BadBranchNameErr(baseline.version.clone(), dev.version.clone()))]
+                    }
+                },
                 i => vec![Err(TestError::BadGroupSizeErr(i, g))],
             }
         })
@@ -256,6 +269,14 @@ Filepath: dummy/path/no_file/"#
 Count: 1
 Group: [("dev", "some command")]"#
             ),
+            (
+                TestError::BadBranchNameErr("boop".to_owned(), "noop".to_owned()).to_path_buf(),
+                r#"BadBranchNameErr: Branch names must be 'baseline' and 'dev'.
+Found: boop, noop"#
+            ),
+
+
+            
         ];
 
         for (err, msg) in pairs {
