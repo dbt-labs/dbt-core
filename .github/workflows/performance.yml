@@ -1,4 +1,5 @@
 
+name: Performance Regression Testing
 # Schedule triggers
 on:
   # TODO this is just while developing
