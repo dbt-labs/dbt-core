@@ -142,7 +142,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def database_host(self):
-        # TODO: rm
         return os.getenv('POSTGRES_TEST_HOST', 'localhost')
 
     def postgres_profile(self):
@@ -155,7 +154,7 @@ class DBTIntegrationTest(unittest.TestCase):
                     'default2': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': os.getenv('POSTGRES_TEST_HOST', 'localhost'),
+                        'host': self.database_host,
                         'port': int(os.getenv('POSTGRES_TEST_PORT', 5432)),
                         'user': os.getenv('POSTGRES_TEST_USER', 'root'),
                         'pass': os.getenv('POSTGRES_TEST_PASS', 'password'),
@@ -165,7 +164,7 @@ class DBTIntegrationTest(unittest.TestCase):
                     'noaccess': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': os.getenv('POSTGRES_TEST_HOST', 'localhost'),
+                        'host': self.database_host,
                         'port': int(os.getenv('POSTGRES_TEST_PORT', 5432)),
                         'user': 'noaccess',
                         'pass': 'password',
