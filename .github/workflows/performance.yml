@@ -16,7 +16,6 @@ jobs:
 
   # runs any tests associated with the runner
   # these tests make sure the runner logic is correct
-  # if there are no tests, it still quickly builds the project to fail fast
   test-runner:
     name: Test Runner
     runs-on: ubuntu-latest
@@ -31,24 +30,6 @@ jobs:
         with:
           command: test
           args: --manifest-path performance/runner/Cargo.toml
-
-  # runs any tests associated with the comparator
-  # these tests make sure the comparison logic is correct
-  # if there are no tests, it still quickly builds the project to fail fast
-  test-comparator:
-    name: Test Comparator
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path performance/comparison/Cargo.toml
 
   # build an optimized binary to be used as the runner in later steps
   build-runner:
@@ -73,32 +54,9 @@ jobs:
           name: runner
           path: performance/runner/target/release/runner
 
-  # build an optimized binary to be used as the comparator in later steps
-  build-comparator:
-    needs: [test-comparator]
-    name: Build Comparator
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: "-D warnings"
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --manifest-path performance/comparison/Cargo.toml
-      - uses: actions/upload-artifact@v2
-        with:
-          name: comparison
-          path: performance/comparison/target/release/comparison
-
   # run the performance measurements on the current or default branch
   measure-dev:
-    needs: [build-runner, build-comparator]
+    needs: [build-runner]
     name: Measure Dev Branch
     runs-on: ubuntu-latest
     steps:
@@ -118,7 +76,7 @@ jobs:
       - name: change permissions
         run: chmod +x ./runner
       - name: run
-        run: ./runner ${{ github.workspace }}/performance/projects/ dev
+        run: ./runner -p ${{ github.workspace }}/performance/projects/ -b dev
       - uses: actions/upload-artifact@v2
         with:
           name: dev-results
@@ -128,7 +86,7 @@ jobs:
   # this part takes by far the longest, so we do everything we can first
   # so the job fails fast.
   measure-latest:
-    needs: [build-runner, build-comparator]
+    needs: [build-runner]
     name: Measure Latest Branch
     runs-on: ubuntu-latest
     steps:
@@ -159,7 +117,7 @@ jobs:
       - name: change permissions
         run: chmod +x ./runner
       - name: run runner
-        run: ./runner ${{ github.workspace }}/performance/projects/ latest
+        run: ./runner -p ${{ github.workspace }}/performance/projects/ -b latest
       - uses: actions/upload-artifact@v2
         with:
           name: latest-results
@@ -167,7 +125,7 @@ jobs:
 
   # run the comparison app on the result output generated from measuring
   # the two branches. Exits with non-zero code if a regression is detected.
-  compare-results:
+  calculate-regressions:
     needs: [measure-dev, measure-latest]
     name: Compare Results
     runs-on: ubuntu-latest
@@ -190,6 +148,6 @@ jobs:
         with:
           name: comparison
       - name: change permissions
-        run: chmod +x ./comparison
-      - name: run comparator
-        run: ./comparison performance/results/
+        run: chmod +x ./runner
+      - name: run calculation
+        run: ./runner calculate -r performance/results/

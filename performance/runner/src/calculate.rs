@@ -2,7 +2,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::{env, fs, io};
+use std::{fs, io};
 use std::borrow::Cow;
 use thiserror::Error;
 
@@ -25,7 +25,7 @@ struct Measurements {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Regression {
+pub struct Regression {
     threshold: f64,
     difference: f64,
     baseline: Measurement,
@@ -40,7 +40,7 @@ struct MeasurementGroup {
 }
 
 #[derive(Error, Debug)]
-enum TestError {
+pub enum TestError {
     #[error("BadJSONErr: JSON in file cannot be deserialized as expected.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
     BadJSONErr(PathBuf, Option<serde_json::Error>),
     #[error("ReadErr: The file cannot be read.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
@@ -100,7 +100,7 @@ fn measurements_from_files(
 
 // given a list of filename-measurement pairs, detect any regressions by grouping
 // measurements together by filename
-fn detect_regressions(
+fn calculate_regressions(
     measurements: &[(PathBuf, Measurement)],
 ) -> Result<Vec<Regression>, TestError> {
     let mut measurement_groups: Vec<MeasurementGroup> = measurements
@@ -142,17 +142,8 @@ fn detect_regressions(
     Ok(x)
 }
 
-// TODO merge runner and comparison projects into one with two sub commands
-fn main() {
-    // TODO args lib
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        println!("please provide the results directory");
-        exit(1);
-    }
-    let results_directory = &args[1];
-
-    let regressions = measurements_from_files(Path::new(&results_directory)).and_then(|v| {
+pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestError> {
+    measurements_from_files(Path::new(&results_directory)).and_then(|v| {
         let v_next: Vec<(PathBuf, Measurement)> = v
             .into_iter()
             // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
@@ -165,21 +156,20 @@ fn main() {
             println!("{}", path.file_name().map(|x| x.to_string_lossy()).unwrap_or(Cow::from("unknown file")))
         }
 
-        detect_regressions(&v_next)
-    });
+        calculate_regressions(&v_next)
+    })
+}
 
+pub fn exit_properly(regressions: &[Regression]) {
     match regressions {
-        Err(e) => panic!("{}", e),
-        Ok(rs) => match rs[..] {
-            [] => println!("congrats! no regressions"),
-            _ => {
-                for r in rs {
-                    println!("{:?}", r);
-                }
-                println!("the above regressions were found.");
-                exit(1)
+        [] => println!("congrats! no regressions"),
+        _ => {
+            for r in regressions {
+                println!("{:?}", r);
             }
-        },
+            println!("the above regressions were found.");
+            exit(1)
+        }
     }
 }
 
