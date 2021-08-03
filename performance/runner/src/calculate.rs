@@ -166,20 +166,20 @@ fn calculate_regressions(
 
             match groups.len() {
                 2 => {
-                    let dev = &groups[0];
-                    let baseline = &groups[1];
+                    let dev = &groups[1];
+                    let baseline = &groups[0];
                     
                     if dev.version == "dev" && baseline.version == "baseline" {
-                        calculate(&dev.run, &dev.measurement, &baseline.measurement).into_iter().map(Ok).collect()
+                        Ok(calculate(&dev.run, &dev.measurement, &baseline.measurement))
                     } else {
-                        vec![Err(TestError::BadBranchNameErr(baseline.version.clone(), dev.version.clone()))]
+                        Err(TestError::BadBranchNameErr(baseline.version.clone(), dev.version.clone()))
                     }
                 },
-                i => vec![Err(TestError::BadGroupSizeErr(i, groups))],
+                i => Err(TestError::BadGroupSizeErr(i, groups)),
             }
         })
-        .flatten()
-        .collect::<Result<Vec<Calculation>, TestError>>()?;
+        .collect::<Result<Vec<Vec<Calculation>>, TestError>>()?
+        .concat();
 
     Ok(calculations)
 }
