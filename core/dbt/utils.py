@@ -308,7 +308,7 @@ def timestring() -> str:
 class JSONEncoder(json.JSONEncoder):
     """A 'custom' json encoder that does normal json encoder things, but also
     handles `Decimal`s. and `Undefined`s. Decimals can lose precision because
-    they get converted to floats. Undefineds are serailized to an empty string.
+    they get converted to floats. Undefined's are serialized to an empty string
     """
     def default(self, obj):
         if isinstance(obj, DECIMALS):
