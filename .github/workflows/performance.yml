@@ -101,7 +101,7 @@ jobs:
           python-version: '3.8'
       - name: move repo up a level
         run: mkdir ${{ github.workspace }}/../latest/ && cp -r ${{ github.workspace }} ${{ github.workspace }}/../latest
-      - name: debug line
+      - name: "[debug] ls new dbt location"
         run: ls ${{ github.workspace }}/../latest/dbt/
       # installation creates egg-links so we have to preserve source
       - name: install dbt from new location
@@ -132,18 +132,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
       - uses: actions/download-artifact@v2
         with:
           name: dev-results
       - uses: actions/download-artifact@v2
         with:
           name: latest-results
-      - name: ls result files
+      - name: "[debug] ls result files"
         run: ls
       - uses: actions/download-artifact@v2
         with:
@@ -151,4 +146,4 @@ jobs:
       - name: change permissions
         run: chmod +x ./runner
       - name: run calculation
-        run: ./runner calculate -r performance/results/
+        run: ./runner calculate -r ./
