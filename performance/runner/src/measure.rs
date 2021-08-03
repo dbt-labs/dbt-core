@@ -1,7 +1,7 @@
 extern crate structopt;
 
 use std::path::PathBuf;
-use std::process::{exit, Command, ExitStatus};
+use std::process::{Command, ExitStatus};
 use std::{fs, io};
 use structopt::StructOpt;
 
@@ -82,16 +82,4 @@ pub fn measure(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<Exi
         })
         .flatten()
         .collect()
-}
-
-// exits the program given measurement results
-pub fn proper_exit(statuses: Vec<ExitStatus>) {
-    for status in statuses {
-        match status.code() {
-            None => (),
-            Some(0) => (),
-            // if any child command exited with a non zero status code, exit with the same one here.
-            Some(nonzero) => exit(nonzero),
-        }
-    }
 }

@@ -42,12 +42,26 @@ fn gracefully_exit_or<A, B, E: Display>(f: &dyn Fn(A) -> B, r: Result<A, E>) -> 
 // should happen. Module functions should only return values.
 fn main() {
     match Opt::from_args() {
+
         Opt::Measure { projects_dir, branch_name } => {
-            gracefully_exit_or(
-                &measure::proper_exit,
+            let statuses = gracefully_exit_or(
+                &|x| x,
                 measure::measure(&projects_dir, &branch_name)
-            )
+            );
+
+            for status in statuses {
+                match status.code() {
+                    None => (),
+                    Some(0) => (),
+                    // if any child command exited with a non zero status code, exit with the same one here.
+                    Some(nonzero) => {
+                        println!("a child process exited with a nonzero status code.");
+                        exit(nonzero)
+                    },
+                }
+            }
         },
+
         Opt::Calculate { results_dir } => {
             let calculations = gracefully_exit_or(
                 &|x| x,
@@ -77,5 +91,6 @@ fn main() {
                 }
             }
         },
+
     }
 }
