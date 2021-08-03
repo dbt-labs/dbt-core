@@ -156,18 +156,18 @@ fn calculate_regressions(
     // locking up mutation
     let sorted_measurement_groups = measurement_groups;
 
-    let x: Vec<Calculation> = sorted_measurement_groups
+    let calculations: Vec<Calculation> = sorted_measurement_groups
         .into_iter()
         .group_by(|x| x.run.clone())
         .into_iter()
-        .map(|(_, group)| {
-            let mut g: Vec<MeasurementGroup> = group.collect();
-            g.sort_by(|x, y| x.version.cmp(&y.version));
+        .map(|(_, g)| {
+            let mut groups: Vec<MeasurementGroup> = g.collect();
+            groups.sort_by(|x, y| x.version.cmp(&y.version));
 
-            match g.len() {
+            match groups.len() {
                 2 => {
-                    let dev = &g[0];
-                    let baseline = &g[1];
+                    let dev = &groups[0];
+                    let baseline = &groups[1];
                     
                     if dev.version == "dev" && baseline.version == "baseline" {
                         calculate(&dev.run, &dev.measurement, &baseline.measurement).into_iter().map(Ok).collect()
@@ -175,13 +175,13 @@ fn calculate_regressions(
                         vec![Err(TestError::BadBranchNameErr(baseline.version.clone(), dev.version.clone()))]
                     }
                 },
-                i => vec![Err(TestError::BadGroupSizeErr(i, g))],
+                i => vec![Err(TestError::BadGroupSizeErr(i, groups))],
             }
         })
         .flatten()
         .collect::<Result<Vec<Calculation>, TestError>>()?;
 
-    Ok(x)
+    Ok(calculations)
 }
 
 pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, TestError> {
