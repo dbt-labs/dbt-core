@@ -270,7 +270,7 @@ Count: 1
 Group: [("dev", "some command")]"#
             ),
             (
-                TestError::BadBranchNameErr("boop".to_owned(), "noop".to_owned()).to_path_buf(),
+                TestError::BadBranchNameErr("boop".to_owned(), "noop".to_owned()),
                 r#"BadBranchNameErr: Branch names must be 'baseline' and 'dev'.
 Found: boop, noop"#
             ),
