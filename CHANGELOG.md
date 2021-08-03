@@ -1,7 +1,9 @@
 ## dbt 0.21.0 (Release TBD)
 
-## dbt 0.21.0b1 (August 03, 2021)
+### Under the hood
+- Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 
+## dbt 0.21.0b1 (August 03, 2021)
 
 ### Breaking changes
 - Add full node selection to source freshness command and align selection syntax with other tasks (`dbt source freshness --select source_name` --> `dbt source freshness --select source:souce_name`) and rename `dbt source snapshot-freshness` -> `dbt source freshness`. ([#2987](https://github.com/dbt-labs/dbt/issues/2987), [#3554](https://github.com/dbt-labs/dbt/pull/3554))
@@ -24,6 +26,7 @@
 - Better interaction between `dbt init` and adapters. Avoid raising errors while initializing a project ([#2814](https://github.com/fishtown-analytics/dbt/pull/2814), [#3483](https://github.com/fishtown-analytics/dbt/pull/3483))
 - Update `create_adapter_plugins` script to include latest accessories, and stay up to date with latest dbt-core version ([#3002](https://github.com/fishtown-analytics/dbt/issues/3002), [#3509](https://github.com/fishtown-analytics/dbt/pull/3509))
 - Scrub environment secrets from logs and console output ([#3617](https://github.com/dbt-labs/dbt/pull/3617))
+- Add tracking for determine why `dbt` needs to re-parse entire project when partial parsing is enabled ([#3572](https://github.com/dbt-labs/dbt/issues/3572), [#3652](https://github.com/dbt-labs/dbt/pull/3652))
 
 ### Dependencies
 - Require `werkzeug>=1` ([#3590](https://github.com/dbt-labs/dbt/pull/3590))
