@@ -33,7 +33,7 @@ pub struct Regression {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct MeasurementGroup {
+pub struct MeasurementGroup {
     version: String,
     run: String,
     measurement: Measurement,
@@ -53,6 +53,10 @@ pub enum TestError {
     BadFileContentsErr(PathBuf, Option<io::Error>),
     #[error("NoResultsErr: The results directory has no json files in it.\nFilepath: {}", .0.to_string_lossy().into_owned())]
     NoResultsErr(PathBuf),
+    #[error("OddResultsCountErr: The results directory has an odd number of results in it. Expected an even number.\nFile Count: {}\nFilepath: {}", .0, .1.to_string_lossy().into_owned())]
+    OddResultsCountErr(usize, PathBuf),
+    #[error("BadGroupSizeErr: Expected two results per group, one for each branch-project pair.\nCount: {}\nGroup: {:?}", .0, .1.into_iter().map(|group| (&group.version[..], &group.run[..])).collect::<Vec<(&str, &str)>>())]
+    BadGroupSizeErr(usize, Vec<MeasurementGroup>),
 }
 
 fn regression(baseline: &Measurement, latest: &Measurement) -> Option<Regression> {
@@ -88,7 +92,6 @@ fn measurements_from_files(
                 .map_or(false, |ext| ext.ends_with("json"))
         })
         .map(|filename| {
-            println!("{:?}", filename);
             fs::read_to_string(&filename)
                 .or_else(|e| Err(TestError::BadFileContentsErr(filename.clone(), Some(e))))
                 .and_then(|contents| {
@@ -136,10 +139,13 @@ fn calculate_regressions(
         .into_iter()
         .map(|(_, group)| {
             let g: Vec<MeasurementGroup> = group.collect();
-            regression(&g[0].measurement, &g[1].measurement)
+            match g.len() {
+                2 => regression(&g[0].measurement, &g[1].measurement).map(Ok),
+                i => Some(Err(TestError::BadGroupSizeErr(i, g))),
+            }
         })
         .flatten()
-        .collect();
+        .collect::<Result<Vec<Regression>, TestError>>()?;
 
     Ok(x)
 }
@@ -147,9 +153,10 @@ fn calculate_regressions(
 pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestError> {
     measurements_from_files(Path::new(&results_directory)).and_then(|v| {
         // exit early with an Err if there are no results to process
-        match v[..] {
-            [] => Err(TestError::NoResultsErr(results_directory.clone())),
-            _ => Ok(())
+        match v.len() {
+            0 => Err(TestError::NoResultsErr(results_directory.clone())),
+            i if i % 2 == 1 => Err(TestError::OddResultsCountErr(i, results_directory.clone())),
+            _ => Ok(()),
         }?;
 
         let v_next: Vec<(PathBuf, Measurement)> = v
@@ -220,6 +227,32 @@ Originating Exception:None"#
                 TestError::NoResultsErr(Path::new("dummy/path/no_file/").to_path_buf()),
                 r#"NoResultsErr: The results directory has no json files in it.
 Filepath: dummy/path/no_file/"#
+            ),
+            (
+                TestError::OddResultsCountErr(3, Path::new("dummy/path/no_file/").to_path_buf()),
+                r#"OddResultsCountErr: The results directory has an odd number of results in it. Expected an even number.
+File Count: 3
+Filepath: dummy/path/no_file/"#
+            ),
+            (
+                TestError::BadGroupSizeErr(1, vec![MeasurementGroup {
+                    version: "dev".to_owned(),
+                    run: "some command".to_owned(),
+                    measurement: Measurement {
+                        command: "some command".to_owned(),
+                        mean: 1.0,
+                        stddev: 1.0,
+                        median: 1.0,
+                        user: 1.0,
+                        system: 1.0,
+                        min: 1.0,
+                        max: 1.0,
+                        times: vec![1.0, 1.1, 0.9, 1.0, 1.1, 0.9, 1.1],
+                    }
+                }]),
+                r#"BadGroupSizeErr: Expected two results per group, one for each branch-project pair.
+Count: 1
+Group: [("dev", "some command")]"#
             ),
         ];
 
