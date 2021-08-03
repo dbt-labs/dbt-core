@@ -25,19 +25,18 @@ struct Measurements {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Regression {
-    Median {
-        threshold: f64,
-        difference: f64,
-        baseline: f64,
-        dev: f64,
-    },
-    StandardDeviation {
-        threshold: f64,
-        difference: f64,
-        baseline: f64,
-        dev: f64,
-    },
+struct Data {
+    threshold: f64,
+    difference: f64,
+    baseline: f64,
+    dev: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Calculation {
+    metric: String,
+    regression: bool,
+    data: Data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,38 +66,35 @@ pub enum TestError {
     BadGroupSizeErr(usize, Vec<MeasurementGroup>),
 }
 
-fn regression(baseline: &Measurement, dev: &Measurement) -> Vec<Regression> {
+fn calculate(metric: &str, baseline: &Measurement, dev: &Measurement) -> Vec<Calculation> {
     let median_threshold = 1.05; // 5% regression threshold
     let median_difference = dev.median / baseline.median;
 
     let stddev_threshold = 1.05; // 5% regression threshold
     let stddev_difference = dev.stddev / baseline.stddev;
 
-    let mut regressions = vec![];
-
-    if median_difference > median_threshold {
-        regressions.push(
-            Regression::Median {
+    vec![
+        Calculation {
+            metric: ["median", metric].join("_"),
+            regression: median_difference > median_threshold,
+            data: Data {
                 threshold: median_threshold,
                 difference: median_difference,
                 baseline: baseline.median.clone(),
                 dev: dev.median.clone(),
             }
-        )
-    };
-
-    if stddev_difference > stddev_threshold {
-        regressions.push(
-            Regression::StandardDeviation {
+        },
+        Calculation {
+            metric: ["stddev", metric].join("_"),
+            regression: stddev_difference > stddev_threshold,
+            data: Data {
                 threshold: stddev_threshold,
                 difference: stddev_difference,
                 baseline: baseline.stddev.clone(),
                 dev: dev.stddev.clone(),
             }
-        )
-    };
-
-    regressions
+        },
+    ]
 }
 
 // given a directory, read all files in the directory and return each
@@ -134,7 +130,7 @@ fn measurements_from_files(
 // measurements together by filename
 fn calculate_regressions(
     measurements: &[(PathBuf, Measurement)],
-) -> Result<Vec<Regression>, TestError> {
+) -> Result<Vec<Calculation>, TestError> {
     let mut measurement_groups: Vec<MeasurementGroup> = measurements
         .into_iter()
         .map(|(p, m)| {
@@ -160,24 +156,24 @@ fn calculate_regressions(
     // locking up mutation
     let sorted_measurement_groups = measurement_groups;
 
-    let x: Vec<Regression> = sorted_measurement_groups
+    let x: Vec<Calculation> = sorted_measurement_groups
         .into_iter()
         .group_by(|x| x.run.clone())
         .into_iter()
         .map(|(_, group)| {
             let g: Vec<MeasurementGroup> = group.collect();
             match g.len() {
-                2 => regression(&g[0].measurement, &g[1].measurement).into_iter().map(Ok).collect(),
+                2 => calculate(&g[0].run, &g[0].measurement, &g[1].measurement).into_iter().map(Ok).collect(),
                 i => vec![Err(TestError::BadGroupSizeErr(i, g))],
             }
         })
         .flatten()
-        .collect::<Result<Vec<Regression>, TestError>>()?;
+        .collect::<Result<Vec<Calculation>, TestError>>()?;
 
     Ok(x)
 }
 
-pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestError> {
+pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, TestError> {
     measurements_from_files(Path::new(&results_directory)).and_then(|v| {
         // exit early with an Err if there are no results to process
         match v.len() {
@@ -202,13 +198,15 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Regression>, TestE
     })
 }
 
-pub fn exit_properly(regressions: Vec<Regression>) {
+pub fn exit_properly(calculations: Vec<Calculation>) {
+    let regressions = calculations.into_iter().filter(|c| c.regression).collect::<Vec<Calculation>>();
     match regressions[..] {
         [] => println!("congrats! no regressions"),
         _ => {
             for r in regressions {
                 println!("{:#?}", r);
             }
+            println!("");
             println!("the above regressions were found.");
             exit(1)
         }
