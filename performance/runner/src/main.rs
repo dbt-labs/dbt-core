@@ -5,6 +5,8 @@ mod measure;
 
 use crate::calculate::Calculation;
 use std::fmt::Display;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
@@ -68,17 +70,30 @@ fn main() {
                 calculate::regressions(&results_dir)
             );
 
+            // print calculations to stdout
             println!(":: All Calculations ::\n");
             for c in &calculations {
-                println!("{:#?}", c);
+                println!("{:#?}\n", c);
             }
             println!("");
 
+            // write calculations to file so it can be downloaded as an artifact
+            let json_calcs = serde_json::to_string(&calculations)
+                .expect("failed to serialize calculations to json");
+            
+            let outfile = &mut results_dir.into_os_string();
+            outfile.push("/final_calculations.json");
+
+            let mut f = File::create(outfile).expect("Unable to create file");
+            f.write_all(json_calcs.as_bytes()).expect("unable to write data");
+
+            // filter for regressions
             let regressions: Vec<Calculation> = calculations
                 .into_iter()
                 .filter(|c| c.regression)
                 .collect();
 
+            // exit with non zero exit code if there are regressions
             match regressions[..] {
                 [] => println!("congrats! no regressions :)"),
                 _ => {
