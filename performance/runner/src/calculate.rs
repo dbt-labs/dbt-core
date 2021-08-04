@@ -3,6 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::fs::DirEntry;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Measurement {
@@ -86,22 +87,29 @@ fn measurements_from_files(
 
     result_files
         .into_iter()
-        .map(|f| f.unwrap().path())
-        .filter(|filename| {
-            filename
+        .map(|entry| {
+            let ent: DirEntry = entry.or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
+                .or_else(|e| Err(CalculateError::CalculateIOError(e)))?;
+
+            Ok(ent.path())
+        })
+        .collect::<Result<Vec<PathBuf>, CalculateError>>()?
+        .into_iter()
+        .filter(|path| {
+            path
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .map_or(false, |ext| ext.ends_with("json"))
         })
-        .map(|filename| {
-            fs::read_to_string(&filename)
-                .or_else(|e| Err(IOError::BadFileContentsErr(filename.clone(), Some(e))))
+        .map(|path| {
+            fs::read_to_string(&path)
+                .or_else(|e| Err(IOError::BadFileContentsErr(path.clone(), Some(e))))
                 .or_else(|e| Err(CalculateError::CalculateIOError(e)))
                 .and_then(|contents| {
                     serde_json::from_str::<Measurements>(&contents)
-                        .or_else(|e| Err(CalculateError::BadJSONErr(filename.clone(), Some(e))))
+                        .or_else(|e| Err(CalculateError::BadJSONErr(path.clone(), Some(e))))
                 })
-                .map(|m| (filename, m))
+                .map(|m| (path, m))
         })
         .collect()
 }
