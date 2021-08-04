@@ -118,7 +118,7 @@ fn calculate_regressions(
     measurements: &[(PathBuf, Measurement)],
 ) -> Result<Vec<Calculation>, CalculateError> {
     let mut measurement_groups: Vec<MeasurementGroup> = measurements
-        .into_iter()
+        .iter()
         .map(|(p, m)| {
             p.file_name()
                 .ok_or_else(|| IOError::MissingFilenameErr(p.to_path_buf()))
@@ -144,11 +144,11 @@ fn calculate_regressions(
     let sorted_measurement_groups = measurement_groups;
 
     let calculations: Vec<Calculation> = sorted_measurement_groups
-        .into_iter()
+        .iter()
         .group_by(|x| x.run.clone())
         .into_iter()
         .map(|(_, g)| {
-            let mut groups: Vec<MeasurementGroup> = g.collect();
+            let mut groups: Vec<&MeasurementGroup> = g.collect();
             groups.sort_by(|x, y| x.version.cmp(&y.version));
 
             match groups.len() {
@@ -162,7 +162,10 @@ fn calculate_regressions(
                         Err(CalculateError::BadBranchNameErr(baseline.version.clone(), dev.version.clone()))
                     }
                 },
-                i => Err(CalculateError::BadGroupSizeErr(i, groups)),
+                i => {
+                    let gs: Vec<MeasurementGroup> = groups.into_iter().map(|x| x.clone()).collect();
+                    Err(CalculateError::BadGroupSizeErr(i, gs))
+                },
             }
         })
         .collect::<Result<Vec<Vec<Calculation>>, CalculateError>>()?
