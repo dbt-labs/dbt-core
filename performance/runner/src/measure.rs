@@ -49,46 +49,52 @@ pub fn measure(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<Exi
             cmd: "dbt parse --no-version-check",
         },
     ];
-
-    // run hyperfine on each target project in the directory
+    
     fs::read_dir(projects_directory)
         .or_else(|e| Err(IOError::ReadErr(projects_directory.to_path_buf(), Some(e))))?
         .map(|entry| {
-            metrics
+            let path = entry
+                .or_else(|e| Err(IOError::ReadErr(projects_directory.to_path_buf(), Some(e))))?
+                .path();
+
+            let project_name: String = path
+                .file_name()
+                .ok_or_else(|| IOError::MissingFilenameErr(path.clone().to_path_buf()))
+                .and_then(|x| x.to_str().ok_or_else(|| IOError::FilenameNotUnicodeErr(path.clone().to_path_buf())))?
+                .to_owned();
+                
+            // each project-metric pair we will run
+            let pairs = metrics
                 .clone()
                 .into_iter()
-                // for each entry-metric pair
-                .map(|metric| {
-                    let ent = entry
-                        .as_ref()
-                        .or_else(|e| Err(IOError::ReadErr(projects_directory.to_path_buf(), None)))?; // TODO change to Some(e)
+                .map(|metric| (path.clone(), project_name.clone(), metric))
+                .collect::<Vec<(PathBuf, String, Metric)>>();
 
-                    let path: PathBuf = ent.path();
-                    let project_name: &str = path
-                        .file_name()
-                        .ok_or_else(|| IOError::MissingFilenameErr(path.clone().to_path_buf()))
-                        .and_then(|x| x.to_str().ok_or_else(|| IOError::FilenameNotUnicodeErr(path.clone().to_path_buf())))?;
-                    
-                    Command::new("hyperfine")
-                        .current_dir(&path)
-                        // warms filesystem caches by running the command first without counting it.
-                        // alternatively we could clear them before each run
-                        .arg("--warmup")
-                        .arg("1")
-                        .arg("--prepare")
-                        .arg(metric.prepare)
-                        .arg([metric.cmd, " --profiles-dir ", "../../project_config/"].join(""))
-                        .arg("--export-json")
-                        .arg(
-                            ["../../results/", &metric.outfile(&project_name, &dbt_branch)].join(""),
-                        )
-                        // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
-                        .arg("--show-output")
-                        .status() // use spawn() here instead for more information
-                        .or_else(|e| Err(IOError::CommandErr(Some(e))))
-                })
-                .collect::<Vec<Result<ExitStatus, IOError>>>()
+            Ok(pairs)
         })
-        .flatten()
-        .collect()
+        .collect::<Result<Vec<Vec<(PathBuf, String, Metric)>>, IOError>>()?
+        .concat()
+        .into_iter()
+        // run hyperfine on each pairing
+        .map(|(path, project_name, metric)| {
+            Command::new("hyperfine")
+                .current_dir(&path)
+                // warms filesystem caches by running the command first without counting it.
+                // alternatively we could clear them before each run
+                .arg("--warmup")
+                .arg("1")
+                .arg("--prepare")
+                .arg(metric.prepare)
+                .arg([metric.cmd, " --profiles-dir ", "../../project_config/"].join(""))
+                .arg("--export-json")
+                .arg(
+                    ["../../results/", &metric.outfile(&project_name, &dbt_branch)].join(""),
+                )
+                // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
+                .arg("--show-output")
+                .status() // use spawn() here instead for more information
+                .or_else(|e| Err(IOError::CommandErr(Some(e))))
+        }
+    )
+    .collect()
 }
