@@ -72,30 +72,34 @@ jobs:
 
     env:
       TOXENV: integration-${{ matrix.adapter }}
-      PYTEST_ADDOPTS: "-v --color=yes -n4"
+      PYTEST_ADDOPTS: "-v --color=yes -nauto"
 
     steps:
       - name: Check out the repository
         uses: actions/checkout@v2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
 
-      - if: |
+      - name: Set up postgres (linux)
+        if: |
           matrix.adapter == 'postgres' &&
           runner.os == 'Linux'
         uses: ./.github/actions/setup-postgres-linux
 
-      - if: |
+      - name: Set up postgres (macos)
+        if: |
           matrix.adapter == 'postgres' &&
           runner.os == 'macOS'
         uses: ./.github/actions/setup-postgres-macos
 
-      - if: |
+      - name: Set up postgres (windows)
+        if: |
           matrix.adapter == 'postgres' &&
           runner.os == 'Windows'
         uses: ./.github/actions/setup-postgres-windows
@@ -108,6 +112,7 @@ jobs:
       - name: Install tox
         run: |
           pip install tox
+          tox --version
 
       - name: Run tox (postgres)
         if: >-
