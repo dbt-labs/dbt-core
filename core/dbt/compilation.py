@@ -8,7 +8,7 @@ import sqlparse
 from dbt import flags
 from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
-from dbt.clients.storage_adapter import StorageAdapter as SA
+from dbt.clients.storage import adapter as SA
 from dbt.context.providers import generate_runtime_model
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.compiled import (
@@ -153,8 +153,8 @@ class Compiler:
         self.config = config
 
     def initialize(self):
-        SA.adapter.make_directory(self.config.target_path)
-        SA.adapter.make_directory(self.config.modules_path)
+        SA.write(self.config.target_path, None)
+        SA.write(self.config.modules_path, None)
 
     # creates a ModelContext which is converted to
     # a dict for jinja rendering of SQL

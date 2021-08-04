@@ -3,6 +3,7 @@ from typing import List
 
 from dbt import semver
 from dbt.clients import registry, system
+from dbt.clients.storage import adapter as SA
 from dbt.contracts.project import (
     RegistryPackageMetadata,
     RegistryPackage,
@@ -58,7 +59,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         tar_path = os.path.realpath(
             os.path.join(get_downloads_path(), tar_name)
         )
-        system.make_directory(os.path.dirname(tar_path))
+        SA.write(os.path.dirname(tar_path), None)
 
         download_url = metadata.downloads.tarball
         system.download(download_url, tar_path)

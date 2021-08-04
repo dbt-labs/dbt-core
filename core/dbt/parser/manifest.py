@@ -20,7 +20,7 @@ from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt.clients.system import make_directory
+from dbt.clients.storage import adapter as SA
 from dbt.config import Project, RuntimeConfig
 from dbt.context.docs import generate_runtime_docs
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
@@ -435,9 +435,7 @@ class ManifestLoader:
                             PARTIAL_PARSE_FILE_NAME)
         try:
             manifest_msgpack = self.manifest.to_msgpack()
-            make_directory(os.path.dirname(path))
-            with open(path, 'wb') as fp:
-                fp.write(manifest_msgpack)
+            SA.write(path, manifest_msgpack)
         except Exception:
             raise
 

@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any, List
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.clients.system
 import dbt.exceptions
+from dbt.clients.storage import adapter as SA
 from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import Project, Profile, PROFILES_DIR
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -255,7 +256,7 @@ class DebugTask(BaseTask):
 
         try:
             raw_profile_data = load_yaml_text(
-                dbt.clients.system.load_file_contents(self.profile_path)
+                SA.read(self.profile_path)
             )
         except Exception:
             pass  # we'll report this when we try to load the profile for real
