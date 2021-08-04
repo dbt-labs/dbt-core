@@ -78,7 +78,7 @@ fn main() {
             println!("");
 
             // write calculations to file so it can be downloaded as an artifact
-            let json_calcs = serde_json::to_string(&calculations)
+            let json_calcs = serde_json::to_string_pretty(&calculations)
                 .expect("failed to serialize calculations to json");
             
             let outfile = &mut results_dir.into_os_string();
