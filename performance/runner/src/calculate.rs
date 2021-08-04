@@ -145,7 +145,7 @@ fn calculate_regressions(
 
     let calculations: Vec<Calculation> = sorted_measurement_groups
         .iter()
-        .group_by(|x| x.run.clone())
+        .group_by(|x| &x.run)
         .into_iter()
         .map(|(_, g)| {
             let mut groups: Vec<&MeasurementGroup> = g.collect();
