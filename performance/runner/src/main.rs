@@ -1,6 +1,7 @@
 extern crate structopt;
 
 mod calculate;
+mod exceptions;
 mod measure;
 
 use crate::calculate::Calculation;
