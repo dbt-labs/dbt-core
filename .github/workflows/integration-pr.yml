@@ -85,48 +85,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up postgres (ubuntu)
-        if: |
+      - if: |
           matrix.adapter == 'postgres' &&
           runner.os == 'Linux'
-        run: |
-          sudo systemctl start postgresql.service
-          pg_isready
-          sudo -u postgres bash test/setup_db.sh
+        uses: ./.github/actions/setup-postgres-linux
 
-      - name: Set up postgres (macos)
-        if: |
+      - if: |
           matrix.adapter == 'postgres' &&
           runner.os == 'macOS'
-        run: |
-          brew services start postgresql
-          echo "Check PostgreSQL service is running"
-          i=10
-          COMMAND='pg_isready'
-          while [ $i -gt 0 ]; do
-              echo "Check PostgreSQL service status"
-              eval $COMMAND && break
-              ((i--))
-              if [ $i == 0 ]; then
-                  echo "PostgreSQL service not ready, all attempts exhausted"
-                  exit 1
-              fi
-              echo "PostgreSQL service not ready, wait 10 more sec, attempts left: $i"
-              sleep 10
-          done
-          createuser -s postgres
-          bash test/setup_db.sh
+        uses: ./.github/actions/setup-postgres-macos
 
-      - name: Set up postgres (windows)
-        if: |
+      - if: |
           matrix.adapter == 'postgres' &&
           runner.os == 'Windows'
-        run: |
-          $pgService = Get-Service -Name postgresql*
-          Set-Service -InputObject $pgService -Status running -StartupType automatic
-          Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
-          $env:Path += ";$env:PGBIN"
-          bash test/setup_db.sh
+        uses: ./.github/actions/setup-postgres-windows
 
       - name: Upgrade pip
         run: |
