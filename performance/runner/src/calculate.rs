@@ -81,11 +81,9 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
 fn measurements_from_files(
     results_directory: &Path,
 ) -> Result<Vec<(PathBuf, Measurements)>, CalculateError> {
-    let result_files = fs::read_dir(results_directory)
+    fs::read_dir(results_directory)
         .or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
-        .or_else(|e| Err(CalculateError::CalculateIOError(e)))?;
-
-    result_files
+        .or_else(|e| Err(CalculateError::CalculateIOError(e)))?
         .into_iter()
         .map(|entry| {
             let ent: DirEntry = entry.or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
@@ -94,7 +92,7 @@ fn measurements_from_files(
             Ok(ent.path())
         })
         .collect::<Result<Vec<PathBuf>, CalculateError>>()?
-        .into_iter()
+        .iter()
         .filter(|path| {
             path
                 .extension()
@@ -102,14 +100,14 @@ fn measurements_from_files(
                 .map_or(false, |ext| ext.ends_with("json"))
         })
         .map(|path| {
-            fs::read_to_string(&path)
+            fs::read_to_string(path)
                 .or_else(|e| Err(IOError::BadFileContentsErr(path.clone(), Some(e))))
                 .or_else(|e| Err(CalculateError::CalculateIOError(e)))
                 .and_then(|contents| {
                     serde_json::from_str::<Measurements>(&contents)
                         .or_else(|e| Err(CalculateError::BadJSONErr(path.clone(), Some(e))))
                 })
-                .map(|m| (path, m))
+                .map(|m| (path.clone(), m))
         })
         .collect()
 }
