@@ -115,7 +115,7 @@ fn measurements_from_files(
 // given a list of filename-measurement pairs, detect any regressions by grouping
 // measurements together by filename
 fn calculate_regressions(
-    measurements: &[(PathBuf, Measurement)],
+    measurements: &[(&PathBuf, &Measurement)],
 ) -> Result<Vec<Calculation>, CalculateError> {
     let mut measurement_groups: Vec<MeasurementGroup> = measurements
         .iter()
@@ -131,7 +131,7 @@ fn calculate_regressions(
                     MeasurementGroup {
                         version: parts[0].to_owned(),
                         run: parts[1..].join("_"),
-                        measurement: m.clone(),
+                        measurement: (*m).clone(),
                     }
                 })
         })
@@ -175,27 +175,23 @@ fn calculate_regressions(
 }
 
 pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, CalculateError> {
-    measurements_from_files(Path::new(&results_directory)).and_then(|v| match v[..] {
+    measurements_from_files(Path::new(&results_directory)).and_then(|v| {
         // exit early with an Err if there are no results to process
-        [] => {
+        if v.len() <= 0 {
             Err(CalculateError::NoResultsErr(results_directory.clone()))
-        },
+        // we expect two runs for each project-metric pairing: one for each branch, baseline
+        // and dev. An odd result count is unexpected.
+        } else if v.len() % 2 == 1 {
+            Err(CalculateError::OddResultsCountErr(v.len(), results_directory.clone()))
+        } else {
+            // otherwise, we can do our comparisons
+            let measurements = v
+                .iter()
+                // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
+                .map(|(p, ms)| (p, &ms.results[0]))
+                .collect::<Vec<(&PathBuf, &Measurement)>>();
 
-        _ => {
-            // we expect two runs for each project-metric pairing: one for each branch, baseline
-            // and dev. An odd result count is unexpected.
-            if v.len() % 2 == 1 {
-                Err(CalculateError::OddResultsCountErr(v.len(), results_directory.clone()))
-            } else {
-                // otherwise, we can do our comparisons
-                let measurements = v
-                    .into_iter()
-                    // the way we're running these, the files will each contain exactly one measurement, hence `results[0]`
-                    .map(|(p, ms)| (p, ms.results[0].clone()))
-                    .collect::<Vec<(PathBuf, Measurement)>>();
-
-                calculate_regressions(&measurements)
-            }
-        },
+            calculate_regressions(&measurements[..])
+        }
     })
 }
