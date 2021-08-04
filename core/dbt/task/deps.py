@@ -9,7 +9,7 @@ from dbt.deps.base import downloads_directory
 from dbt.deps.resolver import resolve_packages
 
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.clients import system
+from dbt.clients.storage import adapter as SA
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
@@ -43,7 +43,7 @@ class DepsTask(BaseTask):
         )
 
     def run(self):
-        system.make_directory(self.config.modules_path)
+        SA.write(self.config.modules_path, None)
         packages = self.config.packages.packages
         if not packages:
             logger.info('Warning: No packages were found in packages.yml')

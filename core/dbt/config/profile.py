@@ -4,7 +4,7 @@ import os
 
 from dbt.dataclass_schema import ValidationError
 
-from dbt.clients.storage_adapter import StorageAdapter as SA
+from dbt.clients.storage import adapter as SA
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
 from dbt.contracts.project import ProfileConfig, UserConfig
@@ -52,7 +52,7 @@ def read_profile(profiles_dir: str) -> Dict[str, Any]:
     contents = None
     if os.path.isfile(path):
         try:
-            contents = SA.adapter.load_file_contents(path, strip=False)  # type: ignore
+            contents = SA.read(path, strip=False)
             yaml_content = load_yaml_text(contents)
             if not yaml_content:
                 msg = f'The profiles.yml file at {path} is empty'

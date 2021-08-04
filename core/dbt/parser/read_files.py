@@ -1,4 +1,4 @@
-from dbt.clients.system import load_file_contents
+from dbt.clients.storage import adapter as SA
 from dbt.contracts.files import (
     FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
 )
@@ -12,7 +12,7 @@ from dbt.parser.search import FilesystemSearcher
 def load_source_file(
         path: FilePath, parse_file_type: ParseFileType,
         project_name: str) -> AnySourceFile:
-    file_contents = load_file_contents(path.absolute_path, strip=False)
+    file_contents = SA.read(path.absolute_path, strip=False)
     checksum = FileHash.from_contents(file_contents)
     sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
     source_file = sf_cls(path=path, checksum=checksum,
@@ -54,7 +54,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
     else:
-        file_contents = load_file_contents(match.absolute_path, strip=False)
+        file_contents = SA.read(match.absolute_path, strip=False)
         checksum = FileHash.from_contents(file_contents)
         source_file = SourceFile(path=match, checksum=checksum)
         source_file.contents = ''

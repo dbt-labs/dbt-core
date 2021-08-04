@@ -4,7 +4,7 @@ import tempfile
 from contextlib import contextmanager
 from typing import List, Optional, Generic, TypeVar
 
-from dbt.clients import system
+from dbt.clients.storage import adapter as SA
 from dbt.contracts.project import ProjectPackageMetadata
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -30,13 +30,13 @@ def downloads_directory():
         DOWNLOADS_PATH = tempfile.mkdtemp(prefix='dbt-downloads-')
         remove_downloads = True
 
-    system.make_directory(DOWNLOADS_PATH)
+    SA.write(DOWNLOADS_PATH, None)
     logger.debug("Set downloads directory='{}'".format(DOWNLOADS_PATH))
 
     yield DOWNLOADS_PATH
 
     if remove_downloads:
-        system.rmtree(DOWNLOADS_PATH)
+        SA.delete(DOWNLOADS_PATH)
         DOWNLOADS_PATH = None
 
 

@@ -2,7 +2,7 @@ import re
 import os.path
 
 from dbt.clients.system import run_cmd
-from dbt.clients.storage_adapter import StorageAdapter as SA
+from dbt.clients.storage import adapter as SA
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.exceptions
 from packaging import version
@@ -43,7 +43,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
         run_cmd(os.path.join(cwd, dirname or ''), ['git', 'sparse-checkout', 'set', subdirectory])
 
     if remove_git_dir:
-        SA.adapter.rmdir(os.path.join(dirname, '.git'))
+        SA.rmdir(os.path.join(dirname, '.git'))
 
     return result
 

@@ -7,7 +7,8 @@ from dbt.dataclass_schema import ValidationError
 
 from .renderer import SelectorRenderer
 
-from dbt.clients.storage_adapter import StorageAdapter as SA
+from dbt.clients.storage import adapter as SA
+from dbt.clients import system
 from dbt.contracts.selection import SelectorFile
 from dbt.exceptions import DbtSelectorsError, RuntimeException
 from dbt.graph import parse_from_selectors_definition, SelectionSpec
@@ -71,7 +72,7 @@ class SelectorConfig(Dict[str, SelectionSpec]):
         cls, path: Path, renderer: SelectorRenderer,
     ) -> 'SelectorConfig':
         try:
-            data = load_yaml_text(SA.adapter.load_file_contents(str(path)))  # type: ignore
+            data = load_yaml_text(SA.read(str(path)))  # type: ignore
         except (ValidationError, RuntimeException) as exc:
             raise DbtSelectorsError(
                 f'Could not read selector file: {exc}',
@@ -87,12 +88,12 @@ class SelectorConfig(Dict[str, SelectionSpec]):
 
 
 def selector_data_from_root(project_root: str) -> Dict[str, Any]:
-    selector_filepath = SA.adapter.resolve_path_from_base(  # type: ignore
+    selector_filepath = system.resolve_path_from_base(  # type: ignore
         'selectors.yml', project_root
     )
 
-    if SA.adapter.path_exists(selector_filepath):  # type: ignore
-        selectors_dict = load_yaml_text(SA.adapter.load_file_contents(selector_filepath))  # type: ignore # noqa
+    if SA.info(selector_filepath):
+        selectors_dict = load_yaml_text(SA.read(selector_filepath))  # type: ignore # noqa
     else:
         selectors_dict = None
     return selectors_dict

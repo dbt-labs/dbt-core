@@ -3,6 +3,7 @@ import shutil
 
 import dbt.config
 import dbt.clients.system
+from dbt.clients.storage import adapter as SA
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
@@ -50,7 +51,7 @@ class InitTask(BaseTask):
         if not os.path.exists(profiles_dir):
             msg = "Creating dbt configuration folder at {}"
             logger.info(msg.format(profiles_dir))
-            dbt.clients.system.make_directory(profiles_dir)
+            SA.write(profiles_dir, None)
             return True
         return False
 
