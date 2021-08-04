@@ -1,6 +1,7 @@
 use crate::calculate::*;
 use std::path::PathBuf;
 use std::io;
+#[cfg(test)]
 use std::path::Path;
 use thiserror::Error;
 
