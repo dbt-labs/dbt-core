@@ -39,7 +39,7 @@ impl Metric<'_> {
 }
 
 // calls hyperfine via system command, and returns result of runs
-pub fn measure(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<ExitStatus>, IOError> {
+pub fn measure<'a>(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<ExitStatus>, IOError> {
     // to add a new metric to the test suite, simply define it in this list:
     // TODO read from some config file?
     let metrics: Vec<Metric> = vec![
@@ -65,20 +65,19 @@ pub fn measure(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<Exi
                 
             // each project-metric pair we will run
             let pairs = metrics
-                .clone()
-                .into_iter()
+                .iter()
                 .map(|metric| (path.clone(), project_name.clone(), metric))
-                .collect::<Vec<(PathBuf, String, Metric)>>();
+                .collect::<Vec<(PathBuf, String, &Metric<'a>)>>();
 
             Ok(pairs)
         })
-        .collect::<Result<Vec<Vec<(PathBuf, String, Metric)>>, IOError>>()?
+        .collect::<Result<Vec<Vec<(PathBuf, String, &Metric<'a>)>>, IOError>>()?
         .concat()
-        .into_iter()
+        .iter()
         // run hyperfine on each pairing
         .map(|(path, project_name, metric)| {
             Command::new("hyperfine")
-                .current_dir(&path)
+                .current_dir(path)
                 // warms filesystem caches by running the command first without counting it.
                 // alternatively we could clear them before each run
                 .arg("--warmup")
@@ -88,7 +87,7 @@ pub fn measure(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<Exi
                 .arg([metric.cmd, " --profiles-dir ", "../../project_config/"].join(""))
                 .arg("--export-json")
                 .arg(
-                    ["../../results/", &metric.outfile(&project_name, &dbt_branch)].join(""),
+                    ["../../results/", &metric.outfile(project_name, dbt_branch)].join(""),
                 )
                 // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
                 .arg("--show-output")
