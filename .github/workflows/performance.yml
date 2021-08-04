@@ -86,9 +86,14 @@ jobs:
           name: dev-results
           path: performance/results/
 
-  # run the performance measurements on the latest release branch
-  # this part takes by far the longest, so we do everything we can first
-  # so the job fails fast.
+  # run the performance measurements on the release branch which we use
+  # as a performance baseline. This part takes by far the longest, so
+  # we do everything we can first so the job fails fast.
+  # -----
+  # we need to checkout dbt twice in this job: once for the baseline dbt
+  # version, and once to get the latest regression testing projects,
+  # metrics, and runner code from the develop or current branch so that
+  # the calculations match for both versions of dbt we are comparing.
   measure-baseline:
     needs: [build-runner]
     name: Measure Baseline Branch
@@ -134,7 +139,6 @@ jobs:
     name: Compare Results
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
       - uses: actions/download-artifact@v2
         with:
           name: dev-results
