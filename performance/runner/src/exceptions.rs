@@ -8,13 +8,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum IOError {
-    #[error("ReadErr: The file cannot be read.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
+    #[error("ReadErr: The file cannot be read.\nFilepath: {}\nOriginating Exception: {}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
     ReadErr(PathBuf, Option<io::Error>),
     #[error("MissingFilenameErr: The path provided does not specify a file.\nFilepath: {}", .0.to_string_lossy().into_owned())]
     MissingFilenameErr(PathBuf),
     #[error("FilenameNotUnicodeErr: The filename is not expressible in unicode. Consider renaming the file.\nFilepath: {}", .0.to_string_lossy().into_owned())]
     FilenameNotUnicodeErr(PathBuf),
-    #[error("BadFileContentsErr: Check that the file exists and is readable.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
+    #[error("BadFileContentsErr: Check that the file exists and is readable.\nFilepath: {}\nOriginating Exception: {}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
     BadFileContentsErr(PathBuf, Option<io::Error>),
     #[error("CommandErr: System command failed to run.\nOriginating Exception: {}", .0.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
     CommandErr(Option<io::Error>),
@@ -23,7 +23,7 @@ pub enum IOError {
 
 #[derive(Debug, Error)]
 pub enum CalculateError {
-    #[error("BadJSONErr: JSON in file cannot be deserialized as expected.\nFilepath: {}\nOriginating Exception:{}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
+    #[error("BadJSONErr: JSON in file cannot be deserialized as expected.\nFilepath: {}\nOriginating Exception: {}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
     BadJSONErr(PathBuf, Option<serde_json::Error>),
     #[error("{}", .0)]
     CalculateIOError(IOError),
@@ -49,7 +49,7 @@ mod tests {
                 IOError::ReadErr(Path::new("dummy/path/file.json").to_path_buf(), None),
                 r#"ReadErr: The file cannot be read.
 Filepath: dummy/path/file.json
-Originating Exception:None"#
+Originating Exception: None"#
             ),
             (
                 IOError::MissingFilenameErr(Path::new("dummy/path/no_file/").to_path_buf()),
@@ -65,7 +65,7 @@ Filepath: dummy/path/no_file/"#
                 IOError::BadFileContentsErr(Path::new("dummy/path/filenotexist.json").to_path_buf(), None),
                 r#"BadFileContentsErr: Check that the file exists and is readable.
 Filepath: dummy/path/filenotexist.json
-Originating Exception:None"#
+Originating Exception: None"#
             ),
             (
                 IOError::CommandErr(None),
@@ -87,13 +87,13 @@ Originating Exception: None"#
                 CalculateError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
                 r#"BadJSONErr: JSON in file cannot be deserialized as expected.
 Filepath: dummy/path/file.json
-Originating Exception:None"#
+Originating Exception: None"#
             ),
             (
                 CalculateError::BadJSONErr(Path::new("dummy/path/file.json").to_path_buf(), None),
                 r#"BadJSONErr: JSON in file cannot be deserialized as expected.
 Filepath: dummy/path/file.json
-Originating Exception:None"#
+Originating Exception: None"#
             ),
             (
                 CalculateError::NoResultsErr(Path::new("dummy/path/no_file/").to_path_buf()),
