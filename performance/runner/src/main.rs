@@ -89,8 +89,8 @@ fn main() {
             f.write_all(json_calcs.as_bytes()).expect("unable to write data");
 
             // filter for regressions
-            let regressions: Vec<Calculation> = calculations
-                .into_iter()
+            let regressions: Vec<&Calculation> = calculations
+                .iter()
                 .filter(|c| c.regression)
                 .collect();
 
