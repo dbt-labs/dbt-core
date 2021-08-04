@@ -59,8 +59,8 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
             data: Data {
                 threshold: median_threshold,
                 difference: median_difference,
-                baseline: baseline.median.clone(),
-                dev: dev.median.clone(),
+                baseline: baseline.median,
+                dev: dev.median,
             }
         },
         Calculation {
@@ -69,8 +69,8 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
             data: Data {
                 threshold: stddev_threshold,
                 difference: stddev_difference,
-                baseline: baseline.stddev.clone(),
-                dev: dev.stddev.clone(),
+                baseline: baseline.stddev,
+                dev: dev.stddev,
             }
         },
     ]
