@@ -1,8 +1,8 @@
 # **what?** - This workflow runs all integration tests for supported OS
 # and python versions and core adapters. Requires secrets to run against
 # different warehouses. This is a trusted workflow.
-# **why?** - This checks the functionality of dbt from a user's perspective,
-# provides code coverage, and attempts to catch functional regressions.
+# **why?** - This checks the functionality of dbt from a user's perspective
+# and attempts to catch functional regressions.
 # **when?** - This workflow will run on every push to a protected branch
 # and when manually triggered.
 
