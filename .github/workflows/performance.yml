@@ -16,6 +16,8 @@ on:
 jobs:
 
   # checks fmt of runner code
+  # purposefully not a dependency of any other job
+  # will block merging, but not prevent developing
   fmt:
     name: Cargo fmt
     runs-on: ubuntu-latest
