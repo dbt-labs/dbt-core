@@ -1,10 +1,9 @@
 use crate::exceptions::{CalculateError, IOError};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use std::fs;
 use std::fs::DirEntry;
-
+use std::path::{Path, PathBuf};
 
 // This type exactly matches the type of array elements
 // from hyperfine's output. Deriving `Serialize` and `Deserialize`
@@ -22,15 +21,13 @@ pub struct Measurement {
     pub times: Vec<f64>,
 }
 
-
-// This type exactly matches the type of hyperfine's output. 
+// This type exactly matches the type of hyperfine's output.
 // Deriving `Serialize` and `Deserialize` gives us read and
 // write capabilities via json_serde.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Measurements {
     pub results: Vec<Measurement>,
 }
-
 
 // Output data from a comparison between runs on the baseline
 // and dev branches.
@@ -78,7 +75,7 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
                 difference: median_difference,
                 baseline: baseline.median,
                 dev: dev.median,
-            }
+            },
         },
         Calculation {
             metric: ["stddev", metric].join("_"),
@@ -88,7 +85,7 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
                 difference: stddev_difference,
                 baseline: baseline.stddev,
                 dev: dev.stddev,
-            }
+            },
         },
     ]
 }
@@ -103,7 +100,8 @@ fn measurements_from_files(
         .or_else(|e| Err(CalculateError::CalculateIOError(e)))?
         .into_iter()
         .map(|entry| {
-            let ent: DirEntry = entry.or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
+            let ent: DirEntry = entry
+                .or_else(|e| Err(IOError::ReadErr(results_directory.to_path_buf(), Some(e))))
                 .or_else(|e| Err(CalculateError::CalculateIOError(e)))?;
 
             Ok(ent.path())
@@ -111,8 +109,7 @@ fn measurements_from_files(
         .collect::<Result<Vec<PathBuf>, CalculateError>>()?
         .iter()
         .filter(|path| {
-            path
-                .extension()
+            path.extension()
                 .and_then(|ext| ext.to_str())
                 .map_or(false, |ext| ext.ends_with("json"))
         })
@@ -134,7 +131,7 @@ fn measurements_from_files(
 fn calculate_regressions(
     measurements: &[(&PathBuf, &Measurement)],
 ) -> Result<Vec<Calculation>, CalculateError> {
-    /* 
+    /*
         Strategy of this function body:
         1. [Measurement] -> [MeasurementGroup]
         2. Sort the MeasurementGroups
@@ -180,17 +177,20 @@ fn calculate_regressions(
                 2 => {
                     let dev = &groups[1];
                     let baseline = &groups[0];
-                    
+
                     if dev.version == "dev" && baseline.version == "baseline" {
                         Ok(calculate(&dev.run, &dev.measurement, &baseline.measurement))
                     } else {
-                        Err(CalculateError::BadBranchNameErr(baseline.version.clone(), dev.version.clone()))
+                        Err(CalculateError::BadBranchNameErr(
+                            baseline.version.clone(),
+                            dev.version.clone(),
+                        ))
                     }
-                },
+                }
                 i => {
                     let gs: Vec<MeasurementGroup> = groups.into_iter().map(|x| x.clone()).collect();
                     Err(CalculateError::BadGroupSizeErr(i, gs))
-                },
+                }
             }
         })
         .collect::<Result<Vec<Vec<Calculation>>, CalculateError>>()?
@@ -210,7 +210,10 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, Calc
         // we expect two runs for each project-metric pairing: one for each branch, baseline
         // and dev. An odd result count is unexpected.
         } else if v.len() % 2 == 1 {
-            Err(CalculateError::OddResultsCountErr(v.len(), results_directory.clone()))
+            Err(CalculateError::OddResultsCountErr(
+                v.len(),
+                results_directory.clone(),
+            ))
         } else {
             // otherwise, we can do our comparisons
             let measurements = v
