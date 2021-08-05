@@ -19,7 +19,7 @@ from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery import Plugin as BigQueryPlugin
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
-from dbt.adapters.bigquery.connections import _sanitize_label
+from dbt.adapters.bigquery.connections import _sanitize_label, _validate_label_length
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
 import dbt.exceptions
