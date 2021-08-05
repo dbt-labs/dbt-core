@@ -226,3 +226,47 @@ pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, Calc
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_5_percent_regression() {
+        let dev = Measurement {
+            command: "some command".to_owned(),
+            mean:    1.06,
+            stddev:  1.06,
+            median:  1.06,
+            user:    1.06,
+            system:  1.06,
+            min:     1.06,
+            max:     1.06,
+            times:  vec![],
+        };
+
+        let baseline = Measurement {
+            command: "some command".to_owned(),
+            mean:    1.00,
+            stddev:  1.00,
+            median:  1.00,
+            user:    1.00,
+            system:  1.00,
+            min:     1.00,
+            max:     1.00,
+            times:  vec![],
+        };
+
+        let calculations = calculate("test_metric", &dev, &baseline);
+        let regressions: Vec<&Calculation> = calculations
+            .iter()
+            .filter(|calc| calc.regression)
+            .collect();
+
+        // expect one regression for median
+        println!("{:#?}", regressions);
+        assert_eq!(regressions.len(), 1);
+        assert_eq!(regressions[0].metric, "median_test_metric");
+    }
+
+}
