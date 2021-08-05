@@ -5,8 +5,8 @@
 # label to manually run all or additional tests. Use `ok to test`
 # label to mark PRs from forked repositories that are safe to run integration
 # tests for. Requires secrets to run against different warehouses.
-# **why?** - This checks the functionality of dbt from a user's perspective,
-# provides code coverage, and attempts to catch functional regressions.
+# **why?** - This checks the functionality of dbt from a user's perspective
+# and attempts to catch functional regressions.
 # **when?** - This workflow will run for all pull requests (including those
 # forks).
 
