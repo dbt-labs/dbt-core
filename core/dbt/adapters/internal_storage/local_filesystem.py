@@ -164,7 +164,7 @@ def delete(path: str) -> bool:
     if path.is_file():
         path.unlink()
 
-    # remove directories recuersivly, surprisingly obnoxious to do in a cross-platform safe manner
+    # remove directories recursively, surprisingly obnoxious to do in a cross-platform safe manner
     if path.is_dir():
         if platform in WINDOWS_PLATFORMS:
             # error handling for permissions on windows platforms
