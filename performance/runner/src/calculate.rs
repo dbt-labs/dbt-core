@@ -49,7 +49,7 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
     let median_threshold = 1.05; // 5% regression threshold
     let median_difference = dev.median / baseline.median;
 
-    let stddev_threshold = 1.05; // 5% regression threshold
+    let stddev_threshold = 1.20; // 20% regression threshold
     let stddev_difference = dev.stddev / baseline.stddev;
 
     vec![
