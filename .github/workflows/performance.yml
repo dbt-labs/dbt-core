@@ -8,8 +8,8 @@ on:
       - 'develop' 
       - 'performance-regression-testing'
   schedule:
-    # runs every day at 10:05pm
-    - cron:  '5 22 * * *'
+    # runs twice a day at 10:05am and 10:05pm
+    - cron:  '5 10,22 * * *'
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
