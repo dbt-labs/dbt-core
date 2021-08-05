@@ -6,7 +6,7 @@ from typing import cast
 
 # TODO:
 # ensure configured adapter has the correct module signature
-# provide better not-ready error messagin
+# provide better not-ready error messaging
 
 # get configured storage adapter
 _module_to_load = getenv(
