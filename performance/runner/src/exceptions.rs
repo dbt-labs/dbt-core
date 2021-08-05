@@ -6,6 +6,9 @@ use std::path::Path;
 use thiserror::Error;
 
 
+// Custom IO Error messages for the IO errors we encounter.
+// New constructors should be added to wrap any new IO errors.
+// The desired output of these errors is tested below.
 #[derive(Debug, Error)]
 pub enum IOError {
     #[error("ReadErr: The file cannot be read.\nFilepath: {}\nOriginating Exception: {}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
@@ -20,7 +23,10 @@ pub enum IOError {
     CommandErr(Option<io::Error>),
 }
 
-
+// Custom Error messages for the error states we could encounter
+// during calculation, and are not prevented at compile time. New
+// constructors should be added for any new error situations that
+// come up. The desired output of these errors is tested below.
 #[derive(Debug, Error)]
 pub enum CalculateError {
     #[error("BadJSONErr: JSON in file cannot be deserialized as expected.\nFilepath: {}\nOriginating Exception: {}", .0.to_string_lossy().into_owned(), .1.as_ref().map_or("None".to_owned(), |e| format!("{}", e)))]
@@ -38,10 +44,12 @@ pub enum CalculateError {
 }
 
 
+// Tests for exceptions
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // Tests the output fo io error messages. There should be at least one per enum constructor.
     #[test]
     fn test_io_error_messages() {
         let pairs = vec![
@@ -80,6 +88,7 @@ Originating Exception: None"#
     }
 
 
+    // Tests the output fo calculate error messages. There should be at least one per enum constructor.
     #[test]
     fn test_calculate_error_messages() {
         let pairs = vec![

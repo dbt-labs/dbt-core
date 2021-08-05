@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::fs::DirEntry;
 
+
+// This type exactly matches the type of array elements
+// from hyperfine's output. Deriving `Serialize` and `Deserialize`
+// gives us read and write capabilities via json_serde.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Measurement {
     pub command: String,
@@ -18,11 +22,18 @@ pub struct Measurement {
     pub times: Vec<f64>,
 }
 
+
+// This type exactly matches the type of hyperfine's output. 
+// Deriving `Serialize` and `Deserialize` gives us read and
+// write capabilities via json_serde.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Measurements {
     pub results: Vec<Measurement>,
 }
 
+
+// Output data from a comparison between runs on the baseline
+// and dev branches.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Data {
     pub threshold: f64,
@@ -31,6 +42,8 @@ pub struct Data {
     pub dev: f64,
 }
 
+// The full output from a comparison between runs on the baseline
+// and dev branches.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Calculation {
     pub metric: String,
@@ -38,6 +51,8 @@ pub struct Calculation {
     pub data: Data,
 }
 
+// A type to describe which measurement we are working with. This
+// information is parsed from the filename of hyperfine's output.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeasurementGroup {
     pub version: String,
@@ -45,6 +60,8 @@ pub struct MeasurementGroup {
     pub measurement: Measurement,
 }
 
+// Given two measurements, return all the calculations. Calculations are
+// flagged as regressions or not regressions.
 fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Calculation> {
     let median_threshold = 1.05; // 5% regression threshold
     let median_difference = dev.median / baseline.median;
@@ -76,8 +93,8 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
     ]
 }
 
-// given a directory, read all files in the directory and return each
-// filename with the deserialized json contents of that file
+// Given a directory, read all files in the directory and return each
+// filename with the deserialized json contents of that file.
 fn measurements_from_files(
     results_directory: &Path,
 ) -> Result<Vec<(PathBuf, Measurements)>, CalculateError> {
@@ -112,11 +129,19 @@ fn measurements_from_files(
         .collect()
 }
 
-// given a list of filename-measurement pairs, detect any regressions by grouping
-// measurements together by filename
+// Given a list of filename-measurement pairs, detect any regressions by grouping
+// measurements together by filename.
 fn calculate_regressions(
     measurements: &[(&PathBuf, &Measurement)],
 ) -> Result<Vec<Calculation>, CalculateError> {
+    /* 
+        Strategy of this function body:
+        1. [Measurement] -> [MeasurementGroup]
+        2. Sort the MeasurementGroups
+        3. Group the MeasurementGroups by "run"
+        4. Call `calculate` with the two resulting Measurements as input
+    */
+
     let mut measurement_groups: Vec<MeasurementGroup> = measurements
         .iter()
         .map(|(p, m)| {
@@ -174,6 +199,9 @@ fn calculate_regressions(
     Ok(calculations)
 }
 
+// Top-level function. Given a path for the result directory, call the above
+// functions to compare and collect calculations. Calculations include both
+// metrics that fall within the threshold and regressions.
 pub fn regressions(results_directory: &PathBuf) -> Result<Vec<Calculation>, CalculateError> {
     measurements_from_files(Path::new(&results_directory)).and_then(|v| {
         // exit early with an Err if there are no results to process
