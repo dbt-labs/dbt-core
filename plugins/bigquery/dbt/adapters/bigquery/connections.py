@@ -602,3 +602,15 @@ def _sanitize_label(value: str) -> str:
     value = value.strip().lower()
     value = _SANITIZE_LABEL_PATTERN.sub("_", value)
     return value
+
+
+def _validate_label_length(value: str) -> None:
+    try:
+        value_length = len(value)
+        assert value_length <= _VALIDATE_LABEL_LENGTH_LIMIT
+    except AssertionError as e:
+        error_msg = (
+            f"Label is greater than length limit: {_VALIDATE_LABEL_LENGTH_LIMIT}"
+        )
+        e.args += (error_msg, "")
+        raise e

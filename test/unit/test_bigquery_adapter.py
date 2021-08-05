@@ -979,9 +979,10 @@ def test_sanitize_label(input, output):
 # TODO: test strings that have verified lengths of 63 and greater and
 # TODO assert that I get the proper error message that the comment string is too long
 # TODO: think of using a random(63) function
-@pytest.mark.parametrize(N=63)
-def test_sanitize_label_length(N):
+def test_validate_label_length():
     random_string = "".join(
-        random.choice(string.ascii_uppercase + string.digits) for i in range(N)
+        random.choice(string.ascii_uppercase + string.digits) for i in range(64)
     )
-    assert  _sanitize_label(random_string) == AssertionError
+    with pytest.raises(AssertionError) as error_info:
+        _validate_label_length(random_string) 
+    assert error_info.value.args[0] == f"Label is greater than length limit: 64"
