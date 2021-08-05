@@ -1,30 +1,11 @@
-extern crate structopt;
-
 use crate::exceptions::IOError;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
 use std::fs;
-use structopt::StructOpt;
 
-#[derive(Clone, Debug, StructOpt)]
-#[structopt(name = "performance", about = "performance regression testing runner")]
-enum Performance {
-    #[structopt(name = "measure")]
-    Measure {
-        #[structopt(parse(from_os_str))]
-        #[structopt(short)]
-        projects_dir: PathBuf,
-        #[structopt(short)]
-        branch_name: bool,
-    },
-    #[structopt(name = "compare")]
-    Compare {
-        #[structopt(parse(from_os_str))]
-        #[structopt(short)]
-        results_dir: PathBuf,
-    },
-}
 
+// `Metric` defines a dbt command that we want to measure on both the
+// baseline and dev branches.
 #[derive(Debug, Clone)]
 struct Metric<'a> {
     name: &'a str,
@@ -33,15 +14,23 @@ struct Metric<'a> {
 }
 
 impl Metric<'_> {
+    // Returns the proper filename for the hyperfine output for this metric.
     fn outfile(&self, project: &str, branch: &str) -> String {
         [branch, "_", self.name, "_", project, ".json"].join("")
     }
 }
 
-// calls hyperfine via system command, and returns result of runs
+// Calls hyperfine via system command, and returns all the exit codes for each hyperfine run.
 pub fn measure<'a>(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec<ExitStatus>, IOError> {
-    // to add a new metric to the test suite, simply define it in this list:
-    // TODO read from some config file?
+    /* 
+        Strategy of this function body:
+        1. Read all directory names in `projects_directory`
+        2. Pair `n` projects with `m` metrics for a total of n*m pairs
+        3. Run hyperfine on each project-metric pair
+    */
+    
+    // To add a new metric to the test suite, simply define it in this list:
+    // TODO: This could be read from a config file in a future version.
     let metrics: Vec<Metric> = vec![
         Metric {
             name: "parse",
@@ -89,7 +78,8 @@ pub fn measure<'a>(projects_directory: &PathBuf, dbt_branch: &str) -> Result<Vec
                 .arg(
                     ["../../results/", &metric.outfile(project_name, dbt_branch)].join(""),
                 )
-                // this prevents capture dbt output. Noisy, but good for debugging when tests fail.
+                // this prevents hyperfine from capturing dbt's output.
+                // Noisy, but good for debugging when tests fail.
                 .arg("--show-output")
                 .status() // use spawn() here instead for more information
                 .or_else(|e| Err(IOError::CommandErr(Some(e))))

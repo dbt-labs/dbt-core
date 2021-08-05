@@ -12,6 +12,9 @@ use std::path::PathBuf;
 use std::process::exit;
 use structopt::StructOpt;
 
+
+// This type defines the commandline interface and is generated
+// by `derive(StructOpt)`
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "performance", about = "performance regression testing runner")]
 enum Opt {
@@ -31,27 +34,29 @@ enum Opt {
     },
 }
 
-fn gracefully_exit_or<A, B, E: Display>(f: &dyn Fn(A) -> B, r: Result<A, E>) -> B {
-    match r {
-        Err(e) => {
-            println!("{}", e);
-            exit(1)
-        },
-        Ok(x) => f(x),
-    }
+// Given a result with a displayable error, map the value if there is one, or
+// print the human readable error message and exit with exit code 1.
+fn map_or_gracefully_exit<A, B, E: Display>(f: &dyn Fn(A) -> B, r: Result<A, E>) -> B {
+    r.map_or_else(|e| { println!("{}", e); exit(1) }, f)
 }
 
 // This is where all the printing, exiting, and error displaying 
 // should happen. Module functions should only return values.
 fn main() {
+    // match what the user inputs from the cli
     match Opt::from_args() {
 
+        // measure subcommand
         Opt::Measure { projects_dir, branch_name } => {
-            let statuses = gracefully_exit_or(
+            // get all the statuses of the hyperfine runs or
+            // gracefully show the user an exception
+            let statuses = map_or_gracefully_exit(
                 &|x| x,
                 measure::measure(&projects_dir, &branch_name)
             );
 
+            // only exit with exit code 0 if all hyperfine runs were
+            // dispatched correctly.
             for status in statuses {
                 match status.code() {
                     None => (),
@@ -65,28 +70,31 @@ fn main() {
             }
         },
 
+        // calculate subcommand
         Opt::Calculate { results_dir } => {
-            let calculations = gracefully_exit_or(
+            // get all the calculations or gracefully show the user an exception
+            let calculations = map_or_gracefully_exit(
                 &|x| x,
                 calculate::regressions(&results_dir)
             );
 
-            // print calculations to stdout
+            // print all calculations to stdout so they can be easily debugged
+            // via CI.
             println!(":: All Calculations ::\n");
             for c in &calculations {
                 println!("{:#?}\n", c);
             }
             println!("");
 
-            // write calculations to file so it can be downloaded as an artifact
+            // indented json string representation of the calculations array
             let json_calcs = serde_json::to_string_pretty(&calculations)
-                .expect("failed to serialize calculations to json");
+                .expect("Main: Failed to serialize calculations to json");
             
+            // create the empty destination file, and write the json string
             let outfile = &mut results_dir.into_os_string();
             outfile.push("/final_calculations.json");
-
-            let mut f = File::create(outfile).expect("Unable to create file");
-            f.write_all(json_calcs.as_bytes()).expect("unable to write data");
+            let mut f = File::create(outfile).expect("Main: Unable to create file");
+            f.write_all(json_calcs.as_bytes()).expect("Main: Unable to write data");
 
             // filter for regressions
             let regressions: Vec<&Calculation> = calculations
@@ -98,6 +106,8 @@ fn main() {
             match regressions[..] {
                 [] => println!("congrats! no regressions :)"),
                 _ => {
+                    // print all calculations to stdout so they can be easily debugged
+                    // via CI.
                     println!(":: Regressions Found ::\n");
                     println!("");
                     for r in regressions {
