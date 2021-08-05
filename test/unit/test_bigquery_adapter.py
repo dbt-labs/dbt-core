@@ -1,6 +1,8 @@
 import agate
 import decimal
 import json
+import string
+import random
 import re
 import pytest
 import unittest
@@ -972,3 +974,14 @@ class TestBigQueryAdapterConversions(TestAdapterConversions):
 )
 def test_sanitize_label(input, output):
     assert _sanitize_label(input) == output
+
+
+# TODO: test strings that have verified lengths of 63 and greater and
+# TODO assert that I get the proper error message that the comment string is too long
+# TODO: think of using a random(63) function
+@pytest.mark.parametrize(N=63)
+def test_sanitize_label_length(N):
+    random_string = "".join(
+        random.choice(string.ascii_uppercase + string.digits) for i in range(N)
+    )
+    assert  _sanitize_label(random_string) == AssertionError

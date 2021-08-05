@@ -595,9 +595,14 @@ def _is_retryable(error):
 
 _SANITIZE_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
 
+_SANITIZE_LABEL_LENGTH_LIMIT = 63
 
+# TODO: extend this function to check length is <= 63 characters
 def _sanitize_label(value: str) -> str:
     """Return a legal value for a BigQuery label."""
     value = value.strip().lower()
     value = _SANITIZE_LABEL_PATTERN.sub("_", value)
+    # TODO: add assert for length
+    value_length = len(value)
+    assert value_length <= _SANITIZE_LABEL_LENGTH_LIMIT
     return value
