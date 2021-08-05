@@ -32,7 +32,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
+          args: --manifest-path performance/runner/Cargo.toml --all -- --check
 
   # runs any tests associated with the runner
   # these tests make sure the runner logic is correct
