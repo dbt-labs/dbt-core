@@ -1,5 +1,8 @@
 ## dbt 0.21.0 (Release TBD)
 
+### Features
+- Capture changes to macros in `state:modified`. Introduce new `state:` sub-selectors: `modified.body`, `modified.configs`, `modified.persisted_descriptions`, `modified.relation`, `modified.macros` ([#2704](https://github.com/dbt-labs/dbt/issues/2704), [#3278](https://github.com/dbt-labs/dbt/issues/3278), [#3559](https://github.com/dbt-labs/dbt/issues/3559))
+
 ### Under the hood
 - Add `build` RPC method, and a subset of flags for `build` task ([#3595](https://github.com/dbt-labs/dbt/issues/3595), [#3674](https://github.com/dbt-labs/dbt/pull/3674))
 

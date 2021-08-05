@@ -410,9 +410,12 @@ class StateSelectorMethod(SelectorMethod):
         if self.modified_macros is None:
             self.modified_macros = self._macros_modified()
 
+        # loop through all macros that this node depends on
         for macro_uid in node.depends_on.macros:
+            # is this macro one of the modified macros?
             if macro_uid in self.modified_macros:
                 return True
+            # if not, and this macro depends on other macros, keep looping
             macro = self.manifest.macros[macro_uid]
             if len(macro.depends_on.macros) > 0:
                 return self.recursively_check_macros_modified(macro)
@@ -445,7 +448,7 @@ class StateSelectorMethod(SelectorMethod):
         else:
             return False
 
-    def check_modified_database_representations(
+    def check_modified_relation(
         self, old: Optional[SelectorTarget], new: SelectorTarget
     ) -> bool:
         if hasattr(new, "same_database_representation"):
@@ -453,7 +456,7 @@ class StateSelectorMethod(SelectorMethod):
         else:
             return False
 
-    def check_modified_macros(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+    def check_modified_macros(self, _, new: SelectorTarget) -> bool:
         return self.recursively_check_macros_modified(new)
 
     def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
@@ -468,12 +471,14 @@ class StateSelectorMethod(SelectorMethod):
             )
 
         state_checks = {
-            'new': self.check_new,
+            # it's new if there is no old version
+            'new': lambda old, _: old is None,
+            # use methods defined above to compare properties of old + new
             'modified': self.check_modified,
             'modified.body': self.check_modified_body,
             'modified.configs': self.check_modified_configs,
             'modified.persisted_descriptions': self.check_modified_persisted_descriptions,
-            'modified.database_representations': self.check_modified_database_representations,
+            'modified.relation': self.check_modified_relation,
             'modified.macros': self.check_modified_macros,
         }
         if selector in state_checks:

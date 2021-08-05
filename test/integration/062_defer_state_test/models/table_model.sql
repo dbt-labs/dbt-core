@@ -1,3 +1,5 @@
 {{ config(materialized='table') }}
 select * from {{ ref('ephemeral_model') }}
--- {{ my_macro() }}
+
+-- establish a macro dependency to trigger state:modified.macros
+-- depends on: {{ my_macro() }}

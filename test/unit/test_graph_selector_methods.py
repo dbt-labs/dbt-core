@@ -763,7 +763,7 @@ def test_select_state_no_change(manifest, previous_state):
     assert not search_manifest_using_method(manifest, method, 'new')
     assert not search_manifest_using_method(manifest, method, 'modified.configs')
     assert not search_manifest_using_method(manifest, method, 'modified.persisted_descriptions')
-    assert not search_manifest_using_method(manifest, method, 'modified.database_representations')
+    assert not search_manifest_using_method(manifest, method, 'modified.relation')
     assert not search_manifest_using_method(manifest, method, 'modified.macros')
 
 
@@ -802,7 +802,7 @@ def test_select_state_changed_model_sql(manifest, previous_state, view_model):
     assert not search_manifest_using_method(manifest, method, 'new')
     assert not search_manifest_using_method(manifest, method, 'modified.configs')
     assert not search_manifest_using_method(manifest, method, 'modified.persisted_descriptions')
-    assert not search_manifest_using_method(manifest, method, 'modified.database_representations')
+    assert not search_manifest_using_method(manifest, method, 'modified.relation')
     assert not search_manifest_using_method(manifest, method, 'modified.macros')
 
 
