@@ -46,6 +46,7 @@ jobs:
         run: ./scripts/build-dist.sh
 
       - name: Show distributions
+        shell: bash
         run: ls -lh dist/
 
       - uses: actions/upload-artifact@v2
@@ -75,6 +76,7 @@ jobs:
           path: dist/
 
       - name: Show distributions
+        shell: bash
         run: ls -lh dist/
 
       - name: Upgrade python dependencies
@@ -90,7 +92,7 @@ jobs:
 
       - name: Check wheel contents
         run: |
-          check-wheel-contents dist/*.whl
+          check-wheel-contents dist/*.whl --ignore W007,W008
 
       - name: Install wheel distributions
         shell: bash
