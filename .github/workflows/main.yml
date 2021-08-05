@@ -24,33 +24,24 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.tox-env }} ${{ matrix.python-version }} / ${{ matrix.os }}
+    name: ${{ matrix.toxenv }} ${{ matrix.python-version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        tox-env: [unit, mypy]
+        toxenv: [unit]
         python-version: [3.6, 3.7, 3.8] # TODO: support unit testing for python 3.9
         include:
           - os: ubuntu-latest
-            tox-env: flake8
+            toxenv: flake8
             python-version: 3.8
           - os: ubuntu-latest
-            tox-env: mypy
-            python-version: 3.6
-          - os: ubuntu-latest
-            tox-env: mypy
-            python-version: 3.7
-          - os: ubuntu-latest
-            tox-env: mypy
+            toxenv: mypy
             python-version: 3.8
-          - os: ubuntu-latest
-            tox-env: mypy
-            python-version: 3.9
 
     env:
-      TOXENV: ${{ matrix.tox-env }}
+      TOXENV: ${{ matrix.toxenv }}
       PYTEST_ADDOPTS: "-v --color=yes"
 
     steps:
