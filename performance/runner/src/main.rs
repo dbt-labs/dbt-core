@@ -5,11 +5,10 @@ mod exceptions;
 mod measure;
 
 use crate::calculate::Calculation;
-use std::fmt::Display;
+use crate::exceptions::CalculateError;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::exit;
 use structopt::StructOpt;
 
 // This type defines the commandline interface and is generated
@@ -33,21 +32,12 @@ enum Opt {
     },
 }
 
-// Given a result with a displayable error, map the value if there is one, or
-// print the human readable error message and exit with exit code 1.
-fn map_or_gracefully_exit<A, B, E: Display>(f: &dyn Fn(A) -> B, r: Result<A, E>) -> B {
-    r.map_or_else(
-        |e| {
-            println!("{}", e);
-            exit(1)
-        },
-        f,
-    )
-}
-
-// This is where all the printing, exiting, and error displaying
-// should happen. Module functions should only return values.
-fn main() {
+// enables proper useage of exit() in main.
+// https://doc.rust-lang.org/std/process/fn.exit.html#examples
+//
+// This is where all the printing should happen. Exiting happens
+// in main, and module functions should only return values.
+fn run_app() -> Result<i32, CalculateError> {
     // match what the user inputs from the cli
     match Opt::from_args() {
         // measure subcommand
@@ -55,30 +45,26 @@ fn main() {
             projects_dir,
             branch_name,
         } => {
-            // get all the statuses of the hyperfine runs or
-            // gracefully show the user an exception
-            let statuses =
-                map_or_gracefully_exit(&|x| x, measure::measure(&projects_dir, &branch_name));
-
-            // only exit with exit code 0 if all hyperfine runs were
-            // dispatched correctly.
-            for status in statuses {
-                match status.code() {
-                    None => (),
-                    Some(0) => (),
-                    // if any child command exited with a non zero status code, exit with the same one here.
-                    Some(nonzero) => {
-                        println!("a child process exited with a nonzero status code.");
-                        exit(nonzero)
-                    }
-                }
-            }
+            // if there are any nonzero exit codes from the hyperfine runs,
+            // return the first one. otherwise return zero.
+            measure::measure(&projects_dir, &branch_name)
+                .or_else(|e| Err(CalculateError::CalculateIOError(e)))?
+                .iter()
+                .map(|status| status.code())
+                .flatten()
+                .filter(|code| *code != 0)
+                .collect::<Vec<i32>>()
+                .get(0)
+                .map_or(Ok(0), |x| {
+                    println!("Main: a child process exited with a nonzero status code.");
+                    Ok(*x)
+                })
         }
 
         // calculate subcommand
         Opt::Calculate { results_dir } => {
             // get all the calculations or gracefully show the user an exception
-            let calculations = map_or_gracefully_exit(&|x| x, calculate::regressions(&results_dir));
+            let calculations = calculate::regressions(&results_dir)?;
 
             // print all calculations to stdout so they can be easily debugged
             // via CI.
@@ -103,21 +89,34 @@ fn main() {
             let regressions: Vec<&Calculation> =
                 calculations.iter().filter(|c| c.regression).collect();
 
-            // exit with non zero exit code if there are regressions
+            // return a non-zero exit code if there are regressions
             match regressions[..] {
-                [] => println!("congrats! no regressions :)"),
+                [] => {
+                    println!("congrats! no regressions :)");
+                    Ok(0)
+                }
                 _ => {
-                    // print all calculations to stdout so they can be easily debugged
-                    // via CI.
+                    // print all calculations to stdout so they can be easily
+                    // debugged via CI.
                     println!(":: Regressions Found ::\n");
                     println!("");
                     for r in regressions {
                         println!("{:#?}\n", r);
                     }
                     println!("");
-                    exit(1)
+                    Ok(1)
                 }
             }
         }
     }
+}
+
+fn main() {
+    std::process::exit(match run_app() {
+        Ok(code) => code,
+        Err(err) => {
+            eprintln!("{}", err);
+            1
+        }
+    });
 }
