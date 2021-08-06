@@ -981,9 +981,6 @@ def test_sanitize_label(input, output):
     [64, 65, 100],
 )
 def test_sanitize_label_length(label_length):
-    test_error_msg = (
-            f"Current label length {label_length} is greater than length limit: {_VALIDATE_LABEL_LENGTH_LIMIT}"
-        )
     random_string = "".join(
         random.choice(string.ascii_uppercase + string.digits)
         for i in range(label_length)
