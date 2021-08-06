@@ -602,16 +602,11 @@ def _sanitize_label(value: str) -> str:
     """Return a legal value for a BigQuery label."""
     value = value.strip().lower()
     value = _SANITIZE_LABEL_PATTERN.sub("_", value)
-    return value
-
-
-def _validate_label_length(value: str) -> None:
-    try:
-        value_length = len(value)
-        assert value_length <= _VALIDATE_LABEL_LENGTH_LIMIT
-    except AssertionError as e:
+    value_length = len(value)
+    if value_length > _VALIDATE_LABEL_LENGTH_LIMIT:
         error_msg = (
-            f"Label is greater than length limit: {_VALIDATE_LABEL_LENGTH_LIMIT}"
+            f"Current label length {value_length} is greater than length limit: {_VALIDATE_LABEL_LENGTH_LIMIT}"
         )
-        e.args += (error_msg, "")
-        raise e
+        raise Exception(error_msg)
+    else:
+        return value
