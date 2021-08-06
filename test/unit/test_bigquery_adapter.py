@@ -19,7 +19,7 @@ from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery import Plugin as BigQueryPlugin
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
-from dbt.adapters.bigquery.connections import _sanitize_label, _validate_label_length
+from dbt.adapters.bigquery.connections import _sanitize_label, _VALIDATE_LABEL_LENGTH_LIMIT
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
 import dbt.exceptions
@@ -976,13 +976,17 @@ def test_sanitize_label(input, output):
     assert _sanitize_label(input) == output
 
 
-# TODO: test strings that have verified lengths of 63 and greater and
-# TODO assert that I get the proper error message that the comment string is too long
-# TODO: think of using a random(63) function
-def test_validate_label_length():
+@pytest.mark.parametrize(
+    "label_length",
+    [64, 65, 100],
+)
+def test_sanitize_label_length(label_length):
+    test_error_msg = (
+            f"Current label length {label_length} is greater than length limit: {_VALIDATE_LABEL_LENGTH_LIMIT}"
+        )
     random_string = "".join(
-        random.choice(string.ascii_uppercase + string.digits) for i in range(64)
+        random.choice(string.ascii_uppercase + string.digits) for i in range(label_length)
     )
-    with pytest.raises(AssertionError) as error_info:
-        _validate_label_length(random_string) 
-    assert error_info.value.args[0] == f"Label is greater than length limit: 64"
+    with pytest.raises(Exception) as error_info:
+        _sanitize_label(random_string) 
+    assert error_info.value.args[0] == test_error_msg
