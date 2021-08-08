@@ -1,11 +1,12 @@
 import dataclasses
 import os
+import json
 from datetime import datetime
 from typing import (
     List, Tuple, ClassVar, Type, TypeVar, Dict, Any, Optional
 )
 
-from dbt.clients.system import write_json, read_json
+from dbt.clients.storage import adapter as SA
 from dbt.exceptions import (
     InternalException,
     RuntimeException,
@@ -13,6 +14,7 @@ from dbt.exceptions import (
 from dbt.version import __version__
 from dbt.tracking import get_invocation_id
 from dbt.dataclass_schema import dbtClassMixin
+import dbt.utils
 
 SourceKey = Tuple[str, str]
 
@@ -56,9 +58,12 @@ class Mergeable(Replaceable):
 
 class Writable:
     def write(self, path: str):
-        write_json(
-            path, self.to_dict(omit_none=False)  # type: ignore
+        content = json.dumps(
+            self.to_dict(omit_none=False),
+            cls=dbt.utils.JSONEncoder
         )
+        
+        SA.write(path, content)
 
 
 class AdditionalPropertiesMixin:
@@ -116,7 +121,7 @@ class Readable:
     @classmethod
     def read(cls, path: str):
         try:
-            data = read_json(path)
+            data = json.loads(SA.read(path))
         except (EnvironmentError, ValueError) as exc:
             raise RuntimeException(
                 f'Could not read {cls.__name__} at "{path}" as JSON: {exc}'

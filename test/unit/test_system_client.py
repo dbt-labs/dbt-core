@@ -8,47 +8,6 @@ from dbt.exceptions import ExecutableError, WorkingDirectoryError
 import dbt.clients.system
 
 
-class SystemClient(unittest.TestCase):
-    def setUp(self):
-        super().setUp()
-        self.tmp_dir = mkdtemp()
-        self.profiles_path = '{}/profiles.yml'.format(self.tmp_dir)
-
-    def set_up_profile(self):
-        with open(self.profiles_path, 'w') as f:
-            f.write('ORIGINAL_TEXT')
-
-    def get_profile_text(self):
-        with open(self.profiles_path, 'r') as f:
-            return f.read()
-
-    def tearDown(self):
-        try:
-            shutil.rmtree(self.tmp_dir)
-        except:
-            pass
-
-    def test__make_file_when_exists(self):
-        self.set_up_profile()
-        written = dbt.clients.system.make_file(self.profiles_path, contents='NEW_TEXT')
-
-        self.assertFalse(written)
-        self.assertEqual(self.get_profile_text(), 'ORIGINAL_TEXT')
-
-    def test__make_file_when_not_exists(self):
-        written = dbt.clients.system.make_file(self.profiles_path, contents='NEW_TEXT')
-
-        self.assertTrue(written)
-        self.assertEqual(self.get_profile_text(), 'NEW_TEXT')
-
-    def test__make_file_with_overwrite(self):
-        self.set_up_profile()
-        written = dbt.clients.system.make_file(self.profiles_path, contents='NEW_TEXT', overwrite=True)
-
-        self.assertTrue(written)
-        self.assertEqual(self.get_profile_text(), 'NEW_TEXT')
-
-
 class TestRunCmd(unittest.TestCase):
     """Test `run_cmd`.
 

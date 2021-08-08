@@ -12,7 +12,7 @@ from dbt.parser.manifest import (
     Manifest, ManifestLoader, _check_manifest
 )
 from dbt.logger import DbtProcessState, print_timestamped_line
-from dbt.clients.system import write_file
+from dbt.clients.storage import adapter as SA
 from dbt.graph import Graph
 import time
 from typing import Optional
@@ -38,7 +38,7 @@ class ParseTask(ConfiguredTask):
 
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
-        write_file(path, json.dumps(self.loader._perf_info,
+        SA.write(path, json.dumps(self.loader._perf_info,
                                     cls=dbt.utils.JSONEncoder, indent=4))
         print_timestamped_line(f"Performance info: {path}")
 

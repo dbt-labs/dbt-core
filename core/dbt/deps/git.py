@@ -1,8 +1,10 @@
 import os
 import hashlib
+from pathlib import Path
 from typing import List, Optional
 
 from dbt.clients import git, system
+import dbt.adapters.internal_storage.local_filesystem as local_SA
 from dbt.config import Project
 from dbt.contracts.project import (
     ProjectPackageMetadata,
@@ -104,14 +106,9 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
     def install(self, project, renderer):
         dest_path = self.get_installation_path(project, renderer)
-        if os.path.exists(dest_path):
-            if system.path_is_symlink(dest_path):
-                system.remove_file(dest_path)
-            else:
-                system.rmdir(dest_path)
-
-        system.move(self._checkout(), dest_path)
-
+        local_SA.delete(dest_path)
+        checkout_path = Path(self._checkout())
+        checkout_path.rename(dest_path)
 
 class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def __init__(
