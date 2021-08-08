@@ -31,7 +31,6 @@ from typing import (
 )
 
 
-
 @dataclass
 class TimingInfo(dbtClassMixin):
     name: str
