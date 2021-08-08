@@ -10,7 +10,7 @@ from dbt.contracts.results import (
     CatalogArtifact, RunResultsArtifact, FreshnessExecutionResultArtifact
 )
 from dbt.contracts.util import VersionedSchema
-from dbt.clients.system import write_file
+from dbt.adapters.internal_storage import local_filesystem as local_SA
 
 
 @dataclass
@@ -31,7 +31,7 @@ class ArtifactInfo:
         )
 
     def write_schema(self, dest_dir: Path):
-        write_file(
+        local_SA.write(
             str(dest_dir / self.path),
             json.dumps(self.json_schema, indent=2)
         )

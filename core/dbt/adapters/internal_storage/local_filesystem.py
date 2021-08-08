@@ -64,7 +64,7 @@ def read(
 def write(
     path: str,
     content: Union[str, bytes, None],
-    overwrite: bool = False,
+    overwrite: bool = True,
 ) -> bool:
     """Writes the given content out to a resource on the filesystem.
 
@@ -90,8 +90,6 @@ def write(
         `True` for success, `False` otherwise.
 
     """
-    # TODO: double check I hit all possible permutations here! (IK)
-
     # create a concrete path object
     path: Path = Path(path)
 
@@ -152,6 +150,9 @@ def delete(path: str) -> bool:
     Args:
         path: Full path of resource to be deleted
 
+    Returns:
+        `True` for success, `False` otherwise.
+
     """
     # create concrete path object
     path: Path = Path(path)
@@ -177,10 +178,6 @@ def delete(path: str) -> bool:
             rmtree(path)
 
     return True
-
-
-def find():
-    pass
 
 
 def info(path: str) -> Union[dict, Literal[False]]:

@@ -19,7 +19,7 @@ from dbt.dataclass_schema import (
     dbtClassMixin, ExtensibleDbtClassMixin
 )
 
-from dbt.clients.system import write_file
+from dbt.clients.storage import adapter as SA
 from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedDocumentation, Quoting, Docs,
@@ -216,7 +216,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
             target_path, subdirectory, self.package_name, path
         )
 
-        write_file(full_path, payload)
+        SA.write(full_path, payload)
         return full_path
 
 

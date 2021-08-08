@@ -1,6 +1,7 @@
-import shutil
+from pathlib import Path
 
 from dbt.clients import system
+import dbt.adapters.internal_storage.local_filesystem as local_SA
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 from dbt.contracts.project import (
     ProjectPackageMetadata,
@@ -45,26 +46,12 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
         return ProjectPackageMetadata.from_project(loaded)
 
     def install(self, project, renderer):
-        src_path = self.resolve_path(project)
-        dest_path = self.get_installation_path(project, renderer)
-
-        can_create_symlink = system.supports_symlinks()
-
-        if system.path_exists(dest_path):
-            if not system.path_is_symlink(dest_path):
-                system.rmdir(dest_path)
-            else:
-                system.remove_file(dest_path)
-
-        if can_create_symlink:
-            logger.debug('  Creating symlink to local dependency.')
-            system.make_symlink(src_path, dest_path)
-
-        else:
-            logger.debug('  Symlinks are not available on this '
-                         'OS, copying dependency.')
-            shutil.copytree(src_path, dest_path)
-
+        src_path = Path(self.resolve_path(project))
+        dest_path = self.get_installation_path(project, renderer)        
+        local_SA.delete(dest_path)
+        src_path.rename(dest_path)
+        # TODO: is it ok to remove symlinking?  
+        # Symlinks aren't really a thing outside of filesystems and will be hard to model in SAs
 
 class LocalUnpinnedPackage(
     LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]

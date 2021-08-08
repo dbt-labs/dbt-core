@@ -9,6 +9,7 @@ import time
 import warnings
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
 import colorama
@@ -345,8 +346,8 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    import dbt.clients.system
-    dbt.clients.system.make_directory(log_dir)
+    # N.B:  Storage adapters can't be used in the logger (circular imports)
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):

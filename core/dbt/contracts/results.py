@@ -20,6 +20,9 @@ from dbt.utils import lowercase
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 import agate
+import json
+import dbt.utils
+from dbt.clients.storage import adapter as SA
 
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -27,7 +30,6 @@ from typing import (
     Union, Dict, List, Optional, Any, NamedTuple, Sequence,
 )
 
-from dbt.clients.system import write_json
 
 
 @dataclass
@@ -211,7 +213,8 @@ class RunResultsArtifact(ExecutionResult, ArtifactMixin):
         )
 
     def write(self, path: str):
-        write_json(path, self.to_dict(omit_none=False))
+        content = json.dumps(self.to_dict(omit_none=False), cls=dbt.utils.JSONEncoder)
+        SA.write(path, content)
 
 
 @dataclass
