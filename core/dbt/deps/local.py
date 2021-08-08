@@ -7,7 +7,6 @@ from dbt.contracts.project import (
     ProjectPackageMetadata,
     LocalPackage,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class LocalPackageMixin:
@@ -47,11 +46,12 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
 
     def install(self, project, renderer):
         src_path = Path(self.resolve_path(project))
-        dest_path = self.get_installation_path(project, renderer)        
+        dest_path = self.get_installation_path(project, renderer)
         local_SA.delete(dest_path)
         src_path.rename(dest_path)
-        # TODO: is it ok to remove symlinking?  
+        # TODO: is it ok to remove symlinking?
         # Symlinks aren't really a thing outside of filesystems and will be hard to model in SAs
+
 
 class LocalUnpinnedPackage(
     LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]

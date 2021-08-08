@@ -1,6 +1,5 @@
 import errno
 import fnmatch
-#import json
 import os
 import os.path
 import re
@@ -9,7 +8,7 @@ import subprocess
 import sys
 import tarfile
 import requests
-import stat
+from pathlib import Path
 from typing import (
     Type, NoReturn, List, Optional, Dict, Any, Tuple, Union
 )
@@ -18,7 +17,6 @@ import dbt.exceptions
 import dbt.utils
 
 from dbt.logger import GLOBAL_LOGGER as logger
-
 if sys.platform == 'win32':
     from ctypes import WinDLL, c_bool
 else:
@@ -247,6 +245,6 @@ def untar_package(
         tarball.extractall(dest_dir)
         tar_dir_name = os.path.commonprefix(tarball.getnames())
     if rename_to:
-        downloaded_path = os.path.join(dest_dir, tar_dir_name)
-        desired_path = os.path.join(dest_dir, rename_to)
-        dbt.clients.system.rename(downloaded_path, desired_path, force=True)
+        downloaded_path = Path(os.path.join(dest_dir, tar_dir_name))
+        desired_path = Path(os.path.join(dest_dir, rename_to))
+        downloaded_path.rename(desired_path)

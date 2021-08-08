@@ -59,10 +59,10 @@ class Mergeable(Replaceable):
 class Writable:
     def write(self, path: str):
         content = json.dumps(
-            self.to_dict(omit_none=False),
+            self.to_dict(omit_none=False),  # type: ignore
             cls=dbt.utils.JSONEncoder
         )
-        
+
         SA.write(path, content)
 
 

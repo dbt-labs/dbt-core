@@ -38,8 +38,14 @@ class ParseTask(ConfiguredTask):
 
     def write_perf_info(self):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
-        SA.write(path, json.dumps(self.loader._perf_info,
-                                    cls=dbt.utils.JSONEncoder, indent=4))
+        SA.write(
+            path,
+            json.dumps(
+                self.loader._perf_info,
+                cls=dbt.utils.JSONEncoder,
+                indent=4
+            )
+        )
         print_timestamped_line(f"Performance info: {path}")
 
     # This method takes code that normally exists in other files

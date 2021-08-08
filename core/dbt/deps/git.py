@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 from typing import List, Optional
 
-from dbt.clients import git, system
+from dbt.clients import git
 import dbt.adapters.internal_storage.local_filesystem as local_SA
 from dbt.config import Project
 from dbt.contracts.project import (
@@ -109,6 +109,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
         local_SA.delete(dest_path)
         checkout_path = Path(self._checkout())
         checkout_path.rename(dest_path)
+
 
 class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
     def __init__(

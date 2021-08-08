@@ -2,7 +2,7 @@ from pathlib import Path
 from shutil import rmtree
 from stat import S_IRUSR, S_IWUSR
 from sys import platform
-from typing import Any, Union
+from typing import Union
 from typing_extensions import Literal
 
 from dbt.logger import GLOBAL_LOGGER as logger
