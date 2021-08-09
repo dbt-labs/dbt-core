@@ -14,4 +14,4 @@ In `runner/src/measure.rs::measure` add a metric to the `metrics` Vec. The Githu
 - add more dbt commands to measure
 - possibly using the uploaded json artifacts to store these results so they can be graphed over time
 - reading new metrics from a file so no one has to edit rust source to add them to the suite
-- instead of building the rust every time, we could publish pull down the latest deployed version.
+- instead of building the rust every time, we could publish and pull down the latest version.
