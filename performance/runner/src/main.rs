@@ -72,7 +72,6 @@ fn run_app() -> Result<i32, CalculateError> {
             for c in &calculations {
                 println!("{:#?}\n", c);
             }
-            println!("");
 
             // indented json string representation of the calculations array
             let json_calcs = serde_json::to_string_pretty(&calculations)
@@ -99,11 +98,9 @@ fn run_app() -> Result<i32, CalculateError> {
                     // print all calculations to stdout so they can be easily
                     // debugged via CI.
                     println!(":: Regressions Found ::\n");
-                    println!("");
                     for r in regressions {
                         println!("{:#?}\n", r);
                     }
-                    println!("");
                     Ok(1)
                 }
             }
