@@ -1,6 +1,7 @@
 # **what?** - This workflow builds python packages and ensures they can be
 # installed on supported OS and python versions. This workflow should not require
-# any secrets.
+# any secrets since it will run for all pushes, PRs, and
+# forked PRs. Secrets are not passed to workflows from forked PRs.
 # **why?** - Ensure that dbt and its dependencies are able to be packaged
 # and installed.
 # **when?** - This will run when pushing to protected branches, pull requests,
