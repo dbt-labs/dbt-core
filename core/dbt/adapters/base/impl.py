@@ -310,8 +310,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             self.Relation.create_from(self.config, node).without_identifier()
             for node in manifest.nodes.values()
             if (
-                node.resource_type in NodeType.executable() and
-                not node.is_ephemeral_model
+                node.is_relational and not node.is_ephemeral_model
             )
         }
 
