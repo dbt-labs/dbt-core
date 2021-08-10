@@ -16,6 +16,7 @@
 - Fix type coercion issues when fetching query result sets ([#2984](https://github.com/fishtown-analytics/dbt/issues/2984), [#3499](https://github.com/fishtown-analytics/dbt/pull/3499))
 - Handle whitespace after a plus sign on the project config ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
 - Fix table and view materialization issue when switching from one to the other ([#2161](https://github.com/dbt-labs/dbt/issues/2161)), [#3547](https://github.com/dbt-labs/dbt/pull/3547))
+- Fix for RPC requests that raise a RecursionError when serializing Undefined values as JSON ([#3464](https://github.com/dbt-labs/dbt/issues/3464), [#3687](https://github.com/dbt-labs/dbt/pull/3687))
 
 ### Under the hood
 - Improve default view and table materialization performance by checking relational cache before attempting to drop temp relations ([#3112](https://github.com/fishtown-analytics/dbt/issues/3112), [#3468](https://github.com/fishtown-analytics/dbt/pull/3468))
