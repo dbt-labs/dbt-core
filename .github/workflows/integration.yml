@@ -1,10 +1,22 @@
-# **what?** - This workflow runs all integration tests for supported OS
-# and python versions and core adapters. Requires secrets to run against
-# different warehouses. This is a trusted workflow.
-# **why?** - This checks the functionality of dbt from a user's perspective
+# **what?**
+# This workflow runs all integration tests for supported OS
+# and python versions and core adapters. If triggered by PR,
+# the workflow will only run tests for adapters related
+# to code changes. Use the `test all` and `test ${adapter}`
+# label to run all or additional tests. Use `ok to test`
+# label to mark PRs from forked repositories that are safe
+# to run integration tests for. Requires secrets to run
+# against different warehouses.
+
+# **why?**
+# This checks the functionality of dbt from a user's perspective
 # and attempts to catch functional regressions.
-# **when?** - This workflow will run on every push to a protected branch
-# and when manually triggered.
+
+# **when?**
+# This workflow will run on every push to a protected branch
+# and when manually triggered. It will also run for all PRs, including
+# PRs from forks. The workflow will be skipped until there is a label
+# to mark the PR as safe to run.
 
 name: Integration Tests
 
@@ -15,22 +27,76 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
+  pull_request_target:
+    branches-ignore:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
   workflow_dispatch:
+
+permissions: read-all
 
 concurrency:
   group: integration-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  pre-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      has-postgres-changes: ${{ steps.check-changes.outputs.postgres == 'true' }}
+      has-snowflake-changes: ${{ steps.check-changes.outputs.snowflake == 'true' }}
+      has-bigquery-changes: ${{ steps.check-changes.outputs.bigquery == 'true' }}
+      has-redshift-changes: ${{ steps.check-changes.outputs.redshift == 'true' }}
+    steps:
+      - name: Check out the repository (non-PR)
+        if: github.event_name != 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Check out the repository (PR)
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check if relevant files changed
+        uses: dorny/paths-filter@v2 # https://github.com/marketplace/actions/paths-changes-filter
+        id: check-changes
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            postgres:
+              - 'core/**'
+              - 'plugins/postgres/**'
+            snowflake:
+              - 'core/**'
+              - 'plugins/snowflake/**'
+            bigquery:
+              - 'core/**'
+              - 'plugins/bigquery/**'
+            redshift:
+              - 'core/**'
+              - 'plugins/redshift/**'
+              - 'plugins/postgres/**'
+
   test:
     name: ${{ matrix.adapter }} ${{ matrix.python-version }} / ${{ matrix.os }}
+    # run if not a pull request or has a label to mark as safe to test
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      contains(github.event.pull_request.labels.*.name, 'ok to test')
     runs-on: ${{ matrix.os }}
+    needs: pre-checks
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         adapter: [postgres, snowflake, redshift, bigquery]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.6, 3.7, 3.8, 3.9] # TODO: only run python 3.8 on PRs
 
     env:
       TOXENV: integration-${{ matrix.adapter }}
@@ -38,9 +104,17 @@ jobs:
 
     steps:
       - name: Check out the repository
+        if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v2
         with:
           persist-credentials: false
+
+      - name: Check out the repository (PR)
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -76,11 +150,33 @@ jobs:
           tox --version
 
       - name: Run tox (postgres)
-        if: matrix.adapter == 'postgres'
+        # run if postgres integration tests
+        # and is either not a PR or is a PR and has relevant changes/specified label
+        if: >-
+          matrix.adapter == 'postgres' &&
+          (
+            github.event_name != 'pull_request_target' ||
+            (
+              needs.pre-checks.outputs.has-postgres-changes ||
+              contains(github.event.pull_request.labels.*.name, 'test all') ||
+              contains(github.event.pull_request.labels.*.name, 'test postgres')
+            )
+          )
         run: tox
 
       - name: Run tox (redshift)
-        if: matrix.adapter == 'redshift'
+        # run if redshift integration tests
+        # and is either not a PR or is a PR and has relevant changes/specified label
+        if: >-
+          matrix.adapter == 'redshift' &&
+          (
+            github.event_name != 'pull_request_target' ||
+            (
+              needs.pre-checks.outputs.has-redshift-changes ||
+              contains(github.event.pull_request.labels.*.name, 'test all') ||
+              contains(github.event.pull_request.labels.*.name, 'test redshift')
+            )
+          )
         env:
           REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
           REDSHIFT_TEST_PASS: ${{ secrets.REDSHIFT_TEST_PASS }}
@@ -90,7 +186,18 @@ jobs:
         run: tox
 
       - name: Run tox (snowflake)
-        if: matrix.adapter == 'snowflake'
+        # run if snowflake integration tests
+        # and is either not a PR or is a PR and has relevant changes/specified label
+        if: >-
+          matrix.adapter == 'snowflake' &&
+          (
+            github.event_name != 'pull_request_target' ||
+            (
+              needs.pre-checks.outputs.has-snowflake-changes ||
+              contains(github.event.pull_request.labels.*.name, 'test all') ||
+              contains(github.event.pull_request.labels.*.name, 'test snowflake')
+            )
+          )
         env:
           SNOWFLAKE_TEST_ACCOUNT: ${{ secrets.SNOWFLAKE_TEST_ACCOUNT }}
           SNOWFLAKE_TEST_PASSWORD: ${{ secrets.SNOWFLAKE_TEST_PASSWORD }}
@@ -107,8 +214,39 @@ jobs:
         run: tox
 
       - name: Run tox (bigquery)
-        if: matrix.adapter == 'bigquery'
+        # run if bigquery integration tests
+        # and is either not a PR or is a PR and has relevant changes/specified label
+        if: >-
+          matrix.adapter == 'bigquery' &&
+          (
+            github.event_name != 'pull_request_target' ||
+            (
+              needs.pre-checks.outputs.has-bigquery-changes ||
+              contains(github.event.pull_request.labels.*.name, 'test all') ||
+              contains(github.event.pull_request.labels.*.name, 'test bigquery')
+            )
+          )
         env:
           BIGQUERY_TEST_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_TEST_SERVICE_ACCOUNT_JSON }}
           BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
         run: tox
+
+  post-checks:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Needs permission PR comment
+        if: >-
+          github.event_name == 'pull_request_target' &&
+          needs.test.result == 'skipped' &&
+          github.event.pull_request.head.repo.full_name != github.repository
+        uses: unsplash/comment-on-pr@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          msg: |
+            "You do not have permissions to run integration tests, @dbt-labs/core "\
+            "needs to label this PR with `ok to test` in order to run integration tests!"
+          check_for_duplicate_msg: true
