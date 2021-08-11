@@ -1,0 +1,73 @@
+# **what?**
+# This workflow contains unit tests for supported OS and
+# python versions. This workflow should require no secrets since
+# it will be triggered for all pushes, PRs, and forked PRs.
+# Secrets are not passed to workflows from forked PRs.
+
+# **why?**
+# To ensure all code being merged into the project passes a
+# minimum threshold of quality.
+
+# **when?**
+# This workflow will run on every push to a protected
+# branch, for all pull requests, and when manually triggered.
+
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
+    branches-ignore:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: unit-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.toxenv }} ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.6, 3.7, 3.8] # TODO: support unit testing for python 3.9 (https://github.com/dbt-labs/dbt/issues/3689)
+
+    env:
+      TOXENV: "unit"
+      PYTEST_ADDOPTS: "-v --color=yes"
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Upgrade python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip --version
+
+      - name: Install tox
+        run: |
+          pip install tox
+          tox --version
+
+      - name: Run tox
+        run: tox
