@@ -35,6 +35,10 @@ concurrency:
   group: build-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     name: Build packages
@@ -52,15 +56,23 @@ jobs:
 
       - name: Upgrade python dependencies
         run: |
-          pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip
           pip --version
+          pip install --upgrade setuptools wheel twine check-wheel-contents
 
       - name: Build distributions
         run: ./scripts/build-dist.sh
 
       - name: Show distributions
-        shell: bash
         run: ls -lh dist/
+
+      - name: Check distribution descriptions
+        run: |
+          twine check dist/*
+
+      - name: Check wheel contents
+        run: |
+          check-wheel-contents dist/*.whl --ignore W007,W008
 
       - uses: actions/upload-artifact@v2
         with:
@@ -83,32 +95,19 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Upgrade python dependencies
+        run: |
+          python -m pip install --upgrade pip
+
       - uses: actions/download-artifact@v2
         with:
           name: dist
           path: dist/
 
       - name: Show distributions
-        shell: bash
         run: ls -lh dist/
 
-      - name: Upgrade python dependencies
-        run: |
-          pip install --upgrade pip twine check-wheel-contents
-          pip --version
-          twine --version
-          check-wheel-contents --version
-
-      - name: Check distribution descriptions
-        run: |
-          twine check dist/*
-
-      - name: Check wheel contents
-        run: |
-          check-wheel-contents dist/*.whl --ignore W007,W008
-
       - name: Install wheel distributions
-        shell: bash
         run: |
           find ./dist/*.whl -maxdepth 1 -type f | xargs pip install --force-reinstall --find-links=dist/
 
@@ -117,7 +116,6 @@ jobs:
           dbt --version
 
       - name: Install source distributions
-        shell: bash
         run: |
           find ./dist/*.gz -maxdepth 1 -type f | xargs pip install --force-reinstall --find-links=dist/
 

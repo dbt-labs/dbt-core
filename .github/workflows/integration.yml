@@ -64,7 +64,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Check if relevant files changed
-        uses: dorny/paths-filter@v2 # https://github.com/marketplace/actions/paths-changes-filter
+        # https://github.com/marketplace/actions/paths-changes-filter
+        uses: dorny/paths-filter@v2
         id: check-changes
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
