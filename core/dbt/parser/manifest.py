@@ -106,7 +106,7 @@ class ReparseReason(StrEnum):
     deps_changed = "05_deps_changed"
     project_config_changed = "06_project_config_changed"
     load_file_failure = "07_load_file_failure"
-    exception = '08_exception'
+    exception = "08_exception"
     proj_env_vars_changed = "09_project_env_vars_changed"
     prof_env_vars_changed = "10_profile_env_vars_changed"
 
@@ -270,7 +270,7 @@ class ManifestLoader:
                     # Get traceback info
                     tb_info = traceback.format_exc()
                     formatted_lines = tb_info.splitlines()
-                    (_, line, method) = formatted_lines[-3].split(', ')
+                    (_, line, method) = formatted_lines[-3].split(", ")
                     exc_info = {
                         "traceback": tb_info,
                         "exception": formatted_lines[-1],
@@ -292,12 +292,12 @@ class ManifestLoader:
                             fire_event(PartialParsingExceptionFile(file=file_id))
                             file_dict = source_file.to_dict()
                             fire_event(PartialParsingFile(file_dict=file_dict))
-                    exc_info['parse_file_type'] = parse_file_type
+                    exc_info["parse_file_type"] = parse_file_type
                     fire_event(PartialParsingException(exc_info=exc_info))
 
                     # Send event
                     if dbt.tracking.active_user is not None:
-                        exc_info['full_reparse_reason'] = ReparseReason.exception
+                        exc_info["full_reparse_reason"] = ReparseReason.exception
                         dbt.tracking.track_partial_parser(exc_info)
 
                     if os.environ.get("DBT_PP_TEST"):
