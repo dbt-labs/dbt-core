@@ -1,6 +1,5 @@
 # **what?**
-# This workflow contains unit tests for supported OS and
-# python versions as well as static code checks. This workflow
+# This workflow contains static code checks. This workflow
 # should require no secrets since it will be triggered for all pushes, PRs, and
 # forked PRs. Secrets are not passed to workflows from forked PRs.
 
@@ -12,7 +11,7 @@
 # This workflow will run on every push to a protected
 # branch, for all pull requests, and when manually triggered.
 
-name: Main CI
+name: Lint
 
 on:
   push:
@@ -32,26 +31,17 @@ on:
 permissions: read-all
 
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref }}
+  group: lint-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: ${{ matrix.toxenv }} ${{ matrix.python-version }} / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.toxenv }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        toxenv: [unit]
-        python-version: [3.6, 3.7, 3.8] # TODO: support unit testing for python 3.9 (https://github.com/dbt-labs/dbt/issues/3689)
-        include:
-          - os: ubuntu-latest
-            toxenv: flake8
-            python-version: 3.8
-          - os: ubuntu-latest
-            toxenv: mypy
-            python-version: 3.8
+        toxenv: [flake8, mypy]
 
     env:
       TOXENV: ${{ matrix.toxenv }}
@@ -63,14 +53,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
 
       - name: Upgrade python dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip --version
 
       - name: Install tox
