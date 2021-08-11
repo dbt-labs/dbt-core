@@ -1,10 +1,15 @@
-# **what?** - This workflow builds python packages and ensures they can be
+# **what?**
+# This workflow builds python packages and ensures they can be
 # installed on supported OS and python versions. This workflow should not require
 # any secrets since it will run for all pushes, PRs, and
 # forked PRs. Secrets are not passed to workflows from forked PRs.
-# **why?** - Ensure that dbt and its dependencies are able to be packaged
+
+# **why?**
+# Ensure that dbt and its dependencies are able to be packaged
 # and installed.
-# **when?** - This will run when pushing to protected branches, pull requests,
+
+# **when?**
+# This will run when pushing to protected branches, pull requests,
 # and manual dispatch.
 
 name: Build
@@ -16,8 +21,15 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
-  workflow_dispatch:
   pull_request:
+    branches-ignore:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  workflow_dispatch:
+
+permissions: read-all
 
 concurrency:
   group: build-${{ github.event_name }}-${{ github.ref }}
