@@ -142,7 +142,7 @@ jobs:
 
       - name: Upgrade pip
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip --version
 
       - name: Install tox
@@ -152,31 +152,27 @@ jobs:
 
       - name: Run tox (postgres)
         # run if postgres integration tests
-        # and is either not a PR or is a PR and has relevant changes/specified label
+        # and is not a PR or has relevant changes/specified label
         if: >-
           matrix.adapter == 'postgres' &&
           (
             github.event_name != 'pull_request_target' ||
-            (
-              needs.pre-checks.outputs.has-postgres-changes ||
-              contains(github.event.pull_request.labels.*.name, 'test all') ||
-              contains(github.event.pull_request.labels.*.name, 'test postgres')
-            )
+            needs.pre-checks.outputs.has-postgres-changes ||
+            contains(github.event.pull_request.labels.*.name, 'test all') ||
+            contains(github.event.pull_request.labels.*.name, 'test postgres')
           )
         run: tox
 
       - name: Run tox (redshift)
         # run if redshift integration tests
-        # and is either not a PR or is a PR and has relevant changes/specified label
+        # and is not a PR or has relevant changes/specified label
         if: >-
           matrix.adapter == 'redshift' &&
           (
             github.event_name != 'pull_request_target' ||
-            (
-              needs.pre-checks.outputs.has-redshift-changes ||
-              contains(github.event.pull_request.labels.*.name, 'test all') ||
-              contains(github.event.pull_request.labels.*.name, 'test redshift')
-            )
+            needs.pre-checks.outputs.has-redshift-changes ||
+            contains(github.event.pull_request.labels.*.name, 'test all') ||
+            contains(github.event.pull_request.labels.*.name, 'test redshift')
           )
         env:
           REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
@@ -188,16 +184,14 @@ jobs:
 
       - name: Run tox (snowflake)
         # run if snowflake integration tests
-        # and is either not a PR or is a PR and has relevant changes/specified label
+        # and is not a PR or has relevant changes/specified label
         if: >-
           matrix.adapter == 'snowflake' &&
           (
             github.event_name != 'pull_request_target' ||
-            (
-              needs.pre-checks.outputs.has-snowflake-changes ||
-              contains(github.event.pull_request.labels.*.name, 'test all') ||
-              contains(github.event.pull_request.labels.*.name, 'test snowflake')
-            )
+            needs.pre-checks.outputs.has-snowflake-changes ||
+            contains(github.event.pull_request.labels.*.name, 'test all') ||
+            contains(github.event.pull_request.labels.*.name, 'test snowflake')
           )
         env:
           SNOWFLAKE_TEST_ACCOUNT: ${{ secrets.SNOWFLAKE_TEST_ACCOUNT }}
@@ -216,16 +210,14 @@ jobs:
 
       - name: Run tox (bigquery)
         # run if bigquery integration tests
-        # and is either not a PR or is a PR and has relevant changes/specified label
+        # and is not a PR or has relevant changes/specified label
         if: >-
           matrix.adapter == 'bigquery' &&
           (
             github.event_name != 'pull_request_target' ||
-            (
-              needs.pre-checks.outputs.has-bigquery-changes ||
-              contains(github.event.pull_request.labels.*.name, 'test all') ||
-              contains(github.event.pull_request.labels.*.name, 'test bigquery')
-            )
+            needs.pre-checks.outputs.has-bigquery-changes ||
+            contains(github.event.pull_request.labels.*.name, 'test all') ||
+            contains(github.event.pull_request.labels.*.name, 'test bigquery')
           )
         env:
           BIGQUERY_TEST_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_TEST_SERVICE_ACCOUNT_JSON }}
