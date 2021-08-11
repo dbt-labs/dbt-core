@@ -1,10 +1,15 @@
-# **what?** - This workflow contains unit tests for supported OS and
+# **what?**
+# This workflow contains unit tests for supported OS and
 # python versions as well as static code checks. This workflow
 # should require no secrets since it will be triggered for all pushes, PRs, and
 # forked PRs. Secrets are not passed to workflows from forked PRs.
-# **why?** - To ensure all code being merged into the project passes a
+
+# **why?**
+# To ensure all code being merged into the project passes a
 # minimum threshold of quality.
-# **when?** - This workflow will run on every push to a protected
+
+# **when?**
+# This workflow will run on every push to a protected
 # branch, for all pull requests, and when manually triggered.
 
 name: Main CI
@@ -17,7 +22,14 @@ on:
       - "*.latest"
       - "releases/*"
   pull_request:
+    branches-ignore:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
   workflow_dispatch:
+
+permissions: read-all
 
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
