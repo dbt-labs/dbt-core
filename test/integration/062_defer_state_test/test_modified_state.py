@@ -166,7 +166,6 @@ class TestModifiedState(DBTIntegrationTest):
 
         results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'], strict=False)
         assert len(results) == 0
-        assert 'detected a change in macros' in stdout
 
         os.remove('macros/second_macro.sql')
         # add a new macro to the existing file
@@ -175,7 +174,6 @@ class TestModifiedState(DBTIntegrationTest):
 
         results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'], strict=False)
         assert len(results) == 0
-        assert 'detected a change in macros' in stdout
 
     @use_profile('postgres')
     def test_postgres_changed_macro_contents(self):
@@ -192,9 +190,9 @@ class TestModifiedState(DBTIntegrationTest):
             fp.write('{% endmacro %}')
             fp.write(newline)
 
+        # table_model calls this macro
         results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'], strict=False)
-        assert len(results) == 0
-        assert 'detected a change in macros' in stdout
+        assert len(results) == 1
 
     @use_profile('postgres')
     def test_postgres_changed_exposure(self):
