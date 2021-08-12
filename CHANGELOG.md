@@ -5,6 +5,7 @@
 
 ### Fixes
 - Fix for RPC requests that raise a RecursionError when serializing Undefined values as JSON ([#3464](https://github.com/dbt-labs/dbt/issues/3464), [#3687](https://github.com/dbt-labs/dbt/pull/3687))
+- Avoid caching schemas for tests when `store_failures` is not enabled ([#3715](https://github.com/dbt-labs/dbt/issues/3715), [#3716](https://github.com/dbt-labs/dbt/pull/3716))
 
 ### Under the hood
 - Add `build` RPC method, and a subset of flags for `build` task ([#3595](https://github.com/dbt-labs/dbt/issues/3595), [#3674](https://github.com/dbt-labs/dbt/pull/3674))
