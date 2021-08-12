@@ -1,5 +1,8 @@
 ## dbt 0.20.2 (Release TBD)
 
+### Fixes
+- Avoid caching schemas for tests when `store_failures` is not enabled ([#3715](https://github.com/dbt-labs/dbt/issues/3715), [#3716](https://github.com/dbt-labs/dbt/pull/3716))
+
 ### Under the hood
 - Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
