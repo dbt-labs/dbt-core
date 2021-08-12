@@ -22,13 +22,11 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
 )
 from dbt.contracts.state import PreviousState
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import (
     InternalException,
     RuntimeException,
 )
 from dbt.node_types import NodeType
-from dbt.ui import warning_tag
 
 
 SELECTOR_GLOB = '*'
@@ -381,7 +379,7 @@ class TestTypeSelectorMethod(SelectorMethod):
 class StateSelectorMethod(SelectorMethod):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.macros_were_modified: Optional[List[str]] = None
+        self.modified_macros: Optional[List[str]] = None
 
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
@@ -394,44 +392,74 @@ class StateSelectorMethod(SelectorMethod):
 
         modified = []
         for uid, macro in new_macros.items():
-            name = f'{macro.package_name}.{macro.name}'
             if uid in old_macros:
                 old_macro = old_macros[uid]
                 if macro.macro_sql != old_macro.macro_sql:
-                    modified.append(f'{name} changed')
+                    modified.append(uid)
             else:
-                modified.append(f'{name} added')
+                modified.append(uid)
 
         for uid, macro in old_macros.items():
             if uid not in new_macros:
-                modified.append(f'{macro.package_name}.{macro.name} removed')
+                modified.append(uid)
 
-        return modified[:3]
+        return modified
 
-    def check_modified(
-        self,
-        old: Optional[SelectorTarget],
-        new: SelectorTarget,
+    def recursively_check_macros_modified(self, node):
+        # check if there are any changes in macros the first time
+        if self.modified_macros is None:
+            self.modified_macros = self._macros_modified()
+
+        # loop through all macros that this node depends on
+        for macro_uid in node.depends_on.macros:
+            # is this macro one of the modified macros?
+            if macro_uid in self.modified_macros:
+                return True
+            # if not, and this macro depends on other macros, keep looping
+            macro = self.manifest.macros[macro_uid]
+            if len(macro.depends_on.macros) > 0:
+                return self.recursively_check_macros_modified(macro)
+            else:
+                return False
+        return False
+
+    def check_modified(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        different_contents = not new.same_contents(old)  # type: ignore
+        upstream_macro_change = self.recursively_check_macros_modified(new)
+        return different_contents or upstream_macro_change
+
+    def check_modified_body(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        if hasattr(new, "same_body"):
+            return not new.same_body(old)  # type: ignore
+        else:
+            return False
+
+    def check_modified_configs(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
+        if hasattr(new, "same_config"):
+            return not new.same_config(old)  # type: ignore
+        else:
+            return False
+
+    def check_modified_persisted_descriptions(
+        self, old: Optional[SelectorTarget], new: SelectorTarget
     ) -> bool:
-        # check if there are any changes in macros, if so, log a warning the
-        # first time
-        if self.macros_were_modified is None:
-            self.macros_were_modified = self._macros_modified()
-            if self.macros_were_modified:
-                log_str = ', '.join(self.macros_were_modified)
-                logger.warning(warning_tag(
-                    f'During a state comparison, dbt detected a change in '
-                    f'macros. This will not be marked as a modification. Some '
-                    f'macros: {log_str}'
-                ))
+        if hasattr(new, "same_persisted_description"):
+            return not new.same_persisted_description(old)  # type: ignore
+        else:
+            return False
 
-        return not new.same_contents(old)  # type: ignore
-
-    def check_new(
-        self,
-        old: Optional[SelectorTarget],
-        new: SelectorTarget,
+    def check_modified_relation(
+        self, old: Optional[SelectorTarget], new: SelectorTarget
     ) -> bool:
+        if hasattr(new, "same_database_representation"):
+            return not new.same_database_representation(old)  # type: ignore
+        else:
+            return False
+
+    def check_modified_macros(self, _, new: SelectorTarget) -> bool:
+        return self.recursively_check_macros_modified(new)
+
+    def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return old is None
 
     def search(
@@ -443,8 +471,15 @@ class StateSelectorMethod(SelectorMethod):
             )
 
         state_checks = {
+            # it's new if there is no old version
+            'new': lambda old, _: old is None,
+            # use methods defined above to compare properties of old + new
             'modified': self.check_modified,
-            'new': self.check_new,
+            'modified.body': self.check_modified_body,
+            'modified.configs': self.check_modified_configs,
+            'modified.persisted_descriptions': self.check_modified_persisted_descriptions,
+            'modified.relation': self.check_modified_relation,
+            'modified.macros': self.check_modified_macros,
         }
         if selector in state_checks:
             checker = state_checks[selector]
