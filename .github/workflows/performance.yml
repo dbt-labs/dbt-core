@@ -2,13 +2,8 @@
 name: Performance Regression Testing
 # Schedule triggers
 on:
-  # TODO this is just while developing
-  pull_request:
-    branches:
-      - 'develop' 
-      - 'performance-regression-testing'
+  # runs twice a day at 10:05am and 10:05pm
   schedule:
-    # runs twice a day at 10:05am and 10:05pm
     - cron:  '5 10,22 * * *'
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
