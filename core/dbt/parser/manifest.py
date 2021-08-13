@@ -231,7 +231,7 @@ class ManifestLoader:
                                 "Switching to a full re-parse.")
 
                     # Get traceback info
-                    tb_info = traceback.format_exc(10)
+                    tb_info = traceback.format_exc()
                     formatted_lines = tb_info.splitlines()
                     (_, line, method) = formatted_lines[-3].split(', ')
                     exc_info = {

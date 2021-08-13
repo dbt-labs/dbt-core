@@ -60,6 +60,7 @@ Contributors:
 
 ### Under the hood
 - Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
+- Check for existence of test node when removing. ([#3711](https://github.com/dbt-labs/dbt/issues/3711), [#3750](https://github.com/dbt-labs/dbt/pull/3750))
 
 
 ## dbt 0.20.1 (August 11, 2021)
