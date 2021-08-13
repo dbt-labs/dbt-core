@@ -21,11 +21,6 @@ on:
       - "*.latest"
       - "releases/*"
   pull_request:
-    branches-ignore:
-      - "main"
-      - "develop"
-      - "*.latest"
-      - "releases/*"
   workflow_dispatch:
 
 permissions: read-all
