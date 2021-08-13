@@ -74,6 +74,9 @@ pub fn measure<'a>(
                 // alternatively we could clear them before each run
                 .arg("--warmup")
                 .arg("1")
+                // --min-runs defaults to 10
+                .arg("--min-runs")
+                .arg("20")
                 .arg("--prepare")
                 .arg(metric.prepare)
                 .arg([metric.cmd, " --profiles-dir ", "../../project_config/"].join(""))
