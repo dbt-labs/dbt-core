@@ -55,6 +55,13 @@ Contributors:
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
 - [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt/pull/3547))
 
+
+## dbt 0.20.2 (Release TBD)
+
+### Under the hood
+- Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
+
+
 ## dbt 0.20.1 (August 11, 2021)
 
 ## dbt 0.20.1rc1 (August 02, 2021)

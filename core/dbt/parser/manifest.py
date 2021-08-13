@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from dataclasses import field
 import os
+import traceback
 from typing import (
     Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
 )
@@ -74,6 +75,7 @@ class ReparseReason(StrEnum):
     deps_changed = '05_deps_changed'
     project_config_changed = '06_project_config_changed'
     load_file_failure = '07_load_file_failure'
+    exception = '08_exception'
 
 
 # Part of saved performance info
@@ -199,10 +201,6 @@ class ManifestLoader:
         # Read files creates a dictionary of projects to a dictionary
         # of parsers to lists of file strings. The file strings are
         # used to get the SourceFiles from the manifest files.
-        # In the future the loaded files will be used to control
-        # partial parsing, but right now we're just moving the
-        # file loading out of the individual parsers and doing it
-        # all at once.
         start_read_files = time.perf_counter()
         project_parser_files = {}
         for project in self.all_projects.values():
@@ -214,15 +212,51 @@ class ManifestLoader:
         if self.saved_manifest is not None:
             partial_parsing = PartialParsing(self.saved_manifest, self.manifest.files)
             skip_parsing = partial_parsing.skip_parsing()
-            if not skip_parsing:
+            if skip_parsing:
+                # nothing changed, so we don't need to generate project_parser_files
+                self.manifest = self.saved_manifest
+            else:
                 # create child_map and parent_map
                 self.saved_manifest.build_parent_and_child_maps()
                 # files are different, we need to create a new set of
                 # project_parser_files.
-                project_parser_files = partial_parsing.get_parsing_files()
-                self.partially_parsing = True
+                try:
+                    project_parser_files = partial_parsing.get_parsing_files()
+                    self.partially_parsing = True
+                    self.manifest = self.saved_manifest
+                except Exception:
+                    # pp_files should still be the full set and manifest is new manifest,
+                    # since get_parsing_files failed
+                    logger.info("Partial parsing enabled but an error occurred. "
+                                "Switching to a full re-parse.")
 
-            self.manifest = self.saved_manifest
+                    # Get traceback info
+                    tb_info = traceback.format_exc(10)
+                    formatted_lines = tb_info.splitlines()
+                    (_, line, method) = formatted_lines[-3].split(', ')
+                    exc_info = {
+                        "traceback": tb_info,
+                        "exception": formatted_lines[-1],
+                        "code": formatted_lines[-2],
+                        "location": f"{line} {method}",
+                    }
+
+                    # get file info for local logs
+                    parse_file_type = None
+                    file_id = partial_parsing.processing_file
+                    if file_id and file_id in self.manifest.files:
+                        old_file = self.manifest.files[file_id]
+                        parse_file_type = old_file.parse_file_type
+                        logger.debug(f"Partial parsing exception processing file {file_id}")
+                        file_dict = old_file.to_dict()
+                        logger.debug(f"PP file: {file_dict}")
+                    exc_info['parse_file_type'] = parse_file_type
+                    logger.debug(f"PP exception info: {exc_info}")
+
+                    # Send event
+                    if dbt.tracking.active_user is not None:
+                        exc_info['full_reparse_reason'] = ReparseReason.exception
+                        dbt.tracking.track_partial_parser(exc_info)
 
         if self.manifest._parsing_info is None:
             self.manifest._parsing_info = ParsingInfo()
