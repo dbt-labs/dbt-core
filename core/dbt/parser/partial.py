@@ -654,8 +654,9 @@ class PartialParsing:
     def remove_tests(self, schema_file, dict_key, name):
         tests = schema_file.get_tests(dict_key, name)
         for test_unique_id in tests:
-            node = self.saved_manifest.nodes.pop(test_unique_id)
-            self.deleted_manifest.nodes[test_unique_id] = node
+            if test_unique_id in self.saved_manifest.nodes:
+                node = self.saved_manifest.nodes.pop(test_unique_id)
+                self.deleted_manifest.nodes[test_unique_id] = node
         schema_file.remove_tests(dict_key, name)
 
     def delete_schema_source(self, schema_file, source_dict):
