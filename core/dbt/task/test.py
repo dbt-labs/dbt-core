@@ -33,8 +33,8 @@ from dbt import flags
 @dataclass
 class TestResultData(dbtClassMixin):
     failures: int
-    should_warn: bool
-    should_error: bool
+    should_warn: int
+    should_error: int
 
 
 class TestRunner(CompileRunner):
