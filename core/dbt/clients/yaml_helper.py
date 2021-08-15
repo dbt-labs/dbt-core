@@ -1,17 +1,16 @@
 import dbt.exceptions
 from typing import Any, Dict, Optional
 import oyaml as yaml
-import yaml.scanner
 
 # the C version is faster, but it doesn't always exist
 try:
-    from yaml import (
+    from oyaml import (
         CLoader as Loader,
         CSafeLoader as SafeLoader,
         CDumper as Dumper
     )
 except ImportError:
-    from yaml import (  # type: ignore  # noqa: F401
+    from oyaml import (  # type: ignore  # noqa: F401
         Loader, SafeLoader, Dumper
     )
 

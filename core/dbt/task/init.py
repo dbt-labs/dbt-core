@@ -105,7 +105,7 @@ class InitTask(BaseTask):
                 ])
                 click.echo(options_msg)
                 numeric_choice = click.prompt(
-                    f"Desired {choice_type} option (enter a number)", type=int
+                    f"Desired {choice_type} option (enter a number)", type=click.INT
                 )
                 choice = option_list[numeric_choice - 1]
                 # Complete the chosen option's values in a recursive call
@@ -185,7 +185,7 @@ class InitTask(BaseTask):
         # Line below raises an exception if the specified adapter is not found
         load_plugin(adapter)
         adapter_path = get_include_paths(adapter)[0]
-        target_options_path = adapter_path / 'target_options.yml'
+        target_options_path = adapter_path / "target_options.yml"
 
         if target_options_path.exists():
             with open(target_options_path) as f:
@@ -240,7 +240,7 @@ class InitTask(BaseTask):
         click.echo("\n".join([
             f"[{n+1}] {v}" for n, v in enumerate(available_adapters)
         ]))
-        numeric_choice = click.prompt("Enter a number", type=int)
+        numeric_choice = click.prompt("Enter a number", type=click.INT)
         return available_adapters[numeric_choice - 1]
 
     def run(self):
