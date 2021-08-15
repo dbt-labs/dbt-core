@@ -13,7 +13,7 @@ from datetime import datetime
 from functools import wraps
 
 import pytest
-import yaml
+import oyaml as yaml
 from unittest.mock import patch
 
 import dbt.main as dbt

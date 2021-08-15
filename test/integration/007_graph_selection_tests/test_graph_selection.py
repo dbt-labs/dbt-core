@@ -1,5 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import yaml
+import oyaml as yaml
 import json
 import os
 
@@ -408,7 +408,7 @@ class TestGraphSelection(DBTIntegrationTest):
 
         results = self.run_dbt(['ls', '--select', '1+exposure:user_exposure'])
         assert len(results) == 5
-        assert sorted(results) == ['exposure:test.user_exposure', 'test.schema_test.unique_users_id', 
+        assert sorted(results) == ['exposure:test.user_exposure', 'test.schema_test.unique_users_id',
             'test.schema_test.unique_users_rollup_gender', 'test.users', 'test.users_rollup']
 
         results = self.run_dbt(['run', '-m', '+exposure:user_exposure'])

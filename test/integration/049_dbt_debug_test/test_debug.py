@@ -1,7 +1,7 @@
 from test.integration.base import DBTIntegrationTest,  use_profile
 import os
 import re
-import yaml
+import oyaml as yaml
 
 import pytest
 

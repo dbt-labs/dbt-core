@@ -1,8 +1,13 @@
-type: redshift
-threads: [1 or more]
-host: [host]
-port: [port]
-user: [dev_username]
-pass: [dev_password]
-dbname: [dbname]
-schema: [dev_schema]
+_fixed_type: redshift
+_choose_authentication_method:
+  password:
+    password: '[password]'
+  iam:
+    method: iam
+host: '[hostname.region.redshift.amazonaws.com]'
+user: '[username]'
+port: 5439
+dbname: '[database name]'
+schema: '[dbt schema]'
+threads: '[1 or more]'
+keepalives_idle: 0 # default 0, indicating the system default

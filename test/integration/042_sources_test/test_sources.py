@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta
 
-import yaml
+import oyaml as yaml
 
 from dbt.exceptions import CompilationException
 import dbt.tracking
@@ -371,7 +371,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_source_freshness_selection_exclude(self):
-        """Tests node selection using the --select argument. It 'excludes' the 
+        """Tests node selection using the --select argument. It 'excludes' the
         only source in the project so it should return no results."""
         self._set_updated_at_to(timedelta(hours=-2))
         self.freshness_start_time = datetime.utcnow()

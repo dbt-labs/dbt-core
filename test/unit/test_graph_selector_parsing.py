@@ -7,7 +7,7 @@ from dbt.graph import (
 )
 from dbt.graph.selector_methods import MethodName
 import textwrap
-import yaml
+import oyaml as yaml
 
 from dbt.contracts.selection import SelectorFile
 

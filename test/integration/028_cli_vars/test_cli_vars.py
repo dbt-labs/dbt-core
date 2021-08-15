@@ -1,5 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import yaml
+import oyaml as yaml
 import json
 
 

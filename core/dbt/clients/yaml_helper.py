@@ -1,6 +1,6 @@
 import dbt.exceptions
 from typing import Any, Dict, Optional
-import yaml
+import oyaml as yaml
 import yaml.scanner
 
 # the C version is faster, but it doesn't always exist

@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import sys
-import yaml
+import oyaml as yaml
 
 LOGGER = logging.getLogger('upgrade_dbt_schema')
 LOGFILE = 'upgrade_dbt_schema_tests_v1_to_v2.txt'

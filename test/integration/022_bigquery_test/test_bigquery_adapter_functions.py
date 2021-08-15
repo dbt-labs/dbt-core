@@ -1,5 +1,5 @@
 from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
-import yaml
+import oyaml as yaml
 
 
 class TestBigqueryAdapterFunctions(DBTIntegrationTest):

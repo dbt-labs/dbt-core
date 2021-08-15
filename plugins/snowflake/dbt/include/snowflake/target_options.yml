@@ -1,4 +1,4 @@
-type: snowflake
+_fixed_type: snowflake
 account: '[account id + region (if applicable)]'
 user: '[username]'
 _choose_authentication_type:

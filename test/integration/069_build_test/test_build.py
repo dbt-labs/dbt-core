@@ -1,5 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import yaml
+import oyaml as yaml
 
 
 class TestBuild(DBTIntegrationTest):
@@ -44,7 +44,7 @@ class TestFailingBuild(TestBuild):
     @property
     def models(self):
         return "models-failing"
-        
+
     @use_profile("postgres")
     def test__postgres_build_happy_path(self):
         results = self.build(expect_pass=False)

@@ -3,7 +3,7 @@ from pprint import pprint
 
 from test.integration.base import DBTIntegrationTest, use_profile
 import textwrap
-import yaml
+import oyaml as yaml
 
 
 class TestBigqueryAdapterSpecific(DBTIntegrationTest):
@@ -28,7 +28,7 @@ class TestBigqueryAdapterSpecific(DBTIntegrationTest):
             test:
                 materialized: table
                 expiring_table:
-                    hours_to_expiration: 4    
+                    hours_to_expiration: 4
         '''))
 
     @use_profile('bigquery')

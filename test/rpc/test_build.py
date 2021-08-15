@@ -1,6 +1,6 @@
 import os
 import pytest
-import yaml
+import oyaml as yaml
 from .util import (
     assert_has_threads,
     get_querier,
@@ -128,7 +128,7 @@ def test_rpc_build_state(
             querier.build(state='./state', models=['state:modified']),
         )
         assert len(results['results']) == 0
-        
+
         # a better test of defer would require multiple targets
         results = querier.async_wait_for_result(
             querier.build(state='./state', models=['state:modified'], defer=True)

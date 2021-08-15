@@ -1,14 +1,14 @@
-type: bigquery
-_choose_method:
-  _oauth:
-    method: oauth
-  _service_account:
-    method: service-account
-    keyfile: [/path/to/bigquery/keyfile.json]
-project: [GCP project id]
-dataset: [the name of your dbt dataset]
-threads: [1 or more]
+_fixed_type: bigquery
+_choose_authentication_method:
+  oauth:
+    _fixed_method: oauth
+  service_account:
+    _fixed_method: service-account
+    keyfile: '[/path/to/bigquery/keyfile.json]'
+project: '[GCP project id]'
+dataset: '[the name of your dbt dataset]'
+threads: '[1 or more]'
 timeout_seconds: 300
-location: [one of US or EU]
-priority: interactive
-retries: 1
+location: '[one of US or EU]'
+_fixed_priority: interactive
+_fixed_retries: 1

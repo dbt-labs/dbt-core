@@ -5,7 +5,7 @@ import random
 import time
 from typing import Dict, Any, Set
 
-import yaml
+import oyaml as yaml
 
 
 def pytest_addoption(parser):

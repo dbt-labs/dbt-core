@@ -1,6 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import textwrap
-import yaml
+import oyaml as yaml
 
 
 class TestBigqueryDatePartitioning(DBTIntegrationTest):

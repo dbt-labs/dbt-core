@@ -2,7 +2,7 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import shutil
-import yaml
+import oyaml as yaml
 
 
 class TestInit(DBTIntegrationTest):

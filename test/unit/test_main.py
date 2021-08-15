@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-import yaml
+import oyaml as yaml
 
 from dbt import main
 

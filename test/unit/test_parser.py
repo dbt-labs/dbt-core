@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 import os
-import yaml
+import oyaml as yaml
 
 import dbt.flags
 import dbt.parser
