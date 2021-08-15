@@ -10,7 +10,7 @@ on:
       - 'develop' 
       - '*.latest' 
       - 'releases/*'
-  pull_request_target:
+  pull_request:
     branches: 
       - 'develop' 
       - '*.latest' 

@@ -12,9 +12,9 @@ import dbt.parser
 import dbt.config
 import dbt.utils
 import dbt.parser.manifest
+from dbt import tracking
 from dbt.contracts.files import SourceFile, FileHash, FilePath
-from dbt.contracts.graph.manifest import Manifest, MacroManifest, ManifestStateCheck
-from dbt.parser.base import BaseParser
+from dbt.contracts.graph.manifest import MacroManifest, ManifestStateCheck
 from dbt.graph import NodeSelector, parse_difference
 
 try:
@@ -43,6 +43,7 @@ class GraphTest(unittest.TestCase):
         # create various attributes
         dbt.flags.STRICT_MODE = True
         self.graph_result = None
+        tracking.do_not_track()
         self.profile = {
             'outputs': {
                 'test': {
@@ -338,8 +339,11 @@ class GraphTest(unittest.TestCase):
         loader = dbt.parser.manifest.ManifestLoader(config, {config.project_name: config})
         loader.manifest = manifest.deepcopy()
 
-        self.assertTrue(loader.matching_parse_results(manifest))
+        is_partial_parsable, _ = loader.is_partial_parsable(manifest)
+        self.assertTrue(is_partial_parsable)
         manifest.metadata.dbt_version = '0.0.1a1'
-        self.assertFalse(loader.matching_parse_results(manifest))
+        is_partial_parsable, _ = loader.is_partial_parsable(manifest)
+        self.assertFalse(is_partial_parsable)
         manifest.metadata.dbt_version = '99999.99.99'
-        self.assertFalse(loader.matching_parse_results(manifest))
+        is_partial_parsable, _ = loader.is_partial_parsable(manifest)
+        self.assertFalse(is_partial_parsable)

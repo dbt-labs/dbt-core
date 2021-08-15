@@ -1,5 +1,5 @@
 import dbt.exceptions
-
+from typing import Any, Dict, Optional
 import yaml
 import yaml.scanner
 
@@ -56,7 +56,7 @@ def contextualized_yaml_error(raw_contents, error):
                                      raw_error=error)
 
 
-def safe_load(contents):
+def safe_load(contents) -> Optional[Dict[str, Any]]:
     return yaml.load(contents, Loader=SafeLoader)
 
 

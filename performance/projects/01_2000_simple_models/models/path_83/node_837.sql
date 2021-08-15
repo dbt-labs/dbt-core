@@ -1,0 +1,11 @@
+select 1 as id
+union all
+select * from {{ ref('node_0') }}
+union all
+select * from {{ ref('node_1') }}
+union all
+select * from {{ ref('node_256') }}
+union all
+select * from {{ ref('node_258') }}
+union all
+select * from {{ ref('node_502') }}

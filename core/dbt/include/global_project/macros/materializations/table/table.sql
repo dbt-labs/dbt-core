@@ -48,7 +48,7 @@
 
   -- cleanup
   {% if old_relation is not none %}
-      {{ adapter.rename_relation(target_relation, backup_relation) }}
+      {{ adapter.rename_relation(old_relation, backup_relation) }}
   {% endif %}
 
   {{ adapter.rename_relation(intermediate_relation, target_relation) }}

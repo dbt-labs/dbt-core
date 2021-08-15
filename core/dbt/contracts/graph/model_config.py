@@ -2,13 +2,13 @@ from dataclasses import field, Field, dataclass
 from enum import Enum
 from itertools import chain
 from typing import (
-    Any, List, Optional, Dict, Union, Type, TypeVar
+    Any, List, Optional, Dict, Union, Type, TypeVar, Callable
 )
 from dbt.dataclass_schema import (
     dbtClassMixin, ValidationError, register_pattern,
 )
 from dbt.contracts.graph.unparsed import AdditionalPropertiesAllowed
-from dbt.exceptions import InternalException
+from dbt.exceptions import InternalException, CompilationException
 from dbt.contracts.util import Replaceable, list_str
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -204,6 +204,34 @@ class BaseConfig(
         else:
             self._extra[key] = value
 
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            msg = (
+                'Error, tried to delete config key "{}": Cannot delete '
+                'built-in keys'
+            ).format(key)
+            raise CompilationException(msg)
+        else:
+            del self._extra[key]
+
+    def _content_iterator(self, include_condition: Callable[[Field], bool]):
+        seen = set()
+        for fld, _ in self._get_fields():
+            seen.add(fld.name)
+            if include_condition(fld):
+                yield fld.name
+
+        for key in self._extra:
+            if key not in seen:
+                seen.add(key)
+                yield key
+
+    def __iter__(self):
+        yield from self._content_iterator(include_condition=lambda f: True)
+
+    def __len__(self):
+        return len(self._get_fields()) + len(self._extra)
+
     @staticmethod
     def compare_key(
         unrendered: Dict[str, Any],
@@ -239,8 +267,14 @@ class BaseConfig(
                     return False
         return True
 
+    # This is used in 'add_config_call' to created the combined config_call_dict.
+    mergebehavior = {
+        "append": ['pre-hook', 'pre_hook', 'post-hook', 'post_hook', 'tags'],
+        "update": ['quoting', 'column_types'],
+    }
+
     @classmethod
-    def _extract_dict(
+    def _merge_dicts(
         cls, src: Dict[str, Any], data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Find all the items in data that match a target_field on this class,
@@ -286,10 +320,10 @@ class BaseConfig(
 
         adapter_config_cls = get_config_class_by_name(adapter_type)
 
-        self_merged = self._extract_dict(dct, data)
+        self_merged = self._merge_dicts(dct, data)
         dct.update(self_merged)
 
-        adapter_merged = adapter_config_cls._extract_dict(dct, data)
+        adapter_merged = adapter_config_cls._merge_dicts(dct, data)
         dct.update(adapter_merged)
 
         # any remaining fields must be "clobber"
@@ -322,6 +356,8 @@ class SourceConfig(BaseConfig):
 
 @dataclass
 class NodeConfig(BaseConfig):
+    # Note: if any new fields are added with MergeBehavior, also update the
+    # 'mergebehavior' dictionary
     enabled: bool = True
     materialized: str = 'view'
     persist_docs: Dict[str, Any] = field(default_factory=dict)

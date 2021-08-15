@@ -17,7 +17,6 @@ class TestBuild(DBTIntegrationTest):
             "config-version": 2,
             "snapshot-paths": ["snapshots"],
             "data-paths": ["data"],
-            "source-paths": ["models"],
             "seeds": {
                 "quote_columns": False,
             },
@@ -35,3 +34,21 @@ class TestBuild(DBTIntegrationTest):
     @use_profile("postgres")
     def test__postgres_build_happy_path(self):
         self.build()
+
+
+class TestFailingBuild(TestBuild):
+    @property
+    def schema(self):
+        return "build_test_069"
+
+    @property
+    def models(self):
+        return "models-failing"
+        
+    @use_profile("postgres")
+    def test__postgres_build_happy_path(self):
+        results = self.build(expect_pass=False)
+        self.assertEqual(len(results), 12)
+        actual = [r.status for r in results]
+        expected = ['error']*1 + ['skipped']*4 + ['pass']*2 + ['success']*5
+        self.assertEqual(sorted(actual), sorted(expected))
