@@ -1,0 +1,11 @@
+models:
+- columns:
+  - name: id
+    tests:
+    - unique
+    - not_null
+    - relationships:
+        field: id
+        to: node_0
+  name: node_128
+version: 2
