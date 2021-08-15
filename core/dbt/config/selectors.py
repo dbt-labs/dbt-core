@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from dbt.clients.yaml_helper import (  # noqa: F401
     yaml, Loader, Dumper, load_yaml_text
 )
@@ -36,7 +36,7 @@ class SelectorConfig(Dict[str, SelectionSpec]):
         try:
             SelectorFile.validate(data)
             selector_file = SelectorFile.from_dict(data)
-            validate_selector_default(selector_file) 
+            validate_selector_default(selector_file)
             selectors = parse_from_selectors_definition(selector_file)
         except ValidationError as exc:
             yaml_sel_cfg = yaml.dump(exc.instance)
@@ -122,18 +122,18 @@ def selector_config_from_data(
 def validate_selector_default(selector_file: SelectorFile) -> None:
     """Check if a selector.yml file has more than 1 default key set to true"""
     default_set: bool = False
-    default_selector_name: str = None
+    default_selector_name: Union[str, None] = None
 
     for selector in selector_file.selectors:
-        if selector.default == 'true' and default_set is False:
+        if selector.default is True and default_set is False:
             default_set = True
             default_selector_name = selector.name
             continue
-        if selector.default == 'true' and default_set is True:
+        if selector.default is True and default_set is True:
             raise DbtSelectorsError(
                 "Error when parsing the selector file. default key is set multiple times.\n"
                 f"Default value found in {default_selector_name} and {selector.name}"
-        )
+            )
 
 
 # These are utilities to clean up the dictionary created from
