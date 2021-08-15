@@ -172,7 +172,12 @@ class ListTask(GraphRunnableTask):
         if self.args.selector_name:
             spec = self.config.get_selector(self.args.selector_name)
         else:
-            spec = parse_difference(self.selector, self.args.exclude)
+            spec = parse_difference(self.args.models, self.args.exclude)
+            # default_selector = self.config.get_default_selector()
+            # if default_selector:
+            #     spec = default_selector
+            # else:
+            #     spec = parse_difference(self.args.models, self.args.exclude)
         return spec
 
     def get_node_selector(self):

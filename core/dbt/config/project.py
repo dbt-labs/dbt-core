@@ -653,6 +653,18 @@ class Project:
             )
         return self.selectors[name]
 
+    def get_default_selector(self) -> Union[SelectionSpec, None]:
+        """This function fetch the default selector to use on `dbt run` (if any)
+        :return: either a selector if default is set or None
+        :rtype: Union[SelectionSpec, None]
+        """
+        for selector_name, selector in self.manifest_selectors.items():
+            if selector["default"]:
+                name = selector_name
+                return self.get_selector(name)
+
+        return None
+
     def get_macro_search_order(self, macro_namespace: str):
         for dispatch_entry in self.dispatch:
             if dispatch_entry['macro_namespace'] == macro_namespace:
