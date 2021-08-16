@@ -478,6 +478,12 @@ class ManifestLoader:
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
         try:
+            # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
+            # saved manifest not matching the code version.
+            if self.manifest.metadata.dbt_version != __version__:
+                logger.debug("Manifest metadata did not contain correct version. "
+                             f"Contained '{self.manifest.metadata.dbt_version}' instead.")
+                self.manifest.metadata.dbt_version = __version__
             manifest_msgpack = self.manifest.to_msgpack()
             make_directory(os.path.dirname(path))
             with open(path, 'wb') as fp:
@@ -493,7 +499,10 @@ class ManifestLoader:
         reparse_reason = None
 
         if manifest.metadata.dbt_version != __version__:
-            logger.info("Unable to do partial parsing because of a dbt version mismatch")
+            # #3757 log both versions because of reports of invalid cases of mismatch.
+            logger.info("Unable to do partial parsing because of a dbt version mismatch. "
+                        f"Saved manifest version: {manifest.metadata.dbt_version}. "
+                        f"Current version: {__version__}.")
             # If the version is wrong, the other checks might not work
             return False, ReparseReason.version_mismatch
         if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
