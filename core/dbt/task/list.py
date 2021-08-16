@@ -1,5 +1,6 @@
 import json
 from typing import Type
+import logging
 
 from dbt.contracts.graph.parsed import (
     ParsedExposure,
@@ -173,7 +174,7 @@ class ListTask(GraphRunnableTask):
             spec = self.config.get_selector(self.args.selector_name)
         else:
             default_selector = self.config.get_default_selector()
-            if default_selector:
+            if default_selector is not None:
                 spec = default_selector
             else:
                 spec = parse_difference(self.args.models, self.args.exclude)
