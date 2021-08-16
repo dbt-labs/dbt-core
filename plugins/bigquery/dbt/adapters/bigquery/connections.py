@@ -605,7 +605,9 @@ def _sanitize_label(value: str) -> str:
     value_length = len(value)
     if value_length > _VALIDATE_LABEL_LENGTH_LIMIT:
         error_msg = (
-            f"Current label length {value_length} is greater than length limit: {_VALIDATE_LABEL_LENGTH_LIMIT} | Current sanitized label: {value}"
+            f"Job label length {value_length} is greater than length limit: " \
+            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n" \
+            f"Current sanitized label: {value}"
         )
         raise Exception(error_msg)
     else:
