@@ -609,6 +609,6 @@ def _sanitize_label(value: str) -> str:
             f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n" \
             f"Current sanitized label: {value}"
         )
-        raise Exception(error_msg)
+        raise RuntimeException(error_msg)
     else:
         return value
