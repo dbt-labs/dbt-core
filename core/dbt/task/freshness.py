@@ -146,6 +146,7 @@ class FreshnessTask(GraphRunnableTask):
             spec = self.config.get_selector(self.args.selector_name)
         else:
             default_selector = self.config.get_default_selector()
+            print(default_selector)
             if default_selector:
                 spec = default_selector
             else:
