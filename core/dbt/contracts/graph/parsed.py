@@ -692,7 +692,7 @@ class ParsedSourceDefinition(
 
     @property
     def depends_on(self):
-        return {'nodes': []}
+        return DependsOn(macros=[], nodes=[])
 
     @property
     def refs(self):

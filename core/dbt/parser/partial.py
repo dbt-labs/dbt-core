@@ -46,6 +46,7 @@ class PartialParsing:
         self.deleted_manifest = Manifest()
         self.macro_child_map: Dict[str, List[str]] = {}
         self.build_file_diff()
+        self.processing_file = None
 
     def skip_parsing(self):
         return (
@@ -118,16 +119,21 @@ class PartialParsing:
         # Need to add new files first, because changes in schema files
         # might refer to them
         for file_id in self.file_diff['added']:
+            self.processing_file = file_id
             self.add_to_saved(file_id)
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
         for file_id in self.file_diff['changed_schema_files']:
+            self.processing_file = file_id
             self.change_schema_file(file_id)
         for file_id in self.file_diff['deleted_schema_files']:
+            self.processing_file = file_id
             self.delete_schema_file(file_id)
         for file_id in self.file_diff['deleted']:
+            self.processing_file = file_id
             self.delete_from_saved(file_id)
         for file_id in self.file_diff['changed']:
+            self.processing_file = file_id
             self.update_in_saved(file_id)
         return self.project_parser_files
 
@@ -648,8 +654,9 @@ class PartialParsing:
     def remove_tests(self, schema_file, dict_key, name):
         tests = schema_file.get_tests(dict_key, name)
         for test_unique_id in tests:
-            node = self.saved_manifest.nodes.pop(test_unique_id)
-            self.deleted_manifest.nodes[test_unique_id] = node
+            if test_unique_id in self.saved_manifest.nodes:
+                node = self.saved_manifest.nodes.pop(test_unique_id)
+                self.deleted_manifest.nodes[test_unique_id] = node
         schema_file.remove_tests(dict_key, name)
 
     def delete_schema_source(self, schema_file, source_dict):

@@ -1,0 +1,12 @@
+default:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      user: dummy
+      password: dummy_password
+      port: 5432
+      dbname: dummy
+      schema: dummy
+      threads: 4

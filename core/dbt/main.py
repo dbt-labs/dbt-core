@@ -1072,15 +1072,15 @@ def parse_args(args, cls=DBTArgumentParser):
     seed_sub = _build_seed_subparser(subs, base_subparser)
     # --threads, --no-version-check
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                          rpc_sub, seed_sub, parse_sub)
+                          rpc_sub, seed_sub, parse_sub, build_sub)
     # --models, --exclude
     # list_sub sets up its own arguments.
     _add_selection_arguments(build_sub, run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
     # --defer
-    _add_defer_argument(run_sub, test_sub)
+    _add_defer_argument(run_sub, test_sub, build_sub)
     # --full-refresh
-    _add_table_mutability_arguments(run_sub, compile_sub)
+    _add_table_mutability_arguments(run_sub, compile_sub, build_sub)
 
     _build_docs_serve_subparser(docs_subs, base_subparser)
     _build_source_freshness_subparser(source_subs, base_subparser)

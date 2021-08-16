@@ -31,7 +31,7 @@ DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
 LOAD_ALL_TIMING_SPEC = 'iglu:com.dbt/load_all_timing/jsonschema/1-0-3'
 RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
 EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
-PARTIAL_PARSER = 'iglu:com.dbt/partial_parser/jsonschema/1-0-0'
+PARTIAL_PARSER = 'iglu:com.dbt/partial_parser/jsonschema/1-0-1'
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
 

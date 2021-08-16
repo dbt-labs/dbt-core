@@ -21,6 +21,7 @@ from dbt.contracts.rpc import (
     RPCSnapshotParameters,
     RPCSourceFreshnessParameters,
     RPCListParameters,
+    RPCBuildParameters,
 )
 from dbt.exceptions import RuntimeException
 from dbt.rpc.method import (
@@ -37,6 +38,7 @@ from dbt.task.seed import SeedTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 from dbt.task.list import ListTask
+from dbt.task.build import BuildTask
 
 from .base import RPCTask
 from .cli import HasCLI
@@ -305,3 +307,22 @@ class RemoteListTask(
             output=[json.loads(x) for x in results],
             logs=None
         )
+
+
+class RemoteBuildProjectTask(RPCCommandTask[RPCBuildParameters], BuildTask):
+    METHOD_NAME = 'build'
+
+    def set_args(self, params: RPCBuildParameters) -> None:
+        self.args.models = self._listify(params.models)
+        self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
+
+        if params.threads is not None:
+            self.args.threads = params.threads
+        if params.defer is None:
+            self.args.defer = flags.DEFER_MODE
+        else:
+            self.args.defer = params.defer
+
+        self.args.state = state_path(params.state)
+        self.set_previous_state()

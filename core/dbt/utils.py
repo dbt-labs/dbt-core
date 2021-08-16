@@ -6,6 +6,7 @@ import decimal
 import functools
 import hashlib
 import itertools
+import jinja2
 import json
 import os
 from contextlib import contextmanager
@@ -306,14 +307,16 @@ def timestring() -> str:
 
 class JSONEncoder(json.JSONEncoder):
     """A 'custom' json encoder that does normal json encoder things, but also
-    handles `Decimal`s. Naturally, this can lose precision because they get
-    converted to floats.
+    handles `Decimal`s. and `Undefined`s. Decimals can lose precision because
+    they get converted to floats. Undefined's are serialized to an empty string
     """
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
+        if isinstance(obj, jinja2.Undefined):
+            return ""
         if hasattr(obj, 'to_dict'):
             # if we have a to_dict we should try to serialize the result of
             # that!

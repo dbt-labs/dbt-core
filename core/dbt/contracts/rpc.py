@@ -117,6 +117,16 @@ class RPCDocsGenerateParameters(RPCParameters):
 
 
 @dataclass
+class RPCBuildParameters(RPCParameters):
+    threads: Optional[int] = None
+    models: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+    selector: Optional[str] = None
+    state: Optional[str] = None
+    defer: Optional[bool] = None
+
+
+@dataclass
 class RPCCliParameters(RPCParameters):
     cli: str
 
