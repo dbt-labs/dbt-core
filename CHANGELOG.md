@@ -13,6 +13,7 @@
 ### Under the hood
 
 - Add `build` RPC method, and a subset of flags for `build` task ([#3595](https://github.com/dbt-labs/dbt/issues/3595), [#3674](https://github.com/dbt-labs/dbt/pull/3674))
+- Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
 
 ## dbt 0.21.0b1 (August 03, 2021)
 
