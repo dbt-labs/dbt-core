@@ -27,6 +27,7 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
+      - "github-actions" # TODO: rm after testing
   pull_request_target:
   workflow_dispatch:
 
