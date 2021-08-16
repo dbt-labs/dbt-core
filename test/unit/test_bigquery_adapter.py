@@ -986,8 +986,8 @@ def test_sanitize_label_length(label_length):
         for i in range(label_length)
     )
     test_error_msg = (
-            f"Job label length {label_length} is greater than length limit: " \
-            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n" \
+            f"Job label length {label_length} is greater than length limit: "
+            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n"
             f"Current sanitized label: {random_string.lower()}"
         )
     with pytest.raises(dbt.exceptions.RuntimeException) as error_info:
