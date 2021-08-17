@@ -256,9 +256,7 @@ class ConfiguredParser(
             parsed_node, self.root_project, self.manifest, config
         )
 
-    def render_with_context(
-        self, parsed_node: IntermediateNode, config: ContextConfig
-    ) -> None:
+    def render_with_context(self, parsed_node: IntermediateNode, config: ContextConfig):
         # Given the parsed node and a ContextConfig to use during parsing,
         # render the node's sql wtih macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
@@ -273,11 +271,12 @@ class ConfiguredParser(
             get_rendered(
                 parsed_node.raw_sql, context, parsed_node, capture_macros=True
             )
+        return context
 
     # This is taking the original config for the node, converting it to a dict,
     # updating the config with new config passed in, then re-creating the
     # config from the dict in the node.
-    def update_parsed_node_config(
+    def update_parsed_node_config_dict(
         self, parsed_node: IntermediateNode, config_dict: Dict[str, Any]
     ) -> None:
         # Overwrite node config
@@ -294,27 +293,49 @@ class ConfiguredParser(
         self._update_node_schema(parsed_node, config_dict)
         self._update_node_alias(parsed_node, config_dict)
 
-    def update_parsed_node(
-        self, parsed_node: IntermediateNode, config: ContextConfig
+    def update_parsed_node_config(
+        self, parsed_node: IntermediateNode, config: ContextConfig,
+        context=None, patch_config_dict=None
     ) -> None:
         """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
-        config_dict = config.build_config_dict()
 
-        # Set tags on node provided in config blocks
+        # build_config_dict takes the config_call_dict in the ContextConfig object
+        # and calls calculate_node_config to combine dbt_project configs and
+        # config calls from SQL files
+        config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
+
+        # Set tags on node provided in config blocks. Tags are additive, so even if
+        # config has been built before, we don't have to reset tags in the parsed_node.
         model_tags = config_dict.get('tags', [])
-        parsed_node.tags.extend(model_tags)
+        for tag in model_tags:
+            if tag not in parsed_node.tags:
+                parsed_node.tags.append(tag)
 
+        # If we have meta in the config, copy to node level, for backwards
+        # compatibility with earlier node-only config.
+        if 'meta' in config_dict and config_dict['meta']:
+            parsed_node.meta = config_dict['meta']
+
+        # unrendered_config is used to compare the original database/schema/alias
+        # values and to handle 'same_config' and 'same_contents' calls
         parsed_node.unrendered_config = config.build_config_dict(
             rendered=False
         )
 
+        parsed_node.config_call_dict = config._config_call_dict
+
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
-        self.update_parsed_node_config(parsed_node, config_dict)
+        self.update_parsed_node_config_dict(parsed_node, config_dict)
+        # This updates the node database/schema/alias
         self.update_parsed_node_name(parsed_node, config_dict)
+
+        # tests don't have hooks
+        if parsed_node.resource_type == NodeType.Test:
+            return
 
         # at this point, we've collected our hooks. Use the node context to
         # render each hook and collect refs/sources
@@ -323,9 +344,8 @@ class ConfiguredParser(
         # skip context rebuilding if there aren't any hooks
         if not hooks:
             return
-        # we could cache the original context from parsing this node. Is that
-        # worth the cost in memory/complexity?
-        context = self._context_for(parsed_node, config)
+        if not context:
+            context = self._context_for(parsed_node, config)
         for hook in hooks:
             get_rendered(hook.sql, context, parsed_node, capture_macros=True)
 
@@ -357,8 +377,8 @@ class ConfiguredParser(
         self, node: IntermediateNode, config: ContextConfig
     ) -> None:
         try:
-            self.render_with_context(node, config)
-            self.update_parsed_node(node, config)
+            context = self.render_with_context(node, config)
+            self.update_parsed_node_config(node, config, context=context)
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             msg = validator_error_message(exc)
