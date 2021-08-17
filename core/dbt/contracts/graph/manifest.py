@@ -170,7 +170,7 @@ class RefableLookup(dbtClassMixin):
 
 
 class AnalysisLookup(RefableLookup):
-    _lookup_types: ClassVar[set] = set(NodeType.Analysis)
+    _lookup_types: ClassVar[set] = set([NodeType.Analysis])
 
 
 def _search_packages(
