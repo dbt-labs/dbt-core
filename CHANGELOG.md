@@ -47,7 +47,25 @@ Contributors:
 - [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt/pull/3547))
 
 
-## dbt 0.20.1 (Release TBD)
+## dbt 0.20.2 (Release TBD)
+
+### Under the hood
+- Better error handling for BigQuery job labels that are too long. ([#3612](https://github.com/dbt-labs/dbt/pull/3612), [#3703](https://github.com/dbt-labs/dbt/pull/3703))
+
+Contributors:
+- [@sungchun12](https://github.com/sungchun12) ([#3703](https://github.com/dbt-labs/dbt/pull/3703))
+
+## dbt 0.20.2rc1 (August 16, 2021)
+
+
+### Under the hood
+- Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
+- Check for existence of test node when removing. ([#3711](https://github.com/dbt-labs/dbt/issues/3711), [#3750](https://github.com/dbt-labs/dbt/pull/3750))
+
+
+## dbt 0.20.1 (August 11, 2021)
+
+## dbt 0.20.1rc1 (August 02, 2021)
 
 ### Features
 - Adds `install-prerelease` parameter to hub packages in `packages.yml`. When set to `True`, allows prerelease packages to be installed. By default, this parameter is False unless explicitly set to True.
