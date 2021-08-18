@@ -1,4 +1,4 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile, get_manifest
 import os
 
 
@@ -36,6 +36,11 @@ class TestAnalyses(DBTIntegrationTest):
         self.assertFalse(os.path.exists(compiled_analysis_path))
         results = self.run_dbt(["compile"])
         self.assertEqual(len(results), 3)
+        manifest = get_manifest()
+        analysis_id = 'analysis.test.analysis'
+        self.assertIn(analysis_id, manifest.nodes)
+        node = manifest.nodes[analysis_id]
+        self.assertEqual(node.description, 'This is my analysis')
 
         self.assertTrue(os.path.exists(path_1))
         self.assertTrue(os.path.exists(path_2))
