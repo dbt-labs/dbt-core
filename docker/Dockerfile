@@ -1,4 +1,4 @@
-ARG BASE_IMAGE="python:3.8-slim-buster"
+ARG BASE_IMAGE=python:3.8-slim-bullseye
 
 FROM $BASE_IMAGE
 ARG BASE_REQUIREMENTS_SRC_PATH
