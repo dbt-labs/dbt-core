@@ -1,5 +1,5 @@
 # **what?**
-# Runs code quality, unit tests, and verifies python build on
+# Runs code quality checks, unit tests, and verifies python build on
 # all code commited to the repository. This workflow should not
 # require any secrets since it runs for PRs from forked repos.
 # By default, secrets are not passed to workflows running from
