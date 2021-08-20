@@ -50,33 +50,25 @@ module.exports = ({ context }) => {
       adapter: [...adapters],
       "python-version": [...pythonVersions],
     };
-  } else if (context.eventName.includes("push")) {
-    // if push, run a for all adapters and python versions on ubuntu
-    // additionally include runs for all adapters, on other OS, but only for
-    // the default python version
-    const include = [];
-    for (const adapter of supportedAdapters) {
-      for (const operatingSystem of ["windows-latest", "macos-latest"]) {
-        include.push({
-          os: operatingSystem,
-          adapter: adapter,
-          "python-version": defaultPythonVersion,
-        });
-      }
+  }
+  // otherwise, run a for all adapters and python versions on ubuntu
+  // additionally include runs for all adapters, on macos and windows,
+  // but only for the default python version
+  const include = [];
+  for (const adapter of supportedAdapters) {
+    for (const operatingSystem of ["windows-latest", "macos-latest"]) {
+      include.push({
+        os: operatingSystem,
+        adapter: adapter,
+        "python-version": defaultPythonVersion,
+      });
     }
-
-    return {
-      os: ["ubuntu-latest"],
-      adapter: supportedAdapters,
-      "python-version": supportedPythonVersions,
-      include,
-    };
   }
 
-  // otherwise (manual trigger, scheduled trigger, etc.) run everything
   return {
-    os: ["ubuntu-latest", "windows-latest", "macos-latest"],
+    os: ["ubuntu-latest"],
     adapter: supportedAdapters,
     "python-version": supportedPythonVersions,
+    include,
   };
 };
