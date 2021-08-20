@@ -12,7 +12,7 @@
 # This will run for all PRs, when code is pushed to a release
 # branch, and when manually triggered.
 
-name: Main CI
+name: Main
 
 on:
   push:

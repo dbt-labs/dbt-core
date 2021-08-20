@@ -1,4 +1,4 @@
-name: Performance Regression Testing
+name: Performance Regression Tests
 # Schedule triggers
 on:
   # runs twice a day at 10:05am and 10:05pm
