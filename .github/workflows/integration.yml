@@ -34,6 +34,9 @@ on:
   pull_request_target:
   # manual tigger
   workflow_dispatch:
+  # everyday at 10:05pm
+  schedule:
+    - cron: "5 22 * * *"
 
 # explicitly turn off permissions for `GITHUB_TOKEN`
 permissions: read-all

@@ -1,18 +1,23 @@
 module.exports = ({ context }) => {
+  const defaultPythonVersion = "3.8";
+  const supportedPythonVersions = ["3.6", "3.7", "3.8", "3.9"];
+  const supportedAdapters = ["snowflake", "postgres", "bigquery", "redshift"];
+
   if (context.eventName.includes("pull_request")) {
+    // if PR, generate matrix based on files changed and PR labels
     const changes = JSON.parse(process.env.CHANGES);
     const labels = context.payload.pull_request.labels.map(({ name }) => name);
-    console.log('labels', labels);
-    console.log('changes', labels);
+    console.log("labels", labels);
+    console.log("changes", labels);
 
     const testAllLabel = labels.includes("test all");
 
     // PR matrix defaults
     const adapters = new Set();
-    const pythonVersions = new Set(["3.8"]);
+    const pythonVersions = new Set([defaultPythonVersion]);
     const operatingSystems = new Set(["ubuntu-latest"]);
 
-    for (const adapter of ["snowflake", "postgres", "bigquery", "redshift"]) {
+    for (const adapter of supportedAdapters) {
       if (
         changes.includes(adapter) ||
         testAllLabel ||
@@ -22,7 +27,7 @@ module.exports = ({ context }) => {
       }
     }
 
-    for (const pythonVersion of ["3.6", "3.7", "3.8", "3.9"]) {
+    for (const pythonVersion of supportedPythonVersions) {
       if (labels.includes(`test python${pythonVersion}`) || testAllLabel) {
         pythonVersions.add(pythonVersion);
       }
@@ -45,11 +50,33 @@ module.exports = ({ context }) => {
       adapter: [...adapters],
       "python-version": [...pythonVersions],
     };
+  } else if (context.eventName.includes("push")) {
+    // if push, run a for all adapters and python versions on ubuntu
+    // additionally include runs for all adapters, on other OS, but only for
+    // the default python version
+    const include = [];
+    for (const adapter of supportedAdapters) {
+      for (const operatingSystem of ["windows-latest", "macos-latest"]) {
+        include.push({
+          os: operatingSystem,
+          adapter: adapter,
+          "python-version": defaultPythonVersion,
+        });
+      }
+    }
+
+    return {
+      os: ["ubuntu-latest"],
+      adapter: supportedAdapters,
+      "python-version": supportedPythonVersions,
+      include,
+    };
   }
 
+  // otherwise (manual trigger, scheduled trigger, etc.) run everything
   return {
-    os: ["ubuntu-latest", "macos-latest", "windows-latest"],
-    adapter: ["postgres", "snowflake", "bigquery", "redshift"],
-    "python-version": ["3.6", "3.7", "3.8", "3.9"],
+    os: ["ubuntu-latest", "windows-latest", "macos-latest"],
+    adapter: supportedAdapters,
+    "python-version": supportedPythonVersions,
   };
 };
