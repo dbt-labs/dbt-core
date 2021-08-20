@@ -1,10 +1,11 @@
 module.exports = ({ context }) => {
   if (context.eventName.includes("pull_request")) {
     const changes = JSON.parse(process.env.CHANGES);
-    const labels = context.payload.pull_request.labels;
-    const testAllLabel = labels.includes("test all");
+    const labels = context.payload.pull_request.labels.map(({ name }) => name);
+    console.log('labels', labels);
+    console.log('changes', labels);
 
-    console.log(labels)
+    const testAllLabel = labels.includes("test all");
 
     // PR matrix defaults
     const adapters = new Set();
