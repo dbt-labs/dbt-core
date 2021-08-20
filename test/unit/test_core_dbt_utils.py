@@ -13,7 +13,8 @@ class testCoreDbtUtils(unittest.TestCase):
 
     def test_connection_exception_retry_max(self):
         Counter._reset()
-        self.assertRaises(ConnectionException, connection_exception_retry(lambda: Counter._add_with_exception(), 5))
+        with self.assertRaises(ConnectionException):
+            connection_exception_retry(lambda: Counter._add_with_exception(), 5)
         self.assertEqual(6, counter) # 6 = original attempt plus 5 retries
 
     def test_connection_exception_retry_success(self):
