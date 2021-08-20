@@ -9,13 +9,8 @@ module.exports = ({ context }) => {
     const labels = context.payload.pull_request.labels.map(({ name }) => name);
     console.log("labels", labels);
     console.log("changes", labels);
-
     const testAllLabel = labels.includes("test all");
-
-    // PR matrix defaults
-    const adapters = new Set();
-    const pythonVersions = new Set([defaultPythonVersion]);
-    const operatingSystems = new Set(["ubuntu-latest"]);
+    const include = [];
 
     for (const adapter of supportedAdapters) {
       if (
@@ -23,38 +18,60 @@ module.exports = ({ context }) => {
         testAllLabel ||
         labels.includes(`test ${adapter}`)
       ) {
-        adapters.add(adapter);
+        for (const pythonVersion of supportedPythonVersions) {
+          if (
+            pythonVersion === defaultPythonVersion ||
+            labels.includes(`test python${pythonVersion}`) ||
+            testAllLabel
+          ) {
+            // always run tests on ubuntu by default
+            include.push({
+              os: "ubuntu-latest",
+              adapter,
+              "python-version": pythonVersion,
+            });
+
+            if (labels.includes("test windows") || testAllLabel) {
+              include.push({
+                os: "windows-latest",
+                adapter,
+                "python-version": pythonVersion,
+              });
+            }
+
+            if (labels.includes("test macos") || testAllLabel) {
+              include.push({
+                os: "macos-latest",
+                adapter,
+                "python-version": pythonVersion,
+              });
+            }
+          }
+        }
       }
     }
 
-    for (const pythonVersion of supportedPythonVersions) {
-      if (labels.includes(`test python${pythonVersion}`) || testAllLabel) {
-        pythonVersions.add(pythonVersion);
-      }
-    }
-
-    if (labels.includes("test windows") || testAllLabel) {
-      operatingSystems.add("windows-latest");
-    }
-
-    if (labels.includes("test linux") || testAllLabel) {
-      operatingSystems.add("ubuntu-latest");
-    }
-
-    if (labels.includes("test macos") || testAllLabel) {
-      operatingSystems.add("macos-latest");
-    }
+    console.log("matrix", { include });
 
     return {
-      os: [...operatingSystems],
-      adapter: [...adapters],
-      "python-version": [...pythonVersions],
+      include,
     };
   }
-  // otherwise, run a for all adapters and python versions on ubuntu
+
+  const include = [];
+  // run for all adapters and python versions on ubuntu
+  for (const adapter of supportedAdapters) {
+    for (const pythonVersion of supportedPythonVersions) {
+      include.push({
+        os: 'ubuntu-latest',
+        adapter: adapter,
+        "python-version": pythonVersion,
+      });
+    }
+  }
+
   // additionally include runs for all adapters, on macos and windows,
   // but only for the default python version
-  const include = [];
   for (const adapter of supportedAdapters) {
     for (const operatingSystem of ["windows-latest", "macos-latest"]) {
       include.push({
@@ -65,10 +82,9 @@ module.exports = ({ context }) => {
     }
   }
 
+  console.log("matrix", { include });
+
   return {
-    os: ["ubuntu-latest"],
-    adapter: supportedAdapters,
-    "python-version": supportedPythonVersions,
     include,
   };
 };
