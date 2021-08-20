@@ -31,6 +31,8 @@ class ListTask(GraphRunnableTask):
     ))
     ALLOWED_KEYS = frozenset((
         'alias',
+        'database',
+        'schema',
         'name',
         'package_name',
         'depends_on',

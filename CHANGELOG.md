@@ -4,6 +4,7 @@
 
 - Capture changes to macros in `state:modified`. Introduce new `state:` sub-selectors: `modified.body`, `modified.configs`, `modified.persisted_descriptions`, `modified.relation`, `modified.macros` ([#2704](https://github.com/dbt-labs/dbt/issues/2704), [#3278](https://github.com/dbt-labs/dbt/issues/3278), [#3559](https://github.com/dbt-labs/dbt/issues/3559))
 - Enable setting configs in schema files for models, seeds, snapshots, analyses, tests ([#2401](https://github.com/dbt-labs/dbt/issues/2401), [#3616](https://github.com/dbt-labs/dbt/pull/3616))
+- Add `database` and `schema` fields into `dbt ls --output json` task ([#3778](https://github.com/dbt-labs/dbt/issues/3778))
 
 ### Fixes
 
