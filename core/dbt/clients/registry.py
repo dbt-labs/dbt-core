@@ -1,3 +1,4 @@
+import functools
 import requests
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -17,7 +18,8 @@ def _get_url(url, registry_base_url=None):
 
 
 def _get_with_retries(path, registry_base_url=None):
-    return connection_exception_retry(lambda: _get(path, registry_base_url), 5)
+    get_fn = functools.partial(_get, path, registry_base_url)
+    return connection_exception_retry(get_fn, 5)
 
 
 def _get(path, registry_base_url=None):

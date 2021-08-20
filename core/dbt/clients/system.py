@@ -1,4 +1,5 @@
 import errno
+import functools
 import fnmatch
 import json
 import os
@@ -443,7 +444,8 @@ def run_cmd(
 def download_with_retries(
     url: str, path: str, timeout: Optional[Union[float, tuple]] = None
 ) -> None:
-    connection_exception_retry(lambda: download(url, path, timeout), 5)
+    download_fn = functools.partial(download, url, path, timeout)
+    connection_exception_retry(download_fn, 5)
 
 
 def download(
