@@ -21,7 +21,7 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
-      - "github-actions-matrix" # TODO: rm after testing
+      - "github-actions" # testing!
   pull_request:
   workflow_dispatch:
 
