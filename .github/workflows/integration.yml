@@ -18,33 +18,49 @@
 # PRs from forks. The workflow will be skipped until there is a label
 # to mark the PR as safe to run.
 
-name: Integration Tests
+name: Adapter Integration Tests
 
 on:
+  # pushes to release branches
   push:
     branches:
       - "main"
       - "develop"
       - "*.latest"
       - "releases/*"
-      - "github-actions" # TODO: rm after testing
+  # all PRs, important to note that `pull_request_target` workflows
+  # will run in the context of the target branch of a PR
   pull_request_target:
+  # manual tigger
   workflow_dispatch:
 
+# explicitly turn off permissions for `GITHUB_TOKEN`
 permissions: read-all
 
+# will cancel previous workflows triggered by the same event and for the same ref
 concurrency:
-  group: integration-${{ github.event_name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+# sets default shell to bash, for all operating systems
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  pre-checks:
+  # generate test metadata about what files changed and the testing matrix to use
+  test-metadata:
+    # run if not a PR from a forked repository or has a label to mark as safe to test
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      contains(github.event.pull_request.labels.*.name, 'ok to test')
+
     runs-on: ubuntu-latest
+
     outputs:
-      has-postgres-changes: ${{ steps.check-changes.outputs.postgres == 'true' }}
-      has-snowflake-changes: ${{ steps.check-changes.outputs.snowflake == 'true' }}
-      has-bigquery-changes: ${{ steps.check-changes.outputs.bigquery == 'true' }}
-      has-redshift-changes: ${{ steps.check-changes.outputs.redshift == 'true' }}
+      matrix: ${{ steps.generate-matrix.outputs.result }}
+
     steps:
       - name: Check out the repository (non-PR)
         if: github.event_name != 'pull_request_target'
@@ -61,8 +77,13 @@ jobs:
 
       - name: Check if relevant files changed
         # https://github.com/marketplace/actions/paths-changes-filter
+        # For each filter, it sets output variable named by the filter to the text:
+        #  'true' - if any of changed files matches any of filter rules
+        #  'false' - if none of changed files matches any of filter rules
+        # also, returns:
+        #  `changes` - JSON array with names of all filters matching any of the changed files
         uses: dorny/paths-filter@v2
-        id: check-changes
+        id: get-changes
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
@@ -80,24 +101,47 @@ jobs:
               - 'plugins/redshift/**'
               - 'plugins/postgres/**'
 
+      - name: Generate integration test matrix
+        id: generate-matrix
+        uses: actions/github-script@v4
+        env:
+          CHANGES: ${{ steps.get-changes.outputs.changes }}
+        with:
+          script: |
+            const script = require('./.github/scripts/integration-test-matrix.js')
+            const matrix = script({ context })
+            console.log(matrix)
+            return matrix
+
   test:
     name: ${{ matrix.adapter }} ${{ matrix.python-version }} / ${{ matrix.os }}
-    # run if not a pull request or has a label to mark as safe to test
+
+    # run if not a PR from a forked repository or has a label to mark as safe to test
+    # also checks that the matrix generated is not empty
     if: >-
-      github.event_name != 'pull_request_target' ||
-      contains(github.event.pull_request.labels.*.name, 'ok to test')
+      needs.test-metadata.outputs.matrix &&
+      fromJSON( needs.test-metadata.outputs.matrix ).include[0] &&
+      (
+        github.event_name != 'pull_request_target' ||
+        github.event.pull_request.head.repo.full_name == github.repository ||
+        contains(github.event.pull_request.labels.*.name, 'ok to test')
+      )
+
     runs-on: ${{ matrix.os }}
-    needs: pre-checks
+
+    needs: test-metadata
+
+    # only block on non-postgres jobs, trying to decrease amount of concurrent processing against warehouses
+    concurrency: ${{ matrix.adapter != 'postgres' && matrix.adapter || github.job }}-${{ matrix.python-version }}-${{ matrix.os }}
+
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        adapter: [postgres, snowflake, redshift, bigquery]
-        python-version: [3.6, 3.7, 3.8, 3.9] # TODO: only run python 3.8 on PRs
+      matrix: ${{ fromJSON(needs.test-metadata.outputs.matrix) }}
 
     env:
       TOXENV: integration-${{ matrix.adapter }}
-      PYTEST_ADDOPTS: "-v --color=yes -nauto"
+      PYTEST_ADDOPTS: "-v --color=yes -n4"
+      DBT_INVOCATION_ENV: github-actions
 
     steps:
       - name: Check out the repository
@@ -106,6 +150,8 @@ jobs:
         with:
           persist-credentials: false
 
+      # explicity checkout the branch for the PR,
+      # this is necessary for the `pull_request_target` event
       - name: Check out the repository (PR)
         if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v2
@@ -147,29 +193,11 @@ jobs:
           tox --version
 
       - name: Run tox (postgres)
-        # run if postgres integration tests
-        # and is not a PR or has relevant changes/specified label
-        if: >-
-          matrix.adapter == 'postgres' &&
-          (
-            github.event_name != 'pull_request_target' ||
-            needs.pre-checks.outputs.has-postgres-changes ||
-            contains(github.event.pull_request.labels.*.name, 'test all') ||
-            contains(github.event.pull_request.labels.*.name, 'test postgres')
-          )
+        if: matrix.adapter == 'postgres'
         run: tox
 
       - name: Run tox (redshift)
-        # run if redshift integration tests
-        # and is not a PR or has relevant changes/specified label
-        if: >-
-          matrix.adapter == 'redshift' &&
-          (
-            github.event_name != 'pull_request_target' ||
-            needs.pre-checks.outputs.has-redshift-changes ||
-            contains(github.event.pull_request.labels.*.name, 'test all') ||
-            contains(github.event.pull_request.labels.*.name, 'test redshift')
-          )
+        if: matrix.adapter == 'redshift'
         env:
           REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
           REDSHIFT_TEST_PASS: ${{ secrets.REDSHIFT_TEST_PASS }}
@@ -179,16 +207,7 @@ jobs:
         run: tox
 
       - name: Run tox (snowflake)
-        # run if snowflake integration tests
-        # and is not a PR or has relevant changes/specified label
-        if: >-
-          matrix.adapter == 'snowflake' &&
-          (
-            github.event_name != 'pull_request_target' ||
-            needs.pre-checks.outputs.has-snowflake-changes ||
-            contains(github.event.pull_request.labels.*.name, 'test all') ||
-            contains(github.event.pull_request.labels.*.name, 'test snowflake')
-          )
+        if: matrix.adapter == 'snowflake'
         env:
           SNOWFLAKE_TEST_ACCOUNT: ${{ secrets.SNOWFLAKE_TEST_ACCOUNT }}
           SNOWFLAKE_TEST_PASSWORD: ${{ secrets.SNOWFLAKE_TEST_PASSWORD }}
@@ -205,31 +224,30 @@ jobs:
         run: tox
 
       - name: Run tox (bigquery)
-        # run if bigquery integration tests
-        # and is not a PR or has relevant changes/specified label
-        if: >-
-          matrix.adapter == 'bigquery' &&
-          (
-            github.event_name != 'pull_request_target' ||
-            needs.pre-checks.outputs.has-bigquery-changes ||
-            contains(github.event.pull_request.labels.*.name, 'test all') ||
-            contains(github.event.pull_request.labels.*.name, 'test bigquery')
-          )
+        if: matrix.adapter == 'bigquery'
         env:
           BIGQUERY_TEST_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_TEST_SERVICE_ACCOUNT_JSON }}
           BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
         run: tox
 
-  post-checks:
+      - uses: actions/upload-artifact@v2
+        with:
+          name: logs
+          path: ./logs
+
+  require-label-comment:
     runs-on: ubuntu-latest
+
     needs: test
+
     permissions:
       pull-requests: write
+
     steps:
       - name: Needs permission PR comment
         if: >-
-          github.event_name == 'pull_request_target' &&
           needs.test.result == 'skipped' &&
+          github.event_name == 'pull_request_target' &&
           github.event.pull_request.head.repo.full_name != github.repository
         uses: unsplash/comment-on-pr@master
         env:
