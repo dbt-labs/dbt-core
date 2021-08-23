@@ -289,7 +289,7 @@ class GraphRunnableTask(ManifestTask):
         else:
             self.manifest.update_node(node)
 
-        if result.status == NodeStatus.Error:
+        if result.status in (NodeStatus.Error, NodeStatus.Fail):
             if is_ephemeral:
                 cause = result
             else:

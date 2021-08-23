@@ -390,9 +390,16 @@ class Compiler:
         self, linker: Linker, node: GraphMemberNode, manifest: Manifest
     ):
         linker.add_node(node.unique_id)
-
         for dependency in node.depends_on_nodes:
             if dependency in manifest.nodes:
+                if node.resource_type != NodeType.Test:
+                    test_dependencies = manifest.get_tests_for_node(dependency)
+                    for test_dependency in test_dependencies:
+                        linker.dependency(
+                            node.unique_id,
+                            test_dependency
+                        )
+
                 linker.dependency(
                     node.unique_id,
                     (manifest.nodes[dependency].unique_id)
@@ -412,8 +419,8 @@ class Compiler:
             self.link_node(linker, node, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(linker, exposure, manifest)
-            # linker.add_node(exposure.unique_id)
 
+        print(linker.graph.edges)
         cycle = linker.find_cycles()
 
         if cycle:
