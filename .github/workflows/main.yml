@@ -12,7 +12,7 @@
 # This will run for all PRs, when code is pushed to a release
 # branch, and when manually triggered.
 
-name: Main
+name: Tests and Code Checks
 
 on:
   push:
@@ -52,17 +52,9 @@ jobs:
 
     steps:
       - name: Check out the repository
-        if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v2
         with:
           persist-credentials: false
-
-      - name: Check out the repository
-        if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -81,7 +73,7 @@ jobs:
         run: tox
 
   unit:
-    name: unit ${{ matrix.python-version }}
+    name: unit test ${{ matrix.python-version }}
 
     runs-on: ubuntu-latest
 
@@ -96,17 +88,9 @@ jobs:
 
     steps:
       - name: Check out the repository
-        if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v2
         with:
           persist-credentials: false
-
-      - name: Check out the repository
-        if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -133,17 +117,9 @@ jobs:
 
     steps:
       - name: Check out the repository
-        if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v2
         with:
           persist-credentials: false
-
-      - name: Check out the repository
-        if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v2
