@@ -44,7 +44,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__specific_model(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'users'])
+        results = self.run_dbt(['run', '--select', 'users'])
         self.assertEqual(len(results), 1)
 
         self.assertTablesEqual("seed", "users")
@@ -80,7 +80,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__tags_and_children(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'tag:base+'])
+        results = self.run_dbt(['run', '--select', 'tag:base+'])
         self.assertEqual(len(results), 5)
 
         created_models = self.get_models_in_schema()
@@ -96,7 +96,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__tags_and_children_limited(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'tag:base+2'])
+        results = self.run_dbt(['run', '--select', 'tag:base+2'])
         self.assertEqual(len(results), 4)
 
         created_models = self.get_models_in_schema()
@@ -113,7 +113,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__snowflake__specific_model(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'users'])
+        results = self.run_dbt(['run', '--select', 'users'])
         self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("SEED", "USERS")
@@ -127,7 +127,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__specific_model_and_children(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'users+'])
+        results = self.run_dbt(['run', '--select', 'users+'])
         self.assertEqual(len(results),  4)
 
         self.assertTablesEqual("seed", "users")
@@ -143,7 +143,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__snowflake__specific_model_and_children(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'users+'])
+        results = self.run_dbt(['run', '--select', 'users+'])
         self.assertEqual(len(results),  4)
 
         self.assertManyTablesEqual(
@@ -158,7 +158,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__specific_model_and_children_limited(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', 'users+1'])
+        results = self.run_dbt(['run', '--select', 'users+1'])
         self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed", "users")
@@ -174,7 +174,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__specific_model_and_parents(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', '+users_rollup'])
+        results = self.run_dbt(['run', '--select', '+users_rollup'])
         self.assertEqual(len(results),  2)
 
         self.assertTablesEqual("seed", "users")
@@ -188,7 +188,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__snowflake__specific_model_and_parents(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', '+users_rollup'])
+        results = self.run_dbt(['run', '--select', '+users_rollup'])
         self.assertEqual(len(results),  2)
 
         self.assertManyTablesEqual(
@@ -204,7 +204,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__specific_model_and_parents_limited(self):
         self.run_sql_file("seed.sql")
 
-        results = self.run_dbt(['run', '--models', '1+users_rollup'])
+        results = self.run_dbt(['run', '--select', '1+users_rollup'])
         self.assertEqual(len(results), 2)
 
         self.assertTablesEqual("seed", "users")
@@ -219,7 +219,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(
-            ['run', '--models', '+users_rollup', '--exclude', 'models/users_rollup.sql']
+            ['run', '--select', '+users_rollup', '--exclude', 'models/users_rollup.sql']
         )
         self.assertEqual(len(results),  1)
 
@@ -235,7 +235,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("seed.sql")
 
         results = self.run_dbt(
-            ['run', '--models', '+users_rollup', '--exclude', 'users_rollup']
+            ['run', '--select', '+users_rollup', '--exclude', 'users_rollup']
         )
         self.assertEqual(len(results),  1)
 
@@ -247,7 +247,7 @@ class TestGraphSelection(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__locally_qualified_name(self):
-        results = self.run_dbt(['run', '--models', 'test.subdir'])
+        results = self.run_dbt(['run', '--select', 'test.subdir'])
         self.assertEqual(len(results), 2)
 
         created_models = self.get_models_in_schema()
@@ -258,7 +258,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('nested_users', created_models)
         self.assert_correct_schemas()
 
-        results = self.run_dbt(['run', '--models', 'models/test/subdir*'])
+        results = self.run_dbt(['run', '--select', 'models/test/subdir*'])
         self.assertEqual(len(results), 2)
 
         created_models = self.get_models_in_schema()
@@ -272,14 +272,14 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__locally_qualified_name_model_with_dots(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', 'alternative.users'])
+        results = self.run_dbt(['run', '--select', 'alternative.users'])
         self.assertEqual(len(results), 1)
 
         created_models = self.get_models_in_schema()
         self.assertIn('alternative.users', created_models)
         self.assert_correct_schemas()
 
-        results = self.run_dbt(['run', '--models', 'models/alternative.*'])
+        results = self.run_dbt(['run', '--select', 'models/alternative.*'])
         self.assertEqual(len(results), 1)
 
         created_models = self.get_models_in_schema()
@@ -289,7 +289,7 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__childrens_parents(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', '@base_users'])
+        results = self.run_dbt(['run', '--select', '@base_users'])
         self.assertEqual(len(results), 5)
 
         created_models = self.get_models_in_schema()
@@ -301,7 +301,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('nested_users', created_models)
 
         results = self.run_dbt(
-            ['test', '--models', 'test_name:not_null'],
+            ['test', '--select', 'test_name:not_null'],
         )
         self.assertEqual(len(results), 1)
         assert results[0].node.name == 'not_null_emails_email'
@@ -309,7 +309,7 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__more_childrens_parents(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', '@users'])
+        results = self.run_dbt(['run', '--select', '@users'])
         # users, emails_alt, users_rollup, users_rollup_dependency, but not base_users (ephemeral)
         self.assertEqual(len(results), 4)
 
@@ -321,7 +321,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('nested_users', created_models)
 
         results = self.run_dbt(
-            ['test', '--models', 'test_name:unique'],
+            ['test', '--select', 'test_name:unique'],
         )
         self.assertEqual(len(results), 2)
         assert sorted([r.node.name for r in results]) == ['unique_users_id', 'unique_users_rollup_gender']
@@ -330,12 +330,12 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('snowflake')
     def test__snowflake__skip_intermediate(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', '@models/users.sql'])
+        results = self.run_dbt(['run', '--select', '@models/users.sql'])
         # base_users, emails, users_rollup, users_rollup_dependency
         self.assertEqual(len(results), 4)
 
         # now re-run, skipping users_rollup
-        results = self.run_dbt(['run', '--models', '@users', '--exclude', 'users_rollup'])
+        results = self.run_dbt(['run', '--select', '@users', '--exclude', 'users_rollup'])
         self.assertEqual(len(results), 3)
 
         # make sure that users_rollup_dependency and users don't interleave
@@ -351,7 +351,7 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__concat(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', '@emails_alt', 'users_rollup'])
+        results = self.run_dbt(['run', '--select', '@emails_alt', 'users_rollup'])
         # users, emails_alt, users_rollup
         self.assertEqual(len(results), 3)
 
@@ -365,7 +365,7 @@ class TestGraphSelection(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__concat_exclude(self):
         self.run_sql_file("seed.sql")
-        results = self.run_dbt(['run', '--models', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt'])
+        results = self.run_dbt(['run', '--select', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt'])
         # users, users_rollup
         self.assertEqual(len(results), 2)
 
@@ -380,7 +380,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__concat_exclude_concat(self):
         self.run_sql_file("seed.sql")
         results = self.run_dbt(
-            ['run', '--models', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt', 'users_rollup']
+            ['run', '--select', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt', 'users_rollup']
         )
         # users
         self.assertEqual(len(results), 1)
@@ -394,7 +394,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('nested_users', created_models)
 
         results = self.run_dbt(
-            ['test', '--models', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt', 'users_rollup']
+            ['test', '--select', '@emails_alt', 'users_rollup', '--exclude', 'emails_alt', 'users_rollup']
         )
         self.assertEqual(len(results), 1)
         assert results[0].node.name == 'unique_users_id'

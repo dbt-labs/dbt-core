@@ -615,17 +615,10 @@ def _add_common_selector_arguments(sub):
     )
 
 
-def _add_selection_arguments(*subparsers, **kwargs):
-    models_name = kwargs.get('models_name', 'models')
+def _add_selection_arguments(*subparsers):
     for sub in subparsers:
-        if models_name == 'models':
-            _add_models_argument(sub)
-        elif models_name == 'select':
-            # these still get stored in 'models', so they present the same
-            # interface to the task
-            _add_select_argument(sub)
-        else:
-            raise InternalException(f'Unknown models style {models_name}')
+        _add_models_argument(sub)
+        _add_select_argument(sub)
         _add_common_selector_arguments(sub)
 
 
@@ -1075,8 +1068,8 @@ def parse_args(args, cls=DBTArgumentParser):
                           rpc_sub, seed_sub, parse_sub, build_sub)
     # --models, --exclude
     # list_sub sets up its own arguments.
-    _add_selection_arguments(build_sub, run_sub, compile_sub, generate_sub, test_sub)
-    _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
+    _add_selection_arguments(
+        build_sub, run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub)
     # --full-refresh
