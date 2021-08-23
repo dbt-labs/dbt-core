@@ -28,6 +28,7 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
+      - "github-actions" # testing!
   # all PRs, important to note that `pull_request_target` workflows
   # will run in the context of the target branch of a PR
   pull_request_target:
