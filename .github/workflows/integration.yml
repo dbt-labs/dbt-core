@@ -18,9 +18,10 @@
 # PRs from forks. The workflow will be skipped until there is a label
 # to mark the PR as safe to run.
 
-name: Integration Tests
+name: Adapter Integration Tests
 
 on:
+  # pushes to release branches
   push:
     branches:
       - "main"
@@ -28,20 +29,27 @@ on:
       - "*.latest"
       - "releases/*"
       - "github-actions-matrix" # TODO: rm after testing
+  # all PRs, important to note that `pull_request_target` workflows
+  # will run in the context of the target branch of a PR
   pull_request_target:
+  # manual tigger
   workflow_dispatch:
 
+# explicitly turn off permissions for `GITHUB_TOKEN`
 permissions: read-all
 
+# will cancel previous workflows triggered by the same event and for the same ref
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+# sets default shell to bash, for all operating systems
 defaults:
   run:
     shell: bash
 
 jobs:
+  # generate test metadata about what files changed and the testing matrix to use
   test-metadata:
     # run if not a PR from a forked repository or has a label to mark as safe to test
     if: >-
@@ -70,6 +78,11 @@ jobs:
 
       - name: Check if relevant files changed
         # https://github.com/marketplace/actions/paths-changes-filter
+        # For each filter, it sets output variable named by the filter to the text:
+        #  'true' - if any of changed files matches any of filter rules
+        #  'false' - if none of changed files matches any of filter rules
+        # also, returns:
+        #  `changes` - JSON array with names of all filters matching any of the changed files
         uses: dorny/paths-filter@v2
         id: get-changes
         with:
@@ -105,6 +118,7 @@ jobs:
     name: ${{ matrix.adapter }} ${{ matrix.python-version }} / ${{ matrix.os }}
 
     # run if not a PR from a forked repository or has a label to mark as safe to test
+    # also checks that the matrix generated is not empty
     if: >-
       needs.test-metadata.outputs.matrix &&
       fromJSON( needs.test-metadata.outputs.matrix ).include[0] &&
@@ -137,6 +151,8 @@ jobs:
         with:
           persist-credentials: false
 
+      # explicity checkout the branch for the PR,
+      # this is necessary for the `pull_request_target` event
       - name: Check out the repository (PR)
         if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v2

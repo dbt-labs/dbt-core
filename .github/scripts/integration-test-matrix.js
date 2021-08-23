@@ -3,12 +3,15 @@ module.exports = ({ context }) => {
   const supportedPythonVersions = ["3.6", "3.7", "3.8", "3.9"];
   const supportedAdapters = ["snowflake", "postgres", "bigquery", "redshift"];
 
+  // if PR, generate matrix based on files changed and PR labels
   if (context.eventName.includes("pull_request")) {
-    // if PR, generate matrix based on files changed and PR labels
+    // `changes` is a list of adapter names that have related
+    // file changes in the PR
+    // ex: ['postgres', 'snowflake']
     const changes = JSON.parse(process.env.CHANGES);
     const labels = context.payload.pull_request.labels.map(({ name }) => name);
     console.log("labels", labels);
-    console.log("changes", labels);
+    console.log("changes", changes);
     const testAllLabel = labels.includes("test all");
     const include = [];
 
@@ -57,6 +60,8 @@ module.exports = ({ context }) => {
       include,
     };
   }
+  // if not PR, generate matrix of python version, adapter, and operating
+  // system to run integration tests on
 
   const include = [];
   // run for all adapters and python versions on ubuntu
