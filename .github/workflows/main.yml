@@ -111,6 +111,11 @@ jobs:
       - name: Run tox
         run: tox
 
+      - uses: actions/upload-artifact@v2
+        with:
+          name: unit_results_${{ matrix.python-version }}.csv
+          path: unit_results_${{ matrix.python-version }}.csv
+
   build:
     name: build packages
 
