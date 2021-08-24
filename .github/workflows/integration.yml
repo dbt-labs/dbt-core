@@ -115,7 +115,7 @@ jobs:
             return matrix
 
   test:
-    name: ${{ matrix.adapter }} ${{ matrix.python-version }} / ${{ matrix.os }}
+    name: ${{ matrix.adapter }} / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     # run if not a PR from a forked repository or has a label to mark as safe to test
     # also checks that the matrix generated is not empty
