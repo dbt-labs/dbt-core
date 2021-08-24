@@ -21,7 +21,7 @@ sp_logger.setLevel(100)
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-1'  # TODO bump to 1-0-2
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-2'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-1'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
@@ -187,7 +187,7 @@ def get_invocation_context(user, config, args):
 
         "run_type": get_run_type(args),
         "adapter_type": adapter_type,
-        # "adapter_unique_id": adapter_id, TODO
+        "adapter_unique_id": adapter_unique_id,
     }
 
 

@@ -57,7 +57,7 @@ class SnowflakeCredentials(Credentials):
     @property
     def type(self):
         return 'snowflake'
-        
+
     @property
     def unique_field(self):
         return self.account

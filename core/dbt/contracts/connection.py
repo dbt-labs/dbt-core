@@ -127,13 +127,13 @@ class Credentials(
         raise NotImplementedError(
             'type not implemented for base credentials class'
         )
-        
+
     @abc.abstractproperty
     def unique_field(self) -> str:
         raise NotImplementedError(
             'type not implemented for base credentials class'
         )
-        
+
     def hashed_unique_field(self) -> str:
         return hashlib.md5(self.unique_field.encode('utf-8')).hexdigest()
 

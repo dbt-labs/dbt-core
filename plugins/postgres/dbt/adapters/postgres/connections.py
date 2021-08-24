@@ -37,7 +37,7 @@ class PostgresCredentials(Credentials):
     @property
     def type(self):
         return 'postgres'
-        
+
     @property
     def unique_field(self):
         return self.host
