@@ -591,22 +591,22 @@ def _add_common_selector_arguments(sub):
 def _add_selection_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
-            '-m',
-            '--models',
-            dest='select',
-            nargs='+',
-            help='''
+            "-m",
+            "--models",
+            dest="select",
+            nargs="+",
+            help="""
                 Specify the nodes to include.
-            ''',
+            """,
         )
         sub.add_argument(
-            '-s',
-            '--select',
-            dest='select',
-            nargs='+',
-            help='''
+            "-s",
+            "--select",
+            dest="select",
+            nargs="+",
+            help="""
                 Specify the nodes to include.
-            ''',
+            """,
         )
         _add_common_selector_arguments(sub)
 
@@ -766,13 +766,13 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
         rpc_method='source-freshness',
     )
     sub.add_argument(
-        '-s',
-        '--select',
+        "-s",
+        "--select",
         dest='select',
-        nargs='+',
-        help='''
+        nargs="+",
+        help="""
             Specify the nodes to include.
-        ''',
+        """,
     )
     _add_common_selector_arguments(sub)
     return sub
@@ -802,11 +802,11 @@ def _build_list_subparser(subparsers, base_subparser):
     sub.add_argument('--output-keys')
 
     sub.add_argument(
-        '-m',
-        '--models',
-        dest='models',
-        nargs='+',
-        help='''
+        "-m",
+        "--models",
+        dest="models",
+        nargs="+",
+        help="""
         Specify the models to select and set the resource-type to 'model'.
         Mutually exclusive with '--select' (or '-s') and '--resource-type'
         """,
@@ -814,13 +814,13 @@ def _build_list_subparser(subparsers, base_subparser):
         required=False,
     )
     sub.add_argument(
-        '-s',
-        '--select',
+        "-s",
+        "--select",
         dest="select",
-        nargs='+',
-        help='''
+        nargs="+",
+        help="""
             Specify the nodes to include.
-        ''',
+        """,
         metavar="SELECTOR",
         required=False,
     )
