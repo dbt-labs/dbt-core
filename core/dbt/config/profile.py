@@ -143,14 +143,6 @@ class Profile(HasCredentials):
                 "config": self.user_config.to_dict(omit_none=True),
             }
         )
-        target.update({
-            'type': self.credentials.type,
-            'threads': self.threads,
-            'name': self.target_name,
-            'target_name': self.target_name,
-            'profile_name': self.profile_name,
-            'config': self.user_config.to_dict(omit_none=True),
-        })
         return target
 
     def __eq__(self, other: object) -> bool:
