@@ -1028,7 +1028,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.docs.append(doc.unique_id)
 
     def get_tests_for_node(self, unique_id: UniqueID) -> List[UniqueID]:
-        """ return list of tests that depend on provided unique id """
+        """ Get a list of tests that depend on the node with the
+        provided unique id """
+
         return [
             node.unique_id
             for _, node in self.nodes.items()

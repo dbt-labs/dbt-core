@@ -3,6 +3,7 @@ from .snapshot import SnapshotRunner as snapshot_model_runner
 from .seed import SeedRunner as seed_runner
 from .test import TestRunner as test_runner
 
+from dbt.contracts.results import NodeStatus
 from dbt.graph import ResourceTypeSelector
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
@@ -24,6 +25,8 @@ class BuildTask(RunTask):
         NodeType.Test: test_runner,
     }
 
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail]
+
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise InternalException(
@@ -39,3 +42,4 @@ class BuildTask(RunTask):
 
     def get_runner_type(self, node):
         return self.RUNNER_MAP.get(node.resource_type)
+

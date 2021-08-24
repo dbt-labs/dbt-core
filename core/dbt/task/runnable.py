@@ -83,6 +83,9 @@ class ManifestTask(ConfiguredTask):
 
 
 class GraphRunnableTask(ManifestTask):
+
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
+
     def __init__(self, args, config):
         super().__init__(args, config)
         self.job_queue: Optional[GraphQueue] = None
@@ -289,7 +292,7 @@ class GraphRunnableTask(ManifestTask):
         else:
             self.manifest.update_node(node)
 
-        if result.status in (NodeStatus.Error, NodeStatus.Fail):
+        if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
             if is_ephemeral:
                 cause = result
             else:

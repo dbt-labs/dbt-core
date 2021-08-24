@@ -395,15 +395,20 @@ class Compiler:
                 if node.resource_type != NodeType.Test:
                     test_dependencies = manifest.get_tests_for_node(dependency)
                     for test_dependency in test_dependencies:
-                        linker.dependency(
-                            node.unique_id,
-                            test_dependency
-                        )
+                        if (
+                           test_dependency not in node.depends_on_nodes and
+                           node.unique_id not in manifest.nodes[test_dependency].depends_on_nodes
+                        ):
+                            linker.dependency(
+                                node.unique_id,
+                                test_dependency
+                            )
 
                 linker.dependency(
                     node.unique_id,
                     (manifest.nodes[dependency].unique_id)
                 )
+
             elif dependency in manifest.sources:
                 linker.dependency(
                     node.unique_id,
@@ -421,6 +426,7 @@ class Compiler:
             self.link_node(linker, exposure, manifest)
 
         print(linker.graph.edges)
+
         cycle = linker.find_cycles()
 
         if cycle:
