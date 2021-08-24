@@ -22,7 +22,6 @@ on:
       - "*.latest"
       - "releases/*"
       - "github-actions"
-      - "leahwicz/testFailures" # testing!
   pull_request:
   workflow_dispatch:
 
