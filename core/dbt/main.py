@@ -263,11 +263,13 @@ def _build_base_subparser():
     base_subparser.add_argument(
         '--profiles-dir',
         default=None,
-        dest='sub_profiles_dir',  # Main cli arg precedes subcommand
+        dest="sub_profiles_dir",  # Main cli arg precedes subcommand
         type=str,
         help='''
         Which directory to look in for the profiles.yml file. Default = {}
-        '''.format(DEFAULT_PROFILES_DIR)
+        """.format(
+            DEFAULT_PROFILES_DIR
+        ),
     )
 
     base_subparser.add_argument(
@@ -375,7 +377,7 @@ def _build_build_subparser(subparsers, base_subparser):
     sub.add_argument(
         '-x',
         '--fail-fast',
-        dest='sub_fail_fast',
+        dest="sub_fail_fast",
         action='store_true',
         help='''
         Stop execution upon a first failure.
@@ -516,7 +518,7 @@ def _build_run_subparser(subparsers, base_subparser):
     run_sub.add_argument(
         '-x',
         '--fail-fast',
-        dest='sub_fail_fast',
+        dest="sub_fail_fast",
         action='store_true',
         help='''
         Stop execution upon a first failure.
@@ -640,7 +642,7 @@ def _add_table_mutability_arguments(*subparsers):
 def _add_version_check(sub):
     sub.add_argument(
         '--no-version-check',
-        dest='sub_version_check',  # main cli arg precedes subcommands
+        dest="sub_version_check",  # main cli arg precedes subcommands
         action='store_false',
         default=None,
         help='''
@@ -722,7 +724,7 @@ def _build_test_subparser(subparsers, base_subparser):
     sub.add_argument(
         '-x',
         '--fail-fast',
-        dest='sub_fail_fast',
+        dest="sub_fail_fast",
         action='store_true',
         help='''
         Stop execution upon a first test failure.
@@ -970,8 +972,8 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--printer-width',
-        dest='printer_width',
+        "--printer-width",
+        dest="printer_width",
         help='''
         Sets the width of terminal output
         '''
@@ -990,14 +992,14 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--no-version-check',
-        dest='version_check',
-        action='store_false',
+        "--no-version-check",
+        dest="version_check",
+        action="store_false",
         default=None,
-        help='''
+        help="""
         If set, skip ensuring dbt's version matches the one specified in
         the dbt_project.yml file ('require-dbt-version')
-        '''
+        """,
     )
 
     p.add_optional_argument_inverse(
@@ -1046,34 +1048,36 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--profiles-dir',
+        "--profiles-dir",
         default=None,
-        dest='profiles_dir',
+        dest="profiles_dir",
         type=str,
-        help='''
+        help="""
         Which directory to look in for the profiles.yml file. Default = {}
-        '''.format(DEFAULT_PROFILES_DIR)
+        """.format(
+            DEFAULT_PROFILES_DIR
+        ),
     )
 
     p.add_argument(
-        '--no-anonymous-usage-stats',
-        action='store_false',
+        "--no-anonymous-usage-stats",
+        action="store_false",
         default=None,
-        dest='send_anonymous_usage_stats',
-        help='''
+        dest="send_anonymous_usage_stats",
+        help="""
         Do not send anonymous usage stat to dbt Labs
-        '''
+        """,
     )
 
     p.add_argument(
-        '-x',
-        '--fail-fast',
-        dest='fail_fast',
-        action='store_true',
+        "-x",
+        "--fail-fast",
+        dest="fail_fast",
+        action="store_true",
         default=None,
-        help='''
+        help="""
         Stop execution upon a first failure.
-        '''
+        """,
     )
 
     p.add_argument(
@@ -1131,10 +1135,10 @@ def parse_args(args, cls=DBTArgumentParser):
     parsed = p.parse_args(args)
 
     # profiles_dir is set before subcommands and after, so normalize
-    if hasattr(parsed, 'sub_profiles_dir'):
+    if hasattr(parsed, "sub_profiles_dir"):
         if parsed.sub_profiles_dir is not None:
             parsed.profiles_dir = parsed.sub_profiles_dir
-        delattr(parsed, 'sub_profiles_dir')
+        delattr(parsed, "sub_profiles_dir")
     if hasattr(parsed, 'profiles_dir'):
         if parsed.profiles_dir is None:
             parsed.profiles_dir = flags.PROFILES_DIR
@@ -1145,16 +1149,16 @@ def parse_args(args, cls=DBTArgumentParser):
             flags.PROFILES_DIR = parsed.profiles_dir
 
     # version_check is set before subcommands and after, so normalize
-    if hasattr(parsed, 'sub_version_check'):
+    if hasattr(parsed, "sub_version_check"):
         if parsed.sub_version_check is False:
             parsed.version_check = False
-        delattr(parsed, 'sub_version_check')
+        delattr(parsed, "sub_version_check")
 
     # fail_fast is set before subcommands and after, so normalize
-    if hasattr(parsed, 'sub_fail_fast'):
+    if hasattr(parsed, "sub_fail_fast"):
         if parsed.sub_fail_fast is True:
             parsed.fail_fast = True
-        delattr(parsed, 'sub_fail_fast')
+        delattr(parsed, "sub_fail_fast")
 
     if getattr(parsed, 'project_dir', None) is not None:
         expanded_user = os.path.expanduser(parsed.project_dir)

@@ -43,7 +43,9 @@ Here, [profile name] should be replaced with a profile name
 defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
-""".format(profiles_file=DEFAULT_PROFILES_DIR)
+""".format(
+    profiles_file=DEFAULT_PROFILES_DIR
+)
 
 
 def read_profile(profiles_dir: str) -> Dict[str, Any]:
@@ -73,7 +75,7 @@ def read_user_config(directory: str) -> UserConfig:
     try:
         profile = read_profile(directory)
         if profile:
-            user_config = coerce_dict_str(profile.get('config', {}))
+            user_config = coerce_dict_str(profile.get("config", {}))
             if user_config is not None:
                 UserConfig.validate(user_config)
                 return UserConfig.from_dict(user_config)
@@ -126,12 +128,12 @@ class Profile(HasCredentials):
         result = {
             "profile_name": self.profile_name,
             "target_name": self.target_name,
-            'user_config': self.user_config,
+            "user_config": self.user_config,
             "threads": self.threads,
             "credentials": self.credentials,
         }
         if serialize_credentials:
-            result['user_config'] = self.user_config.to_dict(omit_none=True)
+            result["user_config"] = self.user_config.to_dict(omit_none=True)
             result['credentials'] = self.credentials.to_dict(omit_none=True)
         return result
 
@@ -242,7 +244,7 @@ class Profile(HasCredentials):
         threads: int,
         profile_name: str,
         target_name: str,
-        user_config: Optional[Dict[str, Any]] = None
+        user_config: Optional[Dict[str, Any]] = None,
     ) -> 'Profile':
         """Create a profile from an existing set of Credentials and the
         remaining information.
@@ -336,7 +338,7 @@ class Profile(HasCredentials):
         """
         # user_config is not rendered.
         if user_config is None:
-            user_config = raw_profile.get('config')
+            user_config = raw_profile.get("config")
         # TODO: should it be, and the values coerced to bool?
         target_name, profile_data = cls.render_profile(
             raw_profile, profile_name, target_override, renderer
@@ -357,7 +359,7 @@ class Profile(HasCredentials):
             profile_name=profile_name,
             target_name=target_name,
             threads=threads,
-            user_config=user_config
+            user_config=user_config,
         )
 
     @classmethod

@@ -261,7 +261,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
 class ProfileConfig(HyphenatedDbtClassMixin, Replaceable):
     profile_name: str = field(metadata={"preserve_underscore": True})
     target_name: str = field(metadata={"preserve_underscore": True})
-    user_config: UserConfig = field(metadata={'preserve_underscore': True})
+    user_config: UserConfig = field(metadata={"preserve_underscore": True})
     threads: int
     # TODO: make this a dynamic union of some kind?
     credentials: Optional[Dict[str, Any]]

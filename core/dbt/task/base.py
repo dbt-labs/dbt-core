@@ -76,7 +76,7 @@ class BaseTask(metaclass=ABCMeta):
 
     @classmethod
     def set_log_format(cls):
-        if flags.LOG_FORMAT == 'json':
+        if flags.LOG_FORMAT == "json":
             log_manager.format_json()
             # we're mutating the initialized, but not-yet-configured event logger
             # because it's being configured too late -- bad! TODO refactor!

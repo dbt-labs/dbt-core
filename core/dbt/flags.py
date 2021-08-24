@@ -9,10 +9,8 @@ from typing import Optional
 # PROFILES_DIR must be set before the other flags
 # It also gets set in main.py and in set_from_args because the rpc server
 # doesn't go through exactly the same main arg processing.
-DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
-PROFILES_DIR = os.path.expanduser(
-    os.getenv('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
-)
+DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser("~"), ".dbt")
+PROFILES_DIR = os.path.expanduser(os.getenv("DBT_PROFILES_DIR", DEFAULT_PROFILES_DIR))
 
 STRICT_MODE = False  # Only here for backwards compatibility
 FULL_REFRESH = False  # subcommand
@@ -70,7 +68,7 @@ def env_set_truthy(key: str) -> Optional[str]:
 
 
 def env_set_bool(env_value):
-    if env_value in ('1', 't', 'true', 'y', 'yes'):
+    if env_value in ("1", "t", "true", "y", "yes"):
         return True
     return False
 
@@ -99,7 +97,7 @@ MP_CONTEXT = _get_context()
 
 
 def set_from_args(args, user_config):
-    global STRICT_MODE, FULL_REFRESH, WARN_ERROR, \
+    # N.B. Multiple `globals` are purely for line length.
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
         USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, INDIRECT_SELECTION, \
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
@@ -112,19 +110,19 @@ def set_from_args(args, user_config):
     WHICH = getattr(args, 'which', WHICH)
 
     # global cli flags with env var and user_config alternatives
-    USE_EXPERIMENTAL_PARSER = get_flag_value('USE_EXPERIMENTAL_PARSER', args, user_config)
+    USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
     STATIC_PARSER = get_flag_value('STATIC_PARSER', args, user_config)
-    WARN_ERROR = get_flag_value('WARN_ERROR', args, user_config)
-    WRITE_JSON = get_flag_value('WRITE_JSON', args, user_config)
-    PARTIAL_PARSE = get_flag_value('PARTIAL_PARSE', args, user_config)
-    USE_COLORS = get_flag_value('USE_COLORS', args, user_config)
+    WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
+    WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
+    PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
+    USE_COLORS = get_flag_value("USE_COLORS", args, user_config)
     PROFILES_DIR = get_flag_value('PROFILES_DIR', args, user_config)
-    DEBUG = get_flag_value('DEBUG', args, user_config)
-    LOG_FORMAT = get_flag_value('LOG_FORMAT', args, user_config)
-    VERSION_CHECK = get_flag_value('VERSION_CHECK', args, user_config)
-    FAIL_FAST = get_flag_value('FAIL_FAST', args, user_config)
-    SEND_ANONYMOUS_USAGE_STATS = get_flag_value('SEND_ANONYMOUS_USAGE_STATS', args, user_config)
-    PRINTER_WIDTH = get_flag_value('PRINTER_WIDTH', args, user_config)
+    DEBUG = get_flag_value("DEBUG", args, user_config)
+    LOG_FORMAT = get_flag_value("LOG_FORMAT", args, user_config)
+    VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
+    FAIL_FAST = get_flag_value("FAIL_FAST", args, user_config)
+    SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
+    PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
     INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config)
     LOG_CACHE_EVENTS = get_flag_value('LOG_CACHE_EVENTS', args, user_config)
     EVENT_BUFFER_SIZE = get_flag_value('EVENT_BUFFER_SIZE', args, user_config)
@@ -137,7 +135,7 @@ def get_flag_value(flag, args, user_config):
         # Environment variables use pattern 'DBT_{flag name}'
         env_flag = f"DBT_{flag}"
         env_value = os.getenv(env_flag)
-        if env_value is not None and env_value != '':
+        if env_value is not None and env_value != "":
             env_value = env_value.lower()
             # non Boolean values
             if flag in [
