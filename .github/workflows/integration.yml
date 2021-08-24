@@ -233,17 +233,20 @@ jobs:
         run: tox
 
       - uses: actions/upload-artifact@v2
+        if: always()
         with:
           name: logs
           path: ./logs
 
       - name: Get current date
+        if: always()
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')"
 
       - uses: actions/upload-artifact@v2
+        if: always()
         with:
-          name: integration_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
+          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}-${{ steps.date.outputs.date }}.csv
           path: integration_results.csv
 
   require-label-comment:
