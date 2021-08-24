@@ -714,7 +714,7 @@ def system_error(operation_name):
         .format(operation_name))
 
 
-class RegistryException(Exception):
+class ConnectionException(Exception):
     pass
 
 
