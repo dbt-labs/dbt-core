@@ -8,6 +8,7 @@ pip-tools
 pytest
 pytest-dotenv
 pytest-logbook
+pytest-csv
 pytest-xdist
 pytz
 tox>=3.13
