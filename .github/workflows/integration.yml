@@ -246,7 +246,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         if: always()
         with:
-          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}-${{ steps.date.outputs.date }}.csv
+          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.adapter }}-${{ steps.date.outputs.date }}.csv
           path: integration_results.csv
 
   require-label-comment:
