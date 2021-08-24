@@ -112,10 +112,12 @@ jobs:
         run: tox
 
       - name: Get current date
+        if: always()
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colon allowed for artifacts
 
       - uses: actions/upload-artifact@v2
+        if: always()
         with:
           name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
           path: unit_results.csv
