@@ -85,7 +85,7 @@ jobs:
 
     env:
       TOXENV: "unit"
-      PYTEST_ADDOPTS: "-v --color=yes --csv unit_results_${{ matrix.python-version }}.csv"
+      PYTEST_ADDOPTS: "-v --color=yes --csv unit_results.csv"
 
     steps:
       - name: Check out the repository
@@ -111,10 +111,14 @@ jobs:
       - name: Run tox
         run: tox
 
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H:%M:%S')"
+
       - uses: actions/upload-artifact@v2
         with:
-          name: unit_results_${{ matrix.python-version }}.csv
-          path: unit_results_${{ matrix.python-version }}.csv
+          name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
+          path: unit_results.csv
 
   build:
     name: build packages
