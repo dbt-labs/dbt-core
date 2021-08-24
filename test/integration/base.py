@@ -65,6 +65,7 @@ class FakeArgs:
         self.schema = True
         self.full_refresh = False
         self.models = None
+        self.select = None
         self.exclude = None
         self.single_threaded = False
         self.selector_name = None

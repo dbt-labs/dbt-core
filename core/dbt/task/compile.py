@@ -44,7 +44,7 @@ class CompileTask(GraphRunnableTask):
         elif not (self.args.models or self.args.exclude) and default_selector:
             spec = default_selector
         else:
-            spec = parse_difference(self.args.models, self.args.exclude)  
+            spec = parse_difference(self.args.select, self.args.exclude)
         return spec
 
     def get_node_selector(self) -> ResourceTypeSelector:
