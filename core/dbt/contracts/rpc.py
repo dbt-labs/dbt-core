@@ -58,6 +58,7 @@ class RPCExecParameters(RPCParameters):
 class RPCCompileParameters(RPCParameters):
     threads: Optional[int] = None
     models: Union[None, str, List[str]] = None
+    select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
     selector: Optional[str] = None
     state: Optional[str] = None
@@ -77,6 +78,7 @@ class RPCListParameters(RPCParameters):
 class RPCRunParameters(RPCParameters):
     threads: Optional[int] = None
     models: Union[None, str, List[str]] = None
+    select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
     selector: Optional[str] = None
     state: Optional[str] = None
@@ -120,6 +122,7 @@ class RPCDocsGenerateParameters(RPCParameters):
 class RPCBuildParameters(RPCParameters):
     threads: Optional[int] = None
     models: Union[None, str, List[str]] = None
+    select: Union[None, str, List[str]] = None
     exclude: Union[None, str, List[str]] = None
     selector: Optional[str] = None
     state: Optional[str] = None
