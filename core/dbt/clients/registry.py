@@ -43,14 +43,14 @@ def _get(path, registry_base_url=None):
 
 
 def index(registry_base_url=None):
-    return _get_with_retries('api/v1/index.json', registry_base_url)
+    return _get_with_retries("api/v1/index.json", registry_base_url)
 
 
 index_cached = memoized(index)
 
 
 def packages(registry_base_url=None):
-    return _get_with_retries('api/v1/packages.json', registry_base_url)
+    return _get_with_retries("api/v1/packages.json", registry_base_url)
 
 
 def package(name, registry_base_url=None):
@@ -80,7 +80,7 @@ def package(name, registry_base_url=None):
 
 
 def package_version(name, version, registry_base_url=None):
-    return _get_with_retries('api/v1/{}/{}.json'.format(name, version), registry_base_url)
+    return _get_with_retries("api/v1/{}/{}.json".format(name, version), registry_base_url)
 
 
 def get_available_versions(name):

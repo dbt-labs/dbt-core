@@ -621,7 +621,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
             time.sleep(1)
             _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
-            raise ConnectionException('External connection exception occurred: ' + str(exc))
+            raise ConnectionException("External connection exception occurred: " + str(exc))
 
 
 # This is used to serialize the args in the run_results and in the logs.
