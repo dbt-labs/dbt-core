@@ -1,15 +1,13 @@
-
-name: Performance Regression Testing
+name: Performance Regression Tests
 # Schedule triggers
 on:
   # runs twice a day at 10:05am and 10:05pm
   schedule:
-    - cron:  '5 10,22 * * *'
+    - cron: "5 10,22 * * *"
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-
   # checks fmt of runner code
   # purposefully not a dependency of any other job
   # will block merging, but not prevent developing
@@ -83,7 +81,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
         with:
-          python-version: '3.8'
+          python-version: "3.8"
       - name: install dbt
         run: pip install -r dev-requirements.txt -r editable-requirements.txt
       - name: install hyperfine
@@ -116,11 +114,11 @@ jobs:
       - name: checkout latest
         uses: actions/checkout@v2
         with:
-          ref: '0.20.latest'
+          ref: "0.20.latest"
       - name: Setup Python
         uses: actions/setup-python@v2.2.2
         with:
-          python-version: '3.8'
+          python-version: "3.8"
       - name: move repo up a level
         run: mkdir ${{ github.workspace }}/../baseline/ && cp -r ${{ github.workspace }} ${{ github.workspace }}/../baseline
       - name: "[debug] ls new dbt location"
