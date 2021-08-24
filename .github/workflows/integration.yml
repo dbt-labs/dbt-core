@@ -183,14 +183,11 @@ jobs:
           runner.os == 'Windows'
         uses: ./.github/actions/setup-postgres-windows
 
-      - name: Upgrade pip
+      - name: Install python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip --version
-
-      - name: Install tox
-        run: |
+          pip install --upgrade pip
           pip install tox
+          pip --version
           tox --version
 
       - name: Run tox (postgres)
