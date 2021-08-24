@@ -29,6 +29,7 @@ on:
       - "*.latest"
       - "releases/*"
       - "github-actions" # testing!
+      - "leahwicz/testFailures" # testing!
   # all PRs, important to note that `pull_request_target` workflows
   # will run in the context of the target branch of a PR
   pull_request_target:
@@ -141,7 +142,7 @@ jobs:
 
     env:
       TOXENV: integration-${{ matrix.adapter }}
-      PYTEST_ADDOPTS: "-v --color=yes -n4"
+      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
       DBT_INVOCATION_ENV: github-actions
 
     steps:
@@ -235,6 +236,15 @@ jobs:
         with:
           name: logs
           path: ./logs
+
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')"
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: integration_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
+          path: integration_results.csv
 
   require-label-comment:
     runs-on: ubuntu-latest

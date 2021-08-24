@@ -113,7 +113,7 @@ jobs:
 
       - name: Get current date
         id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H:%M:%S')"
+        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colon allowed for artifacts
 
       - uses: actions/upload-artifact@v2
         with:
