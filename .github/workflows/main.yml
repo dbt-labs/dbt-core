@@ -84,7 +84,7 @@ jobs:
 
     env:
       TOXENV: "unit"
-      PYTEST_ADDOPTS: "-v --color=yes"
+      PYTEST_ADDOPTS: "-v --color=yes --csv unit_results_${{ matrix.python-version }}.csv"
 
     steps:
       - name: Check out the repository
