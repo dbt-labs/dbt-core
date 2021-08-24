@@ -29,6 +29,7 @@ on:
       - "*.latest"
       - "releases/*"
       - "github-actions" # testing!
+      - "leahwicz/testFailures" # testing!
   # all PRs, important to note that `pull_request_target` workflows
   # will run in the context of the target branch of a PR
   pull_request_target:

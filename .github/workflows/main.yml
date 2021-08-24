@@ -21,7 +21,8 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
-      - "github-actions" # testing!
+      - "github-actions"
+      - "leahwicz/testFailures" # testing!
   pull_request:
   workflow_dispatch:
 
@@ -84,7 +85,7 @@ jobs:
 
     env:
       TOXENV: "unit"
-      PYTEST_ADDOPTS: "-v --color=yes"
+      PYTEST_ADDOPTS: "-v --color=yes --csv unit_results.csv"
 
     steps:
       - name: Check out the repository
@@ -109,6 +110,17 @@ jobs:
 
       - name: Run tox
         run: tox
+
+      - name: Get current date
+        if: always()
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colons allowed for artifacts
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
+          path: unit_results.csv
 
   build:
     name: build packages
