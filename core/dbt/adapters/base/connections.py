@@ -238,12 +238,6 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     @classmethod
     def _rollback(cls, connection: Connection) -> None:
         """Roll back the given connection."""
-        if flags.STRICT_MODE:
-            if not isinstance(connection, Connection):
-                raise dbt.exceptions.CompilerException(
-                    f'In _rollback, got {connection} - not a Connection!'
-                )
-
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
                 f'Tried to rollback transaction on connection '
@@ -257,12 +251,6 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
     @classmethod
     def close(cls, connection: Connection) -> Connection:
-        if flags.STRICT_MODE:
-            if not isinstance(connection, Connection):
-                raise dbt.exceptions.CompilerException(
-                    f'In close, got {connection} - not a Connection!'
-                )
-
         # if the connection is in closed or init, there's nothing to do
         if connection.state in {ConnectionState.CLOSED, ConnectionState.INIT}:
             return connection

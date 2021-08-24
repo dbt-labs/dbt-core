@@ -44,8 +44,7 @@ class TestStrictUndefined(DBTIntegrationTest):
         if args is not None:
             full_args = full_args + args
 
-        result = self.run_dbt(args=full_args, expect_pass=expect_pass,
-                              strict=False, parser=False)
+        result = self.run_dbt(args=full_args, expect_pass=expect_pass)
 
         log_manager.stdout_console()
         return result

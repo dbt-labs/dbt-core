@@ -1,7 +1,7 @@
 import os
 import tempfile
 from test.integration.base import DBTIntegrationTest, use_profile
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, DependencyException
 from dbt import deprecations
 
 
@@ -110,10 +110,7 @@ class TestSimpleDependencyUnpinned(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_simple_dependency(self):
-        with self.assertRaises(CompilationException) as exc:
-            self.run_dbt(["deps"])
-        assert 'is not pinned' in str(exc.exception)
-        self.run_dbt(['deps'], strict=False)
+        self.run_dbt(["deps"])
 
 
 class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):

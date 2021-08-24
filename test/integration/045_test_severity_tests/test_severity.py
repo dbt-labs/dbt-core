@@ -28,10 +28,10 @@ class TestSeverity(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_severity_warnings(self):
-        self.run_dbt_with_vars(['seed'], 'false', strict=False)
-        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        self.run_dbt_with_vars(['seed'], 'false')
+        self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--schema'], 'false', strict=False)
+            ['test', '--schema'], 'false')
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'warn')
         self.assertEqual(results[0].failures, 2)
@@ -40,10 +40,10 @@ class TestSeverity(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_severity_rendered_errors(self):
-        self.run_dbt_with_vars(['seed'], 'false', strict=False)
-        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        self.run_dbt_with_vars(['seed'], 'false')
+        self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--schema'], 'true', strict=False, expect_pass=False)
+            ['test', '--schema'], 'true', expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'fail')
         self.assertEqual(results[0].failures, 2)
@@ -52,42 +52,42 @@ class TestSeverity(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_severity_warnings_strict(self):
-        self.run_dbt_with_vars(['seed'], 'false', strict=False)
-        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        self.run_dbt_with_vars(['seed'], 'false')
+        self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--schema'], 'false', expect_pass=False)
+            ['test', '--schema'], 'false', expect_pass=True)
         self.assertEqual(len(results), 2)
-        self.assertEqual(results[0].status, 'fail')
+        self.assertEqual(results[0].status, 'warn')
         self.assertEqual(results[0].failures, 2)
-        self.assertEqual(results[1].status, 'fail')
+        self.assertEqual(results[1].status, 'warn')
         self.assertEqual(results[1].failures, 2)
 
     @use_profile('postgres')
     def test_postgres_data_severity_warnings(self):
-        self.run_dbt_with_vars(['seed'], 'false', strict=False)
-        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        self.run_dbt_with_vars(['seed'], 'false')
+        self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--data'], 'false', strict=False)
+            ['test', '--data'], 'false')
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'warn')
         self.assertEqual(results[0].failures, 2)
 
     @use_profile('postgres')
     def test_postgres_data_severity_rendered_errors(self):
-        self.run_dbt_with_vars(['seed'], 'false', strict=False)
-        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        self.run_dbt_with_vars(['seed'], 'false')
+        self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--data'], 'true', strict=False, expect_pass=False)
+            ['test', '--data'], 'true', expect_pass=False)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'fail')
         self.assertEqual(results[0].failures, 2)
 
     @use_profile('postgres')
     def test_postgres_data_severity_warnings_strict(self):
-        self.run_dbt_with_vars(['seed'], 'false', strict=False)
-        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        self.run_dbt_with_vars(['seed'], 'false')
+        self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--data'], 'false', expect_pass=False)
+            ['test', '--data'], 'false', expect_pass=True)
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].status, 'fail')
         self.assertEqual(results[0].failures, 2)

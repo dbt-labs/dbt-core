@@ -41,7 +41,6 @@ class GraphTest(unittest.TestCase):
 
     def setUp(self):
         # create various attributes
-        dbt.flags.STRICT_MODE = True
         self.graph_result = None
         tracking.do_not_track()
         self.profile = {

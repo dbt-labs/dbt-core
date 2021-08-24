@@ -21,8 +21,6 @@ from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, 
 
 class TestSnowflakeAdapter(unittest.TestCase):
     def setUp(self):
-        flags.STRICT_MODE = False
-
         profile_cfg = {
             'outputs': {
                 'test': {

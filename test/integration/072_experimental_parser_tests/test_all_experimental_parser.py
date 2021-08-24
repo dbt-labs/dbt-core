@@ -34,6 +34,18 @@ class TestBasicExperimentalParser(DBTIntegrationTest):
         self.assertEqual(node.config._extra, {'x': True})
         self.assertEqual(node.config.tags, ['hello', 'world'])
 
+    @use_profile('postgres')
+    def test_postgres_env_experimental_parser(self):
+        os.environ['DBT_USE_EXPERIMENTAL_PARSER'] = 'true'
+        results = self.run_dbt(['parse'])
+        manifest = get_manifest()
+        node = manifest.nodes['model.test.model_a']
+        self.assertEqual(node.refs, [['model_a']])
+        self.assertEqual(node.sources, [['my_src', 'my_tbl']])
+        self.assertEqual(node.config._extra, {'x': True})
+        self.assertEqual(node.config.tags, ['hello', 'world'])
+        
+
 class TestRefOverrideExperimentalParser(DBTIntegrationTest):
     @property
     def schema(self):

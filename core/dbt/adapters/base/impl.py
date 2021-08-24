@@ -16,7 +16,6 @@ from dbt.exceptions import (
     get_relation_returned_multiple_results,
     InternalException, NotImplementedException, RuntimeException,
 )
-from dbt import flags
 
 from dbt import deprecations
 from dbt.adapters.protocol import (
@@ -289,9 +288,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def _schema_is_cached(self, database: Optional[str], schema: str) -> bool:
         """Check if the schema is cached, and by default logs if it is not."""
 
-        if flags.USE_CACHE is False:
-            return False
-        elif (database, schema) not in self.cache:
+        if (database, schema) not in self.cache:
             logger.debug(
                 'On "{}": cache miss for schema "{}.{}", this is inefficient'
                 .format(self.nice_connection_name(), database, schema)
@@ -340,9 +337,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
-        if not flags.USE_CACHE:
-            return
-
         cache_schemas = self._get_cache_schemas(manifest)
         with executor(self.config) as tpe:
             futures: List[Future[List[BaseRelation]]] = []
@@ -375,9 +369,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
-        if not flags.USE_CACHE:
-            return
-
         with self.cache.lock:
             if clear:
                 self.cache.clear()
@@ -391,8 +382,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to cache a null relation for {}'.format(name)
             )
-        if flags.USE_CACHE:
-            self.cache.add(relation)
+        self.cache.add(relation)
         # so jinja doesn't render things
         return ''
 
@@ -406,8 +396,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to drop a null relation for {}'.format(name)
             )
-        if flags.USE_CACHE:
-            self.cache.drop(relation)
+        self.cache.drop(relation)
         return ''
 
     @available
@@ -428,8 +417,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 .format(src_name, dst_name, name)
             )
 
-        if flags.USE_CACHE:
-            self.cache.rename(from_relation, to_relation)
+        self.cache.rename(from_relation, to_relation)
         return ''
 
     ###

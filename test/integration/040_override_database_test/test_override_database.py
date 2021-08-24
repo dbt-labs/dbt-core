@@ -68,9 +68,6 @@ class BaseOverrideDatabase(DBTIntegrationTest):
             }
         }
 
-    def run_dbt_notstrict(self, args):
-        return self.run_dbt(args, strict=False)
-
 
 class TestModelOverride(BaseOverrideDatabase):
     def run_database_override(self):
@@ -79,9 +76,9 @@ class TestModelOverride(BaseOverrideDatabase):
         else:
             func = lambda x: x
 
-        self.run_dbt_notstrict(['seed'])
+        self.run_dbt(['seed'])
 
-        self.assertEqual(len(self.run_dbt_notstrict(['run'])), 4)
+        self.assertEqual(len(self.run_dbt(['run'])), 4)
         self.assertManyRelationsEqual([
             (func('seed'), self.unique_schema(), self.default_database),
             (func('view_2'), self.unique_schema(), self.alternative_database),
@@ -115,8 +112,8 @@ class BaseTestProjectModelOverride(BaseOverrideDatabase):
         assert False, 'No profile database found!'
 
     def run_database_override(self):
-        self.run_dbt_notstrict(['seed'])
-        self.assertEqual(len(self.run_dbt_notstrict(['run'])), 4)
+        self.run_dbt(['seed'])
+        self.assertEqual(len(self.run_dbt(['run'])), 4)
         self.assertExpectedRelations()
 
     def assertExpectedRelations(self):
@@ -217,9 +214,9 @@ class TestProjectSeedOverride(BaseOverrideDatabase):
                 'database': self.alternative_database
             },
         })
-        self.run_dbt_notstrict(['seed'])
+        self.run_dbt(['seed'])
 
-        self.assertEqual(len(self.run_dbt_notstrict(['run'])), 4)
+        self.assertEqual(len(self.run_dbt(['run'])), 4)
         self.assertManyRelationsEqual([
             (func('seed'), self.unique_schema(), self.alternative_database),
             (func('view_2'), self.unique_schema(), self.alternative_database),

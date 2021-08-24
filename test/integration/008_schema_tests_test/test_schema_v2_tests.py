@@ -117,12 +117,9 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_postgres_malformed_schema_strict_will_break_run(self):
+    def test_postgres_malformed_schema_will_break_run(self):
         with self.assertRaises(CompilationException):
-            self.run_dbt(strict=True)
-        # even if strict = False!
-        with self.assertRaises(CompilationException):
-            self.run_dbt(strict=False)
+            self.run_dbt()
 
 
 class TestCustomConfigSchemaTests(DBTIntegrationTest):
@@ -149,16 +146,11 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
     def test_postgres_config(self):
         """ Test that tests use configs properly. All tests for
         this project will fail, configs are set to make test pass. """
-        results = self.run_dbt()
-        results = self.run_dbt(['test'], strict=False)
+        results = self.run_dbt(['test'], expect_pass=False)
 
         self.assertEqual(len(results), 7)
         for result in results:
             self.assertFalse(result.skipped)
-            self.assertEqual(
-                result.failures, 0,
-                'test {} failed'.format(result.node.name)
-            )
 
 
 class TestHooksInTests(DBTIntegrationTest):
@@ -393,16 +385,16 @@ class TestSchemaCaseInsensitive(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_schema_lowercase_sql(self):
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 2)
-        results = self.run_dbt(['test', '-m', 'lowercase'], strict=False)
+        results = self.run_dbt(['test', '-m', 'lowercase'])
         self.assertEqual(len(results), 1)
 
     @use_profile('postgres')
     def test_postgres_schema_uppercase_sql(self):
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 2)
-        results = self.run_dbt(['test', '-m', 'uppercase'], strict=False)
+        results = self.run_dbt(['test', '-m', 'uppercase'])
         self.assertEqual(len(results), 1)
 
 
@@ -440,7 +432,7 @@ class TestSchemaTestContext(DBTIntegrationTest):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
         self.run_dbt(['deps'])
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 3)
 
         run_result = self.run_dbt(['test'], expect_pass=False)
@@ -457,7 +449,7 @@ class TestSchemaTestContext(DBTIntegrationTest):
         self.assertEqual(results[3].status, TestStatus.Fail)
         self.assertRegex(results[3].node.compiled_sql, r'union all')
         # type_two_model_a_
-        self.assertEqual(results[4].status, TestStatus.Fail)
+        self.assertEqual(results[4].status, TestStatus.Warn)
         self.assertEqual(results[4].node.config.severity, 'WARN')
 
 class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
@@ -500,7 +492,7 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
         self.run_dbt(['deps'])
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 3)
 
         run_result = self.run_dbt(['test'], expect_pass=False)
@@ -515,7 +507,7 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
         self.assertEqual(results[2].status, TestStatus.Fail)
         self.assertRegex(results[2].node.compiled_sql, r'union all')
         # type_two_model_a_
-        self.assertEqual(results[3].status, TestStatus.Fail)
+        self.assertEqual(results[3].status, TestStatus.Warn)
         self.assertEqual(results[3].node.config.severity, 'WARN')
 
 class TestSchemaTestNameCollision(DBTIntegrationTest):

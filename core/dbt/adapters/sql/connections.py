@@ -11,7 +11,6 @@ from dbt.contracts.connection import (
     Connection, ConnectionState, AdapterResponse
 )
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt import flags
 
 
 class SQLConnectionManager(BaseConnectionManager):
@@ -144,13 +143,6 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def begin(self):
         connection = self.get_thread_connection()
-
-        if flags.STRICT_MODE:
-            if not isinstance(connection, Connection):
-                raise dbt.exceptions.CompilerException(
-                    f'In begin, got {connection} - not a Connection!'
-                )
-
         if connection.transaction_open is True:
             raise dbt.exceptions.InternalException(
                 'Tried to begin a new transaction on connection "{}", but '
@@ -163,12 +155,6 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def commit(self):
         connection = self.get_thread_connection()
-        if flags.STRICT_MODE:
-            if not isinstance(connection, Connection):
-                raise dbt.exceptions.CompilerException(
-                    f'In commit, got {connection} - not a Connection!'
-                )
-
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
                 'Tried to commit transaction on connection "{}", but '

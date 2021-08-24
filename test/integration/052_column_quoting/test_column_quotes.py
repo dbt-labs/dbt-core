@@ -33,7 +33,7 @@ class TestColumnQuotingDefault(BaseColumnQuotingTest):
         return self.dir('models-unquoted')
 
     def run_dbt(self, *args, **kwargs):
-        return super().run_dbt(*args, strict=False, **kwargs)
+        return super().run_dbt(*args, **kwargs)
 
     @use_profile('postgres')
     def test_postgres_column_quotes(self):

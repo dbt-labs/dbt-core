@@ -214,7 +214,7 @@ class GraphRunnableTask(ManifestTask):
                     logger.debug('Finished running node {}'.format(
                         runner.node.unique_id))
 
-        fail_fast = getattr(self.config.args, 'fail_fast', False)
+        fail_fast = flags.FAIL_FAST
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastException(
@@ -281,7 +281,7 @@ class GraphRunnableTask(ManifestTask):
             self._submit(pool, args, callback)
 
         # block on completion
-        if getattr(self.config.args, 'fail_fast', False):
+        if flags.FAIL_FAST:
             # checkout for an errors after task completion in case of
             # fast failure
             while self.job_queue.wait_until_something_was_done():
@@ -571,7 +571,11 @@ class GraphRunnableTask(ManifestTask):
         )
 
     def args_to_dict(self):
-        var_args = vars(self.args)
+        var_args = vars(self.args).copy()
+        # update the args with the flags, which could also come from environment
+        # variables or user_config
+        flag_dict = flags.get_flag_dict()
+        var_args.update(flag_dict)
         dict_args = {}
         # remove args keys that clutter up the dictionary
         for key in var_args:
@@ -579,10 +583,11 @@ class GraphRunnableTask(ManifestTask):
                 continue
             if var_args[key] is None:
                 continue
+            # TODO: add more default_false_keys
             default_false_keys = (
                 'debug', 'full_refresh', 'fail_fast', 'warn_error',
-                'single_threaded', 'test_new_parser', 'log_cache_events',
-                'strict'
+                'single_threaded', 'log_cache_events',
+                'use_experimental_parser',
             )
             if key in default_false_keys and var_args[key] is False:
                 continue

@@ -33,7 +33,7 @@ from dbt.adapters.factory import reset_adapters, cleanup_connections
 import dbt.tracking
 
 from dbt.utils import ExitCodes
-from dbt.config import PROFILES_DIR, read_user_config
+from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
 from dbt.exceptions import RuntimeException, InternalException
 
 
@@ -160,17 +160,6 @@ def handle(args):
     return res
 
 
-def initialize_config_values(parsed):
-    """Given the parsed args, initialize the dbt tracking code.
-
-    It would be nice to re-use this profile later on instead of parsing it
-    twice, but dbt's intialization is not structured in a way that makes that
-    easy.
-    """
-    cfg = read_user_config(parsed.profiles_dir)
-    cfg.set_values(parsed.profiles_dir)
-
-
 @contextmanager
 def adapter_management():
     reset_adapters()
@@ -184,8 +173,15 @@ def handle_and_check(args):
     with log_manager.applicationbound():
         parsed = parse_args(args)
 
-        # we've parsed the args - we can now decide if we're debug or not
-        if parsed.debug:
+        # Set flags from args, user config, and env vars
+        user_config = read_user_config(parsed.profiles_dir)  # This is read again later
+        flags.set_from_args(parsed, user_config)
+        dbt.tracking.initialize_from_flags()
+        # Set log_format from flags
+        parsed.cls.set_log_format()
+
+        # we've parsed the args and set the flags - we can now decide if we're debug or not
+        if flags.DEBUG:
             log_manager.set_debug()
 
         profiler_enabled = False
@@ -197,8 +193,6 @@ def handle_and_check(args):
             enable=profiler_enabled,
             outfile=parsed.record_timing_info
         ):
-
-            initialize_config_values(parsed)
 
             with adapter_management():
 
@@ -233,15 +227,17 @@ def track_run(task):
 
 def run_from_args(parsed):
     log_cache_events(getattr(parsed, 'log_cache_events', False))
-    flags.set_from_args(parsed)
 
-    parsed.cls.pre_init_hook(parsed)
     # we can now use the logger for stdout
+    # set log_format in the logger
+    parsed.cls.pre_init_hook(parsed)
 
     logger.info("Running with dbt{}".format(dbt.version.installed))
 
     # this will convert DbtConfigErrors into RuntimeExceptions
+    # task could be any one of the task objects
     task = parsed.cls.from_args(args=parsed)
+
     logger.debug("running dbt with arguments {parsed}", parsed=str(parsed))
 
     log_path = None
@@ -275,11 +271,12 @@ def _build_base_subparser():
 
     base_subparser.add_argument(
         '--profiles-dir',
-        default=PROFILES_DIR,
+        default=None,
+        dest='sub_profiles_dir',  # Main cli arg precedes subcommand
         type=str,
         help='''
         Which directory to look in for the profiles.yml file. Default = {}
-        '''.format(PROFILES_DIR)
+        '''.format(DEFAULT_PROFILES_DIR)
     )
 
     base_subparser.add_argument(
@@ -317,15 +314,6 @@ def _build_base_subparser():
         '--log-cache-events',
         action='store_true',
         help=argparse.SUPPRESS,
-    )
-
-    base_subparser.add_argument(
-        '--bypass-cache',
-        action='store_false',
-        dest='use_cache',
-        help='''
-        If set, bypass the adapter-level cache of database state
-        ''',
     )
 
     base_subparser.set_defaults(defer=None, state=None)
@@ -394,6 +382,7 @@ def _build_build_subparser(subparsers, base_subparser):
     sub.add_argument(
         '-x',
         '--fail-fast',
+        dest='sub_fail_fast',
         action='store_true',
         help='''
         Stop execution upon a first failure.
@@ -531,6 +520,7 @@ def _build_run_subparser(subparsers, base_subparser):
     run_sub.add_argument(
         '-x',
         '--fail-fast',
+        dest='sub_fail_fast',
         action='store_true',
         help='''
         Stop execution upon a first failure.
@@ -654,8 +644,9 @@ def _add_table_mutability_arguments(*subparsers):
 def _add_version_check(sub):
     sub.add_argument(
         '--no-version-check',
-        dest='version_check',
+        dest='sub_version_check',  # main cli arg precedes subcommands
         action='store_false',
+        default=None,
         help='''
         If set, skip ensuring dbt's version matches the one specified in
         the dbt_project.yml file ('require-dbt-version')
@@ -749,6 +740,7 @@ def _build_test_subparser(subparsers, base_subparser):
     sub.add_argument(
         '-x',
         '--fail-fast',
+        dest='sub_fail_fast',
         action='store_true',
         help='''
         Stop execution upon a first test failure.
@@ -972,6 +964,7 @@ def parse_args(args, cls=DBTArgumentParser):
         '-d',
         '--debug',
         action='store_true',
+        default=None,
         help='''
         Display debug logging during dbt execution. Useful for debugging and
         making bug reports.
@@ -981,13 +974,14 @@ def parse_args(args, cls=DBTArgumentParser):
     p.add_argument(
         '--log-format',
         choices=['text', 'json', 'default'],
-        default='default',
+        default=None,
         help='''Specify the log format, overriding the command's default.'''
     )
 
     p.add_argument(
         '--no-write-json',
         action='store_false',
+        default=None,
         dest='write_json',
         help='''
         If set, skip writing the manifest and run_results.json files to disk
@@ -998,6 +992,7 @@ def parse_args(args, cls=DBTArgumentParser):
         '--use-colors',
         action='store_const',
         const=True,
+        default=None,
         dest='use_colors',
         help='''
         Colorize the output DBT prints to the terminal. Output is colorized by
@@ -1019,23 +1014,33 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '-S',
-        '--strict',
-        action='store_true',
+        '--printer-width',
+        dest='printer_width',
         help='''
-        Run schema validations at runtime. This will surface bugs in dbt, but
-        may incur a performance penalty.
+        Sets the width of terminal output
         '''
     )
 
     p.add_argument(
         '--warn-error',
         action='store_true',
+        default=None,
         help='''
         If dbt would normally warn, instead raise an exception. Examples
         include --models that selects nothing, deprecations, configurations
         with no associated models, invalid test configurations, and missing
         sources/refs in tests.
+        '''
+    )
+
+    p.add_argument(
+        '--no-version-check',
+        dest='version_check',
+        action='store_false',
+        default=None,
+        help='''
+        If set, skip ensuring dbt's version matches the one specified in
+        the dbt_project.yml file ('require-dbt-version')
         '''
     )
 
@@ -1061,23 +1066,45 @@ def parse_args(args, cls=DBTArgumentParser):
         help=argparse.SUPPRESS,
     )
 
-    # if set, extract all models and blocks with the jinja block extractor, and
-    # verify that we don't fail anywhere the actual jinja parser passes. The
-    # reverse (passing files that ends up failing jinja) is fine.
-    # TODO remove?
-    p.add_argument(
-        '--test-new-parser',
-        action='store_true',
-        help=argparse.SUPPRESS
-    )
-
     # if set, will use the tree-sitter-jinja2 parser and extractor instead of
     # jinja rendering when possible.
     p.add_argument(
         '--use-experimental-parser',
         action='store_true',
+        default=None,
         help='''
         Uses an experimental parser to extract jinja values.
+        '''
+    )
+
+    p.add_argument(
+        '--profiles-dir',
+        default=None,
+        dest='profiles_dir',
+        type=str,
+        help='''
+        Which directory to look in for the profiles.yml file. Default = {}
+        '''.format(DEFAULT_PROFILES_DIR)
+    )
+
+    p.add_argument(
+        '--no-anonymous-usage-stats',
+        action='store_false',
+        default=None,
+        dest='send_anonymous_usage_stats',
+        help='''
+        Do not send anonymous usage stat to dbt Labs
+        '''
+    )
+
+    p.add_argument(
+        '-x',
+        '--fail-fast',
+        dest='fail_fast',
+        action='store_true',
+        default=None,
+        help='''
+        Stop execution upon a first failure.
         '''
     )
 
@@ -1128,8 +1155,28 @@ def parse_args(args, cls=DBTArgumentParser):
 
     parsed = p.parse_args(args)
 
-    if hasattr(parsed, 'profiles_dir'):
+    # profiles_dir is set before subcommands and after, so normalize
+    if hasattr(parsed, 'sub_profiles_dir'):
+        if parsed.sub_profiles_dir is not None:
+            parsed.profiles_dir = parsed.sub_profiles_dir
+        delattr(parsed, 'sub_profiles_dir')
+    if hasattr(parsed, 'profiles_dir') and parsed.profiles_dir is not None:
         parsed.profiles_dir = os.path.abspath(parsed.profiles_dir)
+        # needs to be set before the other flags, because it's needed to
+        # read the profile that contains them
+        flags.PROFILES_DIR = parsed.profiles_dir
+
+    # version_check is set before subcommands and after, so normalize
+    if hasattr(parsed, 'sub_version_check'):
+        if parsed.sub_version_check is False:
+            parsed.version_check = False
+        delattr(parsed, 'sub_version_check')
+
+    # fail_fast is set before subcommands and after, so normalize
+    if hasattr(parsed, 'sub_fail_fast'):
+        if parsed.sub_fail_fast is True:
+            parsed.fail_fast = True
+        delattr(parsed, 'sub_fail_fast')
 
     if getattr(parsed, 'project_dir', None) is not None:
         expanded_user = os.path.expanduser(parsed.project_dir)

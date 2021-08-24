@@ -12,6 +12,7 @@ from .profile import Profile
 from .project import Project
 from .renderer import DbtProjectYamlRenderer, ProfileRenderer
 from .utils import parse_cli_vars
+from dbt import flags
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
@@ -117,7 +118,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             unrendered=project.unrendered,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
-            config=profile.config,
+            user_config=profile.user_config,
             threads=profile.threads,
             credentials=profile.credentials,
             args=args,
@@ -144,7 +145,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         project = Project.from_project_root(
             project_root,
             renderer,
-            verify_version=getattr(self.args, 'version_check', False),
+            verify_version=bool(flags.VERSION_CHECK),
         )
 
         cfg = self.from_parts(
@@ -197,7 +198,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     ) -> Tuple[Project, Profile]:
         # profile_name from the project
         project_root = args.project_dir if args.project_dir else os.getcwd()
-        version_check = getattr(args, 'version_check', False)
+        version_check = bool(flags.VERSION_CHECK)
         partial = Project.partial_load(
             project_root,
             verify_version=version_check
@@ -416,7 +417,7 @@ class UnsetConfig(UserConfig):
 class UnsetProfile(Profile):
     def __init__(self):
         self.credentials = UnsetCredentials()
-        self.config = UnsetConfig()
+        self.user_config = UnsetConfig()
         self.profile_name = ''
         self.target_name = ''
         self.threads = -1
@@ -513,7 +514,7 @@ class UnsetProfileConfig(RuntimeConfig):
             unrendered=project.unrendered,
             profile_name='',
             target_name='',
-            config=UnsetConfig(),
+            user_config=UnsetConfig(),
             threads=getattr(args, 'threads', 1),
             credentials=UnsetCredentials(),
             args=args,

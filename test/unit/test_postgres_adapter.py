@@ -23,7 +23,6 @@ from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection, 
 class TestPostgresAdapter(unittest.TestCase):
 
     def setUp(self):
-        flags.STRICT_MODE = True
         project_cfg = {
             'name': 'X',
             'version': '0.1',
@@ -331,8 +330,6 @@ class TestPostgresAdapter(unittest.TestCase):
 
 class TestConnectingPostgresAdapter(unittest.TestCase):
     def setUp(self):
-        flags.STRICT_MODE = False
-
         self.target_dict = {
             'type': 'postgres',
             'dbname': 'postgres',

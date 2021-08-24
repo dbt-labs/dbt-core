@@ -51,7 +51,7 @@ class BaseSourcesTest(DBTIntegrationTest):
 class SuccessfulSourcesTest(BaseSourcesTest):
     def setUp(self):
         super().setUp()
-        self.run_dbt_with_vars(['seed'], strict=False)
+        self.run_dbt_with_vars(['seed'])
         self.maxDiff = None
         self._id = 101
         # this is the db initial value
@@ -459,14 +459,9 @@ class TestMalformedSources(BaseSourcesTest):
         return "malformed_models"
 
     @use_profile('postgres')
-    def test_postgres_malformed_schema_nonstrict_will_break_run(self):
+    def test_postgres_malformed_schema_will_break_run(self):
         with self.assertRaises(CompilationException):
-            self.run_dbt_with_vars(['seed'], strict=False)
-
-    @use_profile('postgres')
-    def test_postgres_malformed_schema_strict_will_break_run(self):
-        with self.assertRaises(CompilationException):
-            self.run_dbt_with_vars(['seed'], strict=True)
+            self.run_dbt_with_vars(['seed'])
 
 
 class TestRenderingInSourceTests(BaseSourcesTest):
