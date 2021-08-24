@@ -389,13 +389,7 @@ class Profile(HasCredentials):
         if not raw_profile:
             msg = f"Profile {profile_name} in profiles.yml is empty"
             raise DbtProfileError(INVALID_PROFILE_MESSAGE.format(error_string=msg))
-            )
-            raise DbtProfileError(
-                INVALID_PROFILE_MESSAGE.format(
-                    error_string=msg
-                )
-            )
-        user_config = raw_profiles.get('config')
+        user_config = raw_profiles.get("config")
 
         return cls.from_raw_profile_info(
             raw_profile=raw_profile,
