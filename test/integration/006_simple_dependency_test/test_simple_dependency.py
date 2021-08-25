@@ -167,7 +167,7 @@ class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
                     'revision': 'config-version-2-deps'
                 },
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-utils.git',
+                    'git': 'https://github.com/dbt-labs/dbt-utils.git',
                     'revision': '0.5.0',
                 }
             ]
