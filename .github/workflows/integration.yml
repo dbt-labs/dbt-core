@@ -132,8 +132,10 @@ jobs:
 
     needs: test-metadata
 
-    # only block on non-postgres jobs, trying to decrease amount of concurrent processing against warehouses
-    concurrency: ${{ matrix.adapter != 'postgres' && matrix.adapter || github.job }}-${{ matrix.python-version }}-${{ matrix.os }}
+    # only block on non-postgres jobs, this is an attempt to decrease amount of concurrent jobs running against a warehouse
+    concurrency:
+      group: ${{ matrix.adapter != 'postgres' && matrix.adapter || github.run_id }}-${{ matrix.python-version }}-${{ matrix.os }}
+      cancel-in-progress: false
 
     strategy:
       fail-fast: false
