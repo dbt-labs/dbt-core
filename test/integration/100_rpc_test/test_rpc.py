@@ -1132,7 +1132,7 @@ class TestRPCServerDeps(HasRPCServer):
         return {
             # this is config-version 2, but with no upper bound
             'packages': [
-                {'package': 'fishtown-analytics/dbt_utils', 'version': '0.5.0'},
+                {'package': 'dbt-labs/dbt_utils', 'version': '0.5.0'},
             ]
         }
 

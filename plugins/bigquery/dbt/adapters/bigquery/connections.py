@@ -118,7 +118,7 @@ class BigQueryCredentials(Credentials):
     def __pre_deserialize__(cls, d: Dict[Any, Any]) -> Dict[Any, Any]:
         # We need to inject the correct value of the database (aka project) at
         # this stage, ref
-        # https://github.com/fishtown-analytics/dbt/pull/2908#discussion_r532927436.
+        # https://github.com/dbt-labs/dbt/pull/2908#discussion_r532927436.
 
         # `database` is an alias of `project` in BigQuery
         if 'database' not in d:

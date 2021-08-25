@@ -25,7 +25,7 @@ class PostgresIndexConfig(dbtClassMixin):
     def render(self, relation):
         # We append the current timestamp to the index name because otherwise
         # the index will only be created on every other run. See
-        # https://github.com/fishtown-analytics/dbt/issues/1945#issuecomment-576714925
+        # https://github.com/dbt-labs/dbt/issues/1945#issuecomment-576714925
         # for an explanation.
         now = datetime.utcnow().isoformat()
         inputs = (self.columns +
