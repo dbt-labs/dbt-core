@@ -274,7 +274,7 @@ class BigQueryAdapter(BaseAdapter):
             # next page. If that key table gets dropped before we run
             # list_relations, then this will 404. So, we avoid this
             # situation by making the page size sufficiently large.
-            # see: https://github.com/fishtown-analytics/dbt/issues/726
+            # see: https://github.com/dbt-labs/dbt/issues/726
             # TODO: cache the list of relations up front, and then we
             #       won't need to do this
             max_results=100000)

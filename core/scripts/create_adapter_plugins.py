@@ -130,7 +130,7 @@ default:
 
 
 DBTSPEC_TEMPLATE = '''
-# See https://github.com/fishtown-analytics/dbt-adapter-tests
+# See https://github.com/dbt-labs/dbt-adapter-tests
 # for installation and use
 
 target:

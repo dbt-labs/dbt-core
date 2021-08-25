@@ -721,7 +721,7 @@ class TestProject(BaseConfigTest):
                     'local': 'foo',
                 },
                 {
-                    'git': 'git@example.com:fishtown-analytics/dbt-utils.git',
+                    'git': 'git@example.com:dbt-labs/dbt-utils.git',
                     'revision': 'test-rev'
                 },
             ],
@@ -785,7 +785,7 @@ class TestProject(BaseConfigTest):
             project.packages,
             PackageConfig(packages=[
                 LocalPackage(local='foo'),
-                GitPackage(git='git@example.com:fishtown-analytics/dbt-utils.git', revision='test-rev')
+                GitPackage(git='git@example.com:dbt-labs/dbt-utils.git', revision='test-rev')
             ]))
         str(project)  # this does the equivalent of project.to_project_config(with_packages=True)
         json.dumps(project.to_project_config())
