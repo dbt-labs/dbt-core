@@ -1,7 +1,7 @@
 bumpversion
 flake8
 flaky
-freezegun==0.3.12
+freezegun==1.1.0
 ipdb
 mypy==0.782
 pip-tools
