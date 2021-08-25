@@ -25,5 +25,5 @@ select
     '2021-01-01T12:00:00Z' as str_datetime,
 
     -- this is obviously not a date... but Agate used to think it was!
-    -- see: https://github.com/fishtown-analytics/dbt/issues/2984
+    -- see: https://github.com/dbt-labs/dbt/issues/2984
     '0010T00000aabbccdd' as str_obviously_not_date
