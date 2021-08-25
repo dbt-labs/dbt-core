@@ -62,7 +62,7 @@ setup(
         'minimal-snowplow-tracker==0.0.2',
         'networkx>=2.3,<3',
         'packaging~=20.9',
-        'sqlparse>=0.2.3,<0.4',
+        'sqlparse>=0.2.3,<0.5',
         'dbt-extractor==0.4.0',
         'typing-extensions>=3.7.4,<3.11',
         'werkzeug>=1,<3',
