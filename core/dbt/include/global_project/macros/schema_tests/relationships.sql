@@ -17,9 +17,9 @@ select
 
 from child
 left join parent
-    on child.from_column = parent.to_column
+    on child.from_field = parent.to_field
 
-where parent.to_column is null
+where parent.to_field is null
 
 {% endmacro %}
 
