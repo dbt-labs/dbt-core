@@ -91,6 +91,7 @@ jobs:
             postgres:
               - 'core/**'
               - 'plugins/postgres/**'
+              - 'dev-requirements.txt'
             snowflake:
               - 'core/**'
               - 'plugins/snowflake/**'
