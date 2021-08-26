@@ -73,6 +73,7 @@ Contributors:
 ### Fixes
 
 - Fix bug in finding analysis nodes when applying analysis patch ([#3764](https://github.com/dbt-labs/dbt/issues/3764), [#3767](https://github.com/dbt-labs/dbt/pull/3767))
+- Rewrite built-in generic tests to support `column_name` expressions ([#3790](https://github.com/dbt-labs/dbt/issues/3790), [#3811](https://github.com/dbt-labs/dbt/pull/3811))
 
 Contributors:
 
