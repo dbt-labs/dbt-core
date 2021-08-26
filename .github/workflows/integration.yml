@@ -28,7 +28,6 @@ on:
       - "develop"
       - "*.latest"
       - "releases/*"
-      - "github-actions" # testing!
   # all PRs, important to note that `pull_request_target` workflows
   # will run in the context of the target branch of a PR
   pull_request_target:
@@ -38,9 +37,9 @@ on:
 # explicitly turn off permissions for `GITHUB_TOKEN`
 permissions: read-all
 
-# will cancel previous workflows triggered by the same event and for the same ref
+# will cancel previous workflows triggered by the same event and for the same ref for PRs or same SHA otherwise
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ contains(github.event_name, 'pull_request') && github.event.pull_request.head.ref || github.sha }}
   cancel-in-progress: true
 
 # sets default shell to bash, for all operating systems
@@ -132,11 +131,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     needs: test-metadata
-
-    # only block on non-postgres jobs, this is an attempt to decrease amount of concurrent jobs running against a warehouse
-    concurrency:
-      group: ${{ matrix.adapter != 'postgres' && matrix.adapter || github.run_id }}-${{ matrix.python-version }}-${{ matrix.os }}
-      cancel-in-progress: false
 
     strategy:
       fail-fast: false
