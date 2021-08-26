@@ -40,7 +40,7 @@ permissions: read-all
 
 # will cancel previous workflows triggered by the same event and for the same ref
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.ref }}
   cancel-in-progress: true
 
 # sets default shell to bash, for all operating systems
@@ -133,8 +133,10 @@ jobs:
 
     needs: test-metadata
 
-    # only block on non-postgres jobs, trying to decrease amount of concurrent processing against warehouses
-    concurrency: ${{ matrix.adapter != 'postgres' && matrix.adapter || github.job }}-${{ matrix.python-version }}-${{ matrix.os }}
+    # only block on non-postgres jobs, this is an attempt to decrease amount of concurrent jobs running against a warehouse
+    concurrency:
+      group: ${{ matrix.adapter != 'postgres' && matrix.adapter || github.run_id }}-${{ matrix.python-version }}-${{ matrix.os }}
+      cancel-in-progress: false
 
     strategy:
       fail-fast: false
