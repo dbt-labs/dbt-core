@@ -458,7 +458,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        if not isinstance(source, list):
+        if type(source) is not list:
             source = [source]
 
         source_ref_array = [self.table_ref(
