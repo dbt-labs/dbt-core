@@ -617,7 +617,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
-            self._table_ref('project', 'dataset', 'table1', None),
+            [self._table_ref('project', 'dataset', 'table1', None)],
             self._table_ref('project', 'dataset', 'table2', None),
             job_config=ANY)
         args, kwargs = self.mock_client.copy_table.call_args
@@ -630,7 +630,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             write_disposition=dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
-            self._table_ref('project', 'dataset', 'table1', None),
+            [self._table_ref('project', 'dataset', 'table1', None)],
             self._table_ref('project', 'dataset', 'table2', None),
             job_config=ANY)
         args, kwargs = self.mock_client.copy_table.call_args
