@@ -27,6 +27,8 @@ class TestBigqueryCopyTable(DBTIntegrationTest):
                     materialized: table
                 copy_as_table:
                     materialized: copy
+                copy_as_several_tables:
+                    materialized: copy
                 copy_as_incremental:
                     materialized: copy
         '''))

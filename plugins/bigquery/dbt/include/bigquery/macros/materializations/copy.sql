@@ -7,18 +7,18 @@
 
 
   {# Cycle over ref() and source() to create source tables array #}
-  {% set src = [] %}
+  {% set source_array = [] %}
   {% for ref_table in model.refs %}
-    {{ src.append(ref(*ref_table)) }}
+    {{ source_array.append(ref(*ref_table)) }}
   {% endfor %}
 
   {% for src_table in model.sources %}
-    {{ src.append(source(*src_table)) }}
+    {{ source_array.append(source(*src_table)) }}
   {% endfor %}
 
   {# Call adapter's copy_table function #}
   {%- set result_str = adapter.copy_table(
-      src,
+      source_array,
       destination,
       config.get('copy_materialization', default = 'table')) -%}
 

@@ -454,32 +454,32 @@ class BigQueryConnectionManager(BaseConnectionManager):
         self.create_bigquery_table(database, schema, table_name, callback,
                                    'CREATE DAY PARTITIONED TABLE')
 
-    def copy_bq_table(self, source, destination, write_disposition):
+    def copy_bq_table(self, source_array, destination, write_disposition):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        source_ref = []
-        for src_table in source:
-            source_ref.append(self.table_ref(
+        source_ref_array = []
+        for src_table in source_array:
+            source_ref_array.append(self.table_ref(
                 src_table.database, src_table.schema, src_table.table, conn))
         destination_ref = self.table_ref(
             destination.database, destination.schema, destination.table, conn)
 
         logger.debug(
             'Copying table(s) "{}" to "{}" with disposition: "{}"',
-            ', '.join(src_ref.path for src_ref in source_ref), destination_ref.path, write_disposition)
+            ', '.join(source_ref.path for source_ref in source_ref_array), destination_ref.path, write_disposition)
 
         def copy_and_results():
             job_config = google.cloud.bigquery.CopyJobConfig(
                 write_disposition=write_disposition)
             copy_job = client.copy_table(
-                source_ref, destination_ref, job_config=job_config)
+                source_ref_array, destination_ref, job_config=job_config)
             iterator = copy_job.result(timeout=self.get_timeout(conn))
             return copy_job, iterator
 
         self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
-                ', '.join(src_ref.path for src_ref in source_ref), destination_ref.path),
+                ', '.join(source_ref.path for source_ref in source_ref_array), destination_ref.path),
             conn=conn, fn=copy_and_results)
 
     @staticmethod

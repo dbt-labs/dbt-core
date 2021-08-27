@@ -430,7 +430,7 @@ class BigQueryAdapter(BaseAdapter):
         return "CREATE TABLE"
 
     @available.parse(lambda *a, **k: '')
-    def copy_table(self, source, destination, materialization):
+    def copy_table(self, source_array, destination, materialization):
         if materialization == 'incremental':
             write_disposition = WRITE_APPEND
         elif materialization == 'table':
@@ -442,7 +442,7 @@ class BigQueryAdapter(BaseAdapter):
                 f'{materialization}')
 
         self.connections.copy_bq_table(
-            source, destination, write_disposition)
+            source_array, destination, write_disposition)
 
         return "COPY TABLE with materialization: {}".format(materialization)
 
