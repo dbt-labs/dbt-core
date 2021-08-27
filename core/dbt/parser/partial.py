@@ -46,6 +46,7 @@ class PartialParsing:
         self.deleted_manifest = Manifest()
         self.macro_child_map: Dict[str, List[str]] = {}
         self.build_file_diff()
+        self.processing_file = None
 
     def skip_parsing(self):
         return (
@@ -118,16 +119,21 @@ class PartialParsing:
         # Need to add new files first, because changes in schema files
         # might refer to them
         for file_id in self.file_diff['added']:
+            self.processing_file = file_id
             self.add_to_saved(file_id)
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
         for file_id in self.file_diff['changed_schema_files']:
+            self.processing_file = file_id
             self.change_schema_file(file_id)
         for file_id in self.file_diff['deleted_schema_files']:
+            self.processing_file = file_id
             self.delete_schema_file(file_id)
         for file_id in self.file_diff['deleted']:
+            self.processing_file = file_id
             self.delete_from_saved(file_id)
         for file_id in self.file_diff['changed']:
+            self.processing_file = file_id
             self.update_in_saved(file_id)
         return self.project_parser_files
 
@@ -362,7 +368,8 @@ class PartialParsing:
         for unique_id in macros:
             if unique_id not in self.saved_manifest.macros:
                 # This happens when a macro has already been removed
-                source_file.macros.remove(unique_id)
+                if unique_id in source_file.macros:
+                    source_file.macros.remove(unique_id)
                 continue
 
             base_macro = self.saved_manifest.macros.pop(unique_id)
@@ -388,7 +395,9 @@ class PartialParsing:
                     macro_patch = self.get_schema_element(macro_patches, base_macro.name)
                     self.delete_schema_macro_patch(schema_file, macro_patch)
                     self.merge_patch(schema_file, 'macros', macro_patch)
-            source_file.macros.remove(unique_id)
+            # The macro may have already been removed by handling macro children
+            if unique_id in source_file.macros:
+                source_file.macros.remove(unique_id)
 
     # similar to schedule_nodes_for_parsing but doesn't do sources and exposures
     # and handles schema tests
@@ -645,8 +654,9 @@ class PartialParsing:
     def remove_tests(self, schema_file, dict_key, name):
         tests = schema_file.get_tests(dict_key, name)
         for test_unique_id in tests:
-            node = self.saved_manifest.nodes.pop(test_unique_id)
-            self.deleted_manifest.nodes[test_unique_id] = node
+            if test_unique_id in self.saved_manifest.nodes:
+                node = self.saved_manifest.nodes.pop(test_unique_id)
+                self.deleted_manifest.nodes[test_unique_id] = node
         schema_file.remove_tests(dict_key, name)
 
     def delete_schema_source(self, schema_file, source_dict):
@@ -668,19 +678,17 @@ class PartialParsing:
 
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
-        for unique_id in schema_file.macro_patches:
-            parts = unique_id.split('.')
-            macro_name = parts[-1]
-            if macro_name == macro['name']:
-                macro_unique_id = unique_id
-                break
+        macro_unique_id = None
+        if macro['name'] in schema_file.macro_patches:
+            macro_unique_id = schema_file.macro_patches[macro['name']]
+            del schema_file.macro_patches[macro['name']]
         if macro_unique_id and macro_unique_id in self.saved_manifest.macros:
             macro = self.saved_manifest.macros.pop(macro_unique_id)
             self.deleted_manifest.macros[macro_unique_id] = macro
             macro_file_id = macro.file_id
-            self.add_to_pp_files(self.saved_files[macro_file_id])
-        if macro_unique_id in schema_file.macro_patches:
-            schema_file.macro_patches.remove(macro_unique_id)
+            if macro_file_id in self.new_files:
+                self.saved_files[macro_file_id] = self.new_files[macro_file_id]
+                self.add_to_pp_files(self.saved_files[macro_file_id])
 
     # exposures are created only from schema files, so just delete
     # the exposure.

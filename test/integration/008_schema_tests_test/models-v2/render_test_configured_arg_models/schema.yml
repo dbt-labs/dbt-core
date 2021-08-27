@@ -1,0 +1,7 @@
+version: 2
+
+models:
+  - name: model
+    tests:
+      - equivalent:
+          value: "{{ var('myvar', 'baz') }}-bar"

@@ -1,6 +1,8 @@
 import agate
 import decimal
 import json
+import string
+import random
 import re
 import pytest
 import unittest
@@ -17,7 +19,7 @@ from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery import BigQueryRelation
 from dbt.adapters.bigquery import Plugin as BigQueryPlugin
 from dbt.adapters.bigquery.connections import BigQueryConnectionManager
-from dbt.adapters.bigquery.connections import _sanitize_label
+from dbt.adapters.bigquery.connections import _sanitize_label, _VALIDATE_LABEL_LENGTH_LIMIT
 from dbt.adapters.base.query_headers import MacroQueryStringSetter
 from dbt.clients import agate_helper
 import dbt.exceptions
@@ -972,3 +974,22 @@ class TestBigQueryAdapterConversions(TestAdapterConversions):
 )
 def test_sanitize_label(input, output):
     assert _sanitize_label(input) == output
+
+
+@pytest.mark.parametrize(
+    "label_length",
+    [64, 65, 100],
+)
+def test_sanitize_label_length(label_length):
+    random_string = "".join(
+        random.choice(string.ascii_uppercase + string.digits)
+        for i in range(label_length)
+    )
+    test_error_msg = (
+            f"Job label length {label_length} is greater than length limit: "
+            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n"
+            f"Current sanitized label: {random_string.lower()}"
+        )
+    with pytest.raises(dbt.exceptions.RuntimeException) as error_info:
+        _sanitize_label(random_string)
+    assert error_info.value.args[0] == test_error_msg

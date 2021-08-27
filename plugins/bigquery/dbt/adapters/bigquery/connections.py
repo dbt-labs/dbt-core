@@ -118,7 +118,7 @@ class BigQueryCredentials(Credentials):
     def __pre_deserialize__(cls, d: Dict[Any, Any]) -> Dict[Any, Any]:
         # We need to inject the correct value of the database (aka project) at
         # this stage, ref
-        # https://github.com/fishtown-analytics/dbt/pull/2908#discussion_r532927436.
+        # https://github.com/dbt-labs/dbt/pull/2908#discussion_r532927436.
 
         # `database` is an alias of `project` in BigQuery
         if 'database' not in d:
@@ -597,9 +597,20 @@ def _is_retryable(error):
 
 _SANITIZE_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
 
+_VALIDATE_LABEL_LENGTH_LIMIT = 63
+
 
 def _sanitize_label(value: str) -> str:
     """Return a legal value for a BigQuery label."""
     value = value.strip().lower()
     value = _SANITIZE_LABEL_PATTERN.sub("_", value)
-    return value
+    value_length = len(value)
+    if value_length > _VALIDATE_LABEL_LENGTH_LIMIT:
+        error_msg = (
+            f"Job label length {value_length} is greater than length limit: "
+            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n"
+            f"Current sanitized label: {value}"
+        )
+        raise RuntimeException(error_msg)
+    else:
+        return value

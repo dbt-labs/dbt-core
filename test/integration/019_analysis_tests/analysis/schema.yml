@@ -1,0 +1,5 @@
+version: 2
+
+analyses:
+  - name: analysis
+    description: "This is my analysis"

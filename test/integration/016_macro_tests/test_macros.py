@@ -23,7 +23,7 @@ class TestMacros(DBTIntegrationTest):
         return {
             'packages': [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'git': 'https://github.com/dbt-labs/dbt-integration-project',
                     'revision': 'dbt/0.17.0',
                 },
             ]

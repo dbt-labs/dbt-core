@@ -286,7 +286,7 @@ class SourcePatcher:
             )
 
         return generator.calculate_node_config(
-            config_calls=[],
+            config_call_dict={},
             fqn=fqn,
             resource_type=NodeType.Source,
             project_name=project_name,

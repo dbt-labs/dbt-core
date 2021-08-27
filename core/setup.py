@@ -24,7 +24,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "0.21.0a1"
+package_version = "0.21.0b1"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -34,9 +34,9 @@ setup(
     version=package_version,
     description=description,
     long_description=description,
-    author="Fishtown Analytics",
-    author_email="info@fishtownanalytics.com",
-    url="https://github.com/fishtown-analytics/dbt",
+    author="dbt Labs",
+    author_email="info@dbtlabs.com",
+    url="https://github.com/dbt-labs/dbt",
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     include_package_data = True,
     test_suite='test',
@@ -62,8 +62,8 @@ setup(
         'minimal-snowplow-tracker==0.0.2',
         'networkx>=2.3,<3',
         'packaging~=20.9',
-        'sqlparse>=0.2.3,<0.4',
-        'dbt-extractor==0.2.0',
+        'sqlparse>=0.2.3,<0.5',
+        'dbt-extractor==0.4.0',
         'typing-extensions>=3.7.4,<3.11',
         'werkzeug>=1,<3',
         # the following are all to match snowflake-connector-python

@@ -21,6 +21,7 @@ from dbt.contracts.rpc import (
     RPCSnapshotParameters,
     RPCSourceFreshnessParameters,
     RPCListParameters,
+    RPCBuildParameters,
 )
 from dbt.exceptions import RuntimeException
 from dbt.rpc.method import (
@@ -37,6 +38,7 @@ from dbt.task.seed import SeedTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 from dbt.task.list import ListTask
+from dbt.task.build import BuildTask
 
 from .base import RPCTask
 from .cli import HasCLI
@@ -77,7 +79,10 @@ class RemoteCompileProjectTask(
     METHOD_NAME = 'compile'
 
     def set_args(self, params: RPCCompileParameters) -> None:
-        self.args.models = self._listify(params.models)
+        if params.models:
+            self.args.select = self._listify(params.models)
+        else:
+            self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         if params.threads is not None:
@@ -92,7 +97,10 @@ class RemoteRunProjectTask(RPCCommandTask[RPCRunParameters], RunTask):
     METHOD_NAME = 'run'
 
     def set_args(self, params: RPCRunParameters) -> None:
-        self.args.models = self._listify(params.models)
+        if params.models:
+            self.args.select = self._listify(params.models)
+        else:
+            self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
 
@@ -112,7 +120,7 @@ class RemoteSeedProjectTask(RPCCommandTask[RPCSeedParameters], SeedTask):
 
     def set_args(self, params: RPCSeedParameters) -> None:
         # select has an argparse `dest` value of `models`.
-        self.args.models = self._listify(params.select)
+        self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         if params.threads is not None:
@@ -127,7 +135,10 @@ class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
     METHOD_NAME = 'test'
 
     def set_args(self, params: RPCTestParameters) -> None:
-        self.args.models = self._listify(params.models)
+        if params.models:
+            self.args.select = self._listify(params.models)
+        else:
+            self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         self.args.data = params.data
@@ -150,7 +161,7 @@ class RemoteDocsGenerateProjectTask(
     METHOD_NAME = 'docs.generate'
 
     def set_args(self, params: RPCDocsGenerateParameters) -> None:
-        self.args.models = None
+        self.args.select = None
         self.args.exclude = None
         self.args.selector_name = None
         self.args.compile = params.compile
@@ -214,7 +225,7 @@ class RemoteSnapshotTask(RPCCommandTask[RPCSnapshotParameters], SnapshotTask):
 
     def set_args(self, params: RPCSnapshotParameters) -> None:
         # select has an argparse `dest` value of `models`.
-        self.args.models = self._listify(params.select)
+        self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         if params.threads is not None:
@@ -253,7 +264,7 @@ class GetManifest(
     METHOD_NAME = 'get-manifest'
 
     def set_args(self, params: GetManifestParameters) -> None:
-        self.args.models = None
+        self.args.select = None
         self.args.exclude = None
         self.args.selector_name = None
 
@@ -305,3 +316,25 @@ class RemoteListTask(
             output=[json.loads(x) for x in results],
             logs=None
         )
+
+
+class RemoteBuildProjectTask(RPCCommandTask[RPCBuildParameters], BuildTask):
+    METHOD_NAME = 'build'
+
+    def set_args(self, params: RPCBuildParameters) -> None:
+        if params.models:
+            self.args.select = self._listify(params.models)
+        else:
+            self.args.select = self._listify(params.select)
+        self.args.exclude = self._listify(params.exclude)
+        self.args.selector_name = params.selector
+
+        if params.threads is not None:
+            self.args.threads = params.threads
+        if params.defer is None:
+            self.args.defer = flags.DEFER_MODE
+        else:
+            self.args.defer = params.defer
+
+        self.args.state = state_path(params.state)
+        self.set_previous_state()

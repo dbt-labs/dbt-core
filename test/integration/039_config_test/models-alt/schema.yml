@@ -1,0 +1,31 @@
+version: 2
+sources:
+  - name: raw
+    database: "{{ target.database }}"
+    schema: "{{ target.schema }}"
+    tables:
+      - name: 'some_seed'
+        columns:
+          - name: id
+
+models:
+  - name: model
+    description: "This is a model description"
+    config:
+        tags: ['tag_in_schema']
+        meta:
+            owner: 'Julie Smith'
+            my_attr: "{{ var('my_var') }}"
+        materialization: view
+
+    columns:
+      - name: id
+        tests:
+          - not_null:
+              meta:
+                  owner: 'Simple Simon'
+          - unique:
+              config:
+                  meta:
+                      owner: 'John Doe'
+

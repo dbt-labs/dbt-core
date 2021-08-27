@@ -163,8 +163,17 @@ class TestModels(DBTIntegrationTest):
         with self.assertRaises(CompilationException):
             results = self.run_dbt(["--partial-parse", "run"])
 
-        # Remove the macro patch
+        # put back macro file, got back to schema file with no macro
+        # add separate macro patch schema file
         shutil.copyfile('extra-files/models-schema2.yml', 'models-a/schema.yml')
+        shutil.copyfile('extra-files/my_macro.sql', 'macros/my_macro.sql')
+        shutil.copyfile('extra-files/macros.yml', 'macros/macros.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+
+        # delete macro and schema file
+        print(f"\n\n*** remove macro and macro_patch\n\n")
+        os.remove(normalize('macros/my_macro.sql'))
+        os.remove(normalize('macros/macros.yml'))
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
 
@@ -193,6 +202,8 @@ class TestModels(DBTIntegrationTest):
             os.remove(normalize('macros/my_macro.sql'))
         if os.path.exists(normalize('models-a/eschema.yml')):
             os.remove(normalize('models-a/eschema.yml'))
+        if os.path.exists(normalize('macros/macros.yml')):
+            os.remove(normalize('macros/macros.yml'))
 
 
 class TestSources(DBTIntegrationTest):

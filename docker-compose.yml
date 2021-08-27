@@ -19,7 +19,7 @@ services:
         GROUP_ID: ${GROUP_ID:-}
     command: "/root/.virtualenvs/dbt/bin/pytest"
     environment:
-      DOCKER_TEST_DATABASE_HOST: "database"
+      POSTGRES_TEST_HOST: "database"
     volumes:
       - .:/usr/app
     working_dir: /usr/app
