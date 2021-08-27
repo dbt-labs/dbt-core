@@ -7,6 +7,9 @@
 ### Features
 - Add `dbt build` command to run models, tests, seeds, and snapshots in DAG order. ([#2743] (https://github.com/dbt-labs/dbt/issues/2743), [#3490] (https://github.com/dbt-labs/dbt/issues/3490), [#3608](https://github.com/dbt-labs/dbt/issues/3608))
 - Introduce `on_schema_change` config to detect and handle schema changes on incremental models ([#1132](https://github.com/fishtown-analytics/dbt/issues/1132), [#3387](https://github.com/fishtown-analytics/dbt/issues/3387))
+- Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
+  - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
+  - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
 
 ### Fixes
 - Fix exception on yml files with all comments [3568](https://github.com/dbt-labs/dbt/issues/3568)
