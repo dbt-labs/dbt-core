@@ -42,11 +42,6 @@ Contributors:
 
 ## dbt 0.20.1 (Release TBD)
 
-### Feature enhacements
-- BigQuery copy materialization is enhaced ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
-  - to simplify config (default usage of `copy_materialization='table'` if is is not found in config)
-  - to let copy several source tables into single target table at a time
-
 ### Features
 - Adds `install-prerelease` parameter to hub packages in `packages.yml`. When set to `True`, allows prerelease packages to be installed. By default, this parameter is False unless explicitly set to True.
 
