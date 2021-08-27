@@ -454,14 +454,16 @@ class BigQueryConnectionManager(BaseConnectionManager):
         self.create_bigquery_table(database, schema, table_name, callback,
                                    'CREATE DAY PARTITIONED TABLE')
 
-    def copy_bq_table(self, source_array, destination, write_disposition):
+    def copy_bq_table(self, source, destination, write_disposition):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        source_ref_array = []
-        for src_table in source_array:
-            source_ref_array.append(self.table_ref(
-                src_table.database, src_table.schema, src_table.table, conn))
+        if not isinstance(source, list):
+            source = [source]
+
+        source_ref_array = [self.table_ref(
+            src_table.database, src_table.schema, src_table.table, conn)
+            for src_table in source]
         destination_ref = self.table_ref(
             destination.database, destination.schema, destination.table, conn)
 
