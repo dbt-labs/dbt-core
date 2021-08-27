@@ -267,8 +267,15 @@ class BaseConfig(
                     return False
         return True
 
+    # This is used in 'add_config_call' to created the combined config_call_dict.
+    # 'meta' moved here from node
+    mergebehavior = {
+        "append": ['pre-hook', 'pre_hook', 'post-hook', 'post_hook', 'tags'],
+        "update": ['quoting', 'column_types', 'meta'],
+    }
+
     @classmethod
-    def _extract_dict(
+    def _merge_dicts(
         cls, src: Dict[str, Any], data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Find all the items in data that match a target_field on this class,
@@ -314,10 +321,10 @@ class BaseConfig(
 
         adapter_config_cls = get_config_class_by_name(adapter_type)
 
-        self_merged = self._extract_dict(dct, data)
+        self_merged = self._merge_dicts(dct, data)
         dct.update(self_merged)
 
-        adapter_merged = adapter_config_cls._extract_dict(dct, data)
+        adapter_merged = adapter_config_cls._merge_dicts(dct, data)
         dct.update(adapter_merged)
 
         # any remaining fields must be "clobber"
@@ -349,33 +356,8 @@ class SourceConfig(BaseConfig):
 
 
 @dataclass
-class NodeConfig(BaseConfig):
+class NodeAndTestConfig(BaseConfig):
     enabled: bool = True
-    materialized: str = 'view'
-    persist_docs: Dict[str, Any] = field(default_factory=dict)
-    post_hook: List[Hook] = field(
-        default_factory=list,
-        metadata=MergeBehavior.Append.meta(),
-    )
-    pre_hook: List[Hook] = field(
-        default_factory=list,
-        metadata=MergeBehavior.Append.meta(),
-    )
-    # this only applies for config v1, so it doesn't participate in comparison
-    vars: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=metas(CompareBehavior.Exclude, MergeBehavior.Update),
-    )
-    quoting: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
-    # This is actually only used by seeds. Should it be available to others?
-    # That would be a breaking change!
-    column_types: Dict[str, Any] = field(
-        default_factory=dict,
-        metadata=MergeBehavior.Update.meta(),
-    )
     # these fields are included in serialized output, but are not part of
     # config comparison (they are part of database_representation)
     alias: Optional[str] = field(
@@ -395,6 +377,36 @@ class NodeConfig(BaseConfig):
         metadata=metas(ShowBehavior.Hide,
                        MergeBehavior.Append,
                        CompareBehavior.Exclude),
+    )
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+
+
+@dataclass
+class NodeConfig(NodeAndTestConfig):
+    # Note: if any new fields are added with MergeBehavior, also update the
+    # 'mergebehavior' dictionary
+    materialized: str = 'view'
+    persist_docs: Dict[str, Any] = field(default_factory=dict)
+    post_hook: List[Hook] = field(
+        default_factory=list,
+        metadata=MergeBehavior.Append.meta(),
+    )
+    pre_hook: List[Hook] = field(
+        default_factory=list,
+        metadata=MergeBehavior.Append.meta(),
+    )
+    quoting: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
+    # This is actually only used by seeds. Should it be available to others?
+    # That would be a breaking change!
+    column_types: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
     )
     full_refresh: Optional[bool] = None
     on_schema_change: Optional[str] = 'ignore'
@@ -439,7 +451,8 @@ class SeedConfig(NodeConfig):
 
 
 @dataclass
-class TestConfig(NodeConfig):
+class TestConfig(NodeAndTestConfig):
+    # this is repeated because of a different default
     schema: Optional[str] = field(
         default='dbt_test__audit',
         metadata=CompareBehavior.Exclude.meta(),

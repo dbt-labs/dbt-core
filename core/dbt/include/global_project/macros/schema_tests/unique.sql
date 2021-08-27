@@ -1,7 +1,7 @@
 {% macro default__test_unique(model, column_name) %}
 
 select
-    {{ column_name }},
+    {{ column_name }} as unique_field,
     count(*) as n_records
 
 from {{ model }}

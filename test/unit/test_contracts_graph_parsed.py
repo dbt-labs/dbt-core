@@ -74,9 +74,9 @@ def populated_node_config_dict():
         'pre-hook': [],
         'quoting': {},
         'tags': [],
-        'vars': {},
         'extra': 'even more',
         'on_schema_change': 'ignore',
+        'meta': {},
     }
 
 
@@ -154,8 +154,8 @@ def base_parsed_model_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -245,8 +245,8 @@ def complex_parsed_model_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {'foo': 100},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {
@@ -262,7 +262,6 @@ def complex_parsed_model_dict():
             'column_types': {'a': 'text'},
             'materialized': 'ephemeral',
             'post_hook': ['insert into blah(a, b) select "1", 1'],
-            'vars': {'foo': 100},
         },
     }
 
@@ -293,7 +292,6 @@ def complex_parsed_model_object():
             column_types={'a': 'text'},
             materialized='ephemeral',
             post_hook=[Hook(sql='insert into blah(a, b) select "1", 1')],
-            vars={'foo': 100},
         ),
         columns={'a': ColumnInfo('a', 'a text field', {})},
         checksum=FileHash.from_contents(''),
@@ -301,7 +299,6 @@ def complex_parsed_model_object():
             'column_types': {'a': 'text'},
             'materialized': 'ephemeral',
             'post_hook': ['insert into blah(a, b) select "1", 1'],
-            'vars': {'foo': 100},
         },
     )
 
@@ -313,7 +310,6 @@ def test_model_basic(basic_parsed_model_object, base_parsed_model_dict, minimal_
     assert node.empty is False
     assert node.is_refable is True
     assert node.is_ephemeral is False
-    assert node.local_vars() == {}
 
     minimum = minimal_parsed_model_dict
     assert_from_dict(node, minimum)
@@ -327,7 +323,6 @@ def test_model_complex(complex_parsed_model_object, complex_parsed_model_dict):
     assert node.empty is False
     assert node.is_refable is True
     assert node.is_ephemeral is True
-    assert node.local_vars() == {'foo': 100}
 
 
 def test_invalid_bad_tags(base_parsed_model_dict):
@@ -441,8 +436,8 @@ def basic_parsed_seed_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -534,9 +529,9 @@ def complex_parsed_seed_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
             'quote_columns': True,
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'deferred': False,
         'docs': {'show': True},
@@ -678,6 +673,7 @@ def basic_parsed_model_patch_dict():
                 'tags': [],
             },
         },
+        'config': {},
     }
 
 
@@ -692,6 +688,7 @@ def basic_parsed_model_patch_object():
         columns={'a': ColumnInfo(name='a', description='a text field', meta={})},
         docs=Docs(),
         meta={},
+        config={},
     )
 
 
@@ -788,8 +785,8 @@ def base_parsed_hook_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -859,8 +856,8 @@ def complex_parsed_hook_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {
@@ -994,21 +991,15 @@ def basic_parsed_schema_test_dict():
         'tags': [],
         'meta': {},
         'config': {
-            'column_types': {},
             'enabled': True,
             'materialized': 'test',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
             'tags': [],
-            'vars': {},
             'severity': 'ERROR',
-            'schema': 'dbt_test__audit',
             'warn_if': '!= 0',
             'error_if': '!= 0',
             'fail_calc': 'count(*)',
-            'on_schema_change': 'ignore',
+            'meta': {},
+            'schema': 'dbt_test__audit',
         },
         'docs': {'show': True},
         'columns': {},
@@ -1072,22 +1063,16 @@ def complex_parsed_schema_test_dict():
         'tags': ['tag'],
         'meta': {},
         'config': {
-            'column_types': {'a': 'text'},
             'enabled': True,
             'materialized': 'table',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'quoting': {},
             'tags': [],
-            'vars': {},
             'severity': 'WARN',
-            'schema': 'dbt_test__audit',
             'warn_if': '!= 0',
             'error_if': '!= 0',
             'fail_calc': 'count(*)',
             'extra_key': 'extra value',
-            'on_schema_change': 'ignore',
+            'meta': {},
+            'schema': 'dbt_test__audit',
         },
         'docs': {'show': False},
         'columns': {
@@ -1105,7 +1090,6 @@ def complex_parsed_schema_test_dict():
         },
         'checksum': {'name': 'sha256', 'checksum': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'},
         'unrendered_config': {
-            'column_types': {'a': 'text'},
             'materialized': 'table',
             'severity': 'WARN'
         },
@@ -1115,7 +1099,6 @@ def complex_parsed_schema_test_dict():
 @pytest.fixture
 def complex_parsed_schema_test_object():
     cfg = TestConfig(
-        column_types={'a': 'text'},
         materialized='table',
         severity='WARN'
     )
@@ -1146,7 +1129,6 @@ def complex_parsed_schema_test_object():
         test_metadata=TestMetadata(namespace=None, name='foo', kwargs={}),
         checksum=FileHash.from_contents(''),
         unrendered_config={
-            'column_types': {'a': 'text'},
             'materialized': 'table',
             'severity': 'WARN'
         },
@@ -1201,13 +1183,13 @@ def basic_timestamp_snapshot_config_dict():
         'pre-hook': [],
         'quoting': {},
         'tags': [],
-        'vars': {},
         'unique_key': 'id',
         'strategy': 'timestamp',
         'updated_at': 'last_update',
         'target_database': 'some_snapshot_db',
         'target_schema': 'some_snapshot_schema',
         'on_schema_change': 'ignore',
+        'meta': {},
     }
 
 
@@ -1233,7 +1215,6 @@ def complex_timestamp_snapshot_config_dict():
         'pre-hook': [],
         'quoting': {},
         'tags': [],
-        'vars': {},
         'target_database': 'some_snapshot_db',
         'target_schema': 'some_snapshot_schema',
         'unique_key': 'id',
@@ -1241,6 +1222,7 @@ def complex_timestamp_snapshot_config_dict():
         'strategy': 'timestamp',
         'updated_at': 'last_update',
         'on_schema_change': 'ignore',
+        'meta': {},
     }
 
 
@@ -1291,13 +1273,13 @@ def basic_check_snapshot_config_dict():
         'pre-hook': [],
         'quoting': {},
         'tags': [],
-        'vars': {},
         'target_database': 'some_snapshot_db',
         'target_schema': 'some_snapshot_schema',
         'unique_key': 'id',
         'strategy': 'check',
         'check_cols': 'all',
         'on_schema_change': 'ignore',
+        'meta': {},
     }
 
 
@@ -1323,7 +1305,6 @@ def complex_set_snapshot_config_dict():
         'pre-hook': [],
         'quoting': {},
         'tags': [],
-        'vars': {},
         'target_database': 'some_snapshot_db',
         'target_schema': 'some_snapshot_schema',
         'unique_key': 'id',
@@ -1331,6 +1312,7 @@ def complex_set_snapshot_config_dict():
         'strategy': 'check',
         'check_cols': ['a', 'b'],
         'on_schema_change': 'ignore',
+        'meta': {},
     }
 
 
@@ -1430,13 +1412,13 @@ def basic_timestamp_snapshot_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
             'target_database': 'some_snapshot_db',
             'target_schema': 'some_snapshot_schema',
             'unique_key': 'id',
             'strategy': 'timestamp',
             'updated_at': 'last_update',
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -1562,13 +1544,13 @@ def basic_check_snapshot_dict():
             'pre-hook': [],
             'quoting': {},
             'tags': [],
-            'vars': {},
             'target_database': 'some_snapshot_db',
             'target_schema': 'some_snapshot_schema',
             'unique_key': 'id',
             'strategy': 'check',
             'check_cols': 'all',
-            'on_schema_change': 'ignore'
+            'on_schema_change': 'ignore',
+            'meta': {},
         },
         'docs': {'show': True},
         'columns': {},
@@ -1717,6 +1699,7 @@ def populated_parsed_node_patch_dict():
         'meta': {'key': ['value']},
         'yaml_key': 'models',
         'package_name': 'test',
+        'config': {},
     }
 
 
@@ -1731,6 +1714,7 @@ def populated_parsed_node_patch_object():
         yaml_key='models',
         package_name='test',
         docs=Docs(show=False),
+        config={},
     )
 
 
@@ -1778,7 +1762,6 @@ class TestParsedMacro(ContractTestCase):
             arguments=[],
         )
         assert_symmetric(macro, macro_dict)
-        self.assertEqual(macro.local_vars(), {})
         pickle.loads(pickle.dumps(macro))
 
     def test_invalid_missing_unique_id(self):

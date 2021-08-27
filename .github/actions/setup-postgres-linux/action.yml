@@ -1,0 +1,10 @@
+name: "Set up postgres (linux)"
+description: "Set up postgres service on linux vm for dbt integration tests"
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        sudo systemctl start postgresql.service
+        pg_isready
+        sudo -u postgres bash ${{ github.action_path }}/setup_db.sh

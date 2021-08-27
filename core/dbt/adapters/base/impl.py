@@ -31,7 +31,6 @@ from dbt.contracts.graph.compiled import (
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
-from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values, executor
 
@@ -310,8 +309,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             self.Relation.create_from(self.config, node).without_identifier()
             for node in manifest.nodes.values()
             if (
-                node.resource_type in NodeType.executable() and
-                not node.is_ephemeral_model
+                node.is_relational and not node.is_ephemeral_model
             )
         }
 

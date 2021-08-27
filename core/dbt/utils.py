@@ -6,9 +6,15 @@ import decimal
 import functools
 import hashlib
 import itertools
+import jinja2
 import json
 import os
+import requests
+import time
+
 from contextlib import contextmanager
+from dbt.exceptions import ConnectionException
+from dbt.logger import GLOBAL_LOGGER as logger
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
@@ -306,14 +312,16 @@ def timestring() -> str:
 
 class JSONEncoder(json.JSONEncoder):
     """A 'custom' json encoder that does normal json encoder things, but also
-    handles `Decimal`s. Naturally, this can lose precision because they get
-    converted to floats.
+    handles `Decimal`s. and `Undefined`s. Decimals can lose precision because
+    they get converted to floats. Undefined's are serialized to an empty string
     """
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
+        if isinstance(obj, jinja2.Undefined):
+            return ""
         if hasattr(obj, 'to_dict'):
             # if we have a to_dict we should try to serialize the result of
             # that!
@@ -599,3 +607,19 @@ class MultiDict(Mapping[str, Any]):
 
     def __contains__(self, name) -> bool:
         return any((name in entry for entry in self._itersource()))
+
+
+def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
+    """Attempts to run a function that makes an external call, if the call fails
+    on a connection error or timeout, it will be tried up to 5 more times.
+    """
+    try:
+        return fn()
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        if attempt <= max_attempts - 1:
+            logger.debug('Retrying external call. Attempt: ' +
+                         f'{attempt} Max attempts: {max_attempts}')
+            time.sleep(1)
+            _connection_exception_retry(fn, max_attempts, attempt + 1)
+        else:
+            raise ConnectionException('External connection exception occurred: ' + str(exc))

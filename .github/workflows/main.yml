@@ -1,0 +1,206 @@
+# **what?**
+# Runs code quality checks, unit tests, and verifies python build on
+# all code commited to the repository. This workflow should not
+# require any secrets since it runs for PRs from forked repos.
+# By default, secrets are not passed to workflows running from
+# a forked repo.
+
+# **why?**
+# Ensure code for dbt meets a certain quality standard.
+
+# **when?**
+# This will run for all PRs, when code is pushed to a release
+# branch, and when manually triggered.
+
+name: Tests and Code Checks
+
+on:
+  push:
+    branches:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
+  workflow_dispatch:
+
+permissions: read-all
+
+# will cancel previous workflows triggered by the same event and for the same ref for PRs or same SHA otherwise
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ contains(github.event_name, 'pull_request') && github.event.pull_request.head.ref || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  code-quality:
+    name: ${{ matrix.toxenv }}
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        toxenv: [flake8, mypy]
+
+    env:
+      TOXENV: ${{ matrix.toxenv }}
+      PYTEST_ADDOPTS: "-v --color=yes"
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+
+      - name: Install python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install tox
+          pip --version
+          tox --version
+
+      - name: Run tox
+        run: tox
+
+  unit:
+    name: unit test / python ${{ matrix.python-version }}
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.6, 3.7, 3.8] # TODO: support unit testing for python 3.9 (https://github.com/dbt-labs/dbt/issues/3689)
+
+    env:
+      TOXENV: "unit"
+      PYTEST_ADDOPTS: "-v --color=yes --csv unit_results.csv"
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install tox
+          pip --version
+          tox --version
+
+      - name: Run tox
+        run: tox
+
+      - name: Get current date
+        if: always()
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colons allowed for artifacts
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
+          path: unit_results.csv
+
+  build:
+    name: build packages
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade setuptools wheel twine check-wheel-contents
+          pip --version
+
+      - name: Build distributions
+        run: ./scripts/build-dist.sh
+
+      - name: Show distributions
+        run: ls -lh dist/
+
+      - name: Check distribution descriptions
+        run: |
+          twine check dist/*
+
+      - name: Check wheel contents
+        run: |
+          check-wheel-contents dist/*.whl --ignore W007,W008
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist/
+
+  test-build:
+    name: verify packages / python ${{ matrix.python-version }} / ${{ matrix.os }}
+
+    needs: build
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade wheel
+          pip --version
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: dist/
+
+      - name: Show distributions
+        run: ls -lh dist/
+
+      - name: Install wheel distributions
+        run: |
+          find ./dist/*.whl -maxdepth 1 -type f | xargs pip install --force-reinstall --find-links=dist/
+
+      - name: Check wheel distributions
+        run: |
+          dbt --version
+
+      - name: Install source distributions
+        run: |
+          find ./dist/*.gz -maxdepth 1 -type f | xargs pip install --force-reinstall --find-links=dist/
+
+      - name: Check source distributions
+        run: |
+          dbt --version
