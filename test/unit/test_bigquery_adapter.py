@@ -667,7 +667,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         adapter.connections = MagicMock()
         adapter.copy_table('source', 'destination', 'table')
         adapter.connections.copy_bq_table.assert_called_once_with(
-            'source', 'destination',
+            ['source'], 'destination',
             dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
 
     def test_copy_table_materialization_incremental(self):
@@ -675,7 +675,7 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         adapter.connections = MagicMock()
         adapter.copy_table('source', 'destination', 'incremental')
         adapter.connections.copy_bq_table.assert_called_once_with(
-            'source', 'destination',
+            ['source'], 'destination',
             dbt.adapters.bigquery.impl.WRITE_APPEND)
 
     def test_parse_partition_by(self):
