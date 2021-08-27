@@ -651,11 +651,11 @@ class TestBigQueryConnectionManager(unittest.TestCase):
 
     def _copy_table(self, write_disposition):
         self.connections.table_ref = self._table_ref
-        source = BigQueryRelation.create(
-            database='project', schema='dataset', identifier='table1')
+        source_array = [BigQueryRelation.create(
+            database='project', schema='dataset', identifier='table1')]
         destination = BigQueryRelation.create(
             database='project', schema='dataset', identifier='table2')
-        self.connections.copy_bq_table(source, destination, write_disposition)
+        self.connections.copy_bq_table(source_array, destination, write_disposition)
 
 
 class TestBigQueryAdapter(BaseTestBigQueryAdapter):
