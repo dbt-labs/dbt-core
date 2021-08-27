@@ -1,614 +1,995 @@
-import json
-import re
-from contextlib import contextmanager
-from dataclasses import dataclass
-from functools import lru_cache
 import agate
+import decimal
+import json
+import string
+import random
+import re
+import pytest
+import unittest
+from contextlib import contextmanager
 from requests.exceptions import ConnectionError
-from typing import Optional, Any, Dict, Tuple
+from unittest.mock import patch, MagicMock, Mock, create_autospec, ANY
 
-import google.auth
-import google.auth.exceptions
+import dbt.dataclass_schema
+
+import dbt.flags as flags
+
+from dbt.adapters.bigquery import BigQueryCredentials
+from dbt.adapters.bigquery import BigQueryAdapter
+from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery import Plugin as BigQueryPlugin
+from dbt.adapters.bigquery.connections import BigQueryConnectionManager
+from dbt.adapters.bigquery.connections import _sanitize_label, _VALIDATE_LABEL_LENGTH_LIMIT
+from dbt.adapters.base.query_headers import MacroQueryStringSetter
+from dbt.clients import agate_helper
+import dbt.exceptions
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.context.providers import RuntimeConfigObject
+
 import google.cloud.bigquery
-import google.cloud.exceptions
-from google.api_core import retry, client_info
-from google.auth import impersonated_credentials
-from google.oauth2 import (
-    credentials as GoogleCredentials,
-    service_account as GoogleServiceAccountCredentials
-)
 
-from dbt.utils import format_bytes, format_rows_number
-from dbt.clients import agate_helper, gcloud
-from dbt.tracking import active_user
-from dbt.contracts.connection import ConnectionState, AdapterResponse
-from dbt.exceptions import (
-    FailedToConnectException, RuntimeException, DatabaseException
-)
-from dbt.adapters.base import BaseConnectionManager, Credentials
-from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.version import __version__ as dbt_version
-
-from dbt.dataclass_schema import StrEnum
-
-
-BQ_QUERY_JOB_SPLIT = '-----Query Job SQL Follows-----'
-
-WRITE_TRUNCATE = google.cloud.bigquery.job.WriteDisposition.WRITE_TRUNCATE
-
-REOPENABLE_ERRORS = (
-    ConnectionResetError,
-    ConnectionError,
-)
-
-RETRYABLE_ERRORS = (
-    google.cloud.exceptions.ServerError,
-    google.cloud.exceptions.BadRequest,
-    ConnectionResetError,
-    ConnectionError,
-)
-
-
-@lru_cache()
-def get_bigquery_defaults(scopes=None) -> Tuple[Any, Optional[str]]:
-    """
-    Returns (credentials, project_id)
-
-    project_id is returned available from the environment; otherwise None
-    """
-    # Cached, because the underlying implementation shells out, taking ~1s
-    return google.auth.default(scopes=scopes)
-
-
-class Priority(StrEnum):
-    Interactive = 'interactive'
-    Batch = 'batch'
-
-
-class BigQueryConnectionMethod(StrEnum):
-    OAUTH = 'oauth'
-    SERVICE_ACCOUNT = 'service-account'
-    SERVICE_ACCOUNT_JSON = 'service-account-json'
-    OAUTH_SECRETS = 'oauth-secrets'
-
-
-@dataclass
-class BigQueryAdapterResponse(AdapterResponse):
-    bytes_processed: Optional[int] = None
-
-
-@dataclass
-class BigQueryCredentials(Credentials):
-    method: BigQueryConnectionMethod
-    # BigQuery allows an empty database / project, where it defers to the
-    # environment for the project
-    database: Optional[str]
-    timeout_seconds: Optional[int] = 300
-    location: Optional[str] = None
-    priority: Optional[Priority] = None
-    retries: Optional[int] = 1
-    maximum_bytes_billed: Optional[int] = None
-    impersonate_service_account: Optional[str] = None
-
-    # Keyfile json creds
-    keyfile: Optional[str] = None
-    keyfile_json: Optional[Dict[str, Any]] = None
-
-    # oauth-secrets
-    token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
-    token_uri: Optional[str] = None
-
-    _ALIASES = {
-        'project': 'database',
-        'dataset': 'schema',
-    }
-
-    @property
-    def type(self):
-        return 'bigquery'
-
-    def _connection_keys(self):
-        return ('method', 'database', 'schema', 'location', 'priority',
-                'timeout_seconds', 'maximum_bytes_billed')
-
-    @classmethod
-    def __pre_deserialize__(cls, d: Dict[Any, Any]) -> Dict[Any, Any]:
-        # We need to inject the correct value of the database (aka project) at
-        # this stage, ref
-        # https://github.com/dbt-labs/dbt/pull/2908#discussion_r532927436.
-
-        # `database` is an alias of `project` in BigQuery
-        if 'database' not in d:
-            _, database = get_bigquery_defaults()
-            d['database'] = database
-        return d
-
-
-class BigQueryConnectionManager(BaseConnectionManager):
-    TYPE = 'bigquery'
-
-    SCOPE = ('https://www.googleapis.com/auth/bigquery',
-             'https://www.googleapis.com/auth/cloud-platform',
-             'https://www.googleapis.com/auth/drive')
-
-    QUERY_TIMEOUT = 300
-    RETRIES = 1
-    DEFAULT_INITIAL_DELAY = 1.0  # Seconds
-    DEFAULT_MAXIMUM_DELAY = 1.0  # Seconds
-
-    @classmethod
-    def handle_error(cls, error, message):
-        error_msg = "\n".join([item['message'] for item in error.errors])
-        raise DatabaseException(error_msg)
-
-    def clear_transaction(self):
-        pass
-
-    @contextmanager
-    def exception_handler(self, sql):
-        try:
-            yield
-
-        except google.cloud.exceptions.BadRequest as e:
-            message = "Bad request while running query"
-            self.handle_error(e, message)
-
-        except google.cloud.exceptions.Forbidden as e:
-            message = "Access denied while running query"
-            self.handle_error(e, message)
-
-        except google.auth.exceptions.RefreshError as e:
-            message = "Unable to generate access token, if you're using " \
-                      "impersonate_service_account, make sure your " \
-                      'initial account has the "roles/' \
-                      'iam.serviceAccountTokenCreator" role on the ' \
-                      'account you are trying to impersonate.\n\n' \
-                      f'{str(e)}'
-            raise RuntimeException(message)
-
-        except Exception as e:
-            logger.debug("Unhandled error while running:\n{}".format(sql))
-            logger.debug(e)
-            if isinstance(e, RuntimeException):
-                # during a sql query, an internal to dbt exception was raised.
-                # this sounds a lot like a signal handler and probably has
-                # useful information, so raise it without modification.
-                raise
-            exc_message = str(e)
-            # the google bigquery library likes to add the query log, which we
-            # don't want to log. Hopefully they never change this!
-            if BQ_QUERY_JOB_SPLIT in exc_message:
-                exc_message = exc_message.split(BQ_QUERY_JOB_SPLIT)[0].strip()
-            raise RuntimeException(exc_message)
-
-    def cancel_open(self) -> None:
-        pass
-
-    @classmethod
-    def close(cls, connection):
-        connection.state = ConnectionState.CLOSED
-
-        return connection
-
-    def begin(self):
-        pass
-
-    def commit(self):
-        pass
-
-    @classmethod
-    def get_bigquery_credentials(cls, profile_credentials):
-        method = profile_credentials.method
-        creds = GoogleServiceAccountCredentials.Credentials
-
-        if method == BigQueryConnectionMethod.OAUTH:
-            credentials, _ = get_bigquery_defaults(scopes=cls.SCOPE)
-            return credentials
-
-        elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
-            keyfile = profile_credentials.keyfile
-            return creds.from_service_account_file(keyfile, scopes=cls.SCOPE)
-
-        elif method == BigQueryConnectionMethod.SERVICE_ACCOUNT_JSON:
-            details = profile_credentials.keyfile_json
-            return creds.from_service_account_info(details, scopes=cls.SCOPE)
-
-        elif method == BigQueryConnectionMethod.OAUTH_SECRETS:
-            return GoogleCredentials.Credentials(
-                token=profile_credentials.token,
-                refresh_token=profile_credentials.refresh_token,
-                client_id=profile_credentials.client_id,
-                client_secret=profile_credentials.client_secret,
-                token_uri=profile_credentials.token_uri,
-                scopes=cls.SCOPE
-            )
-
-        error = ('Invalid `method` in profile: "{}"'.format(method))
-        raise FailedToConnectException(error)
-
-    @classmethod
-    def get_impersonated_bigquery_credentials(cls, profile_credentials):
-        source_credentials = cls.get_bigquery_credentials(profile_credentials)
-        return impersonated_credentials.Credentials(
-            source_credentials=source_credentials,
-            target_principal=profile_credentials.impersonate_service_account,
-            target_scopes=list(cls.SCOPE),
-            lifetime=profile_credentials.timeout_seconds,
-        )
-
-    @classmethod
-    def get_bigquery_client(cls, profile_credentials):
-        if profile_credentials.impersonate_service_account:
-            creds =\
-                cls.get_impersonated_bigquery_credentials(profile_credentials)
-        else:
-            creds = cls.get_bigquery_credentials(profile_credentials)
-        database = profile_credentials.database
-        location = getattr(profile_credentials, 'location', None)
-
-        info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
-        return google.cloud.bigquery.Client(
-            database,
-            creds,
-            location=location,
-            client_info=info,
-        )
-
-    @classmethod
-    def open(cls, connection):
-        if connection.state == 'open':
-            logger.debug('Connection is already open, skipping open.')
-            return connection
-
-        try:
-            handle = cls.get_bigquery_client(connection.credentials)
-
-        except google.auth.exceptions.DefaultCredentialsError:
-            logger.info("Please log into GCP to continue")
-            gcloud.setup_default_credentials()
-
-            handle = cls.get_bigquery_client(connection.credentials)
-
-        except Exception as e:
-            logger.debug("Got an error when attempting to create a bigquery "
-                         "client: '{}'".format(e))
-
-            connection.handle = None
-            connection.state = 'fail'
-
-            raise FailedToConnectException(str(e))
-
-        connection.handle = handle
-        connection.state = 'open'
-        return connection
-
-    @classmethod
-    def get_timeout(cls, conn):
-        credentials = conn.credentials
-        return credentials.timeout_seconds
-
-    @classmethod
-    def get_retries(cls, conn) -> int:
-        credentials = conn.credentials
-        if credentials.retries is not None:
-            return credentials.retries
-        else:
-            return 1
-
-    @classmethod
-    def get_table_from_response(cls, resp):
-        column_names = [field.name for field in resp.schema]
-        return agate_helper.table_from_data_flat(resp, column_names)
-
-    def raw_execute(self, sql, fetch=False, *, use_legacy_sql=False):
-        conn = self.get_thread_connection()
-        client = conn.handle
-
-        logger.debug('On {}: {}', conn.name, sql)
-
-        if self.profile.query_comment and self.profile.query_comment.job_label:
-            query_comment = self.query_header.comment.query_comment
-            labels = self._labels_from_query_comment(query_comment)
-        else:
-            labels = {}
-
-        if active_user:
-            labels['dbt_invocation_id'] = active_user.invocation_id
-
-        job_params = {'use_legacy_sql': use_legacy_sql, 'labels': labels}
-
-        priority = conn.credentials.priority
-        if priority == Priority.Batch:
-            job_params['priority'] = google.cloud.bigquery.QueryPriority.BATCH
-        else:
-            job_params[
-                'priority'] = google.cloud.bigquery.QueryPriority.INTERACTIVE
-
-        maximum_bytes_billed = conn.credentials.maximum_bytes_billed
-        if maximum_bytes_billed is not None and maximum_bytes_billed != 0:
-            job_params['maximum_bytes_billed'] = maximum_bytes_billed
-
-        def fn():
-            return self._query_and_results(client, sql, conn, job_params)
-
-        query_job, iterator = self._retry_and_handle(msg=sql, conn=conn, fn=fn)
-
-        return query_job, iterator
-
-    def execute(
-        self, sql, auto_begin=False, fetch=None
-    ) -> Tuple[BigQueryAdapterResponse, agate.Table]:
-        sql = self._add_query_comment(sql)
-        # auto_begin is ignored on bigquery, and only included for consistency
-        query_job, iterator = self.raw_execute(sql, fetch=fetch)
-
-        if fetch:
-            table = self.get_table_from_response(iterator)
-        else:
-            table = agate_helper.empty_table()
-
-        message = 'OK'
-        code = None
-        num_rows = None
-        bytes_processed = None
-
-        if query_job.statement_type == 'CREATE_VIEW':
-            code = 'CREATE VIEW'
-
-        elif query_job.statement_type == 'CREATE_TABLE_AS_SELECT':
-            conn = self.get_thread_connection()
-            client = conn.handle
-            query_table = client.get_table(query_job.destination)
-            code = 'CREATE TABLE'
-            num_rows = query_table.num_rows
-            bytes_processed = query_job.total_bytes_processed
-            message = '{} ({} rows, {} processed)'.format(
-                code,
-                format_rows_number(num_rows),
-                format_bytes(bytes_processed)
-            )
-
-        elif query_job.statement_type == 'SCRIPT':
-            code = 'SCRIPT'
-            bytes_processed = query_job.total_bytes_processed
-            message = f'{code} ({format_bytes(bytes_processed)} processed)'
-
-        elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-            code = query_job.statement_type
-            num_rows = query_job.num_dml_affected_rows
-            bytes_processed = query_job.total_bytes_processed
-            message = '{} ({} rows, {} processed)'.format(
-                code,
-                format_rows_number(num_rows),
-                format_bytes(bytes_processed),
-            )
-
-        response = BigQueryAdapterResponse(
-            _message=message,
-            rows_affected=num_rows,
-            code=code,
-            bytes_processed=bytes_processed
-        )
-
-        return response, table
-
-    def get_partitions_metadata(self, table):
-        def standard_to_legacy(table):
-            return table.project + ':' + table.dataset + '.' + table.identifier
-
-        legacy_sql = 'SELECT * FROM ['\
-            + standard_to_legacy(table) + '$__PARTITIONS_SUMMARY__]'
-
-        sql = self._add_query_comment(legacy_sql)
-        # auto_begin is ignored on bigquery, and only included for consistency
-        _, iterator =\
-            self.raw_execute(sql, fetch='fetch_result', use_legacy_sql=True)
-        return self.get_table_from_response(iterator)
-
-    def create_bigquery_table(self, database, schema, table_name, callback,
-                              sql):
-        """Create a bigquery table. The caller must supply a callback
-        that takes one argument, a `google.cloud.bigquery.Table`, and mutates
-        it.
-        """
-        conn = self.get_thread_connection()
-        client = conn.handle
-
-        view_ref = self.table_ref(database, schema, table_name, conn)
-        view = google.cloud.bigquery.Table(view_ref)
-        callback(view)
-
-        def fn():
-            return client.create_table(view)
-        self._retry_and_handle(msg=sql, conn=conn, fn=fn)
-
-    def create_view(self, database, schema, table_name, sql):
-        def callback(table):
-            table.view_query = sql
-            table.view_use_legacy_sql = False
-
-        self.create_bigquery_table(database, schema, table_name, callback, sql)
-
-    def create_table(self, database, schema, table_name, sql):
-        conn = self.get_thread_connection()
-        client = conn.handle
-
-        table_ref = self.table_ref(database, schema, table_name, conn)
-        job_params = {'destination': table_ref,
-                      'write_disposition': WRITE_TRUNCATE}
-
-        timeout = self.get_timeout(conn)
-
-        def fn():
-            return self._query_and_results(client, sql, conn, job_params,
-                                           timeout=timeout)
-        self._retry_and_handle(msg=sql, conn=conn, fn=fn)
-
-    def create_date_partitioned_table(self, database, schema, table_name):
-        def callback(table):
-            table.partitioning_type = 'DAY'
-
-        self.create_bigquery_table(database, schema, table_name, callback,
-                                   'CREATE DAY PARTITIONED TABLE')
-
-    def copy_bq_table(self, source, destination, write_disposition):
-        conn = self.get_thread_connection()
-        client = conn.handle
-
-        source_ref = self.table_ref(
-            source.database, source.schema, source.table, conn)
-        destination_ref = self.table_ref(
-            destination.database, destination.schema, destination.table, conn)
-
-        logger.debug(
-            'Copying table "{}" to "{}" with disposition: "{}"',
-            source_ref.path, destination_ref.path, write_disposition)
-
-        def copy_and_results():
-            job_config = google.cloud.bigquery.CopyJobConfig(
-                write_disposition=write_disposition)
-            copy_job = client.copy_table(
-                source_ref, destination_ref, job_config=job_config)
-            iterator = copy_job.result(timeout=self.get_timeout(conn))
-            return copy_job, iterator
-
-        self._retry_and_handle(
-            msg='copy table "{}" to "{}"'.format(
-                source_ref.path, destination_ref.path),
-            conn=conn, fn=copy_and_results)
-
-    @staticmethod
-    def dataset(database, schema, conn):
-        dataset_ref = conn.handle.dataset(schema, database)
-        return google.cloud.bigquery.Dataset(dataset_ref)
-
-    @staticmethod
-    def dataset_from_id(dataset_id):
-        return google.cloud.bigquery.Dataset.from_string(dataset_id)
-
-    def table_ref(self, database, schema, table_name, conn):
-        dataset = self.dataset(database, schema, conn)
-        return dataset.table(table_name)
-
-    def get_bq_table(self, database, schema, identifier):
-        """Get a bigquery table for a schema/model."""
-        conn = self.get_thread_connection()
-        table_ref = self.table_ref(database, schema, identifier, conn)
-        return conn.handle.get_table(table_ref)
-
-    def drop_dataset(self, database, schema):
-        conn = self.get_thread_connection()
-        dataset = self.dataset(database, schema, conn)
-        client = conn.handle
-
-        def fn():
-            return client.delete_dataset(
-                dataset, delete_contents=True, not_found_ok=True)
-
-        self._retry_and_handle(
-            msg='drop dataset', conn=conn, fn=fn)
-
-    def create_dataset(self, database, schema):
-        conn = self.get_thread_connection()
-        client = conn.handle
-        dataset = self.dataset(database, schema, conn)
-
-        def fn():
-            return client.create_dataset(dataset, exists_ok=True)
-        self._retry_and_handle(msg='create dataset', conn=conn, fn=fn)
-
-    def _query_and_results(self, client, sql, conn, job_params, timeout=None):
-        """Query the client and wait for results."""
-        # Cannot reuse job_config if destination is set and ddl is used
-        job_config = google.cloud.bigquery.QueryJobConfig(**job_params)
-        query_job = client.query(sql, job_config=job_config)
-        iterator = query_job.result(timeout=timeout)
-
-        return query_job, iterator
-
-    def _retry_and_handle(self, msg, conn, fn):
-        """retry a function call within the context of exception_handler."""
-        def reopen_conn_on_error(error):
-            if isinstance(error, REOPENABLE_ERRORS):
-                logger.warning('Reopening connection after {!r}', error)
-                self.close(conn)
-                self.open(conn)
-                return
-
-        with self.exception_handler(msg):
-            return retry.retry_target(
-                target=fn,
-                predicate=_ErrorCounter(self.get_retries(conn)).count_error,
-                sleep_generator=self._retry_generator(),
-                deadline=None,
-                on_error=reopen_conn_on_error)
-
-    def _retry_generator(self):
-        """Generates retry intervals that exponentially back off."""
-        return retry.exponential_sleep_generator(
-            initial=self.DEFAULT_INITIAL_DELAY,
-            maximum=self.DEFAULT_MAXIMUM_DELAY)
-
-    def _labels_from_query_comment(self, comment: str) -> Dict:
-        try:
-            comment_labels = json.loads(comment)
-        except (TypeError, ValueError):
-            return {'query_comment': _sanitize_label(comment)}
-        return {
-            _sanitize_label(key): _sanitize_label(str(value))
-            for key, value in comment_labels.items()
+from .utils import config_from_parts_or_dicts, inject_adapter, TestAdapterConversions
+
+
+def _bq_conn():
+    conn = MagicMock()
+    conn.get.side_effect = lambda x: 'bigquery' if x == 'type' else None
+    return conn
+
+
+class BaseTestBigQueryAdapter(unittest.TestCase):
+
+    def setUp(self):
+        flags.STRICT_MODE = True
+
+        self.raw_profile = {
+            'outputs': {
+                'oauth': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                },
+                'service_account': {
+                    'type': 'bigquery',
+                    'method': 'service-account',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'keyfile': '/tmp/dummy-service-account.json',
+                    'threads': 1,
+                },
+                'loc': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Luna Station',
+                    'priority': 'batch',
+                    'maximum_bytes_billed': 0,
+                },
+                'impersonate': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'impersonate_service_account': 'dummyaccount@dbt.iam.gserviceaccount.com'
+                },
+                'oauth-credentials-token': {
+                    'type': 'bigquery',
+                    'method': 'oauth-secrets',
+                    'token': 'abc',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Luna Station',
+                    'priority': 'batch',
+                    'maximum_bytes_billed': 0,
+                },
+                'oauth-credentials': {
+                    'type': 'bigquery',
+                    'method': 'oauth-secrets',
+                    'client_id': 'abc',
+                    'client_secret': 'def',
+                    'refresh_token': 'ghi',
+                    'token_uri': 'jkl',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Luna Station',
+                    'priority': 'batch',
+                    'maximum_bytes_billed': 0,
+                },
+                'oauth-no-project': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Solar Station',
+                },
+            },
+            'target': 'oauth',
         }
 
+        self.project_cfg = {
+            'name': 'X',
+            'version': '0.1',
+            'project-root': '/tmp/dbt/does-not-exist',
+            'profile': 'default',
+            'config-version': 2,
+        }
+        self.qh_patch = None
 
-class _ErrorCounter(object):
-    """Counts errors seen up to a threshold then raises the next error."""
+    def tearDown(self):
+        if self.qh_patch:
+            self.qh_patch.stop()
+        super().tearDown()
 
-    def __init__(self, retries):
-        self.retries = retries
-        self.error_count = 0
+    def get_adapter(self, target):
+        project = self.project_cfg.copy()
+        profile = self.raw_profile.copy()
+        profile['target'] = target
 
-    def count_error(self, error):
-        if self.retries == 0:
-            return False  # Don't log
-        self.error_count += 1
-        if _is_retryable(error) and self.error_count <= self.retries:
-            logger.debug(
-                'Retry attempt {} of {} after error: {}',
-                self.error_count, self.retries, repr(error))
-            return True
-        else:
-            return False
-
-
-def _is_retryable(error):
-    """Return true for errors that are unlikely to occur again if retried."""
-    if isinstance(error, RETRYABLE_ERRORS):
-        return True
-    elif isinstance(error, google.api_core.exceptions.Forbidden) and any(
-            e['reason'] == 'rateLimitExceeded' for e in error.errors):
-        return True
-    return False
-
-
-_SANITIZE_LABEL_PATTERN = re.compile(r"[^a-z0-9_-]")
-
-_VALIDATE_LABEL_LENGTH_LIMIT = 63
-
-
-def _sanitize_label(value: str) -> str:
-    """Return a legal value for a BigQuery label."""
-    value = value.strip().lower()
-    value = _SANITIZE_LABEL_PATTERN.sub("_", value)
-    value_length = len(value)
-    if value_length > _VALIDATE_LABEL_LENGTH_LIMIT:
-        error_msg = (
-            f"Job label length {value_length} is greater than length limit: "
-            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n"
-            f"Current sanitized label: {value}"
+        config = config_from_parts_or_dicts(
+            project=project,
+            profile=profile,
         )
-        raise RuntimeException(error_msg)
-    else:
-        return value
+        adapter = BigQueryAdapter(config)
+
+        adapter.connections.query_header = MacroQueryStringSetter(config, MagicMock(macros={}))
+
+        self.qh_patch = patch.object(adapter.connections.query_header, 'add')
+        self.mock_query_header_add = self.qh_patch.start()
+        self.mock_query_header_add.side_effect = lambda q: '/* dbt */\n{}'.format(q)
+
+        inject_adapter(adapter, BigQueryPlugin)
+        return adapter
+
+
+class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
+    @patch('dbt.adapters.bigquery.connections.get_bigquery_defaults', return_value=('credentials', 'project_id'))
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_oauth_no_project_validations(self, mock_open_connection, mock_get_bigquery_defaults):
+        adapter = self.get_adapter('oauth-no-project')
+        mock_get_bigquery_defaults.assert_called_once()
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_oauth_validations(self, mock_open_connection):
+        adapter = self.get_adapter('oauth')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_service_account_validations(self, mock_open_connection):
+        adapter = self.get_adapter('service_account')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_oauth_token_validations(self, mock_open_connection):
+        adapter = self.get_adapter('oauth-credentials-token')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_oauth_credentials_validations(self, mock_open_connection):
+        adapter = self.get_adapter('oauth-credentials')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_impersonated_service_account_validations(self, mock_open_connection):
+        adapter = self.get_adapter('impersonate')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_priority(self, mock_open_connection):
+        adapter = self.get_adapter('loc')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+            self.assertEqual(connection.credentials.priority, 'batch')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_maximum_bytes_billed(self, mock_open_connection):
+        adapter = self.get_adapter('loc')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+            self.assertEqual(connection.credentials.maximum_bytes_billed, 0)
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        mock_open_connection.assert_not_called()
+        connection.handle
+        mock_open_connection.assert_called_once()
+
+    def test_cancel_open_connections_empty(self):
+        adapter = self.get_adapter('oauth')
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    def test_cancel_open_connections_master(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections.thread_connections[0] = object()
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    def test_cancel_open_connections_single(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections.thread_connections.update({
+            0: object(),
+            1: object(),
+        })
+        # actually does nothing
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    @patch('dbt.adapters.bigquery.impl.google.auth.default')
+    @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
+    def test_location_user_agent(self, mock_bq, mock_auth_default):
+        creds = MagicMock()
+        mock_auth_default.return_value = (creds, MagicMock())
+        adapter = self.get_adapter('loc')
+
+        connection = adapter.acquire_connection('dummy')
+        mock_client = mock_bq.Client
+
+        mock_client.assert_not_called()
+        connection.handle
+        mock_client.assert_called_once_with('dbt-unit-000000', creds,
+                                            location='Luna Station',
+                                            client_info=HasUserAgent())
+
+
+class HasUserAgent:
+    PAT = re.compile(r'dbt-\d+\.\d+\.\d+((a|b|rc)\d+)?')
+
+    def __eq__(self, other):
+        compare = getattr(other, 'user_agent', '')
+        return bool(self.PAT.match(compare))
+
+
+class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
+
+    def setUp(self):
+        super().setUp()
+        self._conn_patch = patch.object(BigQueryAdapter, 'ConnectionManager')
+        self.conn_manager_cls = self._conn_patch.start()
+
+        self._relation_patch = patch.object(BigQueryAdapter, 'Relation')
+        self.relation_cls = self._relation_patch.start()
+
+        self.mock_connection_manager = self.conn_manager_cls.return_value
+        self.conn_manager_cls.TYPE = 'bigquery'
+        self.relation_cls.get_default_quote_policy.side_effect = BigQueryRelation.get_default_quote_policy
+
+        self.adapter = self.get_adapter('oauth')
+
+    def tearDown(self):
+        super().tearDown()
+        self._conn_patch.stop()
+        self._relation_patch.stop()
+
+    def test_get_relation(self):
+        self.adapter.get_relation('db', 'schema', 'my_model')
+        self.mock_connection_manager.get_bq_table.assert_called_once_with('db', 'schema', 'my_model')
+
+    def test_create_schema(self):
+        relation = BigQueryRelation.create(database='db', schema='schema')
+        self.adapter.create_schema(relation)
+        self.mock_connection_manager.create_dataset.assert_called_once_with('db', 'schema')
+
+    @patch.object(BigQueryAdapter, 'check_schema_exists')
+    def test_drop_schema(self, mock_check_schema):
+        mock_check_schema.return_value = True
+        relation = BigQueryRelation.create(database='db', schema='schema')
+        self.adapter.drop_schema(relation)
+        self.mock_connection_manager.drop_dataset.assert_called_once_with('db', 'schema')
+
+    def test_get_columns_in_relation(self):
+        self.mock_connection_manager.get_bq_table.side_effect = ValueError
+        self.adapter.get_columns_in_relation(
+            MagicMock(database='db', schema='schema', identifier='ident'),
+        )
+        self.mock_connection_manager.get_bq_table.assert_called_once_with(
+            database='db', schema='schema', identifier='ident'
+        )
+
+
+class TestBigQueryRelation(unittest.TestCase):
+    def setUp(self):
+        flags.STRICT_MODE = True
+
+    def test_view_temp_relation(self):
+        kwargs = {
+            'type': None,
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'my_view'
+            },
+            'quote_policy': {
+                'identifier': False
+            }
+        }
+        BigQueryRelation.validate(kwargs)
+
+    def test_view_relation(self):
+        kwargs = {
+            'type': 'view',
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'my_view'
+            },
+            'quote_policy': {
+                'identifier': True,
+                'schema': True
+            }
+        }
+        BigQueryRelation.validate(kwargs)
+
+    def test_table_relation(self):
+        kwargs = {
+            'type': 'table',
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'generic_table'
+            },
+            'quote_policy': {
+                'identifier': True,
+                'schema': True
+            }
+        }
+        BigQueryRelation.validate(kwargs)
+
+    def test_external_source_relation(self):
+        kwargs = {
+            'type': 'external',
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'sheet'
+            },
+            'quote_policy': {
+                'identifier': True,
+                'schema': True
+            }
+        }
+        BigQueryRelation.validate(kwargs)
+
+    def test_invalid_relation(self):
+        kwargs = {
+            'type': 'invalid-type',
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'my_invalid_id'
+            },
+            'quote_policy': {
+                'identifier': False,
+                'schema': True
+            }
+        }
+        with self.assertRaises(dbt.dataclass_schema.ValidationError):
+            BigQueryRelation.validate(kwargs)
+
+
+class TestBigQueryInformationSchema(unittest.TestCase):
+    def setUp(self):
+        flags.STRICT_MODE = True
+
+    def test_replace(self):
+
+        kwargs = {
+            'type': None,
+            'path': {
+                'database': 'test-project',
+                'schema': 'test_schema',
+                'identifier': 'my_view'
+            },
+            # test for #2188
+            'quote_policy': {
+                'database': False
+            },
+            'include_policy': {
+                'database': True,
+                'schema': True,
+                'identifier': True,
+            }
+        }
+        BigQueryRelation.validate(kwargs)
+        relation = BigQueryRelation.from_dict(kwargs)
+        info_schema = relation.information_schema()
+
+        tables_schema = info_schema.replace(information_schema_view='__TABLES__')
+        assert tables_schema.information_schema_view == '__TABLES__'
+        assert tables_schema.include_policy.schema is True
+        assert tables_schema.include_policy.identifier is False
+        assert tables_schema.include_policy.database is True
+        assert tables_schema.quote_policy.schema is True
+        assert tables_schema.quote_policy.identifier is False
+        assert tables_schema.quote_policy.database is False
+
+        schemata_schema = info_schema.replace(information_schema_view='SCHEMATA')
+        assert schemata_schema.information_schema_view == 'SCHEMATA'
+        assert schemata_schema.include_policy.schema is False
+        assert schemata_schema.include_policy.identifier is True
+        assert schemata_schema.include_policy.database is True
+        assert schemata_schema.quote_policy.schema is True
+        assert schemata_schema.quote_policy.identifier is False
+        assert schemata_schema.quote_policy.database is False
+
+        other_schema = info_schema.replace(information_schema_view='SOMETHING_ELSE')
+        assert other_schema.information_schema_view == 'SOMETHING_ELSE'
+        assert other_schema.include_policy.schema is True
+        assert other_schema.include_policy.identifier is True
+        assert other_schema.include_policy.database is True
+        assert other_schema.quote_policy.schema is True
+        assert other_schema.quote_policy.identifier is False
+        assert other_schema.quote_policy.database is False
+
+
+class TestBigQueryConnectionManager(unittest.TestCase):
+
+    def setUp(self):
+        credentials = Mock(BigQueryCredentials)
+        profile = Mock(query_comment=None, credentials=credentials)
+        self.connections = BigQueryConnectionManager(profile=profile)
+        self.mock_client = Mock(
+          dbt.adapters.bigquery.impl.google.cloud.bigquery.Client)
+        self.mock_connection = MagicMock()
+
+        self.mock_connection.handle = self.mock_client
+
+        self.connections.get_thread_connection = lambda: self.mock_connection
+
+    @patch(
+        'dbt.adapters.bigquery.connections._is_retryable', return_value=True)
+    def test_retry_and_handle(self, is_retryable):
+        self.connections.DEFAULT_MAXIMUM_DELAY = 2.0
+
+        @contextmanager
+        def dummy_handler(msg):
+            yield
+
+        self.connections.exception_handler = dummy_handler
+
+        class DummyException(Exception):
+            """Count how many times this exception is raised"""
+            count = 0
+
+            def __init__(self):
+                DummyException.count += 1
+
+        def raiseDummyException():
+            raise DummyException()
+
+        with self.assertRaises(DummyException):
+            self.connections._retry_and_handle(
+                 "some sql", Mock(credentials=Mock(retries=8)),
+                 raiseDummyException)
+            self.assertEqual(DummyException.count, 9)
+
+    @patch(
+        'dbt.adapters.bigquery.connections._is_retryable', return_value=True)
+    def test_retry_connection_reset(self, is_retryable):
+        self.connections.open = MagicMock()
+        self.connections.close = MagicMock()
+        self.connections.DEFAULT_MAXIMUM_DELAY = 2.0
+
+        @contextmanager
+        def dummy_handler(msg):
+            yield
+
+        self.connections.exception_handler = dummy_handler
+
+        def raiseConnectionResetError():
+            raise ConnectionResetError("Connection broke")
+
+        mock_conn = Mock(credentials=Mock(retries=1))
+        with self.assertRaises(ConnectionResetError):
+            self.connections._retry_and_handle(
+              "some sql", mock_conn,
+              raiseConnectionResetError)
+        self.connections.close.assert_called_once_with(mock_conn)
+        self.connections.open.assert_called_once_with(mock_conn)
+
+    def test_is_retryable(self):
+        _is_retryable = dbt.adapters.bigquery.connections._is_retryable
+        exceptions = dbt.adapters.bigquery.impl.google.cloud.exceptions
+        internal_server_error = exceptions.InternalServerError('code broke')
+        bad_request_error = exceptions.BadRequest('code broke')
+        connection_error = ConnectionError('code broke')
+        client_error = exceptions.ClientError('bad code')
+        rate_limit_error = exceptions.Forbidden("code broke", errors=[{"reason": "rateLimitExceeded"}])
+
+        self.assertTrue(_is_retryable(internal_server_error))
+        self.assertTrue(_is_retryable(bad_request_error))
+        self.assertTrue(_is_retryable(connection_error))
+        self.assertFalse(_is_retryable(client_error))
+        self.assertTrue(_is_retryable(rate_limit_error))
+
+    def test_drop_dataset(self):
+        mock_table = Mock()
+        mock_table.reference = 'table1'
+
+        self.mock_client.list_tables.return_value = [mock_table]
+
+        self.connections.drop_dataset('project', 'dataset')
+
+        self.mock_client.list_tables.assert_not_called()
+        self.mock_client.delete_table.assert_not_called()
+        self.mock_client.delete_dataset.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
+    def test_query_and_results(self, mock_bq):
+        self.connections.get_timeout = lambda x: 100.0
+
+        self.connections._query_and_results(
+          self.mock_client, 'sql', self.mock_connection,
+          {'description': 'blah'})
+
+        mock_bq.QueryJobConfig.assert_called_once()
+        self.mock_client.query.assert_called_once_with(
+          'sql', job_config=mock_bq.QueryJobConfig())
+
+    def test_copy_bq_table_appends(self):
+        self._copy_table(
+            write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.mock_client.copy_table.assert_called_once_with(
+            self._table_ref('project', 'dataset', 'table1', None),
+            self._table_ref('project', 'dataset', 'table2', None),
+            job_config=ANY)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.assertEqual(
+            kwargs['job_config'].write_disposition,
+            dbt.adapters.bigquery.impl.WRITE_APPEND)
+
+    def test_copy_bq_table_truncates(self):
+        self._copy_table(
+            write_disposition=dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.mock_client.copy_table.assert_called_once_with(
+            self._table_ref('project', 'dataset', 'table1', None),
+            self._table_ref('project', 'dataset', 'table2', None),
+            job_config=ANY)
+        args, kwargs = self.mock_client.copy_table.call_args
+        self.assertEqual(
+            kwargs['job_config'].write_disposition,
+            dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
+
+    def test_job_labels_valid_json(self):
+        expected = {"key": "value"}
+        labels = self.connections._labels_from_query_comment(json.dumps(expected))
+        self.assertEqual(labels, expected)
+
+    def test_job_labels_invalid_json(self):
+        labels = self.connections._labels_from_query_comment("not json")
+        self.assertEqual(labels, {"query_comment": "not_json"})
+
+    def _table_ref(self, proj, ds, table, conn):
+        return google.cloud.bigquery.table.TableReference.from_string(
+            '{}.{}.{}'.format(proj, ds, table))
+
+    def _copy_table(self, write_disposition):
+        self.connections.table_ref = self._table_ref
+        source = BigQueryRelation.create(
+            database='project', schema='dataset', identifier='table1')
+        destination = BigQueryRelation.create(
+            database='project', schema='dataset', identifier='table2')
+        self.connections.copy_bq_table(source, destination, write_disposition)
+
+
+class TestBigQueryAdapter(BaseTestBigQueryAdapter):
+
+    def test_copy_table_materialization_table(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections = MagicMock()
+        adapter.copy_table('source', 'destination', 'table')
+        adapter.connections.copy_bq_table.assert_called_once_with(
+            'source', 'destination',
+            dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
+
+    def test_copy_table_materialization_incremental(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections = MagicMock()
+        adapter.copy_table('source', 'destination', 'incremental')
+        adapter.connections.copy_bq_table.assert_called_once_with(
+            'source', 'destination',
+            dbt.adapters.bigquery.impl.WRITE_APPEND)
+
+    def test_parse_partition_by(self):
+        adapter = self.get_adapter('oauth')
+
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by("date(ts)")
+
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by("ts")
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "day"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "day"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "MONTH"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "MONTH"
+            }
+        )
+        
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "YEAR"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "date",
+                "granularity": "YEAR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "HOUR"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "HOUR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "MONTH"
+
+            }).to_dict(omit_none=True
+                ), {
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "MONTH"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "YEAR"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "timestamp",
+                "granularity": "YEAR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "HOUR"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "HOUR"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "MONTH"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "MONTH"
+            }
+        )
+
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "YEAR"
+
+            }).to_dict(omit_none=True), {
+                "field": "ts",
+                "data_type": "datetime",
+                "granularity": "YEAR"
+            }
+        )
+
+        # Invalid, should raise an error
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            adapter.parse_partition_by({})
+
+        # passthrough
+        self.assertEqual(
+            adapter.parse_partition_by({
+                "field": "id",
+                "data_type": "int64",
+                "range": {
+                    "start": 1,
+                    "end": 100,
+                    "interval": 20
+                }
+            }).to_dict(omit_none=True
+                ), {
+                "field": "id",
+                "data_type": "int64",
+                "granularity": "day",
+                "range": {
+                    "start": 1,
+                    "end": 100,
+                    "interval": 20
+                }
+            }
+        )
+
+    def test_hours_to_expiration(self):
+        adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            RuntimeConfigObject)
+        config = {'hours_to_expiration': 4}
+        mock_config.get.side_effect = lambda name: config.get(name)
+
+        expected = {
+            'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 4 hour)',
+        }
+        actual = adapter.get_table_options(mock_config, node={}, temporary=False)
+        self.assertEqual(expected, actual)
+
+
+    def test_hours_to_expiration_temporary(self):
+        adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            RuntimeConfigObject)
+        config={'hours_to_expiration': 4}
+        mock_config.get.side_effect = lambda name: config.get(name)
+
+        expected = {
+            'expiration_timestamp': (
+                'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'),
+        }
+        actual = adapter.get_table_options(mock_config, node={}, temporary=True)
+        self.assertEqual(expected, actual)
+
+
+
+class TestBigQueryFilterCatalog(unittest.TestCase):
+    def test__catalog_filter_table(self):
+        manifest = MagicMock()
+        manifest.get_used_schemas.return_value = [['a', 'B'], ['a', '1234']]
+        column_names = ['table_name', 'table_database', 'table_schema', 'something']
+        rows = [
+            ['foo', 'a', 'b', '1234'],  # include
+            ['foo', 'a', '1234', '1234'],  # include, w/ table schema as str
+            ['foo', 'c', 'B', '1234'],  # skip
+            ['1234', 'A', 'B', '1234'],  # include, w/ table name as str
+        ]
+        table = agate.Table(
+            rows, column_names, agate_helper.DEFAULT_TYPE_TESTER
+        )
+
+        result = BigQueryAdapter._catalog_filter_table(table, manifest)
+        assert len(result) == 3
+        for row in result.rows:
+            assert isinstance(row['table_schema'], str)
+            assert isinstance(row['table_database'], str)
+            assert isinstance(row['table_name'], str)
+            assert isinstance(row['something'], decimal.Decimal)
+
+
+class TestBigQueryAdapterConversions(TestAdapterConversions):
+    def test_convert_text_type(self):
+        rows = [
+            ['', 'a1', 'stringval1'],
+            ['', 'a2', 'stringvalasdfasdfasdfa'],
+            ['', 'a3', 'stringval3'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Text)
+        expected = ['string', 'string', 'string']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_text_type(agate_table, col_idx) == expect
+
+    def test_convert_number_type(self):
+        rows = [
+            ['', '23.98', '-1'],
+            ['', '12.78', '-2'],
+            ['', '79.41', '-3'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Number)
+        expected = ['int64', 'float64', 'int64']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_number_type(agate_table, col_idx) == expect
+
+    def test_convert_boolean_type(self):
+        rows = [
+            ['', 'false', 'true'],
+            ['', 'false', 'false'],
+            ['', 'false', 'true'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Boolean)
+        expected = ['bool', 'bool', 'bool']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_boolean_type(agate_table, col_idx) == expect
+
+    def test_convert_datetime_type(self):
+        rows = [
+            ['', '20190101T01:01:01Z', '2019-01-01 01:01:01'],
+            ['', '20190102T01:01:01Z', '2019-01-01 01:01:01'],
+            ['', '20190103T01:01:01Z', '2019-01-01 01:01:01'],
+        ]
+        agate_table = self._make_table_of(rows, [agate.DateTime, agate_helper.ISODateTime, agate.DateTime])
+        expected = ['datetime', 'datetime', 'datetime']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_datetime_type(agate_table, col_idx) == expect
+
+    def test_convert_date_type(self):
+        rows = [
+            ['', '2019-01-01', '2019-01-04'],
+            ['', '2019-01-02', '2019-01-04'],
+            ['', '2019-01-03', '2019-01-04'],
+        ]
+        agate_table = self._make_table_of(rows, agate.Date)
+        expected = ['date', 'date', 'date']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_date_type(agate_table, col_idx) == expect
+
+    def test_convert_time_type(self):
+        # dbt's default type testers actually don't have a TimeDelta at all.
+        agate.TimeDelta
+        rows = [
+            ['', '120s', '10s'],
+            ['', '3m', '11s'],
+            ['', '1h', '12s'],
+        ]
+        agate_table = self._make_table_of(rows, agate.TimeDelta)
+        expected = ['time', 'time', 'time']
+        for col_idx, expect in enumerate(expected):
+            assert BigQueryAdapter.convert_time_type(agate_table, col_idx) == expect
+
+
+@pytest.mark.parametrize(
+    ["input", "output"],
+    [
+        ("ABC", "abc"),
+        ("a c", "a_c"),
+        ("a ", "a"),
+    ],
+)
+def test_sanitize_label(input, output):
+    assert _sanitize_label(input) == output
+
+
+@pytest.mark.parametrize(
+    "label_length",
+    [64, 65, 100],
+)
+def test_sanitize_label_length(label_length):
+    random_string = "".join(
+        random.choice(string.ascii_uppercase + string.digits)
+        for i in range(label_length)
+    )
+    test_error_msg = (
+            f"Job label length {label_length} is greater than length limit: "
+            f"{_VALIDATE_LABEL_LENGTH_LIMIT}\n"
+            f"Current sanitized label: {random_string.lower()}"
+        )
+    with pytest.raises(dbt.exceptions.RuntimeException) as error_info:
+        _sanitize_label(random_string)
+    assert error_info.value.args[0] == test_error_msg
