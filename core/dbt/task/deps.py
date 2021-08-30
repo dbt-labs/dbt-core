@@ -70,7 +70,7 @@ class DepsTask(BaseTask):
                     version_latest = package.get_version_latest()
                     if version_latest > version:
                         packages_to_upgrade.append(package_name)
-                        logger.info('  Update available: version {}',
+                        logger.info('  Updated version available: {}',
                                     version_latest)
                     elif version_latest == version:
                         logger.info('  Up to date!')
