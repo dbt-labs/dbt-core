@@ -1,6 +1,6 @@
 version: 2
 sources:
   - name: test_copy_several_tables
-    schema: "{{ target.schema) }}"
+    schema: "{{ target.schema }}"
     tables:
-      - name: original
+      - name: additional
