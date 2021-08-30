@@ -125,6 +125,10 @@ class DebugTask(BaseTask):
         self.test_dependencies()
         self.test_connection()
 
+        if self.any_failure:
+            print(red('{}/4 checks failed'.format(len(self.messages))))
+        else:
+            print(green('All checks passed!'))
         for message in self.messages:
             print(message)
             print('')
@@ -368,7 +372,7 @@ class DebugTask(BaseTask):
         print('Connection:')
         for k, v in self.profile.credentials.connection_info():
             print('  {}: {}'.format(k, v))
-        print('  Connection test: {}'.format(self._connection_result()))
+        print('  Connection test: [{}]'.format(self._connection_result()))
         print('')
 
     @classmethod
