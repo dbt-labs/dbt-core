@@ -1,1 +1,1 @@
-select * from {{ ref('original') }}, {{ source('test_copy_several_tables', 'original') }}
+select * from {{ ref('original') }}, {{ source('test_copy_several_tables', 'additional') }}
