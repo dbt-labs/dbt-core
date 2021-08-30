@@ -72,7 +72,7 @@ class DepsTask(BaseTask):
                         packages_to_upgrade.append(package_name)
                         logger.info('  Updated version available: {}',
                                     version_latest)
-                    elif version_latest == version:
+                    else:
                         logger.info('  Up to date!')
                 if package.get_subdirectory():
                     logger.info('   and subdirectory {}',
