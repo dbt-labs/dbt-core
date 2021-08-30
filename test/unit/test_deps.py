@@ -386,7 +386,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(c_pinned.version, '0.1.4a1')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
-    def test_get_version_latest_prelease(self):
+    def test_get_version_latest_prelease_true(self):
         a_contract = RegistryPackage(
             package='dbt-labs-test/a',
             version='>0.1.0',
@@ -429,7 +429,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(c_pinned.get_version_latest(), '0.1.4a1')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
-    def test_get_version_latest_no_prelease(self):
+    def test_get_version_latest_prelease_false(self):
         a_contract = RegistryPackage(
             package='dbt-labs-test/a',
             version='>0.1.0',
