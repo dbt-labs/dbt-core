@@ -458,26 +458,40 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        source_ref = self.table_ref(
-            source.database, source.schema, source.table, conn)
+# -------------------------------------------------------------------------------
+#  BigQuery allows to use copy API using two different formats:
+#  1. client.copy_table(source_table_id, destination_table_id)
+#     where source_table_id = "your-project.source_dataset.source_table"
+#  2. client.copy_table(source_table_ids, destination_table_id)
+#     where source_table_ids = ["your-project.your_dataset.your_table_name", ...]
+#  Let's use uniform function call and always pass list there
+# -------------------------------------------------------------------------------
+        if type(source) is not list:
+            source = [source]
+
+        source_ref_array = [self.table_ref(
+            src_table.database, src_table.schema, src_table.table, conn)
+            for src_table in source]
         destination_ref = self.table_ref(
             destination.database, destination.schema, destination.table, conn)
 
         logger.debug(
-            'Copying table "{}" to "{}" with disposition: "{}"',
-            source_ref.path, destination_ref.path, write_disposition)
+            'Copying table(s) "{}" to "{}" with disposition: "{}"',
+            ', '.join(source_ref.path for source_ref in source_ref_array),
+            destination_ref.path, write_disposition)
 
         def copy_and_results():
             job_config = google.cloud.bigquery.CopyJobConfig(
                 write_disposition=write_disposition)
             copy_job = client.copy_table(
-                source_ref, destination_ref, job_config=job_config)
+                source_ref_array, destination_ref, job_config=job_config)
             iterator = copy_job.result(timeout=self.get_timeout(conn))
             return copy_job, iterator
 
         self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
-                source_ref.path, destination_ref.path),
+                ', '.join(source_ref.path for source_ref in source_ref_array),
+                destination_ref.path),
             conn=conn, fn=copy_and_results)
 
     @staticmethod

@@ -1,8 +1,18 @@
 ## dbt 0.21.0 (Release TBD)
 
+### Features
+
+- Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
+  - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
+  - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
+
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
+
+Contributors:
+
+- [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
