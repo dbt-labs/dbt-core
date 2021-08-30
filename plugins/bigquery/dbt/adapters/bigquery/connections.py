@@ -458,6 +458,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
+# -------------------------------------------------------------------------------
+#  BigQuery allows to use copy API using two different formats:
+#  1. client.copy_table(source_table_id, destination_table_id)
+#     where source_table_id = "your-project.source_dataset.source_table"
+#  2. client.copy_table(source_table_ids, destination_table_id)
+#     where source_table_ids = ["your-project.your_dataset.your_table_name", ...]
+#  Let's use uniform function call and always pass list there
+# -------------------------------------------------------------------------------
         if type(source) is not list:
             source = [source]
 
