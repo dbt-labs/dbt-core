@@ -1,5 +1,9 @@
 ## dbt 0.21.0 (Release TBD)
 
+### Fixes
+
+- Fix bigquery-specific synonyms for database and schema (project and dataset) for snapshots. ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#xxxx](https://github.com/dbt-labs/dbt/pull/xxxx tba))
+
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
