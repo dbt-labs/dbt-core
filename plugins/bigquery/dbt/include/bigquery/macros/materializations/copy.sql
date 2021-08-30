@@ -5,8 +5,8 @@
 
   {% set destination = this.incorporate(type='table') %}
 
-
-  {# Cycle over ref() and source() to create source tables array #}
+  {# there can be several ref() or source() according to BQ copy API docs #}
+  {# cycle over ref() and source() to create source tables array #}
   {% set source_array = [] %}
   {% for ref_table in model.refs %}
     {{ source_array.append(ref(*ref_table)) }}
