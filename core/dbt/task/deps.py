@@ -68,7 +68,7 @@ class DepsTask(BaseTask):
                             package.nice_version_name())
                 if source_type == 'hub':
                     version_latest = package.get_version_latest()
-                    if version_latest > version:
+                    if version_latest != version:
                         packages_to_upgrade.append(package_name)
                         logger.info('  Updated version available: {}',
                                     version_latest)
