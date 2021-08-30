@@ -25,6 +25,8 @@ class TestBigqueryCopyTable(DBTIntegrationTest):
             test:
                 original:
                     materialized: table
+                additional:
+                    materialized: table
                 copy_as_table:
                     materialized: copy
                 copy_as_several_tables:
@@ -36,4 +38,4 @@ class TestBigqueryCopyTable(DBTIntegrationTest):
     @use_profile('bigquery')
     def test__bigquery_copy_table(self):
         results = self.run_dbt()
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 5)
