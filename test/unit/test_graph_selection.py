@@ -120,7 +120,7 @@ def test_run_specs(include, exclude, expected):
     manifest = _get_manifest(graph)
     selector = graph_selector.NodeSelector(graph, manifest)
     spec = graph_cli.parse_difference(include, exclude)
-    selected = selector.select_nodes(spec)
+    selected, _ = selector.select_nodes(spec)
 
     assert selected == expected
 

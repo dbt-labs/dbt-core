@@ -406,6 +406,14 @@ def _build_build_subparser(subparsers, base_subparser):
         Store test results (failing rows) in the database
         '''
     )
+    sub.add_argument(
+        '--greedy',
+        action='store_true',
+        help='''
+        Select all tests that touch the selected resources,
+        even if they also depend on unselected resources
+        '''
+    )
     resource_values: List[str] = [
         str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
     ] + ['all']
@@ -637,7 +645,7 @@ def _add_table_mutability_arguments(*subparsers):
             '--full-refresh',
             action='store_true',
             help='''
-            If specified, DBT will drop incremental models and
+            If specified, dbt will drop incremental models and
             fully-recalculate the incremental table from the model definition.
             '''
         )
@@ -751,6 +759,14 @@ def _build_test_subparser(subparsers, base_subparser):
         action='store_true',
         help='''
         Store test results (failing rows) in the database
+        '''
+    )
+    sub.add_argument(
+        '--greedy',
+        action='store_true',
+        help='''
+        Select all tests that touch the selected resources,
+        even if they also depend on unselected resources
         '''
     )
 
@@ -877,6 +893,14 @@ def _build_list_subparser(subparsers, base_subparser):
         ''',
         metavar='SELECTOR',
         required=False,
+    )
+    sub.add_argument(
+        '--greedy',
+        action='store_true',
+        help='''
+        Select all tests that touch the selected resources,
+        even if they also depend on unselected resources
+        '''
     )
     _add_common_selector_arguments(sub)
 

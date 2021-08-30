@@ -18,6 +18,7 @@ WRITE_JSON = None
 PARTIAL_PARSE = None
 USE_COLORS = None
 STORE_FAILURES = None
+GREEDY = None
 
 
 def env_set_truthy(key: str) -> Optional[str]:
@@ -56,7 +57,7 @@ MP_CONTEXT = _get_context()
 def reset():
     global STRICT_MODE, FULL_REFRESH, USE_CACHE, WARN_ERROR, TEST_NEW_PARSER, \
         USE_EXPERIMENTAL_PARSER, WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS, \
-        STORE_FAILURES
+        STORE_FAILURES, GREEDY
 
     STRICT_MODE = False
     FULL_REFRESH = False
@@ -69,12 +70,13 @@ def reset():
     MP_CONTEXT = _get_context()
     USE_COLORS = True
     STORE_FAILURES = False
+    GREEDY = False
 
 
 def set_from_args(args):
     global STRICT_MODE, FULL_REFRESH, USE_CACHE, WARN_ERROR, TEST_NEW_PARSER, \
         USE_EXPERIMENTAL_PARSER, WRITE_JSON, PARTIAL_PARSE, MP_CONTEXT, USE_COLORS, \
-        STORE_FAILURES
+        STORE_FAILURES, GREEDY
 
     USE_CACHE = getattr(args, 'use_cache', USE_CACHE)
 
@@ -99,6 +101,7 @@ def set_from_args(args):
         USE_COLORS = use_colors_override
 
     STORE_FAILURES = getattr(args, 'store_failures', STORE_FAILURES)
+    GREEDY = getattr(args, 'greedy', GREEDY)
 
 
 # initialize everything to the defaults on module load
