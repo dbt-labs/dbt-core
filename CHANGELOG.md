@@ -10,6 +10,10 @@
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 
+Contributors:
+
+- [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
+
 ## dbt 0.21.0b2 (August 19, 2021)
 
 ### Features
