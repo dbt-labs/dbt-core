@@ -3,6 +3,7 @@ import re
 from typing import List
 
 from packaging import version as packaging_version
+from distutils.version import StrictVersion
 
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
@@ -437,11 +438,10 @@ def filter_installable(
         versions: List[str],
         install_prerelease: bool
 ) -> List[str]:
-    if install_prerelease:
-        return versions
     installable = []
     for version_string in versions:
         version = VersionSpecifier.from_version_string(version_string)
-        if not version.prerelease:
+        if install_prerelease or not version.prerelease:
             installable.append(version_string)
+    installable.sort(key=StrictVersion)
     return installable
