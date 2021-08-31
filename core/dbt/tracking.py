@@ -31,6 +31,7 @@ DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
 LOAD_ALL_TIMING_SPEC = 'iglu:com.dbt/load_all_timing/jsonschema/1-0-3'
 RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
 EXPERIMENTAL_PARSER = 'iglu:com.dbt/experimental_parser/jsonschema/1-0-0'
+PARTIAL_PARSER = 'iglu:com.dbt/partial_parser/jsonschema/1-0-1'
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
 
@@ -131,7 +132,7 @@ class User:
         # will change in every dbt invocation until the user points to a
         # profile dir file which contains a valid profiles.yml file.
         #
-        # See: https://github.com/fishtown-analytics/dbt/issues/1645
+        # See: https://github.com/dbt-labs/dbt/issues/1645
 
         user = {"id": str(uuid.uuid4())}
 
@@ -426,7 +427,7 @@ def track_invalid_invocation(
 def track_experimental_parser_sample(options):
     context = [SelfDescribingJson(EXPERIMENTAL_PARSER, options)]
     assert active_user is not None, \
-        'Cannot track project loading time when active user is None'
+        'Cannot track experimental parser info when active user is None'
 
     track(
         active_user,
@@ -437,9 +438,28 @@ def track_experimental_parser_sample(options):
     )
 
 
+def track_partial_parser(options):
+    context = [SelfDescribingJson(PARTIAL_PARSER, options)]
+    assert active_user is not None, \
+        'Cannot track partial parser info when active user is None'
+
+    track(
+        active_user,
+        category='dbt',
+        action='partial_parser',
+        label=active_user.invocation_id,
+        context=context
+    )
+
+
 def flush():
     logger.debug("Flushing usage events")
-    tracker.flush()
+    try:
+        tracker.flush()
+    except Exception:
+        logger.debug(
+            "An error was encountered while trying to flush usage events"
+        )
 
 
 def disable_tracking():

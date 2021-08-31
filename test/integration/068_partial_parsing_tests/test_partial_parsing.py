@@ -59,7 +59,8 @@ class TestModels(DBTIntegrationTest):
         results = self.run_dbt(["--partial-parse", "test"], expect_pass=False)
         self.assertEqual(len(results), 1)
         manifest = get_manifest()
-        self.assertEqual(len(manifest.files), 33)
+        project_files = [f for f in manifest.files if f.startswith('test://')]
+        self.assertEqual(len(project_files), 4)
         model_3_file_id = 'test://' + normalize('models-a/model_three.sql')
         self.assertIn(model_3_file_id, manifest.files)
         model_three_file = manifest.files[model_3_file_id]
@@ -104,7 +105,8 @@ class TestModels(DBTIntegrationTest):
         manifest = get_manifest()
         schema_file_id = 'test://' + normalize('models-a/schema.yml')
         self.assertNotIn(schema_file_id, manifest.files)
-        self.assertEqual(len(manifest.files), 32)
+        project_files = [f for f in manifest.files if f.startswith('test://')]
+        self.assertEqual(len(project_files), 3)
 
         # Put schema file back and remove a model
         # referred to in schema file
@@ -118,12 +120,31 @@ class TestModels(DBTIntegrationTest):
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
 
+        # Add model four refing model three
+        shutil.copyfile('extra-files/model_four1.sql', 'models-a/model_four.sql')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 4)
+
+        # Remove model_three and change model_four to ref model_one
+        # and change schema file to remove model_three
+        os.remove(normalize('models-a/model_three.sql'))
+        shutil.copyfile('extra-files/model_four2.sql', 'models-a/model_four.sql')
+        shutil.copyfile('extra-files/models-schema1.yml', 'models-a/schema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
+        # Remove model four, put back model three, put back schema file
+        shutil.copyfile('extra-files/model_three.sql', 'models-a/model_three.sql')
+        shutil.copyfile('extra-files/models-schema2.yml', 'models-a/schema.yml')
+        os.remove(normalize('models-a/model_four.sql'))
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
         # Add a macro
         shutil.copyfile('extra-files/my_macro.sql', 'macros/my_macro.sql')
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
         manifest = get_manifest()
-        self.assertEqual(len(manifest.macros), 148)
         macro_id = 'macro.test.do_something'
         self.assertIn(macro_id, manifest.macros)
 
@@ -142,8 +163,27 @@ class TestModels(DBTIntegrationTest):
         with self.assertRaises(CompilationException):
             results = self.run_dbt(["--partial-parse", "run"])
 
-        # Remove the macro patch
+        # put back macro file, got back to schema file with no macro
+        # add separate macro patch schema file
         shutil.copyfile('extra-files/models-schema2.yml', 'models-a/schema.yml')
+        shutil.copyfile('extra-files/my_macro.sql', 'macros/my_macro.sql')
+        shutil.copyfile('extra-files/macros.yml', 'macros/macros.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+
+        # delete macro and schema file
+        print(f"\n\n*** remove macro and macro_patch\n\n")
+        os.remove(normalize('macros/my_macro.sql'))
+        os.remove(normalize('macros/macros.yml'))
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
+        # Add an empty schema file
+        shutil.copyfile('extra-files/empty_schema.yml', 'models-a/eschema.yml')
+        results = self.run_dbt(["--partial-parse", "run"])
+        self.assertEqual(len(results), 3)
+
+        # Add version to empty schema file
+        shutil.copyfile('extra-files/empty_schema_with_version.yml', 'models-a/eschema.yml')
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 3)
 
@@ -152,12 +192,18 @@ class TestModels(DBTIntegrationTest):
             os.remove(normalize('models-a/model_two.sql'))
         if os.path.exists(normalize('models-a/model_three.sql')):
             os.remove(normalize('models-a/model_three.sql'))
+        if os.path.exists(normalize('models-a/model_four.sql')):
+            os.remove(normalize('models-a/model_four.sql'))
         if os.path.exists(normalize('models-a/schema.yml')):
             os.remove(normalize('models-a/schema.yml'))
         if os.path.exists(normalize('target/partial_parse.msgpack')):
             os.remove(normalize('target/partial_parse.msgpack'))
         if os.path.exists(normalize('macros/my_macro.sql')):
             os.remove(normalize('macros/my_macro.sql'))
+        if os.path.exists(normalize('models-a/eschema.yml')):
+            os.remove(normalize('models-a/eschema.yml'))
+        if os.path.exists(normalize('macros/macros.yml')):
+            os.remove(normalize('macros/macros.yml'))
 
 
 class TestSources(DBTIntegrationTest):
@@ -176,6 +222,7 @@ class TestSources(DBTIntegrationTest):
             'config-version': 2,
             'data-paths': ['seed'],
             'test-paths': ['tests'],
+            'macro-paths': ['macros-b'],
             'analysis-paths': ['analysis'],
             'seeds': {
                 'quote_columns': False,
@@ -202,6 +249,8 @@ class TestSources(DBTIntegrationTest):
             os.remove(normalize('tests/my_test.sql'))
         if os.path.exists(normalize('analysis/my_analysis.sql')):
             os.remove(normalize('analysis/my_analysis.sql'))
+        if os.path.exists(normalize('macros-b/tests.sql')):
+            os.remove(normalize('macros-b/tests.sql'))
 
 
     @use_profile('postgres')
@@ -209,6 +258,7 @@ class TestSources(DBTIntegrationTest):
         # initial run
         self.run_dbt(['clean'])
         shutil.copyfile('extra-files/raw_customers.csv', 'seed/raw_customers.csv')
+        shutil.copyfile('extra-files/sources-tests1.sql', 'macros-b/tests.sql')
         results = self.run_dbt(["run"])
         self.assertEqual(len(results), 1)
 
@@ -289,7 +339,7 @@ class TestSources(DBTIntegrationTest):
         shutil.copyfile('extra-files/my_test.sql', 'tests/my_test.sql')
         results = self.run_dbt(["--partial-parse", "test"])
         manifest = get_manifest()
-        self.assertEqual(len(manifest.nodes), 8)
+        self.assertEqual(len(manifest.nodes), 9)
         test_id = 'test.test.my_test'
         self.assertIn(test_id, manifest.nodes)
 
@@ -302,13 +352,17 @@ class TestSources(DBTIntegrationTest):
         os.remove(normalize('tests/my_test.sql'))
         results = self.run_dbt(["--partial-parse", "test"])
         manifest = get_manifest()
-        self.assertEqual(len(manifest.nodes), 8)
+        self.assertEqual(len(manifest.nodes), 9)
 
         # Remove analysis
         os.remove(normalize('analysis/my_analysis.sql'))
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
-        self.assertEqual(len(manifest.nodes), 7)
+        self.assertEqual(len(manifest.nodes), 8)
+
+        # Change source test
+        shutil.copyfile('extra-files/sources-tests2.sql', 'macros-b/tests.sql')
+        results = self.run_dbt(["--partial-parse", "run"])
 
 
 class TestPartialParsingDependency(DBTIntegrationTest):

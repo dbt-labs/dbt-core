@@ -318,6 +318,7 @@ class Querier:
         threads: Optional[int] = None,
         request_id: int = 1,
     ):
+        """ Deprecated rpc command `snapshot-freshness` -> `source-freshness` """
         params = {}
         if select is not None:
             params['select'] = select
@@ -325,6 +326,27 @@ class Querier:
             params['threads'] = threads
         return self.request(
             method='snapshot-freshness', params=params, request_id=request_id
+        )
+
+    def source_freshness(
+        self,
+        select: Optional[Union[str, List[str]]] = None,
+        exclude: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
+        request_id: int = 1,
+        state: Optional[bool] = None,
+    ):
+        params = {}
+        if select is not None:
+            params['select'] = select
+        if exclude is not None:
+            params['exclude'] = exclude
+        if threads is not None:
+            params['threads'] = threads
+        if state is not None:
+            params['state'] = state
+        return self.request(
+            method='source-freshness', params=params, request_id=request_id
         )
 
     def test(
@@ -355,6 +377,30 @@ class Querier:
             params['state'] = state
         return self.request(
             method='test', params=params, request_id=request_id
+        )
+
+    def build(
+        self,
+        models: Optional[Union[str, List[str]]] = None,
+        exclude: Optional[Union[str, List[str]]] = None,
+        threads: Optional[int] = None,
+        request_id: int = 1,
+        defer: Optional[bool] = None,
+        state: Optional[bool] = None,
+    ):
+        params = {}
+        if models is not None:
+            params['models'] = models
+        if exclude is not None:
+            params['exclude'] = exclude
+        if threads is not None:
+            params['threads'] = threads
+        if defer is not None:
+            params['defer'] = defer
+        if state is not None:
+            params['state'] = state
+        return self.request(
+            method='build', params=params, request_id=request_id
         )
 
     def docs_generate(self, compile: bool = None, request_id: int = 1):

@@ -1,3 +1,4 @@
+from dbt.logger import SECRET_ENV_PREFIX
 from test.integration.base import DBTIntegrationTest, use_profile
 
 import os
@@ -15,6 +16,8 @@ class TestContextVars(DBTIntegrationTest):
 
         os.environ["DBT_TEST_013_USER"] = "root"
         os.environ["DBT_TEST_013_PASS"] = "password"
+        os.environ[SECRET_ENV_PREFIX + "013_SECRET"] = "secret_variable"
+        os.environ["DBT_TEST_013_NOT_SECRET"] = "regular_variable"
 
         self.fields = [
             'this',
@@ -138,6 +141,12 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['target.pass'], '')
         self.assertEqual(ctx['env_var'], '1')
 
+    @use_profile('postgres')
+    def test_postgres_env_vars_secrets(self):
+        _, log_output = self.run_dbt_and_capture(['--debug', 'run', '--target', 'prod'])
+
+        self.assertFalse("secret_variable" in log_output)
+        self.assertTrue("regular_variable" in log_output)
 
 class TestEmitWarning(DBTIntegrationTest):
     @property

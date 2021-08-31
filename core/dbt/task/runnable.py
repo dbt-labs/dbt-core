@@ -12,6 +12,7 @@ from .printer import (
     print_run_end_messages,
     print_cancel_line,
 )
+
 from dbt import ui
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
@@ -37,8 +38,9 @@ from dbt.exceptions import (
     InternalException,
     NotImplementedException,
     RuntimeException,
-    FailFastException
+    FailFastException,
 )
+
 from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
 from dbt.parser.manifest import ManifestLoader
 
@@ -127,7 +129,7 @@ class GraphRunnableTask(ManifestTask):
 
         self.job_queue = self.get_graph_queue()
 
-        # we use this a couple times. order does not matter.
+        # we use this a couple of times. order does not matter.
         self._flattened_nodes = []
         for uid in self.job_queue.get_selected_nodes():
             if uid in self.manifest.nodes:
@@ -148,7 +150,7 @@ class GraphRunnableTask(ManifestTask):
     def raise_on_first_error(self):
         return False
 
-    def get_runner_type(self):
+    def get_runner_type(self, node):
         raise NotImplementedException('Not Implemented')
 
     def result_path(self):
@@ -165,7 +167,7 @@ class GraphRunnableTask(ManifestTask):
             run_count = self.run_count
             num_nodes = self.num_nodes
 
-        cls = self.get_runner_type()
+        cls = self.get_runner_type(node)
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):

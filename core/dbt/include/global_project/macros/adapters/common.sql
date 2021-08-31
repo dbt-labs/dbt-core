@@ -311,3 +311,34 @@
   {{ config.set('sql_header', caller()) }}
 {%- endmacro %}
 
+
+{% macro alter_relation_add_remove_columns(relation, add_columns = none, remove_columns = none) -%}
+  {{ return(adapter.dispatch('alter_relation_add_remove_columns')(relation, add_columns, remove_columns)) }}
+{% endmacro %}
+
+{% macro default__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
+  
+  {% if add_columns is none %}
+    {% set add_columns = [] %}
+  {% endif %}
+  {% if remove_columns is none %}
+    {% set remove_columns = [] %}
+  {% endif %}
+  
+  {% set sql -%}
+     
+     alter {{ relation.type }} {{ relation }}
+       
+            {% for column in add_columns %}
+               add column {{ column.name }} {{ column.data_type }}{{ ',' if not loop.last }}
+            {% endfor %}{{ ',' if remove_columns | length > 0 }}
+            
+            {% for column in remove_columns %}
+                drop column {{ column.name }}{{ ',' if not loop.last }}
+            {% endfor %}
+  
+  {%- endset -%}
+
+  {% do run_query(sql) %}
+
+{% endmacro %}

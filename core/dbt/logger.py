@@ -43,6 +43,15 @@ DEBUG_LOG_FORMAT = (
     '{record.message}'
 )
 
+SECRET_ENV_PREFIX = 'DBT_ENV_SECRET_'
+
+
+def get_secret_env() -> List[str]:
+    return [
+        v for k, v in os.environ.items()
+        if k.startswith(SECRET_ENV_PREFIX)
+    ]
+
 
 ExceptionInformation = str
 
@@ -333,6 +342,12 @@ class TimestampNamed(logbook.Processor):
         record.extra[self.name] = datetime.utcnow().isoformat()
 
 
+class ScrubSecrets(logbook.Processor):
+    def process(self, record):
+        for secret in get_secret_env():
+            record.message = record.message.replace(secret, "*****")
+
+
 logger = logbook.Logger('dbt')
 # provide this for the cache, disabled by default
 CACHE_LOGGER = logbook.Logger('dbt.cache')
@@ -473,7 +488,8 @@ class LogManager(logbook.NestedSetup):
         self._file_handler = DelayedFileHandler()
         self._relevel_processor = Relevel(allowed=['dbt', 'werkzeug'])
         self._state_processor = DbtProcessState('internal')
-        # keep track of wheter we've already entered to decide if we should
+        self._scrub_processor = ScrubSecrets()
+        # keep track of whether we've already entered to decide if we should
         # be actually pushing. This allows us to log in main() and also
         # support entering dbt execution via handle_and_check.
         self._stack_depth = 0
@@ -483,6 +499,7 @@ class LogManager(logbook.NestedSetup):
             self._file_handler,
             self._relevel_processor,
             self._state_processor,
+            self._scrub_processor
         ])
 
     def push_application(self):

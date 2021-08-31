@@ -279,7 +279,7 @@ class Config(Protocol):
         ...
 
 
-# `config` implementations
+# Implementation of "config(..)" calls in models
 class ParseConfigObject(Config):
     def __init__(self, model, context_config: Optional[ContextConfig]):
         self.model = model
@@ -316,7 +316,7 @@ class ParseConfigObject(Config):
             raise RuntimeException(
                 'At parse time, did not receive a context config'
             )
-        self.context_config.update_in_model_config(opts)
+        self.context_config.add_config_call(opts)
         return ''
 
     def set(self, name, value):
@@ -1243,7 +1243,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def pre_hooks(self) -> List[Dict[str, Any]]:
-        if isinstance(self.model, ParsedSourceDefinition):
+        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
         return [
             h.to_dict(omit_none=True) for h in self.model.config.pre_hook
@@ -1251,7 +1251,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def post_hooks(self) -> List[Dict[str, Any]]:
-        if isinstance(self.model, ParsedSourceDefinition):
+        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
         return [
             h.to_dict(omit_none=True) for h in self.model.config.post_hook

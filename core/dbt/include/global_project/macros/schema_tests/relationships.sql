@@ -1,16 +1,25 @@
 
 {% macro default__test_relationships(model, column_name, to, field) %}
 
+with child as (
+    select {{ column_name }} as from_field
+    from {{ model }}
+    where {{ column_name }} is not null
+),
+
+parent as (
+    select {{ field }} as to_field
+    from {{ to }}
+)
+
 select
-    child.{{ column_name }}
+    from_field
 
-from {{ model }} as child
+from child
+left join parent
+    on child.from_field = parent.to_field
 
-left join {{ to }} as parent
-    on child.{{ column_name }} = parent.{{ field }}
-
-where child.{{ column_name }} is not null
-  and parent.{{ field }} is null
+where parent.to_field is null
 
 {% endmacro %}
 

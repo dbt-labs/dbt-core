@@ -1,0 +1,12 @@
+name: "Set up postgres (windows)"
+description: "Set up postgres service on windows vm for dbt integration tests"
+runs:
+  using: "composite"
+  steps:
+    - shell: pwsh
+      run: |
+        $pgService = Get-Service -Name postgresql*
+        Set-Service -InputObject $pgService -Status running -StartupType automatic
+        Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
+        $env:Path += ";$env:PGBIN"
+        bash ${{ github.action_path }}/setup_db.sh

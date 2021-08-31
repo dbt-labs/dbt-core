@@ -152,7 +152,7 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         results = self.run_dbt(['test'], strict=False)
 
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         for result in results:
             self.assertFalse(result.skipped)
             self.assertEqual(
@@ -212,7 +212,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
                     "local": "./local_dependency",
                 },
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'git': 'https://github.com/dbt-labs/dbt-integration-project',
                     'revision': 'dbt/0.17.0',
                 },
             ]
@@ -331,14 +331,14 @@ class TestQuotedSchemaTestColumns(DBTIntegrationTest):
         self.assertEqual(len(results), 2)
 
 
-class TestVarsSchemaTests(DBTIntegrationTest):
+class TestCliVarsSchemaTests(DBTIntegrationTest):
     @property
     def schema(self):
         return "schema_tests_008"
 
     @property
     def models(self):
-        return "models-v2/render_test_arg_models"
+        return "models-v2/render_test_cli_arg_models"
 
     @property
     def project_config(self):
@@ -355,6 +355,32 @@ class TestVarsSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         self.run_dbt(['test'], expect_pass=False)
 
+
+class TestConfiguredVarsSchemaTests(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "models-v2/render_test_configured_arg_models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["macros-v2/macros"],
+            'vars': {
+                'myvar': 'foo'
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_argument_rendering(self):
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
+        results = self.run_dbt(['test'])
+        self.assertEqual(len(results), 1)
 
 class TestSchemaCaseInsensitive(DBTIntegrationTest):
     @property

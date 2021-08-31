@@ -134,8 +134,11 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.adapter.truncate_relation(relation)
 
+        # no query comment because wrapped in begin; + commit; for explicit DML
         self.mock_execute.assert_has_calls([
-            mock.call('/* dbt */\ntruncate table test_database."test_schema".test_table', None)
+            mock.call('/* dbt */\nbegin;', None),
+            mock.call('truncate table test_database."test_schema".test_table\n  ;', None),
+            mock.call('commit;', None)
         ])
 
     def test_quoting_on_rename(self):
@@ -258,7 +261,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', private_key=None, application='dbt')
@@ -274,7 +277,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=True, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', private_key=None, application='dbt')
@@ -291,7 +294,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 password='test_password', role=None, schema='public',
                 user='test_user', warehouse='test_warehouse', private_key=None,
@@ -310,7 +313,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 password='test_password', role=None, schema='public',
                 user='test_user', warehouse='test_warehouse',
@@ -329,7 +332,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', authenticator='externalbrowser',
@@ -348,7 +351,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', authenticator='oauth', token='my-oauth-token',
@@ -369,7 +372,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', private_key='test_key',
@@ -390,7 +393,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         conn.handle
         self.snowflake.assert_has_calls([
             mock.call(
-                account='test_account', autocommit=False,
+                account='test_account', autocommit=True,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', private_key='test_key',

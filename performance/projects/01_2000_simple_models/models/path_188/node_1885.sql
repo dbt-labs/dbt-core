@@ -1,0 +1,25 @@
+select 1 as id
+union all
+select * from {{ ref('node_0') }}
+union all
+select * from {{ ref('node_3') }}
+union all
+select * from {{ ref('node_6') }}
+union all
+select * from {{ ref('node_8') }}
+union all
+select * from {{ ref('node_17') }}
+union all
+select * from {{ ref('node_25') }}
+union all
+select * from {{ ref('node_47') }}
+union all
+select * from {{ ref('node_176') }}
+union all
+select * from {{ ref('node_596') }}
+union all
+select * from {{ ref('node_850') }}
+union all
+select * from {{ ref('node_1279') }}
+union all
+select * from {{ ref('node_1799') }}

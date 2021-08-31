@@ -118,13 +118,13 @@ class TestHubPackage(unittest.TestCase):
         self.package_version = self.registry.package_version
 
         self.index_cached.return_value = [
-            'fishtown-analytics-test/a',
+            'dbt-labs-test/a',
         ]
         self.get_available_versions.return_value = [
-            '0.1.2', '0.1.3'
+            '0.1.2', '0.1.3', '0.1.4a1'
         ]
         self.package_version.return_value = {
-            'id': 'fishtown-analytics-test/a/0.1.2',
+            'id': 'dbt-labs-test/a/0.1.2',
             'name': 'a',
             'version': '0.1.2',
             'packages': [],
@@ -143,14 +143,14 @@ class TestHubPackage(unittest.TestCase):
 
     def test_init(self):
         a_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.2',
         )
-        self.assertEqual(a_contract.package, 'fishtown-analytics-test/a')
+        self.assertEqual(a_contract.package, 'dbt-labs-test/a')
         self.assertEqual(a_contract.version, '0.1.2')
 
         a = RegistryUnpinnedPackage.from_contract(a_contract)
-        self.assertEqual(a.package, 'fishtown-analytics-test/a')
+        self.assertEqual(a.package, 'dbt-labs-test/a')
         self.assertEqual(
             a.versions,
             [VersionSpecifier(
@@ -164,7 +164,7 @@ class TestHubPackage(unittest.TestCase):
         )
 
         a_pinned = a.resolved()
-        self.assertEqual(a_contract.package, 'fishtown-analytics-test/a')
+        self.assertEqual(a_contract.package, 'dbt-labs-test/a')
         self.assertEqual(a_contract.version, '0.1.2')
         self.assertEqual(a_pinned.source_type(), 'hub')
 
@@ -176,18 +176,18 @@ class TestHubPackage(unittest.TestCase):
 
     def test_resolve_ok(self):
         a_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.2'
         )
         b_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.2'
         )
         a = RegistryUnpinnedPackage.from_contract(a_contract)
         b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
 
-        self.assertEqual(c.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c.package, 'dbt-labs-test/a')
         self.assertEqual(
             c.versions,
             [
@@ -211,24 +211,24 @@ class TestHubPackage(unittest.TestCase):
         )
 
         c_pinned = c.resolved()
-        self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
         self.assertEqual(c_pinned.version, '0.1.2')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
     def test_resolve_missing_package(self):
         a = RegistryUnpinnedPackage.from_contract(RegistryPackage(
-            package='fishtown-analytics-test/b',
+            package='dbt-labs-test/b',
             version='0.1.2'
         ))
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
             a.resolved()
 
-        msg = 'Package fishtown-analytics-test/b was not found in the package index'
+        msg = 'Package dbt-labs-test/b was not found in the package index'
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_missing_version(self):
         a = RegistryUnpinnedPackage.from_contract(RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.4'
         ))
 
@@ -236,18 +236,18 @@ class TestHubPackage(unittest.TestCase):
             a.resolved()
         msg = (
             "Could not find a matching version for package "
-            "fishtown-analytics-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
+            "dbt-labs-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
             "Available versions: ['0.1.2', '0.1.3']"
         )
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_conflict(self):
         a_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.2'
         )
         b_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.3'
         )
         a = RegistryUnpinnedPackage.from_contract(a_contract)
@@ -257,25 +257,25 @@ class TestHubPackage(unittest.TestCase):
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
             c.resolved()
         msg = (
-            "Version error for package fishtown-analytics-test/a: Could not "
+            "Version error for package dbt-labs-test/a: Could not "
             "find a satisfactory version from options: ['=0.1.2', '=0.1.3']"
         )
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_ranges(self):
         a_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='0.1.2'
         )
         b_contract = RegistryPackage(
-            package='fishtown-analytics-test/a',
+            package='dbt-labs-test/a',
             version='<0.1.4'
         )
         a = RegistryUnpinnedPackage.from_contract(a_contract)
         b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
 
-        self.assertEqual(c.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c.package, 'dbt-labs-test/a')
         self.assertEqual(
             c.versions,
             [
@@ -299,10 +299,178 @@ class TestHubPackage(unittest.TestCase):
         )
 
         c_pinned = c.resolved()
-        self.assertEqual(c_pinned.package, 'fishtown-analytics-test/a')
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
         self.assertEqual(c_pinned.version, '0.1.2')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
+    def test_resolve_ranges_install_prerelease_default_false(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='>0.1.2'
+        )
+        b_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='<0.1.5'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='5',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(c_pinned.version, '0.1.3')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+    def test_resolve_ranges_install_prerelease_true(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='>0.1.2',
+            install_prerelease=True
+        )
+        b_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='<0.1.5'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='2',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='5',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(c_pinned.version, '0.1.4a1')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+    def test_get_version_latest_prelease_true(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='>0.1.0',
+            install_prerelease=True
+        )
+        b_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='<0.1.4'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='0',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='4',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(c_pinned.version, '0.1.3')
+        self.assertEqual(c_pinned.get_version_latest(), '0.1.4a1')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+    def test_get_version_latest_prelease_false(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='>0.1.0',
+            install_prerelease=False
+        )
+        b_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='<0.1.4'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='0',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='4',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(c_pinned.version, '0.1.3')
+        self.assertEqual(c_pinned.get_version_latest(), '0.1.3')
+        self.assertEqual(c_pinned.source_type(), 'hub')
 
 class MockRegistry:
     def __init__(self, packages):
@@ -330,9 +498,9 @@ class TestPackageSpec(unittest.TestCase):
         self.patcher = mock.patch('dbt.deps.registry.registry')
         self.registry = self.patcher.start()
         self.mock_registry = MockRegistry(packages={
-            'fishtown-analytics-test/a': {
+            'dbt-labs-test/a': {
                 '0.1.2': {
-                    'id': 'fishtown-analytics-test/a/0.1.2',
+                    'id': 'dbt-labs-test/a/0.1.2',
                     'name': 'a',
                     'version': '0.1.2',
                     'packages': [],
@@ -346,7 +514,7 @@ class TestPackageSpec(unittest.TestCase):
                     'newfield': ['another', 'value'],
                 },
                 '0.1.3': {
-                    'id': 'fishtown-analytics-test/a/0.1.3',
+                    'id': 'dbt-labs-test/a/0.1.3',
                     'name': 'a',
                     'version': '0.1.3',
                     'packages': [],
@@ -360,12 +528,12 @@ class TestPackageSpec(unittest.TestCase):
                     'newfield': ['another', 'value'],
                 }
             },
-            'fishtown-analytics-test/b': {
+            'dbt-labs-test/b': {
                 '0.2.1': {
-                    'id': 'fishtown-analytics-test/b/0.2.1',
+                    'id': 'dbt-labs-test/b/0.2.1',
                     'name': 'b',
                     'version': '0.2.1',
-                    'packages': [{'package': 'fishtown-analytics-test/a', 'version': '>=0.1.3'}],
+                    'packages': [{'package': 'dbt-labs-test/a', 'version': '>=0.1.3'}],
                     '_source': {
                         'blahblah': 'asdfas',
                     },
@@ -388,13 +556,13 @@ class TestPackageSpec(unittest.TestCase):
     def test_dependency_resolution(self):
         package_config = PackageConfig.from_dict({
             'packages': [
-                {'package': 'fishtown-analytics-test/a', 'version': '>0.1.2'},
-                {'package': 'fishtown-analytics-test/b', 'version': '0.2.1'},
+                {'package': 'dbt-labs-test/a', 'version': '>0.1.2'},
+                {'package': 'dbt-labs-test/b', 'version': '0.2.1'},
             ],
         })
         resolved = resolve_packages(package_config.packages, mock.MagicMock(project_name='test'))
         self.assertEqual(len(resolved), 2)
-        self.assertEqual(resolved[0].name, 'fishtown-analytics-test/a')
+        self.assertEqual(resolved[0].name, 'dbt-labs-test/a')
         self.assertEqual(resolved[0].version, '0.1.3')
-        self.assertEqual(resolved[1].name, 'fishtown-analytics-test/b')
+        self.assertEqual(resolved[1].name, 'dbt-labs-test/b')
         self.assertEqual(resolved[1].version, '0.2.1')

@@ -24,6 +24,7 @@ from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
 from dbt.context import providers
 from dbt.logger import GLOBAL_LOGGER as logger, log_manager
+from dbt.contracts.graph.manifest import Manifest
 
 
 INITIAL_ROOT = os.getcwd()
@@ -64,6 +65,7 @@ class FakeArgs:
         self.schema = True
         self.full_refresh = False
         self.models = None
+        self.select = None
         self.exclude = None
         self.single_threaded = False
         self.selector_name = None
@@ -141,7 +143,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def database_host(self):
-        return os.environ.get('DOCKER_TEST_DATABASE_HOST', 'localhost')
+        return os.getenv('POSTGRES_TEST_HOST', 'localhost')
 
     def postgres_profile(self):
         return {
@@ -154,20 +156,20 @@ class DBTIntegrationTest(unittest.TestCase):
                         'type': 'postgres',
                         'threads': 4,
                         'host': self.database_host,
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
+                        'port': int(os.getenv('POSTGRES_TEST_PORT', 5432)),
+                        'user': os.getenv('POSTGRES_TEST_USER', 'root'),
+                        'pass': os.getenv('POSTGRES_TEST_PASS', 'password'),
+                        'dbname': os.getenv('POSTGRES_TEST_DATABASE', 'dbt'),
                         'schema': self.unique_schema()
                     },
                     'noaccess': {
                         'type': 'postgres',
                         'threads': 4,
                         'host': self.database_host,
-                        'port': 5432,
+                        'port': int(os.getenv('POSTGRES_TEST_PORT', 5432)),
                         'user': 'noaccess',
                         'pass': 'password',
-                        'dbname': 'dbt',
+                        'dbname': os.getenv('POSTGRES_TEST_DATABASE', 'dbt'),
                         'schema': self.unique_schema()
                     }
                 },
@@ -243,7 +245,7 @@ class DBTIntegrationTest(unittest.TestCase):
         }
 
     def bigquery_profile(self):
-        credentials_json_str = os.getenv('BIGQUERY_SERVICE_ACCOUNT_JSON').replace("'", '')
+        credentials_json_str = os.getenv('BIGQUERY_TEST_SERVICE_ACCOUNT_JSON').replace("'", '')
         credentials = json.loads(credentials_json_str)
         project_id = credentials.get('project_id')
 
@@ -1224,9 +1226,22 @@ class AnyStringWith:
     def __repr__(self):
         return 'AnyStringWith<{!r}>'.format(self.contains)
 
+
 def bigquery_rate_limiter(err, *args):
     msg = str(err)
     if 'too many table update operations for this table' in msg:
         time.sleep(1)
         return True
     return False
+
+
+def get_manifest():
+    path = './target/partial_parse.msgpack'
+    if os.path.exists(path):
+        with open(path, 'rb') as fp:
+            manifest_mp = fp.read()
+        manifest: Manifest = Manifest.from_msgpack(manifest_mp)
+        return manifest
+    else:
+        return None
+

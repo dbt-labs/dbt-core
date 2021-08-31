@@ -202,12 +202,12 @@ class RemoteRunSQLTask(RPCTask[RPCExecParameters]):
 class RemoteCompileTask(RemoteRunSQLTask, CompileTask):
     METHOD_NAME = 'compile_sql'
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return RPCCompileRunner
 
 
 class RemoteRunTask(RemoteRunSQLTask, RunTask):
     METHOD_NAME = 'run_sql'
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return RPCExecuteRunner

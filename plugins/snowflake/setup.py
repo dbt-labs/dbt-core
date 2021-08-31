@@ -20,7 +20,7 @@ except ImportError:
 
 
 package_name = "dbt-snowflake"
-package_version = "0.20.0rc1"
+package_version = "0.21.0b1"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -33,9 +33,9 @@ setup(
     description=description,
     long_description=description,
     long_description_content_type='text/markdown',
-    author="Fishtown Analytics",
-    author_email="info@fishtownanalytics.com",
-    url="https://github.com/fishtown-analytics/dbt",
+    author="dbt Labs",
+    author_email="info@dbtlabs.com",
+    url="https://github.com/dbt-labs/dbt",
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [
@@ -47,7 +47,7 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'snowflake-connector-python[secure-local-storage]~=2.4.1',
+        'snowflake-connector-python[secure-local-storage]>=2.4.1,<2.6.0',
         'requests<3.0.0',
         'cryptography>=3.2,<4',
     ],

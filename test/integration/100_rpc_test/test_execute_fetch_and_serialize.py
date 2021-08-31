@@ -17,6 +17,7 @@ class TestRpcExecuteReturnsResults(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
+            'source-paths': ['rpc_serialize_test_models'],
             'macro-paths': ['macros'],
         }
 

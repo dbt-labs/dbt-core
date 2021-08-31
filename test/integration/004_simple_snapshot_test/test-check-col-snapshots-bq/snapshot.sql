@@ -1,10 +1,10 @@
 {% snapshot snapshot_actual %}
     {# this used to be check_cols=('email',), which ought to be totally valid,
-    but isn't because type systems are hard. #}
+    but is not because type systems are hard. #}
     {{
         config(
-            target_database=var('target_database', database),
-            target_schema=schema,
+            target_project=var('target_database', database),
+            target_dataset=var('target_schema', schema),
             unique_key='concat(cast(id as string) , "-", first_name)',
             strategy='check',
             check_cols=['email'],
@@ -18,8 +18,8 @@
 {% snapshot snapshot_checkall %}
     {{
         config(
-            target_database=var('target_database', database),
-            target_schema=schema,
+            target_project=var('target_database', database),
+            target_dataset=var('target_schema', schema),
             unique_key='concat(cast(id as string) , "-", first_name)',
             strategy='check',
             check_cols='all',

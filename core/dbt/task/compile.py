@@ -41,7 +41,7 @@ class CompileTask(GraphRunnableTask):
         if self.args.selector_name:
             spec = self.config.get_selector(self.args.selector_name)
         else:
-            spec = parse_difference(self.args.models, self.args.exclude)
+            spec = parse_difference(self.args.select, self.args.exclude)
         return spec
 
     def get_node_selector(self) -> ResourceTypeSelector:
@@ -56,7 +56,7 @@ class CompileTask(GraphRunnableTask):
             resource_types=NodeType.executable(),
         )
 
-    def get_runner_type(self):
+    def get_runner_type(self, _):
         return CompileRunner
 
     def task_end_messages(self, results):

@@ -30,9 +30,13 @@ class RegistryPackageMixin:
 
 
 class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
-    def __init__(self, package: str, version: str) -> None:
+    def __init__(self,
+                 package: str,
+                 version: str,
+                 version_latest: str) -> None:
         super().__init__(package)
         self.version = version
+        self.version_latest = version_latest
 
     @property
     def name(self):
@@ -43,6 +47,9 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
 
     def get_version(self):
         return self.version
+
+    def get_version_latest(self):
+        return self.version_latest
 
     def nice_version_name(self):
         return 'version {}'.format(self.version)
@@ -61,7 +68,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
         system.make_directory(os.path.dirname(tar_path))
 
         download_url = metadata.downloads.tarball
-        system.download(download_url, tar_path)
+        system.download_with_retries(download_url, tar_path)
         deps_path = project.modules_path
         package_name = self.get_project_name(project, renderer)
         system.untar_package(tar_path, deps_path, package_name)
@@ -71,10 +78,14 @@ class RegistryUnpinnedPackage(
     RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]
 ):
     def __init__(
-        self, package: str, versions: List[semver.VersionSpecifier]
+        self,
+        package: str,
+        versions: List[semver.VersionSpecifier],
+        install_prerelease: bool
     ) -> None:
         super().__init__(package)
         self.versions = versions
+        self.install_prerelease = install_prerelease
 
     def _check_in_index(self):
         index = registry.index_cached()
@@ -91,13 +102,18 @@ class RegistryUnpinnedPackage(
             semver.VersionSpecifier.from_version_string(v)
             for v in raw_version
         ]
-        return cls(package=contract.package, versions=versions)
+        return cls(
+            package=contract.package,
+            versions=versions,
+            install_prerelease=contract.install_prerelease
+        )
 
     def incorporate(
         self, other: 'RegistryUnpinnedPackage'
     ) -> 'RegistryUnpinnedPackage':
         return RegistryUnpinnedPackage(
             package=self.package,
+            install_prerelease=self.install_prerelease,
             versions=self.versions + other.versions,
         )
 
@@ -111,12 +127,18 @@ class RegistryUnpinnedPackage(
             raise DependencyException(new_msg) from e
 
         available = registry.get_available_versions(self.package)
+        installable = semver.filter_installable(
+            available,
+            self.install_prerelease
+        )
+        available_latest = installable[-1]
 
         # for now, pick a version and then recurse. later on,
         # we'll probably want to traverse multiple options
         # so we can match packages. not going to make a difference
         # right now.
-        target = semver.resolve_to_specific_version(range_, available)
+        target = semver.resolve_to_specific_version(range_, installable)
         if not target:
-            package_version_not_found(self.package, range_, available)
-        return RegistryPinnedPackage(package=self.package, version=target)
+            package_version_not_found(self.package, range_, installable)
+        return RegistryPinnedPackage(package=self.package, version=target,
+                                     version_latest=available_latest)

@@ -1,0 +1,266 @@
+# **what?**
+# This workflow runs all integration tests for supported OS
+# and python versions and core adapters. If triggered by PR,
+# the workflow will only run tests for adapters related
+# to code changes. Use the `test all` and `test ${adapter}`
+# label to run all or additional tests. Use `ok to test`
+# label to mark PRs from forked repositories that are safe
+# to run integration tests for. Requires secrets to run
+# against different warehouses.
+
+# **why?**
+# This checks the functionality of dbt from a user's perspective
+# and attempts to catch functional regressions.
+
+# **when?**
+# This workflow will run on every push to a protected branch
+# and when manually triggered. It will also run for all PRs, including
+# PRs from forks. The workflow will be skipped until there is a label
+# to mark the PR as safe to run.
+
+name: Adapter Integration Tests
+
+on:
+  # pushes to release branches
+  push:
+    branches:
+      - "main"
+      - "develop"
+      - "*.latest"
+      - "releases/*"
+  # all PRs, important to note that `pull_request_target` workflows
+  # will run in the context of the target branch of a PR
+  pull_request_target:
+  # manual tigger
+  workflow_dispatch:
+
+# explicitly turn off permissions for `GITHUB_TOKEN`
+permissions: read-all
+
+# will cancel previous workflows triggered by the same event and for the same ref for PRs or same SHA otherwise
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ contains(github.event_name, 'pull_request') && github.event.pull_request.head.ref || github.sha }}
+  cancel-in-progress: true
+
+# sets default shell to bash, for all operating systems
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # generate test metadata about what files changed and the testing matrix to use
+  test-metadata:
+    # run if not a PR from a forked repository or has a label to mark as safe to test
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      contains(github.event.pull_request.labels.*.name, 'ok to test')
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.generate-matrix.outputs.result }}
+
+    steps:
+      - name: Check out the repository (non-PR)
+        if: github.event_name != 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Check out the repository (PR)
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check if relevant files changed
+        # https://github.com/marketplace/actions/paths-changes-filter
+        # For each filter, it sets output variable named by the filter to the text:
+        #  'true' - if any of changed files matches any of filter rules
+        #  'false' - if none of changed files matches any of filter rules
+        # also, returns:
+        #  `changes` - JSON array with names of all filters matching any of the changed files
+        uses: dorny/paths-filter@v2
+        id: get-changes
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            postgres:
+              - 'core/**'
+              - 'plugins/postgres/**'
+              - 'dev-requirements.txt'
+            snowflake:
+              - 'core/**'
+              - 'plugins/snowflake/**'
+            bigquery:
+              - 'core/**'
+              - 'plugins/bigquery/**'
+            redshift:
+              - 'core/**'
+              - 'plugins/redshift/**'
+              - 'plugins/postgres/**'
+
+      - name: Generate integration test matrix
+        id: generate-matrix
+        uses: actions/github-script@v4
+        env:
+          CHANGES: ${{ steps.get-changes.outputs.changes }}
+        with:
+          script: |
+            const script = require('./.github/scripts/integration-test-matrix.js')
+            const matrix = script({ context })
+            console.log(matrix)
+            return matrix
+
+  test:
+    name: ${{ matrix.adapter }} / python ${{ matrix.python-version }} / ${{ matrix.os }}
+
+    # run if not a PR from a forked repository or has a label to mark as safe to test
+    # also checks that the matrix generated is not empty
+    if: >-
+      needs.test-metadata.outputs.matrix &&
+      fromJSON( needs.test-metadata.outputs.matrix ).include[0] &&
+      (
+        github.event_name != 'pull_request_target' ||
+        github.event.pull_request.head.repo.full_name == github.repository ||
+        contains(github.event.pull_request.labels.*.name, 'ok to test')
+      )
+
+    runs-on: ${{ matrix.os }}
+
+    needs: test-metadata
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.test-metadata.outputs.matrix) }}
+
+    env:
+      TOXENV: integration-${{ matrix.adapter }}
+      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
+      DBT_INVOCATION_ENV: github-actions
+
+    steps:
+      - name: Check out the repository
+        if: github.event_name != 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      # explicity checkout the branch for the PR,
+      # this is necessary for the `pull_request_target` event
+      - name: Check out the repository (PR)
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up postgres (linux)
+        if: |
+          matrix.adapter == 'postgres' &&
+          runner.os == 'Linux'
+        uses: ./.github/actions/setup-postgres-linux
+
+      - name: Set up postgres (macos)
+        if: |
+          matrix.adapter == 'postgres' &&
+          runner.os == 'macOS'
+        uses: ./.github/actions/setup-postgres-macos
+
+      - name: Set up postgres (windows)
+        if: |
+          matrix.adapter == 'postgres' &&
+          runner.os == 'Windows'
+        uses: ./.github/actions/setup-postgres-windows
+
+      - name: Install python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install tox
+          pip --version
+          tox --version
+
+      - name: Run tox (postgres)
+        if: matrix.adapter == 'postgres'
+        run: tox
+
+      - name: Run tox (redshift)
+        if: matrix.adapter == 'redshift'
+        env:
+          REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
+          REDSHIFT_TEST_PASS: ${{ secrets.REDSHIFT_TEST_PASS }}
+          REDSHIFT_TEST_USER: ${{ secrets.REDSHIFT_TEST_USER }}
+          REDSHIFT_TEST_PORT: ${{ secrets.REDSHIFT_TEST_PORT }}
+          REDSHIFT_TEST_HOST: ${{ secrets.REDSHIFT_TEST_HOST }}
+        run: tox
+
+      - name: Run tox (snowflake)
+        if: matrix.adapter == 'snowflake'
+        env:
+          SNOWFLAKE_TEST_ACCOUNT: ${{ secrets.SNOWFLAKE_TEST_ACCOUNT }}
+          SNOWFLAKE_TEST_PASSWORD: ${{ secrets.SNOWFLAKE_TEST_PASSWORD }}
+          SNOWFLAKE_TEST_USER: ${{ secrets.SNOWFLAKE_TEST_USER }}
+          SNOWFLAKE_TEST_WAREHOUSE: ${{ secrets.SNOWFLAKE_TEST_WAREHOUSE }}
+          SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN: ${{ secrets.SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN }}
+          SNOWFLAKE_TEST_OAUTH_CLIENT_ID: ${{ secrets.SNOWFLAKE_TEST_OAUTH_CLIENT_ID }}
+          SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET: ${{ secrets.SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET }}
+          SNOWFLAKE_TEST_ALT_DATABASE: ${{ secrets.SNOWFLAKE_TEST_ALT_DATABASE }}
+          SNOWFLAKE_TEST_ALT_WAREHOUSE: ${{ secrets.SNOWFLAKE_TEST_ALT_WAREHOUSE }}
+          SNOWFLAKE_TEST_DATABASE: ${{ secrets.SNOWFLAKE_TEST_DATABASE }}
+          SNOWFLAKE_TEST_QUOTED_DATABASE: ${{ secrets.SNOWFLAKE_TEST_QUOTED_DATABASE }}
+          SNOWFLAKE_TEST_ROLE: ${{ secrets.SNOWFLAKE_TEST_ROLE }}
+        run: tox
+
+      - name: Run tox (bigquery)
+        if: matrix.adapter == 'bigquery'
+        env:
+          BIGQUERY_TEST_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_TEST_SERVICE_ACCOUNT_JSON }}
+          BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
+        run: tox
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: logs
+          path: ./logs
+
+      - name: Get current date
+        if: always()
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%dT%H_%M_%S')" #no colons allowed for artifacts
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.adapter }}-${{ steps.date.outputs.date }}.csv
+          path: integration_results.csv
+
+  require-label-comment:
+    runs-on: ubuntu-latest
+
+    needs: test
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Needs permission PR comment
+        if: >-
+          needs.test.result == 'skipped' &&
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.head.repo.full_name != github.repository
+        uses: unsplash/comment-on-pr@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          msg: |
+            "You do not have permissions to run integration tests, @dbt-labs/core "\
+            "needs to label this PR with `ok to test` in order to run integration tests!"
+          check_for_duplicate_msg: true
