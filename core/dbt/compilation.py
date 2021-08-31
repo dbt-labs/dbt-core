@@ -142,45 +142,36 @@ class Linker:
         include all nodes in their corresponding graph entries.
         """
         out_graph = self.graph.copy()
-        for node_id in self.graph.nodes():
+        for node_id in self.graph:
             data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
 
     def resolve_test_deps(self, manifest: Manifest):
         resolved_graph = nx.DiGraph()
-        for node in self.graph:
-            node_predecessors = set([
-                n for n in nx.traversal.bfs_tree(self.graph, node, reverse=True)
-                if n != node
-            ])
-            for predecessor in node_predecessors:
-                resolved_graph.add_edge(predecessor, node)
-                predecessor_tests = manifest.get_tests_for_node(predecessor)
-                for test in predecessor_tests:
-                    # test_predecessors = set([
-                    #     n for n in nx.traversal.bfs_tree(self.graph, test, reverse=True)
-                    #     if n != test
-                    # ])
-                    test_depends_on = set(manifest.nodes[test].depends_on_nodes)
+        for node_id in self.graph:
+            for predecessor in self.graph.predecessors(node_id):
+                resolved_graph.add_edge(predecessor, node_id)
+            if manifest.nodes[node_id].resource_type != NodeType.Test:
+                all_upstream_nodes = nx.traversal.bfs_tree(
+                    self.graph, node_id, reverse=True
+                )
+                upstream_nodes = set([
+                    n for n in all_upstream_nodes if n != node_id
+                ])
+                for upstream_node in upstream_nodes:
+                    for test in manifest.get_tests_for_node(upstream_node):
+                        test_depends_on = set(
+                            manifest.nodes[test].depends_on_nodes
+                        )
+                        if (
+                            test_depends_on.issubset(upstream_nodes)
+                            and not upstream_nodes.issubset(test_depends_on)
+                            and test != node_id
+                        ):
+                            resolved_graph.add_edge(test, node_id)
 
-                    print(f"node: {node}")
-                    print(f"test: {test}")
-                    # print(f"test_predecessors: {test_predecessors}")
-                    print(f"test_depends_on: {test_depends_on}")
-                    print(f"node_predecessors: {node_predecessors}")
-                    print()
-
-                    if (
-                        test_depends_on.issubset(node_predecessors)
-                        and not node_predecessors.issubset(test_depends_on)
-                        and test != node
-                    ):
-                        resolved_graph.add_edge(test, node)
-
-        print()
-        print('resolved graph')
-        print(*resolved_graph.edges, sep='\n')
+        # swap in new dependency graph
         self.graph = resolved_graph
 
 
@@ -448,23 +439,20 @@ class Compiler:
             self.link_node(linker, node, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(linker, exposure, manifest)
-            # linker.add_node(exposure.unique_id)
 
         cycle = linker.find_cycles()
 
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
-        print()
-        print('raw graph')
-        print(*linker.graph.edges, sep='\n')
-        print()
         # create dep graph here
         linker.resolve_test_deps(manifest)
 
         cycle = linker.find_cycles()
 
         if cycle:
+            # TODO: this implementation error and not a user
+            # error, handle accordingly
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
     def compile(self, manifest: Manifest, write=True) -> Graph:
