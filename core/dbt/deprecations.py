@@ -134,7 +134,7 @@ class AdapterMacroDeprecation(DBTDeprecation):
 class PackageRedirectDeprecation(DBTDeprecation):
     _name = 'package-redirect'
     _description = '''\
-    The `{old_name}` package is deprecatd in favor of `{new_name}`. Please update
+    The `{old_name}` package is deprecated in favor of `{new_name}`. Please update
     your `packages.yml` configuration to use `{new_name}` instead.
     '''
 
