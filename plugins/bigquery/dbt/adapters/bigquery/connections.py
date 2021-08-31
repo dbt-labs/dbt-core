@@ -104,6 +104,8 @@ class BigQueryCredentials(Credentials):
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
+        'target_project': 'target_database',
+        'target_dataset': 'target_schema',
     }
 
     @property
