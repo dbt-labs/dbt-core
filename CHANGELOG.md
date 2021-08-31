@@ -22,6 +22,7 @@ Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - [@dbrtly](https://github.com/dbrtly) ([#3834](https://github.com/dbt-labs/dbt/pull/3834))
 - [@swanderz](https://github.com/swanderz) [#3623](https://github.com/fishtown-analytics/dbt/pull/3623)
+- [@JasonGluck](https://github.com/JasonGluck) ([#3582](https://github.com/dbt-labs/dbt/pull/3582))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
@@ -80,7 +81,6 @@ Contributors:
 - [@tconbeer](https://github.com/tconbeer) [#3468](https://github.com/dbt-labs/dbt/pull/3468))
 - [@JLDLaughlin](https://github.com/JLDLaughlin) ([#3473](https://github.com/dbt-labs/dbt/pull/3473))
 - [@jmriego](https://github.com/jmriego) ([#3526](https://github.com/dbt-labs/dbt/pull/3526))
-- [@JasonGluck](https://github.com/JasonGluck) ([#3582](https://github.com/dbt-labs/dbt/pull/3582))
 - [@danielefrigo](https://github.com/danielefrigo) ([#3547](https://github.com/dbt-labs/dbt/pull/3547))
 
 ## dbt 0.20.2 (Release TBD)
