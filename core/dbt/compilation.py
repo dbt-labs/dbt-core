@@ -158,13 +158,23 @@ class Linker:
                 resolved_graph.add_edge(predecessor, node)
                 predecessor_tests = manifest.get_tests_for_node(predecessor)
                 for test in predecessor_tests:
-                    test_predecessors = set([
-                        n for n in nx.traversal.bfs_tree(self.graph, test, reverse=True)
-                        if n != test
-                    ])
+                    # test_predecessors = set([
+                    #     n for n in nx.traversal.bfs_tree(self.graph, test, reverse=True)
+                    #     if n != test
+                    # ])
+                    test_depends_on = set(manifest.nodes[test].depends_on_nodes)
+
+                    print(f"node: {node}")
+                    print(f"test: {test}")
+                    # print(f"test_predecessors: {test_predecessors}")
+                    print(f"test_depends_on: {test_depends_on}")
+                    print(f"node_predecessors: {node_predecessors}")
+                    print()
+
                     if (
-                        test_predecessors.issubset(node_predecessors)
-                        and not node_predecessors.issubset(test_predecessors)
+                        test_depends_on.issubset(node_predecessors)
+                        and not node_predecessors.issubset(test_depends_on)
+                        and test != node
                     ):
                         resolved_graph.add_edge(test, node)
 
