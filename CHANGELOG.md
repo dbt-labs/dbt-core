@@ -1,6 +1,7 @@
 ## dbt 0.21.0 (Release TBD)
 
 ### Features
+- Add connect_timeout profile configuration for Postgres and Redshift adapters. ([#3581](https://github.com/dbt-labs/dbt/issues/3581), [#3582](https://github.com/dbt-labs/dbt/pull/3582))
 
 - Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
@@ -21,6 +22,7 @@ Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - [@dbrtly](https://github.com/dbrtly) ([#3834](https://github.com/dbt-labs/dbt/pull/3834))
 - [@swanderz](https://github.com/swanderz) [#3623](https://github.com/fishtown-analytics/dbt/pull/3623)
+- [@JasonGluck](https://github.com/JasonGluck) ([#3582](https://github.com/dbt-labs/dbt/pull/3582))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
