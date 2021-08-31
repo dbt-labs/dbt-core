@@ -64,7 +64,7 @@ class DepsTask(BaseTask):
                 fire_event(DepsStartPackageInstall(package_name=package_name))
                 package.install(self.config, renderer)
                 fire_event(DepsInstallInfo(version_name=package.nice_version_name()))
-                if source_type == 'hub':
+                if source_type == "hub":
                     version_latest = package.get_version_latest()
                     if version_latest != version:
                         packages_to_upgrade.append(package_name)
@@ -75,9 +75,8 @@ class DepsTask(BaseTask):
                     fire_event(DepsListSubdirectory(subdirectory=package.get_subdirectory()))
 
                 self.track_package_install(
-                    package_name=package_name,
-                    source_type=source_type,
-                    version=version)
+                    package_name=package_name, source_type=source_type, version=version
+                )
             if packages_to_upgrade:
                 fire_event(EmptyLine())
                 fire_event(DepsNotifyUpdatesAvailable(packages=packages_to_upgrade))
