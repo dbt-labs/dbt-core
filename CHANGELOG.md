@@ -1,12 +1,23 @@
 ## dbt 0.21.0 (Release TBD)
 
+### Features
+
+- Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
+  - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
+  - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
+
 ### Fixes
 
-- Fix bigquery-specific synonym for schema (dataset) for snapshots. ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#xxxx](https://github.com/dbt-labs/dbt/pull/xxxx tba))
+- Fix bigquery-specific synonym for schema (dataset) for snapshots. ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#3834](https://github.com/dbt-labs/dbt/pull/3834))
 
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
+- Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
+
+Contributors:
+- [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
+- [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
@@ -77,6 +88,7 @@ Contributors:
 ### Fixes
 
 - Fix bug in finding analysis nodes when applying analysis patch ([#3764](https://github.com/dbt-labs/dbt/issues/3764), [#3767](https://github.com/dbt-labs/dbt/pull/3767))
+- Rewrite built-in generic tests to support `column_name` expressions ([#3790](https://github.com/dbt-labs/dbt/issues/3790), [#3811](https://github.com/dbt-labs/dbt/pull/3811))
 
 Contributors:
 
