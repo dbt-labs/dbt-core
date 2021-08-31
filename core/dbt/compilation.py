@@ -150,10 +150,10 @@ class Linker:
     def resolve_test_deps(self, manifest: Manifest):
         resolved_graph = nx.DiGraph()
         for node in self.graph:
-            node_predecessors = [
+            node_predecessors = set([
                 n for n in nx.traversal.bfs_tree(self.graph, node, reverse=True)
                 if n != node
-            ]
+            ])
             for predecessor in node_predecessors:
                 resolved_graph.add_edge(predecessor, node)
                 predecessor_tests = manifest.get_tests_for_node(predecessor)
@@ -162,7 +162,10 @@ class Linker:
                         n for n in nx.traversal.bfs_tree(self.graph, test, reverse=True)
                         if n != test
                     ])
-                    if test_predecessors.issubset(set(node_predecessors)) and test != node:
+                    if (
+                        test_predecessors.issubset(node_predecessors)
+                        and not node_predecessors.issubset(test_predecessors)
+                    ):
                         resolved_graph.add_edge(test, node)
 
         print()
@@ -448,6 +451,11 @@ class Compiler:
         print()
         # create dep graph here
         linker.resolve_test_deps(manifest)
+
+        cycle = linker.find_cycles()
+
+        if cycle:
+            raise RuntimeError("Found a cycle: {}".format(cycle))
 
     def compile(self, manifest: Manifest, write=True) -> Graph:
         self.initialize()
