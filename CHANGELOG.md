@@ -6,6 +6,10 @@
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
   - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
 
+### Fixes
+
+- Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3691](https://github.com/dbt-labs/dbt/issues/3682))
+
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
@@ -15,6 +19,11 @@ Contributors:
 - [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
 
 ## dbt 0.21.0b2 (August 19, 2021)
+
+### Fixes
+
+
+## dbt 0.21.0b1 (August 03, 2021)
 
 ### Features
 

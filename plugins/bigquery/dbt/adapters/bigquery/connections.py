@@ -525,10 +525,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
         self._retry_and_handle(
             msg='drop dataset', conn=conn, fn=fn)
 
-    def create_dataset(self, database, schema):
+    def create_dataset(self, database, schema, opts={}):
         conn = self.get_thread_connection()
         client = conn.handle
         dataset = self.dataset(database, schema, conn)
+        dataset.default_encryption_configuration = opts['kms_key_name']
 
         def fn():
             return client.create_dataset(dataset, exists_ok=True)
