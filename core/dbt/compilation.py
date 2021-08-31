@@ -2,7 +2,7 @@ import os
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, cast, Optional
 
-import networkx as nx  # type: ignore
+import networkx as nx
 import sqlparse
 
 from dbt import flags
@@ -146,6 +146,29 @@ class Linker:
             data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
+
+    def resolve_test_deps(self, manifest: Manifest):
+        resolved_graph = nx.DiGraph()
+        for node in self.graph:
+            node_predecessors = [
+                n for n in nx.traversal.bfs_tree(self.graph, node, reverse=True)
+                if n != node
+            ]
+            for predecessor in node_predecessors:
+                resolved_graph.add_edge(predecessor, node)
+                predecessor_tests = manifest.get_tests_for_node(predecessor)
+                for test in predecessor_tests:
+                    test_predecessors = set([
+                        n for n in nx.traversal.bfs_tree(self.graph, test, reverse=True)
+                        if n != test
+                    ])
+                    if test_predecessors.issubset(set(node_predecessors)) and test != node:
+                        resolved_graph.add_edge(test, node)
+
+        print()
+        print('resolved graph')
+        print(*resolved_graph.edges, sep='\n')
+        self.graph = resolved_graph
 
 
 class Compiler:
@@ -390,25 +413,13 @@ class Compiler:
         self, linker: Linker, node: GraphMemberNode, manifest: Manifest
     ):
         linker.add_node(node.unique_id)
+
         for dependency in node.depends_on_nodes:
             if dependency in manifest.nodes:
-                if node.resource_type != NodeType.Test:
-                    test_dependencies = manifest.get_tests_for_node(dependency)
-                    for test_dependency in test_dependencies:
-                        if (
-                           test_dependency not in node.depends_on_nodes and
-                           node.unique_id not in manifest.nodes[test_dependency].depends_on_nodes
-                        ):
-                            linker.dependency(
-                                node.unique_id,
-                                test_dependency
-                            )
-
                 linker.dependency(
                     node.unique_id,
                     (manifest.nodes[dependency].unique_id)
                 )
-
             elif dependency in manifest.sources:
                 linker.dependency(
                     node.unique_id,
@@ -424,13 +435,19 @@ class Compiler:
             self.link_node(linker, node, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(linker, exposure, manifest)
-
-        print(linker.graph.edges)
+            # linker.add_node(exposure.unique_id)
 
         cycle = linker.find_cycles()
 
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
+
+        print()
+        print('raw graph')
+        print(*linker.graph.edges, sep='\n')
+        print()
+        # create dep graph here
+        linker.resolve_test_deps(manifest)
 
     def compile(self, manifest: Manifest, write=True) -> Graph:
         self.initialize()
