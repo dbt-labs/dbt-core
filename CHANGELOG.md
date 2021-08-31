@@ -16,8 +16,9 @@
 - Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
 
 Contributors:
-- [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
+- [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
+- [@dbrtly](https://github.com/dbrtly) ([#3834](https://github.com/dbt-labs/dbt/pull/3834))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
