@@ -150,9 +150,13 @@ class Linker:
     def resolve_test_deps(self, manifest: Manifest):
         resolved_graph = nx.DiGraph()
         for node_id in self.graph:
+            resolved_graph.add_node(node_id)
             for predecessor in self.graph.predecessors(node_id):
                 resolved_graph.add_edge(predecessor, node_id)
-            if manifest.nodes[node_id].resource_type != NodeType.Test:
+            if (
+                node_id in manifest.nodes and
+                manifest.nodes[node_id].resource_type != NodeType.Test
+            ):
                 all_upstream_nodes = nx.traversal.bfs_tree(
                     self.graph, node_id, reverse=True
                 )
@@ -170,7 +174,6 @@ class Linker:
                             and test != node_id
                         ):
                             resolved_graph.add_edge(test, node_id)
-
         # swap in new dependency graph
         self.graph = resolved_graph
 
