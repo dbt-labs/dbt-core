@@ -271,10 +271,12 @@ def parse_from_definition(
 
 def parse_from_selectors_definition(
     source: SelectorFile
-) -> Dict[str, SelectionSpec]:
-    result: Dict[str, SelectionSpec] = {}
+) -> Dict[str, Dict[str, Union[SelectionSpec, bool]]]:
+    result: Dict[str, Dict[str, Union[SelectionSpec, bool]]] = {}
     selector: SelectorDefinition
     for selector in source.selectors:
-        result[selector.name] = parse_from_definition(selector.definition,
-                                                      rootlevel=True)
+        result[selector.name] = {
+            "default": selector.default,
+            "definition": parse_from_definition(selector.definition, rootlevel=True)
+        }
     return result
