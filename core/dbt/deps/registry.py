@@ -30,9 +30,13 @@ class RegistryPackageMixin:
 
 
 class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
-    def __init__(self, package: str, version: str) -> None:
+    def __init__(self,
+                 package: str,
+                 version: str,
+                 version_latest: str) -> None:
         super().__init__(package)
         self.version = version
+        self.version_latest = version_latest
 
     @property
     def name(self):
@@ -43,6 +47,9 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
 
     def get_version(self):
         return self.version
+
+    def get_version_latest(self):
+        return self.version_latest
 
     def nice_version_name(self):
         return 'version {}'.format(self.version)
@@ -124,6 +131,7 @@ class RegistryUnpinnedPackage(
             available,
             self.install_prerelease
         )
+        available_latest = installable[-1]
 
         # for now, pick a version and then recurse. later on,
         # we'll probably want to traverse multiple options
@@ -132,4 +140,5 @@ class RegistryUnpinnedPackage(
         target = semver.resolve_to_specific_version(range_, installable)
         if not target:
             package_version_not_found(self.package, range_, installable)
-        return RegistryPinnedPackage(package=self.package, version=target)
+        return RegistryPinnedPackage(package=self.package, version=target,
+                                     version_latest=available_latest)

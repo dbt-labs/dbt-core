@@ -386,6 +386,91 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(c_pinned.version, '0.1.4a1')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
+    def test_get_version_latest_prelease_true(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='>0.1.0',
+            install_prerelease=True
+        )
+        b_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='<0.1.4'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='0',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='4',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(c_pinned.version, '0.1.3')
+        self.assertEqual(c_pinned.get_version_latest(), '0.1.4a1')
+        self.assertEqual(c_pinned.source_type(), 'hub')
+
+    def test_get_version_latest_prelease_false(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='>0.1.0',
+            install_prerelease=False
+        )
+        b_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='<0.1.4'
+        )
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        self.assertEqual(c.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            c.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='>',
+                    minor='1',
+                    patch='0',
+                    prerelease=None,
+                ),
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='<',
+                    minor='1',
+                    patch='4',
+                    prerelease=None,
+                ),
+            ]
+        )
+
+        c_pinned = c.resolved()
+        self.assertEqual(c_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(c_pinned.version, '0.1.3')
+        self.assertEqual(c_pinned.get_version_latest(), '0.1.3')
+        self.assertEqual(c_pinned.source_type(), 'hub')
 
 class MockRegistry:
     def __init__(self, packages):
