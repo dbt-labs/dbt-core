@@ -115,7 +115,7 @@ def test_parse_simple():
         childrens_parents=False,
         children_depth=None,
         parents_depth=None,
-    ) == parsed['tagged_foo']
+    ) == parsed['tagged_foo']["definition"]
 
 
 def test_parse_simple_childrens_parents():
@@ -141,7 +141,7 @@ def test_parse_simple_childrens_parents():
         childrens_parents=True,
         children_depth=None,
         parents_depth=None,
-    ) == parsed['tagged_foo']
+    ) == parsed['tagged_foo']["definition"]
 
 
 def test_parse_simple_arguments_with_modifiers():
@@ -169,7 +169,7 @@ def test_parse_simple_arguments_with_modifiers():
         childrens_parents=False,
         children_depth=2,
         parents_depth=None,
-    ) == parsed['configured_view']
+    ) == parsed['configured_view']["definition"]
 
 
 def test_parse_union():
@@ -188,7 +188,7 @@ def test_parse_union():
     assert Union(
         Criteria(method=MethodName.Config, value='view', method_arguments=['materialized']),
         Criteria(method=MethodName.Tag, value='foo', method_arguments=[])
-    ) == parsed['views-or-foos']
+    ) == parsed['views-or-foos']["definition"]
 
 
 def test_parse_intersection():
@@ -208,7 +208,7 @@ def test_parse_intersection():
     assert Intersection(
         Criteria(method=MethodName.Config, value='view', method_arguments=['materialized']),
         Criteria(method=MethodName.Tag, value='foo', method_arguments=[]),
-    ) == parsed['views-and-foos']
+    ) == parsed['views-and-foos']["definition"]
 
 
 def test_parse_union_excluding():
@@ -232,7 +232,7 @@ def test_parse_union_excluding():
             Criteria(method=MethodName.Tag, value='foo', method_arguments=[])
         ),
         Criteria(method=MethodName.Tag, value='bar', method_arguments=[]),
-    ) == parsed['views-or-foos-not-bars']
+    ) == parsed['views-or-foos-not-bars']["definition"]
 
 
 def test_parse_yaml_complex():
@@ -272,7 +272,7 @@ def test_parse_yaml_complex():
     assert Union(
         Criteria(method=MethodName.Tag, value='nightly'),
         Criteria(method=MethodName.Tag, value='weeknights_only'),
-    ) == parsed['weeknights']
+    ) == parsed['weeknights']["definition"]
 
     assert Union(
         Intersection(
@@ -300,4 +300,4 @@ def test_parse_yaml_complex():
                 ),
             ),
         ),
-    ) == parsed['test_name']
+    ) == parsed['test_name']["definition"]

@@ -29,7 +29,7 @@ Validator Error:
 """
 
 
-class SelectorConfig(Dict[str, SelectionSpec]):
+class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
 
     @classmethod
     def selectors_from_dict(cls, data: Dict[str, Any]) -> 'SelectorConfig':

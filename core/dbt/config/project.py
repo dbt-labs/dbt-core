@@ -651,15 +651,15 @@ class Project:
                 f'Could not find selector named {name}, expected one of '
                 f'{list(self.selectors)}'
             )
-        return self.selectors[name]
+        return self.selectors[name]["definition"]
 
     def get_default_selector(self) -> Union[SelectionSpec, None]:
         """This function fetch the default selector to use on `dbt run` (if any)
         :return: either a selector if default is set or None
         :rtype: Union[SelectionSpec, None]
         """
-        for selector_name, selector in self.manifest_selectors.items():
-            if selector["default"]:
+        for selector_name, selector in self.selectors.items():
+            if selector["default"] is True:
                 name = selector_name
                 return self.get_selector(name)
 
