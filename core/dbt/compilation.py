@@ -2,7 +2,7 @@ import os
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, cast, Optional
 
-import networkx as nx
+import networkx as nx  # type: ignore
 import sqlparse
 
 from dbt import flags
@@ -169,9 +169,9 @@ class Linker:
                             manifest.nodes[test].depends_on_nodes
                         )
                         if (
-                            test_depends_on.issubset(upstream_nodes)
-                            and not upstream_nodes.issubset(test_depends_on)
-                            and test != node_id
+                            test_depends_on.issubset(upstream_nodes) and
+                            not upstream_nodes.issubset(test_depends_on) and
+                            test != node_id
                         ):
                             resolved_graph.add_edge(test, node_id)
         # swap in new dependency graph

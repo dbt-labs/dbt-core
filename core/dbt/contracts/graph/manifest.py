@@ -1034,8 +1034,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return [
             node.unique_id
             for _, node in self.nodes.items()
-            if node.resource_type == NodeType.Test
-            and unique_id in node.depends_on_nodes
+            if node.resource_type == NodeType.Test and
+            unique_id in node.depends_on_nodes
         ]
 
     # end of methods formerly in ParseResult
