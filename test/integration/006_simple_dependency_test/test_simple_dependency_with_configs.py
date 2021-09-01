@@ -22,7 +22,7 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'git': 'https://github.com/dbt-labs/dbt-integration-project',
                     'revision': 'with-configs-0.17.0',
                 },
             ]
@@ -58,7 +58,7 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'git': 'https://github.com/dbt-labs/dbt-integration-project',
                     'revision': 'with-configs-0.17.0',
                 },
             ]

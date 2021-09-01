@@ -126,7 +126,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # this uses the updated config to set all the right things in the node.
             # if there are hooks present, it WILL render jinja. Will need to change
             # when the experimental parser supports hooks
-            self.update_parsed_node(node, config)
+            self.update_parsed_node_config(node, config)
 
             # update the unrendered config with values from the file.
             # values from yaml files are in there already

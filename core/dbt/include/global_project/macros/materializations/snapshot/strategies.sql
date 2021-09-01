@@ -75,7 +75,7 @@
         table instead of assuming that the user-supplied {{ updated_at }}
         will be present in the historical data.
 
-        See https://github.com/fishtown-analytics/dbt/issues/2350
+        See https://github.com/dbt-labs/dbt/issues/2350
     */ #}
     {% set row_changed_expr -%}
         ({{ snapshotted_rel }}.dbt_valid_from < {{ current_rel }}.{{ updated_at }})

@@ -148,6 +148,7 @@ class ParsedNodeMixins(dbtClassMixin):
         """Given a ParsedNodePatch, add the new information to the node."""
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
+        # Note: config should already be updated
         self.patch_path: Optional[str] = patch.file_id
         # update created_at so process_docs will run in partial parsing
         self.created_at = int(time.time())
@@ -165,9 +166,6 @@ class ParsedNodeMixins(dbtClassMixin):
 
     def get_materialization(self):
         return self.config.materialized
-
-    def local_vars(self):
-        return self.config.vars
 
 
 @dataclass
@@ -203,6 +201,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: int = field(default_factory=lambda: int(time.time()))
+    config_call_dict: Dict[str, Any] = field(default_factory=dict)
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
         if (os.path.basename(self.path) ==
@@ -228,6 +227,11 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
     def _serialize(self):
         return self.to_dict()
+
+    def __post_serialize__(self, dct):
+        if 'config_call_dict' in dct:
+            del dct['config_call_dict']
+        return dct
 
     @classmethod
     def _deserialize(cls, dct: Dict[str, int]):
@@ -258,10 +262,16 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return cls.from_dict(dct)
 
     def _persist_column_docs(self) -> bool:
-        return bool(self.config.persist_docs.get('columns'))
+        if hasattr(self.config, 'persist_docs'):
+            assert isinstance(self.config, NodeConfig)
+            return bool(self.config.persist_docs.get('columns'))
+        return False
 
     def _persist_relation_docs(self) -> bool:
-        return bool(self.config.persist_docs.get('relation'))
+        if hasattr(self.config, 'persist_docs'):
+            assert isinstance(self.config, NodeConfig)
+            return bool(self.config.persist_docs.get('relation'))
+        return False
 
     def same_body(self: T, other: T) -> bool:
         return self.raw_sql == other.raw_sql
@@ -411,7 +421,9 @@ class HasTestMetadata(dbtClassMixin):
 @dataclass
 class ParsedDataTestNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
-    config: TestConfig = field(default_factory=TestConfig)
+    # Was not able to make mypy happy and keep the code working. We need to
+    # refactor the various configs.
+    config: TestConfig = field(default_factory=TestConfig)  # type: ignore
 
 
 @dataclass
@@ -419,7 +431,9 @@ class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
     # keep this in sync with CompiledSchemaTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
-    config: TestConfig = field(default_factory=TestConfig)
+    # Was not able to make mypy happy and keep the code working. We need to
+    # refactor the various configs.
+    config: TestConfig = field(default_factory=TestConfig)  # type: ignore
 
     def same_contents(self, other) -> bool:
         if other is None:
@@ -456,6 +470,7 @@ class ParsedPatch(HasYamlMetadata, Replaceable):
     description: str
     meta: Dict[str, Any]
     docs: Docs
+    config: Dict[str, Any]
 
 
 # The parsed node update is only the 'patch', not the test. The test became a
@@ -486,9 +501,6 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
     created_at: int = field(default_factory=lambda: int(time.time()))
-
-    def local_vars(self):
-        return {}
 
     def patch(self, patch: ParsedMacroPatch):
         self.patch_path: Optional[str] = patch.file_id

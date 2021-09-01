@@ -19,6 +19,7 @@ class PostgresCredentials(Credentials):
     user: str
     port: Port
     password: str  # on postgres the password is mandatory
+    connect_timeout: int = 10
     role: Optional[str] = None
     search_path: Optional[str] = None
     keepalives_idle: int = 0  # 0 means to use the default value
@@ -116,7 +117,7 @@ class PostgresConnectionManager(SQLConnectionManager):
                 host=credentials.host,
                 password=credentials.password,
                 port=credentials.port,
-                connect_timeout=10,
+                connect_timeout=credentials.connect_timeout,
                 **kwargs)
 
             if credentials.role:

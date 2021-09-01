@@ -136,7 +136,7 @@ class TestAgateHelper(unittest.TestCase):
 
     def test_nocast_string_types(self):
         # String fields should not be coerced into a representative type
-        # See: https://github.com/fishtown-analytics/dbt/issues/2984
+        # See: https://github.com/dbt-labs/dbt/issues/2984
 
         column_names = ['a', 'b', 'c', 'd', 'e']
         result_set = [

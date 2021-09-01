@@ -1,0 +1,24 @@
+name: "Set up postgres (macos)"
+description: "Set up postgres service on macos vm for dbt integration tests"
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        brew services start postgresql
+        echo "Check PostgreSQL service is running"
+        i=10
+        COMMAND='pg_isready'
+        while [ $i -gt -1 ]; do
+            if [ $i == 0 ]; then
+                echo "PostgreSQL service not ready, all attempts exhausted"
+                exit 1
+            fi
+            echo "Check PostgreSQL service status"
+            eval $COMMAND && break
+            echo "PostgreSQL service not ready, wait 10 more sec, attempts left: $i"
+            sleep 10
+            ((i--))
+        done
+        createuser -s postgres
+        bash ${{ github.action_path }}/setup_db.sh

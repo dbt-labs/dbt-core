@@ -1,5 +1,5 @@
 {% snapshot snapshot_actual %}
-    {# this custom strategy doesn't exist  in the 'dbt' package #}
+    {# this custom strategy does not exist  in the 'dbt' package #}
     {{
         config(
             target_database=var('target_database', database),
