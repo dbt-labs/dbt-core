@@ -130,7 +130,7 @@ class DebugTask(BaseTask):
             print(red(f"{(pluralize(len(self.messages), 'check'))} failed:"))
         else:
             print(green('All checks passed!'))
-        
+
         for message in self.messages:
             print(message)
             print('')
@@ -328,8 +328,8 @@ class DebugTask(BaseTask):
         if self.project_fail_details == FILE_NOT_FOUND:
             return
         msg = (
-            f'Project loading failed for the following reason: ' \
-            f'\n{self.project_fail_details} ' \
+            f'Project loading failed for the following reason:'
+            f'\n{self.project_fail_details}'
             f'\n'
         )
         self.messages.append(msg)
@@ -342,8 +342,8 @@ class DebugTask(BaseTask):
         if self.profile_fail_details == FILE_NOT_FOUND:
             return
         msg = (
-            f'Profile loading failed for the following reason: ' \
-            f'\n{self.profile_fail_details} ' \
+            f'Profile loading failed for the following reason:'
+            f'\n{self.profile_fail_details}'
             f'\n'
         )
         self.messages.append(msg)
