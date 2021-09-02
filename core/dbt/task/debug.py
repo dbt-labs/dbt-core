@@ -16,6 +16,7 @@ from dbt.context.target import generate_target_context
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
+from dbt.utils import pluralize
 from dbt.version import get_installed_version
 
 from dbt.task.base import BaseTask, get_nearest_project_dir
@@ -126,9 +127,10 @@ class DebugTask(BaseTask):
         self.test_connection()
 
         if self.any_failure:
-            print(red('{}/4 checks failed'.format(len(self.messages))))
+            print(red(f"{(pluralize(len(self.messages), 'check'))} failed:"))
         else:
             print(green('All checks passed!'))
+        
         for message in self.messages:
             print(message)
             print('')
@@ -325,9 +327,12 @@ class DebugTask(BaseTask):
         self.any_failure = True
         if self.project_fail_details == FILE_NOT_FOUND:
             return
-        print('Project loading failed for the following reason:')
-        print(self.project_fail_details)
-        print('')
+        msg = (
+            f'Project loading failed for the following reason: ' \
+            f'\n{self.project_fail_details} ' \
+            f'\n'
+        )
+        self.messages.append(msg)
 
     def _log_profile_fail(self):
         if not self.profile_fail_details:
@@ -336,9 +341,12 @@ class DebugTask(BaseTask):
         self.any_failure = True
         if self.profile_fail_details == FILE_NOT_FOUND:
             return
-        print('Profile loading failed for the following reason:')
-        print(self.profile_fail_details)
-        print('')
+        msg = (
+            f'Profile loading failed for the following reason: ' \
+            f'\n{self.profile_fail_details} ' \
+            f'\n'
+        )
+        self.messages.append(msg)
 
     @staticmethod
     def attempt_connection(profile):
