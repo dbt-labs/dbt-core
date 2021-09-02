@@ -827,6 +827,7 @@ def _build_list_subparser(subparsers, base_subparser):
     sub.add_argument('--output',
                      choices=['json', 'name', 'path', 'selector'],
                      default='selector')
+    sub.add_argument('--output-keys')
 
     sub.add_argument(
         '-m',
