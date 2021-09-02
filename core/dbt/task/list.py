@@ -44,7 +44,6 @@ class ListTask(GraphRunnableTask):
 
     def __init__(self, args, config):
         super().__init__(args, config)
-        self.args.single_threaded = True
         if self.args.models:
             if self.args.select:
                 raise RuntimeException(
