@@ -1,8 +1,14 @@
 ## dbt 0.21.0 (Release TBD)
 
+### Fixes
+- `dbt debug` shows a summary of whether all checks passed or not ([3831](https://github.com/dbt-labs/dbt/issues/3831), [3832](https://github.com/dbt-labs/dbt/issues/3831))
+
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
+
+Contributors: 
+- [@joellabes](https://github.com/joellabes) ([#3669](https://github.com/dbt-labs/dbt/pull/3669))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
