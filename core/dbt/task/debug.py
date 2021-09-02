@@ -123,7 +123,7 @@ class DebugTask(BaseTask):
         if self.any_failure:
             print(red(f"{(pluralize(len(self.messages), 'check'))} failed:"))
         else:
-            print(green('All checks passed!'))
+            print(green("All checks passed!"))
 
         for message in self.messages:
             print(message)
@@ -312,9 +312,9 @@ class DebugTask(BaseTask):
         if self.project_fail_details == FILE_NOT_FOUND:
             return
         msg = (
-            f'Project loading failed for the following reason:'
-            f'\n{self.project_fail_details}'
-            f'\n'
+            f"Project loading failed for the following reason:"
+            f"\n{self.project_fail_details}"
+            f"\n"
         )
         self.messages.append(msg)
 
@@ -326,9 +326,9 @@ class DebugTask(BaseTask):
         if self.profile_fail_details == FILE_NOT_FOUND:
             return
         msg = (
-            f'Profile loading failed for the following reason:'
-            f'\n{self.profile_fail_details}'
-            f'\n'
+            f"Profile loading failed for the following reason:"
+            f"\n{self.profile_fail_details}"
+            f"\n"
         )
         self.messages.append(msg)
 
@@ -364,7 +364,7 @@ class DebugTask(BaseTask):
         print("Connection:")
         for k, v in self.profile.credentials.connection_info():
             print("  {}: {}".format(k, v))
-        print('  Connection test: [{}]'.format(self._connection_result()))
+        print("  Connection test: [{}]".format(self._connection_result()))
         print("")
 
     @classmethod
