@@ -125,11 +125,11 @@ class ListTask(GraphRunnableTask):
             yield json.dumps(
                 {
                     k: v
-                if (
-                    k in self.args.output_keys
-                    if self.args.output_keys is not None
-                    else k in self.ALLOWED_KEYS
-                )
+                    for k, v in node.to_dict(omit_none=False).items()
+                    if (
+                        k in self.args.output_keys
+                        if self.args.output_keys is not None
+                        else k in self.ALLOWED_KEYS
                     )
                 }
             )
