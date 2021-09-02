@@ -291,7 +291,6 @@ class RemoteListTask(
     METHOD_NAME = 'list'
 
     def set_args(self, params: RPCListParameters) -> None:
-
         self.args.output = params.output
         self.args.output_keys = params.output_keys
         self.args.resource_types = self._listify(params.resource_types)
@@ -299,6 +298,7 @@ class RemoteListTask(
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         self.args.select = self._listify(params.select)
+        self.args.single_threaded = True
 
         if self.args.models:
             if self.args.select:
