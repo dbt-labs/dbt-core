@@ -13,6 +13,6 @@ having count(*) > 1
 
 
 {% test unique(model, column_name) %}
-    {% set macro = adapter.dispatch('test_unique') %}
+    {% set macro = adapter.dispatch('test_unique', 'dbt') %}
     {{ macro(model, column_name) }}
 {% endtest %}
