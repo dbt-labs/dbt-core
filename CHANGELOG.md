@@ -1,6 +1,7 @@
 ## dbt 0.21.0 (Release TBD)
 
 ### Features
+
 - Add connect_timeout profile configuration for Postgres and Redshift adapters. ([#3581](https://github.com/dbt-labs/dbt/issues/3581), [#3582](https://github.com/dbt-labs/dbt/pull/3582))
 - Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
@@ -8,16 +9,19 @@
 - Customize ls task JSON output by adding new flag `--output-keys` ([#3778](https://github.com/dbt-labs/dbt/issues/3778), [#3395](https://github.com/dbt-labs/dbt/issues/3395))
 
 ### Fixes
+
 - Support BigQuery-specific aliases `target_dataset` and `target_project` in snapshot configs ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#3834](https://github.com/dbt-labs/dbt/pull/3834))
-- `dbt debug` shows a summary of whether all checks passed or not ([3831](https://github.com/dbt-labs/dbt/issues/3831), [3832](https://github.com/dbt-labs/dbt/issues/3831))
+- `dbt debug` shows a summary of whether all checks passed or not ([#3831](https://github.com/dbt-labs/dbt/issues/3831), [#3832](https://github.com/dbt-labs/dbt/issues/3831))
+- Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848))
 
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 - Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
-- Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`.  ([#3622](https://github.com/fishtown-analytics/dbt/issues/3622), [#3623](https://github.com/fishtown-analytics/dbt/pull/3623))
+- Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/fishtown-analytics/dbt/issues/3622), [#3623](https://github.com/fishtown-analytics/dbt/pull/3623))
 
 Contributors:
+
 - [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
 - [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - [@dbrtly](https://github.com/dbrtly) ([#3834](https://github.com/dbt-labs/dbt/pull/3834))
