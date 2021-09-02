@@ -113,7 +113,11 @@ class ListTask(GraphRunnableTask):
             yield json.dumps({
                 k: v
                 for k, v in node.to_dict(omit_none=False).items()
-                if k in self.ALLOWED_KEYS
+                if (
+                    k in self.args.output_keys
+                    if self.args.output_keys is not None
+                    else k in self.ALLOWED_KEYS
+                )
             })
 
     def generate_paths(self):

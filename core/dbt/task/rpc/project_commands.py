@@ -293,6 +293,7 @@ class RemoteListTask(
     def set_args(self, params: RPCListParameters) -> None:
 
         self.args.output = params.output
+        self.args.output_keys = params.output_keys
         self.args.resource_types = self._listify(params.resource_types)
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
