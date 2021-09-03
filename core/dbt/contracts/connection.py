@@ -139,7 +139,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         raise NotImplementedError("unique_field not implemented for base credentials class")
 
     def hashed_unique_field(self) -> str:
-        return hashlib.md5(self.unique_field.encode('utf-8')).hexdigest()
+        return hashlib.md5(self.unique_field.encode("utf-8")).hexdigest()
 
     def connection_info(self, *, with_aliases: bool = False) -> Iterable[Tuple[str, Any]]:
         self, *, with_aliases: bool = False
