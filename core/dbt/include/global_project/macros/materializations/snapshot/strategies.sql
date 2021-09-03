@@ -39,7 +39,6 @@
   {{ adapter.dispatch('snapshot_hash_arguments', 'dbt')(args) }}
 {%- endmacro %}
 
-
 {% macro default__snapshot_hash_arguments(args) -%}
     md5({%- for arg in args -%}
         coalesce(cast({{ arg }} as varchar ), '')
@@ -96,7 +95,6 @@
 {% macro snapshot_string_as_time(timestamp) -%}
     {{ adapter.dispatch('snapshot_string_as_time', 'dbt')(timestamp) }}
 {%- endmacro %}
-
 
 {% macro default__snapshot_string_as_time(timestamp) %}
     {% do exceptions.raise_not_implemented(

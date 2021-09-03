@@ -1,4 +1,3 @@
-
 {% macro default__test_relationships(model, column_name, to, field) %}
 
 with child as (

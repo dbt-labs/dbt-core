@@ -12,6 +12,7 @@
     node: The available node that an alias is being generated for, or none
 
 #}
+
 {% macro generate_alias_name(custom_alias_name=none, node=none) -%}
     {% do return(adapter.dispatch('generate_alias_name', 'dbt')(custom_alias_name, node)) %}
 {%- endmacro %}

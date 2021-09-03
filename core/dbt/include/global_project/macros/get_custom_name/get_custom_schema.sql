@@ -14,7 +14,7 @@
     node: The node the schema is being generated for
 
 #}
-{% macro generate_schema_name(custom_schema_name, node) -%}
+{% macro generate_schema_name(custom_schema_name=none, node=none) -%}
     {{ return(adapter.dispatch('generate_schema_name', 'dbt')(custom_schema_name, node)) }}
 {% endmacro %}
 

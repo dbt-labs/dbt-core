@@ -4,17 +4,6 @@
   {{ adapter.dispatch('get_merge_sql', 'dbt')(target, source, unique_key, dest_columns, predicates) }}
 {%- endmacro %}
 
-
-{% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-  {{ adapter.dispatch('get_delete_insert_merge_sql', 'dbt')(target, source, unique_key, dest_columns) }}
-{%- endmacro %}
-
-
-{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
-  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates, include_sql_header) }}
-{%- endmacro %}
-
-
 {% macro default__get_merge_sql(target, source, unique_key, dest_columns, predicates) -%}
     {%- set predicates = [] if predicates is none else [] + predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
@@ -52,18 +41,11 @@
 {% endmacro %}
 
 
-{% macro get_quoted_csv(column_names) %}
-    {% set quoted = [] %}
-    {% for col in column_names -%}
-        {%- do quoted.append(adapter.quote(col)) -%}
-    {%- endfor %}
+{% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
+  {{ adapter.dispatch('get_delete_insert_merge_sql', 'dbt')(target, source, unique_key, dest_columns) }}
+{%- endmacro %}
 
-    {%- set dest_cols_csv = quoted | join(', ') -%}
-    {{ return(dest_cols_csv) }}
-{% endmacro %}
-
-
-{% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
+{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
 
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
 
@@ -83,10 +65,10 @@
 
 {%- endmacro %}
 
-{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-    {{ common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) }}
-{% endmacro %}
 
+{% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
+  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates, include_sql_header) }}
+{%- endmacro %}
 
 {% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header) -%}
     {%- set predicates = [] if predicates is none else [] + predicates -%}
