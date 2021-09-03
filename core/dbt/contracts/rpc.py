@@ -72,6 +72,7 @@ class RPCListParameters(RPCParameters):
     select: Union[None, str, List[str]] = None
     selector: Optional[str] = None
     output: Optional[str] = 'json'
+    output_keys: Optional[List[str]] = None
 
 
 @dataclass
