@@ -38,6 +38,10 @@ class PostgresCredentials(Credentials):
     def type(self):
         return 'postgres'
 
+    @property
+    def unique_field(self):
+        return self.host
+
     def _connection_keys(self):
         return ('host', 'port', 'user', 'database', 'schema', 'search_path',
                 'keepalives_idle', 'sslmode')
