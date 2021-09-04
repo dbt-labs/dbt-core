@@ -268,6 +268,12 @@ class DBTIntegrationTest(unittest.TestCase):
             }
         }
 
+    def bigquery_alternate_profile(self):
+        bigquery_profile = self.bigquery_profile()
+        execution_project = self.alternative_database
+        bigquery_profile['test']['outputs']['default2']['execution_project'] = execution_project
+        return bigquery_profile
+
     def presto_profile(self):
         return {
             'config': {
@@ -329,6 +335,8 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.snowflake_profile()
         elif adapter_type == 'bigquery':
             return self.bigquery_profile()
+        elif adapter_type == 'bigquery_alternate':
+            return self.bigquery_alternate_profile()
         elif adapter_type == 'redshift':
             return self.redshift_profile()
         elif adapter_type == 'presto':
