@@ -58,6 +58,10 @@ class SnowflakeCredentials(Credentials):
     def type(self):
         return 'snowflake'
 
+    @property
+    def unique_field(self):
+        return self.account
+
     def _connection_keys(self):
         return (
             'account', 'user', 'database', 'schema', 'warehouse', 'role',

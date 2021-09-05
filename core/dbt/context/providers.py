@@ -1243,7 +1243,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def pre_hooks(self) -> List[Dict[str, Any]]:
-        if isinstance(self.model, ParsedSourceDefinition):
+        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
         return [
             h.to_dict(omit_none=True) for h in self.model.config.pre_hook
@@ -1251,7 +1251,7 @@ class ModelContext(ProviderContext):
 
     @contextproperty
     def post_hooks(self) -> List[Dict[str, Any]]:
-        if isinstance(self.model, ParsedSourceDefinition):
+        if self.model.resource_type in [NodeType.Source, NodeType.Test]:
             return []
         return [
             h.to_dict(omit_none=True) for h in self.model.config.post_hook

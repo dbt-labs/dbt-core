@@ -81,7 +81,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': [],
                     'pre-hook': [],
                     'quoting': {},
-                    'vars': {},
                     'column_types': {},
                     'persist_docs': {},
                     'target_database': self.default_database,
@@ -95,6 +94,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'alias': None,
                     'check_cols': None,
                     'on_schema_change': 'ignore',
+                    'meta': {},
                 },
                 'unique_id': 'snapshot.test.my_snapshot',
                 'original_file_path': normalize('snapshots/snapshot.sql'),
@@ -121,7 +121,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': [],
                     'pre-hook': [],
                     'quoting': {},
-                    'vars': {},
                     'column_types': {},
                     'persist_docs': {},
                     'full_refresh': None,
@@ -129,6 +128,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'database': None,
                     'schema': None,
                     'alias': None,
+                    'meta': {},
                 },
                 'unique_id': 'analysis.test.a',
                 'original_file_path': normalize('analyses/a.sql'),
@@ -156,7 +156,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'tags': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {},
                         'column_types': {},
                         'persist_docs': {},
                         'full_refresh': None,
@@ -164,6 +163,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'database': None,
                         'schema': None,
                         'alias': None,
+                        'meta': {},
                     },
                     'original_file_path': normalize('models/ephemeral.sql'),
                     'unique_id': 'model.test.ephemeral',
@@ -182,7 +182,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'tags': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {},
                         'column_types': {},
                         'persist_docs': {},
                         'full_refresh': None,
@@ -191,6 +190,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'database': None,
                         'schema': None,
                         'alias': None,
+                        'meta': {},
                     },
                     'original_file_path': normalize('models/incremental.sql'),
                     'unique_id': 'model.test.incremental',
@@ -209,7 +209,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'tags': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {},
                         'column_types': {},
                         'persist_docs': {},
                         'full_refresh': None,
@@ -217,6 +216,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'database': None,
                         'schema': None,
                         'alias': None,
+                        'meta': {},
                     },
                     'original_file_path': normalize('models/sub/inner.sql'),
                     'unique_id': 'model.test.inner',
@@ -235,7 +235,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'tags': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {},
                         'column_types': {},
                         'persist_docs': {},
                         'full_refresh': None,
@@ -243,6 +242,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'database': None,
                         'schema': None,
                         'alias': None,
+                        'meta': {},
                     },
                     'original_file_path': normalize('models/outer.sql'),
                     'unique_id': 'model.test.outer',
@@ -272,7 +272,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'tags': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {},
                         'column_types': {},
                         'persist_docs': {},
                         'full_refresh': None,
@@ -280,6 +279,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'database': None,
                         'schema': None,
                         'alias': None,
+                        'meta': {},
                     },
                     'unique_id': 'model.test.ephemeral',
                     'original_file_path': normalize('models/ephemeral.sql'),
@@ -329,7 +329,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'tags': [],
                     'pre-hook': [],
                     'quoting': {},
-                    'vars': {},
                     'column_types': {},
                     'persist_docs': {},
                     'quote_columns': False,
@@ -338,6 +337,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'database': None,
                     'schema': None,
                     'alias': None,
+                    'meta': {},
                 },
                 'unique_id': 'seed.test.seed',
                 'original_file_path': normalize('data/seed.csv'),
@@ -361,7 +361,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'test',
-                        'post-hook': [],
                         'severity': 'ERROR',
                         'store_failures': None,
                         'warn_if': '!= 0',
@@ -370,16 +369,10 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'where': None,
                         'limit': None,
                         'tags': [],
-                        'pre-hook': [],
-                        'quoting': {},
-                        'vars': {},
-                        'column_types': {},
-                        'persist_docs': {},
-                        'full_refresh': None,
-                        'on_schema_change': 'ignore',
                         'database': None,
                         'schema': 'dbt_test__audit',
                         'alias': None,
+                        'meta': {},
                     },
                     'unique_id': 'test.test.not_null_outer_id.e5db1d4aad',
                     'original_file_path': normalize('models/schema.yml'),
@@ -394,7 +387,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'test',
-                        'post-hook': [],
                         'severity': 'ERROR',
                         'store_failures': None,
                         'warn_if': '!= 0',
@@ -403,16 +395,10 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'where': None,
                         'limit': None,
                         'tags': [],
-                        'pre-hook': [],
-                        'quoting': {},
-                        'vars': {},
-                        'column_types': {},
-                        'persist_docs': {},
-                        'full_refresh': None,
-                        'on_schema_change': 'ignore',
                         'database': None,
                         'schema': 'dbt_test__audit',
                         'alias': None,
+                        'meta': {},
                     },
                     'unique_id': 'test.test.t',
                     'original_file_path': normalize('tests/t.sql'),
@@ -427,7 +413,6 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'test',
-                        'post-hook': [],
                         'severity': 'ERROR',
                         'store_failures': None,
                         'warn_if': '!= 0',
@@ -436,16 +421,10 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'where': None,
                         'limit': None,
                         'tags': [],
-                        'pre-hook': [],
-                        'quoting': {},
-                        'vars': {},
-                        'column_types': {},
-                        'persist_docs': {},
-                        'full_refresh': None,
-                        'on_schema_change': 'ignore',
                         'database': None,
                         'schema': 'dbt_test__audit',
                         'alias': None,
+                        'meta': {},
                     },
                     'unique_id': 'test.test.unique_outer_id.615b011076',
                     'original_file_path': normalize('models/schema.yml'),
@@ -506,6 +485,45 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.assertEqual(set(results), {'test.incremental'})
 
         self.run_dbt_ls(['--select', 'config.incremental_strategy:insert_overwrite'], expect_pass=True)
+    
+    def expect_selected_keys(self):
+        """Expect selected fields of the the selected model
+        """
+        expectations = [{
+            'database': self.default_database, 
+            'schema': self.unique_schema(), 
+            'alias': 'inner'
+            }]
+        results = self.run_dbt_ls(['--model', 'inner', '--output', 'json', '--output-keys', 'database,schema,alias'])
+        self.assertEqual(len(results), len(expectations))
+
+        for got, expected in zip(results, expectations):
+            self.assertEqualJSON(got, expected)
+    
+        """Expect selected fields of the test resource types
+        """
+        expectations = [
+            {'name': 'not_null_outer_id', 'column_name': 'id'},
+            {'name': 't'},
+            {'name': 'unique_outer_id', 'column_name': 'id'}
+            ]
+        results = self.run_dbt_ls(['--resource-type', 'test', '--output', 'json', '--output-keys', 'name,column_name'])
+        self.assertEqual(len(results), len(expectations))
+
+        for got, expected in zip(
+            sorted(results, key=lambda x: json.loads(x).get("name")), 
+            sorted(expectations, key=lambda x: x.get("name"))
+            ):
+            self.assertEqualJSON(got, expected)
+
+        """Expect nothing (non-existent keys) for the selected models
+        """
+        expectations = [{}, {}]
+        results = self.run_dbt_ls(['--model', 'inner outer', '--output', 'json', '--output-keys', 'non_existent_key'])
+        self.assertEqual(len(results), len(expectations))
+
+        for got, expected in zip(results, expectations):
+            self.assertEqualJSON(got, expected)
 
 
     @use_profile('postgres')
@@ -518,3 +536,4 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.expect_test_output()
         self.expect_select()
         self.expect_all_output()
+        self.expect_selected_keys()

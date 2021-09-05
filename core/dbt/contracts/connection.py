@@ -1,5 +1,6 @@
 import abc
 import itertools
+import hashlib
 from dataclasses import dataclass, field
 from typing import (
     Any, ClassVar, Dict, Tuple, Iterable, Optional, List, Callable,
@@ -126,6 +127,15 @@ class Credentials(
         raise NotImplementedError(
             'type not implemented for base credentials class'
         )
+
+    @abc.abstractproperty
+    def unique_field(self) -> str:
+        raise NotImplementedError(
+            'type not implemented for base credentials class'
+        )
+
+    def hashed_unique_field(self) -> str:
+        return hashlib.md5(self.unique_field.encode('utf-8')).hexdigest()
 
     def connection_info(
         self, *, with_aliases: bool = False
