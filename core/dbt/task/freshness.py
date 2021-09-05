@@ -145,10 +145,10 @@ class FreshnessTask(GraphRunnableTask):
         if self.args.selector_name:
             # use pre-defined selector (--selector) to create selection spec
             spec = self.config.get_selector(self.args.selector_name)
-        elif not (self.args.models or self.args.exclude) and default_selector:
+        elif not (self.args.select or self.args.exclude) and default_selector:
             spec = default_selector
         else:
-            spec = parse_difference(self.args.models, self.args.exclude)           
+            spec = parse_difference(self.args.select, self.args.exclude)           
         return spec
 
     def get_node_selector(self):
