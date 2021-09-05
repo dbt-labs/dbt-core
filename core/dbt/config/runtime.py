@@ -391,6 +391,10 @@ class UnsetCredentials(Credentials):
     def type(self):
         return None
 
+    @property
+    def unique_field(self):
+        return None
+
     def connection_info(self, *args, **kwargs):
         return {}
 

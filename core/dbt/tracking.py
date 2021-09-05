@@ -21,7 +21,7 @@ sp_logger.setLevel(100)
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-1'
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-2'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-1'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
@@ -166,10 +166,15 @@ def get_run_type(args):
 
 
 def get_invocation_context(user, config, args):
+    # this adapter might not have implemented the type or unique_field properties
     try:
         adapter_type = config.credentials.type
     except Exception:
         adapter_type = None
+    try:
+        adapter_unique_id = config.credentials.hashed_unique_field()
+    except Exception:
+        adapter_unique_id = None
 
     return {
         "project_id": None if config is None else config.hashed_name(),
@@ -182,6 +187,7 @@ def get_invocation_context(user, config, args):
 
         "run_type": get_run_type(args),
         "adapter_type": adapter_type,
+        "adapter_unique_id": adapter_unique_id,
     }
 
 

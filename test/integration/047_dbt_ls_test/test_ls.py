@@ -485,6 +485,45 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.assertEqual(set(results), {'test.incremental'})
 
         self.run_dbt_ls(['--select', 'config.incremental_strategy:insert_overwrite'], expect_pass=True)
+    
+    def expect_selected_keys(self):
+        """Expect selected fields of the the selected model
+        """
+        expectations = [{
+            'database': self.default_database, 
+            'schema': self.unique_schema(), 
+            'alias': 'inner'
+            }]
+        results = self.run_dbt_ls(['--model', 'inner', '--output', 'json', '--output-keys', 'database,schema,alias'])
+        self.assertEqual(len(results), len(expectations))
+
+        for got, expected in zip(results, expectations):
+            self.assertEqualJSON(got, expected)
+    
+        """Expect selected fields of the test resource types
+        """
+        expectations = [
+            {'name': 'not_null_outer_id', 'column_name': 'id'},
+            {'name': 't'},
+            {'name': 'unique_outer_id', 'column_name': 'id'}
+            ]
+        results = self.run_dbt_ls(['--resource-type', 'test', '--output', 'json', '--output-keys', 'name,column_name'])
+        self.assertEqual(len(results), len(expectations))
+
+        for got, expected in zip(
+            sorted(results, key=lambda x: json.loads(x).get("name")), 
+            sorted(expectations, key=lambda x: x.get("name"))
+            ):
+            self.assertEqualJSON(got, expected)
+
+        """Expect nothing (non-existent keys) for the selected models
+        """
+        expectations = [{}, {}]
+        results = self.run_dbt_ls(['--model', 'inner outer', '--output', 'json', '--output-keys', 'non_existent_key'])
+        self.assertEqual(len(results), len(expectations))
+
+        for got, expected in zip(results, expectations):
+            self.assertEqualJSON(got, expected)
 
 
     @use_profile('postgres')
@@ -497,3 +536,4 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.expect_test_output()
         self.expect_select()
         self.expect_all_output()
+        self.expect_selected_keys()
