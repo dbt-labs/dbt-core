@@ -31,7 +31,7 @@ _TOKEN_REQUEST_URL = 'https://{}.snowflakecomputing.com/oauth/token-request'
 class SnowflakeCredentials(Credentials):
     account: str
     user: str
-    password: str
+    password: Optional[str] = None
     warehouse: Optional[str] = None
     role: Optional[str] = None
     authenticator: Optional[str] = None
