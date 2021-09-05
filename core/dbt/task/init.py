@@ -1,7 +1,8 @@
 import copy
 import os
+import re
 import shutil
-from typing import Tuple
+from typing import Optional
 
 import oyaml as yaml
 import click
@@ -41,6 +42,15 @@ Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
 Happy modeling!
 """
 
+# https://click.palletsprojects.com/en/8.0.x/api/?highlight=float#types
+click_type_mapping = {
+    "string": click.STRING,
+    "int": click.INT,
+    "float": click.FLOAT,
+    "bool": click.BOOL,
+    None: None
+}
+
 
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
@@ -57,7 +67,7 @@ class InitTask(BaseTask):
             return True
         return False
 
-    def create_profile_from_sample(self, adapter: str):
+    def create_profile_from_sample(self, adapter: str, profile_name: str):
         """Create a profile entry using the adapter's sample_profiles.yml"""
         # Line below raises an exception if the specified adapter is not found
         load_plugin(adapter)
@@ -68,13 +78,24 @@ class InitTask(BaseTask):
             logger.debug(f"No sample profile found for {adapter}.")
         else:
             with open(sample_profiles_path, "r") as f:
-                # Ignore the name given in the sample_profiles.yml
-                profile = list(yaml.load(f).values())[0]
-                profiles_filepath, profile_name = self.write_profile(profile)
+                sample_profile = f.read()
+            sample_profile_name = list(yaml.load(sample_profile).keys())[0]
+            sample_profile = re.sub(
+                f"^{sample_profile_name}:",
+                f"{profile_name}:",
+                sample_profile
+            )
+            profiles_filepath = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
+            if os.path.exists(profiles_filepath):
+                with open(profiles_filepath, "a") as f:
+                    f.write("\n" + sample_profile)
+            else:
+                with open(profiles_filepath, "w") as f:
+                    f.write(sample_profile)
                 logger.info(
                     f"Profile {profile_name} written to {profiles_filepath} "
-                    "using sample configuration. Once updated "
-                    "you'll be able to start developing with dbt."
+                    "using sample configuration. Once updated, you'll be able to "
+                    "start developing with dbt."
                 )
 
     def get_addendum(self, project_name: str, profiles_path: str) -> str:
@@ -116,21 +137,17 @@ class InitTask(BaseTask):
                 if key.startswith("_fixed"):
                     # _fixed prefixed keys are not presented to the user
                     target[key[7:]] = value
-                elif isinstance(value, str) and (value[0] + value[-1] == "[]"):
-                    # A square bracketed value is used as a hint
-                    hide_input = key == "password"
-                    target[key] = click.prompt(
-                        f"{key} ({value[1:-1]})", hide_input=hide_input
-                    )
-                elif isinstance(value, list):
-                    # A list can be used to provide both a hint and a default
-                    target[key] = click.prompt(
-                        f"{key} ({value[0]})", default=value[1]
-                    )
                 else:
-                    # All other values are used as defaults
+                    hide_input = value.get("hide_input", False)
+                    default = value.get("default", None)
+                    hint = value.get("hint", None)
+                    type = click_type_mapping[value.get("type", None)]
+                    text = key + (f" ({hint})" if hint else "")
                     target[key] = click.prompt(
-                        key, default=target_options_local[key]
+                        text,
+                        default=default,
+                        hide_input=hide_input,
+                        type=type
                     )
         return target
 
@@ -143,16 +160,13 @@ class InitTask(BaseTask):
         return dbt_project["profile"]
 
     def write_profile(
-        self, profile: dict, profile_name: str = None
-    ) -> Tuple[str, str]:
+        self, profile: dict, profile_name: str
+    ) -> str:
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
-        profiles_file = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
-        profile_name = (
-            profile_name or self.get_profile_name_from_current_project()
-        )
-        if os.path.exists(profiles_file):
-            with open(profiles_file, "r+") as f:
+        profiles_filepath = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
+        if os.path.exists(profiles_filepath):
+            with open(profiles_filepath, "r+") as f:
                 profiles = yaml.load(f) or {}
                 profiles[profile_name] = profile
                 f.seek(0)
@@ -160,11 +174,11 @@ class InitTask(BaseTask):
                 f.truncate()
         else:
             profiles = {profile_name: profile}
-            with open(profiles_file, "w") as f:
+            with open(profiles_filepath, "w") as f:
                 yaml.dump(profiles, f)
-        return profiles_file, profile_name
+        return profiles_filepath
 
-    def create_profile_from_target_options(self, target_options: dict):
+    def create_profile_from_target_options(self, target_options: dict, profile_name: str):
         """Create and write a profile using the supplied target_options."""
         target = self.generate_target_from_input(target_options)
         profile = {
@@ -173,13 +187,13 @@ class InitTask(BaseTask):
             },
             "target": "dev"
         }
-        profiles_filepath, profile_name = self.write_profile(profile)
+        profiles_filepath = self.write_profile(profile, profile_name)
         logger.info(
             f"Profile {profile_name} written to {profiles_filepath} using "
-            "your supplied values."
+            "your supplied values. Run 'dbt debug' to validate the connection."
         )
 
-    def create_profile_from_scratch(self, adapter: str):
+    def create_profile_from_scratch(self, adapter: str, profile_name: str):
         """Create a profile without defaults using target_options.yml if available, or
         sample_profiles.yml as a fallback."""
         # Line below raises an exception if the specified adapter is not found
@@ -190,13 +204,16 @@ class InitTask(BaseTask):
         if target_options_path.exists():
             with open(target_options_path) as f:
                 target_options = yaml.load(f)
-            self.create_profile_from_target_options(target_options)
+            self.create_profile_from_target_options(target_options, profile_name)
         else:
             # For adapters without a target_options.yml defined, fallback on
             # sample_profiles.yml
-            self.create_profile_from_sample(adapter)
+            self.create_profile_from_sample(adapter, profile_name)
 
-    def check_if_can_write_profile(self, profile_name: str = None) -> bool:
+    def check_if_can_write_profile(self, profile_name: Optional[str] = None) -> bool:
+        """Using either a provided profile name or that specified in dbt_project.yml,
+        check if the profile already exists in profiles.yml, and if so ask the
+        user whether to proceed and overwrite it."""
         profiles_file = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
         if not os.path.exists(profiles_file):
             return True
@@ -221,16 +238,17 @@ class InitTask(BaseTask):
         profile_name = list(profile_template["profile"].keys())[0]
         self.check_if_can_write_profile(profile_name)
         render_vars = {}
-        for template_variable in profile_template["vars"]:
+        for template_variable in profile_template["prompts"]:
             render_vars[template_variable] = click.prompt(template_variable)
         profile = profile_template["profile"][profile_name]
         profile_str = yaml.dump(profile)
         profile_str = Template(profile_str).render(vars=render_vars)
         profile = yaml.load(profile_str)
-        profiles_filepath, _ = self.write_profile(profile, profile_name)
+        profiles_filepath = self.write_profile(profile, profile_name)
         logger.info(
             f"Profile {profile_name} written to {profiles_filepath} using "
-            "profile_template.yml and your supplied values."
+            "profile_template.yml and your supplied values. Run 'dbt debug' "
+            "to validate the connection."
         )
 
     def ask_for_adapter_choice(self) -> str:
@@ -240,10 +258,14 @@ class InitTask(BaseTask):
         click.echo("\n".join([
             f"[{n+1}] {v}" for n, v in enumerate(available_adapters)
         ]))
+        click.echo(
+            "(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)"
+        )
         numeric_choice = click.prompt("Enter a number", type=click.INT)
         return available_adapters[numeric_choice - 1]
 
     def run(self):
+        """Entry point for the init task."""
         profiles_dir = dbt.config.PROFILES_DIR
         self.create_profiles_dir(profiles_dir)
 
@@ -254,30 +276,44 @@ class InitTask(BaseTask):
             in_project = False
 
         if in_project:
+            # When dbt init is run inside an existing project,
+            # just setup the user's profile.
             logger.info("Setting up your profile.")
+            default_profile_name = self.get_profile_name_from_current_project()
             if os.path.exists("profile_template.yml"):
-                self.create_profile_using_profile_template()
+                self.create_profile_using_profile_template(default_profile_name)
             else:
-                if not self.check_if_can_write_profile():
+                if not self.check_if_can_write_profile(profile_name=default_profile_name):
                     return
                 adapter = self.ask_for_adapter_choice()
                 self.create_profile_from_scratch(
-                    adapter
+                    adapter, profile_name=default_profile_name
                 )
         else:
-            project_dir = click.prompt("What is the desired project name?")
-            if os.path.exists(project_dir):
+            # When dbt init is run outside of an existing project,
+            # create a new project and set up their profile.
+            project_name = click.prompt("What is the desired project name?")
+            if os.path.exists(project_name):
                 logger.info(
-                    f"Existing project found at directory {project_dir}"
+                    f"Existing project found at directory {project_name}"
                 )
                 return
 
-            self.copy_starter_repo(project_dir)
-            os.chdir(project_dir)
-            if not self.check_if_can_write_profile():
+            self.copy_starter_repo(project_name)
+            os.chdir(project_name)
+            with open("dbt_project.yml", "r+") as f:
+                content = f"{f.read()}".format(
+                    project_name=project_name,
+                    profile_name=project_name
+                )
+                f.seek(0)
+                f.write(content)
+                f.truncate()
+
+            if not self.check_if_can_write_profile(profile_name=project_name):
                 return
             adapter = self.ask_for_adapter_choice()
             self.create_profile_from_scratch(
-                adapter
+                adapter, profile_name=project_name
             )
-            logger.info(self.get_addendum(project_dir, profiles_dir))
+            logger.info(self.get_addendum(project_name, profiles_dir))

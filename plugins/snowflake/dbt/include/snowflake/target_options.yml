@@ -1,15 +1,28 @@
 _fixed_type: snowflake
-account: '[account id + region (if applicable)]'
-user: '[username]'
+account:
+  hint: 'https://<this_value>.snowflakecomputing.com'
+user:
+  hint: 'dev username'
 _choose_authentication_type:
   password:
-    password: '[password]'
+    password:
+      hint: 'dev password'
+      hide_input: true
   keypair:
-    private_key_path: '[path/to/private.key]'
-    private_key_passphrase: '[passphrase for the private key, if key is encrypted]'
-role: '[user role]'
-database: '[database name]'
-warehouse: '[warehouse name]'
-schema: '[dbt schema]'
-threads: '[1 or more]'
-client_session_keep_alive: False
+    private_key_path:
+      hint: 'path/to/private.key'
+    private_key_passphrase:
+      hint: 'passphrase for the private key, if key is encrypted'
+      hide_input: true
+role:
+  hint: 'dev role'
+warehouse:
+  hint: 'warehouse name'
+database:
+  hint: 'default database that dbt will build objects in'
+schema:
+  hint: 'default schema that dbt will build objects in'
+threads:
+  hint: '1 or more'
+  type: 'int'
+  default: 1
