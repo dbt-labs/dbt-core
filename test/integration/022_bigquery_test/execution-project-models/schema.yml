@@ -6,5 +6,5 @@ models:
   tests:
     - project_for_job_id:
         region: region-us
-        project_id: {{project_id}}
-        job_id: {{job_id}}
+        project_id: "{{ project_id}}"
+        unique_schema_id: "{{ unique_schema_id }}"
