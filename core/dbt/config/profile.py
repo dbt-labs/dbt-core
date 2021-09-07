@@ -84,13 +84,31 @@ def read_user_config(directory: str) -> UserConfig:
 
 # The Profile class is included in RuntimeConfig, so any attribute
 # additions must also be set where the RuntimeConfig class is created
-@dataclass
+# `init=False` is a workaround for https://bugs.python.org/issue45081
+@dataclass(init=False)
 class Profile(HasCredentials):
     profile_name: str
     target_name: str
     config: UserConfig
     threads: int
     credentials: Credentials
+
+    def __init__(
+        self,
+        profile_name: str,
+        target_name: str,
+        config: UserConfig,
+        threads: int,
+        credentials: Credentials
+    ):
+        """Explicitly defining `__init__` to work around bug in Python 3.9.7
+        https://bugs.python.org/issue45081
+        """
+        self.profile_name = profile_name
+        self.target_name = target_name
+        self.config = config
+        self.threads = threads
+        self.credentials = credentials
 
     def to_profile_info(
         self, serialize_credentials: bool = False
