@@ -13,6 +13,7 @@
 - Support BigQuery-specific aliases `target_dataset` and `target_project` in snapshot configs ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#3834](https://github.com/dbt-labs/dbt/pull/3834))
 - `dbt debug` shows a summary of whether all checks passed or not ([#3831](https://github.com/dbt-labs/dbt/issues/3831), [#3832](https://github.com/dbt-labs/dbt/issues/3831))
 - Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848))
+- Fix bug with initializing a dataclass that inherits from `typing.Protocol`, specifically for `dbt.config.profile.Profile` ([#3843](https://github.com/dbt-labs/dbt/issues/3843), [#3855](https://github.com/dbt-labs/dbt/pull/3855))
 
 ### Under the hood
 
@@ -20,6 +21,7 @@
 - Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/fishtown-analytics/dbt/issues/3622), [#3623](https://github.com/fishtown-analytics/dbt/pull/3623))
 - Alert users on package rename ([hub.getdbt.com#180](https://github.com/dbt-labs/hub.getdbt.com/issues/810), [#3825](https://github.com/dbt-labs/dbt/pull/3825))
+- Add `adapter_unique_id` to invocation context in anonymous usage tracking, to better understand dbt adoption ([#3713](https://github.com/dbt-labs/dbt/issues/3713), [#3796](https://github.com/dbt-labs/dbt/issues/3796))
 
 Contributors:
 
