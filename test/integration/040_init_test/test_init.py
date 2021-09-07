@@ -1,8 +1,11 @@
-
-from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import shutil
-import oyaml as yaml
+from unittest import mock
+from unittest.mock import Mock, call
+
+import click
+
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestInit(DBTIntegrationTest):
@@ -26,18 +29,32 @@ class TestInit(DBTIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_postgres_init_task(self):
-        project_name = self.get_project_name()
-        self.run_dbt(['init', project_name, '--adapter', 'postgres'])
-
-        assert os.path.exists(project_name)
-        project_file = os.path.join(project_name, 'dbt_project.yml')
-        assert os.path.exists(project_file)
-        with open(project_file) as fp:
-            project_data = yaml.safe_load(fp.read())
-
-        assert 'config-version' in project_data
-        assert project_data['config-version'] == 2
-
-        git_dir = os.path.join(project_name, '.git')
-        assert not os.path.exists(git_dir)
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    def test_postgres_init_task_in_project(self, mock_prompt, mock_confirm):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+        manager.confirm.side_effect = ["y"]
+        manager.prompt.side_effect = [
+            1,
+            4,
+            "localhost",
+            5432,
+            "test_user",
+            "test_password",
+            "test_db",
+            "test_schema",
+        ]
+        self.run_dbt(['init', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
+        manager.assert_has_calls([
+            call.confirm('The profile test already exists in /Users/niall.woodward/.dbt/profiles.yml. Continue and overwrite it?'),
+            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
+            call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
+            call.prompt('port', default=5432, hide_input=False, type=click.INT),
+            call.prompt('user (dev username)', default=None, hide_input=False, type=None),
+            call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
+            call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+        ])

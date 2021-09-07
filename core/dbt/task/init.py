@@ -121,13 +121,10 @@ class InitTask(BaseTask):
             if key.startswith("_choose"):
                 choice_type = key[8:].replace("_", " ")
                 option_list = list(value.keys())
-                options_msg = "\n".join([
+                prompt_msg = "\n".join([
                     f"[{n+1}] {v}" for n, v in enumerate(option_list)
-                ])
-                click.echo(options_msg)
-                numeric_choice = click.prompt(
-                    f"Desired {choice_type} option (enter a number)", type=click.INT
-                )
+                ]) + f"\nDesired {choice_type} option (enter a number)"
+                numeric_choice = click.prompt(prompt_msg, type=click.INT)
                 choice = option_list[numeric_choice - 1]
                 # Complete the chosen option's values in a recursive call
                 target = self.generate_target_from_input(
@@ -253,15 +250,14 @@ class InitTask(BaseTask):
 
     def ask_for_adapter_choice(self) -> str:
         """Ask the user which adapter (database) they'd like to use."""
-        click.echo("Which database would you like to use?")
         available_adapters = list(_get_adapter_plugin_names())
-        click.echo("\n".join([
-            f"[{n+1}] {v}" for n, v in enumerate(available_adapters)
-        ]))
-        click.echo(
-            "(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)"
+        prompt_msg = (
+            "Which database would you like to use?\n" +
+            "\n".join([f"[{n+1}] {v}" for n, v in enumerate(available_adapters)]) +
+            "\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)" +
+            "\n\nEnter a number"
         )
-        numeric_choice = click.prompt("Enter a number", type=click.INT)
+        numeric_choice = click.prompt(prompt_msg, type=click.INT)
         return available_adapters[numeric_choice - 1]
 
     def run(self):
@@ -279,23 +275,23 @@ class InitTask(BaseTask):
             # When dbt init is run inside an existing project,
             # just setup the user's profile.
             logger.info("Setting up your profile.")
-            default_profile_name = self.get_profile_name_from_current_project()
+            profile_name = self.get_profile_name_from_current_project()
             if os.path.exists("profile_template.yml"):
-                self.create_profile_using_profile_template(default_profile_name)
+                self.create_profile_using_profile_template(profile_name)
             else:
-                if not self.check_if_can_write_profile(profile_name=default_profile_name):
+                if not self.check_if_can_write_profile(profile_name=profile_name):
                     return
                 adapter = self.ask_for_adapter_choice()
                 self.create_profile_from_scratch(
-                    adapter, profile_name=default_profile_name
+                    adapter, profile_name=profile_name
                 )
         else:
             # When dbt init is run outside of an existing project,
-            # create a new project and set up their profile.
+            # create a new project and set up the user's profile.
             project_name = click.prompt("What is the desired project name?")
             if os.path.exists(project_name):
                 logger.info(
-                    f"Existing project found at directory {project_name}"
+                    f"A project called {project_name} already exists here."
                 )
                 return
 
