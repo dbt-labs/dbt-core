@@ -44,11 +44,11 @@ class DBTDeprecation:
 
 
 class PackageRedirectDeprecation(DBTDeprecation):
-    _name = 'package-redirect'
-    _description = '''\
+    _name = "package-redirect"
+    _description = """\
     The `{old_name}` package is deprecated in favor of `{new_name}`. Please update
     your `packages.yml` configuration to use `{new_name}` instead.
-    '''
+    """
 
 
 class PackageInstallPathDeprecation(DBTDeprecation):
@@ -116,7 +116,7 @@ deprecations_list: List[DBTDeprecation] = [
     ConfigSourcePathDeprecation(),
     ConfigDataPathDeprecation(),
     PackageInstallPathDeprecation(),
-    PackageRedirectDeprecation()
+    PackageRedirectDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {
