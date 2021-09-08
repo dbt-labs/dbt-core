@@ -2,6 +2,7 @@ import functools
 import requests
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt import deprecations
 import os
 
 if os.getenv('DBT_PACKAGE_HUB_URL'):
@@ -44,7 +45,29 @@ def packages(registry_base_url=None):
 
 
 def package(name, registry_base_url=None):
-    return _get_with_retries('api/v1/{}.json'.format(name), registry_base_url)
+    response = _get_with_retries('api/v1/{}.json'.format(name), registry_base_url)
+
+    # Either redirectnamespace or redirectname in the JSON response indicate a redirect
+    # redirectnamespace redirects based on package ownership
+    # redirectname redirects based on package name
+    # Both can be present at the same time, or neither. Fails gracefully to old name
+
+    if ('redirectnamespace' in response) or ('redirectname' in response):
+
+        if ('redirectnamespace' in response) and response['redirectnamespace'] is not None:
+            use_namespace = response['redirectnamespace']
+        else:
+            use_namespace = response['namespace']
+
+        if ('redirectname' in response) and response['redirectname'] is not None:
+            use_name = response['redirectname']
+        else:
+            use_name = response['name']
+
+        new_nwo = use_namespace + "/" + use_name
+        deprecations.warn('package-redirect', old_name=name, new_name=new_nwo)
+
+    return response
 
 
 def package_version(name, version, registry_base_url=None):
