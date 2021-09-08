@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: model_a
+    columns:
+      - name: fun
+        tags: [marketing]
+        tests:
+          - unique
+  - name: model_b
+    columns:
+      - name: fun
+        tags: [finance]
+        tests:
+          - unique
+  - name: model_c
+    columns:
+      - name: fun
+        tags: [engineering]
+        tests:
+          - unique
