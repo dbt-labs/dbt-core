@@ -15,6 +15,10 @@
 - Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848))
 - Fix bug with initializing a dataclass that inherits from `typing.Protocol`, specifically for `dbt.config.profile.Profile` ([#3843](https://github.com/dbt-labs/dbt/issues/3843), [#3855](https://github.com/dbt-labs/dbt/pull/3855))
 
+### Fixes
+
+- Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3691](https://github.com/dbt-labs/dbt/issues/3682))
+
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
