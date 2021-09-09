@@ -645,7 +645,7 @@ class Project:
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
 
-    def get_selector(self, name: str) -> SelectionSpec:
+    def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:
             raise RuntimeException(
                 f'Could not find selector named {name}, expected one of '
@@ -653,7 +653,7 @@ class Project:
             )
         return self.selectors[name]["definition"]
 
-    def get_default_selector(self) -> Union[SelectionSpec, None]:
+    def get_default_selector(self) -> Union[SelectionSpec, bool, None]:
         """This function fetch the default selector to use on `dbt run` (if any)
         :return: either a selector if default is set or None
         :rtype: Union[SelectionSpec, None]

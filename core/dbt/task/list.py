@@ -1,6 +1,5 @@
 import json
 from typing import Type
-import logging
 
 from dbt.contracts.graph.parsed import (
     ParsedExposure,
