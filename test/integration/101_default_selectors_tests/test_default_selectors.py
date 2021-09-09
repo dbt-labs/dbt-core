@@ -1,8 +1,5 @@
 import yaml
-
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
-
-from dbt.task.list import ListTask
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestDefaultSelectors(DBTIntegrationTest):
