@@ -8,10 +8,6 @@ class TestBuild(DBTIntegrationTest):
         return "build_test_069"
 
     @property
-    def models(self):
-        return "models"
-
-    @property
     def project_config(self):
         return {
             "config-version": 2,
@@ -31,6 +27,12 @@ class TestBuild(DBTIntegrationTest):
 
         return self.run_dbt(args, expect_pass=expect_pass)
 
+
+class TestPassingBuild(TestBuild):
+    @property
+    def models(self):
+        return "models"
+
     @use_profile("postgres")
     def test__postgres_build_happy_path(self):
         self.build()
@@ -44,11 +46,29 @@ class TestFailingBuild(TestBuild):
     @property
     def models(self):
         return "models-failing"
-        
+
     @use_profile("postgres")
     def test__postgres_build_happy_path(self):
         results = self.build(expect_pass=False)
-        self.assertEqual(len(results), 12)
+        self.assertEqual(len(results), 13)
         actual = [r.status for r in results]
-        expected = ['error']*1 + ['skipped']*4 + ['pass']*2 + ['success']*5
+        expected = ['error']*1 + ['skipped']*5 + ['pass']*2 + ['success']*5
+        self.assertEqual(sorted(actual), sorted(expected))
+
+
+class TestFailingTestsBuild(TestBuild):
+    @property
+    def schema(self):
+        return "build_test_069"
+
+    @property
+    def models(self):
+        return "tests-failing"
+
+    @use_profile("postgres")
+    def test__postgres_failing_test_skips_downstream(self):
+        results = self.build(expect_pass=False)
+        self.assertEqual(len(results), 13)
+        actual = [str(r.status) for r in results]
+        expected = ['fail'] + ['skipped']*6 + ['pass']*2 + ['success']*4
         self.assertEqual(sorted(actual), sorted(expected))
