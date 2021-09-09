@@ -13,6 +13,7 @@
 - Support BigQuery-specific aliases `target_dataset` and `target_project` in snapshot configs ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#3834](https://github.com/dbt-labs/dbt/pull/3834))
 - `dbt debug` shows a summary of whether all checks passed or not ([#3831](https://github.com/dbt-labs/dbt/issues/3831), [#3832](https://github.com/dbt-labs/dbt/issues/3831))
 - Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848))
+- Introduce a macro, `get_where_subquery`, for tests that use `where` config. Alias filtering subquery as `dbt_subquery` instead of resource identifier ([#3857](https://github.com/dbt-labs/dbt/issues/3857), [#3859](https://github.com/dbt-labs/dbt/issues/3859))
 
 ### Under the hood
 
