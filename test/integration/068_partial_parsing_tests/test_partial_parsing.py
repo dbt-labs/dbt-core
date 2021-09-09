@@ -74,7 +74,7 @@ class TestModels(DBTIntegrationTest):
         self.assertEqual(type(schema_file).__name__, 'SchemaSourceFile')
         self.assertEqual(len(schema_file.tests), 1)
         tests = schema_file.get_all_test_ids()
-        self.assertEqual(tests, ['test.test.unique_model_three_id.1358521a1c'])
+        self.assertEqual(tests, ['test.test.unique_model_three_id.6776ac8160'])
         unique_test_id = tests[0]
         self.assertIn(unique_test_id, manifest.nodes)
 
@@ -85,7 +85,7 @@ class TestModels(DBTIntegrationTest):
         schema_file_id = 'test://' + normalize('models-a/schema.yml')
         schema_file = manifest.files[schema_file_id]
         tests = schema_file.get_all_test_ids()
-        self.assertEqual(tests, ['test.test.not_null_model_three_id.8f3f13afd0'])
+        self.assertEqual(tests, ['test.test.not_null_model_three_id.3162ce0a6f'])
         not_null_test_id = tests[0]
         self.assertIn(not_null_test_id, manifest.nodes.keys())
         self.assertNotIn(unique_test_id, manifest.nodes.keys())
@@ -406,7 +406,7 @@ class TestPartialParsingDependency(DBTIntegrationTest):
         self.assertIn(source_id, manifest.sources)
         # We have 1 root model, 1 local_dep model, 1 local_dep seed, 1 local_dep source test, 2 root source tests
         self.assertEqual(len(manifest.nodes), 5)
-        test_id = 'test.local_dep.source_unique_seed_source_seed_id.c37cdbabae'
+        test_id = 'test.local_dep.source_unique_seed_source_seed_id.afa94935ed'
         test_node = manifest.nodes[test_id]
 
 
@@ -460,7 +460,7 @@ class TestMacros(DBTIntegrationTest):
         shutil.copyfile('extra-files/custom_schema_tests2.sql', 'macros-macros/custom_schema_tests.sql')
         results = self.run_dbt(["--partial-parse", "test"], expect_pass=False)
         manifest = get_manifest()
-        test_node_id = 'test.test.type_two_model_a_.05477328b9'
+        test_node_id = 'test.test.type_two_model_a_.842bc6c2a7'
         self.assertIn(test_node_id, manifest.nodes)
         results = sorted(results, key=lambda r: r.node.name)
         self.assertEqual(len(results), 2)

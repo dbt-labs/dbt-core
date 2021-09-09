@@ -152,7 +152,7 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         results = self.run_dbt(['test'], strict=False)
 
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 7)
         for result in results:
             self.assertFalse(result.skipped)
             self.assertEqual(
@@ -544,8 +544,8 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
 
         # both tests have the same unique id except for the hash
         expected_unique_ids = [
-            'test.test.not_null_base_extension_id.4a9d96018d',
-            'test.test.not_null_base_extension_id.60bbea9027'
+            'test.test.not_null_base_extension_id.922d83a56c',
+            'test.test.not_null_base_extension_id.c8d18fe069'
         ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)

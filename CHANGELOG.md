@@ -14,10 +14,11 @@
 - `dbt debug` shows a summary of whether all checks passed or not ([#3831](https://github.com/dbt-labs/dbt/issues/3831), [#3832](https://github.com/dbt-labs/dbt/issues/3831))
 - Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848))
 - Fix bug with initializing a dataclass that inherits from `typing.Protocol`, specifically for `dbt.config.profile.Profile` ([#3843](https://github.com/dbt-labs/dbt/issues/3843), [#3855](https://github.com/dbt-labs/dbt/pull/3855))
+- Introduce a macro, `get_where_subquery`, for tests that use `where` config. Alias filtering subquery as `dbt_subquery` instead of resource identifier ([#3857](https://github.com/dbt-labs/dbt/issues/3857), [#3859](https://github.com/dbt-labs/dbt/issues/3859))
 
 ### Fixes
 
-- Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3691](https://github.com/dbt-labs/dbt/issues/3682))
+- Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3682](https://github.com/dbt-labs/dbt/issues/3682), [#3691](https://github.com/dbt-labs/dbt/issues/3682))
 
 ### Under the hood
 
@@ -36,7 +37,8 @@ Contributors:
 - [@JasonGluck](https://github.com/JasonGluck) ([#3582](https://github.com/dbt-labs/dbt/pull/3582))
 - [@joellabes](https://github.com/joellabes) ([#3669](https://github.com/dbt-labs/dbt/pull/3669))
 - [@juma-adoreme](https://github.com/juma-adoreme) ([#3838](https://github.com/dbt-labs/dbt/pull/3838))
-- [@annafil](https://github.com/annafil)([#3825](https://github.com/dbt-labs/dbt/pull/3825))
+- [@annafil](https://github.com/annafil) ([#3825](https://github.com/dbt-labs/dbt/pull/3825))
+- [@AndreasTA-AW](https://github.com/AndreasTA-AW) ([#3691](https://github.com/dbt-labs/dbt/pull/3691))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
