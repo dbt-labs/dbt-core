@@ -148,7 +148,7 @@ class FreshnessTask(GraphRunnableTask):
         elif not (self.args.select or self.args.exclude) and default_selector:
             spec = default_selector
         else:
-            spec = parse_difference(self.args.select, self.args.exclude)           
+            spec = parse_difference(self.args.select, self.args.exclude)
         return spec
 
     def get_node_selector(self):
