@@ -769,13 +769,10 @@ class BigQueryAdapter(BaseAdapter):
         return result
 
     @available.parse(lambda *a, **k: {})
-    def get_table_options(
-        self, config: Dict[str, Any], node: Dict[str, Any], temporary: bool
+    def get_common_options(
+        self, config: Dict[str, Any], node: Dict[str, Any], temporary: bool = False
     ) -> Dict[str, Any]:
         opts = {}
-        if temporary:
-            expiration = 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'
-            opts['expiration_timestamp'] = expiration
 
         if (config.get('hours_to_expiration') is not None) and (not temporary):
             expiration = (
@@ -787,12 +784,24 @@ class BigQueryAdapter(BaseAdapter):
             description = sql_escape(node['description'])
             opts['description'] = '"""{}"""'.format(description)
 
-        if config.get('kms_key_name') is not None:
-            opts['kms_key_name'] = "'{}'".format(config.get('kms_key_name'))
-
         if config.get('labels'):
             labels = config.get('labels', {})
             opts['labels'] = list(labels.items())
+
+        return opts
+
+    @available.parse(lambda *a, **k: {})
+    def get_table_options(
+        self, config: Dict[str, Any], node: Dict[str, Any], temporary: bool
+    ) -> Dict[str, Any]:
+        opts = self.get_common_options(config, node, temporary)
+
+        if temporary:
+            expiration = 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'
+            opts['expiration_timestamp'] = expiration
+
+        if config.get('kms_key_name') is not None:
+            opts['kms_key_name'] = "'{}'".format(config.get('kms_key_name'))
 
         if config.get('require_partition_filter'):
             opts['require_partition_filter'] = config.get(
@@ -802,6 +811,13 @@ class BigQueryAdapter(BaseAdapter):
             opts['partition_expiration_days'] = config.get(
                 'partition_expiration_days')
 
+        return opts
+
+    @available.parse(lambda *a, **k: {})
+    def get_view_options(
+        self, config: Dict[str, Any], node: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        opts = self.get_common_options(config, node)
         return opts
 
     @available.parse_none
