@@ -1,17 +1,17 @@
 
 
 {% macro get_merge_sql(target, source, unique_key, dest_columns, predicates=none) -%}
-  {{ adapter.dispatch('get_merge_sql')(target, source, unique_key, dest_columns, predicates) }}
+  {{ adapter.dispatch('get_merge_sql', 'dbt')(target, source, unique_key, dest_columns, predicates) }}
 {%- endmacro %}
 
 
 {% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
-  {{ adapter.dispatch('get_delete_insert_merge_sql')(target, source, unique_key, dest_columns) }}
+  {{ adapter.dispatch('get_delete_insert_merge_sql', 'dbt')(target, source, unique_key, dest_columns) }}
 {%- endmacro %}
 
 
 {% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
-  {{ adapter.dispatch('get_insert_overwrite_merge_sql')(target, source, dest_columns, predicates, include_sql_header) }}
+  {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates, include_sql_header) }}
 {%- endmacro %}
 
 

@@ -131,3 +131,36 @@ class TestMacroOverrideBuiltin(DBTIntegrationTest):
         # the first time, the model doesn't exist
         self.run_dbt()
         self.run_dbt()
+
+
+class TestDispatchMacroOverrideBuiltin(TestMacroOverrideBuiltin):
+    # test the same functionality as above, but this time,
+    # dbt.get_columns_in_relation will dispatch to a default__ macro
+    # from an installed package, per dispatch config search_order
+
+    @property
+    def project_config(self):
+        return {
+            "config-version": 2,
+            "dispatch": [
+                {
+                    "macro_namespace": "dbt",
+                    "search_order": ["test", "package_macro_overrides", "dbt"],
+                }
+            ],
+        }
+        
+    @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {
+                    "local": "./package_macro_overrides",
+                },
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_overrides(self):
+        self.run_dbt(["deps"])
+        super().test_postgres_overrides()
