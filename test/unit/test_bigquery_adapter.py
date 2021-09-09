@@ -868,6 +868,31 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
         actual = adapter.get_table_options(mock_config, node={}, temporary=True)
         self.assertEqual(expected, actual)
 
+    def test_table_kms_key_name(self):
+        adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            RuntimeConfigObject)
+        config={'kms_key_name': 'some_key'}
+        mock_config.get.side_effect = lambda name: config.get(name)
+
+        expected = {
+            'kms_key_name': "'some_key'"
+        }
+        actual = adapter.get_table_options(mock_config, node={}, temporary=False)
+        self.assertEqual(expected, actual)
+
+        
+    def test_view_kms_key_name(self):
+        adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            RuntimeConfigObject)
+        config={'kms_key_name': 'some_key'}
+        mock_config.get.side_effect = lambda name: config.get(name)
+
+        expected = {}
+        actual = adapter.get_view_options(mock_config, node={})
+        self.assertEqual(expected, actual)
+
 
 
 class TestBigQueryFilterCatalog(unittest.TestCase):
