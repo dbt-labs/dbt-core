@@ -259,6 +259,43 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
         self.assertTablesEqual("agg", "view_3", schema, self.xf_schema())
 
 
+class TestCustomSchemaDispatchedPackageMacro(TestCustomSchemaWithCustomMacro):
+    # test the same functionality as above, but this time,
+    # dbt.generate_schema_name will dispatch to a default__ macro
+    # from an installed package, per dispatch config search_order
+
+    @property
+    def project_config(self):
+        return {
+            "config-version": 2,
+            "dispatch": [
+                {
+                    "macro_namespace": "dbt",
+                    "search_order": ["test", "package_macro_overrides", "dbt"],
+                }
+            ],
+            "models": {
+                "schema": "dbt_test"
+            },
+            
+        }
+        
+    @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {
+                    "local": "./package_macro_overrides",
+                },
+            ]
+        }
+
+    @use_profile('postgres')
+    def test__postgres__custom_schema_from_macro(self):
+        self.run_dbt(["deps"])
+        super().test__postgres__custom_schema_from_macro
+
+
 class TestCustomSchemaWithCustomMacroConfigs(TestCustomSchemaWithCustomMacro):
 
     @property

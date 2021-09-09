@@ -8,6 +8,6 @@ where {{ column_name }} is null
 
 
 {% test not_null(model, column_name) %}
-    {% set macro = adapter.dispatch('test_not_null') %}
+    {% set macro = adapter.dispatch('test_not_null', 'dbt') %}
     {{ macro(model, column_name) }}
 {% endtest %}

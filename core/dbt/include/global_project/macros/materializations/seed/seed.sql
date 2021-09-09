@@ -1,6 +1,6 @@
 
 {% macro create_csv_table(model, agate_table) -%}
-  {{ adapter.dispatch('create_csv_table')(model, agate_table) }}
+  {{ adapter.dispatch('create_csv_table', 'dbt')(model, agate_table) }}
 {%- endmacro %}
 
 {% macro default__create_csv_table(model, agate_table) %}
@@ -26,7 +26,7 @@
 {% endmacro %}
 
 {% macro reset_csv_table(model, full_refresh, old_relation, agate_table) -%}
-  {{ adapter.dispatch('reset_csv_table')(model, full_refresh, old_relation, agate_table) }}
+  {{ adapter.dispatch('reset_csv_table', 'dbt')(model, full_refresh, old_relation, agate_table) }}
 {%- endmacro %}
 
 {% macro default__reset_csv_table(model, full_refresh, old_relation, agate_table) %}
@@ -43,7 +43,7 @@
 {% endmacro %}
 
 {% macro get_binding_char() -%}
-  {{ adapter.dispatch('get_binding_char')() }}
+  {{ adapter.dispatch('get_binding_char', 'dbt')() }}
 {%- endmacro %}
 
 {% macro default__get_binding_char() %}
@@ -51,7 +51,7 @@
 {% endmacro %}
 
 {% macro get_batch_size() -%}
-  {{ adapter.dispatch('get_batch_size')() }}
+  {{ adapter.dispatch('get_batch_size', 'dbt')() }}
 {%- endmacro %}
 
 {% macro default__get_batch_size() %}
@@ -70,7 +70,7 @@
 {% endmacro %}
 
 {% macro load_csv_rows(model, agate_table) -%}
-  {{ adapter.dispatch('load_csv_rows')(model, agate_table) }}
+  {{ adapter.dispatch('load_csv_rows', 'dbt')(model, agate_table) }}
 {%- endmacro %}
 
 {% macro default__load_csv_rows(model, agate_table) %}

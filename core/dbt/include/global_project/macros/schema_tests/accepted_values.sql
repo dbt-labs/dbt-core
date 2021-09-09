@@ -28,6 +28,6 @@ where value_field not in (
 
 
 {% test accepted_values(model, column_name, values, quote=True) %}
-    {% set macro = adapter.dispatch('test_accepted_values') %}
+    {% set macro = adapter.dispatch('test_accepted_values', 'dbt') %}
     {{ macro(model, column_name, values, quote) }}
 {% endtest %}
