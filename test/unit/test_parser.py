@@ -415,14 +415,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[0].package_name, 'snowplow')
         self.assertTrue(tests[0].name.startswith('accepted_values_'))
         self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
-        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '0ecffad2de'])
+        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '9d4814efde'])
         self.assertEqual(tests[0].test_metadata.name, 'accepted_values')
         self.assertIsNone(tests[0].test_metadata.namespace)
         self.assertEqual(
             tests[0].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
+                'model': "{{ get_where_subquery(ref('my_model')) }}",
                 'values': ['red', 'blue', 'green'],
             }
         )
@@ -437,14 +437,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
         self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
         self.assertEqual(tests[1].package_name, 'snowplow')
-        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, '0cc2317899'])
+        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, '13958f62f7'])
         self.assertEqual(tests[1].test_metadata.name, 'test_case')
         self.assertEqual(tests[1].test_metadata.namespace, 'foreign_package')
         self.assertEqual(
             tests[1].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
+                'model': "{{ get_where_subquery(ref('my_model')) }}",
                 'arg': 100,
             },
         )
@@ -456,14 +456,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[2].package_name, 'snowplow')
         self.assertTrue(tests[2].name.startswith('not_null_'))
         self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
-        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, '1bac81dcfe'])
+        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, '2f61818750'])
         self.assertEqual(tests[2].test_metadata.name, 'not_null')
         self.assertIsNone(tests[2].test_metadata.namespace)
         self.assertEqual(
             tests[2].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
+                'model': "{{ get_where_subquery(ref('my_model')) }}",
             },
         )
 
