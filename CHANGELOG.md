@@ -27,6 +27,7 @@
 - Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/fishtown-analytics/dbt/issues/3622), [#3623](https://github.com/fishtown-analytics/dbt/pull/3623))
 - Alert users on package rename ([hub.getdbt.com#180](https://github.com/dbt-labs/hub.getdbt.com/issues/810), [#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - Add `adapter_unique_id` to invocation context in anonymous usage tracking, to better understand dbt adoption ([#3713](https://github.com/dbt-labs/dbt/issues/3713), [#3796](https://github.com/dbt-labs/dbt/issues/3796))
+- Specify `macro_namespace = 'dbt'` for all dispatched macros in the global project, making it possible to dispatch to macro implementations defined in packages. Dispatch `generate_schema_name` and `generate_alias_name` ([#3456](https://github.com/dbt-labs/dbt/issues/3456), [#3851](https://github.com/dbt-labs/dbt/issues/3851))
 
 Contributors:
 
