@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import yaml
 
 
-class TestBuild(DBTIntegrationTest):
+class TestBuildBase(DBTIntegrationTest):
     @property
     def schema(self):
         return "build_test_069"
@@ -28,7 +28,7 @@ class TestBuild(DBTIntegrationTest):
         return self.run_dbt(args, expect_pass=expect_pass)
 
 
-class TestPassingBuild(TestBuild):
+class TestPassingBuild(TestBuildBase):
     @property
     def models(self):
         return "models"
@@ -38,11 +38,7 @@ class TestPassingBuild(TestBuild):
         self.build()
 
 
-class TestFailingBuild(TestBuild):
-    @property
-    def schema(self):
-        return "build_test_069"
-
+class TestFailingBuild(TestBuildBase):
     @property
     def models(self):
         return "models-failing"
@@ -56,11 +52,7 @@ class TestFailingBuild(TestBuild):
         self.assertEqual(sorted(actual), sorted(expected))
 
 
-class TestFailingTestsBuild(TestBuild):
-    @property
-    def schema(self):
-        return "build_test_069"
-
+class TestFailingTestsBuild(TestBuildBase):
     @property
     def models(self):
         return "tests-failing"

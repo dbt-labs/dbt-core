@@ -1027,17 +1027,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
 
-    def get_tests_for_node(self, unique_id: UniqueID) -> List[UniqueID]:
-        """ Get a list of tests that depend on the node with the
-        provided unique id """
-
-        return [
-            node.unique_id
-            for _, node in self.nodes.items()
-            if node.resource_type == NodeType.Test and
-            unique_id in node.depends_on_nodes
-        ]
-
     # end of methods formerly in ParseResult
 
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
