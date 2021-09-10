@@ -147,34 +147,66 @@ class Linker:
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
 
-    def resolve_test_deps(self, manifest: Manifest):
+    def resolve_graph(self, manifest: Manifest):
         resolved_graph = nx.DiGraph()
         for node_id in self.graph:
+            # Add each node to the new graph
             resolved_graph.add_node(node_id)
+
+            # Loop through predecessors of the current node, add edge from
+            # predecessor to current node. Note: A predecessor of 'n' is a node
+            # 'm' such that there exists a directed edge from 'm' to 'n'. This
+            # essentially reconstructs `self.graph`
             for predecessor in self.graph.predecessors(node_id):
                 resolved_graph.add_edge(predecessor, node_id)
+
+            # If node is executable (in manifest.nodes) and _not_ a test node
             if (
                 node_id in manifest.nodes and
                 manifest.nodes[node_id].resource_type != NodeType.Test
             ):
+                # Get *everything* upstream
                 all_upstream_nodes = nx.traversal.bfs_tree(
                     self.graph, node_id, reverse=True
                 )
+                # Get the set of upstream nodes not including the current node
                 upstream_nodes = set([
                     n for n in all_upstream_nodes if n != node_id
                 ])
+
+                # Get all tests that depend on any upstream nodes
+                upstream_nodes_tests = []
                 for upstream_node in upstream_nodes:
-                    for test in manifest.get_tests_for_node(upstream_node):
-                        test_depends_on = set(
-                            manifest.nodes[test].depends_on_nodes
+                    upstream_nodes_tests += manifest.get_tests_for_node(
+                        upstream_node
+                    )
+
+                for upstream_nodes_test in upstream_nodes_tests:
+                    # Get the set of all nodes that the test depends on
+                    # including the upstream_node itself. This is necessary
+                    # because tests can depend on multiple nodes (ex:
+                    # relationship tests). Test nodes do not distiquish
+                    # between what node the test is "testing" and what
+                    # node(s) it depends
+                    test_depends_on = set(
+                        manifest.nodes[upstream_nodes_test].depends_on_nodes
+                    )
+
+                    # If the set of nodes that an upstream test depends on
+                    # is a proper (or strict) subset of all upstream nodes of
+                    # the current node, add an edge from the upstream test
+                    # to the current node. Must be a proper/strict subset to
+                    # avoid adding a circular dependency to the graph.
+                    if (
+                        test_depends_on.issubset(upstream_nodes) and
+                        not upstream_nodes.issubset(test_depends_on)
+                    ):
+                        resolved_graph.add_edge(
+                            upstream_nodes_test,
+                            node_id
                         )
-                        if (
-                            test_depends_on.issubset(upstream_nodes) and
-                            not upstream_nodes.issubset(test_depends_on) and
-                            test != node_id
-                        ):
-                            resolved_graph.add_edge(test, node_id)
-        # swap in new dependency graph
+
+        # Swap in new dependency graph!
         self.graph = resolved_graph
 
 
@@ -448,15 +480,7 @@ class Compiler:
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
-        # create dep graph here
-        linker.resolve_test_deps(manifest)
-
-        cycle = linker.find_cycles()
-
-        if cycle:
-            # TODO: this implementation error and not a user
-            # error, handle accordingly
-            raise RuntimeError("Found a cycle: {}".format(cycle))
+        linker.resolve_graph(manifest)
 
     def compile(self, manifest: Manifest, write=True) -> Graph:
         self.initialize()
