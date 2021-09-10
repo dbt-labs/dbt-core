@@ -209,6 +209,9 @@ class Querier:
     def deps(self, request_id: int = 1):
         return self.request(method='deps', request_id=request_id)
 
+    def list(self, request_id: int = 1):
+        return self.request(method='list', request_id=request_id)
+
     def compile(
         self,
         models: Optional[Union[str, List[str]]] = None,
