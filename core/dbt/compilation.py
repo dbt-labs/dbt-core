@@ -207,7 +207,7 @@ class Linker:
                     # Get the set of all nodes that the test depends on
                     # including the upstream_node itself. This is necessary
                     # because tests can depend on multiple nodes (ex:
-                    # relationship tests). Test nodes do not distiquish
+                    # relationship tests). Test nodes do not distinguish
                     # between what node the test is "testing" and what
                     # node(s) it depends on.
                     test_depends_on = set(
