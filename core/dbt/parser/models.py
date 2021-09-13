@@ -225,28 +225,21 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             return "cannot_parse"
 
     # checks for banned macros
-    def _has_banned_macro(
-        self, node: ParsedModelNode
-    ) -> bool:
+    def _has_banned_macro(self, node: ParsedModelNode) -> bool:
         # first check if there is a banned macro defined in scope for this model file
         root_project_name = self.root_project.project_name
         project_name = node.package_name
-        banned_macros = ['ref', 'source', 'config']
+        banned_macros = ["ref", "source", "config"]
 
         all_banned_macro_keys: Iterator[str] = chain.from_iterable(
             map(
-                lambda name: [
-                    f"macro.{project_name}.{name}",
-                    f"macro.{root_project_name}.{name}"
-                ],
-                banned_macros
+                lambda name: [f"macro.{project_name}.{name}", f"macro.{root_project_name}.{name}"],
+                banned_macros,
             )
         )
 
         return reduce(
-            lambda z, key: z or (key in self.manifest.macros),
-            all_banned_macro_keys,
-            False
+            lambda z, key: z or (key in self.manifest.macros), all_banned_macro_keys, False
         )
 
     # this method updates the model node rendered and unrendered config as well
@@ -307,7 +300,7 @@ def _get_exp_sample_result(
     sample_node: ParsedModelNode,
     sample_config: ContextConfig,
     node: ParsedModelNode,
-    config: ContextConfig
+    config: ContextConfig,
 ) -> List[str]:
     result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
 
