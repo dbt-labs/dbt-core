@@ -155,7 +155,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # first check if there is a banned macro defined in scope for this model file
         root_project_name = self.root_project.project_name
         project_name = node.package_name
-        banned_macros = ['ref', 'source', 'config']
+        banned_macros = [] # TODO UNDO. TESTING ONLY ['ref', 'source', 'config']
         all_banned_macro_keys = chain.from_iterable(
             map(
                 lambda name: [
