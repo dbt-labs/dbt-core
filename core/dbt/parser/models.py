@@ -40,6 +40,19 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         if flags.USE_EXPERIMENTAL_PARSER or sample:
             experimentally_parsed = self._try_exp_parser_run(node, config)
 
+        # if the parser succeeded, extract some data in easy-to-compare formats
+        if isinstance(experimentally_parsed, dict):
+            # create second config format
+            config_call_dict: Dict[str, Any] = {}
+            for c in experimentally_parsed['configs']:
+                ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
+
+            # format sources TODO change extractor to match this type
+            source_calls: List[List[str]] = []
+            for s in experimentally_parsed['sources']:
+                source_calls.append([s[0], s[1]])
+            experimentally_parsed['sources'] = source_calls
+
         # normal dbt run
         if not flags.USE_EXPERIMENTAL_PARSER:
             # normal rendering
@@ -52,19 +65,8 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                     if experimentally_parsed == "cannot_parse":
                         result += ["01_experimental_parser_cannot_parse"]
                     elif experimentally_parsed == "has_banned_macro":
-                        result += ["08_experimental_parser_cannot_parse_banned_macro"]
+                        result += ["08_has_banned_macro"]
                 else:
-                    # create second config format
-                    config_call_dict: Dict[str, Any] = {}
-                    for c in experimentally_parsed['configs']:
-                        ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
-
-                    # format sources TODO change extractor to match this type
-                    source_calls: List[List[str]] = []
-                    for s in experimentally_parsed['sources']:
-                        source_calls.append([s[0], s[1]])
-                    experimentally_parsed['sources'] = source_calls
-
                     # look for false positive configs
                     for k in config_call_dict.keys():
                         if k not in config._config_call_dict:
