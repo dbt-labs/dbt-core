@@ -11,7 +11,7 @@ from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignor
 from functools import reduce
 from itertools import chain
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -38,20 +38,23 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # run the experimental parser if the flag is on or if we're sampling
         if flags.USE_EXPERIMENTAL_PARSER or sample:
-            # first check if there is a banned macro defined in scope for this model file
-            root_project_name = self.root_project.project_name
-            project_name = node.package_name
-            banned_macros = ['ref', 'source', 'config']
-            all_banned_macro_keys = chain.from_iterable(map(lambda name: [f"macro.{project_name}.{name}", f"macro.{root_project_name}.{name}"], banned_macros))
-            has_banned_macro = reduce(lambda z, key: z or self.manifest.macros.has_key(key), all_banned_macro_keys)
+            experimentally_parsed = self._try_exp_parser_run(node, config)
 
-            if has_banned_macro:
-                experimentally_parsed = "has_banned_macro"
-            else:
-                try:
-                    experimentally_parsed: Dict[str, List[Any]] = py_extract_from_source(node.raw_sql)
-
-                    # second config format
+        # normal dbt run
+        if not flags.USE_EXPERIMENTAL_PARSER:
+            # normal rendering
+            super().render_update(node, config)
+            # if we're sampling, compare for correctness
+            if sample:
+                result: List[str] = []
+                # experimental parser couldn't parse
+                if (isinstance(experimentally_parsed, str)):
+                    if experimentally_parsed == "cannot_parse":
+                        result += ["01_experimental_parser_cannot_parse"]
+                    elif experimentally_parsed == "has_banned_macro":
+                        result += ["08_experimental_parser_cannot_parse_banned_macro"]
+                else:
+                    # create second config format
                     config_call_dict: Dict[str, Any] = {}
                     for c in experimentally_parsed['configs']:
                         ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
@@ -62,22 +65,6 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                         source_calls.append([s[0], s[1]])
                     experimentally_parsed['sources'] = source_calls
 
-                except ExtractionError as e:
-                    experimentally_parsed = e
-
-        # normal dbt run
-        if not flags.USE_EXPERIMENTAL_PARSER:
-            # normal rendering
-            super().render_update(node, config)
-            # if we're sampling, compare for correctness
-            if sample:
-                result: List[str] = []
-                # experimental parser couldn't parse
-                if isinstance(experimentally_parsed, Exception):
-                    result += ["01_experimental_parser_cannot_parse"]
-                elif experimentally_parsed == "has_banned_macro":
-                    result += ["08_experimental_parser_cannot_parse_banned_macro"]
-                else:
                     # look for false positive configs
                     for k in config_call_dict.keys():
                         if k not in config._config_call_dict:
@@ -131,7 +118,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                     })
 
         # if the --use-experimental-parser flag was set, and the experimental parser succeeded
-        elif not isinstance(experimentally_parsed, Exception):
+        elif isinstance(experimentally_parsed, Dict):
             # since it doesn't need python jinja, fit the refs, sources, and configs
             # into the node. Down the line the rest of the node will be updated with
             # this information. (e.g. depends_on etc.)
@@ -159,3 +146,40 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # fall back to python jinja rendering.
         else:
             super().render_update(node, config)
+
+    def _try_exp_parser_run(
+        self, node: ParsedModelNode, config: ContextConfig
+    ) -> Union[str, Dict[str, List[Any]]]:
+        # first check if there is a banned macro defined in scope for this model file
+        root_project_name = self.root_project.project_name
+        project_name = node.package_name
+        banned_macros = ['ref', 'source', 'config']
+        all_banned_macro_keys = chain.from_iterable(
+            map(
+                lambda name: [
+                    f"macro.{project_name}.{name}",
+                    f"macro.{root_project_name}.{name}"
+                ],
+                banned_macros
+            )
+        )
+        has_banned_macro: bool = reduce(
+            lambda z, key: z or (key in self.manifest.macros),
+            all_banned_macro_keys,
+            False
+        )
+
+        if has_banned_macro:
+            return "has_banned_macro"
+        # if it does not have a banned macro defined
+        else:
+            # run the experimental parser and return the results
+            try:
+                experimentally_parsed: Dict[str, List[Any]] = py_extract_from_source(
+                    node.raw_sql
+                )
+                return experimentally_parsed
+
+            # unless it failed, then indicate that
+            except ExtractionError:
+                return "cannot_parse"
