@@ -197,6 +197,6 @@ class SelectorUnitTest(unittest.TestCase):
         ''')
       with self.assertRaisesRegex(
                 dbt.exceptions.DbtSelectorsError,
-                'Default key is set to True multiple times'
+                'Found multiple selectors with `default: true`:'
       ):
         selector_config_from_data(dct)

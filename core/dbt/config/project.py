@@ -38,6 +38,7 @@ from .selectors import (
     selector_data_from_root,
     SelectorConfig,
 )
+from dbt.logger import print_timestamped_line
 
 
 INVALID_VERSION_ERROR = """\
@@ -661,6 +662,7 @@ class Project:
         for selector_name, selector in self.selectors.items():
             if selector["default"] is True:
                 name = selector_name
+                print_timestamped_line(f'Using default selector {name}')
                 return self.get_selector(name)
 
         return None

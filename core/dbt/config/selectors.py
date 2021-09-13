@@ -132,8 +132,7 @@ def validate_selector_default(selector_file: SelectorFile) -> None:
         if selector.default is True and default_set is True:
             raise DbtSelectorsError(
                 "Error when parsing the selector file. "
-                "Default key is set to True multiple times.\n"
-                "Default with value set to True found in "
+                "Found multiple selectors with `default: true`:"
                 f"{default_selector_name} and {selector.name}"
             )
 
