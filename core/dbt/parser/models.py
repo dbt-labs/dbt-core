@@ -8,6 +8,8 @@ from dbt.parser.search import FileBlock
 import dbt.tracking as tracking
 from dbt import utils
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
+from functools import reduce
+from itertools import chain
 import random
 from typing import Any, Dict, List
 
@@ -36,22 +38,32 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # run the experimental parser if the flag is on or if we're sampling
         if flags.USE_EXPERIMENTAL_PARSER or sample:
-            try:
-                experimentally_parsed: Dict[str, List[Any]] = py_extract_from_source(node.raw_sql)
+            # first check if there is a banned macro defined in scope for this model file
+            root_project_name = self.root_project.project_name
+            project_name = node.package_name
+            banned_macros = ['ref', 'source', 'config']
+            all_banned_macro_keys = chain.from_iterable(map(lambda name: [f"macro.{project_name}.{name}", f"macro.{root_project_name}.{name}"], banned_macros))
+            has_banned_macro = reduce(lambda z, key: z or self.manifest.macros.has_key(key), all_banned_macro_keys)
 
-                # second config format
-                config_call_dict: Dict[str, Any] = {}
-                for c in experimentally_parsed['configs']:
-                    ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
+            if has_banned_macro:
+                experimentally_parsed = "has_banned_macro"
+            else:
+                try:
+                    experimentally_parsed: Dict[str, List[Any]] = py_extract_from_source(node.raw_sql)
 
-                # format sources TODO change extractor to match this type
-                source_calls: List[List[str]] = []
-                for s in experimentally_parsed['sources']:
-                    source_calls.append([s[0], s[1]])
-                experimentally_parsed['sources'] = source_calls
+                    # second config format
+                    config_call_dict: Dict[str, Any] = {}
+                    for c in experimentally_parsed['configs']:
+                        ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
 
-            except ExtractionError as e:
-                experimentally_parsed = e
+                    # format sources TODO change extractor to match this type
+                    source_calls: List[List[str]] = []
+                    for s in experimentally_parsed['sources']:
+                        source_calls.append([s[0], s[1]])
+                    experimentally_parsed['sources'] = source_calls
+
+                except ExtractionError as e:
+                    experimentally_parsed = e
 
         # normal dbt run
         if not flags.USE_EXPERIMENTAL_PARSER:
@@ -63,6 +75,8 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 # experimental parser couldn't parse
                 if isinstance(experimentally_parsed, Exception):
                     result += ["01_experimental_parser_cannot_parse"]
+                elif experimentally_parsed == "has_banned_macro":
+                    result += ["08_experimental_parser_cannot_parse_banned_macro"]
                 else:
                     # look for false positive configs
                     for k in config_call_dict.keys():
