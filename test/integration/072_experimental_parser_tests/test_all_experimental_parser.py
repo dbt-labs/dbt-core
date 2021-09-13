@@ -21,10 +21,10 @@ class TestAllExperimentalParser(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models"
+        return "basic"
 
     @use_profile('postgres')
-    def test_postgres_experimental_parser(self):
+    def test_postgres_experimental_parser_basic(self):
         results = self.run_dbt(['--use-experimental-parser', 'parse'])
         manifest = get_manifest()
         node = manifest.nodes['model.test.model_a']
