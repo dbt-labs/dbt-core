@@ -1,0 +1,35 @@
+version: 2
+
+sources:
+  - name: src
+    schema: "{{ target.schema }}"
+    freshness:
+      warn_after: {count: 24, period: hour}
+    loaded_at_field: _loaded_at
+    tables:
+      - name: source_a
+        identifier: model_c
+        columns:
+          - name: fun
+          - name: _loaded_at
+  - name: src
+    schema: "{{ target.schema }}"
+    freshness:
+      warn_after: {count: 24, period: hour}
+    loaded_at_field: _loaded_at
+    tables:
+      - name: source_b
+        identifier: model_c
+        columns:
+          - name: fun
+          - name: _loaded_at
+
+models:
+  - name: model_a
+    columns:
+      - name: fun
+        tags: [marketing]
+  - name: model_b
+    columns:
+      - name: fun
+        tags: [finance]
