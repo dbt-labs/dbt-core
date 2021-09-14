@@ -74,7 +74,7 @@ def find_matching(
                         {
                             "searched_path": relative_path_to_search,
                             "absolute_path": absolute_path,
-                        'modification_time': modification_time,
+                            "relative_path": relative_path,
                             "modification_time": modification_time,
                         }
                     )

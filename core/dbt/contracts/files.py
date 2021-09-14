@@ -137,7 +137,7 @@ class RemoteFile(dbtClassMixin):
 
     @property
     def modification_time(self):
-        return 'from remote system'
+        return "from remote system"
 
 
 @dataclass

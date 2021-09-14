@@ -13,18 +13,26 @@ from typing import Optional
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
         path: FilePath, parse_file_type: ParseFileType,
-        project_name: str, saved_files,) -> Optional[AnySourceFile]:
+    parse_file_type: ParseFileType,
+    project_name: str,
+    saved_files,
+) -> Optional[AnySourceFile]:
 
     sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
-    source_file = sf_cls(path=path, checksum=FileHash.empty(),
+    source_file = sf_cls(
                          parse_file_type=parse_file_type, project_name=project_name)
 
     skip_loading_schema_file = False
-    if (parse_file_type == ParseFileType.Schema and
-            saved_files and source_file.file_id in saved_files):
+    if (
+        parse_file_type == ParseFileType.Schema
+        and saved_files
+        and source_file.file_id in saved_files
+    ):
         old_source_file = saved_files[source_file.file_id]
-        if (source_file.path.modification_time != 0.0 and
-                old_source_file.path.modification_time == source_file.path.modification_time):
+        if (
+            source_file.path.modification_time != 0.0
+            and old_source_file.path.modification_time == source_file.path.modification_time
+        ):
             source_file.checksum = old_source_file.checksum
             source_file.dfy = old_source_file.dfy
             skip_loading_schema_file = True
@@ -128,7 +136,7 @@ def read_files(project, files, parser_files, saved_files):
     project_files = {}
 
     project_files['MacroParser'] = read_files_for_parser(
-        project, files, project.macro_paths, '.sql', ParseFileType.Macro, saved_files
+        project, files, project.macro_paths, ".sql", ParseFileType.Macro, saved_files
     )
 
     project_files['ModelParser'] = read_files_for_parser(
@@ -136,11 +144,11 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['SnapshotParser'] = read_files_for_parser(
-        project, files, project.snapshot_paths, '.sql', ParseFileType.Snapshot, saved_files
+        project, files, project.snapshot_paths, ".sql", ParseFileType.Snapshot, saved_files
     )
 
     project_files['AnalysisParser'] = read_files_for_parser(
-        project, files, project.analysis_paths, '.sql', ParseFileType.Analysis, saved_files
+        project, files, project.analysis_paths, ".sql", ParseFileType.Analysis, saved_files
     )
 
     project_files["SingularTestParser"] = read_files_for_parser(
@@ -157,17 +165,17 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['DocumentationParser'] = read_files_for_parser(
-        project, files, project.docs_paths, '.md', ParseFileType.Documentation, saved_files
+        project, files, project.docs_paths, ".md", ParseFileType.Documentation, saved_files
     )
 
     project_files['SchemaParser'] = read_files_for_parser(
-        project, files, project.all_source_paths, '.yml', ParseFileType.Schema, saved_files
+        project, files, project.all_source_paths, ".yml", ParseFileType.Schema, saved_files
     )
 
     # Also read .yaml files for schema files. Might be better to change
     # 'read_files_for_parser' accept an array in the future.
     yaml_files = read_files_for_parser(
-        project, files, project.all_source_paths, '.yaml', ParseFileType.Schema, saved_files
+        project, files, project.all_source_paths, ".yaml", ParseFileType.Schema, saved_files
     )
     project_files['SchemaParser'].extend(yaml_files)
 
