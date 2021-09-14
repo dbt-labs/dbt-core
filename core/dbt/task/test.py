@@ -23,8 +23,6 @@ from dbt.exceptions import (
 )
 from dbt.graph import (
     ResourceTypeSelector,
-    SelectionSpec,
-    parse_test_selectors,
 )
 from dbt.node_types import NodeType, RunHookType
 from dbt import flags
@@ -172,16 +170,6 @@ class TestTask(RunTask):
     ) -> None:
         # Don't execute on-run-* hooks for tests
         pass
-
-    def get_selection_spec(self) -> SelectionSpec:
-        base_spec = super().get_selection_spec()
-        # serves to handle --schema and --data flags
-        # only supported for backwards compatibility
-        return parse_test_selectors(
-            data=self.args.data,
-            schema=self.args.schema,
-            base=base_spec
-        )
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:

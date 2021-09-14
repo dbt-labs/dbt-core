@@ -15,12 +15,6 @@ class SingularTestParser(SimpleSQLParser[ParsedSingularTestNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
-    def transform(self, node):
-        # here for backwards compatibility only
-        if 'data' not in node.tags:
-            node.tags.append('data')
-        return node
-
     @classmethod
     def get_compiled_path(cls, block: FileBlock):
         return get_pseudo_test_path(block.name, block.path.relative_path,

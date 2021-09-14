@@ -31,7 +31,7 @@ class TestSeverity(DBTIntegrationTest):
         self.run_dbt_with_vars(['seed'], 'false')
         self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--schema'], 'false')
+            ['test', '--select', 'test_type:generic'], 'false')
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'warn')
         self.assertEqual(results[0].failures, 2)
@@ -43,7 +43,7 @@ class TestSeverity(DBTIntegrationTest):
         self.run_dbt_with_vars(['seed'], 'false')
         self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--schema'], 'true', expect_pass=False)
+            ['test', '--select', 'test_type:generic'], 'true', expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'fail')
         self.assertEqual(results[0].failures, 2)
@@ -55,7 +55,7 @@ class TestSeverity(DBTIntegrationTest):
         self.run_dbt_with_vars(['seed'], 'false')
         self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--schema'], 'false', expect_pass=True)
+            ['test', '--select', 'test_type:generic'], 'false', expect_pass=True)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'warn')
         self.assertEqual(results[0].failures, 2)
@@ -67,7 +67,7 @@ class TestSeverity(DBTIntegrationTest):
         self.run_dbt_with_vars(['seed'], 'false')
         self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--data'], 'false')
+            ['test', '--select', 'test_type:singular'], 'false')
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'warn')
         self.assertEqual(results[0].failures, 2)
@@ -77,7 +77,7 @@ class TestSeverity(DBTIntegrationTest):
         self.run_dbt_with_vars(['seed'], 'false')
         self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--data'], 'true', expect_pass=False)
+            ['test', '--select', 'test_type:singular'], 'true', expect_pass=False)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'fail')
         self.assertEqual(results[0].failures, 2)
@@ -87,7 +87,7 @@ class TestSeverity(DBTIntegrationTest):
         self.run_dbt_with_vars(['seed'], 'false')
         self.run_dbt_with_vars(['run'], 'false')
         results = self.run_dbt_with_vars(
-            ['test', '--data'], 'false', expect_pass=True)
+            ['test', '--select', 'test_type:singular'], 'false', expect_pass=True)
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].status, 'fail')
         self.assertEqual(results[0].failures, 2)

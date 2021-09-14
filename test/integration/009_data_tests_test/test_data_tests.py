@@ -25,7 +25,6 @@ class TestDataTests(DBTIntegrationTest):
 
     def run_data_validations(self):
         args = FakeArgs()
-        args.data = True
 
         test_task = TestTask(args, self.config)
         return test_task.run()

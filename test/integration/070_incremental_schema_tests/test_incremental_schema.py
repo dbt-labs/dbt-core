@@ -32,7 +32,7 @@ class TestSelectionExpansion(DBTIntegrationTest):
         assert sorted(test_names) == sorted(expected_tests)
 
     def run_tests_and_assert(
-        self, include, exclude, expected_tests, compare_source, compare_target, schema = False, data = False
+        self, include, exclude, expected_tests, compare_source, compare_target
     ):  
 
         run_args = ['run']
@@ -50,10 +50,6 @@ class TestSelectionExpansion(DBTIntegrationTest):
             test_args.extend(('--models', include))
         if exclude:
             test_args.extend(('--exclude', exclude))
-        if schema:
-            test_args.append('--schema')
-        if data:
-            test_args.append('--data')
         
         results = self.run_dbt(test_args)
         tests_run = [r.node.name for r in results]

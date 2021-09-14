@@ -325,8 +325,6 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             'kwargs': builder.args,
         }
         tags = sorted(set(itertools.chain(tags, builder.tags())))
-        if 'schema' not in tags:
-            tags.append('schema')
 
         node = self.create_test_node(
             target=target,

@@ -327,12 +327,12 @@ class SchemaParserSourceTest(SchemaParserTest):
         tests.sort(key=lambda n: n.unique_id)
 
         self.assertEqual(tests[0].config.severity, 'ERROR')
-        self.assertEqual(tests[0].tags, ['schema'])
+        self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].sources, [['my_source', 'my_table']])
         self.assertEqual(tests[0].column_name, 'color')
         self.assertEqual(tests[0].fqn, ['snowplow', 'test', tests[0].name])
         self.assertEqual(tests[1].config.severity, 'WARN')
-        self.assertEqual(tests[1].tags, ['schema'])
+        self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].sources, [['my_source', 'my_table']])
         self.assertEqual(tests[1].column_name, 'color')
         self.assertEqual(tests[1].fqn, ['snowplow', 'test', tests[1].name])
@@ -409,7 +409,7 @@ class SchemaParserModelsTest(SchemaParserTest):
                 continue
             tests.append(node)
         self.assertEqual(tests[0].config.severity, 'ERROR')
-        self.assertEqual(tests[0].tags, ['schema'])
+        self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].refs, [['my_model']])
         self.assertEqual(tests[0].column_name, 'color')
         self.assertEqual(tests[0].package_name, 'snowplow')
@@ -430,7 +430,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         # foreign packages are a bit weird, they include the macro package
         # name in the test name
         self.assertEqual(tests[1].config.severity, 'ERROR')
-        self.assertEqual(tests[1].tags, ['schema'])
+        self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].refs, [['my_model']])
         self.assertEqual(tests[1].column_name, 'color')
         self.assertEqual(tests[1].column_name, 'color')
@@ -450,7 +450,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         )
 
         self.assertEqual(tests[2].config.severity, 'WARN')
-        self.assertEqual(tests[2].tags, ['schema'])
+        self.assertEqual(tests[2].tags, [])
         self.assertEqual(tests[2].refs, [['my_model']])
         self.assertEqual(tests[2].column_name, 'color')
         self.assertEqual(tests[2].package_name, 'snowplow')
@@ -837,7 +837,7 @@ class SingularTestParserTest(BaseParserTest):
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             refs=[['blah']],
             config=TestConfig(severity='ERROR'),
-            tags=['data'],
+            tags=[],
             path=normalize('test/test_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
