@@ -64,3 +64,18 @@ class TestFailingTestsBuild(TestBuildBase):
         actual = [str(r.status) for r in results]
         expected = ['fail'] + ['skipped']*6 + ['pass']*2 + ['success']*4
         self.assertEqual(sorted(actual), sorted(expected))
+
+
+class TestCircularRelationshipTestsBuild(TestBuildBase):
+    @property
+    def models(self):
+        return "models-circular-relationship"
+
+    @use_profile("postgres")
+    def test__postgres_circular_relationship_test_success(self):
+        """ Ensure that tests that refer to each other's model don't create
+        a circular dependency. """
+        results = self.build()
+        actual = [r.status for r in results]
+        expected = ['success']*7 + ['pass']*2
+        self.assertEqual(sorted(actual), sorted(expected))
