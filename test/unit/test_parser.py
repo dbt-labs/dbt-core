@@ -531,7 +531,7 @@ class ExperimentalModelParserTest(BaseParserTest):
         )
 
     def _generate_macros(self):
-        return itertools.chain(
+        yield itertools.chain(
             super._generate_macros(),
             ParsedMacro(
                 name='ref',
