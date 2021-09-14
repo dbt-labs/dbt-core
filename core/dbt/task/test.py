@@ -9,8 +9,8 @@ from .run import RunTask
 from .printer import print_start_line, print_test_result_line
 
 from dbt.contracts.graph.compiled import (
-    CompiledDataTestNode,
-    CompiledSchemaTestNode,
+    CompiledSingularTestNode,
+    CompiledGenericTestNode,
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -54,7 +54,7 @@ class TestRunner(CompileRunner):
 
     def execute_test(
         self,
-        test: Union[CompiledDataTestNode, CompiledSchemaTestNode],
+        test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
         manifest: Manifest
     ) -> TestResultData:
         context = generate_runtime_model(
@@ -175,6 +175,8 @@ class TestTask(RunTask):
 
     def get_selection_spec(self) -> SelectionSpec:
         base_spec = super().get_selection_spec()
+        # serves to handle --schema and --data flags
+        # only supported for backwards compatibility
         return parse_test_selectors(
             data=self.args.data,
             schema=self.args.schema,

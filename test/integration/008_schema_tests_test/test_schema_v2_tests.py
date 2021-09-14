@@ -148,7 +148,7 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
         this project will fail, configs are set to make test pass. """
         results = self.run_dbt(['test'], expect_pass=False)
 
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results), 8)
         for result in results:
             self.assertFalse(result.skipped)
 

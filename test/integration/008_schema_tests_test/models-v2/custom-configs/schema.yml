@@ -10,8 +10,6 @@ models:
       - warn_if
       - limit
       - fail_calc
-      - where:  # test override + weird quoting
-          where: "\"favorite_color\" = 'red'"
     columns:
       - name: id
         tests:
@@ -20,6 +18,11 @@ models:
               to: ref('table_copy')  # itself
               field: id
               where: 1=1
+  - name: table_copy_another_one
+    tests:
+      - where:  # test override + weird quoting
+          config:
+            where: "\"favorite_color\" = 'red'"
   - name: "table.copy.with.dots"
     description: "A copy of the table with a gross name"
     # passes, see https://github.com/dbt-labs/dbt/issues/3857

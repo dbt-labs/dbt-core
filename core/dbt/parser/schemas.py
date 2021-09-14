@@ -26,7 +26,7 @@ from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ColumnInfo,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
     ParsedMacroPatch,
     UnpatchedSourceDefinition,
     ParsedExposure,
@@ -54,8 +54,8 @@ from dbt.exceptions import (
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
-from dbt.parser.schema_test_builders import (
-    TestBuilder, SchemaTestBlock, TargetBlock, YamlBlock,
+from dbt.parser.generic_test_builders import (
+    TestBuilder, GenericTestBlock, TargetBlock, YamlBlock,
     TestBlock, Testable
 )
 from dbt.utils import (
@@ -163,7 +163,7 @@ def _trimmed(inp: str) -> str:
     return inp[:44] + '...' + inp[-3:]
 
 
-class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
+class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
     def __init__(
         self, project, manifest, root_project,
     ) -> None:
@@ -201,10 +201,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
-    def parse_from_dict(self, dct, validate=True) -> ParsedSchemaTestNode:
+    def parse_from_dict(self, dct, validate=True) -> ParsedGenericTestNode:
         if validate:
-            ParsedSchemaTestNode.validate(dct)
-        return ParsedSchemaTestNode.from_dict(dct)
+            ParsedGenericTestNode.validate(dct)
+        return ParsedGenericTestNode.from_dict(dct)
 
     def parse_column_tests(
         self, block: TestBlock, column: UnparsedColumn
@@ -226,7 +226,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         raw_sql: str,
         test_metadata: Dict[str, Any],
         column_name: Optional[str],
-    ) -> ParsedSchemaTestNode:
+    ) -> ParsedGenericTestNode:
 
         HASH_LENGTH = 10
 
@@ -267,8 +267,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             'checksum': FileHash.empty().to_dict(omit_none=True),
         }
         try:
-            ParsedSchemaTestNode.validate(dct)
-            return ParsedSchemaTestNode.from_dict(dct)
+            ParsedGenericTestNode.validate(dct)
+            return ParsedGenericTestNode.from_dict(dct)
         except ValidationError as exc:
             msg = validator_error_message(exc)
             # this is a bit silly, but build an UnparsedNode just for error
@@ -288,7 +288,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         test: Dict[str, Any],
         tags: List[str],
         column_name: Optional[str],
-    ) -> ParsedSchemaTestNode:
+    ) -> ParsedGenericTestNode:
         try:
             builder = TestBuilder(
                 test=test,
@@ -307,10 +307,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             raise CompilationException(msg) from exc
         original_name = os.path.basename(target.original_file_path)
         compiled_path = get_pseudo_test_path(
-            builder.compiled_name, original_name, 'schema_test',
+            builder.compiled_name, original_name, 'test',
         )
         fqn_path = get_pseudo_test_path(
-            builder.fqn_name, original_name, 'schema_test',
+            builder.fqn_name, original_name, 'test',
         )
         # the fqn for tests actually happens in the test target's name, which
         # is not necessarily this package's name
@@ -387,7 +387,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 msg = validator_error_message(exc)
                 raise CompilationException(msg, node=node) from exc
 
-    def parse_node(self, block: SchemaTestBlock) -> ParsedSchemaTestNode:
+    def parse_node(self, block: GenericTestBlock) -> ParsedGenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
         builds the initial node to be parsed, but rendering is basically the
         same
@@ -401,7 +401,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
         self.add_test_node(block, node)
         return node
 
-    def add_test_node(self, block: SchemaTestBlock, node: ParsedSchemaTestNode):
+    def add_test_node(self, block: GenericTestBlock, node: ParsedGenericTestNode):
         test_from = {"key": block.target.yaml_key, "name": block.target.name}
         if node.config.enabled:
             self.manifest.add_node(block.file, node, test_from)
@@ -409,7 +409,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
             self.manifest.add_disabled(block.file, node, test_from)
 
     def render_with_context(
-        self, node: ParsedSchemaTestNode, config: ContextConfig,
+        self, node: ParsedGenericTestNode, config: ContextConfig,
     ) -> None:
         """Given the parsed node and a ContextConfig to use during
         parsing, collect all the refs that might be squirreled away in the test
@@ -447,7 +447,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedSchemaTestNode]):
                 column_name = get_adapter(self.root_project).quote(column_name)
             column_tags = column.tags
 
-        block = SchemaTestBlock.from_test_block(
+        block = GenericTestBlock.from_test_block(
             src=target_block,
             test=test,
             column_name=column_name,

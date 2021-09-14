@@ -242,9 +242,9 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return ParsedRPCNode.from_dict(dct)
         elif resource_type == 'test':
             if 'test_metadata' in dct:
-                return ParsedSchemaTestNode.from_dict(dct)
+                return ParsedGenericTestNode.from_dict(dct)
             else:
-                return ParsedDataTestNode.from_dict(dct)
+                return ParsedSingularTestNode.from_dict(dct)
         elif resource_type == 'operation':
             return ParsedHookNode.from_dict(dct)
         elif resource_type == 'seed':
@@ -412,7 +412,7 @@ class HasTestMetadata(dbtClassMixin):
 
 
 @dataclass
-class ParsedDataTestNode(ParsedNode):
+class ParsedSingularTestNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -420,8 +420,8 @@ class ParsedDataTestNode(ParsedNode):
 
 
 @dataclass
-class ParsedSchemaTestNode(ParsedNode, HasTestMetadata):
-    # keep this in sync with CompiledSchemaTestNode!
+class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
+    # keep this in sync with CompiledGenericTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
@@ -773,11 +773,11 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
 
 ManifestNodes = Union[
     ParsedAnalysisNode,
-    ParsedDataTestNode,
+    ParsedSingularTestNode,
     ParsedHookNode,
     ParsedModelNode,
     ParsedRPCNode,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
 ]

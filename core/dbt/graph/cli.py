@@ -22,6 +22,9 @@ INTERSECTION_DELIMITER = ','
 
 DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*']
 DEFAULT_EXCLUDES: List[str] = []
+
+# here for backwards compatibility
+# we have since renamed data --> singular, schema --> generic
 DATA_TEST_SELECTOR: str = 'test_type:data'
 SCHEMA_TEST_SELECTOR: str = 'test_type:schema'
 
@@ -71,7 +74,8 @@ def parse_difference(
     excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, greedy=True)
     return SelectionDifference(components=[included, excluded])
 
-
+# serves to handle --schema and --data flags
+# only supported for backwards compatibility
 def parse_test_selectors(
     data: bool, schema: bool, base: SelectionSpec
 ) -> SelectionSpec:

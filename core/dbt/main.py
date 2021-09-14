@@ -724,6 +724,7 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
+    # here for backwards compatibility
         '--data',
         action='store_true',
         help='''
@@ -731,6 +732,7 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
+    # here for backwards compatibility
         '--schema',
         action='store_true',
         help='''

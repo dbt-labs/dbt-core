@@ -15,7 +15,7 @@ from dbt.contracts.graph.model_config import SourceConfig
 from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition,
     ParsedSourceDefinition,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
 )
 from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
@@ -211,7 +211,7 @@ class SourcePatcher:
 
     def get_source_tests(
         self, target: UnpatchedSourceDefinition
-    ) -> Iterable[ParsedSchemaTestNode]:
+    ) -> Iterable[ParsedGenericTestNode]:
         for test, column in target.get_tests():
             yield self.parse_source_test(
                 target=target,
@@ -242,7 +242,7 @@ class SourcePatcher:
         target: UnpatchedSourceDefinition,
         test: Dict[str, Any],
         column: Optional[UnparsedColumn],
-    ) -> ParsedSchemaTestNode:
+    ) -> ParsedGenericTestNode:
         column_name: Optional[str]
         if column is None:
             column_name = None

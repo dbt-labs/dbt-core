@@ -25,8 +25,8 @@ from dbt.utils import (
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag
-from dbt.contracts.graph.compiled import CompiledSchemaTestNode
-from dbt.contracts.graph.parsed import ParsedSchemaTestNode
+from dbt.contracts.graph.compiled import CompiledGenericTestNode
+from dbt.contracts.graph.parsed import ParsedGenericTestNode
 from dbt.exceptions import (
     InternalException, raise_compiler_error, CompilationException,
     invalid_materialization_argument, MacroReturn, JinjaRenderingException,
@@ -627,12 +627,12 @@ def extract_toplevel_blocks(
     )
 
 
-SCHEMA_TEST_KWARGS_NAME = '_dbt_schema_test_kwargs'
+GENERIC_TEST_KWARGS_NAME = '_dbt_generic_test_kwargs'
 
 
 def add_rendered_test_kwargs(
     context: Dict[str, Any],
-    node: Union[ParsedSchemaTestNode, CompiledSchemaTestNode],
+    node: Union[ParsedGenericTestNode, CompiledGenericTestNode],
     capture_macros: bool = False,
 ) -> None:
     """Render each of the test kwargs in the given context using the native
@@ -662,4 +662,4 @@ def add_rendered_test_kwargs(
         return value
 
     kwargs = deep_map(_convert_function, node.test_metadata.kwargs)
-    context[SCHEMA_TEST_KWARGS_NAME] = kwargs
+    context[GENERIC_TEST_KWARGS_NAME] = kwargs

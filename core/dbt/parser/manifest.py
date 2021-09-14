@@ -47,7 +47,7 @@ from dbt.exceptions import (
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
-from dbt.parser.data_test import DataTestParser
+from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
@@ -292,7 +292,7 @@ class ManifestLoader:
 
             # Load the rest of the files except for schema yaml files
             parser_types: List[Type[Parser]] = [
-                ModelParser, SnapshotParser, AnalysisParser, DataTestParser,
+                ModelParser, SnapshotParser, AnalysisParser, SingularTestParser,
                 SeedParser, DocumentationParser, HookParser]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
