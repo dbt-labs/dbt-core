@@ -74,54 +74,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             super().render_update(node, config)
             # if we're sampling, compare for correctness
             if sample:
-                result: List[str] = []
-                # experimental parser couldn't parse
-                if (isinstance(experimentally_parsed, str)):
-                    if experimentally_parsed == "cannot_parse":
-                        result += ["01_experimental_parser_cannot_parse"]
-                    elif experimentally_parsed == "has_banned_macro":
-                        result += ["08_has_banned_macro"]
-                else:
-                    # look for false positive configs
-                    for k in config_call_dict.keys():
-                        if k not in config._config_call_dict:
-                            result += ["02_false_positive_config_value"]
-                            break
-
-                    # look for missed configs
-                    for k in config._config_call_dict.keys():
-                        if k not in config_call_dict:
-                            result += ["03_missed_config_value"]
-                            break
-
-                    # look for false positive sources
-                    for s in experimentally_parsed['sources']:
-                        if s not in node.sources:
-                            result += ["04_false_positive_source_value"]
-                            break
-
-                    # look for missed sources
-                    for s in node.sources:
-                        if s not in experimentally_parsed['sources']:
-                            result += ["05_missed_source_value"]
-                            break
-
-                    # look for false positive refs
-                    for r in experimentally_parsed['refs']:
-                        if r not in node.refs:
-                            result += ["06_false_positive_ref_value"]
-                            break
-
-                    # look for missed refs
-                    for r in node.refs:
-                        if r not in experimentally_parsed['refs']:
-                            result += ["07_missed_ref_value"]
-                            break
-
-                    # if there are no errors, return a success value
-                    if not result:
-                        result = ["00_exact_match"]
-
+                result = self._get_sample_result(experimentally_parsed, config_call_dict, source_calls)
                 # fire a tracking event. this fires one event for every sample
                 # so that we have data on a per file basis. Not only can we expect
                 # no false positives or misses, we can expect the number model
@@ -187,3 +140,61 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             all_banned_macro_keys,
             False
         )
+
+    def _get_sample_result(
+        sample_output: Union[str, Dict[str, Any]],
+        config_call_dict: Dict[str, Any],
+        source_calls: List[List[str]]
+    ) -> List[str]:
+        result: List[str] = []
+        # experimental parser couldn't parse
+        if (isinstance(experimentally_parsed, str)):
+            if experimentally_parsed == "cannot_parse":
+                result += ["01_experimental_parser_cannot_parse"]
+            elif experimentally_parsed == "has_banned_macro":
+                result += ["08_has_banned_macro"]
+        else:
+            # look for false positive configs
+            for k in config_call_dict.keys():
+                if k not in config._config_call_dict:
+                    result += ["02_false_positive_config_value"]
+                    break
+
+            # look for missed configs
+            for k in config._config_call_dict.keys():
+                if k not in config_call_dict:
+                    result += ["03_missed_config_value"]
+                    break
+
+            # look for false positive sources
+            for s in experimentally_parsed['sources']:
+                if s not in node.sources:
+                    result += ["04_false_positive_source_value"]
+                    break
+
+            # look for missed sources
+            for s in node.sources:
+                if s not in experimentally_parsed['sources']:
+                    result += ["05_missed_source_value"]
+                    break
+
+            # look for false positive refs
+            for r in experimentally_parsed['refs']:
+                if r not in node.refs:
+                    result += ["06_false_positive_ref_value"]
+                    break
+
+            # look for missed refs
+            for r in node.refs:
+                if r not in experimentally_parsed['refs']:
+                    result += ["07_missed_ref_value"]
+                    break
+
+            # if there are no errors, return a success value
+            if not result:
+                result = ["00_exact_match"]
+
+            return result
+
+class TestableModelParser(ModelParser):
+    pass
