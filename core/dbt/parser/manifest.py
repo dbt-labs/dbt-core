@@ -748,8 +748,7 @@ class ManifestLoader:
             # what is the manifest passed in actually used for?
             macro_parser = MacroParser(project, self.manifest)
             for path in macro_parser.get_paths():
-                source_file = load_source_file(
-                    path, ParseFileType.Macro, project.project_name, {})
+                source_file = load_source_file(path, ParseFileType.Macro, project.project_name, {})
                 block = FileBlock(source_file)
                 # This does not add the file to the manifest.files,
                 # but that shouldn't be necessary here.

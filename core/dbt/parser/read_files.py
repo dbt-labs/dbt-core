@@ -131,9 +131,7 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
 
 def read_files_for_parser(project, files, dirs, extension, parse_ft, saved_files):
     parser_files = []
-    source_files = get_source_files(
-        project, dirs, extension, parse_ft, saved_files
-    )
+    source_files = get_source_files(project, dirs, extension, parse_ft, saved_files)
     for sf in source_files:
         files[sf.file_id] = sf
         parser_files.append(sf.file_id)
