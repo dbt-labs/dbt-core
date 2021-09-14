@@ -530,25 +530,22 @@ class ExperimentalModelParserTest(BaseParserTest):
             root_project=self.root_project_config,
         )
 
-    def _generate_macros(self):
-        yield itertools.chain(
-            super._generate_macros(),
-            ParsedMacro(
-                name='ref',
-                resource_type=NodeType.Macro,
-                unique_id=f'macro.root.ref',
-                package_name='root',
-                original_file_path=normalize('macros/macro.sql'),
-                root_path=get_abs_os_path('./dbt_modules/root'),
-                path=normalize('macros/macro.sql'),
-                macro_sql='{% macro ref(model_name) %}{% set x = raise("boom") %}{% endmacro %}',
-            )
-        )
-
     def file_block_for(self, data, filename):
         return super().file_block_for(data, filename, 'models')
 
     def test_built_in_macro_override_detection(self):
+        macro_unique_id = 'macro.root.ref'
+        self.parser.manifest.macros[macro_unique_id] = ParsedMacro(
+            name='ref',
+            resource_type=NodeType.Macro,
+            unique_id=macro_unique_id,
+            package_name='root',
+            original_file_path=normalize('macros/macro.sql'),
+            root_path=get_abs_os_path('./dbt_modules/root'),
+            path=normalize('macros/macro.sql'),
+            macro_sql='{% macro ref(model_name) %}{% set x = raise("boom") %}{% endmacro %}',
+        )
+
         raw_sql = '{{ config(materialized="table") }}select 1 as id'
         block = self.file_block_for(raw_sql, 'nested/model_1.sql')
         node = ParsedModelNode(
