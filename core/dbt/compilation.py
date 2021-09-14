@@ -159,7 +159,7 @@ class Linker:
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
 
-    def resolve_graph(self, manifest: Manifest):
+    def resolve_graph(self, manifest: Manifest) -> None:
         """ This method adds additional edges to the DAG. For a given non-test
         executable node, add an edge from an upstream test to the given node if
         the set of nodes the test depends on is a proper/strict subset of the
