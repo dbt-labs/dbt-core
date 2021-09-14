@@ -11,7 +11,7 @@ from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignor
 from functools import reduce
 from itertools import chain
 import random
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -35,7 +35,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
     # external storage used for exposing internal details to integration tests
     def _render_update(
-        self, node: ParsedModelNode, config: ContextConfig, external_storage: Option[Dict[str, bool]]
+        self, node: ParsedModelNode, config: ContextConfig, external_storage: Optional[Dict[str, bool]]
     ) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
@@ -224,7 +224,7 @@ def _get_sample_result(
 
 # exposes internals to integration tests by threading a mutable variable
 class TestableModelParser(ModelParser):
-    self.experimental_parser_triggers: Dict[str, bool] = {}
+    experimental_parser_triggers: Dict[str, bool] = {}
 
     def render_update(
         self, node: ParsedModelNode, config: ContextConfig
