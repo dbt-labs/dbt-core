@@ -34,8 +34,10 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # `True` roughly 1/100 times this function is called
         sample: bool = random.randint(1, 101) == 100
 
-        # top-level declaration of variable
+        # top-level declaration of variables
         experimentally_parsed: Union[str, Dict[str, List[Any]]] = ""
+        config_call_dict: Dict[str, Any] = {}
+        source_calls: List[List[str]] = []
 
         # run the experimental parser if the flag is on or if we're sampling
         if flags.USE_EXPERIMENTAL_PARSER or sample:
@@ -56,12 +58,10 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # if the parser succeeded, extract some data in easy-to-compare formats
         if isinstance(experimentally_parsed, dict):
             # create second config format
-            config_call_dict: Dict[str, Any] = {}
             for c in experimentally_parsed['configs']:
                 ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
 
             # format sources TODO change extractor to match this type
-            source_calls: List[List[str]] = []
             for s in experimentally_parsed['sources']:
                 source_calls.append([s[0], s[1]])
             experimentally_parsed['sources'] = source_calls
