@@ -521,7 +521,7 @@ class ModelParserTest(BaseParserTest):
             self.parser.parse_file(block)
 
 
-class ExperimentalModelParserTest(BaseParserTest):
+class StaticModelParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
         self.parser = ModelParser(
@@ -533,6 +533,9 @@ class ExperimentalModelParserTest(BaseParserTest):
     def file_block_for(self, data, filename):
         return super().file_block_for(data, filename, 'models')
 
+    # tests that when the ref built-in is overriden with a macro definition
+    # that the ModelParser can detect it. This does not test that the static
+    # parser does not run in this case. That test is in integration test suite 072
     def test_built_in_macro_override_detection(self):
         macro_unique_id = 'macro.root.ref'
         self.parser.manifest.macros[macro_unique_id] = ParsedMacro(
