@@ -36,9 +36,24 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # `True` roughly 1/100 times this function is called
         sample: bool = random.randint(1, 101) == 100
 
+        # top-level declaration of variable
+        experimentally_parsed: Union[str, Dict[str, List[Any]]] = ""
+
         # run the experimental parser if the flag is on or if we're sampling
         if flags.USE_EXPERIMENTAL_PARSER or sample:
-            experimentally_parsed = self._try_exp_parser_run(node, config)
+            if self._has_banned_macro(node):
+                experimentally_parsed = "has_banned_macro"
+            else:
+                # run the experimental parser and return the results
+                try:
+                    experimentally_parsed = py_extract_from_source(
+                        node.raw_sql
+                    )
+                # if we want information on what features are barring the experimental
+                # parser from reading model files, this is where we would add that
+                # since that information is stored in the `ExtractionError`.
+                except ExtractionError:
+                    experimentally_parsed = "cannot_parse"
 
         # if the parser succeeded, extract some data in easy-to-compare formats
         if isinstance(experimentally_parsed, dict):
@@ -149,13 +164,14 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         else:
             super().render_update(node, config)
 
-    def _try_exp_parser_run(
-        self, node: ParsedModelNode, config: ContextConfig
-    ) -> Union[str, Dict[str, List[Any]]]:
+    def _has_banned_macro(
+        self, node: ParsedModelNode
+    ) -> bool:
         # first check if there is a banned macro defined in scope for this model file
         root_project_name = self.root_project.project_name
         project_name = node.package_name
-        banned_macros = [] # TODO UNDO. TESTING ONLY ['ref', 'source', 'config']
+        banned_macros = ['ref', 'source', 'config']
+
         all_banned_macro_keys = chain.from_iterable(
             map(
                 lambda name: [
@@ -165,23 +181,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 banned_macros
             )
         )
-        has_banned_macro: bool = reduce(
+
+        return reduce(
             lambda z, key: z or (key in self.manifest.macros),
             all_banned_macro_keys,
             False
         )
-
-        if has_banned_macro:
-            return "has_banned_macro"
-        # if it does not have a banned macro defined
-        else:
-            # run the experimental parser and return the results
-            try:
-                experimentally_parsed: Dict[str, List[Any]] = py_extract_from_source(
-                    node.raw_sql
-                )
-                return experimentally_parsed
-
-            # unless it failed, then indicate that
-            except ExtractionError:
-                return "cannot_parse"

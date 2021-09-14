@@ -10,3 +10,6 @@ models:
   - name: model_a
     columns:
       - name: fun
+  - name: model_b
+    columns:
+      - name: fun
