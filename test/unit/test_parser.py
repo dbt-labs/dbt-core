@@ -32,7 +32,7 @@ from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
-
+import itertools
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode, MockSource, MockDocumentation
 
 
@@ -519,6 +519,57 @@ class ModelParserTest(BaseParserTest):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
         with self.assertRaises(CompilationException):
             self.parser.parse_file(block)
+
+
+class ExperimentalModelParserTest(BaseParserTest):
+    def setUp(self):
+        super().setUp()
+        self.parser = ModelParser(
+            project=self.snowplow_project_config,
+            manifest=self.manifest,
+            root_project=self.root_project_config,
+        )
+
+    def _generate_macros(self):
+        return itertools.chain(
+            super._generate_macros(),
+            ParsedMacro(
+                name='ref',
+                resource_type=NodeType.Macro,
+                unique_id=f'macro.root.ref',
+                package_name='root',
+                original_file_path=normalize('macros/macro.sql'),
+                root_path=get_abs_os_path('./dbt_modules/root'),
+                path=normalize('macros/macro.sql'),
+                macro_sql='{% macro ref(model_name) %}{% set x = raise("boom") %}{% endmacro %}',
+            )
+        )
+
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'models')
+
+    def test_built_in_macro_override_detection(self):
+        raw_sql = '{{ config(materialized="table") }}select 1 as id'
+        block = self.file_block_for(raw_sql, 'nested/model_1.sql')
+        node = ParsedModelNode(
+            alias='model_1',
+            name='model_1',
+            database='test',
+            schema='analytics',
+            resource_type=NodeType.Model,
+            unique_id='model.snowplow.model_1',
+            fqn=['snowplow', 'nested', 'model_1'],
+            package_name='snowplow',
+            original_file_path=normalize('models/nested/model_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            config=NodeConfig(materialized='table'),
+            path=normalize('nested/model_1.sql'),
+            raw_sql=raw_sql,
+            checksum=block.file.checksum,
+            unrendered_config={'materialized': 'table'},
+        )
+
+        assert(self.parser._has_banned_macro(node))
 
 
 class SnapshotParserTest(BaseParserTest):
