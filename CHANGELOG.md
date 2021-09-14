@@ -7,6 +7,7 @@
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
   - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
 - Customize ls task JSON output by adding new flag `--output-keys` ([#3778](https://github.com/dbt-labs/dbt/issues/3778), [#3395](https://github.com/dbt-labs/dbt/issues/3395))
+- add support for execution project on BigQuery through profile configuration ([#3708](https://github.com/dbt-labs/dbt/issues/3708))
 
 ### Fixes
 
@@ -40,6 +41,7 @@ Contributors:
 - [@juma-adoreme](https://github.com/juma-adoreme) ([#3838](https://github.com/dbt-labs/dbt/pull/3838))
 - [@annafil](https://github.com/annafil) ([#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - [@AndreasTA-AW](https://github.com/AndreasTA-AW) ([#3691](https://github.com/dbt-labs/dbt/pull/3691))
+- [@Kayrnt](https://github.com/Kayrnt) ([3707](https://github.com/dbt-labs/dbt/pull/3707))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
