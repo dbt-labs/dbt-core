@@ -31,6 +31,12 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def render_update(
         self, node: ParsedModelNode, config: ContextConfig
     ) -> None:
+        self._render_update(node, config, external_storage = None)
+
+    # external storage used for exposing internal details to integration tests
+    def _render_update(
+        self, node: ParsedModelNode, config: ContextConfig, external_storage: Option[Dict[str, bool]]
+    ) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
 
         # `True` roughly 1/100 times this function is called
@@ -57,6 +63,11 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # if the parser succeeded, extract some data in easy-to-compare formats
         if isinstance(experimentally_parsed, dict):
+            # if we have external storage for tests, write that this parse
+            # run succeeded
+            if external_storage:
+                external_storage[node.path] = True
+
             # create second config format
             config_call_dict: Dict[str, Any] = {}
             for c in experimentally_parsed['configs']:
@@ -121,6 +132,11 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # the experimental parser tried and failed on this model.
         # fall back to python jinja rendering.
         else:
+            # if we have external storage for tests, write that this parse
+            # run failed
+            if external_storage:
+                external_storage[node.path] = False
+
             super().render_update(node, config)
 
     def _has_banned_macro(
@@ -206,5 +222,11 @@ def _get_sample_result(
     return result
 
 
+# exposes internals to integration tests by threading a mutable variable
 class TestableModelParser(ModelParser):
-    pass
+    self.experimental_parser_triggers: Dict[str, bool] = {}
+
+    def render_update(
+        self, node: ParsedModelNode, config: ContextConfig
+    ) -> None:
+        self._render_update(node, config, self.experimental_parser_triggers)
