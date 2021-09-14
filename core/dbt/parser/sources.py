@@ -269,11 +269,6 @@ class SourcePatcher:
             tags=tags,
             column_name=column_name
         )
-        # we can't go through result.add_node - no file... instead!
-        if node.config.enabled:
-            self.manifest.add_node_nofile(node)
-        else:
-            self.manifest.add_disabled_nofile(node)
         return node
 
     def _generate_source_config(self, fqn: List[str], rendered: bool, project_name: str):
