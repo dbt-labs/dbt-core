@@ -26,6 +26,7 @@ snapshot_data = '''
 {% endsnapshot %}
 '''
 
+
 @pytest.mark.supported('postgres')
 def test_rpc_build_threads(
     project_root, profiles_root, dbt_profile, unique_schema

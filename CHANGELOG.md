@@ -8,6 +8,7 @@
   - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
 - Customize ls task JSON output by adding new flag `--output-keys` ([#3778](https://github.com/dbt-labs/dbt/issues/3778), [#3395](https://github.com/dbt-labs/dbt/issues/3395))
 - add support for execution project on BigQuery through profile configuration ([#3708](https://github.com/dbt-labs/dbt/issues/3708))
+- Skip downstream nodes during the `build` task when a test fails. ([#3597](https://github.com/dbt-labs/dbt/issues/3597), [#3792](https://github.com/dbt-labs/dbt/pull/3792))
 
 ### Fixes
 
