@@ -263,6 +263,15 @@ class DBTIntegrationTest(unittest.TestCase):
                         'keyfile_json': credentials,
                         'schema': self.unique_schema(),
                     },
+                    'alternate': {
+                        'type': 'bigquery',
+                        'method': 'service-account-json',
+                        'threads': 1,
+                        'project': project_id,
+                        'keyfile_json': credentials,
+                        'schema': self.unique_schema(),
+                        'execution_project': self.alternative_database,
+                    },
                 },
                 'target': 'default2'
             }
