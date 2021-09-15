@@ -1,5 +1,4 @@
 import json
-from typing import Type
 
 from dbt.contracts.graph.parsed import (
     ParsedExposure,
@@ -186,7 +185,6 @@ class ListTask(GraphRunnableTask):
             raise InternalException(
                 'manifest and graph must be set to get perform node selection'
             )
-        cls: Type[ResourceTypeSelector]
         if self.resource_types == [NodeType.Test]:
             return TestSelector(
                 graph=self.graph,

@@ -399,6 +399,14 @@ def _build_build_subparser(subparsers, base_subparser):
         Stop execution upon a first failure.
         '''
     )
+    resource_values: List[str] = [
+        str(s) for s in ListTask.ALL_RESOURCE_VALUES
+    ] + ['default', 'all']
+    sub.add_argument('--resource-type',
+                     choices=resource_values,
+                     action='append',
+                     default=[],
+                     dest='resource_types')
     return sub
 
 
