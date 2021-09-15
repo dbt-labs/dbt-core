@@ -265,7 +265,7 @@ class ManifestLoader:
             self.manifest._parsing_info = ParsingInfo()
 
         if skip_parsing:
-            logger.info("Partial parsing enabled, no changes found, skipping parsing")
+            logger.debug("Partial parsing enabled, no changes found, skipping parsing")
         else:
             # Load Macros
             # We need to parse the macros first, so they're resolvable when
@@ -577,7 +577,7 @@ class ManifestLoader:
                 )
                 reparse_reason = ReparseReason.load_file_failure
         else:
-            logger.info(f"Unable to do partial parsing because {path} not found")
+            logger.info("Partial parse save file not found. Starting full parse.")
             reparse_reason = ReparseReason.file_not_found
 
         # this event is only fired if a full reparse is needed

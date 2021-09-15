@@ -105,10 +105,10 @@ class PartialParsing:
         }
         if changed_or_deleted_macro_file:
             self.macro_child_map = self.saved_manifest.build_macro_child_map()
-        logger.info(f"Partial parsing enabled: "
-                    f"{len(deleted) + len(deleted_schema_files)} files deleted, "
-                    f"{len(added)} files added, "
-                    f"{len(changed) + len(changed_schema_files)} files changed.")
+        logger.debug(f"Partial parsing enabled: "
+                     f"{len(deleted) + len(deleted_schema_files)} files deleted, "
+                     f"{len(added)} files added, "
+                     f"{len(changed) + len(changed_schema_files)} files changed.")
         self.file_diff = file_diff
 
     # generate the list of files that need parsing
