@@ -110,8 +110,8 @@ def _extend_prepended_ctes(prepended_ctes, new_prepended_ctes):
 
 
 def _get_tests_for_node(manifest: Manifest, unique_id: UniqueID) -> List[UniqueID]:
-    """ Get a list of tests that depend on the node with the
-    provided unique id """
+    """Get a list of tests that depend on the node with the
+    provided unique id"""
 
     tests = []
     if unique_id in manifest.child_map:
@@ -440,7 +440,7 @@ class Compiler:
             self.add_test_edges(linker, manifest)
 
     def add_test_edges(self, linker: Linker, manifest: Manifest) -> None:
-        """ This method adds additional edges to the DAG. For a given non-test
+        """This method adds additional edges to the DAG. For a given non-test
         executable node, add an edge from an upstream test to the given node if
         the set of nodes the test depends on is a subset of the upstream nodes
         for the given node. """
@@ -463,25 +463,18 @@ class Compiler:
             # If node is executable (in manifest.nodes) and does _not_
             # represent a test, continue.
             if (
-                node_id in manifest.nodes and
-                manifest.nodes[node_id].resource_type != NodeType.Test
+                node_id in manifest.nodes
+                and manifest.nodes[node_id].resource_type != NodeType.Test
             ):
                 # Get *everything* upstream of the node
-                all_upstream_nodes = nx.traversal.bfs_tree(
-                    linker.graph, node_id, reverse=True
-                )
+                all_upstream_nodes = nx.traversal.bfs_tree(linker.graph, node_id, reverse=True)
                 # Get the set of upstream nodes not including the current node.
-                upstream_nodes = set([
-                    n for n in all_upstream_nodes if n != node_id
-                ])
+                upstream_nodes = set([n for n in all_upstream_nodes if n != node_id])
 
                 # Get all tests that depend on any upstream nodes.
                 upstream_tests = []
                 for upstream_node in upstream_nodes:
-                    upstream_tests += _get_tests_for_node(
-                        manifest,
-                        upstream_node
-                    )
+                    upstream_tests += _get_tests_for_node(manifest, upstream_node)
 
                 for upstream_test in upstream_tests:
                     # Get the set of all nodes that the test depends on
@@ -490,18 +483,13 @@ class Compiler:
                     # relationship tests). Test nodes do not distinguish
                     # between what node the test is "testing" and what
                     # node(s) it depends on.
-                    test_depends_on = set(
-                        manifest.nodes[upstream_test].depends_on_nodes
-                    )
+                    test_depends_on = set(manifest.nodes[upstream_test].depends_on_nodes)
 
                     # If the set of nodes that an upstream test depends on
                     # is a subset of all upstream nodes of the current node,
                     # add an edge from the upstream test to the current node.
                     if (test_depends_on.issubset(upstream_nodes)):
-                        linker.graph.add_edge(
-                            upstream_test,
-                            node_id
-                        )
+                        linker.graph.add_edge(upstream_test, node_id)
 
     def compile(self, manifest: Manifest, write=True, add_test_edges=False) -> Graph:
         self.initialize()
