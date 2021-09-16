@@ -407,6 +407,30 @@ def _build_build_subparser(subparsers, base_subparser):
                      action='append',
                      default=[],
                      dest='resource_types')
+    sub.add_argument(
+        '-m',
+        '--models',
+        dest='models',
+        nargs='+',
+        help='''
+        Specify the models to select and set the resource-type to 'model'.
+        Mutually exclusive with '--select' (or '-s') and '--resource-type'
+        ''',
+        metavar='SELECTOR',
+        required=False,
+    )
+    sub.add_argument(
+        '-s',
+        '--select',
+        dest='select',
+        nargs='+',
+        help='''
+            Specify the nodes to include.
+        ''',
+        metavar='SELECTOR',
+        required=False,
+    )
+    _add_common_selector_arguments(sub)
     return sub
 
 
@@ -1070,8 +1094,7 @@ def parse_args(args, cls=DBTArgumentParser):
     # --select, --exclude
     # list_sub sets up its own arguments.
     _add_selection_arguments(
-        build_sub, run_sub, compile_sub, generate_sub,
-        test_sub, snapshot_sub, seed_sub)
+        run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub)
     # --full-refresh
