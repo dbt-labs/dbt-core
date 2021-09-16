@@ -135,7 +135,10 @@ class RemoteTestProjectTask(RPCCommandTask[RPCTestParameters], TestTask):
     METHOD_NAME = 'test'
 
     def set_args(self, params: RPCTestParameters) -> None:
-        self.args.select = self._listify(params.select)
+        if params.models:
+            self.args.select = self._listify(params.models)
+        else:
+            self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
         self.args.data = params.data
