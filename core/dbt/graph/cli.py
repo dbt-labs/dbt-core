@@ -238,6 +238,6 @@ def parse_from_selectors_definition(
     for selector in source.selectors:
         result[selector.name] = {
             "default": selector.default,
-            "definition": parse_from_definition(selector.definition, rootlevel=True)
+            "definition": parse_from_definition(selector.definition, rootlevel=True),
         }
     return result
