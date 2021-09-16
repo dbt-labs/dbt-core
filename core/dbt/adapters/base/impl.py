@@ -934,7 +934,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
         kwargs: Dict[str, Any] = None,
-        release: bool = False,
         text_only_columns: Optional[Iterable[str]] = None,
     ) -> agate.Table:
         """Look macro_name up in the manifest and execute its results.
@@ -948,10 +947,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             execution context.
         :param kwargs: An optional dict of keyword args used to pass to the
             macro.
-        :param release: Ignored.
         """
-        if release is not False:
-            deprecations.warn('execute-macro-release')
+
         if kwargs is None:
             kwargs = {}
         if context_override is None:
