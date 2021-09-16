@@ -285,6 +285,9 @@ class SourceFreshnessOutput(dbtClassMixin):
     status: FreshnessStatus
     criteria: FreshnessThreshold
     adapter_response: Dict[str, Any]
+    timing: List[TimingInfo]
+    thread_id: str
+    execution_time: float
 
 
 @dataclass
@@ -333,7 +336,10 @@ def process_freshness_result(
         max_loaded_at_time_ago_in_s=result.age,
         status=result.status,
         criteria=criteria,
-        adapter_response=result.adapter_response
+        adapter_response=result.adapter_response,
+        timing=result.timing,
+        thread_id=result.thread_id,
+        execution_time=result.execution_time,
     )
 
 
