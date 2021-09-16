@@ -19,7 +19,7 @@ from dbt.exceptions import RuntimeException, InternalException
 from dbt.logger import print_timestamped_line
 from dbt.node_types import NodeType
 
-from dbt.graph import ResourceTypeSelector, SelectionSpec, parse_difference
+from dbt.graph import ResourceTypeSelector
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 
 
@@ -135,22 +135,6 @@ class FreshnessTask(GraphRunnableTask):
 
     def raise_on_first_error(self):
         return False
-
-    def get_selection_spec(self) -> SelectionSpec:
-        """Generates a selection spec from task arguments to use when
-        processing graph. A SelectionSpec describes what nodes to select
-        when creating queue from graph of nodes.
-        """
-        default_selector = self.config.get_default_selector()
-        if self.args.selector_name:
-            # use pre-defined selector (--selector) to create selection spec
-            spec = self.config.get_selector(self.args.selector_name)
-        elif not (self.args.select or self.args.exclude) and default_selector:
-            spec = default_selector
-        else:
-            # use --select and --exclude args to create selection spec
-            spec = parse_difference(self.args.select, self.args.exclude)
-        return spec
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:

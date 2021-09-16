@@ -9,7 +9,7 @@
 - Customize ls task JSON output by adding new flag `--output-keys` ([#3778](https://github.com/dbt-labs/dbt/issues/3778), [#3395](https://github.com/dbt-labs/dbt/issues/3395))
 - Add support for execution project on BigQuery through profile configuration ([#3707](https://github.com/dbt-labs/dbt/issues/3707), [#3708](https://github.com/dbt-labs/dbt/issues/3708))
 - Skip downstream nodes during the `build` task when a test fails. ([#3597](https://github.com/dbt-labs/dbt/issues/3597), [#3792](https://github.com/dbt-labs/dbt/pull/3792))
-- Added default field in the `selectors.yml` to allow user to define default selector ([#3448](https://github.com/dbt-labs/dbt/issues/3448#issuecomment-907611470))
+- Added default field in the `selectors.yml` to allow user to define default selector ([#3448](https://github.com/dbt-labs/dbt/issues/3448), [#3875](https://github.com/dbt-labs/dbt/issues/3875), [#3892](https://github.com/dbt-labs/dbt/issues/3892))
 
 ### Fixes
 
