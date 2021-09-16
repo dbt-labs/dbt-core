@@ -113,25 +113,84 @@ def test_rpc_build_state(
 
         get_write_manifest(querier, os.path.join(state_dir, 'manifest.json'))
 
-        project.models['my_model.sql'] = 'select * from {{ ref("data" )}} where id = 2'
+        project.models['my_model.sql'] =\
+            'select * from {{ ref("data" )}} where id = 2'
         project.write_models(project_root, remove=True)
         querier.sighup()
         assert querier.wait_for_status('ready') is True
 
         results = querier.async_wait_for_result(
-            querier.build(state='./state', models=['state:modified'])
+            querier.build(state='./state', select=['state:modified'])
         )
         assert len(results['results']) == 3
 
         get_write_manifest(querier, os.path.join(state_dir, 'manifest.json'))
 
         results = querier.async_wait_for_result(
-            querier.build(state='./state', models=['state:modified']),
+            querier.build(state='./state', select=['state:modified']),
         )
         assert len(results['results']) == 0
-        
+
         # a better test of defer would require multiple targets
         results = querier.async_wait_for_result(
-            querier.build(state='./state', models=['state:modified'], defer=True)
+            querier.build(
+                state='./state',
+                select=['state:modified'],
+                defer=True
+            )
         )
         assert len(results['results']) == 0
+
+
+@pytest.mark.supported('postgres')
+def test_rpc_build_selectors(
+    project_root, profiles_root, dbt_profile, unique_schema
+):
+    schema_yaml = {
+        'version': 2,
+        'models': [{
+            'name': 'my_model',
+            'columns': [
+                {
+                    'name': 'id',
+                    'tests': ['not_null', 'unique'],
+                },
+            ],
+        }],
+    }
+    project = ProjectDefinition(
+        name='test',
+        project_data={
+            'seeds': {'+quote_columns': False},
+            'models': {'test': {'my_model': {'+tags': 'example_tag'}}}
+        },
+        models={
+            'my_model.sql': 'select * from {{ ref("data") }}',
+            'schema.yml': yaml.safe_dump(schema_yaml)
+        },
+        seeds={'data.csv': 'id,message\n1,hello\n2,goodbye'},
+        snapshots={'my_snapshots.sql': snapshot_data},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+    )
+    with querier_ctx as querier:
+        # test simple resource_types param
+        results = querier.async_wait_for_result(
+            querier.build(resource_types=['seed'])
+        )
+        assert len(results['results']) == 1
+        assert results['results'][0]['node']['resource_type'] == 'seed'
+
+        # test simple select param (should select tagged model and its tests)
+        results = querier.async_wait_for_result(
+            querier.build(select=['tag:example_tag'])
+        )
+        assert len(results['results']) == 3
+        assert sorted(
+            [result['node']['resource_type'] for result in results['results']]
+        ) == ['model', 'test', 'test']

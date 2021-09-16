@@ -320,13 +320,12 @@ class RemoteListTask(
 
 
 class RemoteBuildProjectTask(RPCCommandTask[RPCBuildParameters], BuildTask):
+
     METHOD_NAME = 'build'
 
     def set_args(self, params: RPCBuildParameters) -> None:
-        if params.models:
-            self.args.select = self._listify(params.models)
-        else:
-            self.args.select = self._listify(params.select)
+        self.args.resource_types = self._listify(params.resource_types)
+        self.args.select = self._listify(params.select)
         self.args.exclude = self._listify(params.exclude)
         self.args.selector_name = params.selector
 
