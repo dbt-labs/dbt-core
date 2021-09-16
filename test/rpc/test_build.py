@@ -120,14 +120,14 @@ def test_rpc_build_state(
         assert querier.wait_for_status('ready') is True
 
         results = querier.async_wait_for_result(
-            querier.build(state='./state', models=['state:modified'])
+            querier.build(state='./state', select=['state:modified'])
         )
         assert len(results['results']) == 3
 
         get_write_manifest(querier, os.path.join(state_dir, 'manifest.json'))
 
         results = querier.async_wait_for_result(
-            querier.build(state='./state', models=['state:modified']),
+            querier.build(state='./state', select=['state:modified']),
         )
         assert len(results['results']) == 0
 
@@ -135,7 +135,7 @@ def test_rpc_build_state(
         results = querier.async_wait_for_result(
             querier.build(
                 state='./state',
-                models=['state:modified'],
+                select=['state:modified'],
                 defer=True
             )
         )
@@ -185,20 +185,6 @@ def test_rpc_build_selectors(
         )
         assert len(results['results']) == 1
         assert results['results'][0]['node']['resource_type'] == 'seed'
-
-        # test simple models param
-        results = querier.async_wait_for_result(
-            querier.build(models=['my_model'])
-        )
-        assert len(results['results']) == 1
-        assert results['results'][0]['node']['resource_type'] == 'model'
-
-        # test simple models param
-        results = querier.async_wait_for_result(
-            querier.build(models=['my_model'])
-        )
-        assert len(results['results']) == 1
-        assert results['results'][0]['node']['resource_type'] == 'model'
 
         # test simple select param (should select tagged model and its tests)
         results = querier.async_wait_for_result(

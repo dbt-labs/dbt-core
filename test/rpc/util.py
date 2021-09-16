@@ -384,7 +384,6 @@ class Querier:
 
     def build(
         self,
-        models: Optional[Union[str, List[str]]] = None,
         select: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
         resource_types: Optional[Union[str, List[str]]] = None,
@@ -396,8 +395,6 @@ class Querier:
         params = {}
         if select is not None:
             params['select'] = select
-        if models is not None:
-            params['models'] = models
         if exclude is not None:
             params['exclude'] = exclude
         if resource_types is not None:
