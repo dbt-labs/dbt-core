@@ -10,23 +10,23 @@ from pathlib import Path
 
 import dbt.version
 import dbt.flags as flags
-import dbt.task.run as run_task
 import dbt.task.build as build_task
+import dbt.task.clean as clean_task
 import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
-import dbt.task.clean as clean_task
 import dbt.task.deps as deps_task
-import dbt.task.init as init_task
-import dbt.task.seed as seed_task
-import dbt.task.test as test_task
-import dbt.task.snapshot as snapshot_task
-import dbt.task.generate as generate_task
-import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
-import dbt.task.run_operation as run_operation_task
+import dbt.task.generate as generate_task
+import dbt.task.init as init_task
+import dbt.task.list as list_task
 import dbt.task.parse as parse_task
+import dbt.task.run as run_task
+import dbt.task.run_operation as run_operation_task
+import dbt.task.seed as seed_task
+import dbt.task.serve as serve_task
+import dbt.task.snapshot as snapshot_task
+import dbt.task.test as test_task
 from dbt.profiler import profiler
-from dbt.task.list import ListTask
 from dbt.task.rpc.server import RPCServerTask
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
@@ -400,8 +400,8 @@ def _build_build_subparser(subparsers, base_subparser):
         '''
     )
     resource_values: List[str] = [
-        str(s) for s in ListTask.ALL_RESOURCE_VALUES
-    ] + ['default', 'all']
+        str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
+    ] + ['all']
     sub.add_argument('--resource-type',
                      choices=resource_values,
                      action='append',
@@ -823,9 +823,9 @@ def _build_list_subparser(subparsers, base_subparser):
         ''',
         aliases=['ls'],
     )
-    sub.set_defaults(cls=ListTask, which='list', rpc_method=None)
+    sub.set_defaults(cls=list_task.ListTask, which='list', rpc_method=None)
     resource_values: List[str] = [
-        str(s) for s in ListTask.ALL_RESOURCE_VALUES
+        str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES
     ] + ['default', 'all']
     sub.add_argument('--resource-type',
                      choices=resource_values,
@@ -1070,7 +1070,8 @@ def parse_args(args, cls=DBTArgumentParser):
     # --select, --exclude
     # list_sub sets up its own arguments.
     _add_selection_arguments(
-        build_sub, run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
+        build_sub, run_sub, compile_sub, generate_sub,
+        test_sub, snapshot_sub, seed_sub)
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub)
     # --full-refresh

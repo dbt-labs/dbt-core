@@ -4,8 +4,8 @@ from .seed import SeedRunner as seed_runner
 from .test import TestRunner as test_runner
 
 from dbt.contracts.results import NodeStatus
+from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector
-from dbt.exceptions import RuntimeException, InternalException
 from dbt.node_types import NodeType
 from dbt.task.test import TestSelector
 
@@ -17,6 +17,8 @@ class BuildTask(RunTask):
 
     I.E. a resource of type Model is handled by the ModelRunner which is
     imported as run_model_runner. """
+
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail]
 
     RUNNER_MAP = {
         NodeType.Model: run_model_runner,
@@ -32,15 +34,19 @@ class BuildTask(RunTask):
             return list(self.ALL_RESOURCE_VALUES)
 
         values = set(self.args.resource_types)
-        return list(values)
 
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail]
+        if 'all' in values:
+            values.remove('all')
+            values.update(self.ALL_RESOURCE_VALUES)
+
+        return list(values)
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise InternalException(
                 'manifest and graph must be set to get node selection'
             )
+
         resource_types = self.resource_types
 
         if resource_types == [NodeType.Test]:
