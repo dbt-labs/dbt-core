@@ -368,11 +368,11 @@ def _build_build_subparser(subparsers, base_subparser):
         """,
     )
     sub.add_argument(
-        '--store-failures',
-        action='store_true',
-        help='''
+        "--store-failures",
+        action="store_true",
+        help="""
         Store test results (failing rows) in the database
-        '''
+        """,
     )
     sub.add_argument(
         '--indirect-selection',
@@ -385,23 +385,25 @@ def _build_build_subparser(subparsers, base_subparser):
         ''',
     )
 
-    resource_values: List[str] = [
-        str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
-    ] + ['all']
-    sub.add_argument('--resource-type',
-                     choices=resource_values,
-                     action='append',
-                     default=[],
-                     dest='resource_types')
+    resource_values: List[str] = [str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES] + [
+        "all"
+    ]
+    sub.add_argument(
+        "--resource-type",
+        choices=resource_values,
+        action="append",
+        default=[],
+        dest="resource_types",
+    )
     # explicity don't support --models
     sub.add_argument(
-        '-s',
-        '--select',
-        dest='select',
-        nargs='+',
-        help='''
+        "-s",
+        "--select",
+        dest="select",
+        nargs="+",
+        help="""
             Specify the nodes to include.
-        ''',
+        """,
     )
     _add_common_selector_arguments(sub)
     return sub
@@ -788,9 +790,9 @@ def _build_list_subparser(subparsers, base_subparser):
         """,
         aliases=['ls'],
     )
-    sub.set_defaults(cls=list_task.ListTask, which='list', rpc_method=None)
+    sub.set_defaults(cls=list_task.ListTask, which="list", rpc_method=None)
     resource_values: List[str] = [str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES] + [
-        str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES
+        "default",
         "all",
     sub.add_argument('--resource-type',
                      choices=resource_values,

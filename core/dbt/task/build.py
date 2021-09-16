@@ -17,7 +17,7 @@ class BuildTask(RunTask):
     RUNNER_MAP will be processed by the mapped runner class.
 
     I.E. a resource of type Model is handled by the ModelRunner which is
-    imported as run_model_runner. """
+    imported as run_model_runner."""
 
     MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail]
 
@@ -36,8 +36,8 @@ class BuildTask(RunTask):
 
         values = set(self.args.resource_types)
 
-        if 'all' in values:
-            values.remove('all')
+        if "all" in values:
+            values.remove("all")
             values.update(self.ALL_RESOURCE_VALUES)
 
         return list(values)
