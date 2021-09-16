@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: model_0
+    columns:
+      - name: iso3
+        tests:
+          - relationships:
+              to: ref('model_1')
+              field: iso3
+
+  - name: model_1
+    columns:
+      - name: iso3
+        tests:
+          - relationships:
+              to: ref('model_0')
+              field: iso3

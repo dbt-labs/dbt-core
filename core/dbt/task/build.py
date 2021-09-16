@@ -3,18 +3,19 @@ from .snapshot import SnapshotRunner as snapshot_model_runner
 from .seed import SeedRunner as seed_runner
 from .test import TestRunner as test_runner
 
+from dbt.contracts.results import NodeStatus
 from dbt.graph import ResourceTypeSelector
 from dbt.exceptions import InternalException
 from dbt.node_types import NodeType
 
 
 class BuildTask(RunTask):
-    """The Build task processes all assets of a given process and attempts to 'build'
-    them in an opinionated fashion.  Every resource type outlined in RUNNER_MAP
-    will be processed by the mapped runner class.
+    """The Build task processes all assets of a given process and
+    attempts to 'build' them in an opinionated fashion. Every resource
+    type outlined in RUNNER_MAP will be processed by the mapped runner class.
 
-    I.E. a resource of type Model is handled by the ModelRunner which is imported
-    as run_model_runner.
+    I.E. a resource of type Model is handled by the ModelRunner which is
+    imported as run_model_runner.
     """
 
     RUNNER_MAP = {
@@ -23,6 +24,8 @@ class BuildTask(RunTask):
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
     }
+
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail]
 
     def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:

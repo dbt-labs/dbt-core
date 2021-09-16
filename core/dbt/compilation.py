@@ -10,7 +10,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.clients import jinja
 from dbt.clients.system import make_directory
 from dbt.context.providers import generate_runtime_model
-from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.compiled import (
     COMPILED_TYPES,
     CompiledSchemaTestNode,
@@ -107,6 +107,18 @@ def _extend_prepended_ctes(prepended_ctes, new_prepended_ctes):
         _add_prepended_cte(prepended_ctes, new_cte)
 
 
+def _get_tests_for_node(manifest: Manifest, unique_id: UniqueID) -> List[UniqueID]:
+    """ Get a list of tests that depend on the node with the
+    provided unique id """
+
+    return [
+        node.unique_id
+        for _, node in manifest.nodes.items()
+        if node.resource_type == NodeType.Test and
+        unique_id in node.depends_on_nodes
+    ]
+
+
 class Linker:
     def __init__(self, data=None):
         if data is None:
@@ -142,7 +154,7 @@ class Linker:
         include all nodes in their corresponding graph entries.
         """
         out_graph = self.graph.copy()
-        for node_id in self.graph.nodes():
+        for node_id in self.graph:
             data = manifest.expect(node_id).to_dict(omit_none=True)
             out_graph.add_node(node_id, **data)
         nx.write_gpickle(out_graph, outfile)
@@ -412,12 +424,79 @@ class Compiler:
             self.link_node(linker, node, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(linker, exposure, manifest)
-            # linker.add_node(exposure.unique_id)
 
         cycle = linker.find_cycles()
 
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
+
+        self.resolve_graph(linker, manifest)
+
+    def resolve_graph(self, linker: Linker, manifest: Manifest) -> None:
+        """ This method adds additional edges to the DAG. For a given non-test
+        executable node, add an edge from an upstream test to the given node if
+        the set of nodes the test depends on is a proper/strict subset of the
+        upstream nodes for the given node. """
+
+        # Given a graph:
+        # model1 --> model2 --> model3
+        #   |         |
+        #   |        \/
+        #  \/      test 2
+        # test1
+        #
+        # Produce the following graph:
+        # model1 --> model2 --> model3
+        #   |         |         /\ /\
+        #   |        \/         |  |
+        #  \/      test2 -------   |
+        # test1 -------------------
+
+        for node_id in linker.graph:
+            # If node is executable (in manifest.nodes) and does _not_
+            # represent a test, continue.
+            if (
+                node_id in manifest.nodes and
+                manifest.nodes[node_id].resource_type != NodeType.Test
+            ):
+                # Get *everything* upstream of the node
+                all_upstream_nodes = nx.traversal.bfs_tree(
+                    linker.graph, node_id, reverse=True
+                )
+                # Get the set of upstream nodes not including the current node.
+                upstream_nodes = set([
+                    n for n in all_upstream_nodes if n != node_id
+                ])
+
+                # Get all tests that depend on any upstream nodes.
+                upstream_tests = []
+                for upstream_node in upstream_nodes:
+                    upstream_tests += _get_tests_for_node(
+                        manifest,
+                        upstream_node
+                    )
+
+                for upstream_test in upstream_tests:
+                    # Get the set of all nodes that the test depends on
+                    # including the upstream_node itself. This is necessary
+                    # because tests can depend on multiple nodes (ex:
+                    # relationship tests). Test nodes do not distinguish
+                    # between what node the test is "testing" and what
+                    # node(s) it depends on.
+                    test_depends_on = set(
+                        manifest.nodes[upstream_test].depends_on_nodes
+                    )
+
+                    # If the set of nodes that an upstream test depends on
+                    # is a proper (or strict) subset of all upstream nodes of
+                    # the current node, add an edge from the upstream test
+                    # to the current node. Must be a proper/strict subset to
+                    # avoid adding a circular dependency to the graph.
+                    if (test_depends_on < upstream_nodes):
+                        linker.graph.add_edge(
+                            upstream_test,
+                            node_id
+                        )
 
     def compile(self, manifest: Manifest, write=True) -> Graph:
         self.initialize()

@@ -83,6 +83,7 @@ class BigQueryCredentials(Credentials):
     # BigQuery allows an empty database / project, where it defers to the
     # environment for the project
     database: Optional[str]
+    execution_project: Optional[str] = None
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
     priority: Optional[Priority] = None
@@ -130,6 +131,9 @@ class BigQueryCredentials(Credentials):
         if 'database' not in d:
             _, database = get_bigquery_defaults()
             d['database'] = database
+        # `execution_project` default to dataset/project
+        if 'execution_project' not in d:
+            d['execution_project'] = d['database']
         return d
 
 
@@ -252,12 +256,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 cls.get_impersonated_bigquery_credentials(profile_credentials)
         else:
             creds = cls.get_bigquery_credentials(profile_credentials)
-        database = profile_credentials.database
+        execution_project = profile_credentials.execution_project
         location = getattr(profile_credentials, 'location', None)
 
         info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
         return google.cloud.bigquery.Client(
-            database,
+            execution_project,
             creds,
             location=location,
             client_info=info,
