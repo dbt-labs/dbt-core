@@ -653,7 +653,7 @@ class Project:
             )
         return self.selectors[name]["definition"]
 
-    def get_default_selector_name(self) -> Union[str, bool]:
+    def get_default_selector_name(self) -> Union[str, None]:
         """This function fetch the default selector to use on `dbt run` (if any)
         :return: either a selector if default is set or None
         :rtype: Union[SelectionSpec, None]

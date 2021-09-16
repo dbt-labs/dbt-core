@@ -115,7 +115,7 @@ class GraphRunnableTask(ManifestTask):
     @property
     def selection_arg(self):
         return self.args.select
-        
+
     @property
     def exclusion_arg(self):
         return self.args.exclude
