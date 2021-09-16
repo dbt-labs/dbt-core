@@ -399,6 +399,13 @@ def _build_build_subparser(subparsers, base_subparser):
         Stop execution upon a first failure.
         '''
     )
+    sub.add_argument(
+        '--store-failures',
+        action='store_true',
+        help='''
+        Store test results (failing rows) in the database
+        '''
+    )
     resource_values: List[str] = [
         str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
     ] + ['all']
