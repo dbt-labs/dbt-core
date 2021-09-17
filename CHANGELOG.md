@@ -11,6 +11,7 @@
 - Skip downstream nodes during the `build` task when a test fails. ([#3597](https://github.com/dbt-labs/dbt/issues/3597), [#3792](https://github.com/dbt-labs/dbt/pull/3792))
 - Added default field in the `selectors.yml` to allow user to define default selector ([#3448](https://github.com/dbt-labs/dbt/issues/3448#issuecomment-907611470))
 - Added timing and thread information to sources.json artifact ([#3804](https://github.com/dbt-labs/dbt/issues/3804), [#3894](https://github.com/dbt-labs/dbt/pull/3894))
+- Update cli and rpc flags for the `build` task to align with other commands (`--resource-type`, `--store-failures`) ([#3596](https://github.com/dbt-labs/dbt/issues/3596), [#3884](https://github.com/dbt-labs/dbt/pull/3884))
 
 ### Fixes
 
@@ -19,19 +20,17 @@
 - Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848), [#3850](https://github.com/dbt-labs/dbt/pull/3850))
 - Fix bug with initializing a dataclass that inherits from `typing.Protocol`, specifically for `dbt.config.profile.Profile` ([#3843](https://github.com/dbt-labs/dbt/issues/3843), [#3855](https://github.com/dbt-labs/dbt/pull/3855))
 - Introduce a macro, `get_where_subquery`, for tests that use `where` config. Alias filtering subquery as `dbt_subquery` instead of resource identifier ([#3857](https://github.com/dbt-labs/dbt/issues/3857), [#3859](https://github.com/dbt-labs/dbt/issues/3859))
-
-### Fixes
-
 - Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3682](https://github.com/dbt-labs/dbt/issues/3682), [#3691](https://github.com/dbt-labs/dbt/issues/3682))
 
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 - Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
-- Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/fishtown-analytics/dbt/issues/3622), [#3623](https://github.com/fishtown-analytics/dbt/pull/3623))
+- Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/dbt-labs/dbt/issues/3622), [#3623](https://github.com/dbt-labs/dbt/pull/3623))
 - Alert users on package rename ([hub.getdbt.com#180](https://github.com/dbt-labs/hub.getdbt.com/issues/810), [#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - Add `adapter_unique_id` to invocation context in anonymous usage tracking, to better understand dbt adoption ([#3713](https://github.com/dbt-labs/dbt/issues/3713), [#3796](https://github.com/dbt-labs/dbt/issues/3796))
 - Specify `macro_namespace = 'dbt'` for all dispatched macros in the global project, making it possible to dispatch to macro implementations defined in packages. Dispatch `generate_schema_name` and `generate_alias_name` ([#3456](https://github.com/dbt-labs/dbt/issues/3456), [#3851](https://github.com/dbt-labs/dbt/issues/3851))
+- Retry transient GitHub failures during download ([#3729](https://github.com/dbt-labs/dbt/pull/3729))
 
 Contributors:
 
