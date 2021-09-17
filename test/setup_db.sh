@@ -34,8 +34,11 @@ until pg_isready -h ${PGHOST} -p ${PGPORT} -U ${PGUSER}; do
     sleep 2;
 done;
 
+createdb dbt
 psql -c "CREATE ROLE root WITH PASSWORD 'password';"
 psql -c "ALTER ROLE root WITH LOGIN;"
+psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"
+
 psql -c "CREATE ROLE noaccess WITH PASSWORD 'password' NOSUPERUSER;"
 psql -c "ALTER ROLE noaccess WITH LOGIN;"
 psql -c "GRANT CONNECT ON DATABASE dbt TO noaccess;"
