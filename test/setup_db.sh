@@ -34,4 +34,11 @@ until pg_isready -h ${PGHOST} -p ${PGPORT} -U ${PGUSER}; do
     sleep 2;
 done;
 
+psql -c "CREATE ROLE noaccess WITH PASSWORD 'password' NOSUPERUSER;"
+psql -c "ALTER ROLE noaccess WITH LOGIN;"
+psql -c "GRANT CONNECT ON DATABASE dbt TO noaccess;"
+
+psql -c 'CREATE DATABASE "dbtMixedCase";'
+psql -c 'GRANT CREATE, CONNECT ON DATABASE "dbtMixedCase" TO root WITH GRANT OPTION;'
+
 set +x
