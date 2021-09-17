@@ -30,6 +30,7 @@
 - Alert users on package rename ([hub.getdbt.com#180](https://github.com/dbt-labs/hub.getdbt.com/issues/810), [#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - Add `adapter_unique_id` to invocation context in anonymous usage tracking, to better understand dbt adoption ([#3713](https://github.com/dbt-labs/dbt/issues/3713), [#3796](https://github.com/dbt-labs/dbt/issues/3796))
 - Specify `macro_namespace = 'dbt'` for all dispatched macros in the global project, making it possible to dispatch to macro implementations defined in packages. Dispatch `generate_schema_name` and `generate_alias_name` ([#3456](https://github.com/dbt-labs/dbt/issues/3456), [#3851](https://github.com/dbt-labs/dbt/issues/3851))
+- Retry transient GitHub failures during download ([#3729](https://github.com/dbt-labs/dbt/pull/3729))
 
 Contributors:
 
