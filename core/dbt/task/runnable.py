@@ -41,7 +41,13 @@ from dbt.exceptions import (
     FailFastException,
 )
 
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
+from dbt.graph import (
+    GraphQueue,
+    NodeSelector,
+    SelectionSpec,
+    parse_difference,
+    Graph
+)
 from dbt.parser.manifest import ManifestLoader
 
 import dbt.exceptions
@@ -106,11 +112,27 @@ class GraphRunnableTask(ManifestTask):
     def index_offset(self, value: int) -> int:
         return value
 
-    @abstractmethod
+    @property
+    def selection_arg(self):
+        return self.args.select
+
+    @property
+    def exclusion_arg(self):
+        return self.args.exclude
+
     def get_selection_spec(self) -> SelectionSpec:
-        raise NotImplementedException(
-            f'get_selection_spec not implemented for task {type(self)}'
-        )
+        default_selector_name = self.config.get_default_selector_name()
+        if self.args.selector_name:
+            # use pre-defined selector (--selector)
+            spec = self.config.get_selector(self.args.selector_name)
+        elif not (self.selection_arg or self.exclusion_arg) and default_selector_name:
+            # use pre-defined selector (--selector) with default: true
+            logger.info(f"Using default selector {default_selector_name}")
+            spec = self.config.get_selector(default_selector_name)
+        else:
+            # use --select and --exclude args
+            spec = parse_difference(self.selection_arg, self.exclusion_arg)
+        return spec
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:

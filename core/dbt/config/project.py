@@ -38,7 +38,6 @@ from .selectors import (
     selector_data_from_root,
     SelectorConfig,
 )
-from dbt.logger import print_timestamped_line
 
 
 INVALID_VERSION_ERROR = """\
@@ -654,16 +653,14 @@ class Project:
             )
         return self.selectors[name]["definition"]
 
-    def get_default_selector(self) -> Union[SelectionSpec, bool, None]:
+    def get_default_selector_name(self) -> Union[str, None]:
         """This function fetch the default selector to use on `dbt run` (if any)
         :return: either a selector if default is set or None
         :rtype: Union[SelectionSpec, None]
         """
         for selector_name, selector in self.selectors.items():
             if selector["default"] is True:
-                name = selector_name
-                print_timestamped_line(f'Using default selector {name}')
-                return self.get_selector(name)
+                return selector_name
 
         return None
 
