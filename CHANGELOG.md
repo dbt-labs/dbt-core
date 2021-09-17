@@ -2,6 +2,7 @@
 
 ### Features
 
+- Experimental parser now detects macro overrides of ref, source, and config builtins. ([#3581](https://github.com/dbt-labs/dbt/issues/3866), [#3582](https://github.com/dbt-labs/dbt/pull/3877))
 - Add connect_timeout profile configuration for Postgres and Redshift adapters. ([#3581](https://github.com/dbt-labs/dbt/issues/3581), [#3582](https://github.com/dbt-labs/dbt/pull/3582))
 - Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
