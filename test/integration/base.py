@@ -65,6 +65,7 @@ class FakeArgs:
         self.schema = True
         self.full_refresh = False
         self.models = None
+        self.select = None
         self.exclude = None
         self.single_threaded = False
         self.selector_name = None
@@ -261,6 +262,15 @@ class DBTIntegrationTest(unittest.TestCase):
                         'project': project_id,
                         'keyfile_json': credentials,
                         'schema': self.unique_schema(),
+                    },
+                    'alternate': {
+                        'type': 'bigquery',
+                        'method': 'service-account-json',
+                        'threads': 1,
+                        'project': project_id,
+                        'keyfile_json': credentials,
+                        'schema': self.unique_schema(),
+                        'execution_project': self.alternative_database,
                     },
                 },
                 'target': 'default2'

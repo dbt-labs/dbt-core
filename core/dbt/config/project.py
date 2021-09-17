@@ -645,13 +645,24 @@ class Project:
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
 
-    def get_selector(self, name: str) -> SelectionSpec:
+    def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:
             raise RuntimeException(
                 f'Could not find selector named {name}, expected one of '
                 f'{list(self.selectors)}'
             )
-        return self.selectors[name]
+        return self.selectors[name]["definition"]
+
+    def get_default_selector_name(self) -> Union[str, None]:
+        """This function fetch the default selector to use on `dbt run` (if any)
+        :return: either a selector if default is set or None
+        :rtype: Union[SelectionSpec, None]
+        """
+        for selector_name, selector in self.selectors.items():
+            if selector["default"] is True:
+                return selector_name
+
+        return None
 
     def get_macro_search_order(self, macro_namespace: str):
         for dispatch_entry in self.dispatch:

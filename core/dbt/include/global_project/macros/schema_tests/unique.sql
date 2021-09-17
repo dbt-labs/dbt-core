@@ -1,7 +1,7 @@
 {% macro default__test_unique(model, column_name) %}
 
 select
-    {{ column_name }},
+    {{ column_name }} as unique_field,
     count(*) as n_records
 
 from {{ model }}
@@ -13,6 +13,6 @@ having count(*) > 1
 
 
 {% test unique(model, column_name) %}
-    {% set macro = adapter.dispatch('test_unique') %}
+    {% set macro = adapter.dispatch('test_unique', 'dbt') %}
     {{ macro(model, column_name) }}
 {% endtest %}

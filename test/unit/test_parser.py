@@ -32,7 +32,7 @@ from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
-
+import itertools
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode, MockSource, MockDocumentation
 
 
@@ -146,6 +146,7 @@ class BaseParserTest(unittest.TestCase):
             searched_path=searched,
             relative_path=filename,
             project_root=root_dir,
+            modification_time=0.0,
         )
         sf_cls = SchemaSourceFile if filename.endswith('.yml') else SourceFile
         source_file = sf_cls(
@@ -415,14 +416,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[0].package_name, 'snowplow')
         self.assertTrue(tests[0].name.startswith('accepted_values_'))
         self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
-        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '0ecffad2de'])
+        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '9d4814efde'])
         self.assertEqual(tests[0].test_metadata.name, 'accepted_values')
         self.assertIsNone(tests[0].test_metadata.namespace)
         self.assertEqual(
             tests[0].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
+                'model': "{{ get_where_subquery(ref('my_model')) }}",
                 'values': ['red', 'blue', 'green'],
             }
         )
@@ -437,14 +438,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
         self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
         self.assertEqual(tests[1].package_name, 'snowplow')
-        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, '0cc2317899'])
+        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, '13958f62f7'])
         self.assertEqual(tests[1].test_metadata.name, 'test_case')
         self.assertEqual(tests[1].test_metadata.namespace, 'foreign_package')
         self.assertEqual(
             tests[1].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
+                'model': "{{ get_where_subquery(ref('my_model')) }}",
                 'arg': 100,
             },
         )
@@ -456,14 +457,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[2].package_name, 'snowplow')
         self.assertTrue(tests[2].name.startswith('not_null_'))
         self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
-        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, '1bac81dcfe'])
+        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, '2f61818750'])
         self.assertEqual(tests[2].test_metadata.name, 'not_null')
         self.assertIsNone(tests[2].test_metadata.namespace)
         self.assertEqual(
             tests[2].test_metadata.kwargs,
             {
                 'column_name': 'color',
-                'model': "{% if config.get('where') %}(select * from {{ ref('my_model') }} where {{config.get('where')}}) my_model{% else %}{{ ref('my_model') }}{% endif %}",
+                'model': "{{ get_where_subquery(ref('my_model')) }}",
             },
         )
 
@@ -519,6 +520,57 @@ class ModelParserTest(BaseParserTest):
         block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
         with self.assertRaises(CompilationException):
             self.parser.parse_file(block)
+
+
+class StaticModelParserTest(BaseParserTest):
+    def setUp(self):
+        super().setUp()
+        self.parser = ModelParser(
+            project=self.snowplow_project_config,
+            manifest=self.manifest,
+            root_project=self.root_project_config,
+        )
+
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'models')
+
+    # tests that when the ref built-in is overriden with a macro definition
+    # that the ModelParser can detect it. This does not test that the static
+    # parser does not run in this case. That test is in integration test suite 072
+    def test_built_in_macro_override_detection(self):
+        macro_unique_id = 'macro.root.ref'
+        self.parser.manifest.macros[macro_unique_id] = ParsedMacro(
+            name='ref',
+            resource_type=NodeType.Macro,
+            unique_id=macro_unique_id,
+            package_name='root',
+            original_file_path=normalize('macros/macro.sql'),
+            root_path=get_abs_os_path('./dbt_modules/root'),
+            path=normalize('macros/macro.sql'),
+            macro_sql='{% macro ref(model_name) %}{% set x = raise("boom") %}{% endmacro %}',
+        )
+
+        raw_sql = '{{ config(materialized="table") }}select 1 as id'
+        block = self.file_block_for(raw_sql, 'nested/model_1.sql')
+        node = ParsedModelNode(
+            alias='model_1',
+            name='model_1',
+            database='test',
+            schema='analytics',
+            resource_type=NodeType.Model,
+            unique_id='model.snowplow.model_1',
+            fqn=['snowplow', 'nested', 'model_1'],
+            package_name='snowplow',
+            original_file_path=normalize('models/nested/model_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            config=NodeConfig(materialized='table'),
+            path=normalize('nested/model_1.sql'),
+            raw_sql=raw_sql,
+            checksum=block.file.checksum,
+            unrendered_config={'materialized': 'table'},
+        )
+
+        assert(self.parser._has_banned_macro(node))
 
 
 class SnapshotParserTest(BaseParserTest):

@@ -31,7 +31,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.assertEqual(len(results), 10)
 
         args = FakeArgs()
-        args.models = include
+        args.select = include
         args.exclude = exclude
 
         test_task = TestTask(args, self.config)

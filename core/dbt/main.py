@@ -10,23 +10,23 @@ from pathlib import Path
 
 import dbt.version
 import dbt.flags as flags
-import dbt.task.run as run_task
 import dbt.task.build as build_task
+import dbt.task.clean as clean_task
 import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
-import dbt.task.clean as clean_task
 import dbt.task.deps as deps_task
-import dbt.task.init as init_task
-import dbt.task.seed as seed_task
-import dbt.task.test as test_task
-import dbt.task.snapshot as snapshot_task
-import dbt.task.generate as generate_task
-import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
-import dbt.task.run_operation as run_operation_task
+import dbt.task.generate as generate_task
+import dbt.task.init as init_task
+import dbt.task.list as list_task
 import dbt.task.parse as parse_task
+import dbt.task.run as run_task
+import dbt.task.run_operation as run_operation_task
+import dbt.task.seed as seed_task
+import dbt.task.serve as serve_task
+import dbt.task.snapshot as snapshot_task
+import dbt.task.test as test_task
 from dbt.profiler import profiler
-from dbt.task.list import ListTask
 from dbt.task.rpc.server import RPCServerTask
 from dbt.adapters.factory import reset_adapters, cleanup_connections
 
@@ -399,6 +399,32 @@ def _build_build_subparser(subparsers, base_subparser):
         Stop execution upon a first failure.
         '''
     )
+    sub.add_argument(
+        '--store-failures',
+        action='store_true',
+        help='''
+        Store test results (failing rows) in the database
+        '''
+    )
+    resource_values: List[str] = [
+        str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
+    ] + ['all']
+    sub.add_argument('--resource-type',
+                     choices=resource_values,
+                     action='append',
+                     default=[],
+                     dest='resource_types')
+    # explicity don't support --models
+    sub.add_argument(
+        '-s',
+        '--select',
+        dest='select',
+        nargs='+',
+        help='''
+            Specify the nodes to include.
+        ''',
+    )
+    _add_common_selector_arguments(sub)
     return sub
 
 
@@ -554,39 +580,6 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     return generate_sub
 
 
-def _add_models_argument(sub, help_override=None, **kwargs):
-    help_str = '''
-        Specify the models to include.
-    '''
-    if help_override is not None:
-        help_str = help_override
-    sub.add_argument(
-        '-m',
-        '--models',
-        dest='models',
-        nargs='+',
-        help=help_str,
-        **kwargs
-    )
-
-
-def _add_select_argument(sub, dest='models', help_override=None, **kwargs):
-    help_str = '''
-        Specify the nodes to include.
-    '''
-    if help_override is not None:
-        help_str = help_override
-
-    sub.add_argument(
-        '-s',
-        '--select',
-        dest=dest,
-        nargs='+',
-        help=help_str,
-        **kwargs
-    )
-
-
 def _add_common_selector_arguments(sub):
     sub.add_argument(
         '--exclude',
@@ -615,17 +608,26 @@ def _add_common_selector_arguments(sub):
     )
 
 
-def _add_selection_arguments(*subparsers, **kwargs):
-    models_name = kwargs.get('models_name', 'models')
+def _add_selection_arguments(*subparsers):
     for sub in subparsers:
-        if models_name == 'models':
-            _add_models_argument(sub)
-        elif models_name == 'select':
-            # these still get stored in 'models', so they present the same
-            # interface to the task
-            _add_select_argument(sub)
-        else:
-            raise InternalException(f'Unknown models style {models_name}')
+        sub.add_argument(
+            '-m',
+            '--models',
+            dest='select',
+            nargs='+',
+            help='''
+                Specify the nodes to include.
+            ''',
+        )
+        sub.add_argument(
+            '-s',
+            '--select',
+            dest='select',
+            nargs='+',
+            help='''
+                Specify the nodes to include.
+            ''',
+        )
         _add_common_selector_arguments(sub)
 
 
@@ -787,11 +789,14 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
         which='source-freshness',
         rpc_method='source-freshness',
     )
-    _add_select_argument(
-        sub,
+    sub.add_argument(
+        '-s',
+        '--select',
         dest='select',
-        metavar='SELECTOR',
-        required=False,
+        nargs='+',
+        help='''
+            Specify the nodes to include.
+        ''',
     )
     _add_common_selector_arguments(sub)
     return sub
@@ -836,9 +841,9 @@ def _build_list_subparser(subparsers, base_subparser):
         ''',
         aliases=['ls'],
     )
-    sub.set_defaults(cls=ListTask, which='list', rpc_method=None)
+    sub.set_defaults(cls=list_task.ListTask, which='list', rpc_method=None)
     resource_values: List[str] = [
-        str(s) for s in ListTask.ALL_RESOURCE_VALUES
+        str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES
     ] + ['default', 'all']
     sub.add_argument('--resource-type',
                      choices=resource_values,
@@ -848,19 +853,28 @@ def _build_list_subparser(subparsers, base_subparser):
     sub.add_argument('--output',
                      choices=['json', 'name', 'path', 'selector'],
                      default='selector')
+    sub.add_argument('--output-keys')
 
-    _add_models_argument(
-        sub,
-        help_override='''
+    sub.add_argument(
+        '-m',
+        '--models',
+        dest='models',
+        nargs='+',
+        help='''
         Specify the models to select and set the resource-type to 'model'.
         Mutually exclusive with '--select' (or '-s') and '--resource-type'
         ''',
         metavar='SELECTOR',
-        required=False
+        required=False,
     )
-    _add_select_argument(
-        sub,
+    sub.add_argument(
+        '-s',
+        '--select',
         dest='select',
+        nargs='+',
+        help='''
+            Specify the nodes to include.
+        ''',
         metavar='SELECTOR',
         required=False,
     )
@@ -1006,8 +1020,6 @@ def parse_args(args, cls=DBTArgumentParser):
         enable_help='''
         Allow for partial parsing by looking for and writing to a pickle file
         in the target directory. This overrides the user configuration file.
-
-        WARNING: This can result in unexpected behavior if you use env_var()!
         ''',
         disable_help='''
         Disallow partial parsing. This overrides the user configuration file.
@@ -1073,10 +1085,10 @@ def parse_args(args, cls=DBTArgumentParser):
     # --threads, --no-version-check
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
                           rpc_sub, seed_sub, parse_sub, build_sub)
-    # --models, --exclude
+    # --select, --exclude
     # list_sub sets up its own arguments.
-    _add_selection_arguments(build_sub, run_sub, compile_sub, generate_sub, test_sub)
-    _add_selection_arguments(snapshot_sub, seed_sub, models_name='select')
+    _add_selection_arguments(
+        run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
     _add_defer_argument(run_sub, test_sub, build_sub)
     # --full-refresh

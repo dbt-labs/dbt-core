@@ -40,7 +40,7 @@ class TestPostgresAdapter(unittest.TestCase):
                     'host': 'thishostshouldnotexist',
                     'pass': 'password',
                     'port': 5432,
-                    'schema': 'public'
+                    'schema': 'public',
                 }
             },
             'target': 'test'
@@ -107,6 +107,37 @@ class TestPostgresAdapter(unittest.TestCase):
             add_query.assert_called_once_with('select pg_terminate_backend(42)')
 
         master.handle.get_backend_pid.assert_not_called()
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_default_connect_timeout(self, psycopg2):
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=10,
+            application_name='dbt')
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_changed_connect_timeout(self, psycopg2):
+        self.config.credentials = self.config.credentials.replace(connect_timeout=30)
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_not_called()
+        connection.handle
+        psycopg2.connect.assert_called_once_with(
+            dbname='postgres',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5432,
+            connect_timeout=30,
+            application_name='dbt')
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_default_keepalive(self, psycopg2):

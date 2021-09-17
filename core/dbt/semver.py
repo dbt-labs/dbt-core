@@ -437,11 +437,15 @@ def filter_installable(
         versions: List[str],
         install_prerelease: bool
 ) -> List[str]:
-    if install_prerelease:
-        return versions
     installable = []
+    installable_dict = {}
     for version_string in versions:
         version = VersionSpecifier.from_version_string(version_string)
-        if not version.prerelease:
-            installable.append(version_string)
-    return installable
+        if install_prerelease or not version.prerelease:
+            installable.append(version)
+            installable_dict[str(version)] = version_string
+    sorted_installable = sorted(installable)
+    sorted_installable_original_versions = [
+        str(installable_dict.get(str(version))) for version in sorted_installable
+    ]
+    return sorted_installable_original_versions

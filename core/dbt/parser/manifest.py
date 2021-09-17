@@ -203,8 +203,11 @@ class ManifestLoader:
         # used to get the SourceFiles from the manifest files.
         start_read_files = time.perf_counter()
         project_parser_files = {}
+        saved_files = {}
+        if self.saved_manifest:
+            saved_files = self.saved_manifest.files
         for project in self.all_projects.values():
-            read_files(project, self.manifest.files, project_parser_files)
+            read_files(project, self.manifest.files, project_parser_files, saved_files)
         self._perf_info.path_count = len(self.manifest.files)
         self._perf_info.read_files_elapsed = (time.perf_counter() - start_read_files)
 
@@ -423,7 +426,7 @@ class ManifestLoader:
         if not self.partially_parsing and HookParser in parser_types:
             hook_parser = HookParser(project, self.manifest, self.root_project)
             path = hook_parser.get_path()
-            file = load_source_file(path, ParseFileType.Hook, project.project_name)
+            file = load_source_file(path, ParseFileType.Hook, project.project_name, {})
             if file:
                 file_block = FileBlock(file)
                 hook_parser.parse_file(file_block)
@@ -648,7 +651,7 @@ class ManifestLoader:
             macro_parser = MacroParser(project, self.manifest)
             for path in macro_parser.get_paths():
                 source_file = load_source_file(
-                    path, ParseFileType.Macro, project.project_name)
+                    path, ParseFileType.Macro, project.project_name, {})
                 block = FileBlock(source_file)
                 # This does not add the file to the manifest.files,
                 # but that shouldn't be necessary here.

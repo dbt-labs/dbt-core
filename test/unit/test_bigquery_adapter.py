@@ -617,7 +617,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             write_disposition=dbt.adapters.bigquery.impl.WRITE_APPEND)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
-            self._table_ref('project', 'dataset', 'table1', None),
+            [self._table_ref('project', 'dataset', 'table1', None)],
             self._table_ref('project', 'dataset', 'table2', None),
             job_config=ANY)
         args, kwargs = self.mock_client.copy_table.call_args
@@ -630,7 +630,7 @@ class TestBigQueryConnectionManager(unittest.TestCase):
             write_disposition=dbt.adapters.bigquery.impl.WRITE_TRUNCATE)
         args, kwargs = self.mock_client.copy_table.call_args
         self.mock_client.copy_table.assert_called_once_with(
-            self._table_ref('project', 'dataset', 'table1', None),
+            [self._table_ref('project', 'dataset', 'table1', None)],
             self._table_ref('project', 'dataset', 'table2', None),
             job_config=ANY)
         args, kwargs = self.mock_client.copy_table.call_args
@@ -866,6 +866,31 @@ class TestBigQueryAdapter(BaseTestBigQueryAdapter):
                 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'),
         }
         actual = adapter.get_table_options(mock_config, node={}, temporary=True)
+        self.assertEqual(expected, actual)
+
+    def test_table_kms_key_name(self):
+        adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            RuntimeConfigObject)
+        config={'kms_key_name': 'some_key'}
+        mock_config.get.side_effect = lambda name: config.get(name)
+
+        expected = {
+            'kms_key_name': "'some_key'"
+        }
+        actual = adapter.get_table_options(mock_config, node={}, temporary=False)
+        self.assertEqual(expected, actual)
+
+        
+    def test_view_kms_key_name(self):
+        adapter = self.get_adapter('oauth')
+        mock_config = create_autospec(
+            RuntimeConfigObject)
+        config={'kms_key_name': 'some_key'}
+        mock_config.get.side_effect = lambda name: config.get(name)
+
+        expected = {}
+        actual = adapter.get_view_options(mock_config, node={})
         self.assertEqual(expected, actual)
 
 

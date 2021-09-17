@@ -1,6 +1,6 @@
 
 {% macro handle_existing_table(full_refresh, old_relation) %}
-    {{ adapter.dispatch('handle_existing_table', macro_namespace = 'dbt')(full_refresh, old_relation) }}
+    {{ adapter.dispatch('handle_existing_table', 'dbt')(full_refresh, old_relation) }}
 {% endmacro %}
 
 {% macro default__handle_existing_table(full_refresh, old_relation) %}

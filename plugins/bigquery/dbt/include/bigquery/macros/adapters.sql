@@ -27,16 +27,18 @@
 
 {%- endmacro -%}
 
-
-{% macro bigquery_table_options(config, node, temporary) %}
-  {% set opts = adapter.get_table_options(config, node, temporary) %}
-
+{% macro bigquery_options(opts) %}
   {% set options -%}
     OPTIONS({% for opt_key, opt_val in opts.items() %}
       {{ opt_key }}={{ opt_val }}{{ "," if not loop.last }}
     {% endfor %})
   {%- endset %}
   {%- do return(options) -%}
+{%- endmacro -%}
+
+{% macro bigquery_table_options(config, node, temporary) %}
+  {% set opts = adapter.get_table_options(config, node, temporary) %}
+  {%- do return(bigquery_options(opts)) -%}
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
@@ -58,13 +60,18 @@
 
 {%- endmacro -%}
 
+{% macro bigquery_view_options(config, node) %}
+  {% set opts = adapter.get_view_options(config, node) %}
+  {%- do return(bigquery_options(opts)) -%}
+{%- endmacro -%}
+
 {% macro bigquery__create_view_as(relation, sql) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
 
   {{ sql_header if sql_header is not none }}
 
   create or replace view {{ relation }}
-  {{ bigquery_table_options(config, model, temporary=false) }}
+  {{ bigquery_view_options(config, model) }}
   as {{ sql }};
 
 {% endmacro %}

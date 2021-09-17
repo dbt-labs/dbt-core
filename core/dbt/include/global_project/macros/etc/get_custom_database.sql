@@ -14,7 +14,7 @@
 
 #}
 {% macro generate_database_name(custom_database_name=none, node=none) -%}
-    {% do return(adapter.dispatch('generate_database_name')(custom_database_name, node)) %}
+    {% do return(adapter.dispatch('generate_database_name', 'dbt')(custom_database_name, node)) %}
 {%- endmacro %}
 
 {% macro default__generate_database_name(custom_database_name=none, node=none) -%}

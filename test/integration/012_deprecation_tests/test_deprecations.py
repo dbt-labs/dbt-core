@@ -187,3 +187,36 @@ class TestDispatchPackagesDeprecation(BaseTestDeprecations):
             self.run_dbt(strict=True)
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'Raised during dispatch for: string_literal' in exc_str
+
+
+class TestPackageRedirectDeprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('where-were-going-we-dont-need-models')
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'package': 'fishtown-analytics/dbt_utils',
+                    'version': '0.7.0'
+                }
+            ]
+        }
+    
+    @use_profile('postgres')
+    def test_postgres_package_redirect(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(['deps'], strict=False)
+        expected = {'package-redirect'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+    @use_profile('postgres')
+    def test_postgres_package_redirect_fail(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['deps'], strict=True)
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        expected = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
+        assert expected in exc_str

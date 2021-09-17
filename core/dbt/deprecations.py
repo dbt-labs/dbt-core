@@ -131,6 +131,14 @@ class AdapterMacroDeprecation(DBTDeprecation):
     '''
 
 
+class PackageRedirectDeprecation(DBTDeprecation):
+    _name = 'package-redirect'
+    _description = '''\
+    The `{old_name}` package is deprecated in favor of `{new_name}`. Please update
+    your `packages.yml` configuration to use `{new_name}` instead.
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
 a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -176,6 +184,7 @@ deprecations_list: List[DBTDeprecation] = [
     ModelsKeyNonModelDeprecation(),
     ExecuteMacrosReleaseDeprecation(),
     AdapterMacroDeprecation(),
+    PackageRedirectDeprecation()
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

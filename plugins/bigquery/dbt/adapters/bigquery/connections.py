@@ -83,6 +83,7 @@ class BigQueryCredentials(Credentials):
     # BigQuery allows an empty database / project, where it defers to the
     # environment for the project
     database: Optional[str]
+    execution_project: Optional[str] = None
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
     priority: Optional[Priority] = None
@@ -104,11 +105,17 @@ class BigQueryCredentials(Credentials):
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
+        'target_project': 'target_database',
+        'target_dataset': 'target_schema',
     }
 
     @property
     def type(self):
         return 'bigquery'
+
+    @property
+    def unique_field(self):
+        return self.database
 
     def _connection_keys(self):
         return ('method', 'database', 'schema', 'location', 'priority',
@@ -124,6 +131,9 @@ class BigQueryCredentials(Credentials):
         if 'database' not in d:
             _, database = get_bigquery_defaults()
             d['database'] = database
+        # `execution_project` default to dataset/project
+        if 'execution_project' not in d:
+            d['execution_project'] = d['database']
         return d
 
 
@@ -246,12 +256,12 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 cls.get_impersonated_bigquery_credentials(profile_credentials)
         else:
             creds = cls.get_bigquery_credentials(profile_credentials)
-        database = profile_credentials.database
+        execution_project = profile_credentials.execution_project
         location = getattr(profile_credentials, 'location', None)
 
         info = client_info.ClientInfo(user_agent=f'dbt-{dbt_version}')
         return google.cloud.bigquery.Client(
-            database,
+            execution_project,
             creds,
             location=location,
             client_info=info,
@@ -458,26 +468,40 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        source_ref = self.table_ref(
-            source.database, source.schema, source.table, conn)
+# -------------------------------------------------------------------------------
+#  BigQuery allows to use copy API using two different formats:
+#  1. client.copy_table(source_table_id, destination_table_id)
+#     where source_table_id = "your-project.source_dataset.source_table"
+#  2. client.copy_table(source_table_ids, destination_table_id)
+#     where source_table_ids = ["your-project.your_dataset.your_table_name", ...]
+#  Let's use uniform function call and always pass list there
+# -------------------------------------------------------------------------------
+        if type(source) is not list:
+            source = [source]
+
+        source_ref_array = [self.table_ref(
+            src_table.database, src_table.schema, src_table.table, conn)
+            for src_table in source]
         destination_ref = self.table_ref(
             destination.database, destination.schema, destination.table, conn)
 
         logger.debug(
-            'Copying table "{}" to "{}" with disposition: "{}"',
-            source_ref.path, destination_ref.path, write_disposition)
+            'Copying table(s) "{}" to "{}" with disposition: "{}"',
+            ', '.join(source_ref.path for source_ref in source_ref_array),
+            destination_ref.path, write_disposition)
 
         def copy_and_results():
             job_config = google.cloud.bigquery.CopyJobConfig(
                 write_disposition=write_disposition)
             copy_job = client.copy_table(
-                source_ref, destination_ref, job_config=job_config)
+                source_ref_array, destination_ref, job_config=job_config)
             iterator = copy_job.result(timeout=self.get_timeout(conn))
             return copy_job, iterator
 
         self._retry_and_handle(
             msg='copy table "{}" to "{}"'.format(
-                source_ref.path, destination_ref.path),
+                ', '.join(source_ref.path for source_ref in source_ref_array),
+                destination_ref.path),
             conn=conn, fn=copy_and_results)
 
     @staticmethod
