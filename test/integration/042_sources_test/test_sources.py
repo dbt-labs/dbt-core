@@ -272,7 +272,21 @@ class TestSourceFreshness(SuccessfulSourcesTest):
                     'warn_after': {'count': 10, 'period': 'hour'},
                     'error_after': {'count': 18, 'period': 'hour'},
                 },
-                'adapter_response': {}
+                'adapter_response': {},
+                'thread_id': AnyStringWith('Thread-'),
+                'execution_time': AnyFloat(),
+                'timing': [
+                    {
+                        'name': 'compile',
+                        'started_at': AnyStringWith(),
+                        'completed_at': AnyStringWith(),
+                    },
+                    {
+                        'name': 'execute',
+                        'started_at': AnyStringWith(),
+                        'completed_at': AnyStringWith(),
+                    }
+                ]
             }
         ])
 
