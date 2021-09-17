@@ -13,7 +13,9 @@ from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
 from dbt.adapters.snowflake import SnowflakeColumn
 from dbt.contracts.graph.manifest import Manifest
-from dbt.exceptions import RuntimeException, DatabaseException
+from dbt.exceptions import (
+    raise_compiler_error, RuntimeException, DatabaseException
+)
 from dbt.utils import filter_null_values
 
 
