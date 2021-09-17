@@ -111,6 +111,5 @@ class TestOverrideDefaultReturn(BaseTestCustomMaterialization):
     @use_profile('postgres')
     def test_postgres_default_dependency(self):
         self.run_dbt(['deps'])
-        self.run_dbt(['run'], expect_pass=False)
-
-
+        results = self.run_dbt(['run'], expect_pass=False)
+        assert 'did not explicitly return a list of relations' in results[0].message
