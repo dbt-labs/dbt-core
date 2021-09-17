@@ -32,8 +32,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     def render_update(
         self, node: ParsedModelNode, config: ContextConfig
     ) -> None:
-        # `True` roughly 1/100 times this function is called
-        sample: bool = random.randint(1, 101) == 100
+        # TODO go back to 1/100 when this is turned on by default.
+        # `True` roughly 1/50 times this function is called
+        sample: bool = random.randint(1, 51) == 50
 
         # top-level declaration of variables
         experimentally_parsed: Optional[Union[str, Dict[str, List[Any]]]] = None
