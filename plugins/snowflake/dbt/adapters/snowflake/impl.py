@@ -163,6 +163,25 @@ class SnowflakeAdapter(SQLAdapter):
 
         return relations
 
+    def quote_seed_column(
+        self, column: str, quote_config: Optional[bool]
+    ) -> str:
+        quote_columns: bool = False
+        if isinstance(quote_config, bool):
+            quote_columns = quote_config
+        elif quote_config is None:
+            pass
+        else:
+            raise_compiler_error(
+                f'The seed configuration value of "quote_columns" has an '
+                f'invalid type {type(quote_config)}'
+            )
+
+        if quote_columns:
+            return self.quote(column)
+        else:
+            return column
+
     def timestamp_add_sql(
         self, add_to: str, number: int = 1, interval: str = 'hour'
     ) -> str:
