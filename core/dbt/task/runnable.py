@@ -48,13 +48,7 @@ from dbt.exceptions import (
     warn_or_error,
 )
 
-from dbt.graph import (
-    GraphQueue,
-    NodeSelector,
-    SelectionSpec,
-    parse_difference,
-    Graph
-)
+from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, Graph
 from dbt.parser.manifest import ManifestLoader
 
 import dbt.exceptions
