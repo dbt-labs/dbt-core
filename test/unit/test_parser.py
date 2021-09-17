@@ -146,6 +146,7 @@ class BaseParserTest(unittest.TestCase):
             searched_path=searched,
             relative_path=filename,
             project_root=root_dir,
+            modification_time=0.0,
         )
         sf_cls = SchemaSourceFile if filename.endswith('.yml') else SourceFile
         source_file = sf_cls(

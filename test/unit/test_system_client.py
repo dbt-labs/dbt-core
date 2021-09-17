@@ -153,7 +153,8 @@ class TestFindMatching(unittest.TestCase):
             expected_output = [{
                 'searched_path': relative_path,
                 'absolute_path': named_file.name,
-                'relative_path': os.path.basename(named_file.name)
+                'relative_path': os.path.basename(named_file.name),
+                'modification_time': out[0]['modification_time'],
             }]
             self.assertEqual(out, expected_output)
 
@@ -167,7 +168,8 @@ class TestFindMatching(unittest.TestCase):
             expected_output = [{
                 'searched_path': relative_path,
                 'absolute_path': named_file.name,
-                'relative_path': os.path.basename(named_file.name)
+                'relative_path': os.path.basename(named_file.name),
+                'modification_time': out[0]['modification_time'],
             }]
             self.assertEqual(out, expected_output)
 

@@ -84,6 +84,7 @@ class FilesystemSearcher(Iterable[FilePath]):
             file_match = FilePath(
                 searched_path=result['searched_path'],
                 relative_path=result['relative_path'],
+                modification_time=result['modification_time'],
                 project_root=root,
             )
             yield file_match

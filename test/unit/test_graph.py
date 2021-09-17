@@ -122,7 +122,7 @@ class GraphTest(unittest.TestCase):
         # Create the source file patcher
         self.load_source_file_patcher = patch('dbt.parser.read_files.load_source_file')
         self.mock_source_file = self.load_source_file_patcher.start()
-        def mock_load_source_file(path, parse_file_type, project_name):
+        def mock_load_source_file(path, parse_file_type, project_name, saved_files):
             for sf in self.mock_models:
                 if sf.path == path:
                     source_file = sf
@@ -137,6 +137,7 @@ class GraphTest(unittest.TestCase):
                 searched_path='.',
                 project_root=os.path.normcase(os.getcwd()),
                 relative_path='dbt_project.yml',
+                modification_time=0.0,
             )
             return path
 
@@ -165,6 +166,7 @@ class GraphTest(unittest.TestCase):
                 searched_path='models',
                 project_root=os.path.normcase(os.getcwd()),
                 relative_path='{}.sql'.format(k),
+                modification_time=0.0,
             )
             # FileHash can't be empty or 'search_key' will be None
             source_file = SourceFile(path=path, checksum=FileHash.from_contents('abc'))

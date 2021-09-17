@@ -12,13 +12,27 @@ from typing import Optional
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
         path: FilePath, parse_file_type: ParseFileType,
-        project_name: str) -> Optional[AnySourceFile]:
-    file_contents = load_file_contents(path.absolute_path, strip=False)
-    checksum = FileHash.from_contents(file_contents)
+        project_name: str, saved_files,) -> Optional[AnySourceFile]:
+
     sf_cls = SchemaSourceFile if parse_file_type == ParseFileType.Schema else SourceFile
-    source_file = sf_cls(path=path, checksum=checksum,
+    source_file = sf_cls(path=path, checksum=FileHash.empty(),
                          parse_file_type=parse_file_type, project_name=project_name)
-    source_file.contents = file_contents.strip()
+
+    skip_loading_schema_file = False
+    if (parse_file_type == ParseFileType.Schema and
+            saved_files and source_file.file_id in saved_files):
+        old_source_file = saved_files[source_file.file_id]
+        if (source_file.path.modification_time != 0.0 and
+                old_source_file.path.modification_time == source_file.path.modification_time):
+            source_file.checksum = old_source_file.checksum
+            source_file.dfy = old_source_file.dfy
+            skip_loading_schema_file = True
+
+    if not skip_loading_schema_file:
+        file_contents = load_file_contents(path.absolute_path, strip=False)
+        source_file.checksum = FileHash.from_contents(file_contents)
+        source_file.contents = file_contents.strip()
+
     if parse_file_type == ParseFileType.Schema and source_file.contents:
         dfy = yaml_from_file(source_file)
         if dfy:
@@ -69,7 +83,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
 
 # Use the FilesystemSearcher to get a bunch of FilePaths, then turn
 # them into a bunch of FileSource objects
-def get_source_files(project, paths, extension, parse_file_type):
+def get_source_files(project, paths, extension, parse_file_type, saved_files):
     # file path list
     fp_list = list(FilesystemSearcher(
         project, paths, extension
@@ -80,17 +94,17 @@ def get_source_files(project, paths, extension, parse_file_type):
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
         else:
-            file = load_source_file(fp, parse_file_type, project.project_name)
+            file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
             if file:
                 fb_list.append(file)
     return fb_list
 
 
-def read_files_for_parser(project, files, dirs, extension, parse_ft):
+def read_files_for_parser(project, files, dirs, extension, parse_ft, saved_files):
     parser_files = []
     source_files = get_source_files(
-        project, dirs, extension, parse_ft
+        project, dirs, extension, parse_ft, saved_files
     )
     for sf in source_files:
         files[sf.file_id] = sf
@@ -102,46 +116,46 @@ def read_files_for_parser(project, files, dirs, extension, parse_ft):
 # dictionary needs to be passed in. What determines the order of
 # the various projects? Is the root project always last? Do the
 # non-root projects need to be done separately in order?
-def read_files(project, files, parser_files):
+def read_files(project, files, parser_files, saved_files):
 
     project_files = {}
 
     project_files['MacroParser'] = read_files_for_parser(
-        project, files, project.macro_paths, '.sql', ParseFileType.Macro,
+        project, files, project.macro_paths, '.sql', ParseFileType.Macro, saved_files
     )
 
     project_files['ModelParser'] = read_files_for_parser(
-        project, files, project.source_paths, '.sql', ParseFileType.Model,
+        project, files, project.source_paths, '.sql', ParseFileType.Model, saved_files
     )
 
     project_files['SnapshotParser'] = read_files_for_parser(
-        project, files, project.snapshot_paths, '.sql', ParseFileType.Snapshot,
+        project, files, project.snapshot_paths, '.sql', ParseFileType.Snapshot, saved_files
     )
 
     project_files['AnalysisParser'] = read_files_for_parser(
-        project, files, project.analysis_paths, '.sql', ParseFileType.Analysis,
+        project, files, project.analysis_paths, '.sql', ParseFileType.Analysis, saved_files
     )
 
     project_files['DataTestParser'] = read_files_for_parser(
-        project, files, project.test_paths, '.sql', ParseFileType.Test,
+        project, files, project.test_paths, '.sql', ParseFileType.Test, saved_files
     )
 
     project_files['SeedParser'] = read_files_for_parser(
-        project, files, project.data_paths, '.csv', ParseFileType.Seed,
+        project, files, project.data_paths, '.csv', ParseFileType.Seed, saved_files
     )
 
     project_files['DocumentationParser'] = read_files_for_parser(
-        project, files, project.docs_paths, '.md', ParseFileType.Documentation,
+        project, files, project.docs_paths, '.md', ParseFileType.Documentation, saved_files
     )
 
     project_files['SchemaParser'] = read_files_for_parser(
-        project, files, project.all_source_paths, '.yml', ParseFileType.Schema,
+        project, files, project.all_source_paths, '.yml', ParseFileType.Schema, saved_files
     )
 
     # Also read .yaml files for schema files. Might be better to change
     # 'read_files_for_parser' accept an array in the future.
     yaml_files = read_files_for_parser(
-        project, files, project.all_source_paths, '.yaml', ParseFileType.Schema,
+        project, files, project.all_source_paths, '.yaml', ParseFileType.Schema, saved_files
     )
     project_files['SchemaParser'].extend(yaml_files)
 

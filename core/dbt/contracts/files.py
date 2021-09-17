@@ -42,6 +42,7 @@ parse_file_type_to_parser = {
 class FilePath(dbtClassMixin):
     searched_path: str
     relative_path: str
+    modification_time: float
     project_root: str
 
     @property
@@ -132,6 +133,10 @@ class RemoteFile(dbtClassMixin):
     def original_file_path(self):
         return 'from remote system'
 
+    @property
+    def modification_time(self):
+        return 'from remote system'
+
 
 @dataclass
 class BaseSourceFile(dbtClassMixin, SerializableType):
@@ -149,8 +154,6 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
     @property
     def file_id(self):
         if isinstance(self.path, RemoteFile):
-            return None
-        if self.checksum.name == 'none':
             return None
         return f'{self.project_name}://{self.path.original_file_path}'
 

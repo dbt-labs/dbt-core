@@ -72,10 +72,13 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
 
     # Hooks are only in the dbt_project.yml file for the project
     def get_path(self) -> FilePath:
+        # There ought to be an existing file object for this, but
+        # until that is implemented use a dummy modification time
         path = FilePath(
             project_root=self.project.project_root,
             searched_path='.',
             relative_path='dbt_project.yml',
+            modification_time=0.0,
         )
         return path
 
