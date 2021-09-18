@@ -254,7 +254,7 @@ class NodeSelector(MethodManager):
 
         - node selection. Based on the include/exclude sets, the set
             of matched unique IDs is returned
-                - includes direct + indirect selection (for tests)
+            - includes direct + indirect selection (for tests)
         - filtering:
             - selectors can filter the nodes after all of them have been
               selected
