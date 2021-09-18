@@ -16,6 +16,7 @@
 - Added default field in the `selectors.yml` to allow user to define default selector ([#3448](https://github.com/dbt-labs/dbt/issues/3448), [#3875](https://github.com/dbt-labs/dbt/issues/3875), [#3892](https://github.com/dbt-labs/dbt/issues/3892))
 - Added timing and thread information to sources.json artifact ([#3804](https://github.com/dbt-labs/dbt/issues/3804), [#3894](https://github.com/dbt-labs/dbt/pull/3894))
 - Update cli and rpc flags for the `build` task to align with other commands (`--resource-type`, `--store-failures`) ([#3596](https://github.com/dbt-labs/dbt/issues/3596), [#3884](https://github.com/dbt-labs/dbt/pull/3884))
+- Log tests that are not indirectly selected. Add `--greedy` flag to `test`, `list`, `build` and `greedy` property in yaml selectors ([#3723](https://github.com/dbt-labs/dbt/pull/3723), [#3833](https://github.com/dbt-labs/dbt/pull/3833))
 
 ### Fixes
 
@@ -44,7 +45,7 @@ Contributors:
 - [@dbrtly](https://github.com/dbrtly) ([#3834](https://github.com/dbt-labs/dbt/pull/3834))
 - [@swanderz](https://github.com/swanderz) [#3623](https://github.com/dbt-labs/dbt/pull/3623)
 - [@JasonGluck](https://github.com/JasonGluck) ([#3582](https://github.com/dbt-labs/dbt/pull/3582))
-- [@joellabes](https://github.com/joellabes) ([#3669](https://github.com/dbt-labs/dbt/pull/3669))
+- [@joellabes](https://github.com/joellabes) ([#3669](https://github.com/dbt-labs/dbt/pull/3669), [#3833](https://github.com/dbt-labs/dbt/pull/3833))
 - [@juma-adoreme](https://github.com/juma-adoreme) ([#3838](https://github.com/dbt-labs/dbt/pull/3838))
 - [@annafil](https://github.com/annafil) ([#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - [@AndreasTA-AW](https://github.com/AndreasTA-AW) ([#3691](https://github.com/dbt-labs/dbt/pull/3691))
