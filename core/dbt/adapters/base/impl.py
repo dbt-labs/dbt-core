@@ -327,7 +327,6 @@ class BaseAdapter(metaclass=AdapterMeta):
             [node for node in manifest.nodes.values() if (node.is_relational and not node.is_ephemeral_model)],
             manifest.sources.values(),
         )
-        # relational_nodes = [node for node in nodes if (node.is_relational and not node.is_ephemeral_model)]
         for node in nodes:
             relation = self.Relation.create_from(self.config, node)
             info_schema_name_map.add(relation)
