@@ -47,10 +47,6 @@ class TestColumnQuotingDefault(BaseColumnQuotingTest):
     def test_snowflake_column_quotes(self):
         self._run_columnn_quotes()
 
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')
-
     @use_profile('bigquery')
     def test_bigquery_column_quotes(self):
         self._run_columnn_quotes(strategy='merge')
