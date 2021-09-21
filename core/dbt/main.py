@@ -1031,17 +1031,17 @@ def parse_args(args, cls=DBTArgumentParser):
         default=None,
         help='''
         Enables experimental parsing features.
-        '''
+        """,
     )
 
     # if set, will disable the use of the stable static parser and instead
     # always rely on jinja rendering.
     p.add_argument(
-        '--no-static-parser',
+        "--no-static-parser",
         default=None,
-        dest='static_parser',
-        action='store_false',
-        help='''
+        dest="static_parser",
+        action="store_false",
+        help="""
         Disables the static parser.
         '''
     )

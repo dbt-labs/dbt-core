@@ -174,11 +174,13 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # files parseable by the experimental parser to match our internal
             # testing.
             if tracking.active_user is not None:  # None in some tests
-                tracking.track_experimental_parser_sample({
-                    "project_id": self.root_project.hashed_name(),
-                    "file_id": utils.get_hash(node),
-                    "status": result
-                })
+                tracking.track_experimental_parser_sample(
+                    {
+                        "project_id": self.root_project.hashed_name(),
+                        "file_id": utils.get_hash(node),
+                        "status": result,
+                    }
+                )
 
     def run_static_parser(
         self, node: ParsedModelNode
@@ -193,9 +195,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # run the stable static parser and return the results
         try:
-            statically_parsed = py_extract_from_source(
-                node.raw_sql
-            )
+            statically_parsed = py_extract_from_source(node.raw_sql)
             fire_event(StaticParserSuccess(path=node.path))
             return _shift_sources(statically_parsed)
         # if we want information on what features are barring the static
@@ -221,9 +221,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # for now, this line calls the stable static parser since there are no
             # experimental features. Change `py_extract_from_source` to the new
             # experimental call when we add additional features.
-            experimentally_parsed = py_extract_from_source(
-                node.raw_sql
-            )
+            experimentally_parsed = py_extract_from_source(node.raw_sql)
             fire_event(ExperimentalParserSuccess(path=node.path))
             return _shift_sources(experimentally_parsed)
         # if we want information on what features are barring the experimental
@@ -300,22 +298,20 @@ def _get_config_call_dict(
 ) -> Dict[str, Any]:
     config_call_dict: Dict[str, Any] = {}
 
-    for c in static_parser_result['configs']:
+    for c in static_parser_result["configs"]:
         ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
 
     return config_call_dict
 
 
 # TODO if we format sources in the extractor to match this type, we won't need this function.
-def _shift_sources(
-    static_parser_result: Dict[str, List[Any]]
-) -> Dict[str, List[Any]]:
+def _shift_sources(static_parser_result: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
     shifted_result = deepcopy(static_parser_result)
     source_calls = []
 
-    for s in static_parser_result['sources']:
+    for s in static_parser_result["sources"]:
         source_calls.append([s[0], s[1]])
-    shifted_result['sources'] = source_calls
+    shifted_result["sources"] = source_calls
 
     return shifted_result
 

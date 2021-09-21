@@ -99,7 +99,7 @@ MP_CONTEXT = _get_context()
 
 def set_from_args(args, user_config):
     # N.B. Multiple `globals` are purely for line length.
-        USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
+    # Because `global` is a parser directive (as opposed to a language construct)
     # black insists in putting them all on one line
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
@@ -114,7 +114,7 @@ def set_from_args(args, user_config):
 
     # global cli flags with env var and user_config alternatives
     USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
-    STATIC_PARSER = get_flag_value('STATIC_PARSER', args, user_config)
+    STATIC_PARSER = get_flag_value("STATIC_PARSER", args, user_config)
     WARN_ERROR = get_flag_value("WARN_ERROR", args, user_config)
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
     PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
