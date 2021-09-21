@@ -57,8 +57,12 @@ parse_file_type_to_key = {
 # These macro names have special treatment in the ManifestLoader and
 # partial parsing. If they have changed we will skip partial parsing
 special_override_macros = [
-    'ref', 'source', 'config', 'generate_schema_name',
-    'generate_database_name', 'generate_alias_name'
+    "ref",
+    "source",
+    "config",
+    "generate_schema_name",
+    "generate_database_name",
+    "generate_alias_name",
 ]
 
 
@@ -459,8 +463,8 @@ class PartialParsing:
     def check_for_special_deleted_macros(self, source_file):
         for unique_id in source_file.macros:
             if unique_id in self.saved_manifest.macros:
-                package_name = unique_id.split('.')[1]
-                if package_name == 'dbt':
+                package_name = unique_id.split(".")[1]
+                if package_name == "dbt":
                     continue
                 macro = self.saved_manifest.macros[unique_id]
                 if macro.name in special_override_macros:

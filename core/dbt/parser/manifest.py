@@ -612,9 +612,11 @@ class ManifestLoader:
         # Check for custom versions of these special macros
         for macro_name in special_override_macros:
             macro = self.macro_resolver.get_macro(None, macro_name)
-            if macro and macro.package_name != 'dbt':
-                if (macro.file_id in self.partial_parser.file_diff['changed'] or
-                        macro.file_id in self.partial_parser.file_diff['added']):
+            if macro and macro.package_name != "dbt":
+                if (
+                    macro.file_id in self.partial_parser.file_diff["changed"]
+                    or macro.file_id in self.partial_parser.file_diff["added"]
+                ):
                     # The file with the macro in it has changed
                     return True
         return False
