@@ -513,9 +513,7 @@ class ManifestLoader:
     # the 'macro_sql' to find depends_on.macros
     def macro_depends_on(self):
         macro_ctx = generate_macro_context(self.root_project)
-        macro_namespace = TestMacroNamespace(
-            self.macro_resolver, {}, None, MacroStack(), []
-        )
+        macro_namespace = TestMacroNamespace(self.macro_resolver, {}, None, MacroStack(), [])
         adapter = get_adapter(self.root_project)
         db_wrapper = ParseProvider().DatabaseWrapper(adapter, macro_namespace)
         for macro in self.manifest.macros.values():
