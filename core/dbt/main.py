@@ -1066,14 +1066,26 @@ def parse_args(args, cls=DBTArgumentParser):
         help=argparse.SUPPRESS,
     )
 
-    # if set, will use the tree-sitter-jinja2 parser and extractor instead of
-    # jinja rendering when possible.
+    # if set, will use the latest features from the static parser instead of
+    # the stable static parser.
     p.add_argument(
         '--use-experimental-parser',
         action='store_true',
         default=None,
         help='''
-        Uses an experimental parser to extract jinja values.
+        Enables experimental parsing features.
+        '''
+    )
+
+    # if set, will disable the use of the stable static parser and instead
+    # always rely on jinja rendering.
+    p.add_argument(
+        '--no-static-parser',
+        default=None,
+        dest='static_parser',
+        action='store_false',
+        help='''
+        Disables the static parser.
         '''
     )
 

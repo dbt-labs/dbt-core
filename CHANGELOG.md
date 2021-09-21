@@ -2,6 +2,7 @@
 
 ### Features
 - Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
+- Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt/issues/3377), [#3939](https://github.com/dbt-labs/dbt/pull/3939))
 
 ### Fixes
 
