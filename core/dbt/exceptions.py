@@ -728,7 +728,7 @@ def missing_relation(relation, model=None):
 def raise_dataclass_not_dict(obj):
     msg = (
         'The object ("{obj}") was used as a dictionary. This '
-        'capability has been removed from objects of this type.'
+        "capability has been removed from objects of this type."
     )
     raise_compiler_error(msg)
 
