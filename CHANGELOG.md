@@ -1,6 +1,8 @@
 ## dbt 0.21.0 (Release TBD)
 
-## dbt 0.21.0b2 (August 19, 2021)
+## dbt 0.21.0rc1 (September 20, 2021)
+
+
 
 
 ### Features
@@ -52,6 +54,7 @@ Contributors:
 - [@Kayrnt](https://github.com/Kayrnt) ([3707](https://github.com/dbt-labs/dbt/pull/3707))
 - [@TeddyCr](https://github.com/TeddyCr) ([#3448](https://github.com/dbt-labs/dbt/pull/3865))
 - [@sdebruyn](https://github.com/sdebruyn) ([#3906](https://github.com/dbt-labs/dbt/pull/3906))
+
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
