@@ -674,6 +674,14 @@ def missing_relation(relation, model=None):
         model)
 
 
+def raise_dataclass_not_dict(obj):
+    msg = (
+        'The object ("{obj}") was used as a dictionary. This '
+        'capability has been removed from objects of this type.'
+    )
+    raise_compiler_error(msg)
+
+
 def relation_wrong_type(relation, expected_type, model=None):
     raise_compiler_error(
         ('Trying to create {expected_type} {relation}, '
@@ -993,6 +1001,7 @@ CONTEXT_EXPORTS = {
         raise_ambiguous_alias,
         raise_ambiguous_catalog_match,
         raise_cache_inconsistent,
+        raise_dataclass_not_dict,
         raise_compiler_error,
         raise_database_error,
         raise_dep_not_found,

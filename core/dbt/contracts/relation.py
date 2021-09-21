@@ -8,7 +8,7 @@ from typing_extensions import Protocol
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import CompilationException
+from dbt.exceptions import raise_dataclass_not_dict, CompilationException
 from dbt.utils import deep_merge
 
 
@@ -42,18 +42,10 @@ class FakeAPIObject(dbtClassMixin, Replaceable, Mapping):
             raise KeyError(key) from None
 
     def __iter__(self):
-        msg = (
-            'The object ("{obj}") is not a dictionary.'
-            .format(obj=self)
-        )
-        raise CompilationException(msg)
+        raise_dataclass_not_dict(self)
 
     def __len__(self):
-        msg = (
-            'The object ("{obj}") is not a dictionary.'
-            .format(obj=self)
-        )
-        raise CompilationException(msg)
+        raise_dataclass_not_dict(self)
 
     def incorporate(self, **kwargs):
         value = self.to_dict(omit_none=True)
