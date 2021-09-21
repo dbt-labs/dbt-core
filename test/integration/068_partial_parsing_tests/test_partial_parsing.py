@@ -2,6 +2,7 @@ from dbt.exceptions import CompilationException
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.parser.partial import special_override_macros
 from test.integration.base import DBTIntegrationTest, use_profile, normalize
 import shutil
 import os
@@ -436,6 +437,10 @@ class TestMacros(DBTIntegrationTest):
     def tearDown(self):
         if os.path.exists(normalize('macros-macros/custom_schema_tests.sql')):
             os.remove(normalize('macros-macros/custom_schema_tests.sql'))
+        if os.path.exists(normalize('macros-macros/ref_override.sql')):
+            os.remove(normalize('macros-macros/ref_override.sql'))
+        if os.path.exists(normalize('macros-macros/gsm_override.sql')):
+            os.remove(normalize('macros-macros/gsm_override.sql'))
 
     @use_profile('postgres')
     def test_postgres_nested_macros(self):
@@ -468,3 +473,38 @@ class TestMacros(DBTIntegrationTest):
         self.assertEqual(results[1].status, TestStatus.Fail)
         self.assertEqual(results[1].node.config.severity, 'ERROR')
 
+    @use_profile('postgres')
+    def test_postgres_skip_macros(self):
+        expected_special_override_macros = [
+            'ref', 'source', 'config', 'generate_schema_name',
+            'generate_database_name', 'generate_alias_name'
+        ]
+        self.assertEqual(special_override_macros, expected_special_override_macros)
+
+        # initial run so we have a msgpack file
+        results = self.run_dbt()
+
+        # add a new ref override macro
+        shutil.copyfile('extra-files/ref_override.sql', 'macros-macros/ref_override.sql')
+        results, log_output = self.run_dbt_and_capture(['--partial-parse', 'run'])
+        self.assertTrue('Starting full parse.' in log_output)
+
+        # modify a ref override macro
+        shutil.copyfile('extra-files/ref_override2.sql', 'macros-macros/ref_override.sql')
+        results, log_output = self.run_dbt_and_capture(['--partial-parse', 'run'])
+        self.assertTrue('Starting full parse.' in log_output)
+
+        # remove a ref override macro
+        os.remove(normalize('macros-macros/ref_override.sql'))
+        results, log_output = self.run_dbt_and_capture(['--partial-parse', 'run'])
+        self.assertTrue('Starting full parse.' in log_output)
+
+        # custom generate_schema_name macro
+        shutil.copyfile('extra-files/gsm_override.sql', 'macros-macros/gsm_override.sql')
+        results, log_output = self.run_dbt_and_capture(['--partial-parse', 'run'])
+        self.assertTrue('Starting full parse.' in log_output)
+
+        # change generate_schema_name macro
+        shutil.copyfile('extra-files/gsm_override2.sql', 'macros-macros/gsm_override.sql')
+        results, log_output = self.run_dbt_and_capture(['--partial-parse', 'run'])
+        self.assertTrue('Starting full parse.' in log_output)
