@@ -236,8 +236,7 @@ class ModelRunner(CompileRunner):
         if isinstance(result, str):
             msg = (
                 'The materialization ("{}") did not explicitly return a '
-                'list of relations to add to the cache.'
-                .format(str(model.get_materialization()))
+                "list of relations to add to the cache.".format(str(model.get_materialization()))
             )
             raise CompilationException(msg, node=model)
 
