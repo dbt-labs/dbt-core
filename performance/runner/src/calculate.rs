@@ -1,4 +1,5 @@
 use crate::exceptions::{CalculateError, IOError};
+use chrono::prelude::*;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -45,6 +46,7 @@ pub struct Data {
 pub struct Calculation {
     pub metric: String,
     pub regression: bool,
+    pub ts: DateTime<Utc>,
     pub data: Data,
 }
 
@@ -60,6 +62,11 @@ pub struct MeasurementGroup {
 // Given two measurements, return all the calculations. Calculations are
 // flagged as regressions or not regressions.
 fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Calculation> {
+    // choosing the current timestamp for all calculations to be the same.
+    // this timestamp is not from the time of measurement becuase hyperfine
+    // controls that. Since calculation is run directly after, this is fine.
+    let ts = Utc::now();
+
     let median_threshold = 1.05; // 5% regression threshold
     let median_difference = dev.median / baseline.median;
 
@@ -70,6 +77,7 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
         Calculation {
             metric: ["median", metric].join("_"),
             regression: median_difference > median_threshold,
+            ts: ts,
             data: Data {
                 threshold: median_threshold,
                 difference: median_difference,
@@ -80,6 +88,7 @@ fn calculate(metric: &str, dev: &Measurement, baseline: &Measurement) -> Vec<Cal
         Calculation {
             metric: ["stddev", metric].join("_"),
             regression: stddev_difference > stddev_threshold,
+            ts: ts,
             data: Data {
                 threshold: stddev_threshold,
                 difference: stddev_difference,

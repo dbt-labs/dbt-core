@@ -6,6 +6,8 @@ mod measure;
 
 use crate::calculate::Calculation;
 use crate::exceptions::CalculateError;
+use chrono::offset::Utc;
+use std::fs::metadata;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -29,6 +31,9 @@ enum Opt {
         #[structopt(parse(from_os_str))]
         #[structopt(short)]
         results_dir: PathBuf,
+        #[structopt(parse(from_os_str))]
+        #[structopt(short)]
+        out_dir: PathBuf,
     },
 }
 
@@ -62,7 +67,18 @@ fn run_app() -> Result<i32, CalculateError> {
         }
 
         // calculate subcommand
-        Opt::Calculate { results_dir } => {
+        Opt::Calculate {
+            results_dir,
+            out_dir,
+        } => {
+            // validate output directory and exit early if it won't work.
+            let md = metadata(&out_dir)
+                .expect("Main: Failed to read specified output directory metadata. Does it exist?");
+            if !md.is_dir() {
+                eprintln!("Main: Output directory is not a directory");
+                return Ok(1);
+            }
+
             // get all the calculations or gracefully show the user an exception
             let calculations = calculate::regressions(&results_dir)?;
 
@@ -77,9 +93,18 @@ fn run_app() -> Result<i32, CalculateError> {
             let json_calcs = serde_json::to_string_pretty(&calculations)
                 .expect("Main: Failed to serialize calculations to json");
 
+            // if there are any calculations, use the first timestamp, if there are none
+            // just use the current time.
+            let ts = calculations
+                .first()
+                .map_or_else(|| Utc::now(), |calc| calc.ts);
+
             // create the empty destination file, and write the json string
-            let outfile = &mut results_dir.into_os_string();
-            outfile.push("/final_calculations.json");
+            let outfile = &mut out_dir.into_os_string();
+            outfile.push("/final_calculations_");
+            outfile.push(ts.timestamp().to_string());
+            outfile.push(".json");
+
             let mut f = File::create(outfile).expect("Main: Unable to create file");
             f.write_all(json_calcs.as_bytes())
                 .expect("Main: Unable to write data");
