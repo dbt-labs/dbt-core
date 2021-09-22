@@ -8,7 +8,6 @@
 
 - Enact deprecation for `materialization-return` and replace deprecation warning with an exception. ([#3896](https://github.com/dbt-labs/dbt/issues/3896))
 
-
 ## dbt 0.21.0 (Release TBD)
 
 ## dbt 0.21.0rc1 (September 20, 2021)
