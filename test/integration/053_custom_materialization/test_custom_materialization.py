@@ -98,3 +98,18 @@ class TestOverrideAdapterLocal(BaseTestCustomMaterialization):
         self.run_dbt(['deps'])
         # this should error because the override is buggy
         self.run_dbt(['run'], expect_pass=False)
+
+
+class TestOverrideDefaultReturn(BaseTestCustomMaterialization):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'macro-paths': ['override-view-return-no-relation']
+        }
+
+    @use_profile('postgres')
+    def test_postgres_default_dependency(self):
+        self.run_dbt(['deps'])
+        results = self.run_dbt(['run'], expect_pass=False)
+        assert 'did not explicitly return a list of relations' in results[0].message
