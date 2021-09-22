@@ -48,10 +48,6 @@ class TestChangingRelationType(DBTIntegrationTest):
     def test__snowflake__switch_materialization(self):
         self.swap_types_and_test()
 
-    @use_profile("redshift")
-    def test__redshift__switch_materialization(self):
-        self.swap_types_and_test()
-
     @mark.flaky(rerun_filter=bigquery_rate_limiter, max_runs=3)
     @use_profile("bigquery")
     def test__bigquery__switch_materialization(self):
@@ -77,21 +73,5 @@ class TestChangingRelationType(DBTIntegrationTest):
         self.assertEqual(len(results),  1)
 
         results = self.run_dbt(['run', '--vars', 'materialized: view', "--full-refresh"])
-        self.assertEqual(results[0].node.config.materialized, 'view')
-        self.assertEqual(len(results),  1)
-
-    @use_profile('presto')
-    def test__presto__switch_materialization(self):
-        # presto can't do incremental materializations so there's less to this
-
-        results = self.run_dbt(['run', '--vars', 'materialized: view'])
-        self.assertEqual(results[0].node.config.materialized, 'view')
-        self.assertEqual(len(results),  1)
-
-        results = self.run_dbt(['run', '--vars', 'materialized: table'])
-        self.assertEqual(results[0].node.config.materialized, 'table')
-        self.assertEqual(len(results),  1)
-
-        results = self.run_dbt(['run', '--vars', 'materialized: view'])
         self.assertEqual(results[0].node.config.materialized, 'view')
         self.assertEqual(len(results),  1)

@@ -97,10 +97,6 @@ jobs:
             bigquery:
               - 'core/**'
               - 'plugins/bigquery/**'
-            redshift:
-              - 'core/**'
-              - 'plugins/redshift/**'
-              - 'plugins/postgres/**'
 
       - name: Generate integration test matrix
         id: generate-matrix
@@ -189,16 +185,6 @@ jobs:
 
       - name: Run tox (postgres)
         if: matrix.adapter == 'postgres'
-        run: tox
-
-      - name: Run tox (redshift)
-        if: matrix.adapter == 'redshift'
-        env:
-          REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
-          REDSHIFT_TEST_PASS: ${{ secrets.REDSHIFT_TEST_PASS }}
-          REDSHIFT_TEST_USER: ${{ secrets.REDSHIFT_TEST_USER }}
-          REDSHIFT_TEST_PORT: ${{ secrets.REDSHIFT_TEST_PORT }}
-          REDSHIFT_TEST_HOST: ${{ secrets.REDSHIFT_TEST_HOST }}
         run: tox
 
       - name: Run tox (snowflake)

@@ -94,10 +94,6 @@ class TestDefaultQueryComments(DBTIntegrationTest):
     def test_postgres_comments(self):
         self.run_assert_comments()
 
-    @use_profile('redshift')
-    def test_redshift_comments(self):
-        self.run_assert_comments()
-
     @use_profile('snowflake')
     def test_snowflake_comments(self):
         self.run_assert_comments()

@@ -69,7 +69,7 @@ class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         dbt.flags.WARN_ERROR = True
-        # HACK: this is needed since tracking events can 
+        # HACK: this is needed since tracking events can
         # be sent when using the model parser
         tracking.do_not_track()
 
@@ -80,7 +80,7 @@ class BaseParserTest(unittest.TestCase):
             'quoting': {},
             'outputs': {
                 'test': {
-                    'type': 'redshift',
+                    'type': 'postgres',
                     'host': 'localhost',
                     'schema': 'analytics',
                     'user': 'test',

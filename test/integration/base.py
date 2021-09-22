@@ -17,7 +17,7 @@ import yaml
 from unittest.mock import patch
 
 import dbt.main as dbt
-import dbt.flags as flags
+from dbt import flags
 from dbt.deprecations import reset_deprecations
 from dbt.adapters.factory import get_adapter, reset_adapters, register_adapter
 from dbt.clients.jinja import template_cache
@@ -81,7 +81,7 @@ class TestArgs:
 
 
 def _profile_from_test_name(test_name):
-    adapter_names = ('postgres', 'snowflake', 'redshift', 'bigquery', 'presto')
+    adapter_names = ('postgres', 'snowflake', 'bigquery', 'presto')
     adapters_in_name = sum(x in test_name for x in adapter_names)
     if adapters_in_name != 1:
         raise ValueError(
@@ -168,28 +168,6 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': 'noaccess',
                         'pass': 'password',
                         'dbname': os.getenv('POSTGRES_TEST_DATABASE', 'dbt'),
-                        'schema': self.unique_schema()
-                    }
-                },
-                'target': 'default2'
-            }
-        }
-
-    def redshift_profile(self):
-        return {
-            'config': {
-                'send_anonymous_usage_stats': False
-            },
-            'test': {
-                'outputs': {
-                    'default2': {
-                        'type': 'redshift',
-                        'threads': 1,
-                        'host': os.getenv('REDSHIFT_TEST_HOST'),
-                        'port': int(os.getenv('REDSHIFT_TEST_PORT')),
-                        'user': os.getenv('REDSHIFT_TEST_USER'),
-                        'pass': os.getenv('REDSHIFT_TEST_PASS'),
-                        'dbname': os.getenv('REDSHIFT_TEST_DBNAME'),
                         'schema': self.unique_schema()
                     }
                 },
@@ -336,8 +314,6 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.snowflake_profile()
         elif adapter_type == 'bigquery':
             return self.bigquery_profile()
-        elif adapter_type == 'redshift':
-            return self.redshift_profile()
         elif adapter_type == 'presto':
             return self.presto_profile()
         else:
@@ -544,10 +520,10 @@ class DBTIntegrationTest(unittest.TestCase):
         self._created_schemas.add(
             self._get_schema_fqn(self.default_database, schema)
         )
-        # on postgres/redshift, this will make you sad
+        # on postgres, this will make you sad
         drop_alternative = (
             self.setup_alternate_db and
-            self.adapter_type not in {'postgres', 'redshift'} and
+            self.adapter_type not in {'postgres'} and
             self.alternative_database
         )
         if drop_alternative:
@@ -584,7 +560,6 @@ class DBTIntegrationTest(unittest.TestCase):
             "dbt exit state did not match expected")
 
         return res
-
 
     def run_dbt_and_capture(self, *args, **kwargs):
         try:
@@ -640,7 +615,6 @@ class DBTIntegrationTest(unittest.TestCase):
         if kwargs is None:
             kwargs = {}
         base_kwargs.update(kwargs)
-
 
         to_return = to_return.format(**base_kwargs)
 
@@ -1077,7 +1051,6 @@ class DBTIntegrationTest(unittest.TestCase):
                     'num_mismatched nonzero: ' + sql
                 )
 
-
     def _assertTableRowCountsEqual(self, relation_a, relation_b):
         cmp_query = """
             with table_a as (
@@ -1094,7 +1067,6 @@ class DBTIntegrationTest(unittest.TestCase):
             from table_a, table_b
 
         """.format(str(relation_a), str(relation_b))
-
 
         res = self.run_sql(cmp_query, fetch='one')
 
@@ -1247,4 +1219,3 @@ def get_manifest():
         return manifest
     else:
         return None
-

@@ -24,12 +24,6 @@ class TestBaseCaching(DBTIntegrationTest):
         self.run_dbt()
         self.assertTablesEqual('model', 'expected')
 
-    @use_profile('redshift')
-    def test_redshift_adapter_methods(self):
-        self.run_dbt(['compile'])  # trigger any compile-time issues
-        self.run_dbt()
-        self.assertTablesEqual('model', 'expected')
-
     @use_profile('snowflake')
     def test_snowflake_adapter_methods(self):
         self.run_dbt(['compile'])  # trigger any compile-time issues

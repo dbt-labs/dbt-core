@@ -361,10 +361,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
     def test_snowflake_source_freshness(self):
         self._run_source_freshness()
 
-    @use_profile('redshift')
-    def test_redshift_source_freshness(self):
-        self._run_source_freshness()
-
     @use_profile('bigquery')
     def test_bigquery_source_freshness(self):
         self._run_source_freshness()
@@ -490,10 +486,5 @@ class TestUnquotedSources(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_catalog(self):
-        self.run_dbt_with_vars(['run'])
-        self.run_dbt_with_vars(['docs', 'generate'])
-
-    @use_profile('redshift')
-    def test_redshift_catalog(self):
         self.run_dbt_with_vars(['run'])
         self.run_dbt_with_vars(['docs', 'generate'])

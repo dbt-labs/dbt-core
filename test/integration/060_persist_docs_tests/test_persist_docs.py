@@ -95,10 +95,6 @@ class TestPersistDocs(BasePersistDocsTest):
     def test_postgres_comments(self):
         self.run_has_comments_pglike()
 
-    @use_profile('redshift')
-    def test_redshift_comments(self):
-        self.run_has_comments_pglike()
-
     @use_profile('snowflake')
     def test_snowflake_comments(self):
         self.run_dbt()
@@ -117,43 +113,6 @@ class TestPersistDocs(BasePersistDocsTest):
         table_name_comment = table_node['columns']['NAME']['comment']
         assert table_name_comment.startswith(
             'Some stuff here and then a call to')
-
-
-
-class TestPersistDocsLateBinding(BasePersistDocsTest):
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            'models': {
-                'test': {
-                    '+persist_docs': {
-                        "relation": True,
-                        "columns": True,
-                    },
-                    'view_model': {
-                        'bind': False,
-                    }
-                }
-            }
-        }
-
-    @use_profile('redshift')
-    def test_redshift_late_binding_view(self):
-        self.run_dbt()
-        self.run_dbt(['docs', 'generate'])
-        with open('target/catalog.json') as fp:
-            catalog_data = json.load(fp)
-        assert 'nodes' in catalog_data
-        assert len(catalog_data['nodes']) == 3
-        table_node = catalog_data['nodes']['model.test.table_model']
-        view_node = self._assert_has_table_comments(table_node)
-
-        view_node = catalog_data['nodes']['model.test.view_model']
-        self._assert_has_view_comments(view_node, False, False)
-
-        no_docs_node = catalog_data['nodes']['model.test.no_docs_model']
-        self._assert_has_view_comments(no_docs_node, False, False)
 
 
 class TestPersistDocsSimple(BasePersistDocsTest):

@@ -1,5 +1,4 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import dbt.exceptions
 
 
 class TestSimpleSnapshotFiles(DBTIntegrationTest):
@@ -47,10 +46,5 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery__simple_snapshot(self):
-        self.test_snapshot_check_cols_cycle()
-        self.assert_expected()
-
-    @use_profile('redshift')
-    def test__redshift__simple_snapshot(self):
         self.test_snapshot_check_cols_cycle()
         self.assert_expected()

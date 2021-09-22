@@ -60,36 +60,6 @@ class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
         self.assertEqual(len(results),  10)
 
 
-class TestSimpleSeedColumnOverrideRedshift(TestSimpleSeedColumnOverride):
-    @property
-    def models(self):
-        return "models-rs"
-
-    @property
-    def profile_config(self):
-        return self.redshift_profile()
-
-    def seed_enabled_types(self):
-        return {
-            "id": "text",
-            "birthday": "date",
-        }
-
-    def seed_tricky_types(self):
-        return {
-            'id_str': 'text',
-            'looks_like_a_bool': 'text',
-            'looks_like_a_date': 'text',
-        }
-
-    @use_profile('redshift')
-    def test_redshift_simple_seed_with_column_override_redshift(self):
-        results = self.run_dbt(["seed", "--show"])
-        self.assertEqual(len(results),  2)
-        results = self.run_dbt(["test"])
-        self.assertEqual(len(results),  10)
-
-
 class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
     @property
     def models(self):

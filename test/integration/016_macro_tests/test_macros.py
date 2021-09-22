@@ -95,20 +95,6 @@ class TestAdapterMacroNoDestination(DBTIntegrationTest):
         assert "In dispatch: No macro named 'dispatch_to_nowhere' found" in str(exc.value)
 
 
-class TestDispatchMacroUseParent(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "test_macros_016"
-
-    @property
-    def models(self):
-        return "dispatch-inheritance-models"
-
-    @use_profile('redshift')
-    def test_redshift_inherited_macro(self):
-        self.run_dbt(['run'])
-
-
 class TestMacroOverrideBuiltin(DBTIntegrationTest):
     @property
     def schema(self):
@@ -124,7 +110,6 @@ class TestMacroOverrideBuiltin(DBTIntegrationTest):
             'config-version': 2,
             'macro-paths': ['override-get-columns-macros'],
         }
-
 
     @use_profile('postgres')
     def test_postgres_overrides(self):

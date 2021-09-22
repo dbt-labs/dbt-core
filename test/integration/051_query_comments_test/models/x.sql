@@ -12,7 +12,7 @@
 {% set required = ['name', 'schema', 'type', 'threads'] %}
 
 {# Require what we docuement at https://docs.getdbt.com/docs/target #}
-{% if target.type == 'postgres' or target.type == 'redshift' %}
+{% if target.type == 'postgres' %}
 	{% do required.extend(['dbname', 'host', 'user', 'port']) %}
 {% elif target.type == 'snowflake' %}
 	{% do required.extend(['database', 'warehouse', 'user', 'role', 'account']) %}

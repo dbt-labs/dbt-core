@@ -39,10 +39,6 @@ class TestColumnQuotingDefault(BaseColumnQuotingTest):
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
 
-    @use_profile('redshift')
-    def test_redshift_column_quotes(self):
-        self._run_columnn_quotes()
-
     @use_profile('bigquery')
     def test_bigquery_column_quotes(self):
         self._run_columnn_quotes(strategy='merge')
@@ -85,10 +81,6 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
 
-    @use_profile('redshift')
-    def test_redshift_column_quotes(self):
-        self._run_columnn_quotes()
-
     @use_profile('snowflake')
     def test_snowflake_column_quotes(self):
         self._run_columnn_quotes()
@@ -118,10 +110,6 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
 
     @use_profile('postgres')
     def test_postgres_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('redshift')
-    def test_redshift_column_quotes(self):
         self._run_columnn_quotes()
 
     @use_profile('snowflake')

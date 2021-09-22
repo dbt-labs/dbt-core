@@ -83,20 +83,6 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
 
         self.assert_expected()
 
-    @use_profile('redshift')
-    def test__redshift__simple_snapshot(self):
-        self.dbt_run_seed_snapshot()
-
-        self.assert_expected()
-
-        self.run_sql_file("invalidate_postgres.sql")
-        self.run_sql_file("update.sql")
-
-        results = self.run_snapshot()
-        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
-
-        self.assert_expected()
-
 
 class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
 
@@ -161,10 +147,6 @@ class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test_snowflake_renamed_source(self):
-        self._run_snapshot_test()
-
-    @use_profile('redshift')
-    def test_redshift_renamed_source(self):
         self._run_snapshot_test()
 
     @use_profile('bigquery')
@@ -844,11 +826,6 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__snapshot_hard_delete(self):
-        self.run_sql_file('seed.sql')
-        self._test_snapshot_hard_delete()
-
-    @use_profile('redshift')
-    def test__redshift__snapshot_hard_delete(self):
         self.run_sql_file('seed.sql')
         self._test_snapshot_hard_delete()
 
