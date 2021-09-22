@@ -54,7 +54,7 @@ class TestModifiedState(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_changed_seed_contents_state(self):
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], expect_pass=True)
         assert len(results) == 0
         with open('data/seed.csv') as fp:
             fp.readline()
@@ -91,12 +91,12 @@ class TestModifiedState(DBTIntegrationTest):
                 fp.write(f'{idx},{value}{newline}')
 
         # now if we run again, we should get a warning
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'])
         assert len(results) == 1
         assert results[0] == 'test.seed'
 
         with pytest.raises(CompilationException) as exc:
-            self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=True)
+            self.run_dbt(['--warn-error', 'ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'])
         assert '>1MB' in str(exc.value)
 
         shutil.rmtree('./state')
@@ -106,12 +106,12 @@ class TestModifiedState(DBTIntegrationTest):
         with open('data/seed.csv', 'a') as fp:
             fp.write(f'{random},test{newline}')
 
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], expect_pass=True)
         assert len(results) == 0
 
     @use_profile('postgres')
     def test_postgres_changed_seed_config(self):
-        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
+        results = self.run_dbt(['ls', '--resource-type', 'seed', '--select', 'state:modified', '--state', './state'], expect_pass=True)
         assert len(results) == 0
 
         self.use_default_project({'seeds': {'test': {'quote_columns': False}}})
@@ -123,7 +123,7 @@ class TestModifiedState(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_unrendered_config_same(self):
-        results = self.run_dbt(['ls', '--resource-type', 'model', '--select', 'state:modified', '--state', './state'], strict=False, expect_pass=True)
+        results = self.run_dbt(['ls', '--resource-type', 'model', '--select', 'state:modified', '--state', './state'], expect_pass=True)
         assert len(results) == 0
 
         # although this is the default value, dbt will recognize it as a change
@@ -135,7 +135,7 @@ class TestModifiedState(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_changed_model_contents(self):
-        results = self.run_dbt(['run', '--models', 'state:modified', '--state', './state'], strict=False)
+        results = self.run_dbt(['run', '--models', 'state:modified', '--state', './state'])
         assert len(results) == 0
 
         with open('models/table_model.sql') as fp:
@@ -164,7 +164,7 @@ class TestModifiedState(DBTIntegrationTest):
         with open('macros/second_macro.sql', 'w') as fp:
             fp.write(new_macro)
 
-        results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'], strict=False)
+        results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'])
         assert len(results) == 0
 
         os.remove('macros/second_macro.sql')
@@ -172,7 +172,7 @@ class TestModifiedState(DBTIntegrationTest):
         with open('macros/macros.sql', 'a') as fp:
             fp.write(new_macro)
 
-        results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'], strict=False)
+        results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'])
         assert len(results) == 0
 
     @use_profile('postgres')
@@ -191,7 +191,7 @@ class TestModifiedState(DBTIntegrationTest):
             fp.write(newline)
 
         # table_model calls this macro
-        results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'], strict=False)
+        results, stdout = self.run_dbt_and_capture(['run', '--models', 'state:modified', '--state', './state'])
         assert len(results) == 1
 
     @use_profile('postgres')

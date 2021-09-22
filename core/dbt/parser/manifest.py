@@ -64,7 +64,6 @@ from dbt.dataclass_schema import StrEnum, dbtClassMixin
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.msgpack'
 PARSING_STATE = DbtProcessState('parsing')
-DEFAULT_PARTIAL_PARSE = False
 
 
 class ReparseReason(StrEnum):
@@ -539,18 +538,8 @@ class ManifestLoader:
                     reparse_reason = ReparseReason.project_config_changed
         return valid, reparse_reason
 
-    def _partial_parse_enabled(self):
-        # if the CLI is set, follow that
-        if flags.PARTIAL_PARSE is not None:
-            return flags.PARTIAL_PARSE
-        # if the config is set, follow that
-        elif self.root_project.config.partial_parse is not None:
-            return self.root_project.config.partial_parse
-        else:
-            return DEFAULT_PARTIAL_PARSE
-
     def read_manifest_for_partial_parse(self) -> Optional[Manifest]:
-        if not self._partial_parse_enabled():
+        if not flags.PARTIAL_PARSE:
             logger.debug('Partial parsing not enabled')
             return None
         path = os.path.join(self.root_project.target_path,
@@ -587,7 +576,7 @@ class ManifestLoader:
 
     def build_perf_info(self):
         mli = ManifestLoaderInfo(
-            is_partial_parse_enabled=self._partial_parse_enabled(),
+            is_partial_parse_enabled=flags.PARTIAL_PARSE,
             is_static_analysis_enabled=flags.USE_EXPERIMENTAL_PARSER
         )
         for project in self.all_projects.values():

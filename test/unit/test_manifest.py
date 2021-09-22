@@ -55,7 +55,6 @@ ENV_KEY_NAME = 'KEY' if os.name == 'nt' else 'key'
 
 class ManifestTest(unittest.TestCase):
     def setUp(self):
-        dbt.flags.STRICT_MODE = True
         # TODO: why is this needed for tests in this module to pass?
         tracking.active_user = None
 
@@ -373,7 +372,7 @@ class ManifestTest(unittest.TestCase):
     def test_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.invocation_id = '01234567-0123-0123-0123-0123456789ab'
-        mock_user.do_not_track = True
+        dbt.flags.SEND_ANONYMOUS_USAGE_STATS = False
         now = datetime.utcnow()
         self.assertEqual(
             ManifestMetadata(
@@ -396,7 +395,7 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.invocation_id = '01234567-0123-0123-0123-0123456789ab'
-        mock_user.do_not_track = True
+        dbt.flags.SEND_ANONYMOUS_USAGE_STATS = False
         metadata = ManifestMetadata(
             project_id='098f6bcd4621d373cade4e832627b4f6',
             adapter_type='postgres',
@@ -486,8 +485,6 @@ class ManifestTest(unittest.TestCase):
 
 class MixedManifestTest(unittest.TestCase):
     def setUp(self):
-        dbt.flags.STRICT_MODE = True
-
         self.maxDiff = None
 
         self.model_config = NodeConfig.from_dict({

@@ -112,7 +112,7 @@ class HasRPCServer(DBTIntegrationTest):
         super().setUp()
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
         if self.should_seed:
-            self.run_dbt_with_vars(['seed'], strict=False)
+            self.run_dbt_with_vars(['seed'])
         port = random.randint(49152, 61000)
         self._server = self.ServerProcess(
             cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema()),

@@ -45,13 +45,6 @@ from dbt.dataclass_schema import ValidationError
 from .utils import ContractTestCase, assert_symmetric, assert_from_dict, compare_dicts, assert_fails_validation, dict_replace, replace_config
 
 
-@pytest.fixture(autouse=True)
-def strict_mode():
-    flags.STRICT_MODE = True
-    yield
-    flags.STRICT_MODE = False
-
-
 @pytest.fixture
 def populated_node_config_object():
     result = NodeConfig(
@@ -726,13 +719,6 @@ def test_patch_parsed_model(basic_parsed_model_object, basic_parsed_model_patch_
     pre_patch = basic_parsed_model_object
     pre_patch.patch(basic_parsed_model_patch_object)
     assert patched_model_object == pre_patch
-
-
-def test_patch_parsed_model_invalid(basic_parsed_model_object, basic_parsed_model_patch_object):
-    pre_patch = basic_parsed_model_object # ParsedModelNode
-    patch = basic_parsed_model_patch_object.replace(description=None)
-    with pytest.raises(ValidationError):
-        pre_patch.patch(patch)
 
 
 @pytest.fixture

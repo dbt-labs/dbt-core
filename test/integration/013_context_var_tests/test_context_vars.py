@@ -143,7 +143,8 @@ class TestContextVars(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_env_vars_secrets(self):
-        _, log_output = self.run_dbt_and_capture(['--debug', 'run', '--target', 'prod'])
+        os.environ['DBT_DEBUG'] = 'True'
+        _, log_output = self.run_dbt_and_capture(['run', '--target', 'prod'])
 
         self.assertFalse("secret_variable" in log_output)
         self.assertTrue("regular_variable" in log_output)
@@ -159,9 +160,7 @@ class TestEmitWarning(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_warn(self):
-        with pytest.raises(dbt.exceptions.CompilationException):
-            self.run_dbt(['run'], strict=True)
-        self.run_dbt(['run'], strict=False, expect_pass=True)
+        self.run_dbt(['run'], expect_pass=True)
 
 
 class TestVarDependencyInheritance(DBTIntegrationTest):
@@ -199,9 +198,9 @@ class TestVarDependencyInheritance(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_var_mutual_overrides_v1_conversion(self):
-        self.run_dbt(['deps'], strict=False)
-        assert len(self.run_dbt(['seed'], strict=False)) == 2
-        assert len(self.run_dbt(['run'], strict=False)) == 2
+        self.run_dbt(['deps'])
+        assert len(self.run_dbt(['seed'])) == 2
+        assert len(self.run_dbt(['run'])) == 2
         self.assertTablesEqual('root_model_expected', 'model')
         self.assertTablesEqual('first_dep_expected', 'first_dep_model')
 

@@ -22,8 +22,6 @@ class CompilerTest(unittest.TestCase):
             "".join(b.split()))
 
     def setUp(self):
-        dbt.flags.STRICT_MODE = True
-
         self.maxDiff = None
 
         self.model_config = NodeConfig.from_dict({

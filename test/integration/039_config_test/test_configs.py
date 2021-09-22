@@ -180,11 +180,11 @@ class TestDisabledConfigs(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_conditional_model(self):
         # no seeds/models - enabled should eval to False because of the target
-        results = self.run_dbt(['seed', '--target', 'disabled'], strict=False)
+        results = self.run_dbt(['seed', '--target', 'disabled'])
         self.assertEqual(len(results), 0)
-        results = self.run_dbt(['run', '--target', 'disabled'], strict=False)
+        results = self.run_dbt(['run', '--target', 'disabled'])
         self.assertEqual(len(results), 0)
-        results = self.run_dbt(['test', '--target', 'disabled'], strict=False)
+        results = self.run_dbt(['test', '--target', 'disabled'])
         self.assertEqual(len(results), 0)
 
         # has seeds/models - enabled should eval to True because of the target
@@ -192,7 +192,7 @@ class TestDisabledConfigs(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 2)
-        results = self.run_dbt(['test'], strict=False)
+        results = self.run_dbt(['test'])
         self.assertEqual(len(results), 5)
 
 
@@ -234,14 +234,14 @@ class TestUnusedModelConfigs(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_warn_unused_configuration_paths(self):
         with self.assertRaises(CompilationException) as exc:
-            self.run_dbt(['seed'])
+            self.run_dbt(['--warn-error', 'seed'])
 
         self.assertIn('Configuration paths exist', str(exc.exception))
         self.assertIn('- sources.test', str(exc.exception))
         self.assertIn('- models.test', str(exc.exception))
         self.assertIn('- models.test', str(exc.exception))
 
-        self.run_dbt(['seed'], strict=False)
+        self.run_dbt(['seed'])
 
 class TestConfigIndivTests(DBTIntegrationTest):
     @property
@@ -280,19 +280,19 @@ class TestConfigIndivTests(DBTIntegrationTest):
         self.assertEqual(len(self.run_dbt(['run'])), 2)
         
         # all tests on (minus sleeper_agent) + WARN
-        self.assertEqual(len(self.run_dbt(['test'], strict=False)), 5)
+        self.assertEqual(len(self.run_dbt(['test'])), 5)
         
         # turn off two of them directly
-        self.assertEqual(len(self.run_dbt(['test', '--vars', '{"enabled_direct": False}'], strict=False)), 3)
+        self.assertEqual(len(self.run_dbt(['test', '--vars', '{"enabled_direct": False}'])), 3)
         
         # turn on sleeper_agent data test directly
         self.assertEqual(len(self.run_dbt(['test', '--models', 'sleeper_agent', 
-            '--vars', '{"enabled_direct": True}'], strict=False)), 1)
+            '--vars', '{"enabled_direct": True}'])), 1)
         
         # set three to ERROR directly
         results = self.run_dbt(['test', '--models', 'config.severity:error',
             '--vars', '{"enabled_direct": True, "severity_direct": "ERROR"}'
-            ], strict=False, expect_pass = False)
+            ], expect_pass = False)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'fail')
         self.assertEqual(results[1].status, 'fail')

@@ -30,8 +30,6 @@ def fetch_cluster_credentials(*args, **kwargs):
 class TestRedshiftAdapter(unittest.TestCase):
 
     def setUp(self):
-        flags.STRICT_MODE = True
-
         profile_cfg = {
             'outputs': {
                 'test': {

@@ -40,8 +40,6 @@ def _bq_conn():
 class BaseTestBigQueryAdapter(unittest.TestCase):
 
     def setUp(self):
-        flags.STRICT_MODE = True
-
         self.raw_profile = {
             'outputs': {
                 'oauth': {
@@ -375,7 +373,7 @@ class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
 
 class TestBigQueryRelation(unittest.TestCase):
     def setUp(self):
-        flags.STRICT_MODE = True
+        pass
 
     def test_view_temp_relation(self):
         kwargs = {
@@ -455,7 +453,7 @@ class TestBigQueryRelation(unittest.TestCase):
 
 class TestBigQueryInformationSchema(unittest.TestCase):
     def setUp(self):
-        flags.STRICT_MODE = True
+        pass
 
     def test_replace(self):
 

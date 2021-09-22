@@ -67,14 +67,15 @@ class BootstrapProcess(dbt.flags.MP_CONTEXT.Process):
         keeps everything in memory.
         """
         # reset flags
-        dbt.flags.set_from_args(self.task.args)
+        user_config = None
+        if self.task.config is not None:
+            user_config = self.task.config.user_config
+        dbt.flags.set_from_args(self.task.args, user_config)
+        dbt.tracking.initialize_from_flags()
         # reload the active plugin
         load_plugin(self.task.config.credentials.type)
         # register it
         register_adapter(self.task.config)
-
-        # reset tracking, etc
-        self.task.config.config.set_values(self.task.args.profiles_dir)
 
     def task_exec(self) -> None:
         """task_exec runs first inside the child process"""

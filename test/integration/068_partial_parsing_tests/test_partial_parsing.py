@@ -113,7 +113,7 @@ class TestModels(DBTIntegrationTest):
         shutil.copyfile('extra-files/models-schema2.yml', 'models-a/schema.yml')
         os.remove(normalize('models-a/model_three.sql'))
         with self.assertRaises(CompilationException):
-            results = self.run_dbt(["--partial-parse", "run"])
+            results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put model back again
         shutil.copyfile('extra-files/model_three.sql', 'models-a/model_three.sql')
@@ -161,7 +161,7 @@ class TestModels(DBTIntegrationTest):
         # Remove the macro
         os.remove(normalize('macros/my_macro.sql'))
         with self.assertRaises(CompilationException):
-            results = self.run_dbt(["--partial-parse", "run"])
+            results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # put back macro file, got back to schema file with no macro
         # add separate macro patch schema file
@@ -317,7 +317,7 @@ class TestSources(DBTIntegrationTest):
         # Change seed name to wrong name
         shutil.copyfile('extra-files/schema-sources5.yml', 'models-b/sources.yml')
         with self.assertRaises(CompilationException):
-            results = self.run_dbt(["--partial-parse", "run"])
+            results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put back seed name to right name
         shutil.copyfile('extra-files/schema-sources4.yml', 'models-b/sources.yml')
@@ -441,7 +441,7 @@ class TestMacros(DBTIntegrationTest):
     def test_postgres_nested_macros(self):
 
         shutil.copyfile('extra-files/custom_schema_tests1.sql', 'macros-macros/custom_schema_tests.sql')
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 2)
         manifest = get_manifest()
         macro_child_map = manifest.build_macro_child_map()
@@ -454,7 +454,7 @@ class TestMacros(DBTIntegrationTest):
         self.assertEqual(results[0].status, TestStatus.Fail)
         self.assertRegex(results[0].node.compiled_sql, r'union all')
         # type_two_model_a_
-        self.assertEqual(results[1].status, TestStatus.Fail)
+        self.assertEqual(results[1].status, TestStatus.Warn)
         self.assertEqual(results[1].node.config.severity, 'WARN')
 
         shutil.copyfile('extra-files/custom_schema_tests2.sql', 'macros-macros/custom_schema_tests.sql')
