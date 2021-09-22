@@ -35,6 +35,7 @@ class TestDeprecations(BaseTestDeprecations):
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
+<<<<<<< HEAD
 class TestMaterializationReturnDeprecation(BaseTestDeprecations):
     @property
     def models(self):
@@ -85,6 +86,8 @@ class TestMaterializationReturnDeprecation(BaseTestDeprecations):
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
+=======
+>>>>>>> 237048c7ac09e7291d08b2204c6bdb15f07f6247
 class TestAdapterMacroDeprecation(BaseTestDeprecations):
     @property
     def models(self):
