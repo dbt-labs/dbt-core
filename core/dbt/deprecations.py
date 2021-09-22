@@ -57,22 +57,6 @@ class DispatchPackagesDeprecation(DBTDeprecation):
     '''
 
 
-class MaterializationReturnDeprecation(DBTDeprecation):
-    _name = 'materialization-return'
-
-    _description = '''\
-    The materialization ("{materialization}") did not explicitly return a list
-    of relations to add to the cache. By default the target relation will be
-    added, but this behavior will be removed in a future version of dbt.
-
-
-
-    For more information, see:
-
-    https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-returning-relations
-    '''
-
-
 class NotADictionaryDeprecation(DBTDeprecation):
     _name = 'not-a-dictionary'
 
@@ -178,7 +162,6 @@ active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
     DispatchPackagesDeprecation(),
-    MaterializationReturnDeprecation(),
     NotADictionaryDeprecation(),
     ColumnQuotingDeprecation(),
     ModelsKeyNonModelDeprecation(),

@@ -16,7 +16,6 @@ from .printer import (
     get_counts,
 )
 
-from dbt import deprecations
 from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
@@ -209,11 +208,12 @@ class ModelRunner(CompileRunner):
         self, result: Any, model
     ) -> List[BaseRelation]:
         if isinstance(result, str):
-            deprecations.warn('materialization-return',
-                              materialization=model.get_materialization())
-            return [
-                self.adapter.Relation.create_from(self.config, model)
-            ]
+            msg = (
+                'The materialization ("{}") did not explicitly return a '
+                'list of relations to add to the cache.'
+                .format(str(model.get_materialization()))
+            )
+            raise CompilationException(msg, node=model)
 
         if isinstance(result, dict):
             return _validate_materialization_relations_dict(result, model)
