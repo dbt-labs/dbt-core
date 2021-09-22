@@ -35,59 +35,6 @@ class TestDeprecations(BaseTestDeprecations):
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
-<<<<<<< HEAD
-class TestMaterializationReturnDeprecation(BaseTestDeprecations):
-    @property
-    def models(self):
-        return self.dir('custom-models')
-
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            'macro-paths': [self.dir('custom-materialization-macros')],
-        }
-
-    @use_profile('postgres')
-    def test_postgres_deprecations_fail(self):
-        # this should fail at runtime
-        self.run_dbt(strict=True, expect_pass=False)
-
-    @use_profile('postgres')
-    def test_postgres_deprecations(self):
-        self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
-        expected = {'materialization-return'}
-        self.assertEqual(expected, deprecations.active_deprecations)
-
-
-class TestMaterializationReturnDeprecation(BaseTestDeprecations):
-    @property
-    def models(self):
-        return self.dir('custom-models')
-
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            'macro-paths': [self.dir('custom-materialization-macros')],
-        }
-
-    @use_profile('postgres')
-    def test_postgres_deprecations_fail(self):
-        # this should fail at runtime
-        self.run_dbt(['--warn-error', 'run'], expect_pass=False)
-
-    @use_profile('postgres')
-    def test_postgres_deprecations(self):
-        self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt()
-        expected = {'materialization-return'}
-        self.assertEqual(expected, deprecations.active_deprecations)
-
-
-=======
->>>>>>> 237048c7ac09e7291d08b2204c6bdb15f07f6247
 class TestAdapterMacroDeprecation(BaseTestDeprecations):
     @property
     def models(self):
