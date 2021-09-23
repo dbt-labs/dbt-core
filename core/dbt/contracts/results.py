@@ -369,7 +369,7 @@ class FreshnessResult(ExecutionResult):
 
 
 @dataclass
-@schema_version('sources', 1)
+@schema_version('sources', 2)
 class FreshnessExecutionResultArtifact(
     ArtifactMixin,
     VersionedSchema,
