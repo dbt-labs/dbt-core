@@ -51,7 +51,7 @@
 {% endmacro %}
 
 {% macro get_batch_size() -%}
-  {{ adapter.dispatch('get_batch_size', 'dbt')() }}
+  {{ return(adapter.dispatch('get_batch_size', 'dbt')()) }}
 {%- endmacro %}
 
 {% macro default__get_batch_size() %}
