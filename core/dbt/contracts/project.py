@@ -1,9 +1,7 @@
 from dbt.contracts.util import Replaceable, Mergeable, list_str
-from dbt.contracts.connection import UserConfigContract, QueryComment
+from dbt.contracts.connection import QueryComment, UserConfigContract
 from dbt.helper_types import NoValue
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-from dbt import tracking
-from dbt import ui
 from dbt.dataclass_schema import (
     dbtClassMixin, ValidationError,
     HyphenatedDbtClassMixin,
@@ -230,25 +228,20 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     use_colors: Optional[bool] = None
     partial_parse: Optional[bool] = None
     printer_width: Optional[int] = None
-
-    def set_values(self, cookie_dir):
-        if self.send_anonymous_usage_stats:
-            tracking.initialize_tracking(cookie_dir)
-        else:
-            tracking.do_not_track()
-
-        if self.use_colors is not None:
-            ui.use_colors(self.use_colors)
-
-        if self.printer_width:
-            ui.printer_width(self.printer_width)
+    write_json: Optional[bool] = None
+    warn_error: Optional[bool] = None
+    log_format: Optional[bool] = None
+    debug: Optional[bool] = None
+    version_check: Optional[bool] = None
+    fail_fast: Optional[bool] = None
+    use_experimental_parser: Optional[bool] = None
 
 
 @dataclass
 class ProfileConfig(HyphenatedDbtClassMixin, Replaceable):
     profile_name: str = field(metadata={'preserve_underscore': True})
     target_name: str = field(metadata={'preserve_underscore': True})
-    config: UserConfig
+    user_config: UserConfig = field(metadata={'preserve_underscore': True})
     threads: int
     # TODO: make this a dynamic union of some kind?
     credentials: Optional[Dict[str, Any]]

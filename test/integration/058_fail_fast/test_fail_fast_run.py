@@ -43,8 +43,27 @@ class TestFastFailingDuringRun(DBTIntegrationTest):
         vals = self.run_sql(query, fetch='all')
         self.assertFalse(len(vals) == count, 'Execution was not stopped before run end')
 
+
     @use_profile('postgres')
     def test_postgres_fail_fast_run(self):
         with self.assertRaises(FailFastException):
             self.run_dbt(['run', '--threads', '1', '--fail-fast'])
+            self.check_audit_table()
+
+
+class FailFastFromConfig(TestFastFailingDuringRun):
+
+    @property
+    def profile_config(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False,
+                'fail_fast': True,
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_fail_fast_run_user_config(self):
+        with self.assertRaises(FailFastException):
+            self.run_dbt(['run', '--threads', '1'])
             self.check_audit_table()

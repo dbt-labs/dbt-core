@@ -156,13 +156,6 @@ class ParsedNodeMixins(dbtClassMixin):
         self.columns = patch.columns
         self.meta = patch.meta
         self.docs = patch.docs
-        if flags.STRICT_MODE:
-            # It seems odd that an instance can be invalid
-            # Maybe there should be validation or restrictions
-            # elsewhere?
-            assert isinstance(self, dbtClassMixin)
-            dct = self.to_dict(omit_none=False)
-            self.validate(dct)
 
     def get_materialization(self):
         return self.config.materialized
@@ -509,11 +502,6 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
         self.meta = patch.meta
         self.docs = patch.docs
         self.arguments = patch.arguments
-        if flags.STRICT_MODE:
-            # What does this actually validate?
-            assert isinstance(self, dbtClassMixin)
-            dct = self.to_dict(omit_none=False)
-            self.validate(dct)
 
     def same_contents(self, other: Optional['ParsedMacro']) -> bool:
         if other is None:

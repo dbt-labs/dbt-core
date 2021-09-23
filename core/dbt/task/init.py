@@ -3,6 +3,7 @@ import shutil
 
 import dbt.config
 import dbt.clients.system
+from dbt import flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
@@ -93,7 +94,7 @@ class InitTask(BaseTask):
             except StopIteration:
                 logger.debug("No adapters installed, skipping")
 
-        profiles_dir = dbt.config.PROFILES_DIR
+        profiles_dir = flags.PROFILES_DIR
         profiles_file = os.path.join(profiles_dir, 'profiles.yml')
 
         self.create_profiles_dir(profiles_dir)

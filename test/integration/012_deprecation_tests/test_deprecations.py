@@ -25,38 +25,13 @@ class TestDeprecations(BaseTestDeprecations):
 
     @use_profile('postgres')
     def test_postgres_deprecations_fail(self):
-        self.run_dbt(strict=True, expect_pass=False)
+        self.run_dbt(['--warn-error', 'run'], expect_pass=False)
 
     @use_profile('postgres')
     def test_postgres_deprecations(self):
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
+        self.run_dbt()
         expected = {'adapter:already_exists'}
-        self.assertEqual(expected, deprecations.active_deprecations)
-
-
-class TestMaterializationReturnDeprecation(BaseTestDeprecations):
-    @property
-    def models(self):
-        return self.dir('custom-models')
-
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2,
-            'macro-paths': [self.dir('custom-materialization-macros')],
-        }
-
-    @use_profile('postgres')
-    def test_postgres_deprecations_fail(self):
-        # this should fail at runtime
-        self.run_dbt(strict=True, expect_pass=False)
-
-    @use_profile('postgres')
-    def test_postgres_deprecations(self):
-        self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
-        expected = {'materialization-return'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
@@ -75,7 +50,7 @@ class TestAdapterMacroDeprecation(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_adapter_macro(self):
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
+        self.run_dbt()
         expected = {'adapter-macro'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
@@ -83,7 +58,7 @@ class TestAdapterMacroDeprecation(BaseTestDeprecations):
     def test_postgres_adapter_macro_fail(self):
         self.assertEqual(deprecations.active_deprecations, set())
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(strict=True)
+            self.run_dbt(['--warn-error', 'run'])
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'The "adapter_macro" macro has been deprecated' in exc_str
 
@@ -91,7 +66,7 @@ class TestAdapterMacroDeprecation(BaseTestDeprecations):
     def test_redshift_adapter_macro(self):
         self.assertEqual(deprecations.active_deprecations, set())
         # pick up the postgres macro
-        self.run_dbt(strict=False)
+        self.run_dbt()
         expected = {'adapter-macro'}
         self.assertEqual(expected, deprecations.active_deprecations)
         
@@ -100,7 +75,7 @@ class TestAdapterMacroDeprecation(BaseTestDeprecations):
         self.assertEqual(deprecations.active_deprecations, set())
         # picked up the default -> error
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(strict=False, expect_pass=False)
+            self.run_dbt(expect_pass=False)
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'not allowed' in exc_str  # we saw the default macro
 
@@ -120,7 +95,7 @@ class TestAdapterMacroDeprecationPackages(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_adapter_macro_pkg(self):
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
+        self.run_dbt()
         expected = {'adapter-macro'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
@@ -128,7 +103,7 @@ class TestAdapterMacroDeprecationPackages(BaseTestDeprecations):
     def test_postgres_adapter_macro_pkg_fail(self):
         self.assertEqual(deprecations.active_deprecations, set())
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(strict=True)
+            self.run_dbt(['--warn-error', 'run'])
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'The "adapter_macro" macro has been deprecated' in exc_str
 
@@ -137,7 +112,7 @@ class TestAdapterMacroDeprecationPackages(BaseTestDeprecations):
         self.assertEqual(deprecations.active_deprecations, set())
         # pick up the postgres macro
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
+        self.run_dbt()
         expected = {'adapter-macro'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
@@ -146,7 +121,7 @@ class TestAdapterMacroDeprecationPackages(BaseTestDeprecations):
         self.assertEqual(deprecations.active_deprecations, set())
         # picked up the default -> error
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(strict=False, expect_pass=False)
+            self.run_dbt(expect_pass=False)
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'not allowed' in exc_str  # we saw the default macro
 
@@ -176,7 +151,7 @@ class TestDispatchPackagesDeprecation(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_adapter_macro(self):
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
+        self.run_dbt()
         expected = {'dispatch-packages'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
@@ -184,7 +159,7 @@ class TestDispatchPackagesDeprecation(BaseTestDeprecations):
     def test_postgres_adapter_macro_fail(self):
         self.assertEqual(deprecations.active_deprecations, set())
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(strict=True)
+            self.run_dbt(['--warn-error', 'run'])
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         assert 'Raised during dispatch for: string_literal' in exc_str
 
@@ -208,7 +183,7 @@ class TestPackageRedirectDeprecation(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_package_redirect(self):
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(['deps'], strict=False)
+        self.run_dbt(['deps'])
         expected = {'package-redirect'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
@@ -216,7 +191,7 @@ class TestPackageRedirectDeprecation(BaseTestDeprecations):
     def test_postgres_package_redirect_fail(self):
         self.assertEqual(deprecations.active_deprecations, set())
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(['deps'], strict=True)
+            self.run_dbt(['--warn-error', 'deps'])
         exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
         expected = "The `fishtown-analytics/dbt_utils` package is deprecated in favor of `dbt-labs/dbt_utils`"
         assert expected in exc_str

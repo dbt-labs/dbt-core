@@ -164,11 +164,13 @@ jobs:
           name: runner
       - name: change permissions
         run: chmod +x ./runner
+      - name: make results directory
+        run: mkdir ./final-output/
       - name: run calculation
-        run: ./runner calculate -r ./
+        run: ./runner calculate -r ./ -o ./final-output/
         # always attempt to upload the results even if there were regressions found
       - uses: actions/upload-artifact@v2
         if: ${{ always() }}
         with:
           name: final-calculations
-          path: ./final_calculations.json
+          path: ./final-output/*

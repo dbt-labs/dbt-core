@@ -68,7 +68,6 @@ class BaseParserTest(unittest.TestCase):
             yield pm
 
     def setUp(self):
-        dbt.flags.STRICT_MODE = True
         dbt.flags.WARN_ERROR = True
         # HACK: this is needed since tracking events can 
         # be sent when using the model parser

@@ -30,8 +30,8 @@ def print_fancy_output_line(
         progress=progress,
         message=msg)
 
-    truncate_width = ui.PRINTER_WIDTH - 3
-    justified = prefix.ljust(ui.PRINTER_WIDTH, ".")
+    truncate_width = ui.printer_width() - 3
+    justified = prefix.ljust(ui.printer_width(), ".")
     if truncate and len(justified) > truncate_width:
         justified = justified[:truncate_width] + '...'
 

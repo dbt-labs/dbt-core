@@ -4,7 +4,6 @@ from dbt.dataclass_schema import dbtClassMixin, ValidationError
 
 import dbt.deprecations
 import dbt.exceptions
-import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
@@ -15,7 +14,6 @@ from dbt.adapters.base import (
 from dbt.adapters.bigquery.relation import BigQueryRelation
 from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
-from dbt.contracts.connection import Connection
 from dbt.contracts.graph.manifest import Manifest
 from dbt.logger import GLOBAL_LOGGER as logger, print_timestamped_line
 from dbt.utils import filter_null_values
@@ -514,19 +512,6 @@ class BigQueryAdapter(BaseAdapter):
 
         if sql_override is None:
             sql_override = model.get('compiled_sql')
-
-        if flags.STRICT_MODE:
-            connection = self.connections.get_thread_connection()
-            if not isinstance(connection, Connection):
-                dbt.exceptions.raise_compiler_error(
-                    f'Got {connection} - not a Connection!'
-                )
-            model_uid = model.get('unique_id')
-            if connection.name != model_uid:
-                raise dbt.exceptions.InternalException(
-                    f'Connection had name "{connection.name}", expected model '
-                    f'unique id of "{model_uid}"'
-                )
 
         if materialization == 'view':
             res = self._materialize_as_view(model)

@@ -399,7 +399,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
         self._created_schemas = set()
         reset_deprecations()
-        flags.reset()
         template_cache.clear()
 
         self.use_profile(self._pick_profile())
@@ -579,8 +578,8 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True, profiles_dir=True):
-        res, success = self.run_dbt_and_check(args=args, strict=strict, parser=parser, profiles_dir=profiles_dir)
+    def run_dbt(self, args=None, expect_pass=True, profiles_dir=True):
+        res, success = self.run_dbt_and_check(args=args, profiles_dir=profiles_dir)
         self.assertEqual(
             success, expect_pass,
             "dbt exit state did not match expected")
@@ -603,17 +602,13 @@ class DBTIntegrationTest(unittest.TestCase):
 
         return res, stdout
 
-    def run_dbt_and_check(self, args=None, strict=True, parser=False, profiles_dir=True):
+    def run_dbt_and_check(self, args=None, profiles_dir=True):
         log_manager.reset_handlers()
         if args is None:
             args = ["run"]
 
         final_args = []
 
-        if strict:
-            final_args.append('--strict')
-        if parser:
-            final_args.append('--test-new-parser')
         if os.getenv('DBT_TEST_SINGLE_THREADED') in ('y', 'Y', '1'):
             final_args.append('--single-threaded')
 

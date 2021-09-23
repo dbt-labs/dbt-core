@@ -2964,7 +2964,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'project_id'] == '098f6bcd4621d373cade4e832627b4f6'
                 assert 'send_anonymous_usage_stats' in metadata and metadata[
                     'send_anonymous_usage_stats'] is False
-                assert 'user_id' in metadata and metadata['user_id'] is None
                 assert 'adapter_type' in metadata and metadata['adapter_type'] == self.adapter_type
             else:
                 self.assertIn(key, expected_manifest)  # sanity check
@@ -3292,7 +3291,7 @@ class TestDocsGenerateOverride(DBTIntegrationTest):
         self.assertEqual(len(self.run_dbt(['run'])), 1)
         # this should pick up our failure macro and raise a compilation exception
         with self.assertRaises(CompilationException) as exc:
-            self.run_dbt(['docs', 'generate'])
+            self.run_dbt(['--warn-error', 'docs', 'generate'])
 
         self.assertIn('rejected: no catalogs for you', str(exc.exception))
 

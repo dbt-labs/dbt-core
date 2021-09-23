@@ -8,6 +8,7 @@ from unittest import mock
 import dbt.semver
 import dbt.config
 import dbt.exceptions
+import dbt.flags
 
 
 class BaseDependencyTest(DBTIntegrationTest):
@@ -45,8 +46,6 @@ class BaseDependencyTest(DBTIntegrationTest):
         }
 
     def run_dbt(self, *args, **kwargs):
-        strict = kwargs.pop('strict', False)
-        kwargs['strict'] = strict
         return super().run_dbt(*args, **kwargs)
 
 
@@ -115,12 +114,9 @@ class TestMissingDependency(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_missing_dependency(self):
-        # dbt should raise a dbt exception, not raise a parse-time TypeError.
-        with self.assertRaises(dbt.exceptions.Exception) as exc:
-            self.run_dbt(['compile'], strict=False)
-        message = str(exc.exception)
-        self.assertIn('no_such_dependency', message)
-        self.assertIn('is undefined', message)
+        # dbt should raise a runtime exception
+        with self.assertRaises(dbt.exceptions.RuntimeException) as exc:
+            self.run_dbt(['compile'])
 
 
 class TestSimpleDependencyWithSchema(TestSimpleDependency):
@@ -172,6 +168,54 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         self.run_dbt(['deps'])
         self.run_dbt(['seed', '--no-version-check'])
         results = self.run_dbt(['run', '--no-version-check'])
+        self.assertEqual(len(results), 5)
+
+
+class TestSimpleDependencyNoVersionCheckConfig(TestSimpleDependency):
+    def run_dbt(self, cmd, *args, **kwargs):
+        # we can't add this to the config because Sources don't respect dbt_project.yml
+        vars_arg = yaml.safe_dump({
+            'schema_override': self.base_schema(),
+        })
+        cmd.extend(['--vars', vars_arg])
+        return super().run_dbt(cmd, *args, **kwargs)
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'macro-paths': ['schema_override_macros'],
+            'models': {
+                'schema': 'dbt_test',
+            },
+            'seeds': {
+                'schema': 'dbt_test',
+            }
+        }
+
+    @property
+    def profile_config(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False,
+                'version_check': False,
+            }
+        }
+
+    def base_schema(self):
+        return 'dbt_test_{}_macro'.format(self.unique_schema())
+
+    def configured_schema(self):
+        return 'configured_{}_macro'.format(self.unique_schema())
+
+    @use_profile('postgres')
+    @mock.patch('dbt.config.project.get_installed_version')
+    def test_postgres_local_dependency_out_of_date_no_check(self, mock_get):
+        mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
+        self.run_dbt(['deps'])
+        self.assertFalse(dbt.flags.VERSION_CHECK)
+        self.run_dbt(['seed'])
+        results = self.run_dbt(['run'])
         self.assertEqual(len(results), 5)
 
 
@@ -244,11 +288,6 @@ class TestSimpleDependencyDuplicateName(DBTIntegrationTest):
                 }
             ]
         }
-
-    def run_dbt(self, *args, **kwargs):
-        strict = kwargs.pop('strict', False)
-        kwargs['strict'] = strict
-        return super().run_dbt(*args, **kwargs)
 
     @use_profile('postgres')
     def test_postgres_local_dependency_same_name(self):
