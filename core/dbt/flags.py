@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 # PROFILES_DIR must be set before the other flags
+# It also gets set in main.py and in set_from_args because the rpc server
+# doesn't go through exactly the same main arg processing.
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
 PROFILES_DIR = os.path.expanduser(
     os.getenv('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
@@ -107,6 +109,7 @@ def set_from_args(args, user_config):
     WRITE_JSON = get_flag_value('WRITE_JSON', args, user_config)
     PARTIAL_PARSE = get_flag_value('PARTIAL_PARSE', args, user_config)
     USE_COLORS = get_flag_value('USE_COLORS', args, user_config)
+    PROFILES_DIR = get_flag_value('PROFILES_DIR', args, user_config)
     DEBUG = get_flag_value('DEBUG', args, user_config)
     LOG_FORMAT = get_flag_value('LOG_FORMAT', args, user_config)
     VERSION_CHECK = get_flag_value('VERSION_CHECK', args, user_config)
@@ -125,7 +128,7 @@ def get_flag_value(flag, args, user_config):
         if env_value is not None and env_value != '':
             env_value = env_value.lower()
             # non Boolean values
-            if flag in ['LOG_FORMAT', 'PRINTER_WIDTH']:
+            if flag in ['LOG_FORMAT', 'PRINTER_WIDTH', 'PROFILES_DIR']:
                 flag_value = env_value
             else:
                 flag_value = env_set_bool(env_value)
@@ -135,6 +138,8 @@ def get_flag_value(flag, args, user_config):
             flag_value = flag_defaults[flag]
     if flag == 'PRINTER_WIDTH':  # printer_width must be an int or it hangs
         flag_value = int(flag_value)
+    if flag == 'PROFILES_DIR':
+        flag_value = os.path.abspath(flag_value)
 
     return flag_value
 

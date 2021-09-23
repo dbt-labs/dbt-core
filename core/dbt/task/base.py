@@ -93,7 +93,7 @@ class BaseTask(metaclass=ABCMeta):
             logger.error("Encountered an error while reading profiles:")
             logger.error("  ERROR {}".format(str(exc)))
 
-            all_profiles = read_profiles(args.profiles_dir).keys()
+            all_profiles = read_profiles(flags.PROFILES_DIR).keys()
 
             if len(all_profiles) > 0:
                 logger.info("Defined profiles:")

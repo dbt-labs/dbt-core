@@ -1,6 +1,7 @@
 ## dbt 1.0.0 (Release TBD)
 
 ### Features
+- Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
 
 ### Fixes
 
@@ -12,6 +13,7 @@
 Contributors:
 
 - [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
+
 
 ## dbt 0.21.0 (Release TBD)
 
@@ -34,7 +36,6 @@ Contributors:
 - Added timing and thread information to sources.json artifact ([#3804](https://github.com/dbt-labs/dbt/issues/3804), [#3894](https://github.com/dbt-labs/dbt/pull/3894))
 - Update cli and rpc flags for the `build` task to align with other commands (`--resource-type`, `--store-failures`) ([#3596](https://github.com/dbt-labs/dbt/issues/3596), [#3884](https://github.com/dbt-labs/dbt/pull/3884))
 - Log tests that are not indirectly selected. Add `--greedy` flag to `test`, `list`, `build` and `greedy` property in yaml selectors ([#3723](https://github.com/dbt-labs/dbt/pull/3723), [#3833](https://github.com/dbt-labs/dbt/pull/3833))
-- Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
 
 ### Fixes
 

@@ -12,6 +12,7 @@ import yaml
 
 import dbt.config
 import dbt.exceptions
+from dbt import flags
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
@@ -93,6 +94,7 @@ class Args:
             self.threads = threads
         if profiles_dir is not None:
             self.profiles_dir = profiles_dir
+            flags.PROFILES_DIR = profiles_dir
         if cli_vars is not None:
             self.vars = cli_vars
         if version_check is not None:
