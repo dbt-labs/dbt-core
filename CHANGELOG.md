@@ -7,6 +7,11 @@
 ### Under the hood
 
 - Enact deprecation for `materialization-return` and replace deprecation warning with an exception. ([#3896](https://github.com/dbt-labs/dbt/issues/3896))
+- Build catalog for only relational, non-ephemeral nodes in the graph ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
+
+Contributors:
+
+- [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
 
 ## dbt 0.21.0 (Release TBD)
 

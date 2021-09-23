@@ -321,7 +321,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         info_schema_name_map = SchemaSearchMap()
         nodes: Iterator[CompileResultNode] = chain(
-            manifest.nodes.values(),
+            [node for node in manifest.nodes.values() if (
+                node.is_relational and not node.is_ephemeral_model
+            )],
             manifest.sources.values(),
         )
         for node in nodes:
