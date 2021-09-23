@@ -438,6 +438,7 @@ class DBTIntegrationTest(unittest.TestCase):
         if not os.path.exists(self.test_root_dir):
             os.makedirs(self.test_root_dir)
 
+        flags.PROFILES_DIR = self.test_root_dir
         profiles_path = os.path.join(self.test_root_dir, 'profiles.yml')
         with open(profiles_path, 'w') as f:
             yaml.safe_dump(profile_config, f, default_flow_style=True)

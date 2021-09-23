@@ -47,6 +47,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]
+        dbt.flags.PROFILES_DIR = profiles_dir
         if cli_vars:
             handle_and_check_args.extend(['--vars', cli_vars])
         if target is not None:
