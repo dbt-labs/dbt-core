@@ -10,6 +10,9 @@
 
 ## dbt 0.21.0 (Release TBD)
 
+### Fixes
+- Fix batching for large seeds on Snowflake ([#3941](https://github.com/dbt-labs/dbt/issues/3941), [#3942](https://github.com/dbt-labs/dbt/pull/3942))
+
 ## dbt 0.21.0rc1 (September 20, 2021)
 
 ### Features
