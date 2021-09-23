@@ -185,7 +185,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version('run-results', 2)
+@schema_version('run-results', 3)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
