@@ -1138,7 +1138,7 @@ def parse_args(args, cls=DBTArgumentParser):
         if parsed.sub_profiles_dir is not None:
             parsed.profiles_dir = parsed.sub_profiles_dir
         delattr(parsed, "sub_profiles_dir")
-    if hasattr(parsed, 'profiles_dir'):
+    if hasattr(parsed, "profiles_dir"):
         if parsed.profiles_dir is None:
             parsed.profiles_dir = flags.PROFILES_DIR
         else:

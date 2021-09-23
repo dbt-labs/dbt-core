@@ -119,7 +119,7 @@ def set_from_args(args, user_config):
     WRITE_JSON = get_flag_value("WRITE_JSON", args, user_config)
     PARTIAL_PARSE = get_flag_value("PARTIAL_PARSE", args, user_config)
     USE_COLORS = get_flag_value("USE_COLORS", args, user_config)
-    PROFILES_DIR = get_flag_value('PROFILES_DIR', args, user_config)
+    PROFILES_DIR = get_flag_value("PROFILES_DIR", args, user_config)
     DEBUG = get_flag_value("DEBUG", args, user_config)
     LOG_FORMAT = get_flag_value("LOG_FORMAT", args, user_config)
     VERSION_CHECK = get_flag_value("VERSION_CHECK", args, user_config)
@@ -157,7 +157,7 @@ def get_flag_value(flag, args, user_config):
             flag_value = flag_defaults[flag]
     if flag in ["PRINTER_WIDTH", "EVENT_BUFFER_SIZE"]:  # must be ints
         flag_value = int(flag_value)
-    if flag == 'PROFILES_DIR':
+    if flag == "PROFILES_DIR":
         flag_value = os.path.abspath(flag_value)
 
     return flag_value

@@ -709,7 +709,7 @@ class ManifestLoader:
         profile_env_vars_hash = FileHash.from_contents(env_var_str)
 
         # Create a FileHash of the profile file
-        profile_path = os.path.join(flags.PROFILES_DIR, 'profiles.yml')
+        profile_path = os.path.join(flags.PROFILES_DIR, "profiles.yml")
         with open(profile_path) as fp:
             profile_hash = FileHash.from_contents(fp.read())
 
