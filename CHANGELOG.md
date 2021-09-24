@@ -20,6 +20,9 @@ Contributors:
 ### Fixes
 - Fix batching for large seeds on Snowflake ([#3941](https://github.com/dbt-labs/dbt/issues/3941), [#3942](https://github.com/dbt-labs/dbt/pull/3942))
 
+### Under the hood
+- Bump artifact schema versions for 0.21.0 ([#3945](https://github.com/dbt-labs/dbt/pull/3945))
+
 ## dbt 0.21.0rc1 (September 20, 2021)
 
 ### Features
