@@ -350,7 +350,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def expect_test_output(self):
         expectations = {
             'name': ('not_null_outer_id', 't', 'unique_outer_id'),
-            'selector': ('test.test.not_null_outer_id', 'test.test.t', 'test.test.unique_outer_id'),
+            'selector': ('test.not_null_outer_id', 'test.t', 'test.unique_outer_id'),
             'json': (
                 {
                     'name': 'not_null_outer_id',
@@ -436,9 +436,9 @@ class TestStrictUndefined(DBTIntegrationTest):
         self.expect_given_output(['--resource-type', 'test'], expectations)
 
     def expect_all_output(self):
-        # tests have their type inserted into their fqn, after the package
-        # but models don't! they just have (package.name)
-        # sources are like models - (package.source_name.table_name)
+        # generic test FQNS include the resource + column they're defined on
+        # models are just package, subdirectory path, name
+        # sources are like models, ending in source_name.table_name
         expected_default = {
             'test.ephemeral',
             'test.incremental',
@@ -447,9 +447,9 @@ class TestStrictUndefined(DBTIntegrationTest):
             'test.outer',
             'test.seed',
             'source:test.my_source.my_table',
-            'test.test.not_null_outer_id',
-            'test.test.unique_outer_id',
-            'test.test.t',
+            'test.not_null_outer_id',
+            'test.unique_outer_id',
+            'test.t',
         }
         # analyses have their type inserted into their fqn like tests
         expected_all = expected_default | {'test.analysis.a'}
@@ -467,12 +467,12 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     def expect_select(self):
         results = self.run_dbt_ls(['--resource-type', 'test', '--select', 'outer'])
-        self.assertEqual(set(results), {'test.test.not_null_outer_id', 'test.test.unique_outer_id'})
+        self.assertEqual(set(results), {'test.not_null_outer_id', 'test.unique_outer_id'})
 
         self.run_dbt_ls(['--resource-type', 'test', '--select', 'inner'], expect_pass=True)
 
         results = self.run_dbt_ls(['--resource-type', 'test', '--select', '+inner'])
-        self.assertEqual(set(results), {'test.test.not_null_outer_id', 'test.test.unique_outer_id'})
+        self.assertEqual(set(results), {'test.not_null_outer_id', 'test.unique_outer_id'})
 
         results = self.run_dbt_ls(['--resource-type', 'model', '--select', 'outer+'])
         self.assertEqual(set(results), {'test.outer', 'test.sub.inner'})

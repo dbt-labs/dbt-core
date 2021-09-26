@@ -330,12 +330,12 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].sources, [['my_source', 'my_table']])
         self.assertEqual(tests[0].column_name, 'color')
-        self.assertEqual(tests[0].fqn, ['snowplow', 'test', tests[0].name])
+        self.assertEqual(tests[0].fqn, ['snowplow', tests[0].name])
         self.assertEqual(tests[1].config.severity, 'WARN')
         self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].sources, [['my_source', 'my_table']])
         self.assertEqual(tests[1].column_name, 'color')
-        self.assertEqual(tests[1].fqn, ['snowplow', 'test', tests[1].name])
+        self.assertEqual(tests[1].fqn, ['snowplow', tests[1].name])
 
         file_id = 'snowplow://' + normalize('models/test_one.yml')
         self.assertIn(file_id, self.parser.manifest.files)
@@ -414,7 +414,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[0].column_name, 'color')
         self.assertEqual(tests[0].package_name, 'snowplow')
         self.assertTrue(tests[0].name.startswith('accepted_values_'))
-        self.assertEqual(tests[0].fqn, ['snowplow', 'test', tests[0].name])
+        self.assertEqual(tests[0].fqn, ['snowplow', tests[0].name])
         self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '9d4814efde'])
         self.assertEqual(tests[0].test_metadata.name, 'accepted_values')
         self.assertIsNone(tests[0].test_metadata.namespace)
@@ -434,7 +434,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[1].refs, [['my_model']])
         self.assertEqual(tests[1].column_name, 'color')
         self.assertEqual(tests[1].column_name, 'color')
-        self.assertEqual(tests[1].fqn, ['snowplow', 'test', tests[1].name])
+        self.assertEqual(tests[1].fqn, ['snowplow', tests[1].name])
         self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
         self.assertEqual(tests[1].package_name, 'snowplow')
         self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, '13958f62f7'])
@@ -455,7 +455,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[2].column_name, 'color')
         self.assertEqual(tests[2].package_name, 'snowplow')
         self.assertTrue(tests[2].name.startswith('not_null_'))
-        self.assertEqual(tests[2].fqn, ['snowplow', 'test', tests[2].name])
+        self.assertEqual(tests[2].fqn, ['snowplow', tests[2].name])
         self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, '2f61818750'])
         self.assertEqual(tests[2].test_metadata.name, 'not_null')
         self.assertIsNone(tests[2].test_metadata.namespace)
@@ -831,14 +831,14 @@ class SingularTestParserTest(BaseParserTest):
             schema='dbt_test__audit',
             resource_type=NodeType.Test,
             unique_id='test.snowplow.test_1',
-            fqn=['snowplow', 'test', 'test_1'],
+            fqn=['snowplow', 'test_1'],
             package_name='snowplow',
             original_file_path=normalize('tests/test_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             refs=[['blah']],
             config=TestConfig(severity='ERROR'),
             tags=[],
-            path=normalize('test/test_1.sql'),
+            path=normalize('test_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
             unrendered_config={},

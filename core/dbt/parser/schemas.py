@@ -1,5 +1,6 @@
 import itertools
 import os
+import pathlib
 
 from abc import ABCMeta, abstractmethod
 from hashlib import md5
@@ -306,15 +307,14 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             )
             raise CompilationException(msg) from exc
         original_name = os.path.basename(target.original_file_path)
-        compiled_path = get_pseudo_test_path(
-            builder.compiled_name, original_name, 'test',
-        )
-        fqn_path = get_pseudo_test_path(
-            builder.fqn_name, original_name, 'test',
-        )
-        # the fqn for tests actually happens in the test target's name, which
-        # is not necessarily this package's name
-        fqn = self.get_fqn(fqn_path, builder.fqn_name)
+        compiled_path = get_pseudo_test_path(builder.compiled_name, original_name)
+
+        # fqn is the relative path of the yaml file where this generic test is defined,
+        # minus the project-level directory and the file name itself
+        # TODO pass a consistent path object from both UnparsedNode and UnpatchedSourceDefinition
+        path = pathlib.Path(target.original_file_path)
+        relative_path = str(path.relative_to(*path.parts[:1]))
+        fqn = self.get_fqn(relative_path, builder.fqn_name)
 
         # this is the ContextConfig that is used in render_update
         config: ContextConfig = self.initial_config(fqn)
