@@ -24,4 +24,4 @@ vars:
 
 
 seeds:
-  quote_columns: False
+  quote_columns: True
