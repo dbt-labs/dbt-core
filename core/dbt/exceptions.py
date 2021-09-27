@@ -849,10 +849,10 @@ def raise_patch_targets_not_found(patches):
     )
 
 
-def raise_no_unique_id(patch, temp):
+def raise_no_unique_id(patch):
     raise_compiler_error(
-        'No unique_id for {} {}. {}'.format(
-            patch.yaml_key, patch.name, temp
+        'No unique_id: {}'.format(
+            patch
         )
     )
 
