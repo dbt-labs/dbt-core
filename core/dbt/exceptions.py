@@ -849,6 +849,14 @@ def raise_patch_targets_not_found(patches):
     )
 
 
+def raise_no_unique_id(patch, temp):
+    raise_compiler_error(
+        'No unique_id for {} {}. {}'.format(
+            patch.yaml_key, patch.name, temp
+        )
+    )
+
+
 def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
     if path_1 == path_2:
         return (
@@ -1007,6 +1015,7 @@ CONTEXT_EXPORTS = {
         raise_dep_not_found,
         raise_dependency_error,
         raise_duplicate_patch_name,
+        raise_no_unique_id,
         raise_duplicate_resource_name,
         raise_invalid_schema_yml_version,
         raise_not_implemented,

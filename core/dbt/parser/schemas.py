@@ -49,7 +49,7 @@ from dbt.exceptions import (
     raise_invalid_schema_yml_version, ValidationException,
     CompilationException, raise_duplicate_patch_name,
     raise_duplicate_macro_patch_name, InternalException,
-    raise_duplicate_source_patch_name,
+    raise_duplicate_source_patch_name, raise_no_unique_id,
     warn_or_error,
 )
 from dbt.node_types import NodeType
@@ -822,8 +822,11 @@ class NodePatchParser(
                 f'file {source_file.path.original_file_path}'
             )
         if unique_id is None:
-            # This will usually happen when a node is disabled
-            return
+            # TODO: if node is not disabled raise exception
+            if self.manifest.find_disabled_by_name(patch.name, None):
+                breakpoint()
+                return
+            raise raise_no_unique_id(patch, patch.config)
 
         # patches can't be overwritten
         node = self.manifest.nodes.get(unique_id)
