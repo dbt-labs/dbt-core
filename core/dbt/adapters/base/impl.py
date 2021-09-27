@@ -17,7 +17,6 @@ from dbt.exceptions import (
     InternalException, NotImplementedException, RuntimeException,
 )
 
-from dbt import deprecations
 from dbt.adapters.protocol import (
     AdapterConfig,
     ConnectionManagerProtocol,
