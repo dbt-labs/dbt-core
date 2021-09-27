@@ -1104,11 +1104,10 @@ class ProviderContext(ManifestContext):
         """This was deprecated in v0.18 in favor of adapter.dispatch"""
         msg = (
             'The "adapter_macro" macro has been deprecated. Instead, use '
-            'the `adapter.dispatch` method to find a macro and call the '
-            'result.  For more information, see: '
-            'https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch)'
-            ' adapter_macro was called for: {macro_name}'
-            .format(macro_name=name)
+            "the `adapter.dispatch` method to find a macro and call the "
+            "result.  For more information, see: "
+            "https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch)"
+            " adapter_macro was called for: {macro_name}".format(macro_name=name)
         )
         raise CompilationException(msg)
 
