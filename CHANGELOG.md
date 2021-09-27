@@ -11,11 +11,12 @@
 - Build catalog for only relational, non-ephemeral nodes in the graph ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
 - Enact deprecation to remove the `release` arg from the `execute_macro` method. ([#3900](https://github.com/dbt-labs/dbt/issues/3900))
 - Enact deprecation for default quoting to be True.  Override for the `dbt-snowflake` adapter so it stays `False`. ([#3898](https://github.com/dbt-labs/dbt/issues/3898))
+- Enact deprecation for object used as dictionaries when they should be dataclasses. Replace deprecation warning with an exception for the dunder methods of `__iter__` and `__len__` for all superclasses of FakeAPIObject. ([#3897](https://github.com/dbt-labs/dbt/issues/3897))
+
 
 Contributors:
 
 - [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
-
 
 ## dbt 0.21.0 (Release TBD)
 
