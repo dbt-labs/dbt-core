@@ -82,15 +82,6 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     '''
 
 
-class ExecuteMacrosReleaseDeprecation(DBTDeprecation):
-    _name = 'execute-macro-release'
-    _description = '''\
-    The "release" argument to execute_macro is now ignored, and will be removed
-    in a future relase of dbt. At that time, providing a `release` argument
-    will result in an error.
-    '''
-
-
 class AdapterMacroDeprecation(DBTDeprecation):
     _name = 'adapter-macro'
     _description = '''\
@@ -149,7 +140,6 @@ deprecations_list: List[DBTDeprecation] = [
     DispatchPackagesDeprecation(),
     NotADictionaryDeprecation(),
     ModelsKeyNonModelDeprecation(),
-    ExecuteMacrosReleaseDeprecation(),
     AdapterMacroDeprecation(),
     PackageRedirectDeprecation()
 ]
