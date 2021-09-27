@@ -1101,8 +1101,7 @@ class ProviderContext(ManifestContext):
 
     @contextmember
     def adapter_macro(self, name: str, *args, **kwargs):
-        """This was deprecated in v0.18 in favor of adapter.dispatch
-        """
+        """This was deprecated in v0.18 in favor of adapter.dispatch"""
         msg = (
             'The "adapter_macro" macro has been deprecated. Instead, use '
             'the `adapter.dispatch` method to find a macro and call the '
