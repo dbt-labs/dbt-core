@@ -174,7 +174,7 @@ def handle_and_check(args):
         parsed = parse_args(args)
 
         # Set flags from args, user config, and env vars
-        user_config = read_user_config(parsed.profiles_dir)  # This is read again later
+        user_config = read_user_config(flags.PROFILES_DIR)  # This is read again later
         flags.set_from_args(parsed, user_config)
         dbt.tracking.initialize_from_flags()
         # Set log_format from flags
@@ -1160,11 +1160,14 @@ def parse_args(args, cls=DBTArgumentParser):
         if parsed.sub_profiles_dir is not None:
             parsed.profiles_dir = parsed.sub_profiles_dir
         delattr(parsed, 'sub_profiles_dir')
-    if hasattr(parsed, 'profiles_dir') and parsed.profiles_dir is not None:
-        parsed.profiles_dir = os.path.abspath(parsed.profiles_dir)
-        # needs to be set before the other flags, because it's needed to
-        # read the profile that contains them
-        flags.PROFILES_DIR = parsed.profiles_dir
+    if hasattr(parsed, 'profiles_dir'):
+        if parsed.profiles_dir is None:
+            parsed.profiles_dir = flags.PROFILES_DIR
+        else:
+            parsed.profiles_dir = os.path.abspath(parsed.profiles_dir)
+            # needs to be set before the other flags, because it's needed to
+            # read the profile that contains them
+            flags.PROFILES_DIR = parsed.profiles_dir
 
     # version_check is set before subcommands and after, so normalize
     if hasattr(parsed, 'sub_version_check'):

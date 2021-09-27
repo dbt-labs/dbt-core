@@ -797,12 +797,11 @@ class BaseAdapter(metaclass=AdapterMeta):
     def quote_seed_column(
         self, column: str, quote_config: Optional[bool]
     ) -> str:
-        # this is the default for now
-        quote_columns: bool = False
+        quote_columns: bool = True
         if isinstance(quote_config, bool):
             quote_columns = quote_config
         elif quote_config is None:
-            deprecations.warn('column-quoting-unset')
+            pass
         else:
             raise_compiler_error(
                 f'The seed configuration value of "quote_columns" has an '

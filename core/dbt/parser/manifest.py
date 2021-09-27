@@ -607,7 +607,7 @@ class ManifestLoader:
             ])
         )
 
-        profile_path = os.path.join(config.args.profiles_dir, 'profiles.yml')
+        profile_path = os.path.join(flags.PROFILES_DIR, 'profiles.yml')
         with open(profile_path) as fp:
             profile_hash = FileHash.from_contents(fp.read())
 

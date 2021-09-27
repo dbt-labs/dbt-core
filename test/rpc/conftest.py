@@ -7,6 +7,7 @@ from typing import Dict, Any, Set
 
 import yaml
 
+from dbt import flags
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -145,6 +146,7 @@ def dbt_profile_data(unique_schema, pytestconfig):
 
 @pytest.fixture
 def dbt_profile(profiles_root, dbt_profile_data) -> Dict[str, Any]:
+    flags.PROFILES_DIR = profiles_root
     path = os.path.join(profiles_root, 'profiles.yml')
     with open(path, 'w') as fp:
         fp.write(yaml.safe_dump(dbt_profile_data))

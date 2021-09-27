@@ -248,7 +248,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         assert isinstance(data['elapsed_time'], float)
         self.assertBetween(data['metadata']['generated_at'],
                            self.freshness_start_time)
-        assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v1.json'
+        assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v2.json'
         assert data['metadata']['dbt_version'] == dbt.version.__version__
         assert data['metadata']['invocation_id'] == dbt.tracking.active_user.invocation_id
         key = 'key'
