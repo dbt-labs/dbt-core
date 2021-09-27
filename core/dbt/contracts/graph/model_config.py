@@ -409,6 +409,7 @@ class NodeConfig(NodeAndTestConfig):
         metadata=MergeBehavior.Update.meta(),
     )
     full_refresh: Optional[bool] = None
+    unique_key: Optional[Union[str, List[str]]] = None
     on_schema_change: Optional[str] = 'ignore'
 
     @classmethod
