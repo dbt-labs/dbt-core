@@ -342,10 +342,11 @@ class ManifestLoader:
             # which is now named '_disabled'. This used to copy from
             # ParseResults to the Manifest.
             # TODO: normalize to only one disabled
-            disabled = []
-            for value in self.manifest._disabled.values():
-                disabled.extend(value)
-            self.manifest.disabled = disabled
+            # todo: remove below?
+            # disabled = []
+            # for value in self.manifest..values():
+            #     disabled.extend(value)
+            # self.manifest.disabled = disabled
 
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors

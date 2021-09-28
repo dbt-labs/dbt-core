@@ -567,7 +567,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     # Moved from the ParseResult object
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     # following is from ParseResult
-    _disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
@@ -1007,10 +1006,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.exposures.append(exposure.unique_id)
 
     def add_disabled_nofile(self, node: CompileResultNode):
-        if node.unique_id in self._disabled:
-            self._disabled[node.unique_id].append(node)
-        else:
-            self._disabled[node.unique_id] = [node]
+        self.disabled.append(node)
+
 
     def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode, test_from=None):
         self.add_disabled_nofile(node)
@@ -1048,7 +1045,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.flat_graph,
             self.state_check,
             self.source_patches,
-            self._disabled,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
