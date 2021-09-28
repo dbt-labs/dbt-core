@@ -39,12 +39,6 @@ class TestAliases(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
-    @use_profile('snowflake')
-    def test__alias_model_name_snowflake(self):
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 4)
-        self.run_dbt(['test'])
-
 
 class TestAliasErrors(DBTIntegrationTest):
     @property

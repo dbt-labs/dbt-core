@@ -347,7 +347,3 @@ class TestSimpleBigSeedBatched(DBTIntegrationTest):
     def test_postgres_big_batched_seed(self):
         self.test_big_batched_seed()
     
-    @use_profile('snowflake')
-    def test_snowflake_big_batched_seed(self):
-        self.test_big_batched_seed()
-    

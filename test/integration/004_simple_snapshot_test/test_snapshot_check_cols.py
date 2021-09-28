@@ -34,11 +34,6 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
     def assert_expected(self):
         self.run_dbt(['test', '--select', 'test_type:singular', '--vars', 'version: 3'])
 
-    @use_profile('snowflake')
-    def test__snowflake__simple_snapshot(self):
-        self.test_snapshot_check_cols_cycle()
-        self.assert_expected()
-
     @use_profile('postgres')
     def test__postgres__simple_snapshot(self):
         self.test_snapshot_check_cols_cycle()

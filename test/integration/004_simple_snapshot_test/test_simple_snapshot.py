@@ -28,10 +28,7 @@ class BaseSimpleSnapshotTest(DBTIntegrationTest):
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
 
     def assert_case_tables_equal(self, actual, expected):
-        if self.adapter_type == 'snowflake':
-            actual = actual.upper()
-            expected = expected.upper()
-
+        # this does something different on snowflake, but here it's just assertTablesEqual
         self.assertTablesEqual(actual, expected)
 
     def assert_expected(self):
@@ -62,20 +59,6 @@ class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
         self.assert_expected()
 
         self.run_sql_file("invalidate_postgres.sql")
-        self.run_sql_file("update.sql")
-
-        results = self.run_snapshot()
-        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
-
-        self.assert_expected()
-
-    @use_profile('snowflake')
-    def test__snowflake__simple_snapshot(self):
-        self.dbt_run_seed_snapshot()
-
-        self.assert_expected()
-
-        self.run_sql_file("invalidate_snowflake.sql")
         self.run_sql_file("update.sql")
 
         results = self.run_snapshot()
@@ -143,10 +126,6 @@ class TestSimpleColumnSnapshotFiles(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_renamed_source(self):
-        self._run_snapshot_test()
-
-    @use_profile('snowflake')
-    def test_snowflake_renamed_source(self):
         self._run_snapshot_test()
 
     @use_profile('bigquery')
@@ -401,10 +380,7 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        if self.adapter_type == 'snowflake':
-            paths = ['test-snapshots-pg']
-        else:
-            paths = ['test-snapshots-bq']
+        paths = ['test-snapshots-bq']
         return {
             'config-version': 2,
             'snapshot-paths': paths,
@@ -413,23 +389,6 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
 
     def run_snapshot(self):
         return self.run_dbt(['snapshot', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
-
-    @use_profile('snowflake')
-    def test__snowflake__cross_snapshot(self):
-        self.run_sql_file("seed.sql")
-
-        results = self.run_snapshot()
-        self.assertEqual(len(results),  1)
-
-        self.assertTablesEqual("SNAPSHOT_EXPECTED", "SNAPSHOT_ACTUAL", table_b_db=self.alternative_database)
-
-        self.run_sql_file("invalidate_snowflake.sql")
-        self.run_sql_file("update.sql")
-
-        results = self.run_snapshot()
-        self.assertEqual(len(results),  1)
-
-        self.assertTablesEqual("SNAPSHOT_EXPECTED", "SNAPSHOT_ACTUAL", table_b_db=self.alternative_database)
 
     @use_profile('bigquery')
     def test__bigquery__cross_snapshot(self):
@@ -824,18 +783,10 @@ class TestSnapshotHardDelete(DBTIntegrationTest):
         self.run_sql_file('seed_bq.sql')
         self._test_snapshot_hard_delete()
 
-    @use_profile('snowflake')
-    def test__snowflake__snapshot_hard_delete(self):
-        self.run_sql_file('seed.sql')
-        self._test_snapshot_hard_delete()
-
     def _test_snapshot_hard_delete(self):
         self._snapshot()
 
-        if self.adapter_type == 'snowflake':
-            self.assertTablesEqual("SNAPSHOT_EXPECTED", "SNAPSHOT_ACTUAL")
-        else:
-            self.assertTablesEqual("snapshot_expected", "snapshot_actual")
+        self.assertTablesEqual("snapshot_expected", "snapshot_actual")
 
         self._invalidated_snapshot_datetime = None
         self._revived_snapshot_datetime = None

@@ -44,25 +44,6 @@ class TestColumnQuotingDefault(BaseColumnQuotingTest):
         self._run_columnn_quotes(strategy='merge')
 
 
-class TestColumnQuotingSnowflakeDefault(BaseColumnQuotingTest):
-    @property
-    def project_config(self):
-        return {
-            'config-version': 2
-        }
-
-    @property
-    def models(self):
-        return self.dir('models-unquoted')
-
-    def run_dbt(self, *args, **kwargs):
-        return super().run_dbt(*args, **kwargs)
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes(self):
-        self._run_columnn_quotes()
-
-
 class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     @property
     def models(self):
@@ -80,14 +61,6 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     @use_profile('postgres')
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')
 
     @use_profile('bigquery')
     def test_bigquery_column_quotes_merged(self):
@@ -111,14 +84,6 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
     @use_profile('postgres')
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')
 
     @use_profile('bigquery')
     def test_bigquery_column_quotes_merged(self):

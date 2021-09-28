@@ -15,42 +15,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
 
     @property
     def alternative_database(self):
-        if self.adapter_type == 'snowflake':
-            return os.getenv('SNOWFLAKE_TEST_DATABASE')
-        else:
-            return super().alternative_database
-
-    def snowflake_profile(self):
-        return {
-            'config': {
-                'send_anonymous_usage_stats': False
-            },
-            'test': {
-                'outputs': {
-                    'default2': {
-                        'type': 'snowflake',
-                        'threads': 4,
-                        'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
-                        'user': os.getenv('SNOWFLAKE_TEST_USER'),
-                        'password': os.getenv('SNOWFLAKE_TEST_PASSWORD'),
-                        'database': os.getenv('SNOWFLAKE_TEST_QUOTED_DATABASE'),
-                        'schema': self.unique_schema(),
-                        'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
-                    },
-                    'noaccess': {
-                        'type': 'snowflake',
-                        'threads': 4,
-                        'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
-                        'user': 'noaccess',
-                        'password': 'password',
-                        'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
-                        'schema': self.unique_schema(),
-                        'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
-                    }
-                },
-                'target': 'default2'
-            }
-        }
+        return super().alternative_database
 
     @property
     def project_config(self):
@@ -71,10 +36,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
 
 class TestModelOverride(BaseOverrideDatabase):
     def run_database_override(self):
-        if self.adapter_type == 'snowflake':
-            func = lambda x: x.upper()
-        else:
-            func = lambda x: x
+        func = lambda x: x
 
         self.run_dbt(['seed'])
 
@@ -91,10 +53,6 @@ class TestModelOverride(BaseOverrideDatabase):
     def test_bigquery_database_override(self):
         self.run_database_override()
 
-    @use_profile('snowflake')
-    def test_snowflake_database_override(self):
-        self.run_database_override()
-
 
 class BaseTestProjectModelOverride(BaseOverrideDatabase):
     # this is janky, but I really want to access self.default_database in
@@ -106,8 +64,6 @@ class BaseTestProjectModelOverride(BaseOverrideDatabase):
         for key in ['database', 'project', 'dbname']:
             if key in profile:
                 database = profile[key]
-                if self.adapter_type == 'snowflake':
-                    return database.upper()
                 return database
         assert False, 'No profile database found!'
 
@@ -117,10 +73,7 @@ class BaseTestProjectModelOverride(BaseOverrideDatabase):
         self.assertExpectedRelations()
 
     def assertExpectedRelations(self):
-        if self.adapter_type == 'snowflake':
-            func = lambda x: x.upper()
-        else:
-            func = lambda x: x
+        func = lambda x: x
 
         self.assertManyRelationsEqual([
             (func('seed'), self.unique_schema(), self.default_database),
@@ -163,10 +116,6 @@ class TestProjectModelOverride(BaseTestProjectModelOverride):
     def test_bigquery_database_override(self):
         self.run_database_override()
 
-    @use_profile('snowflake')
-    def test_snowflake_database_override(self):
-        self.run_database_override()
-
 
 class TestProjectModelAliasOverride(BaseTestProjectModelOverride):
     @property
@@ -203,10 +152,7 @@ class TestProjectModelAliasOverride(BaseTestProjectModelOverride):
 
 class TestProjectSeedOverride(BaseOverrideDatabase):
     def run_database_override(self):
-        if self.adapter_type == 'snowflake':
-            func = lambda x: x.upper()
-        else:
-            func = lambda x: x
+        func = lambda x: x
 
         self.use_default_project({
             'config-version': 2,
@@ -227,8 +173,4 @@ class TestProjectSeedOverride(BaseOverrideDatabase):
 
     @use_profile('bigquery')
     def test_bigquery_database_override(self):
-        self.run_database_override()
-
-    @use_profile('snowflake')
-    def test_snowflake_database_override(self):
         self.run_database_override()

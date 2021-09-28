@@ -60,36 +60,6 @@ class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
         self.assertEqual(len(results),  10)
 
 
-class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
-    @property
-    def models(self):
-        return "models-snowflake"
-
-    def seed_enabled_types(self):
-        return {
-            "id": "FLOAT",
-            "birthday": "TEXT",
-        }
-
-    def seed_tricky_types(self):
-        return {
-            'id_str': 'TEXT',
-            'looks_like_a_bool': 'TEXT',
-            'looks_like_a_date': 'TEXT',
-        }
-
-    @property
-    def profile_config(self):
-        return self.snowflake_profile()
-
-    @use_profile('snowflake')
-    def test_snowflake_simple_seed_with_column_override_snowflake(self):
-        results = self.run_dbt(["seed", "--show"])
-        self.assertEqual(len(results),  2)
-        results = self.run_dbt(["test"])
-        self.assertEqual(len(results),  10)
-
-
 class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
     @property
     def models(self):

@@ -41,7 +41,3 @@ class TestColumnComment(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_comments(self):
         self.run_has_comments()
-
-    @use_profile('snowflake')
-    def test_snowflake_comments(self):
-        self.run_has_comments()

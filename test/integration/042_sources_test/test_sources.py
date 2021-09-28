@@ -357,10 +357,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         self.assertEqual(results[0].status, 'pass')
         self._assert_freshness_results('target/pass_source.json', 'pass')
 
-    @use_profile('snowflake')
-    def test_snowflake_source_freshness(self):
-        self._run_source_freshness()
-
     @use_profile('bigquery')
     def test_bigquery_source_freshness(self):
         self._run_source_freshness()

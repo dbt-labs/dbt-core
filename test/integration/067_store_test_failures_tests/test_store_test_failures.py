@@ -91,12 +91,6 @@ class PostgresTestStoreTestFailures(TestStoreTestFailures):
         self.run_tests_store_failures_and_assert()
 
 
-class SnowflakeTestStoreTestFailures(TestStoreTestFailures):
-    @use_profile('snowflake')
-    def test__snowflake__store_and_assert(self):
-        self.run_tests_store_failures_and_assert()
-
-
 class BigQueryTestStoreTestFailures(TestStoreTestFailures):
     @use_profile('bigquery')
     def test__bigquery__store_and_assert(self):

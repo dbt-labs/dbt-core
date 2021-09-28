@@ -35,8 +35,6 @@ class TestDeferState(DBTIntegrationTest):
     def get_profile(self, adapter_type):
         if self.other_schema is None:
             self.other_schema = self.unique_schema() + '_other'
-            if self.adapter_type == 'snowflake':
-                self.other_schema = self.other_schema.upper()
         profile = super().get_profile(adapter_type)
         default_name = profile['test']['target']
         profile['test']['outputs']['otherschema'] = copy.deepcopy(profile['test']['outputs'][default_name])
@@ -173,10 +171,6 @@ class TestDeferState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_state_defer_deleted_upstream(self):
         self.run_defer_deleted_upstream()
-
-    @use_profile('snowflake')
-    def test_snowflake_state_changetarget(self):
-        self.run_and_defer()
 
     @use_profile('bigquery')
     def test_bigquery_state_changetarget(self):

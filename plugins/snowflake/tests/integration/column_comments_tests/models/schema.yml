@@ -1,0 +1,9 @@
+version: 2
+models:
+  - name: quote_model
+    description: "model to test column quotes and comments" 
+    columns:
+      - name: 2id
+        description: "XXX My description"
+        quote: true
+

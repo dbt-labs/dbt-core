@@ -44,10 +44,6 @@ class TestChangingRelationType(DBTIntegrationTest):
     def test__postgres__switch_materialization(self):
         self.swap_types_and_test()
 
-    @use_profile("snowflake")
-    def test__snowflake__switch_materialization(self):
-        self.swap_types_and_test()
-
     @mark.flaky(rerun_filter=bigquery_rate_limiter, max_runs=3)
     @use_profile("bigquery")
     def test__bigquery__switch_materialization(self):

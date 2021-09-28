@@ -99,17 +99,12 @@ class TestDocsGenerate(DBTIntegrationTest):
     setup_alternate_db = True
 
     def adapter_case(self, value):
-        if self.adapter_type == 'snowflake':
-            return value.upper()
-        else:
-            return value.lower()
+        return value.lower()
 
     def setUp(self):
         super().setUp()
         self.maxDiff = None
         self.alternate_schema = self.unique_schema() + '_test'
-        if self.adapter_type == 'snowflake':
-            self.alternate_schema = self.alternate_schema.upper()
 
         self._created_schemas.add(self.alternate_schema)
         os.environ['DBT_ENV_CUSTOM_ENV_env_key'] = 'env_value'
@@ -179,38 +174,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'description': 'Indicates whether there are statistics for this table',
                 'include': False,
             },
-        }
-
-    def _snowflake_stats(self):
-        return {
-            'has_stats': {
-                'id': 'has_stats',
-                'label': 'Has Stats?',
-                'value': True,
-                'description': 'Indicates whether there are statistics for this table',
-                'include': False,
-            },
-            'bytes': {
-                'id': 'bytes',
-                'label': 'Approximate Size',
-                'value': AnyFloat(),
-                'description': 'Approximate size of the table as reported by Snowflake',
-                'include': True,
-            },
-            'last_modified': {
-                'id': 'last_modified',
-                'label': 'Last Modified',
-                'value': AnyString(),
-                'description': 'The timestamp for last update/change',
-                'include': True,
-            },
-            'row_count': {
-                'id': 'row_count',
-                'label': 'Row Count',
-                'value': 1.0,
-                'description': 'An approximate count of rows in this table',
-                'include': True,
-            }
         }
 
     def _bigquery_stats(self, is_table, partition=None, cluster=None):
@@ -387,10 +350,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             profile = self.get_profile(self.adapter_type)
             target_name = profile['test']['target']
             return profile['test']['outputs'][target_name]['user']
-        elif self.adapter_type == 'snowflake':
-            return self.run_sql('select current_role()', fetch='one')[0]
-        else:  # bigquery, presto, other dbs that have no 'role'
-            return None
+        return None
 
     def expected_postgres_references_catalog(self):
         model_database = self.default_database
@@ -502,20 +462,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
             },
         }
-
-    def expected_snowflake_catalog(self, case_columns=False):
-        return self._expected_catalog(
-            id_type='NUMBER',
-            text_type='TEXT',
-            time_type='TIMESTAMP_NTZ',
-            view_type='VIEW',
-            table_type='BASE TABLE',
-            model_stats=self._no_stats(),
-            seed_stats=self._snowflake_stats(),
-            case=lambda x: x.upper(),
-            model_database=self.alternative_database,
-            case_columns=case_columns,
-        )
 
     def expected_bigquery_catalog(self):
         return self._expected_catalog(
@@ -908,7 +854,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             target_schema=self.alternate_schema
         )
 
-        quote_database = quote_schema = self.adapter_type != 'snowflake'
+        quote_database = quote_schema = True
         relation_name_node_format = self._relation_name_format(
             quote_database, quote_schema, quote_model
         )
@@ -2742,38 +2688,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         assert os.path.exists('./target/assets/lorem-ipsum.txt')
 
         assert not os.path.exists('./target/non-existent-assets')
-
-    @use_profile('snowflake')
-    def test__snowflake__run_and_generate(self):
-        self.run_and_generate()
-
-        self.verify_catalog(self.expected_snowflake_catalog())
-        self.verify_manifest(self.expected_seeded_manifest())
-        self.verify_run_results(self.expected_run_results())
-
-    @use_profile('snowflake')
-    def test__snowflake__run_and_generate_ignore_quoting_parameter(self):
-        # with optional adapters, this package could easily just not exist!
-        # accordingly, only run it when we think snowflake things should work
-        from dbt.adapters.snowflake import connections as snowflake_conn
-        old_connect = snowflake_conn.snowflake.connector.connect
-
-        def connect(*args, **kwargs):
-            kwargs['session_parameters'] = {
-                'QUOTED_IDENTIFIERS_IGNORE_CASE': True
-            }
-            return old_connect(*args, **kwargs)
-
-        with patch.object(snowflake_conn.snowflake.connector, 'connect', connect):
-            self.run_and_generate({
-                'quoting': {
-                    'identifier': True,
-                }
-            })
-
-        self.verify_catalog(self.expected_snowflake_catalog(case_columns=True))
-        self.verify_manifest(self.expected_seeded_manifest(quote_model=True))
-        self.verify_run_results(self.expected_run_results())
 
     @use_profile('bigquery')
     def test__bigquery__run_and_generate(self):

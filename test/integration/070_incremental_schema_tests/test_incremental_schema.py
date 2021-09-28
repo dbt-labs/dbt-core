@@ -126,22 +126,6 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
     def test__postgres__run_incremental_fail_on_schema_change(self):
         self.run_incremental_fail_on_schema_change()
 
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_ignore(self):
-        self.run_incremental_ignore()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_append_new_columns(self):
-        self.run_incremental_append_new_columns()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_sync_all_columns(self):
-        self.run_incremental_sync_all_columns()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_fail_on_schema_change(self):
-        self.run_incremental_fail_on_schema_change()
-
     @use_profile('bigquery')
     def test__bigquery__run_incremental_ignore(self):
         self.run_incremental_ignore()
