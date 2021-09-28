@@ -1,5 +1,0 @@
-version: 2
-snapshots:
-  - name: snapshot_actual
-    tests:
-      - mutually_exclusive_ranges

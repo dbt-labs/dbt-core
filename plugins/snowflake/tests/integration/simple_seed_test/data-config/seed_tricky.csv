@@ -1,7 +1,0 @@
-id,id_str,a_bool,looks_like_a_bool,a_date,looks_like_a_date,relative,weekday
-1,1,true,true,2019-01-01 12:32:30,2019-01-01 12:32:30,tomorrow,Saturday
-2,2,True,True,2019-01-01 12:32:31,2019-01-01 12:32:31,today,Sunday
-3,3,TRUE,TRUE,2019-01-01 12:32:32,2019-01-01 12:32:32,yesterday,Monday
-4,4,false,false,2019-01-01 01:32:32,2019-01-01 01:32:32,tomorrow,Saturday
-5,5,False,False,2019-01-01 01:32:32,2019-01-01 01:32:32,today,Sunday
-6,6,FALSE,FALSE,2019-01-01 01:32:32,2019-01-01 01:32:32,yesterday,Monday

@@ -1,6 +1,0 @@
-version: 2
-sources:
-  - name: test_source
-    schema: "{{ target.schema }}"
-    tables:
-      - name: renamed_seed
