@@ -59,32 +59,3 @@ class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
         results = self.run_dbt(["test"])
         self.assertEqual(len(results),  10)
 
-
-class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
-    @property
-    def models(self):
-        return "models-bq"
-
-    def seed_enabled_types(self):
-        return {
-            "id": "FLOAT64",
-            "birthday": "STRING",
-        }
-
-    def seed_tricky_types(self):
-        return {
-            'id_str': 'STRING',
-            'looks_like_a_bool': 'STRING',
-            'looks_like_a_date': 'STRING',
-        }
-
-    @property
-    def profile_config(self):
-        return self.bigquery_profile()
-
-    @use_profile('bigquery')
-    def test_bigquery_simple_seed_with_column_override_bigquery(self):
-        results = self.run_dbt(["seed", "--show"])
-        self.assertEqual(len(results),  2)
-        results = self.run_dbt(["test"])
-        self.assertEqual(len(results),  10)

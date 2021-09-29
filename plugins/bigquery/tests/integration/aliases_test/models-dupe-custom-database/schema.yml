@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: model_a
+  tests:
+  - expect_value:
+      field: tablename
+      value: duped_alias
+- name: model_b
+  tests:
+  - expect_value:
+      field: tablename
+      value: duped_alias

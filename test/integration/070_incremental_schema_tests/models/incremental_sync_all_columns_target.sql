@@ -8,7 +8,7 @@ with source_data as (
 
 )
 
-{% set string_type = 'string' if target.type == 'bigquery' else 'varchar(10)' %}
+{% set string_type = 'varchar(10)' %}
 
 select id
        ,cast(field1 as {{string_type}}) as field1

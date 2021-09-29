@@ -89,9 +89,3 @@ class PostgresTestStoreTestFailures(TestStoreTestFailures):
     def test__postgres__store_and_assert(self):
         self.run_tests_store_one_failure()
         self.run_tests_store_failures_and_assert()
-
-
-class BigQueryTestStoreTestFailures(TestStoreTestFailures):
-    @use_profile('bigquery')
-    def test__bigquery__store_and_assert(self):
-        self.run_tests_store_failures_and_assert()

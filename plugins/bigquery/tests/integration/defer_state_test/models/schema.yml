@@ -1,0 +1,9 @@
+version: 2
+models:
+  - name: view_model
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+      - name: name

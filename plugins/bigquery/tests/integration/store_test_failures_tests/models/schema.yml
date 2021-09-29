@@ -1,0 +1,40 @@
+version: 2
+
+models:
+
+  - name: fine_model
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+
+  - name: problematic_model
+    columns:
+      - name: id
+        tests:
+          - unique:
+              store_failures: true
+          - not_null
+      - name: first_name
+        tests:
+          # test truncation of really long test name
+          - accepted_values:
+              values:
+                - Jack
+                - Kathryn
+                - Gerald
+                - Bonnie
+                - Harold
+                - Jacqueline
+                - Wanda
+                - Craig
+                # - Gary
+                # - Rose
+
+  - name: fine_model_but_with_a_no_good_very_long_name
+    columns:
+      - name: quite_long_column_name
+        tests:
+          # test truncation of really long test name with builtin
+          - unique

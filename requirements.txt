@@ -1,3 +1,2 @@
 ./core
 ./plugins/postgres
-./plugins/bigquery

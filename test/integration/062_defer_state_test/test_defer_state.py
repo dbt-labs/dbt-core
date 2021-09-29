@@ -171,7 +171,3 @@ class TestDeferState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_state_defer_deleted_upstream(self):
         self.run_defer_deleted_upstream()
-
-    @use_profile('bigquery')
-    def test_bigquery_state_changetarget(self):
-        self.run_and_defer()

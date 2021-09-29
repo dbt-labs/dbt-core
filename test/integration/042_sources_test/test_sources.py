@@ -74,8 +74,7 @@ class SuccessfulSourcesTest(BaseSourcesTest):
             'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
         )"""
         quoted_columns = ','.join(
-            self.adapter.quote(c) if self.adapter_type != 'bigquery' else c
-            for c in
+            self.adapter.quote(c) for c in
             ('favorite_color', 'id', 'first_name',
              'email', 'ip_address', 'updated_at')
         )
@@ -356,10 +355,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'pass')
         self._assert_freshness_results('target/pass_source.json', 'pass')
-
-    @use_profile('bigquery')
-    def test_bigquery_source_freshness(self):
-        self._run_source_freshness()
 
     @use_profile('postgres')
     def test_postgres_source_freshness_selection_select(self):

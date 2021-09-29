@@ -91,9 +91,6 @@ jobs:
               - 'core/**'
               - 'plugins/postgres/**'
               - 'dev-requirements.txt'
-            bigquery:
-              - 'core/**'
-              - 'plugins/bigquery/**'
 
       - name: Generate integration test matrix
         id: generate-matrix
@@ -182,13 +179,6 @@ jobs:
 
       - name: Run tox (postgres)
         if: matrix.adapter == 'postgres'
-        run: tox
-
-      - name: Run tox (bigquery)
-        if: matrix.adapter == 'bigquery'
-        env:
-          BIGQUERY_TEST_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_TEST_SERVICE_ACCOUNT_JSON }}
-          BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
         run: tox
 
       - uses: actions/upload-artifact@v2
