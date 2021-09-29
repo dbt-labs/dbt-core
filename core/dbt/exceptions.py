@@ -852,8 +852,8 @@ def raise_patch_targets_not_found(patches):
 # todo: fix error message to be useful & add test
 def raise_no_unique_id(patch):
     raise_compiler_error(
-        'No unique_id: {}'.format(
-            patch
+        'No unique_id found for {} {}.'.format(
+            patch.yaml_key, patch.name
         )
     )
 

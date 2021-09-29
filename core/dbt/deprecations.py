@@ -61,12 +61,10 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     _name = 'models-key-mismatch'
 
     _description = '''\
-    "{node.name}" is a {node.resource_type} node, but it is specified in
+    "{patch.name}" is a {resource_type} node, but it is specified in
     the {patch.yaml_key} section of {patch.original_file_path}.
 
-
-
-    To fix this warning, place the `{node.name}` specification under
+    To fix this warning, place the `{patch.name}` specification under
     the {expected_key} key instead.
 
     This warning will become an error in a future release.
