@@ -344,8 +344,9 @@ class TimestampNamed(logbook.Processor):
 
 class ScrubSecrets(logbook.Processor):
     def process(self, record):
+        subbed = str(record.message)
         for secret in get_secret_env():
-            record.message = record.message.replace(secret, "*****")
+            record.message = subbed.replace(secret, "*****")
 
 
 logger = logbook.Logger('dbt')
