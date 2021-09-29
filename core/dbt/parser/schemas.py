@@ -813,7 +813,6 @@ class NodePatchParser(
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
         if patch.yaml_key in ['models', 'seeds', 'snapshots']:
-            breakpoint()
             unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
             if (unique_id is None and
                not self.manifest.find_disabled_by_name(patch.name, None)):
