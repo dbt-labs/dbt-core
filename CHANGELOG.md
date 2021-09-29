@@ -22,6 +22,7 @@ Contributors:
 ### Fixes
 - Fix batching for large seeds on Snowflake ([#3941](https://github.com/dbt-labs/dbt/issues/3941), [#3942](https://github.com/dbt-labs/dbt/pull/3942))
 - Avoid infinite recursion in `state:modified.macros` check ([#3904](https://github.com/dbt-labs/dbt/issues/3904), [#3957](https://github.com/dbt-labs/dbt/pull/3957))
+- Cast log messages to strings before scrubbing of prefixed env vars ([#3971](https://github.com/dbt-labs/dbt/issues/3971), [#3972](https://github.com/dbt-labs/dbt/pull/3972))
 
 ### Under the hood
 - Bump artifact schema versions for 0.21.0 ([#3945](https://github.com/dbt-labs/dbt/pull/3945))
