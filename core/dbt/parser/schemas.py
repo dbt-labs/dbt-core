@@ -813,14 +813,13 @@ class NodePatchParser(
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
         if patch.yaml_key in ['models', 'seeds', 'snapshots']:
+            breakpoint()
             unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
             if (unique_id is None and
                not self.manifest.find_disabled_by_name(patch.name, None)):
-            # need to raise an exception when a refable node does not 
-            # have a unique id and is not disabled
-            # todo: fix error message to be useful & add test
+                # need to raise an exception when a refable node does not
+                # have a unique id and is not disabled
                 raise raise_no_unique_id(patch)
-                
         elif patch.yaml_key == 'analyses':
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
         else:

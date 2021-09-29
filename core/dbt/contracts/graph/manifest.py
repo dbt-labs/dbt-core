@@ -1008,7 +1008,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def add_disabled_nofile(self, node: CompileResultNode):
         self.disabled.append(node)
 
-
     def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode, test_from=None):
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
