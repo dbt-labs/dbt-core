@@ -103,7 +103,7 @@ A short list of tools used in `dbt` testing that will be helpful to your underst
 - [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) - but don't worry too much, nobody _really_ understands how make works and our Makefile is super simple
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
-- [CircleCI](https://circleci.com/product/) and [Azure Pipelines](https://azure.microsoft.com/en-us/services/devops/pipelines/)
+- [Github Actions](https://github.com/features/actions)
 
 A deep understanding of these tools in not required to effectively contribute to `dbt`, but we recommend checking out the attached documentation if you're interested in learning more about them.
 
@@ -226,7 +226,7 @@ python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 > is a list of useful command-line options for `pytest` to use while developing.
 ## Submitting a Pull Request
 
-dbt Labs provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `dbt-labs/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines.
+dbt Labs provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `dbt-labs/dbt` repo, GitHub will trigger automated tests in Github Actions.
 
 A `dbt` maintainer will review your PR. They may suggest code revision for style or clarity, or request that you add unit or integration test(s). These are good things! We believe that, with a little bit of help, anyone can contribute high-quality code.
 
