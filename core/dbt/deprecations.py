@@ -57,15 +57,6 @@ class DispatchPackagesDeprecation(DBTDeprecation):
     '''
 
 
-class NotADictionaryDeprecation(DBTDeprecation):
-    _name = 'not-a-dictionary'
-
-    _description = '''\
-    The object ("{obj}") was used as a dictionary. In a future version of dbt
-    this capability will be removed from objects of this type.
-    '''
-
-
 class ModelsKeyNonModelDeprecation(DBTDeprecation):
     _name = 'models-key-mismatch'
 
@@ -129,7 +120,6 @@ active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
     DispatchPackagesDeprecation(),
-    NotADictionaryDeprecation(),
     ModelsKeyNonModelDeprecation(),
     PackageRedirectDeprecation()
 ]
