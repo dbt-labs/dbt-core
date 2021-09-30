@@ -17,7 +17,6 @@ from dbt.exceptions import (
     InternalException, NotImplementedException, RuntimeException,
 )
 
-from dbt import deprecations
 from dbt.adapters.protocol import (
     AdapterConfig,
     ConnectionManagerProtocol,
@@ -797,12 +796,11 @@ class BaseAdapter(metaclass=AdapterMeta):
     def quote_seed_column(
         self, column: str, quote_config: Optional[bool]
     ) -> str:
-        # this is the default for now
-        quote_columns: bool = False
+        quote_columns: bool = True
         if isinstance(quote_config, bool):
             quote_columns = quote_config
         elif quote_config is None:
-            deprecations.warn('column-quoting-unset')
+            pass
         else:
             raise_compiler_error(
                 f'The seed configuration value of "quote_columns" has an '
@@ -934,7 +932,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
         kwargs: Dict[str, Any] = None,
-        release: bool = False,
         text_only_columns: Optional[Iterable[str]] = None,
     ) -> agate.Table:
         """Look macro_name up in the manifest and execute its results.
@@ -948,10 +945,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             execution context.
         :param kwargs: An optional dict of keyword args used to pass to the
             macro.
-        :param release: Ignored.
         """
-        if release is not False:
-            deprecations.warn('execute-macro-release')
+
         if kwargs is None:
             kwargs = {}
         if context_override is None:

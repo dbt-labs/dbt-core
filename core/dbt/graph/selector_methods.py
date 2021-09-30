@@ -406,27 +406,38 @@ class StateSelectorMethod(SelectorMethod):
 
         return modified
 
-    def recursively_check_macros_modified(self, node):
-        # check if there are any changes in macros the first time
-        if self.modified_macros is None:
-            self.modified_macros = self._macros_modified()
-
+    def recursively_check_macros_modified(self, node, previous_macros):
         # loop through all macros that this node depends on
         for macro_uid in node.depends_on.macros:
+            # avoid infinite recursion if we've already seen this macro
+            if macro_uid in previous_macros:
+                continue
+            previous_macros.append(macro_uid)
             # is this macro one of the modified macros?
             if macro_uid in self.modified_macros:
                 return True
             # if not, and this macro depends on other macros, keep looping
-            macro = self.manifest.macros[macro_uid]
-            if len(macro.depends_on.macros) > 0:
-                return self.recursively_check_macros_modified(macro)
+            macro_node = self.manifest.macros[macro_uid]
+            if len(macro_node.depends_on.macros) > 0:
+                return self.recursively_check_macros_modified(macro_node, previous_macros)
             else:
                 return False
-        return False
+
+    def check_macros_modified(self, node):
+        # check if there are any changes in macros the first time
+        if self.modified_macros is None:
+            self.modified_macros = self._macros_modified()
+        # no macros have been modified, skip looping entirely
+        if not self.modified_macros:
+            return False
+        # recursively loop through upstream macros to see if any is modified
+        else:
+            previous_macros = []
+            return self.recursively_check_macros_modified(node, previous_macros)
 
     def check_modified(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         different_contents = not new.same_contents(old)  # type: ignore
-        upstream_macro_change = self.recursively_check_macros_modified(new)
+        upstream_macro_change = self.check_macros_modified(new)
         return different_contents or upstream_macro_change
 
     def check_modified_body(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
@@ -458,7 +469,7 @@ class StateSelectorMethod(SelectorMethod):
             return False
 
     def check_modified_macros(self, _, new: SelectorTarget) -> bool:
-        return self.recursively_check_macros_modified(new)
+        return self.check_macros_modified(new)
 
     def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
         return old is None

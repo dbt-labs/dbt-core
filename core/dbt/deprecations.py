@@ -57,30 +57,6 @@ class DispatchPackagesDeprecation(DBTDeprecation):
     '''
 
 
-class NotADictionaryDeprecation(DBTDeprecation):
-    _name = 'not-a-dictionary'
-
-    _description = '''\
-    The object ("{obj}") was used as a dictionary. In a future version of dbt
-    this capability will be removed from objects of this type.
-    '''
-
-
-class ColumnQuotingDeprecation(DBTDeprecation):
-    _name = 'column-quoting-unset'
-
-    _description = '''\
-    The quote_columns parameter was not set for seeds, so the default value of
-    False was chosen. The default will change to True in a future release.
-
-
-
-    For more information, see:
-
-    https://docs.getdbt.com/v0.15/docs/seeds#section-specify-column-quoting
-    '''
-
-
 class ModelsKeyNonModelDeprecation(DBTDeprecation):
     _name = 'models-key-mismatch'
 
@@ -94,24 +70,6 @@ class ModelsKeyNonModelDeprecation(DBTDeprecation):
     the {expected_key} key instead.
 
     This warning will become an error in a future release.
-    '''
-
-
-class ExecuteMacrosReleaseDeprecation(DBTDeprecation):
-    _name = 'execute-macro-release'
-    _description = '''\
-    The "release" argument to execute_macro is now ignored, and will be removed
-    in a future relase of dbt. At that time, providing a `release` argument
-    will result in an error.
-    '''
-
-
-class AdapterMacroDeprecation(DBTDeprecation):
-    _name = 'adapter-macro'
-    _description = '''\
-    The "adapter_macro" macro has been deprecated. Instead, use the
-    `adapter.dispatch` method to find a macro and call the result.
-    adapter_macro was called for: {macro_name}
     '''
 
 
@@ -162,11 +120,7 @@ active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
     DispatchPackagesDeprecation(),
-    NotADictionaryDeprecation(),
-    ColumnQuotingDeprecation(),
     ModelsKeyNonModelDeprecation(),
-    ExecuteMacrosReleaseDeprecation(),
-    AdapterMacroDeprecation(),
     PackageRedirectDeprecation()
 ]
 

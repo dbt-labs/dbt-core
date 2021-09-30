@@ -577,7 +577,7 @@ class ManifestLoader:
     def build_perf_info(self):
         mli = ManifestLoaderInfo(
             is_partial_parse_enabled=flags.PARTIAL_PARSE,
-            is_static_analysis_enabled=flags.USE_EXPERIMENTAL_PARSER
+            is_static_analysis_enabled=flags.STATIC_PARSER
         )
         for project in self.all_projects.values():
             project_info = ProjectLoaderInfo(

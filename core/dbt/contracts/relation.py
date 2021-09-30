@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import (
     Optional, Dict,
 )
@@ -7,9 +7,8 @@ from typing_extensions import Protocol
 
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
 
-from dbt import deprecations
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import CompilationException
+from dbt.exceptions import raise_dataclass_not_dict, CompilationException
 from dbt.utils import deep_merge
 
 
@@ -43,13 +42,10 @@ class FakeAPIObject(dbtClassMixin, Replaceable, Mapping):
             raise KeyError(key) from None
 
     def __iter__(self):
-        deprecations.warn('not-a-dictionary', obj=self)
-        for _, name in self._get_fields():
-            yield name
+        raise_dataclass_not_dict(self)
 
     def __len__(self):
-        deprecations.warn('not-a-dictionary', obj=self)
-        return len(fields(self.__class__))
+        raise_dataclass_not_dict(self)
 
     def incorporate(self, **kwargs):
         value = self.to_dict(omit_none=True)
