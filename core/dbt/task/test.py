@@ -126,9 +126,7 @@ class TestRunner(CompileRunner):
         self.print_start_line()
 
     def execute_test(
-        self,
-        test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
-        manifest: Manifest
+        self, test: Union[CompiledSingularTestNode, CompiledGenericTestNode], manifest: Manifest
     ) -> TestResultData:
         context = generate_runtime_model_context(
             test, self.config, manifest
