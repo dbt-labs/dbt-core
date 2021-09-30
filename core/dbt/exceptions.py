@@ -933,22 +933,20 @@ def raise_unrecognized_credentials_type(typename, supported_types):
     )
 
 
-def raise_invalid_patch(
-    node, patch_section: str, patch_path: str,
-) -> NoReturn:
+def warn_invalid_patch(patch, resource_type):
     msg = line_wrap_message(
         f'''\
-        '{node.name}' is a {node.resource_type} node, but it is
-        specified in the {patch_section} section of
-        {patch_path}.
+        '{patch.name}' is a {resource_type} node, but it is
+        specified in the {patch.yaml_key} section of
+        {patch.original_file_path}.
 
 
 
-        To fix this error, place the `{node.name}`
-        specification under the {node.resource_type.pluralize()} key instead.
+        To fix this error, place the `{patch.name}`
+        specification under the {resource_type.pluralize()} key instead.
         '''
     )
-    raise_compiler_error(msg, node)
+    warn_or_error(msg)
 
 
 def raise_not_implemented(msg):
