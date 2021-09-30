@@ -1,10 +1,16 @@
 ## dbt 1.0.0 (Release TBD)
 
+### Breaking changes
+
+- The two type of test definitions are now "singular" and "generic" (instead of "data" and "schema", respectively). The `test_type:` selection method accepts `test_type:singular` and `test_type:generic`. (It will also accept `test_type:schema` and `test_type:data` for backwards compatibility) ([#3234](https://github.com/dbt-labs/dbt/issues/3234), [#3880](https://github.com/dbt-labs/dbt/pull/3880)). **Not backwards compatible:** The `--data` and `--schema` flags to `dbt test` are no longer supported, and tests no longer have the tags `'data'` and `'schema'` automatically applied.
+
 ### Features
 - Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
 - Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt/issues/3377), [#3939](https://github.com/dbt-labs/dbt/pull/3939))
+- Generic test FQNs have changed to include the relative path, resource, and column (if applicable) where they are defined. This makes it easier to configure them from the `tests` block in `dbt_project.yml` ([#3259](https://github.com/dbt-labs/dbt/pull/3259), [#3880](https://github.com/dbt-labs/dbt/pull/3880)
 
 ### Fixes
+- Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
 
 ### Under the hood
 

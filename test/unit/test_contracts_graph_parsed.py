@@ -16,7 +16,7 @@ from dbt.contracts.graph.parsed import (
     ParsedModelNode,
     DependsOn,
     ColumnInfo,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
     ParsedSnapshotNode,
     IntermediateSnapshotNode,
     ParsedNodePatch,
@@ -1000,7 +1000,7 @@ def basic_parsed_schema_test_dict():
 
 @pytest.fixture
 def basic_parsed_schema_test_object():
-    return ParsedSchemaTestNode(
+    return ParsedGenericTestNode(
         package_name='test',
         root_path='/root/',
         path='/root/x/path.sql',
@@ -1089,7 +1089,7 @@ def complex_parsed_schema_test_object():
         severity='WARN'
     )
     cfg._extra.update({'extra_key': 'extra value'})
-    return ParsedSchemaTestNode(
+    return ParsedGenericTestNode(
         package_name='test',
         root_path='/root/',
         path='/root/x/path.sql',
@@ -1125,20 +1125,20 @@ def test_basic_schema_test_node(minimal_parsed_schema_test_dict, basic_parsed_sc
     node = basic_parsed_schema_test_object
     node_dict = basic_parsed_schema_test_dict
     minimum = minimal_parsed_schema_test_dict
-    assert_symmetric(node, node_dict, ParsedSchemaTestNode)
+    assert_symmetric(node, node_dict, ParsedGenericTestNode)
 
     assert node.empty is False
     assert node.is_ephemeral is False
     assert node.is_refable is False
     assert node.get_materialization() == 'test'
 
-    assert_from_dict(node, minimum, ParsedSchemaTestNode)
+    assert_from_dict(node, minimum, ParsedGenericTestNode)
     pickle.loads(pickle.dumps(node))
 
 
 def test_complex_schema_test_node(complex_parsed_schema_test_dict, complex_parsed_schema_test_object):
     # this tests for the presence of _extra keys
-    node = complex_parsed_schema_test_object  # ParsedSchemaTestNode
+    node = complex_parsed_schema_test_object  # ParsedGenericTestNode
     assert(node.config._extra['extra_key'])
     node_dict = complex_parsed_schema_test_dict
     assert_symmetric(node, node_dict)
@@ -1149,13 +1149,13 @@ def test_invalid_column_name_type(complex_parsed_schema_test_dict):
     # bad top-level field
     bad_column_name = complex_parsed_schema_test_dict
     bad_column_name['column_name'] = {}
-    assert_fails_validation(bad_column_name, ParsedSchemaTestNode)
+    assert_fails_validation(bad_column_name, ParsedGenericTestNode)
 
 
 def test_invalid_severity(complex_parsed_schema_test_dict):
     invalid_config_value = complex_parsed_schema_test_dict
     invalid_config_value['config']['severity'] = 'WERROR'
-    assert_fails_validation(invalid_config_value, ParsedSchemaTestNode)
+    assert_fails_validation(invalid_config_value, ParsedGenericTestNode)
 
 
 @pytest.fixture

@@ -72,7 +72,7 @@ class TestModifiedState(DBTIntegrationTest):
 
         results = self.run_dbt(['ls', '--select', 'state:modified+', '--state', './state'])
         assert len(results) == 7
-        assert set(results) == {'test.seed', 'test.table_model', 'test.view_model', 'test.ephemeral_model', 'test.schema_test.not_null_view_model_id', 'test.schema_test.unique_view_model_id', 'exposure:test.my_exposure'}
+        assert set(results) == {'test.seed', 'test.table_model', 'test.view_model', 'test.ephemeral_model', 'test.not_null_view_model_id', 'test.unique_view_model_id', 'exposure:test.my_exposure'}
 
         shutil.rmtree('./state')
         self.copy_state()

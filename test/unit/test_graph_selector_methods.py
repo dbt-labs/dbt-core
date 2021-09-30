@@ -13,8 +13,8 @@ from dbt.contracts.graph.parsed import (
     ParsedModelNode,
     ParsedExposure,
     ParsedSeedNode,
-    ParsedDataTestNode,
-    ParsedSchemaTestNode,
+    ParsedSingularTestNode,
+    ParsedGenericTestNode,
     ParsedSourceDefinition,
     TestConfig,
     TestMetadata,
@@ -240,7 +240,7 @@ def make_schema_test(pkg, test_name, test_model, test_kwargs, path=None, refs=No
         source_values.append([source.source_name, source.name])
         depends_on_nodes.append(source.unique_id)
 
-    return ParsedSchemaTestNode(
+    return ParsedGenericTestNode(
         raw_sql=raw_sql,
         test_metadata=TestMetadata(
             namespace=namespace,
@@ -296,7 +296,7 @@ def make_data_test(pkg, name, sql, refs=None, sources=None, tags=None, path=None
         source_values.append([src.source_name, src.name])
         depends_on_nodes.append(src.unique_id)
 
-    return ParsedDataTestNode(
+    return ParsedSingularTestNode(
         raw_sql=sql,
         database='dbt',
         schema='dbt_schema',
@@ -712,6 +712,11 @@ def test_select_test_type(manifest):
     method = methods.get_method('test_type', [])
     assert isinstance(method, TestTypeSelectorMethod)
     assert method.arguments == []
+    assert search_manifest_using_method(manifest, method, 'generic') == {
+        'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'unique_ext_raw_ext_source_id'}
+    assert search_manifest_using_method(manifest, method, 'singular') == {
+        'view_test_nothing'}
+    # test backwards compatibility
     assert search_manifest_using_method(manifest, method, 'schema') == {
         'unique_table_model_id', 'not_null_table_model_id', 'unique_view_model_id', 'unique_ext_raw_ext_source_id'}
     assert search_manifest_using_method(manifest, method, 'data') == {

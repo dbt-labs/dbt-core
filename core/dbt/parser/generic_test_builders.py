@@ -6,7 +6,7 @@ from typing import (
     Generic, TypeVar, Dict, Any, Tuple, Optional, List,
 )
 
-from dbt.clients.jinja import get_rendered, SCHEMA_TEST_KWARGS_NAME
+from dbt.clients.jinja import get_rendered, GENERIC_TEST_KWARGS_NAME
 from dbt.contracts.graph.parsed import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
     TestDef,
@@ -19,7 +19,7 @@ from dbt.exceptions import raise_compiler_error
 from dbt.parser.search import FileBlock
 
 
-def get_nice_schema_test_name(
+def get_nice_generic_test_name(
     test_type: str, test_name: str, args: Dict[str, Any]
 ) -> Tuple[str, str]:
     flat_args = []
@@ -153,7 +153,7 @@ class TestBlock(TargetColumnsBlock[Testable], Generic[Testable]):
 
 
 @dataclass
-class SchemaTestBlock(TestBlock[Testable], Generic[Testable]):
+class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
     test: Dict[str, Any]
     column_name: Optional[str]
     tags: List[str]
@@ -165,7 +165,7 @@ class SchemaTestBlock(TestBlock[Testable], Generic[Testable]):
         test: Dict[str, Any],
         column_name: Optional[str],
         tags: List[str],
-    ) -> 'SchemaTestBlock':
+    ) -> 'GenericTestBlock':
         return cls(
             file=src.file,
             data=src.data,
@@ -404,7 +404,7 @@ class TestBuilder(Generic[Testable]):
             raise self._bad_type()
         if self.namespace is not None:
             name = '{}_{}'.format(self.namespace, name)
-        return get_nice_schema_test_name(name, self.target.name, self.args)
+        return get_nice_generic_test_name(name, self.target.name, self.args)
 
     def construct_config(self) -> str:
         configs = ",".join([
@@ -428,7 +428,7 @@ class TestBuilder(Generic[Testable]):
         ).format(
             macro=self.macro_name(),
             config=self.construct_config(),
-            kwargs_name=SCHEMA_TEST_KWARGS_NAME,
+            kwargs_name=GENERIC_TEST_KWARGS_NAME,
         )
 
     def build_model_str(self):

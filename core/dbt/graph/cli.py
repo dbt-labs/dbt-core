@@ -22,8 +22,6 @@ INTERSECTION_DELIMITER = ','
 
 DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*']
 DEFAULT_EXCLUDES: List[str] = []
-DATA_TEST_SELECTOR: str = 'test_type:data'
-SCHEMA_TEST_SELECTOR: str = 'test_type:schema'
 
 
 def parse_union(
@@ -70,37 +68,6 @@ def parse_difference(
     included = parse_union_from_default(include, DEFAULT_INCLUDES, greedy=bool(flags.GREEDY))
     excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, greedy=True)
     return SelectionDifference(components=[included, excluded])
-
-
-def parse_test_selectors(
-    data: bool, schema: bool, base: SelectionSpec
-) -> SelectionSpec:
-    union_components = []
-
-    if data:
-        union_components.append(
-            SelectionCriteria.from_single_spec(DATA_TEST_SELECTOR)
-        )
-    if schema:
-        union_components.append(
-            SelectionCriteria.from_single_spec(SCHEMA_TEST_SELECTOR)
-        )
-
-    intersect_with: SelectionSpec
-    if not union_components:
-        return base
-    elif len(union_components) == 1:
-        intersect_with = union_components[0]
-    else:  # data and schema tests
-        intersect_with = SelectionUnion(
-            components=union_components,
-            expect_exists=True,
-            raw=[DATA_TEST_SELECTOR, SCHEMA_TEST_SELECTOR],
-        )
-
-    return SelectionIntersection(
-        components=[base, intersect_with], expect_exists=True
-    )
 
 
 RawDefinition = Union[str, Dict[str, Any]]

@@ -724,20 +724,6 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        '--data',
-        action='store_true',
-        help='''
-        Run data tests defined in "tests" directory.
-        '''
-    )
-    sub.add_argument(
-        '--schema',
-        action='store_true',
-        help='''
-        Run constraint validations from schema.yml files
-        '''
-    )
-    sub.add_argument(
         '-x',
         '--fail-fast',
         dest='sub_fail_fast',

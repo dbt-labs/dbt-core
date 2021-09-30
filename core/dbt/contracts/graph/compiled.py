@@ -2,13 +2,13 @@ from dbt.contracts.graph.parsed import (
     HasTestMetadata,
     ParsedNode,
     ParsedAnalysisNode,
-    ParsedDataTestNode,
+    ParsedSingularTestNode,
     ParsedHookNode,
     ParsedModelNode,
     ParsedExposure,
     ParsedResource,
     ParsedRPCNode,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
     ParsedSourceDefinition,
@@ -107,7 +107,7 @@ class CompiledSnapshotNode(CompiledNode):
 
 
 @dataclass
-class CompiledDataTestNode(CompiledNode):
+class CompiledSingularTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
@@ -115,8 +115,8 @@ class CompiledDataTestNode(CompiledNode):
 
 
 @dataclass
-class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
-    # keep this in sync with ParsedSchemaTestNode!
+class CompiledGenericTestNode(CompiledNode, HasTestMetadata):
+    # keep this in sync with ParsedGenericTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
@@ -134,7 +134,7 @@ class CompiledSchemaTestNode(CompiledNode, HasTestMetadata):
         )
 
 
-CompiledTestNode = Union[CompiledDataTestNode, CompiledSchemaTestNode]
+CompiledTestNode = Union[CompiledSingularTestNode, CompiledGenericTestNode]
 
 
 PARSED_TYPES: Dict[Type[CompiledNode], Type[ParsedResource]] = {
@@ -144,8 +144,8 @@ PARSED_TYPES: Dict[Type[CompiledNode], Type[ParsedResource]] = {
     CompiledRPCNode: ParsedRPCNode,
     CompiledSeedNode: ParsedSeedNode,
     CompiledSnapshotNode: ParsedSnapshotNode,
-    CompiledDataTestNode: ParsedDataTestNode,
-    CompiledSchemaTestNode: ParsedSchemaTestNode,
+    CompiledSingularTestNode: ParsedSingularTestNode,
+    CompiledGenericTestNode: ParsedGenericTestNode,
 }
 
 
@@ -156,8 +156,8 @@ COMPILED_TYPES: Dict[Type[ParsedResource], Type[CompiledNode]] = {
     ParsedRPCNode: CompiledRPCNode,
     ParsedSeedNode: CompiledSeedNode,
     ParsedSnapshotNode: CompiledSnapshotNode,
-    ParsedDataTestNode: CompiledDataTestNode,
-    ParsedSchemaTestNode: CompiledSchemaTestNode,
+    ParsedSingularTestNode: CompiledSingularTestNode,
+    ParsedGenericTestNode: CompiledGenericTestNode,
 }
 
 
@@ -185,22 +185,22 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
 
 NonSourceCompiledNode = Union[
     CompiledAnalysisNode,
-    CompiledDataTestNode,
+    CompiledSingularTestNode,
     CompiledModelNode,
     CompiledHookNode,
     CompiledRPCNode,
-    CompiledSchemaTestNode,
+    CompiledGenericTestNode,
     CompiledSeedNode,
     CompiledSnapshotNode,
 ]
 
 NonSourceParsedNode = Union[
     ParsedAnalysisNode,
-    ParsedDataTestNode,
+    ParsedSingularTestNode,
     ParsedHookNode,
     ParsedModelNode,
     ParsedRPCNode,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
 ]

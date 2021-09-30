@@ -30,7 +30,7 @@ parse_file_type_to_parser = {
     ParseFileType.Model: 'ModelParser',
     ParseFileType.Snapshot: 'SnapshotParser',
     ParseFileType.Analysis: 'AnalysisParser',
-    ParseFileType.Test: 'DataTestParser',
+    ParseFileType.Test: 'SingularTestParser',
     ParseFileType.Seed: 'SeedParser',
     ParseFileType.Documentation: 'DocumentationParser',
     ParseFileType.Schema: 'SchemaParser',

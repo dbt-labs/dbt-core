@@ -136,7 +136,7 @@ def read_files(project, files, parser_files, saved_files):
         project, files, project.analysis_paths, '.sql', ParseFileType.Analysis, saved_files
     )
 
-    project_files['DataTestParser'] = read_files_for_parser(
+    project_files['SingularTestParser'] = read_files_for_parser(
         project, files, project.test_paths, '.sql', ParseFileType.Test, saved_files
     )
 

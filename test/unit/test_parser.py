@@ -10,14 +10,14 @@ import dbt.parser
 from dbt import tracking
 from dbt.exceptions import CompilationException
 from dbt.parser import (
-    ModelParser, MacroParser, DataTestParser, SchemaParser,
+    ModelParser, MacroParser, SingularTestParser, SchemaParser,
     SnapshotParser, AnalysisParser
 )
 from dbt.parser.schemas import (
     TestablePatchParser, SourceParser, AnalysisPatchParser, MacroPatchParser
 )
 from dbt.parser.search import FileBlock
-from dbt.parser.schema_test_builders import YamlBlock
+from dbt.parser.generic_test_builders import YamlBlock
 from dbt.parser.sources import SourcePatcher
 
 from dbt.node_types import NodeType
@@ -28,7 +28,7 @@ from dbt.contracts.graph.model_config import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, DependsOn, ColumnInfo,
-    ParsedDataTestNode, ParsedSnapshotNode, ParsedAnalysisNode,
+    ParsedSingularTestNode, ParsedSnapshotNode, ParsedAnalysisNode,
     UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
@@ -327,15 +327,15 @@ class SchemaParserSourceTest(SchemaParserTest):
         tests.sort(key=lambda n: n.unique_id)
 
         self.assertEqual(tests[0].config.severity, 'ERROR')
-        self.assertEqual(tests[0].tags, ['schema'])
+        self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].sources, [['my_source', 'my_table']])
         self.assertEqual(tests[0].column_name, 'color')
-        self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
+        self.assertEqual(tests[0].fqn, ['snowplow', tests[0].name])
         self.assertEqual(tests[1].config.severity, 'WARN')
-        self.assertEqual(tests[1].tags, ['schema'])
+        self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].sources, [['my_source', 'my_table']])
         self.assertEqual(tests[1].column_name, 'color')
-        self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
+        self.assertEqual(tests[1].fqn, ['snowplow', tests[1].name])
 
         file_id = 'snowplow://' + normalize('models/test_one.yml')
         self.assertIn(file_id, self.parser.manifest.files)
@@ -409,12 +409,12 @@ class SchemaParserModelsTest(SchemaParserTest):
                 continue
             tests.append(node)
         self.assertEqual(tests[0].config.severity, 'ERROR')
-        self.assertEqual(tests[0].tags, ['schema'])
+        self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].refs, [['my_model']])
         self.assertEqual(tests[0].column_name, 'color')
         self.assertEqual(tests[0].package_name, 'snowplow')
         self.assertTrue(tests[0].name.startswith('accepted_values_'))
-        self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
+        self.assertEqual(tests[0].fqn, ['snowplow', tests[0].name])
         self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name, '9d4814efde'])
         self.assertEqual(tests[0].test_metadata.name, 'accepted_values')
         self.assertIsNone(tests[0].test_metadata.namespace)
@@ -430,11 +430,11 @@ class SchemaParserModelsTest(SchemaParserTest):
         # foreign packages are a bit weird, they include the macro package
         # name in the test name
         self.assertEqual(tests[1].config.severity, 'ERROR')
-        self.assertEqual(tests[1].tags, ['schema'])
+        self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].refs, [['my_model']])
         self.assertEqual(tests[1].column_name, 'color')
         self.assertEqual(tests[1].column_name, 'color')
-        self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
+        self.assertEqual(tests[1].fqn, ['snowplow', tests[1].name])
         self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
         self.assertEqual(tests[1].package_name, 'snowplow')
         self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name, '13958f62f7'])
@@ -450,12 +450,12 @@ class SchemaParserModelsTest(SchemaParserTest):
         )
 
         self.assertEqual(tests[2].config.severity, 'WARN')
-        self.assertEqual(tests[2].tags, ['schema'])
+        self.assertEqual(tests[2].tags, [])
         self.assertEqual(tests[2].refs, [['my_model']])
         self.assertEqual(tests[2].column_name, 'color')
         self.assertEqual(tests[2].package_name, 'snowplow')
         self.assertTrue(tests[2].name.startswith('not_null_'))
-        self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
+        self.assertEqual(tests[2].fqn, ['snowplow', tests[2].name])
         self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name, '2f61818750'])
         self.assertEqual(tests[2].test_metadata.name, 'not_null')
         self.assertIsNone(tests[2].test_metadata.namespace)
@@ -805,10 +805,10 @@ class MacroParserTest(BaseParserTest):
         )
 
 
-class DataTestParserTest(BaseParserTest):
+class SingularTestParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
-        self.parser = DataTestParser(
+        self.parser = SingularTestParser(
             project=self.snowplow_project_config,
             manifest=self.manifest,
             root_project=self.root_project_config,
@@ -824,21 +824,21 @@ class DataTestParserTest(BaseParserTest):
         self.parser.parse_file(block)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         node = list(self.parser.manifest.nodes.values())[0]
-        expected = ParsedDataTestNode(
+        expected = ParsedSingularTestNode(
             alias='test_1',
             name='test_1',
             database='test',
             schema='dbt_test__audit',
             resource_type=NodeType.Test,
             unique_id='test.snowplow.test_1',
-            fqn=['snowplow', 'data_test', 'test_1'],
+            fqn=['snowplow', 'test_1'],
             package_name='snowplow',
             original_file_path=normalize('tests/test_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             refs=[['blah']],
             config=TestConfig(severity='ERROR'),
-            tags=['data'],
-            path=normalize('data_test/test_1.sql'),
+            tags=[],
+            path=normalize('test_1.sql'),
             raw_sql=raw_sql,
             checksum=block.file.checksum,
             unrendered_config={},

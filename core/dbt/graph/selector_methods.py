@@ -8,17 +8,17 @@ from dbt.dataclass_schema import StrEnum
 from .graph import UniqueId
 
 from dbt.contracts.graph.compiled import (
-    CompiledDataTestNode,
-    CompiledSchemaTestNode,
+    CompiledSingularTestNode,
+    CompiledGenericTestNode,
     CompileResultNode,
     ManifestNode,
 )
 from dbt.contracts.graph.manifest import Manifest, WritableManifest
 from dbt.contracts.graph.parsed import (
     HasTestMetadata,
-    ParsedDataTestNode,
+    ParsedSingularTestNode,
     ParsedExposure,
-    ParsedSchemaTestNode,
+    ParsedGenericTestNode,
     ParsedSourceDefinition,
 )
 from dbt.contracts.state import PreviousState
@@ -361,14 +361,15 @@ class TestTypeSelectorMethod(SelectorMethod):
         self, included_nodes: Set[UniqueId], selector: str
     ) -> Iterator[UniqueId]:
         search_types: Tuple[Type, ...]
-        if selector == 'schema':
-            search_types = (ParsedSchemaTestNode, CompiledSchemaTestNode)
-        elif selector == 'data':
-            search_types = (ParsedDataTestNode, CompiledDataTestNode)
+        # continue supporting 'schema' + 'data' for backwards compatibility
+        if selector in ('generic', 'schema'):
+            search_types = (ParsedGenericTestNode, CompiledGenericTestNode)
+        elif selector in ('singular', 'data'):
+            search_types = (ParsedSingularTestNode, CompiledSingularTestNode)
         else:
             raise RuntimeException(
-                f'Invalid test type selector {selector}: expected "data" or '
-                '"schema"'
+                f'Invalid test type selector {selector}: expected "generic" or '
+                '"singular"'
             )
 
         for node, real_node in self.parsed_nodes(included_nodes):
