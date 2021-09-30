@@ -2,6 +2,7 @@
 
 ### Features
 - Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
+- Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt/issues/3377), [#3939](https://github.com/dbt-labs/dbt/pull/3939))
 
 ### Fixes
 
@@ -17,11 +18,14 @@
 Contributors:
 
 - [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
+- [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt/issues/3952))
 
 ## dbt 0.21.0 (Release TBD)
 
 ### Fixes
 - Fix batching for large seeds on Snowflake ([#3941](https://github.com/dbt-labs/dbt/issues/3941), [#3942](https://github.com/dbt-labs/dbt/pull/3942))
+- Avoid infinite recursion in `state:modified.macros` check ([#3904](https://github.com/dbt-labs/dbt/issues/3904), [#3957](https://github.com/dbt-labs/dbt/pull/3957))
+- Cast log messages to strings before scrubbing of prefixed env vars ([#3971](https://github.com/dbt-labs/dbt/issues/3971), [#3972](https://github.com/dbt-labs/dbt/pull/3972))
 
 ### Under the hood
 - Bump artifact schema versions for 0.21.0 ([#3945](https://github.com/dbt-labs/dbt/pull/3945))
