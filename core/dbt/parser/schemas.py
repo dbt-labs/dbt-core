@@ -63,8 +63,6 @@ from dbt.utils import (
     get_pseudo_test_path, coerce_dict_str
 )
 
-from dbt import deprecations
-
 
 UnparsedSchemaYaml = Union[
     UnparsedSourceDefinition,
@@ -817,15 +815,22 @@ class NodePatchParser(
         if patch.yaml_key in ['models', 'seeds', 'snapshots']:
             unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
             if unique_id:
+                resource_type = unique_id.split('.')[0]
                 if (unique_id.split('.')[0] + 's') != patch.yaml_key:
-                    deprecations.warn('models-key-mismatch',
-                                     patch=patch,
-                                     resource_type=unique_id.split('.')[0],
-                                     expected_key=patch.yaml_key)
+                    warn_or_error(
+                        f"WARNING: {patch.name} is a {resource_type} node, "
+                        f"but it is specified in the {patch.yaml_key} section "
+                        f"of {patch.original_file_path}. "
+                        f"To fix this warning, place the `{patch.name}` specification "
+                        f"under the {resource_type} key instead.")
 
-            elif self.manifest.find_disabled_by_name(patch.name, None):
+                    return
+
+            else:
+                if not self.manifest.find_disabled_by_name(patch.name, None):
                     # need to raise an exception when a refable node does not
                     # have a unique id and is not disabled
+                    # todo: do we still want to do this?
                     raise raise_no_unique_id(patch)
         elif patch.yaml_key == 'analyses':
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
