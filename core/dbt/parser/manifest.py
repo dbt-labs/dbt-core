@@ -318,7 +318,7 @@ class ManifestLoader:
 
             # Load the rest of the files except for schema yaml files
             parser_types: List[Type[Parser]] = [
-                ModelParser, SnapshotParser, AnalysisParser, SingularTestParser,
+                ModelParser,
                 SeedParser, DocumentationParser, HookParser]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:

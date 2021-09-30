@@ -56,7 +56,7 @@ from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.parser.generic_test_builders import (
-    TestBuilder, GenericTestBlock, TargetBlock, YamlBlock,
+    TestBuilder,
     TestBlock, Testable
 )
 from dbt.ui import warning_tag
@@ -439,7 +439,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             self.manifest.add_disabled(block.file, node, test_from)
 
     def render_with_context(
-        self, node: ParsedGenericTestNode, config: ContextConfig,
+        self,
+        node: ParsedGenericTestNode,
+        config: ContextConfig,
     ) -> None:
         """Given the parsed node and a ContextConfig to use during
         parsing, collect all the refs that might be squirreled away in the test

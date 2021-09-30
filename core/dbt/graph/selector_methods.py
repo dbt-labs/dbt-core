@@ -405,14 +405,13 @@ class TestTypeSelectorMethod(SelectorMethod):
     ) -> Iterator[UniqueId]:
         search_types: Tuple[Type, ...]
         # continue supporting 'schema' + 'data' for backwards compatibility
-        if selector in ('generic', 'schema'):
+        if selector in ("generic", "schema"):
             search_types = (ParsedGenericTestNode, CompiledGenericTestNode)
-        elif selector in ('singular', 'data'):
+        elif selector in ("singular", "data"):
             search_types = (ParsedSingularTestNode, CompiledSingularTestNode)
         else:
             raise RuntimeException(
-                f'Invalid test type selector {selector}: expected "generic" or '
-                '"singular"'
+                f'Invalid test type selector {selector}: expected "generic" or ' '"singular"'
             )
 
         for node, real_node in self.parsed_nodes(included_nodes):

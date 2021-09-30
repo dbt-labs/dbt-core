@@ -599,7 +599,7 @@ def extract_toplevel_blocks(
     )
 
 
-GENERIC_TEST_KWARGS_NAME = '_dbt_generic_test_kwargs'
+GENERIC_TEST_KWARGS_NAME = "_dbt_generic_test_kwargs"
 
 
 def add_rendered_test_kwargs(

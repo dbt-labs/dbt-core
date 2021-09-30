@@ -165,7 +165,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
         test: Dict[str, Any],
         column_name: Optional[str],
         tags: List[str],
-    ) -> 'GenericTestBlock':
+    ) -> "GenericTestBlock":
         return cls(
             file=src.file,
             data=src.data,
