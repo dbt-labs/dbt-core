@@ -21,6 +21,7 @@ GREEDY = None  # subcommand
 
 # Global CLI commands
 USE_EXPERIMENTAL_PARSER = None
+STATIC_PARSER = None
 WARN_ERROR = None
 WRITE_JSON = None
 PARTIAL_PARSE = None
@@ -37,6 +38,7 @@ PRINTER_WIDTH = 80
 # Environment variables use the pattern 'DBT_{flag name}', like DBT_PROFILES_DIR
 flag_defaults = {
     "USE_EXPERIMENTAL_PARSER": False,
+    "STATIC_PARSER": True,
     "WARN_ERROR": False,
     "WRITE_JSON": True,
     "PARTIAL_PARSE": False,
@@ -93,8 +95,8 @@ MP_CONTEXT = _get_context()
 
 def set_from_args(args, user_config):
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, \
-        USE_EXPERIMENTAL_PARSER, WRITE_JSON, PARTIAL_PARSE, USE_COLORS, \
-        STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, GREEDY, \
+        USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
+        USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, GREEDY, \
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH
 
     STRICT_MODE = False  # backwards compatibility
@@ -105,6 +107,7 @@ def set_from_args(args, user_config):
 
     # global cli flags with env var and user_config alternatives
     USE_EXPERIMENTAL_PARSER = get_flag_value('USE_EXPERIMENTAL_PARSER', args, user_config)
+    STATIC_PARSER = get_flag_value('STATIC_PARSER', args, user_config)
     WARN_ERROR = get_flag_value('WARN_ERROR', args, user_config)
     WRITE_JSON = get_flag_value('WRITE_JSON', args, user_config)
     PARTIAL_PARSE = get_flag_value('PARTIAL_PARSE', args, user_config)
@@ -147,6 +150,7 @@ def get_flag_value(flag, args, user_config):
 def get_flag_dict():
     return {
         "use_experimental_parser": USE_EXPERIMENTAL_PARSER,
+        "static_parser": STATIC_PARSER,
         "warn_error": WARN_ERROR,
         "write_json": WRITE_JSON,
         "partial_parse": PARTIAL_PARSE,

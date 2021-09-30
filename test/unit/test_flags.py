@@ -32,6 +32,22 @@ class TestFlags(TestCase):
         flags.USE_EXPERIMENTAL_PARSER = False
         self.user_config.use_experimental_parser = None
 
+        # static_parser
+        self.user_config.static_parser = False
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.STATIC_PARSER, False)
+        os.environ['DBT_STATIC_PARSER'] = 'true'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.STATIC_PARSER, True)
+        setattr(self.args, 'static_parser', False)
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.STATIC_PARSER, False)
+        # cleanup
+        os.environ.pop('DBT_STATIC_PARSER')
+        delattr(self.args, 'static_parser')
+        flags.STATIC_PARSER = True
+        self.user_config.static_parser = None
+
         # warn_error
         self.user_config.warn_error = False
         flags.set_from_args(self.args, self.user_config)
