@@ -164,3 +164,28 @@ class TestDispatchMacroOverrideBuiltin(TestMacroOverrideBuiltin):
     def test_postgres_overrides(self):
         self.run_dbt(["deps"])
         super().test_postgres_overrides()
+
+
+class TestAdapterMacroDeprecated(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "test_macros_016"
+
+    @property
+    def models(self):
+        return "deprecated-adapter-macro-models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["deprecated-adapter-macro"]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_invalid_macro(self):
+        with pytest.raises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['run'])
+
+        assert 'The "adapter_macro" macro has been deprecated' in str(exc.value)

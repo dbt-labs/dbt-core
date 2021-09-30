@@ -1151,65 +1151,17 @@ class ProviderContext(ManifestContext):
 
     @contextmember
     def adapter_macro(self, name: str, *args, **kwargs):
-        """Find the most appropriate macro for the name, considering the
-        adapter type currently in use, and call that with the given arguments.
-
-        If the name has a `.` in it, the first section before the `.` is
-        interpreted as a package name, and the remainder as a macro name.
-
-        If no adapter is found, raise a compiler exception. If an invalid
-        package name is specified, raise a compiler exception.
-
-
-        Some examples:
-
-            {# dbt will call this macro by name, providing any arguments #}
-            {% macro create_table_as(temporary, relation, sql) -%}
-
-              {# dbt will dispatch the macro call to the relevant macro #}
-              {{ adapter_macro('create_table_as', temporary, relation, sql) }}
-            {%- endmacro %}
-
-
-            {#
-                If no macro matches the specified adapter, "default" will be
-                used
-            #}
-            {% macro default__create_table_as(temporary, relation, sql) -%}
-               ...
-            {%- endmacro %}
-
-
-
-            {# Example which defines special logic for Redshift #}
-            {% macro redshift__create_table_as(temporary, relation, sql) -%}
-               ...
-            {%- endmacro %}
-
-
-
-            {# Example which defines special logic for BigQuery #}
-            {% macro bigquery__create_table_as(temporary, relation, sql) -%}
-               ...
-            {%- endmacro %}
+        """This was deprecated in v0.18 in favor of adapter.dispatch
         """
-        deprecations.warn('adapter-macro', macro_name=name)
-        original_name = name
-        package_name = None
-        if '.' in name:
-            package_name, name = name.split('.', 1)
-
-        try:
-            macro = self.db_wrapper.dispatch(
-                macro_name=name, macro_namespace=package_name
-            )
-        except CompilationException as exc:
-            raise CompilationException(
-                f'In adapter_macro: {exc.msg}\n'
-                f"    Original name: '{original_name}'",
-                node=self.model
-            ) from exc
-        return macro(*args, **kwargs)
+        msg = (
+            'The "adapter_macro" macro has been deprecated. Instead, use '
+            'the `adapter.dispatch` method to find a macro and call the '
+            'result.  For more information, see: '
+            'https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch)'
+            ' adapter_macro was called for: {macro_name}'
+            .format(macro_name=name)
+        )
+        raise CompilationException(msg)
 
 
 class MacroContext(ProviderContext):
