@@ -5,7 +5,7 @@ from typing import NoReturn, Optional, Mapping, Any
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt import flags
-from dbt.ui import line_wrap_message
+from dbt.ui import line_wrap_message, warning_tag
 
 import dbt.dataclass_schema
 
@@ -849,15 +849,6 @@ def raise_patch_targets_not_found(patches):
     )
 
 
-# todo: fix error message to be useful & add test
-def raise_no_unique_id(patch):
-    raise_compiler_error(
-        'No unique_id found for {} {}.'.format(
-            patch.yaml_key, patch.name
-        )
-    )
-
-
 def _fix_dupe_msg(path_1: str, path_2: str, name: str, type_name: str) -> str:
     if path_1 == path_2:
         return (
@@ -939,14 +930,11 @@ def warn_invalid_patch(patch, resource_type):
         '{patch.name}' is a {resource_type} node, but it is
         specified in the {patch.yaml_key} section of
         {patch.original_file_path}.
-
-
-
         To fix this error, place the `{patch.name}`
         specification under the {resource_type.pluralize()} key instead.
         '''
     )
-    warn_or_error(msg)
+    warn_or_error(msg, log_fmt=warning_tag('{}'))
 
 
 def raise_not_implemented(msg):
@@ -1014,7 +1002,6 @@ CONTEXT_EXPORTS = {
         raise_dep_not_found,
         raise_dependency_error,
         raise_duplicate_patch_name,
-        raise_no_unique_id,
         raise_duplicate_resource_name,
         raise_invalid_schema_yml_version,
         raise_not_implemented,
