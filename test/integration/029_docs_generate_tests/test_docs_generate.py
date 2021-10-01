@@ -1665,7 +1665,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.macro_info': ANY,
                 'test.macro_arg_info': ANY,
             },
-            'disabled': [],
+            'disabled': {},
         }
 
     def expected_postgres_references_manifest(self, model_database=None):
@@ -2162,7 +2162,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'snapshot.test.snapshot_seed': ['seed.test.seed'],
                 'source.test.my_source.my_table': [],
             },
-            'disabled': [],
+            'disabled': {},
             'macros': {
                 'macro.test.test_nothing': {
                     'name': 'test_nothing',
@@ -2652,7 +2652,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.macro_info': ANY,
                 'test.macro_arg_info': ANY,
             },
-            'disabled': [],
+            'disabled': {},
         }
 
     def _checksum_file(self, path):
@@ -2921,7 +2921,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.macro_info': ANY,
                 'test.macro_arg_info': ANY,
             },
-            'disabled': [],
+            'disabled': {},
         }
 
     def verify_metadata(self, metadata, dbt_schema_version):

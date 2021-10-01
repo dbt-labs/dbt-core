@@ -256,7 +256,7 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(
-            nodes={}, sources={}, macros={}, docs={}, disabled=[], files={},
+            nodes={}, sources={}, macros={}, docs={}, disabled={}, files={},
             exposures={}, selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
@@ -278,7 +278,7 @@ class ManifestTest(unittest.TestCase):
                     # invocation_id is None, so it will not be present
                 },
                 'docs': {},
-                'disabled': [],
+                'disabled': {},
             }
         )
 
@@ -286,14 +286,14 @@ class ManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(
-            nodes=nodes, sources={}, macros={}, docs={}, disabled=[], files={},
+            nodes=nodes, sources={}, macros={}, docs={}, disabled={}, files={},
             exposures={}, selectors={},
             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['docs'], {})
-        self.assertEqual(serialized['disabled'], [])
+        self.assertEqual(serialized['disabled'], {})
         parent_map = serialized['parent_map']
         child_map = serialized['child_map']
         # make sure there aren't any extra/missing keys.
@@ -355,7 +355,7 @@ class ManifestTest(unittest.TestCase):
         nodes = copy.copy(self.nested_nodes)
         sources = copy.copy(self.sources)
         manifest = Manifest(nodes=nodes, sources=sources, macros={}, docs={},
-                            disabled=[], files={}, exposures=exposures, selectors={})
+                            disabled={}, files={}, exposures=exposures, selectors={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
         flat_exposures = flat_graph['exposures']
@@ -402,7 +402,7 @@ class ManifestTest(unittest.TestCase):
             generated_at=datetime.utcnow(),
         )
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            disabled=[], selectors={},
+                            disabled={}, selectors={},
                             metadata=metadata, files={}, exposures={})
 
         self.assertEqual(
@@ -427,13 +427,13 @@ class ManifestTest(unittest.TestCase):
                     'invocation_id': '01234567-0123-0123-0123-0123456789ab',
                     'env': {ENV_KEY_NAME: 'value'},
                 },
-                'disabled': [],
+                'disabled': {},
             }
         )
 
     def test_get_resource_fqns_empty(self):
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={},
-                            disabled=[], files={}, exposures={}, selectors={})
+                            disabled={}, files={}, exposures={}, selectors={})
         self.assertEqual(manifest.get_resource_fqns(), {})
 
     def test_get_resource_fqns(self):
@@ -459,7 +459,7 @@ class ManifestTest(unittest.TestCase):
             checksum=FileHash.empty(),
         )
         manifest = Manifest(nodes=nodes, sources=self.sources, macros={}, docs={},
-                            disabled=[], files={}, exposures=self.exposures, selectors={})
+                            disabled={}, files={}, exposures=self.exposures, selectors={})
         expect = {
             'exposures': frozenset([
                 ('root', 'my_exposure')
@@ -646,7 +646,7 @@ class MixedManifestTest(unittest.TestCase):
     def test__no_nodes(self):
         metadata = ManifestMetadata(generated_at=datetime.utcnow(), invocation_id='01234567-0123-0123-0123-0123456789ab')
         manifest = Manifest(nodes={}, sources={}, macros={}, docs={}, selectors={},
-                            disabled=[], metadata=metadata, files={}, exposures={})
+                            disabled={}, metadata=metadata, files={}, exposures={})
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -665,7 +665,7 @@ class MixedManifestTest(unittest.TestCase):
                     'env': {ENV_KEY_NAME: 'value'},
                 },
                 'docs': {},
-                'disabled': [],
+                'disabled': {},
             }
         )
 
@@ -673,12 +673,12 @@ class MixedManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            disabled=[], selectors={},
+                            disabled={}, selectors={},
                             metadata=ManifestMetadata(generated_at=datetime.utcnow()),
                             files={}, exposures={})
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized['metadata']['generated_at'], '2018-02-14T09:15:13Z')
-        self.assertEqual(serialized['disabled'], [])
+        self.assertEqual(serialized['disabled'], {})
         parent_map = serialized['parent_map']
         child_map = serialized['child_map']
         # make sure there aren't any extra/missing keys.
@@ -738,7 +738,7 @@ class MixedManifestTest(unittest.TestCase):
     def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, sources={}, macros={}, docs={},
-                            disabled=[], selectors={},
+                            disabled={}, selectors={},
                             files={}, exposures={})
         manifest.build_flat_graph()
         flat_graph = manifest.flat_graph
@@ -785,7 +785,7 @@ class TestManifestSearch(unittest.TestCase):
             docs={
                 d.unique_id: d for d in self.docs
             },
-            disabled=[],
+            disabled={},
             files={},
             exposures={},
             selectors={},
@@ -806,7 +806,7 @@ def make_manifest(nodes=[], sources=[], macros=[], docs=[]):
         docs={
             d.unique_id: d for d in docs
         },
-        disabled=[],
+        disabled={},
         files={},
         exposures={},
         selectors={},
