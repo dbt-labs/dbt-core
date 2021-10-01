@@ -338,21 +338,12 @@ class ManifestLoader:
                 time.perf_counter() - start_patch
             )
 
-            # ParseResults had a 'disabled' attribute which was a dictionary
-            # which is now named '_disabled'. This used to copy from
-            # ParseResults to the Manifest.
-            # TODO: normalize to only one disabled
-            disabled = []
-            for value in self.manifest._disabled.values():
-                disabled.extend(value)
-            self.manifest.disabled = disabled
-
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
 
             # update the refs, sources, and docs
             # These check the created_at time on the nodes to
-            # determine whether they need processinga.
+            # determine whether they need processing.
             start_process = time.perf_counter()
             self.process_sources(self.root_project.project_name)
             self.process_refs(self.root_project.project_name)
@@ -902,7 +893,7 @@ def _warn_for_unused_resource_config_paths(
     manifest: Manifest, config: RuntimeConfig
 ) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
-    disabled_fqns: PathSet = frozenset(tuple(n.fqn) for n in manifest.disabled)
+    disabled_fqns: PathSet = frozenset(tuple(n.fqn) for n in manifest.disabled.values())
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 

@@ -558,3 +558,21 @@ class TestInvalidSchema(DBTIntegrationTest):
             results = self.run_dbt()
         self.assertRegex(str(exc.exception), r"'models' is not a list")
 
+
+class TestWrongSpecificationBlock(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "wrong_specification_block"
+
+    @use_profile('postgres')
+    def test_postgres_wrong_specification_block(self):
+        with self.assertWarns(Warning):
+            results = self.run_dbt(['ls', '-s', 'some_seed', '--output', 'json', '--output-keys', 'name, description'])
+
+        assert len(results) == 1
+        assert results[0] == '{"name": "some_seed", "description": ""}'
+

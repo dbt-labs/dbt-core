@@ -45,12 +45,11 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.exceptions import (
-    validator_error_message, JSONValidationException,
+    warn_invalid_patch, validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException,
     CompilationException, raise_duplicate_patch_name,
     raise_duplicate_macro_patch_name, InternalException,
-    raise_duplicate_source_patch_name,
-    warn_or_error,
+    raise_duplicate_source_patch_name, warn_or_error,
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
@@ -814,6 +813,12 @@ class NodePatchParser(
         source_file: SchemaSourceFile = self.yaml.file
         if patch.yaml_key in ['models', 'seeds', 'snapshots']:
             unique_id = self.manifest.ref_lookup.get_unique_id(patch.name, None)
+            if unique_id:
+                resource_type = NodeType(unique_id.split('.')[0])
+                if resource_type.pluralize() != patch.yaml_key:
+                    warn_invalid_patch(patch, resource_type)
+                    return
+
         elif patch.yaml_key == 'analyses':
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None)
         else:
