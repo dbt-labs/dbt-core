@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from dataclasses import field
+from datetime import datetime
 import os
 import traceback
 from typing import (
@@ -596,6 +597,13 @@ class ManifestLoader:
                 # different version of dbt
                 is_partial_parseable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parseable:
+                    # We don't want to have stale generated_at dates
+                    manifest.metadata.generated_at = datetime.utcnow()
+                    # or invocation_ids
+                    if dbt.tracking.active_user:
+                        manifest.metadata.invocation_id = dbt.tracking.active_user.invocation_id
+                    else:
+                        manifest.metadata.invocation_id = None
                     return manifest
             except Exception as exc:
                 logger.debug(
