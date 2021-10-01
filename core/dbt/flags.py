@@ -41,7 +41,7 @@ flag_defaults = {
     "STATIC_PARSER": True,
     "WARN_ERROR": False,
     "WRITE_JSON": True,
-    "PARTIAL_PARSE": False,
+    "PARTIAL_PARSE": True,
     "USE_COLORS": True,
     "PROFILES_DIR": DEFAULT_PROFILES_DIR,
     "DEBUG": False,
