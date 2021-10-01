@@ -162,8 +162,8 @@ class BaseArtifactMetadata(dbtClassMixin):
 
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
-        if dct['generated_at'] and dct['generated_at'].endswith('+00:00'):
-            dct['generated_at'] = dct['generated_at'].replace('+00:00', '') + "Z"
+        if dct["generated_at"] and dct["generated_at"].endswith("+00:00"):
+            dct["generated_at"] = dct["generated_at"].replace("+00:00", "") + "Z"
         return dct
 
 
