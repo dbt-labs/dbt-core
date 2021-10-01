@@ -992,7 +992,7 @@ def warn_invalid_patch(patch, resource_type):
         specification under the {resource_type.pluralize()} key instead.
         """
     )
-    warn_or_error(msg, log_fmt=warning_tag('{}'))
+    warn_or_error(msg, log_fmt=warning_tag("{}"))
 
 
 def raise_not_implemented(msg):
