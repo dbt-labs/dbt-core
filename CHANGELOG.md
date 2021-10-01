@@ -22,6 +22,7 @@
 - Enact deprecation for default quoting to be True.  Override for the `dbt-snowflake` adapter so it stays `False`. ([#3898](https://github.com/dbt-labs/dbt/issues/3898))
 - Enact deprecation for object used as dictionaries when they should be dataclasses. Replace deprecation warning with an exception for the dunder methods of `__iter__` and `__len__` for all superclasses of FakeAPIObject. ([#3897](https://github.com/dbt-labs/dbt/issues/3897))
 - Enact deprecation for `adapter-macro` and replace deprecation warning with an exception. ([#3901](https://github.com/dbt-labs/dbt/issues/3901))
+- Add warning when trying to put a node under the wrong key.  ie. A seed under models in a `schema.yml` file. ([#3899](https://github.com/dbt-labs/dbt/issues/3899))
 
 Contributors:
 

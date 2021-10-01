@@ -5,7 +5,7 @@ from mashumaro import DataClassMessagePackMixin
 from multiprocessing.synchronize import Lock
 from typing import (
     Dict, List, Optional, Union, Mapping, MutableMapping, Any, Set, Tuple,
-    TypeVar, Callable, Iterable, Generic, cast, AbstractSet, ClassVar
+    TypeVar, Callable, Generic, cast, AbstractSet, ClassVar
 )
 from typing_extensions import Protocol
 from uuid import UUID
@@ -402,9 +402,10 @@ class NameSearcher(Generic[N]):
 
         return self.package is None or self.package == model.package_name
 
-    def search(self, haystack: Iterable[N]) -> Optional[N]:
+    def search(self, haystack) -> Optional[N]:
         """Find an entry in the given iterable by name."""
-        for model in haystack:
+        # breakpoint()
+        for model in haystack.values():
             if self._matches(model):
                 return model
         return None
@@ -559,7 +560,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     docs: MutableMapping[str, ParsedDocumentation] = field(default_factory=dict)
     exposures: MutableMapping[str, ParsedExposure] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
-    disabled: List[CompileResultNode] = field(default_factory=list)
     files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
@@ -567,6 +567,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     # Moved from the ParseResult object
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     # following is from ParseResult
+    disabled: MutableMapping[str, CompileResultNode] = field(default_factory=dict)
+
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
@@ -1006,7 +1008,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.exposures.append(exposure.unique_id)
 
     def add_disabled_nofile(self, node: CompileResultNode):
-        self.disabled.append(node)
+        # a disabled node should only show up once
+        _check_duplicates(node, self.disabled)
+        self.disabled[node.unique_id] = node
 
     def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode, test_from=None):
         self.add_disabled_nofile(node)
@@ -1096,7 +1100,7 @@ class WritableManifest(ArtifactMixin):
             'The selectors defined in selectors.yml'
         ))
     )
-    disabled: Optional[List[CompileResultNode]] = field(metadata=dict(
+    disabled: Optional[Mapping[UniqueID, CompileResultNode]] = field(metadata=dict(
         description='A list of the disabled nodes in the target'
     ))
     parent_map: Optional[NodeEdgeMap] = field(metadata=dict(
