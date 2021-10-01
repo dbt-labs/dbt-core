@@ -404,7 +404,6 @@ class NameSearcher(Generic[N]):
 
     def search(self, haystack) -> Optional[N]:
         """Find an entry in the given iterable by name."""
-        # breakpoint()
         for model in haystack.values():
             if self._matches(model):
                 return model
@@ -738,7 +737,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
             metadata=self.metadata,
-            disabled=[_deepcopy(n) for n in self.disabled],
+            disabled={k: _deepcopy(v) for k, v in self.disabled.items()},
             files={k: _deepcopy(v) for k, v in self.files.items()},
             state_check=_deepcopy(self.state_check),
         )
@@ -1042,12 +1041,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.docs,
             self.exposures,
             self.selectors,
-            self.disabled,
             self.files,
             self.metadata,
             self.flat_graph,
             self.state_check,
             self.source_patches,
+            self.disabled,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
