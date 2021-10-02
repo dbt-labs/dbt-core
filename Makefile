@@ -44,30 +44,6 @@ integration-postgres: .env ## Runs postgres integration tests with py38.
 integration-postgres-fail-fast: .env ## Runs postgres integration tests with py38 in "fail fast" mode.
 	$(DOCKER_CMD) tox -e py38-postgres -- -x -nauto
 
-.PHONY: integration-redshift
-integration-redshift: .env ## Runs redshift integration tests with py38.
-	$(DOCKER_CMD) tox -e py38-redshift -- -nauto
-
-.PHONY: integration-redshift-fail-fast
-integration-redshift-fail-fast: .env ## Runs redshift integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-redshift -- -x -nauto
-
-.PHONY: integration-snowflake
-integration-snowflake: .env ## Runs snowflake integration tests with py38.
-	$(DOCKER_CMD) tox -e py38-snowflake -- -nauto
-
-.PHONY: integration-snowflake-fail-fast
-integration-snowflake-fail-fast: .env ## Runs snowflake integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-snowflake -- -x -nauto
-
-.PHONY: integration-bigquery
-integration-bigquery: .env ## Runs bigquery integration tests with py38.
-	$(DOCKER_CMD) tox -e py38-bigquery -- -nauto
-
-.PHONY: integration-bigquery-fail-fast
-integration-bigquery-fail-fast: .env ## Runs bigquery integration tests with py38 in "fail fast" mode.
-	$(DOCKER_CMD) tox -e py38-bigquery -- -x -nauto
-
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
 	docker-compose up -d database

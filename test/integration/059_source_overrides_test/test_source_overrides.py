@@ -59,8 +59,7 @@ class TestSourceOverrides(DBTIntegrationTest):
             'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
         )"""
         quoted_columns = ','.join(
-            self.adapter.quote(c) if self.adapter_type != 'bigquery' else c
-            for c in
+            self.adapter.quote(c) for c in
             ('favorite_color', 'id', 'first_name', 'email', 'ip_address', 'updated_at')
         )
         self.run_sql(

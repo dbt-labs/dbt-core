@@ -1,7 +1,4 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
-
-from dbt.task.test import TestTask
-from dbt.task.list import ListTask
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestStoreTestFailures(DBTIntegrationTest):
@@ -32,10 +29,10 @@ class TestStoreTestFailures(DBTIntegrationTest):
                 },
             },
         }
-    
+
     def column_type_overrides(self):
         return {}
-        
+
     def run_tests_store_one_failure(self):
         test_audit_schema = self.unique_schema() + "_dbt_test__audit"
 
@@ -58,7 +55,7 @@ class TestStoreTestFailures(DBTIntegrationTest):
         # compare test results
         actual = [(r.status, r.failures) for r in results]
         expected = [('pass', 0), ('pass', 0), ('pass', 0), ('pass', 0),
-                    ('fail', 2), ('fail', 2), ('fail', 2), ('fail', 10),]
+                    ('fail', 2), ('fail', 2), ('fail', 2), ('fail', 10)]
         self.assertEqual(sorted(actual), sorted(expected))
 
         # compare test results stored in database
@@ -67,11 +64,13 @@ class TestStoreTestFailures(DBTIntegrationTest):
         self.assertTablesEqual("unique_problematic_model_id", "expected_unique_problematic_model_id", test_audit_schema)
         self.assertTablesEqual("accepted_values_problematic_mo_c533ab4ca65c1a9dbf14f79ded49b628", "expected_accepted_values", test_audit_schema)
 
+
 class PostgresTestStoreTestFailures(TestStoreTestFailures):
+
     @property
     def schema(self):
-        return "067" # otherwise too long + truncated
-    
+        return "067"  # otherwise too long + truncated
+
     def column_type_overrides(self):
         return {
             "expected_unique_problematic_model_id": {
@@ -85,44 +84,8 @@ class PostgresTestStoreTestFailures(TestStoreTestFailures):
                 },
             },
         }
-    
+
     @use_profile('postgres')
     def test__postgres__store_and_assert(self):
         self.run_tests_store_one_failure()
-        self.run_tests_store_failures_and_assert()
-
-class RedshiftTestStoreTestFailures(TestStoreTestFailures):
-    def column_type_overrides(self):
-        return {
-            "expected_not_null_problematic_model_id": {
-                "+column_types": {
-                    "email": "varchar(26)",
-                    "first_name": "varchar(10)",
-                },
-            },
-            "expected_unique_problematic_model_id": {
-                "+column_types": {
-                    "n_records": "bigint",
-                },
-            },
-            "expected_accepted_values": {
-                "+column_types": {
-                    "value_field": "varchar(10)",
-                    "n_records": "bigint",
-                },
-            },
-        }
-    
-    @use_profile('redshift')
-    def test__redshift__store_and_assert(self):
-        self.run_tests_store_failures_and_assert()
-
-class SnowflakeTestStoreTestFailures(TestStoreTestFailures):
-    @use_profile('snowflake')
-    def test__snowflake__store_and_assert(self):
-        self.run_tests_store_failures_and_assert()
-
-class BigQueryTestStoreTestFailures(TestStoreTestFailures):
-    @use_profile('bigquery')
-    def test__bigquery__store_and_assert(self):
         self.run_tests_store_failures_and_assert()

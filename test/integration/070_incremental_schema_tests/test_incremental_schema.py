@@ -1,4 +1,4 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestIncrementalSchemaChange(DBTIntegrationTest):
@@ -18,12 +18,11 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
         }
 
     def list_tests_and_assert(self, include, exclude, expected_tests):
-        list_args = [ 'ls', '--resource-type', 'test']
+        list_args = ['ls', '--resource-type', 'test']
         if include:
             list_args.extend(('--select', include))
         if exclude:
             list_args.extend(('--exclude', exclude))
-        
         listed = self.run_dbt(list_args)
         print(listed)
         assert len(listed) == len(expected_tests)
@@ -38,13 +37,12 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
         run_args = ['run']
         if include:
             run_args.extend(('--models', include))
-        
         results_one = self.run_dbt(run_args)
         results_two = self.run_dbt(run_args)
 
         self.assertEqual(len(results_one), 3)
         self.assertEqual(len(results_two), 3)
-         
+
         test_args = ['test']
         if include:
             test_args.extend(('--models', include))
@@ -70,10 +68,10 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
             'unique_incremental_ignore_id',
             'unique_incremental_ignore_target_id'
         ]
-            
+
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+
     def run_incremental_append_new_columns(self):
         select = 'model_a incremental_append_new_columns incremental_append_new_columns_target'
         compare_source = 'incremental_append_new_columns'
@@ -87,10 +85,9 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
             'unique_incremental_append_new_columns_id',
             'unique_incremental_append_new_columns_target_id'
         ]
-            
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-    
+
     def run_incremental_sync_all_columns(self):
         select = 'model_a incremental_sync_all_columns incremental_sync_all_columns_target'
         compare_source = 'incremental_sync_all_columns'
@@ -104,17 +101,15 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
             'unique_incremental_sync_all_columns_id',
             'unique_incremental_sync_all_columns_target_id'
         ]
-            
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected, compare_source, compare_target)
-        
+
     def run_incremental_fail_on_schema_change(self):
         select = 'model_a incremental_fail'
         results_one = self.run_dbt(['run', '--models', select, '--full-refresh'])
         results_two = self.run_dbt(['run', '--models', select], expect_pass = False)
         self.assertIn('Compilation Error', results_two[1].message)
-    
-    ######################### POSTGRES TESTS #########################
+
     @use_profile('postgres')
     def test__postgres__run_incremental_ignore(self):
         self.run_incremental_ignore()
@@ -126,58 +121,7 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__run_incremental_sync_all_columns(self):
         self.run_incremental_sync_all_columns()
-        
+
     @use_profile('postgres')
     def test__postgres__run_incremental_fail_on_schema_change(self):
-        self.run_incremental_fail_on_schema_change()
-    
-    ######################### REDSHIFT TESTS #########################
-    @use_profile('redshift')
-    def test__redshift__run_incremental_ignore(self):
-        self.run_incremental_ignore()
-
-    @use_profile('redshift')
-    def test__redshift__run_incremental_append_new_columns(self):
-        self.run_incremental_append_new_columns()
-
-    @use_profile('redshift')
-    def test__redshift__run_incremental_sync_all_columns(self):
-        self.run_incremental_sync_all_columns()
-
-    @use_profile('redshift')
-    def test__redshift__run_incremental_fail_on_schema_change(self):
-        self.run_incremental_fail_on_schema_change()
-
-    ######################### SNOWFLAKE TESTS #########################
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_ignore(self):
-        self.run_incremental_ignore()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_append_new_columns(self):
-        self.run_incremental_append_new_columns()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_sync_all_columns(self):
-        self.run_incremental_sync_all_columns()
-
-    @use_profile('snowflake')
-    def test__snowflake__run_incremental_fail_on_schema_change(self):
-        self.run_incremental_fail_on_schema_change()
-        
-    ######################### BIGQUERY TESTS #########################
-    @use_profile('bigquery')
-    def test__bigquery__run_incremental_ignore(self):
-        self.run_incremental_ignore()
-
-    @use_profile('bigquery')
-    def test__bigquery__run_incremental_append_new_columns(self):
-        self.run_incremental_append_new_columns()
-
-    @use_profile('bigquery')
-    def test__bigquery__run_incremental_sync_all_columns(self):
-        self.run_incremental_sync_all_columns()
-        
-    @use_profile('bigquery')
-    def test__bigquery__run_incremental_fail_on_schema_change(self):
         self.run_incremental_fail_on_schema_change()

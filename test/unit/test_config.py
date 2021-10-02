@@ -15,7 +15,6 @@ import dbt.exceptions
 from dbt import flags
 from dbt.adapters.factory import load_plugin
 from dbt.adapters.postgres import PostgresCredentials
-from dbt.adapters.redshift import RedshiftCredentials
 from dbt.context.base import generate_base_context
 from dbt.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
 from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
@@ -36,6 +35,7 @@ def temp_cd(path):
         yield
     finally:
         os.chdir(current_path)
+
 
 @contextmanager
 def raises_nothing():
@@ -126,15 +126,6 @@ class BaseConfigTest(unittest.TestCase):
                         'dbname': 'postgres-db-name',
                         'schema': 'postgres-schema',
                         'threads': 7,
-                    },
-                    'redshift': {
-                        'type': 'redshift',
-                        'host': 'redshift-db-hostname',
-                        'port': 5555,
-                        'user': 'db_user',
-                        'pass': 'db_pass',
-                        'dbname': 'redshift-db-name',
-                        'schema': 'redshift-schema',
                     },
                     'with-vars': {
                         'type': "{{ env_var('env_value_type') }}",
@@ -342,7 +333,6 @@ class TestProfile(BaseConfigTest):
 
         self.assertIn('nope', str(exc.exception))
         self.assertIn('- postgres', str(exc.exception))
-        self.assertIn('- redshift', str(exc.exception))
         self.assertIn('- with-vars', str(exc.exception))
 
     def test_no_outputs(self):
@@ -452,28 +442,6 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.password, 'other_db_pass')
         self.assertEqual(profile.credentials.schema, 'other-postgres-schema')
         self.assertEqual(profile.credentials.database, 'other-postgres-db-name')
-        self.assertEqual(profile, from_raw)
-
-    def test_target_override(self):
-        self.args.target = 'redshift'
-        profile = self.from_args()
-        from_raw = self.from_raw_profile_info(
-                target_override='redshift'
-            )
-
-        self.assertEqual(profile.profile_name, 'default')
-        self.assertEqual(profile.target_name, 'redshift')
-        self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.user_config.send_anonymous_usage_stats)
-        self.assertIsNone(profile.user_config.use_colors)
-        self.assertTrue(isinstance(profile.credentials, RedshiftCredentials))
-        self.assertEqual(profile.credentials.type, 'redshift')
-        self.assertEqual(profile.credentials.host, 'redshift-db-hostname')
-        self.assertEqual(profile.credentials.port, 5555)
-        self.assertEqual(profile.credentials.user, 'db_user')
-        self.assertEqual(profile.credentials.password, 'db_pass')
-        self.assertEqual(profile.credentials.schema, 'redshift-schema')
-        self.assertEqual(profile.credentials.database, 'redshift-db-name')
         self.assertEqual(profile, from_raw)
 
     def test_env_vars(self):

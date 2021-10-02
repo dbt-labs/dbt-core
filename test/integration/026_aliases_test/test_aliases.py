@@ -33,18 +33,6 @@ class TestAliases(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
-    @use_profile('bigquery')
-    def test__alias_model_name_bigquery(self):
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 4)
-        self.run_dbt(['test'])
-
-    @use_profile('snowflake')
-    def test__alias_model_name_snowflake(self):
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 4)
-        self.run_dbt(['test'])
-
 
 class TestAliasErrors(DBTIntegrationTest):
     @property
@@ -129,12 +117,3 @@ class TestSameAliasDifferentDatabases(DBTIntegrationTest):
                 },
             }
         }
-
-    @use_profile('bigquery')
-    def test__bigquery_same_alias_succeeds_in_different_schemas(self):
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 2)
-        res = self.run_dbt(['test'])
-
-        # Make extra sure the tests ran
-        self.assertTrue(len(res) > 0)

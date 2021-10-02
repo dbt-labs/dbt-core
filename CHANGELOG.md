@@ -23,6 +23,7 @@
 - Enact deprecation for object used as dictionaries when they should be dataclasses. Replace deprecation warning with an exception for the dunder methods of `__iter__` and `__len__` for all superclasses of FakeAPIObject. ([#3897](https://github.com/dbt-labs/dbt/issues/3897))
 - Enact deprecation for `adapter-macro` and replace deprecation warning with an exception. ([#3901](https://github.com/dbt-labs/dbt/issues/3901))
 - Add warning when trying to put a node under the wrong key.  ie. A seed under models in a `schema.yml` file. ([#3899](https://github.com/dbt-labs/dbt/issues/3899))
+- Plugins for `redshift`, `snowflake`, and `bigquery` have moved to separate repos: [`dbt-redshift`](https://github.com/dbt-labs/dbt-redshift), [`dbt-snowflake`](https://github.com/dbt-labs/dbt-snowflake), [`dbt-bigquery`](https://github.com/dbt-labs/dbt-bigquery)
 
 Contributors:
 

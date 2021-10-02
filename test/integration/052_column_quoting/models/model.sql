@@ -1,9 +1,5 @@
 {% set col_a = '"col_A"' %}
 {% set col_b = '"col_B"' %}
-{% if adapter.type() == 'bigquery' %}
-    {% set col_a = '`col_A`' %}
-    {% set col_b = '`col_B`' %}
-{% endif %}
 
 {{config(
     materialized = 'incremental',

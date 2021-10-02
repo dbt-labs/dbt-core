@@ -43,17 +43,6 @@ class TestEphemeralMulti(DBTIntegrationTest):
         expected_sql = "".join(expected_sql.split())
         self.assertEqual(sql_file, expected_sql)
 
-    @use_profile('snowflake')
-    def test__snowflake(self):
-        self.run_sql_file("seed.sql")
-
-        results = self.run_dbt()
-        self.assertEqual(len(results), 3)
-
-        self.assertManyTablesEqual(
-            ["SEED", "DEPENDENT", "DOUBLE_DEPENDENT", "SUPER_DEPENDENT"]
-        )
-
 
 class TestEphemeralNested(DBTIntegrationTest):
     @property

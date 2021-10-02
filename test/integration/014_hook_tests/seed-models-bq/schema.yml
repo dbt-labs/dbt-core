@@ -1,7 +1,0 @@
-version: 2
-seeds:
-- name: example_seed
-  columns:
-  - name: a
-    tests:
-    - not_null

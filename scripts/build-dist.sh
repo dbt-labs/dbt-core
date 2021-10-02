@@ -14,7 +14,7 @@ rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
 mkdir -p "$DBT_PATH"/dist
 
-for SUBPATH in core plugins/postgres plugins/redshift plugins/bigquery plugins/snowflake
+for SUBPATH in core plugins/postgres
 do
     rm -rf "$DBT_PATH"/"$SUBPATH"/dist
     rm -rf "$DBT_PATH"/"$SUBPATH"/build

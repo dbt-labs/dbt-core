@@ -1,7 +1,7 @@
 module.exports = ({ context }) => {
   const defaultPythonVersion = "3.8";
   const supportedPythonVersions = ["3.6", "3.7", "3.8", "3.9"];
-  const supportedAdapters = ["snowflake", "postgres", "bigquery", "redshift"];
+  const supportedAdapters = ["postgres"];
 
   // if PR, generate matrix based on files changed and PR labels
   if (context.eventName.includes("pull_request")) {

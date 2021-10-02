@@ -8,6 +8,3 @@
     '{{ s }}'::text
 {% endmacro %}
 
-{% macro bigquery__string_literal(s) %}
-    cast('{{ s }}' as string)
-{% endmacro %}
