@@ -1,6 +1,6 @@
 
 {% macro snapshot_merge_sql(target, source, insert_cols) -%}
-  {{ adapter.dispatch('snapshot_merge_sql')(target, source, insert_cols) }}
+  {{ adapter.dispatch('snapshot_merge_sql', 'dbt')(target, source, insert_cols) }}
 {%- endmacro %}
 
 

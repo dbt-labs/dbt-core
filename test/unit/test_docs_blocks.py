@@ -136,6 +136,7 @@ class DocumentationParserTest(unittest.TestCase):
             relative_path=relative_path,
             project_root=self.root_path,
             searched_path=self.subdir_path,
+            modification_time=0.0,
         )
         source_file = SourceFile(path=match, checksum=FileHash.empty())
         source_file.contents = contents

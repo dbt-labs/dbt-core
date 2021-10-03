@@ -27,6 +27,7 @@ class ServerProcess(dbt.flags.MP_CONTEXT.Process):
             '--port', str(self.port),
             '--profiles-dir', profiles_dir
         ]
+        dbt.flags.PROFILES_DIR = profiles_dir
         if cli_vars:
             handle_and_check_args.extend(['--vars', cli_vars])
         super().__init__(
@@ -112,7 +113,7 @@ class HasRPCServer(DBTIntegrationTest):
         super().setUp()
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
         if self.should_seed:
-            self.run_dbt_with_vars(['seed'], strict=False)
+            self.run_dbt_with_vars(['seed'])
         port = random.randint(49152, 61000)
         self._server = self.ServerProcess(
             cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema()),

@@ -3,7 +3,6 @@ import re
 from typing import List
 
 from packaging import version as packaging_version
-from distutils.version import LooseVersion
 
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
@@ -439,9 +438,14 @@ def filter_installable(
         install_prerelease: bool
 ) -> List[str]:
     installable = []
+    installable_dict = {}
     for version_string in versions:
         version = VersionSpecifier.from_version_string(version_string)
         if install_prerelease or not version.prerelease:
-            installable.append(version_string)
-    installable.sort(key=LooseVersion)
-    return installable
+            installable.append(version)
+            installable_dict[str(version)] = version_string
+    sorted_installable = sorted(installable)
+    sorted_installable_original_versions = [
+        str(installable_dict.get(str(version))) for version in sorted_installable
+    ]
+    return sorted_installable_original_versions

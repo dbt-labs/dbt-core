@@ -7,6 +7,7 @@ from typing import Type, Union, Dict, Any, Optional
 
 from dbt import tracking
 from dbt import ui
+from dbt import flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     NodeStatus, RunResult, collect_timing_info, RunStatus
@@ -21,7 +22,7 @@ from .printer import print_skip_caused_by_error, print_skip_line
 
 from dbt.adapters.factory import register_adapter
 from dbt.config import RuntimeConfig, Project
-from dbt.config.profile import read_profile, PROFILES_DIR
+from dbt.config.profile import read_profile
 import dbt.exceptions
 
 
@@ -34,7 +35,7 @@ class NoneConfig:
 def read_profiles(profiles_dir=None):
     """This is only used for some error handling"""
     if profiles_dir is None:
-        profiles_dir = PROFILES_DIR
+        profiles_dir = flags.PROFILES_DIR
 
     raw_profiles = read_profile(profiles_dir)
 
@@ -70,6 +71,13 @@ class BaseTask(metaclass=ABCMeta):
             log_manager.format_text()
 
     @classmethod
+    def set_log_format(cls):
+        if flags.LOG_FORMAT == 'json':
+            log_manager.format_json()
+        else:
+            log_manager.format_text()
+
+    @classmethod
     def from_args(cls, args):
         try:
             config = cls.ConfigType.from_args(args)
@@ -85,7 +93,7 @@ class BaseTask(metaclass=ABCMeta):
             logger.error("Encountered an error while reading profiles:")
             logger.error("  ERROR {}".format(str(exc)))
 
-            all_profiles = read_profiles(args.profiles_dir).keys()
+            all_profiles = read_profiles(flags.PROFILES_DIR).keys()
 
             if len(all_profiles) > 0:
                 logger.info("Defined profiles:")

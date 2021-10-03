@@ -10,6 +10,7 @@ from jinja2 import Template
 
 import dbt.config
 import dbt.clients.system
+from dbt import flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
@@ -85,7 +86,7 @@ class InitTask(BaseTask):
                 f"{profile_name}:",
                 sample_profile
             )
-            profiles_filepath = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
+            profiles_filepath = os.path.join(flags.PROFILES_DIR, "profiles.yml")
             if os.path.exists(profiles_filepath):
                 with open(profiles_filepath, "a") as f:
                     f.write("\n" + sample_profile)
@@ -161,7 +162,7 @@ class InitTask(BaseTask):
     ) -> str:
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
-        profiles_filepath = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
+        profiles_filepath = os.path.join(flags.PROFILES_DIR, "profiles.yml")
         if os.path.exists(profiles_filepath):
             with open(profiles_filepath, "r+") as f:
                 profiles = yaml.load(f) or {}
@@ -211,7 +212,7 @@ class InitTask(BaseTask):
         """Using either a provided profile name or that specified in dbt_project.yml,
         check if the profile already exists in profiles.yml, and if so ask the
         user whether to proceed and overwrite it."""
-        profiles_file = os.path.join(dbt.config.PROFILES_DIR, "profiles.yml")
+        profiles_file = os.path.join(flags.PROFILES_DIR, "profiles.yml")
         if not os.path.exists(profiles_file):
             return True
         profile_name = (
@@ -262,7 +263,7 @@ class InitTask(BaseTask):
 
     def run(self):
         """Entry point for the init task."""
-        profiles_dir = dbt.config.PROFILES_DIR
+        profiles_dir = flags.PROFILES_DIR
         self.create_profiles_dir(profiles_dir)
 
         try:

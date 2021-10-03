@@ -4,6 +4,7 @@ import os
 
 from dbt.dataclass_schema import ValidationError
 
+from dbt import flags
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.connection import Credentials, HasCredentials
@@ -20,10 +21,8 @@ from dbt.utils import coerce_dict_str
 from .renderer import ProfileRenderer
 
 DEFAULT_THREADS = 1
+
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
-PROFILES_DIR = os.path.expanduser(
-    os.getenv('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
-)
 
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
@@ -43,7 +42,7 @@ Here, [profile name] should be replaced with a profile name
 defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
-""".format(profiles_file=PROFILES_DIR)
+""".format(profiles_file=DEFAULT_PROFILES_DIR)
 
 
 def read_profile(profiles_dir: str) -> Dict[str, Any]:
@@ -73,10 +72,10 @@ def read_user_config(directory: str) -> UserConfig:
     try:
         profile = read_profile(directory)
         if profile:
-            user_cfg = coerce_dict_str(profile.get('config', {}))
-            if user_cfg is not None:
-                UserConfig.validate(user_cfg)
-                return UserConfig.from_dict(user_cfg)
+            user_config = coerce_dict_str(profile.get('config', {}))
+            if user_config is not None:
+                UserConfig.validate(user_config)
+                return UserConfig.from_dict(user_config)
     except (RuntimeException, ValidationError):
         pass
     return UserConfig()
@@ -84,13 +83,31 @@ def read_user_config(directory: str) -> UserConfig:
 
 # The Profile class is included in RuntimeConfig, so any attribute
 # additions must also be set where the RuntimeConfig class is created
-@dataclass
+# `init=False` is a workaround for https://bugs.python.org/issue45081
+@dataclass(init=False)
 class Profile(HasCredentials):
     profile_name: str
     target_name: str
-    config: UserConfig
+    user_config: UserConfig
     threads: int
     credentials: Credentials
+
+    def __init__(
+        self,
+        profile_name: str,
+        target_name: str,
+        user_config: UserConfig,
+        threads: int,
+        credentials: Credentials
+    ):
+        """Explicitly defining `__init__` to work around bug in Python 3.9.7
+        https://bugs.python.org/issue45081
+        """
+        self.profile_name = profile_name
+        self.target_name = target_name
+        self.user_config = user_config
+        self.threads = threads
+        self.credentials = credentials
 
     def to_profile_info(
         self, serialize_credentials: bool = False
@@ -106,12 +123,12 @@ class Profile(HasCredentials):
         result = {
             'profile_name': self.profile_name,
             'target_name': self.target_name,
-            'config': self.config,
+            'user_config': self.user_config,
             'threads': self.threads,
             'credentials': self.credentials,
         }
         if serialize_credentials:
-            result['config'] = self.config.to_dict(omit_none=True)
+            result['user_config'] = self.user_config.to_dict(omit_none=True)
             result['credentials'] = self.credentials.to_dict(omit_none=True)
         return result
 
@@ -125,7 +142,7 @@ class Profile(HasCredentials):
             'name': self.target_name,
             'target_name': self.target_name,
             'profile_name': self.profile_name,
-            'config': self.config.to_dict(omit_none=True),
+            'config': self.user_config.to_dict(omit_none=True),
         })
         return target
 
@@ -220,7 +237,7 @@ class Profile(HasCredentials):
         threads: int,
         profile_name: str,
         target_name: str,
-        user_cfg: Optional[Dict[str, Any]] = None
+        user_config: Optional[Dict[str, Any]] = None
     ) -> 'Profile':
         """Create a profile from an existing set of Credentials and the
         remaining information.
@@ -229,20 +246,20 @@ class Profile(HasCredentials):
         :param threads: The number of threads to use for connections.
         :param profile_name: The profile name used for this profile.
         :param target_name: The target name used for this profile.
-        :param user_cfg: The user-level config block from the
+        :param user_config: The user-level config block from the
             raw profiles, if specified.
         :raises DbtProfileError: If the profile is invalid.
         :returns: The new Profile object.
         """
-        if user_cfg is None:
-            user_cfg = {}
-        UserConfig.validate(user_cfg)
-        config = UserConfig.from_dict(user_cfg)
+        if user_config is None:
+            user_config = {}
+        UserConfig.validate(user_config)
+        user_config_obj: UserConfig = UserConfig.from_dict(user_config)
 
         profile = cls(
             profile_name=profile_name,
             target_name=target_name,
-            config=config,
+            user_config=user_config_obj,
             threads=threads,
             credentials=credentials
         )
@@ -295,7 +312,7 @@ class Profile(HasCredentials):
         raw_profile: Dict[str, Any],
         profile_name: str,
         renderer: ProfileRenderer,
-        user_cfg: Optional[Dict[str, Any]] = None,
+        user_config: Optional[Dict[str, Any]] = None,
         target_override: Optional[str] = None,
         threads_override: Optional[int] = None,
     ) -> 'Profile':
@@ -307,7 +324,7 @@ class Profile(HasCredentials):
             disk as yaml and its values rendered with jinja.
         :param profile_name: The profile name used.
         :param renderer: The config renderer.
-        :param user_cfg: The global config for the user, if it
+        :param user_config: The global config for the user, if it
             was present.
         :param target_override: The target to use, if provided on
             the command line.
@@ -317,9 +334,9 @@ class Profile(HasCredentials):
             target could not be found
         :returns: The new Profile object.
         """
-        # user_cfg is not rendered.
-        if user_cfg is None:
-            user_cfg = raw_profile.get('config')
+        # user_config is not rendered.
+        if user_config is None:
+            user_config = raw_profile.get('config')
         # TODO: should it be, and the values coerced to bool?
         target_name, profile_data = cls.render_profile(
             raw_profile, profile_name, target_override, renderer
@@ -340,7 +357,7 @@ class Profile(HasCredentials):
             profile_name=profile_name,
             target_name=target_name,
             threads=threads,
-            user_cfg=user_cfg
+            user_config=user_config
         )
 
     @classmethod
@@ -383,13 +400,13 @@ class Profile(HasCredentials):
                     error_string=msg
                 )
             )
-        user_cfg = raw_profiles.get('config')
+        user_config = raw_profiles.get('config')
 
         return cls.from_raw_profile_info(
             raw_profile=raw_profile,
             profile_name=profile_name,
             renderer=renderer,
-            user_cfg=user_cfg,
+            user_config=user_config,
             target_override=target_override,
             threads_override=threads_override,
         )
@@ -417,7 +434,7 @@ class Profile(HasCredentials):
         """
         threads_override = getattr(args, 'threads', None)
         target_override = getattr(args, 'target', None)
-        raw_profiles = read_profile(args.profiles_dir)
+        raw_profiles = read_profile(flags.PROFILES_DIR)
         profile_name = cls.pick_profile_name(getattr(args, 'profile', None),
                                              project_profile_name)
         return cls.from_raw_profiles(

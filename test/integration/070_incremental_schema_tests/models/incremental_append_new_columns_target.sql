@@ -2,7 +2,7 @@
     config(materialized='table') 
 }}
 
-{% set string_type = 'string' if target.type == 'bigquery' else 'varchar(10)' %}
+{% set string_type = 'varchar(10)' %}
 
 with source_data as (
 

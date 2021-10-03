@@ -9,7 +9,6 @@ from dbt.task import generate
 
 class GenerateTest(unittest.TestCase):
     def setUp(self):
-        dbt.flags.STRICT_MODE = True
         self.maxDiff = None
         self.manifest = mock.MagicMock()
         self.patcher = mock.patch('dbt.task.generate.get_unique_id_mapping')

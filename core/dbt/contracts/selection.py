@@ -9,6 +9,7 @@ class SelectorDefinition(dbtClassMixin):
     name: str
     definition: Union[str, Dict[str, Any]]
     description: str = ''
+    default: bool = False
 
 
 @dataclass

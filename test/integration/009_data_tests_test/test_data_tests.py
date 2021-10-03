@@ -25,7 +25,6 @@ class TestDataTests(DBTIntegrationTest):
 
     def run_data_validations(self):
         args = FakeArgs()
-        args.data = True
 
         test_task = TestTask(args, self.config)
         return test_task.run()
@@ -56,26 +55,3 @@ class TestDataTests(DBTIntegrationTest):
         defined_tests = os.listdir(self.test_path)
         self.assertNotEqual(len(test_results), 0)
         self.assertEqual(len(test_results), len(defined_tests))
-
-    @use_profile('snowflake')
-    def test_snowflake_data_tests(self):
-        self.use_profile('snowflake')
-
-        self.run_sql_file("seed.sql")
-
-        results = self.run_dbt()
-        self.assertEqual(len(results), 1)
-        test_results = self.run_data_validations()
-
-        for result in test_results:
-            # assert that all deliberately failing tests actually fail
-            if 'fail' in result.node.name:
-                self.assertEqual(result.status, 'fail')
-                self.assertFalse(result.skipped)
-                self.assertTrue(result.failures > 0)
-
-            # assert that actual tests pass
-            else:
-                self.assertEqual(result.status, 'pass')
-                self.assertFalse(result.skipped)
-                self.assertEqual(result.failures, 0)

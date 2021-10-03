@@ -9,8 +9,8 @@ from .run import RunTask
 from .printer import print_start_line, print_test_result_line
 
 from dbt.contracts.graph.compiled import (
-    CompiledDataTestNode,
-    CompiledSchemaTestNode,
+    CompiledSingularTestNode,
+    CompiledGenericTestNode,
     CompiledTestNode,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -23,8 +23,6 @@ from dbt.exceptions import (
 )
 from dbt.graph import (
     ResourceTypeSelector,
-    SelectionSpec,
-    parse_test_selectors,
 )
 from dbt.node_types import NodeType, RunHookType
 from dbt import flags
@@ -54,7 +52,7 @@ class TestRunner(CompileRunner):
 
     def execute_test(
         self,
-        test: Union[CompiledDataTestNode, CompiledSchemaTestNode],
+        test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
         manifest: Manifest
     ) -> TestResultData:
         context = generate_runtime_model(
@@ -172,14 +170,6 @@ class TestTask(RunTask):
     ) -> None:
         # Don't execute on-run-* hooks for tests
         pass
-
-    def get_selection_spec(self) -> SelectionSpec:
-        base_spec = super().get_selection_spec()
-        return parse_test_selectors(
-            data=self.args.data,
-            schema=self.args.schema,
-            base=base_spec
-        )
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:

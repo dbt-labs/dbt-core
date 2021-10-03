@@ -1,4 +1,3 @@
-import pytest
 from test.integration.base import DBTIntegrationTest, use_profile
 
 
@@ -21,31 +20,3 @@ class TestPostgresColumnTypes(TestColumnTypes):
     def test_postgres_column_types(self):
         self.run_and_test()
 
-class TestRedshiftColumnTypes(TestColumnTypes):
-    @property
-    def models(self):
-        return 'rs_models'
-
-    @use_profile('redshift')
-    def test_redshift_column_types(self):
-        self.run_and_test()
-
-
-class TestSnowflakeColumnTypes(TestColumnTypes):
-    @property
-    def models(self):
-        return 'sf_models'
-
-    @use_profile('snowflake')
-    def test_snowflake_column_types(self):
-        self.run_and_test()
-
-
-class TestBigQueryColumnTypes(TestColumnTypes):
-    @property
-    def models(self):
-        return 'bq_models'
-
-    @use_profile('bigquery')
-    def test_bigquery_column_types(self):
-        self.run_and_test()

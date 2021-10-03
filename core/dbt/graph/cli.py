@@ -1,4 +1,5 @@
 # special support for CLI argument parsing.
+from dbt import flags
 import itertools
 from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
 
@@ -21,8 +22,6 @@ INTERSECTION_DELIMITER = ','
 
 DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*']
 DEFAULT_EXCLUDES: List[str] = []
-DATA_TEST_SELECTOR: str = 'test_type:data'
-SCHEMA_TEST_SELECTOR: str = 'test_type:schema'
 
 
 def parse_union(
@@ -66,40 +65,9 @@ def parse_union_from_default(
 def parse_difference(
     include: Optional[List[str]], exclude: Optional[List[str]]
 ) -> SelectionDifference:
-    included = parse_union_from_default(include, DEFAULT_INCLUDES)
+    included = parse_union_from_default(include, DEFAULT_INCLUDES, greedy=bool(flags.GREEDY))
     excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, greedy=True)
     return SelectionDifference(components=[included, excluded])
-
-
-def parse_test_selectors(
-    data: bool, schema: bool, base: SelectionSpec
-) -> SelectionSpec:
-    union_components = []
-
-    if data:
-        union_components.append(
-            SelectionCriteria.from_single_spec(DATA_TEST_SELECTOR)
-        )
-    if schema:
-        union_components.append(
-            SelectionCriteria.from_single_spec(SCHEMA_TEST_SELECTOR)
-        )
-
-    intersect_with: SelectionSpec
-    if not union_components:
-        return base
-    elif len(union_components) == 1:
-        intersect_with = union_components[0]
-    else:  # data and schema tests
-        intersect_with = SelectionUnion(
-            components=union_components,
-            expect_exists=True,
-            raw=[DATA_TEST_SELECTOR, SCHEMA_TEST_SELECTOR],
-        )
-
-    return SelectionIntersection(
-        components=[base, intersect_with], expect_exists=True
-    )
 
 
 RawDefinition = Union[str, Dict[str, Any]]
@@ -180,7 +148,7 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
     union_def_parts = _get_list_dicts(definition, 'union')
     include, exclude = _parse_include_exclude_subdefs(union_def_parts)
 
-    union = SelectionUnion(components=include)
+    union = SelectionUnion(components=include, greedy_warning=False)
 
     if exclude is None:
         union.raw = definition
@@ -188,7 +156,8 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
     else:
         return SelectionDifference(
             components=[union, exclude],
-            raw=definition
+            raw=definition,
+            greedy_warning=False
         )
 
 
@@ -197,7 +166,7 @@ def parse_intersection_definition(
 ) -> SelectionSpec:
     intersection_def_parts = _get_list_dicts(definition, 'intersection')
     include, exclude = _parse_include_exclude_subdefs(intersection_def_parts)
-    intersection = SelectionIntersection(components=include)
+    intersection = SelectionIntersection(components=include, greedy_warning=False)
 
     if exclude is None:
         intersection.raw = definition
@@ -205,7 +174,8 @@ def parse_intersection_definition(
     else:
         return SelectionDifference(
             components=[intersection, exclude],
-            raw=definition
+            raw=definition,
+            greedy_warning=False
         )
 
 
@@ -239,7 +209,7 @@ def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
     if diff_arg is None:
         return base
     else:
-        return SelectionDifference(components=[base, diff_arg])
+        return SelectionDifference(components=[base, diff_arg], greedy_warning=False)
 
 
 def parse_from_definition(
@@ -271,10 +241,12 @@ def parse_from_definition(
 
 def parse_from_selectors_definition(
     source: SelectorFile
-) -> Dict[str, SelectionSpec]:
-    result: Dict[str, SelectionSpec] = {}
+) -> Dict[str, Dict[str, Union[SelectionSpec, bool]]]:
+    result: Dict[str, Dict[str, Union[SelectionSpec, bool]]] = {}
     selector: SelectorDefinition
     for selector in source.selectors:
-        result[selector.name] = parse_from_definition(selector.definition,
-                                                      rootlevel=True)
+        result[selector.name] = {
+            "default": selector.default,
+            "definition": parse_from_definition(selector.definition, rootlevel=True)
+        }
     return result

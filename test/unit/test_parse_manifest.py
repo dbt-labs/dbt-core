@@ -33,7 +33,7 @@ class TestLoader(unittest.TestCase):
             'quoting': {},
             'outputs': {
                 'test': {
-                    'type': 'redshift',
+                    'type': 'postgres',
                     'host': 'localhost',
                     'schema': 'analytics',
                     'user': 'test',

@@ -30,26 +30,14 @@ class TestColumnQuotingDefault(BaseColumnQuotingTest):
 
     @property
     def models(self):
-        return self.dir('models-unquoted')
+        return self.dir('models')
 
     def run_dbt(self, *args, **kwargs):
-        return super().run_dbt(*args, strict=False, **kwargs)
+        return super().run_dbt(*args, **kwargs)
 
     @use_profile('postgres')
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
-
-    @use_profile('redshift')
-    def test_redshift_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('bigquery')
-    def test_bigquery_column_quotes(self):
-        self._run_columnn_quotes(strategy='merge')
 
 
 class TestColumnQuotingDisabled(BaseColumnQuotingTest):
@@ -70,22 +58,6 @@ class TestColumnQuotingDisabled(BaseColumnQuotingTest):
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
 
-    @use_profile('redshift')
-    def test_redshift_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')
-
-    @use_profile('bigquery')
-    def test_bigquery_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')
-
 
 class TestColumnQuotingEnabled(BaseColumnQuotingTest):
     @property
@@ -104,19 +76,3 @@ class TestColumnQuotingEnabled(BaseColumnQuotingTest):
     @use_profile('postgres')
     def test_postgres_column_quotes(self):
         self._run_columnn_quotes()
-
-    @use_profile('redshift')
-    def test_redshift_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes(self):
-        self._run_columnn_quotes()
-
-    @use_profile('snowflake')
-    def test_snowflake_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')
-
-    @use_profile('bigquery')
-    def test_bigquery_column_quotes_merged(self):
-        self._run_columnn_quotes(strategy='merge')

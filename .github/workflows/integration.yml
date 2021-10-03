@@ -91,16 +91,6 @@ jobs:
               - 'core/**'
               - 'plugins/postgres/**'
               - 'dev-requirements.txt'
-            snowflake:
-              - 'core/**'
-              - 'plugins/snowflake/**'
-            bigquery:
-              - 'core/**'
-              - 'plugins/bigquery/**'
-            redshift:
-              - 'core/**'
-              - 'plugins/redshift/**'
-              - 'plugins/postgres/**'
 
       - name: Generate integration test matrix
         id: generate-matrix
@@ -189,40 +179,6 @@ jobs:
 
       - name: Run tox (postgres)
         if: matrix.adapter == 'postgres'
-        run: tox
-
-      - name: Run tox (redshift)
-        if: matrix.adapter == 'redshift'
-        env:
-          REDSHIFT_TEST_DBNAME: ${{ secrets.REDSHIFT_TEST_DBNAME }}
-          REDSHIFT_TEST_PASS: ${{ secrets.REDSHIFT_TEST_PASS }}
-          REDSHIFT_TEST_USER: ${{ secrets.REDSHIFT_TEST_USER }}
-          REDSHIFT_TEST_PORT: ${{ secrets.REDSHIFT_TEST_PORT }}
-          REDSHIFT_TEST_HOST: ${{ secrets.REDSHIFT_TEST_HOST }}
-        run: tox
-
-      - name: Run tox (snowflake)
-        if: matrix.adapter == 'snowflake'
-        env:
-          SNOWFLAKE_TEST_ACCOUNT: ${{ secrets.SNOWFLAKE_TEST_ACCOUNT }}
-          SNOWFLAKE_TEST_PASSWORD: ${{ secrets.SNOWFLAKE_TEST_PASSWORD }}
-          SNOWFLAKE_TEST_USER: ${{ secrets.SNOWFLAKE_TEST_USER }}
-          SNOWFLAKE_TEST_WAREHOUSE: ${{ secrets.SNOWFLAKE_TEST_WAREHOUSE }}
-          SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN: ${{ secrets.SNOWFLAKE_TEST_OAUTH_REFRESH_TOKEN }}
-          SNOWFLAKE_TEST_OAUTH_CLIENT_ID: ${{ secrets.SNOWFLAKE_TEST_OAUTH_CLIENT_ID }}
-          SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET: ${{ secrets.SNOWFLAKE_TEST_OAUTH_CLIENT_SECRET }}
-          SNOWFLAKE_TEST_ALT_DATABASE: ${{ secrets.SNOWFLAKE_TEST_ALT_DATABASE }}
-          SNOWFLAKE_TEST_ALT_WAREHOUSE: ${{ secrets.SNOWFLAKE_TEST_ALT_WAREHOUSE }}
-          SNOWFLAKE_TEST_DATABASE: ${{ secrets.SNOWFLAKE_TEST_DATABASE }}
-          SNOWFLAKE_TEST_QUOTED_DATABASE: ${{ secrets.SNOWFLAKE_TEST_QUOTED_DATABASE }}
-          SNOWFLAKE_TEST_ROLE: ${{ secrets.SNOWFLAKE_TEST_ROLE }}
-        run: tox
-
-      - name: Run tox (bigquery)
-        if: matrix.adapter == 'bigquery'
-        env:
-          BIGQUERY_TEST_SERVICE_ACCOUNT_JSON: ${{ secrets.BIGQUERY_TEST_SERVICE_ACCOUNT_JSON }}
-          BIGQUERY_TEST_ALT_DATABASE: ${{ secrets.BIGQUERY_TEST_ALT_DATABASE }}
         run: tox
 
       - uses: actions/upload-artifact@v2

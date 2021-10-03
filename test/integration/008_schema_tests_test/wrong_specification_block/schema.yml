@@ -1,0 +1,4 @@
+version: 2
+models:
+  - name: some_seed
+    description: "This is my seed under a model"

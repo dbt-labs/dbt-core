@@ -1,15 +1,10 @@
 import json
-from typing import Type
 
 from dbt.contracts.graph.parsed import (
     ParsedExposure,
     ParsedSourceDefinition
 )
-from dbt.graph import (
-    parse_difference,
-    ResourceTypeSelector,
-    SelectionSpec,
-)
+from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
@@ -165,25 +160,19 @@ class ListTask(GraphRunnableTask):
         return list(values)
 
     @property
-    def selector(self):
+    def selection_arg(self):
+        # for backwards compatibility, list accepts both --models and --select,
+        # with slightly different behavior: --models implies --resource-type model
         if self.args.models:
             return self.args.models
         else:
             return self.args.select
-
-    def get_selection_spec(self) -> SelectionSpec:
-        if self.args.selector_name:
-            spec = self.config.get_selector(self.args.selector_name)
-        else:
-            spec = parse_difference(self.selector, self.args.exclude)
-        return spec
 
     def get_node_selector(self):
         if self.manifest is None or self.graph is None:
             raise InternalException(
                 'manifest and graph must be set to get perform node selection'
             )
-        cls: Type[ResourceTypeSelector]
         if self.resource_types == [NodeType.Test]:
             return TestSelector(
                 graph=self.graph,

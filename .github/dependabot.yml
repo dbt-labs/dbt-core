@@ -12,22 +12,7 @@ updates:
       interval: "daily"
     rebase-strategy: "disabled"
   - package-ecosystem: "pip"
-    directory: "/plugins/bigquery"
-    schedule:
-      interval: "daily"
-    rebase-strategy: "disabled"
-  - package-ecosystem: "pip"
     directory: "/plugins/postgres"
-    schedule:
-      interval: "daily"
-    rebase-strategy: "disabled"
-  - package-ecosystem: "pip"
-    directory: "/plugins/redshift"
-    schedule:
-      interval: "daily"
-    rebase-strategy: "disabled"
-  - package-ecosystem: "pip"
-    directory: "/plugins/snowflake"
     schedule:
       interval: "daily"
     rebase-strategy: "disabled"

@@ -9,7 +9,7 @@
 
 WITH source_data AS (SELECT * FROM {{ ref('model_a') }} )
 
-{% set string_type = 'string' if target.type == 'bigquery' else 'varchar(10)' %}
+{% set string_type = 'varchar(10)' %}
 
 {% if is_incremental() %}
 

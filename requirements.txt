@@ -1,5 +1,2 @@
 ./core
 ./plugins/postgres
-./plugins/redshift
-./plugins/snowflake
-./plugins/bigquery

@@ -1,6 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 from pytest import mark
-import dbt.exceptions
 
 
 class TestAdapterDDL(DBTIntegrationTest):
@@ -73,7 +72,3 @@ class TestAdapterDDL(DBTIntegrationTest):
             ],
             expect_pass=True,
         )
-
-    @use_profile("redshift")
-    def test_redshift_long_name_succeeds(self):
-        self.run_dbt(["run"], expect_pass=True)

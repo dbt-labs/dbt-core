@@ -64,11 +64,6 @@ class TestDebug(DBTIntegrationTest):
         self.run_dbt(['debug'])
         self.assertNotIn('ERROR', self.capsys.readouterr().out)
 
-    @use_profile('bigquery')
-    def test_bigquery_ok(self):
-        self.run_dbt(['debug'])
-        self.assertNotIn('ERROR', self.capsys.readouterr().out)
-
     @use_profile('postgres')
     def test_postgres_nopass(self):
         self.run_dbt(['debug', '--target', 'nopass'], expect_pass=False)

@@ -1,7 +1,0 @@
-version: 2
-
-models:
-- name: description_table
-  columns:
-  - name: field
-    description: '{{ var("field_description") }}'

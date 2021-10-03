@@ -1,35 +1,96 @@
+## dbt 1.0.0 (Release TBD)
+
+### Breaking changes
+
+- The two type of test definitions are now "singular" and "generic" (instead of "data" and "schema", respectively). The `test_type:` selection method accepts `test_type:singular` and `test_type:generic`. (It will also accept `test_type:schema` and `test_type:data` for backwards compatibility) ([#3234](https://github.com/dbt-labs/dbt/issues/3234), [#3880](https://github.com/dbt-labs/dbt/pull/3880)). **Not backwards compatible:** The `--data` and `--schema` flags to `dbt test` are no longer supported, and tests no longer have the tags `'data'` and `'schema'` automatically applied.
+
+### Features
+- Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
+- Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt/issues/3377), [#3939](https://github.com/dbt-labs/dbt/pull/3939))
+- Generic test FQNs have changed to include the relative path, resource, and column (if applicable) where they are defined. This makes it easier to configure them from the `tests` block in `dbt_project.yml` ([#3259](https://github.com/dbt-labs/dbt/pull/3259), [#3880](https://github.com/dbt-labs/dbt/pull/3880)
+- Turn on partial parsing by default ([#3867](https://github.com/dbt-labs/dbt/issues/3867), [#3989](https://github.com/dbt-labs/dbt/issues/3989))
+
+### Fixes
+- Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
+- Skip partial parsing if certain macros have changed ([#3810](https://github.com/dbt-labs/dbt/issues/3810), [#3982](https://github.com/dbt-labs/dbt/pull/3892))
+
+### Under the hood
+
+- Enact deprecation for `materialization-return` and replace deprecation warning with an exception. ([#3896](https://github.com/dbt-labs/dbt/issues/3896))
+- Build catalog for only relational, non-ephemeral nodes in the graph ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
+- Enact deprecation to remove the `release` arg from the `execute_macro` method. ([#3900](https://github.com/dbt-labs/dbt/issues/3900))
+- Enact deprecation for default quoting to be True.  Override for the `dbt-snowflake` adapter so it stays `False`. ([#3898](https://github.com/dbt-labs/dbt/issues/3898))
+- Enact deprecation for object used as dictionaries when they should be dataclasses. Replace deprecation warning with an exception for the dunder methods of `__iter__` and `__len__` for all superclasses of FakeAPIObject. ([#3897](https://github.com/dbt-labs/dbt/issues/3897))
+- Enact deprecation for `adapter-macro` and replace deprecation warning with an exception. ([#3901](https://github.com/dbt-labs/dbt/issues/3901))
+- Add warning when trying to put a node under the wrong key.  ie. A seed under models in a `schema.yml` file. ([#3899](https://github.com/dbt-labs/dbt/issues/3899))
+- Plugins for `redshift`, `snowflake`, and `bigquery` have moved to separate repos: [`dbt-redshift`](https://github.com/dbt-labs/dbt-redshift), [`dbt-snowflake`](https://github.com/dbt-labs/dbt-snowflake), [`dbt-bigquery`](https://github.com/dbt-labs/dbt-bigquery)
+
+Contributors:
+
+- [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
+- [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt/issues/3952))
+
 ## dbt 0.21.0 (Release TBD)
+
+### Fixes
+- Fix batching for large seeds on Snowflake ([#3941](https://github.com/dbt-labs/dbt/issues/3941), [#3942](https://github.com/dbt-labs/dbt/pull/3942))
+- Avoid infinite recursion in `state:modified.macros` check ([#3904](https://github.com/dbt-labs/dbt/issues/3904), [#3957](https://github.com/dbt-labs/dbt/pull/3957))
+- Cast log messages to strings before scrubbing of prefixed env vars ([#3971](https://github.com/dbt-labs/dbt/issues/3971), [#3972](https://github.com/dbt-labs/dbt/pull/3972))
+
+### Under the hood
+- Bump artifact schema versions for 0.21.0 ([#3945](https://github.com/dbt-labs/dbt/pull/3945))
+
+## dbt 0.21.0rc1 (September 20, 2021)
 
 ### Features
 
+- Experimental parser now detects macro overrides of ref, source, and config builtins. ([#3581](https://github.com/dbt-labs/dbt/issues/3866), [#3582](https://github.com/dbt-labs/dbt/pull/3877))
 - Add connect_timeout profile configuration for Postgres and Redshift adapters. ([#3581](https://github.com/dbt-labs/dbt/issues/3581), [#3582](https://github.com/dbt-labs/dbt/pull/3582))
 - Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
   - to simplify config (default usage of `copy_materialization='table'` if is is not found in global or local config)
   - to let copy several source tables into single target table at a time. ([Google doc reference](https://cloud.google.com/bigquery/docs/managing-tables#copying_multiple_source_tables))
 - Customize ls task JSON output by adding new flag `--output-keys` ([#3778](https://github.com/dbt-labs/dbt/issues/3778), [#3395](https://github.com/dbt-labs/dbt/issues/3395))
+- Add support for execution project on BigQuery through profile configuration ([#3707](https://github.com/dbt-labs/dbt/issues/3707), [#3708](https://github.com/dbt-labs/dbt/issues/3708))
+- Skip downstream nodes during the `build` task when a test fails. ([#3597](https://github.com/dbt-labs/dbt/issues/3597), [#3792](https://github.com/dbt-labs/dbt/pull/3792))
+- Added default field in the `selectors.yml` to allow user to define default selector ([#3448](https://github.com/dbt-labs/dbt/issues/3448), [#3875](https://github.com/dbt-labs/dbt/issues/3875), [#3892](https://github.com/dbt-labs/dbt/issues/3892))
+- Added timing and thread information to sources.json artifact ([#3804](https://github.com/dbt-labs/dbt/issues/3804), [#3894](https://github.com/dbt-labs/dbt/pull/3894))
+- Update cli and rpc flags for the `build` task to align with other commands (`--resource-type`, `--store-failures`) ([#3596](https://github.com/dbt-labs/dbt/issues/3596), [#3884](https://github.com/dbt-labs/dbt/pull/3884))
+- Log tests that are not indirectly selected. Add `--greedy` flag to `test`, `list`, `build` and `greedy` property in yaml selectors ([#3723](https://github.com/dbt-labs/dbt/pull/3723), [#3833](https://github.com/dbt-labs/dbt/pull/3833))
 
 ### Fixes
 
 - Support BigQuery-specific aliases `target_dataset` and `target_project` in snapshot configs ([#3694](https://github.com/dbt-labs/dbt/issues/3694), [#3834](https://github.com/dbt-labs/dbt/pull/3834))
 - `dbt debug` shows a summary of whether all checks passed or not ([#3831](https://github.com/dbt-labs/dbt/issues/3831), [#3832](https://github.com/dbt-labs/dbt/issues/3831))
-- Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848))
+- Fix issue when running the `deps` task after the `list` task in the RPC server ([#3846](https://github.com/dbt-labs/dbt/issues/3846), [#3848](https://github.com/dbt-labs/dbt/pull/3848), [#3850](https://github.com/dbt-labs/dbt/pull/3850))
+- Fix bug with initializing a dataclass that inherits from `typing.Protocol`, specifically for `dbt.config.profile.Profile` ([#3843](https://github.com/dbt-labs/dbt/issues/3843), [#3855](https://github.com/dbt-labs/dbt/pull/3855))
+- Introduce a macro, `get_where_subquery`, for tests that use `where` config. Alias filtering subquery as `dbt_subquery` instead of resource identifier ([#3857](https://github.com/dbt-labs/dbt/issues/3857), [#3859](https://github.com/dbt-labs/dbt/issues/3859))
+- Use group by column_name in accepted_values test for compatibility with most database engines ([#3905](https://github.com/dbt-labs/dbt/issues/3905), [#3906](https://github.com/dbt-labs/dbt/pull/3906))
+- Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3682](https://github.com/dbt-labs/dbt/issues/3682), [#3691](https://github.com/dbt-labs/dbt/issues/3682))
 
 ### Under the hood
 
 - Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 - Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
-- Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/fishtown-analytics/dbt/issues/3622), [#3623](https://github.com/fishtown-analytics/dbt/pull/3623))
+- Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/dbt-labs/dbt/issues/3622), [#3623](https://github.com/dbt-labs/dbt/pull/3623))
+- Alert users on package rename ([hub.getdbt.com#180](https://github.com/dbt-labs/hub.getdbt.com/issues/810), [#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - Add `adapter_unique_id` to invocation context in anonymous usage tracking, to better understand dbt adoption ([#3713](https://github.com/dbt-labs/dbt/issues/3713), [#3796](https://github.com/dbt-labs/dbt/issues/3796))
+- Specify `macro_namespace = 'dbt'` for all dispatched macros in the global project, making it possible to dispatch to macro implementations defined in packages. Dispatch `generate_schema_name` and `generate_alias_name` ([#3456](https://github.com/dbt-labs/dbt/issues/3456), [#3851](https://github.com/dbt-labs/dbt/issues/3851))
+- Retry transient GitHub failures during download ([#3729](https://github.com/dbt-labs/dbt/pull/3729))
 
 Contributors:
 
 - [@xemuliam](https://github.com/xemuliam) ([#3606](https://github.com/dbt-labs/dbt/pull/3606))
 - [@sungchun12](https://github.com/sungchun12) ([#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - [@dbrtly](https://github.com/dbrtly) ([#3834](https://github.com/dbt-labs/dbt/pull/3834))
-- [@swanderz](https://github.com/swanderz) [#3623](https://github.com/fishtown-analytics/dbt/pull/3623)
+- [@swanderz](https://github.com/swanderz) [#3623](https://github.com/dbt-labs/dbt/pull/3623)
 - [@JasonGluck](https://github.com/JasonGluck) ([#3582](https://github.com/dbt-labs/dbt/pull/3582))
-- [@joellabes](https://github.com/joellabes) ([#3669](https://github.com/dbt-labs/dbt/pull/3669))
+- [@joellabes](https://github.com/joellabes) ([#3669](https://github.com/dbt-labs/dbt/pull/3669), [#3833](https://github.com/dbt-labs/dbt/pull/3833))
 - [@juma-adoreme](https://github.com/juma-adoreme) ([#3838](https://github.com/dbt-labs/dbt/pull/3838))
+- [@annafil](https://github.com/annafil) ([#3825](https://github.com/dbt-labs/dbt/pull/3825))
+- [@AndreasTA-AW](https://github.com/AndreasTA-AW) ([#3691](https://github.com/dbt-labs/dbt/pull/3691))
+- [@Kayrnt](https://github.com/Kayrnt) ([3707](https://github.com/dbt-labs/dbt/pull/3707))
+- [@TeddyCr](https://github.com/TeddyCr) ([#3448](https://github.com/dbt-labs/dbt/pull/3865))
+- [@sdebruyn](https://github.com/sdebruyn) ([#3906](https://github.com/dbt-labs/dbt/pull/3906))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
@@ -96,6 +157,7 @@ Contributors:
 
 - Better error handling for BigQuery job labels that are too long. ([#3612](https://github.com/dbt-labs/dbt/pull/3612), [#3703](https://github.com/dbt-labs/dbt/pull/3703))
 - Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
+- Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
 
 ### Fixes
 

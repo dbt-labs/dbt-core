@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: model_0
+    columns:
+      - name: iso3
+        tests:
+          - unique
+          - not_null
+      - name: historical_iso_numeric
+        tests:
+          - not_null
+  - name: model_2
+    columns:
+      - name: iso3
+        tests:
+          - unique
+          - not_null

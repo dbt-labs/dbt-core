@@ -73,12 +73,12 @@ def test_rpc_run_vars_compiled(
         test_kwargs={},
     )
     with querier_ctx as querier:
-        results = querier.async_wait_for_result(querier.cli_args('run --vars "{materialized_var: table}"'))
+        results = querier.async_wait_for_result(querier.cli_args('--no-partial-parse run --vars "{materialized_var: table}"'))
         assert len(results['results']) == 1
         assert results['results'][0]['node']['config']['materialized'] == 'table'
         # make sure that `--vars` doesn't update global state - if it does,
         # this run() will result in a view!
-        results = querier.async_wait_for_result(querier.cli_args('run'))
+        results = querier.async_wait_for_result(querier.cli_args('--no-partial-parse run'))
         assert len(results['results']) == 1
         assert results['results'][0]['node']['config']['materialized'] == 'view'
 

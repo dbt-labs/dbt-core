@@ -177,3 +177,26 @@ class SelectorUnitTest(unittest.TestCase):
                 "not a valid method name"
         ):
             selector_config_from_data(dct)
+
+    def test_multiple_default_true(self):
+      """Test selector_config_from_data returns the correct error when multiple
+      default values are set
+      """
+      dct = get_selector_dict('''\
+                selectors:
+                  - name: summa_nothing
+                    definition:
+                      method: tag
+                      value: nightly
+                    default: true
+                  - name: summa_something
+                    definition:
+                      method: tag
+                      value: daily
+                    default: true
+        ''')
+      with self.assertRaisesRegex(
+                dbt.exceptions.DbtSelectorsError,
+                'Found multiple selectors with `default: true`:'
+      ):
+        selector_config_from_data(dct)

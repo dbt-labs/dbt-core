@@ -117,12 +117,9 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_postgres_malformed_schema_strict_will_break_run(self):
+    def test_postgres_malformed_schema_will_break_run(self):
         with self.assertRaises(CompilationException):
-            self.run_dbt(strict=True)
-        # even if strict = False!
-        with self.assertRaises(CompilationException):
-            self.run_dbt(strict=False)
+            self.run_dbt()
 
 
 class TestCustomConfigSchemaTests(DBTIntegrationTest):
@@ -149,16 +146,11 @@ class TestCustomConfigSchemaTests(DBTIntegrationTest):
     def test_postgres_config(self):
         """ Test that tests use configs properly. All tests for
         this project will fail, configs are set to make test pass. """
-        results = self.run_dbt()
-        results = self.run_dbt(['test'], strict=False)
+        results = self.run_dbt(['test'], expect_pass=False)
 
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 8)
         for result in results:
             self.assertFalse(result.skipped)
-            self.assertEqual(
-                result.failures, 0,
-                'test {} failed'.format(result.node.name)
-            )
 
 
 class TestHooksInTests(DBTIntegrationTest):
@@ -257,55 +249,6 @@ class TestCustomSchemaTests(DBTIntegrationTest):
                 self.assertIn(result.node.name, expected_failures)
 
 
-class TestBQSchemaTests(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "schema_tests_008"
-
-    @property
-    def models(self):
-        return "models-v2/bq-models"
-
-    @staticmethod
-    def dir(path):
-        return os.path.normpath(
-            os.path.join('models-v2', path))
-
-    def run_schema_validations(self):
-        args = FakeArgs()
-
-        test_task = TestTask(args, self.config)
-        return test_task.run()
-
-    @use_profile('bigquery')
-    def test_schema_tests_bigquery(self):
-        self.use_default_project({'data-paths': [self.dir('seed')]})
-        self.assertEqual(len(self.run_dbt(['seed'])), 1)
-        results = self.run_dbt()
-        self.assertEqual(len(results), 1)
-        test_results = self.run_schema_validations()
-        self.assertEqual(len(test_results), 8)
-
-        for result in test_results:
-            # assert that all deliberately failing tests actually fail
-            if 'failure' in result.node.name:
-                self.assertEqual(result.status, 'fail')
-                self.assertFalse(result.skipped)
-                self.assertTrue(
-                    result.failures > 0,
-                    'test {} did not fail'.format(result.node.name)
-                )
-            # assert that actual tests pass
-            else:
-                self.assertEqual(result.status, 'pass')
-                self.assertFalse(result.skipped)
-                self.assertEqual(
-                    result.failures, 0,
-                    'test {} failed'.format(result.node.name)
-                )
-
-        self.assertEqual(sum(x.failures for x in test_results), 0)
-
 class TestQuotedSchemaTestColumns(DBTIntegrationTest):
     @property
     def schema(self):
@@ -393,16 +336,16 @@ class TestSchemaCaseInsensitive(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_schema_lowercase_sql(self):
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 2)
-        results = self.run_dbt(['test', '-m', 'lowercase'], strict=False)
+        results = self.run_dbt(['test', '-m', 'lowercase'])
         self.assertEqual(len(results), 1)
 
     @use_profile('postgres')
     def test_postgres_schema_uppercase_sql(self):
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 2)
-        results = self.run_dbt(['test', '-m', 'uppercase'], strict=False)
+        results = self.run_dbt(['test', '-m', 'uppercase'])
         self.assertEqual(len(results), 1)
 
 
@@ -440,7 +383,7 @@ class TestSchemaTestContext(DBTIntegrationTest):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
         self.run_dbt(['deps'])
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 3)
 
         run_result = self.run_dbt(['test'], expect_pass=False)
@@ -457,7 +400,7 @@ class TestSchemaTestContext(DBTIntegrationTest):
         self.assertEqual(results[3].status, TestStatus.Fail)
         self.assertRegex(results[3].node.compiled_sql, r'union all')
         # type_two_model_a_
-        self.assertEqual(results[4].status, TestStatus.Fail)
+        self.assertEqual(results[4].status, TestStatus.Warn)
         self.assertEqual(results[4].node.config.severity, 'WARN')
 
 class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
@@ -500,7 +443,7 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
         # This test tests the the TestContext and TestMacroNamespace
         # are working correctly
         self.run_dbt(['deps'])
-        results = self.run_dbt(strict=False)
+        results = self.run_dbt()
         self.assertEqual(len(results), 3)
 
         run_result = self.run_dbt(['test'], expect_pass=False)
@@ -515,7 +458,7 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
         self.assertEqual(results[2].status, TestStatus.Fail)
         self.assertRegex(results[2].node.compiled_sql, r'union all')
         # type_two_model_a_
-        self.assertEqual(results[3].status, TestStatus.Fail)
+        self.assertEqual(results[3].status, TestStatus.Warn)
         self.assertEqual(results[3].node.config.severity, 'WARN')
 
 class TestSchemaTestNameCollision(DBTIntegrationTest):
@@ -544,8 +487,8 @@ class TestSchemaTestNameCollision(DBTIntegrationTest):
 
         # both tests have the same unique id except for the hash
         expected_unique_ids = [
-            'test.test.not_null_base_extension_id.4a9d96018d',
-            'test.test.not_null_base_extension_id.60bbea9027'
+            'test.test.not_null_base_extension_id.922d83a56c',
+            'test.test.not_null_base_extension_id.c8d18fe069'
         ]
         self.assertIn(test_results[0].node.unique_id, expected_unique_ids)
         self.assertIn(test_results[1].node.unique_id, expected_unique_ids)
@@ -565,4 +508,22 @@ class TestInvalidSchema(DBTIntegrationTest):
         with self.assertRaises(CompilationException) as exc:
             results = self.run_dbt()
         self.assertRegex(str(exc.exception), r"'models' is not a list")
+
+
+class TestWrongSpecificationBlock(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "wrong_specification_block"
+
+    @use_profile('postgres')
+    def test_postgres_wrong_specification_block(self):
+        with self.assertWarns(Warning):
+            results = self.run_dbt(['ls', '-s', 'some_seed', '--output', 'json', '--output-keys', 'name, description'])
+
+        assert len(results) == 1
+        assert results[0] == '{"name": "some_seed", "description": ""}'
 

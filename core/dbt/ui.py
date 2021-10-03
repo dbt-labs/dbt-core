@@ -17,23 +17,18 @@ COLOR_FG_GREEN = COLORS['green']
 COLOR_FG_YELLOW = COLORS['yellow']
 COLOR_RESET_ALL = COLORS['reset_all']
 
-PRINTER_WIDTH = 80
-
-
-def use_colors(use_colors_val=True):
-    flags.USE_COLORS = use_colors_val
-
-
-def printer_width(printer_width):
-    global PRINTER_WIDTH
-    PRINTER_WIDTH = printer_width
-
 
 def color(text: str, color_code: str):
     if flags.USE_COLORS:
         return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text
+
+
+def printer_width():
+    if flags.PRINTER_WIDTH:
+        return flags.PRINTER_WIDTH
+    return 80
 
 
 def green(text: str):
@@ -56,7 +51,7 @@ def line_wrap_message(
     newlines to newlines and avoid calling textwrap.fill() on them (like
     markdown)
     '''
-    width = PRINTER_WIDTH - subtract
+    width = printer_width() - subtract
     if dedent:
         msg = textwrap.dedent(msg)
 

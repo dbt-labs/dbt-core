@@ -41,7 +41,13 @@ from dbt.exceptions import (
     FailFastException,
 )
 
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, Graph
+from dbt.graph import (
+    GraphQueue,
+    NodeSelector,
+    SelectionSpec,
+    parse_difference,
+    Graph
+)
 from dbt.parser.manifest import ManifestLoader
 
 import dbt.exceptions
@@ -83,6 +89,9 @@ class ManifestTask(ConfiguredTask):
 
 
 class GraphRunnableTask(ManifestTask):
+
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
+
     def __init__(self, args, config):
         super().__init__(args, config)
         self.job_queue: Optional[GraphQueue] = None
@@ -103,11 +112,27 @@ class GraphRunnableTask(ManifestTask):
     def index_offset(self, value: int) -> int:
         return value
 
-    @abstractmethod
+    @property
+    def selection_arg(self):
+        return self.args.select
+
+    @property
+    def exclusion_arg(self):
+        return self.args.exclude
+
     def get_selection_spec(self) -> SelectionSpec:
-        raise NotImplementedException(
-            f'get_selection_spec not implemented for task {type(self)}'
-        )
+        default_selector_name = self.config.get_default_selector_name()
+        if self.args.selector_name:
+            # use pre-defined selector (--selector)
+            spec = self.config.get_selector(self.args.selector_name)
+        elif not (self.selection_arg or self.exclusion_arg) and default_selector_name:
+            # use pre-defined selector (--selector) with default: true
+            logger.info(f"Using default selector {default_selector_name}")
+            spec = self.config.get_selector(default_selector_name)
+        else:
+            # use --select and --exclude args
+            spec = parse_difference(self.selection_arg, self.exclusion_arg)
+        return spec
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
@@ -189,7 +214,7 @@ class GraphRunnableTask(ManifestTask):
                     logger.debug('Finished running node {}'.format(
                         runner.node.unique_id))
 
-        fail_fast = getattr(self.config.args, 'fail_fast', False)
+        fail_fast = flags.FAIL_FAST
 
         if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
             self._raise_next_tick = FailFastException(
@@ -256,7 +281,7 @@ class GraphRunnableTask(ManifestTask):
             self._submit(pool, args, callback)
 
         # block on completion
-        if getattr(self.config.args, 'fail_fast', False):
+        if flags.FAIL_FAST:
             # checkout for an errors after task completion in case of
             # fast failure
             while self.job_queue.wait_until_something_was_done():
@@ -289,7 +314,7 @@ class GraphRunnableTask(ManifestTask):
         else:
             self.manifest.update_node(node)
 
-        if result.status == NodeStatus.Error:
+        if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
             if is_ephemeral:
                 cause = result
             else:
@@ -413,7 +438,7 @@ class GraphRunnableTask(ManifestTask):
             )
 
         if len(self._flattened_nodes) == 0:
-            logger.warning("WARNING: Nothing to do. Try checking your model "
+            logger.warning("\nWARNING: Nothing to do. Try checking your model "
                            "configs and model specification args")
             result = self.get_result(
                 results=[],
@@ -546,7 +571,11 @@ class GraphRunnableTask(ManifestTask):
         )
 
     def args_to_dict(self):
-        var_args = vars(self.args)
+        var_args = vars(self.args).copy()
+        # update the args with the flags, which could also come from environment
+        # variables or user_config
+        flag_dict = flags.get_flag_dict()
+        var_args.update(flag_dict)
         dict_args = {}
         # remove args keys that clutter up the dictionary
         for key in var_args:
@@ -554,10 +583,11 @@ class GraphRunnableTask(ManifestTask):
                 continue
             if var_args[key] is None:
                 continue
+            # TODO: add more default_false_keys
             default_false_keys = (
                 'debug', 'full_refresh', 'fail_fast', 'warn_error',
-                'single_threaded', 'test_new_parser', 'log_cache_events',
-                'strict'
+                'single_threaded', 'log_cache_events',
+                'use_experimental_parser',
             )
             if key in default_false_keys and var_args[key] is False:
                 continue

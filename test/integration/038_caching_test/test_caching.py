@@ -39,10 +39,6 @@ class TestCachingLowercaseModel(TestBaseCaching):
     def models(self):
         return "models"
 
-    @use_profile('snowflake')
-    def test_snowflake_cache(self):
-        self.cache_run()
-
     @use_profile('postgres')
     def test_postgres_cache(self):
         self.cache_run()
@@ -51,10 +47,6 @@ class TestCachingUppercaseModel(TestBaseCaching):
     @property
     def models(self):
         return "shouting_models"
-
-    @use_profile('snowflake')
-    def test_snowflake_cache(self):
-        self.cache_run()
 
     @use_profile('postgres')
     def test_postgres_cache(self):

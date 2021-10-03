@@ -1,7 +1,6 @@
-from test.integration.base import DBTIntegrationTest, use_profile
-import os
-
 import json
+
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestColumnComment(DBTIntegrationTest):
@@ -39,18 +38,6 @@ class TestColumnComment(DBTIntegrationTest):
         column_comment = column_node['columns']['2id']['comment']
         assert column_comment.startswith('XXX')
 
-
     @use_profile('postgres')
     def test_postgres_comments(self):
         self.run_has_comments()
-
-    @use_profile('redshift')
-    def test_redshift_comments(self):
-        self.run_has_comments()
-
-    @use_profile('snowflake')
-    def test_snowflake_comments(self):
-        self.run_has_comments()
-
-
-

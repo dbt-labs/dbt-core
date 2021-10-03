@@ -3,7 +3,7 @@ import pytest
 
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.compiled import (
-    CompiledModelNode, InjectedCTE, CompiledSchemaTestNode
+    CompiledModelNode, InjectedCTE, CompiledGenericTestNode
 )
 from dbt.contracts.graph.parsed import (
     DependsOn, NodeConfig, TestConfig, TestMetadata, ColumnInfo
@@ -335,7 +335,7 @@ def minimal_schema_test_dict():
 
 @pytest.fixture
 def basic_uncompiled_schema_test_node():
-    return CompiledSchemaTestNode(
+    return CompiledGenericTestNode(
         package_name='test',
         root_path='/root/',
         path='/root/x/path.sql',
@@ -367,7 +367,7 @@ def basic_uncompiled_schema_test_node():
 
 @pytest.fixture
 def basic_compiled_schema_test_node():
-    return CompiledSchemaTestNode(
+    return CompiledGenericTestNode(
         package_name='test',
         root_path='/root/',
         path='/root/x/path.sql',
@@ -506,19 +506,19 @@ def test_basic_uncompiled_schema_test(basic_uncompiled_schema_test_node, basic_u
     node_dict = basic_uncompiled_schema_test_dict
     minimum = minimal_schema_test_dict
 
-    assert_symmetric(node, node_dict, CompiledSchemaTestNode)
+    assert_symmetric(node, node_dict, CompiledGenericTestNode)
     assert node.empty is False
     assert node.is_refable is False
     assert node.is_ephemeral is False
 
-    assert_from_dict(node, minimum, CompiledSchemaTestNode)
+    assert_from_dict(node, minimum, CompiledGenericTestNode)
 
 
 def test_basic_compiled_schema_test(basic_compiled_schema_test_node, basic_compiled_schema_test_dict):
     node = basic_compiled_schema_test_node
     node_dict = basic_compiled_schema_test_dict
 
-    assert_symmetric(node, node_dict, CompiledSchemaTestNode)
+    assert_symmetric(node, node_dict, CompiledGenericTestNode)
     assert node.empty is False
     assert node.is_refable is False
     assert node.is_ephemeral is False
@@ -527,13 +527,13 @@ def test_basic_compiled_schema_test(basic_compiled_schema_test_node, basic_compi
 def test_invalid_extra_schema_test_fields(minimal_schema_test_dict):
     bad_extra = minimal_schema_test_dict
     bad_extra['extra'] = 'extra value'
-    assert_fails_validation(bad_extra, CompiledSchemaTestNode)
+    assert_fails_validation(bad_extra, CompiledGenericTestNode)
 
 
 def test_invalid_resource_type_schema_test(minimal_schema_test_dict):
     bad_type = minimal_schema_test_dict
     bad_type['resource_type'] = str(NodeType.Model)
-    assert_fails_validation(bad_type, CompiledSchemaTestNode)
+    assert_fails_validation(bad_type, CompiledGenericTestNode)
 
 
 unchanged_schema_tests = [

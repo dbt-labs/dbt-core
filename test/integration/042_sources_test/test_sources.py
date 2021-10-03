@@ -51,7 +51,7 @@ class BaseSourcesTest(DBTIntegrationTest):
 class SuccessfulSourcesTest(BaseSourcesTest):
     def setUp(self):
         super().setUp()
-        self.run_dbt_with_vars(['seed'], strict=False)
+        self.run_dbt_with_vars(['seed'])
         self.maxDiff = None
         self._id = 101
         # this is the db initial value
@@ -74,8 +74,7 @@ class SuccessfulSourcesTest(BaseSourcesTest):
             'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
         )"""
         quoted_columns = ','.join(
-            self.adapter.quote(c) if self.adapter_type != 'bigquery' else c
-            for c in
+            self.adapter.quote(c) for c in
             ('favorite_color', 'id', 'first_name',
              'email', 'ip_address', 'updated_at')
         )
@@ -248,7 +247,7 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         assert isinstance(data['elapsed_time'], float)
         self.assertBetween(data['metadata']['generated_at'],
                            self.freshness_start_time)
-        assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v1.json'
+        assert data['metadata']['dbt_schema_version'] == 'https://schemas.getdbt.com/dbt/sources/v2.json'
         assert data['metadata']['dbt_version'] == dbt.version.__version__
         assert data['metadata']['invocation_id'] == dbt.tracking.active_user.invocation_id
         key = 'key'
@@ -272,7 +271,21 @@ class TestSourceFreshness(SuccessfulSourcesTest):
                     'warn_after': {'count': 10, 'period': 'hour'},
                     'error_after': {'count': 18, 'period': 'hour'},
                 },
-                'adapter_response': {}
+                'adapter_response': {},
+                'thread_id': AnyStringWith('Thread-'),
+                'execution_time': AnyFloat(),
+                'timing': [
+                    {
+                        'name': 'compile',
+                        'started_at': AnyStringWith(),
+                        'completed_at': AnyStringWith(),
+                    },
+                    {
+                        'name': 'execute',
+                        'started_at': AnyStringWith(),
+                        'completed_at': AnyStringWith(),
+                    }
+                ]
             }
         ])
 
@@ -342,18 +355,6 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'pass')
         self._assert_freshness_results('target/pass_source.json', 'pass')
-
-    @use_profile('snowflake')
-    def test_snowflake_source_freshness(self):
-        self._run_source_freshness()
-
-    @use_profile('redshift')
-    def test_redshift_source_freshness(self):
-        self._run_source_freshness()
-
-    @use_profile('bigquery')
-    def test_bigquery_source_freshness(self):
-        self._run_source_freshness()
 
     @use_profile('postgres')
     def test_postgres_source_freshness_selection_select(self):
@@ -445,14 +446,9 @@ class TestMalformedSources(BaseSourcesTest):
         return "malformed_models"
 
     @use_profile('postgres')
-    def test_postgres_malformed_schema_nonstrict_will_break_run(self):
+    def test_postgres_malformed_schema_will_break_run(self):
         with self.assertRaises(CompilationException):
-            self.run_dbt_with_vars(['seed'], strict=False)
-
-    @use_profile('postgres')
-    def test_postgres_malformed_schema_strict_will_break_run(self):
-        with self.assertRaises(CompilationException):
-            self.run_dbt_with_vars(['seed'], strict=True)
+            self.run_dbt_with_vars(['seed'])
 
 
 class TestRenderingInSourceTests(BaseSourcesTest):
@@ -481,10 +477,5 @@ class TestUnquotedSources(SuccessfulSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_catalog(self):
-        self.run_dbt_with_vars(['run'])
-        self.run_dbt_with_vars(['docs', 'generate'])
-
-    @use_profile('redshift')
-    def test_redshift_catalog(self):
         self.run_dbt_with_vars(['run'])
         self.run_dbt_with_vars(['docs', 'generate'])

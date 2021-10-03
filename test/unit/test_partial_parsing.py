@@ -1,5 +1,6 @@
 import unittest
 from unittest import mock
+import time
 
 import dbt.exceptions
 from dbt.parser.partial import PartialParsing
@@ -17,14 +18,14 @@ class TestPartialParsing(unittest.TestCase):
         project_name = 'my_test'
         project_root = '/users/root'
         model_file = SourceFile(
-            path=FilePath(project_root=project_root, searched_path='models', relative_path='my_model.sql'),
+            path=FilePath(project_root=project_root, searched_path='models', relative_path='my_model.sql', modification_time=time.time()),
             checksum=FileHash.from_contents('abcdef'),
             project_name=project_name,
             parse_file_type=ParseFileType.Model,
             nodes=['model.my_test.my_model'],
         )
         schema_file = SchemaSourceFile(
-            path=FilePath(project_root=project_root, searched_path='models', relative_path='schema.yml'),
+            path=FilePath(project_root=project_root, searched_path='models', relative_path='schema.yml', modification_time=time.time()),
             checksum=FileHash.from_contents('ghijkl'),
             project_name=project_name,
             parse_file_type=ParseFileType.Schema,

@@ -6,73 +6,6 @@ from .util import (
 )
 
 
-def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema):
-    project = ProjectDefinition(
-        models={
-            'my_model.sql': 'select 1 as id',
-        },
-        packages={'packages': packages},
-    )
-    querier_ctx = get_querier(
-        project_def=project,
-        project_dir=project_dir,
-        profiles_dir=profiles_dir,
-        schema=schema,
-        test_kwargs={},
-        criteria='error',
-    )
-
-    with querier_ctx as querier:
-        # we should be able to run sql queries at startup
-        querier.is_error(querier.run_sql('select 1 as id'))
-
-        # the status should be an error as deps wil not be defined
-        querier.is_result(querier.status())
-
-        # deps should pass
-        querier.async_wait_for_result(querier.deps())
-
-        # queries should work after deps
-        tok1 = querier.is_async_result(querier.run())
-        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
-
-        querier.is_result(querier.async_wait(tok2))
-        querier.is_result(querier.async_wait(tok1))
-
-        # now break the project
-        project.packages['packages'] = bad_packages
-        project.write_packages(project_dir, remove=True)
-
-        # queries should still work because we haven't reloaded
-        tok1 = querier.is_async_result(querier.run())
-        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
-
-        querier.is_result(querier.async_wait(tok2))
-        querier.is_result(querier.async_wait(tok1))
-
-        # now run deps again, it should be sad
-        querier.async_wait_for_error(querier.deps())
-        # it should also not be running.
-        result = querier.is_result(querier.ps(active=True, completed=False))
-        assert result['rows'] == []
-
-        # fix packages again
-        project.packages['packages'] = packages
-        project.write_packages(project_dir, remove=True)
-        # keep queries broken, we haven't run deps yet
-        querier.is_error(querier.run())
-
-        # deps should pass now
-        querier.async_wait_for_result(querier.deps())
-        querier.is_result(querier.status())
-
-        tok1 = querier.is_async_result(querier.run())
-        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
-
-        querier.is_result(querier.async_wait(tok2))
-        querier.is_result(querier.async_wait(tok1))
-
-
 @pytest.mark.parametrize(
     "packages, bad_packages",
     # from dbt hub
@@ -147,4 +80,110 @@ def deps_with_packages(packages, bad_packages, project_dir, profiles_dir, schema
 )
 @pytest.mark.supported('postgres')
 def test_rpc_deps_packages(project_root, profiles_root, dbt_profile, unique_schema, packages, bad_packages):
-    deps_with_packages(packages, bad_packages, project_root, profiles_root, unique_schema)
+    project = ProjectDefinition(
+        models={
+            'my_model.sql': 'select 1 as id',
+        },
+        packages={'packages': packages},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+        criteria='error',
+    )
+    with querier_ctx as querier:
+        # we should be able to run sql queries at startup
+        querier.is_error(querier.run_sql('select 1 as id'))
+
+        # the status should be an error as deps wil not be defined
+        querier.is_result(querier.status())
+
+        # deps should pass
+        querier.async_wait_for_result(querier.deps())
+
+        # queries should work after deps
+        tok1 = querier.is_async_result(querier.run())
+        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
+
+        querier.is_result(querier.async_wait(tok2))
+        querier.is_result(querier.async_wait(tok1))
+
+        # now break the project
+        project.packages['packages'] = bad_packages
+        project.write_packages(project_root, remove=True)
+
+        # queries should still work because we haven't reloaded
+        tok1 = querier.is_async_result(querier.run())
+        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
+
+        querier.is_result(querier.async_wait(tok2))
+        querier.is_result(querier.async_wait(tok1))
+
+        # now run deps again, it should be sad
+        querier.async_wait_for_error(querier.deps())
+        # it should also not be running.
+        result = querier.is_result(querier.ps(active=True, completed=False))
+        assert result['rows'] == []
+
+        # fix packages again
+        project.packages['packages'] = packages
+        project.write_packages(project_root, remove=True)
+        # keep queries broken, we haven't run deps yet
+        querier.is_error(querier.run())
+
+        # deps should pass now
+        querier.async_wait_for_result(querier.deps())
+        querier.is_result(querier.status())
+
+        tok1 = querier.is_async_result(querier.run())
+        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
+
+        querier.is_result(querier.async_wait(tok2))
+        querier.is_result(querier.async_wait(tok1))
+
+
+@pytest.mark.supported('postgres')
+def test_rpc_deps_after_list(project_root, profiles_root, dbt_profile, unique_schema):
+    packages = [{
+        'package': 'dbt-labs/dbt_utils',
+        'version': '0.5.0',
+    }]
+    project = ProjectDefinition(
+        models={
+            'my_model.sql': 'select 1 as id',
+        },
+        packages={'packages': packages},
+    )
+    querier_ctx = get_querier(
+        project_def=project,
+        project_dir=project_root,
+        profiles_dir=profiles_root,
+        schema=unique_schema,
+        test_kwargs={},
+        criteria='error',
+    )
+    with querier_ctx as querier:
+        # we should be able to run sql queries at startup
+        querier.is_error(querier.run_sql('select 1 as id'))
+
+        # the status should be an error as deps wil not be defined
+        querier.is_result(querier.status())
+
+        # deps should pass
+        querier.async_wait_for_result(querier.deps())
+
+        # queries should work after deps
+        tok1 = querier.is_async_result(querier.run())
+        tok2 = querier.is_async_result(querier.run_sql('select 1 as id'))
+
+        querier.is_result(querier.async_wait(tok2))
+        querier.is_result(querier.async_wait(tok1))
+
+        # list should pass
+        querier.list()
+
+        # deps should pass
+        querier.async_wait_for_result(querier.deps())

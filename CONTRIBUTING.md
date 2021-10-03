@@ -14,6 +14,10 @@ This document is a guide intended for folks interested in contributing to `dbt`.
 
 If you're new to python development or contributing to open-source software, we encourage you to read this document from start to finish. If you get stuck, drop us a line in the `#dbt-core-development` channel on [slack](https://community.getdbt.com).
 
+#### Adapters
+
+If you have an issue or code change suggestion related to a specific database [adapter](https://docs.getdbt.com/docs/available-adapters); please refer to that supported databases seperate repo for those contributions.
+
 ### Signing the CLA
 
 Please note that all contributors to `dbt` must sign the [Contributor License Agreement](https://docs.getdbt.com/docs/contributor-license-agreements) to have their Pull Request merged into the `dbt` codebase. If you are unable to sign the CLA, then the `dbt` maintainers will unfortunately be unable to merge your Pull Request. You are, however, welcome to open issues and comment on existing ones.
@@ -68,7 +72,7 @@ The `dbt` maintainers use labels to categorize open issues. Some labels indicate
 
 - **Trunks** are where active development of the next release takes place. There is one trunk named `develop` at the time of writing this, and will be the default branch of the repository.
 - **Release Branches** track a specific, not yet complete release of `dbt`. Each minor version release has a corresponding release branch. For example, the `0.11.x` series of releases has a branch called `0.11.latest`. This allows us to release new patch versions under `0.11` without necessarily needing to pull them into the latest version of `dbt`.
-- **Feature Branches** track individual features and fixes. On completion they should be merged into the trunk brnach or a specific release branch.
+- **Feature Branches** track individual features and fixes. On completion they should be merged into the trunk branch or a specific release branch.
 
 ## Getting the code
 
@@ -103,7 +107,7 @@ A short list of tools used in `dbt` testing that will be helpful to your underst
 - [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) - but don't worry too much, nobody _really_ understands how make works and our Makefile is super simple
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
-- [CircleCI](https://circleci.com/product/) and [Azure Pipelines](https://azure.microsoft.com/en-us/services/devops/pipelines/)
+- [Github Actions](https://github.com/features/actions)
 
 A deep understanding of these tools in not required to effectively contribute to `dbt`, but we recommend checking out the attached documentation if you're interested in learning more about them.
 
@@ -135,7 +139,7 @@ brew install postgresql
 
 ### Installation
 
-First make sure that you set up your `virtualenv` as described in [Setting up an environment](#setting-up-an-environment). Next, install `dbt` (and its dependencies) with:
+First make sure that you set up your `virtualenv` as described in [Setting up an environment](#setting-up-an-environment).  Also ensure you have the latest version of pip installed with `pip install --upgrade pip`. Next, install `dbt` (and its dependencies) with:
 
 ```sh
 make dev
@@ -155,7 +159,7 @@ Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as
 
 Getting the `dbt` integration tests set up in your local environment will be very helpful as you start to make changes to your local version of `dbt`. The section that follows outlines some helpful tips for setting up the test environment.
 
-Since `dbt` works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, dbt Labs provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on [_Submitting a Pull Request_](#submitting-a-pull-request) below for more information on this CI setup.
+Although `dbt` works with a number of different databases, you won't need to supply credentials for every one of these databases in your test environment. Instead you can test all dbt-core code changes with Python and Postgres.
 
 ### Initial setup
 
@@ -169,6 +173,8 @@ or, alternatively:
 docker-compose up -d database
 PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
 ```
+
+Note that you may need to run the previous command twice as it does not currently wait for the database to be running before attempting to run commands against it.  This will be fixed with [#3876](https://github.com/dbt-labs/dbt/issues/3876).
 
 `dbt` uses test credentials specified in a `test.env` file in the root of the repository for non-Postgres databases. This `test.env` file is git-ignored, but please be _extra_ careful to never check in credentials or other sensitive information when developing against `dbt`. To create your `test.env` file, copy the provided sample file, then supply your relevant credentials. This step is only required to use non-Postgres databases.
 
@@ -224,7 +230,7 @@ python -m pytest test/unit/test_graph.py::GraphTest::test__dependency_list
 > is a list of useful command-line options for `pytest` to use while developing.
 ## Submitting a Pull Request
 
-dbt Labs provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment. When pull requests are submitted to the `dbt-labs/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines.
+dbt Labs provides a CI environment to test changes to specific adapters, and periodic maintenance checks of `dbt-core` through Github Actions. For example, if you submit a pull request to the `dbt-redshift` repo, GitHub will trigger automated code checks and tests against Redshift.
 
 A `dbt` maintainer will review your PR. They may suggest code revision for style or clarity, or request that you add unit or integration test(s). These are good things! We believe that, with a little bit of help, anyone can contribute high-quality code.
 

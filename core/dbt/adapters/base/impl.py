@@ -16,9 +16,7 @@ from dbt.exceptions import (
     get_relation_returned_multiple_results,
     InternalException, NotImplementedException, RuntimeException,
 )
-from dbt import flags
 
-from dbt import deprecations
 from dbt.adapters.protocol import (
     AdapterConfig,
     ConnectionManagerProtocol,
@@ -289,9 +287,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def _schema_is_cached(self, database: Optional[str], schema: str) -> bool:
         """Check if the schema is cached, and by default logs if it is not."""
 
-        if flags.USE_CACHE is False:
-            return False
-        elif (database, schema) not in self.cache:
+        if (database, schema) not in self.cache:
             logger.debug(
                 'On "{}": cache miss for schema "{}.{}", this is inefficient'
                 .format(self.nice_connection_name(), database, schema)
@@ -324,7 +320,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         info_schema_name_map = SchemaSearchMap()
         nodes: Iterator[CompileResultNode] = chain(
-            manifest.nodes.values(),
+            [node for node in manifest.nodes.values() if (
+                node.is_relational and not node.is_ephemeral_model
+            )],
             manifest.sources.values(),
         )
         for node in nodes:
@@ -340,9 +338,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Populate the relations cache for the given schemas. Returns an
         iterable of the schemas populated, as strings.
         """
-        if not flags.USE_CACHE:
-            return
-
         cache_schemas = self._get_cache_schemas(manifest)
         with executor(self.config) as tpe:
             futures: List[Future[List[BaseRelation]]] = []
@@ -375,9 +370,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
-        if not flags.USE_CACHE:
-            return
-
         with self.cache.lock:
             if clear:
                 self.cache.clear()
@@ -391,8 +383,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to cache a null relation for {}'.format(name)
             )
-        if flags.USE_CACHE:
-            self.cache.add(relation)
+        self.cache.add(relation)
         # so jinja doesn't render things
         return ''
 
@@ -406,8 +397,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             raise_compiler_error(
                 'Attempted to drop a null relation for {}'.format(name)
             )
-        if flags.USE_CACHE:
-            self.cache.drop(relation)
+        self.cache.drop(relation)
         return ''
 
     @available
@@ -428,8 +418,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 .format(src_name, dst_name, name)
             )
 
-        if flags.USE_CACHE:
-            self.cache.rename(from_relation, to_relation)
+        self.cache.rename(from_relation, to_relation)
         return ''
 
     ###
@@ -807,12 +796,11 @@ class BaseAdapter(metaclass=AdapterMeta):
     def quote_seed_column(
         self, column: str, quote_config: Optional[bool]
     ) -> str:
-        # this is the default for now
-        quote_columns: bool = False
+        quote_columns: bool = True
         if isinstance(quote_config, bool):
             quote_columns = quote_config
         elif quote_config is None:
-            deprecations.warn('column-quoting-unset')
+            pass
         else:
             raise_compiler_error(
                 f'The seed configuration value of "quote_columns" has an '
@@ -944,7 +932,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         project: Optional[str] = None,
         context_override: Optional[Dict[str, Any]] = None,
         kwargs: Dict[str, Any] = None,
-        release: bool = False,
         text_only_columns: Optional[Iterable[str]] = None,
     ) -> agate.Table:
         """Look macro_name up in the manifest and execute its results.
@@ -958,10 +945,8 @@ class BaseAdapter(metaclass=AdapterMeta):
             execution context.
         :param kwargs: An optional dict of keyword args used to pass to the
             macro.
-        :param release: Ignored.
         """
-        if release is not False:
-            deprecations.warn('execute-macro-release')
+
         if kwargs is None:
             kwargs = {}
         if context_override is None:
