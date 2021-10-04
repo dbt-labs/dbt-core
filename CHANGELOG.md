@@ -15,6 +15,7 @@
 
 ### Features
 
+- Make `--models` and `--select` synonyms, except for `ls` (to preserve existing behavior) ([#3210](https://github.com/dbt-labs/dbt/pull/3210), [#3791](https://github.com/dbt-labs/dbt/pull/3791))
 - Experimental parser now detects macro overrides of ref, source, and config builtins. ([#3581](https://github.com/dbt-labs/dbt/issues/3866), [#3582](https://github.com/dbt-labs/dbt/pull/3877))
 - Add connect_timeout profile configuration for Postgres and Redshift adapters. ([#3581](https://github.com/dbt-labs/dbt/issues/3581), [#3582](https://github.com/dbt-labs/dbt/pull/3582))
 - Enhance BigQuery copy materialization ([#3570](https://github.com/dbt-labs/dbt/issues/3570), [#3606](https://github.com/dbt-labs/dbt/pull/3606)):
@@ -40,13 +41,13 @@
 
 ### Under the hood
 
-- Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 - Better dbt hub registry packages version logging that prompts the user for upgrades to relevant packages ([#3560](https://github.com/dbt-labs/dbt/issues/3560), [#3763](https://github.com/dbt-labs/dbt/issues/3763), [#3759](https://github.com/dbt-labs/dbt/pull/3759))
 - Allow the default seed macro's SQL parameter, `%s`, to be replaced by dispatching a new macro, `get_binding_char()`. This enables adapters with parameter marker characters such as `?` to not have to override `basic_load_csv_rows`. ([#3622](https://github.com/dbt-labs/dbt/issues/3622), [#3623](https://github.com/dbt-labs/dbt/pull/3623))
 - Alert users on package rename ([hub.getdbt.com#180](https://github.com/dbt-labs/hub.getdbt.com/issues/810), [#3825](https://github.com/dbt-labs/dbt/pull/3825))
 - Add `adapter_unique_id` to invocation context in anonymous usage tracking, to better understand dbt adoption ([#3713](https://github.com/dbt-labs/dbt/issues/3713), [#3796](https://github.com/dbt-labs/dbt/issues/3796))
 - Specify `macro_namespace = 'dbt'` for all dispatched macros in the global project, making it possible to dispatch to macro implementations defined in packages. Dispatch `generate_schema_name` and `generate_alias_name` ([#3456](https://github.com/dbt-labs/dbt/issues/3456), [#3851](https://github.com/dbt-labs/dbt/issues/3851))
-- Retry transient GitHub failures during download ([#3729](https://github.com/dbt-labs/dbt/pull/3729))
+- Retry transient GitHub failures during download ([#3546](https://github.com/dbt-labs/dbt/pull/3546), [#3729](https://github.com/dbt-labs/dbt/pull/3729))
+- Don't reload and validate schema files if they haven't changed ([#3563](https://github.com/dbt-labs/dbt/issues/3563), [#3888](https://github.com/dbt-labs/dbt/issues/3888))
 
 Contributors:
 
@@ -79,7 +80,6 @@ Contributors:
 ### Under the hood
 
 - Add `build` RPC method, and a subset of flags for `build` task ([#3595](https://github.com/dbt-labs/dbt/issues/3595), [#3674](https://github.com/dbt-labs/dbt/pull/3674))
-- Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
 
 ## dbt 0.21.0b1 (August 03, 2021)
 
@@ -130,6 +130,7 @@ Contributors:
 - Better error handling for BigQuery job labels that are too long. ([#3612](https://github.com/dbt-labs/dbt/pull/3612), [#3703](https://github.com/dbt-labs/dbt/pull/3703))
 - Get more information on partial parsing version mismatches ([#3757](https://github.com/dbt-labs/dbt/issues/3757), [#3758](https://github.com/dbt-labs/dbt/pull/3758))
 - Switch to full reparse on partial parsing exceptions. Log and report exception information. ([#3725](https://github.com/dbt-labs/dbt/issues/3725), [#3733](https://github.com/dbt-labs/dbt/pull/3733))
+- Use GitHub Actions for CI ([#3688](https://github.com/dbt-labs/dbt/issues/3688), [#3669](https://github.com/dbt-labs/dbt/pull/3669))
 
 ### Fixes
 
