@@ -2,6 +2,7 @@ import os
 import shutil
 from unittest import mock
 from unittest.mock import Mock, call
+from pathlib import Path
 
 import click
 
@@ -31,7 +32,7 @@ class TestInit(DBTIntegrationTest):
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
-    def test_postgres_init_task_in_project(self, mock_prompt, mock_confirm):
+    def test_postgres_init_task_in_project_with_existing_profiles_yml(self, mock_prompt, mock_confirm):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
@@ -46,7 +47,9 @@ class TestInit(DBTIntegrationTest):
             "test_db",
             "test_schema",
         ]
+
         self.run_dbt(['init'])
+
         manager.assert_has_calls([
             call.confirm(f'The profile test already exists in {self.test_root_dir}/profiles.yml. Continue and overwrite it?'),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
@@ -58,3 +61,224 @@ class TestInit(DBTIntegrationTest):
             call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
             call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
         ])
+
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+            assert f.read() == """config:
+  send_anonymous_usage_stats: false
+test:
+  outputs:
+    dev:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: test_user
+      pass: test_password
+      dbname: test_db
+      schema: test_schema
+  target: dev
+"""
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    @mock.patch.object(Path, 'exists', autospec=True)
+    def test_postgres_init_task_in_project_without_existing_profiles_yml(self, exists, mock_prompt, mock_confirm):
+
+        def exists_side_effect(path):
+            # Override responses on specific files, default to 'real world' if not overriden
+            return {
+                'profiles.yml': False
+            }.get(path.name, os.path.exists(path))
+
+        exists.side_effect = exists_side_effect
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.prompt.side_effect = [
+            1,
+            4,
+            "localhost",
+            5432,
+            "test_user",
+            "test_password",
+            "test_db",
+            "test_schema",
+        ]
+
+        self.run_dbt(['init'])
+
+        manager.assert_has_calls([
+            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
+            call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
+            call.prompt('port', default=5432, hide_input=False, type=click.INT),
+            call.prompt('user (dev username)', default=None, hide_input=False, type=None),
+            call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
+            call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+        ])
+
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+            assert f.read() == """test:
+  outputs:
+    dev:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: test_user
+      pass: test_password
+      dbname: test_db
+      schema: test_schema
+  target: dev
+"""
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    @mock.patch.object(Path, 'exists', autospec=True)
+    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_target_options(self, exists, mock_prompt, mock_confirm):
+
+        def exists_side_effect(path):
+            # Override responses on specific files, default to 'real world' if not overriden
+            return {
+                'profiles.yml': False,
+                'target_options.yml': False,
+            }.get(path.name, os.path.exists(path))
+
+        exists.side_effect = exists_side_effect
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+        manager.prompt.side_effect = [
+            1,
+        ]
+        self.run_dbt(['init'])
+        manager.assert_has_calls([
+            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
+        ])
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+            assert f.read() == """test:
+  outputs:
+    dev:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: test_user
+      pass: test_password
+      dbname: test_db
+      schema: test_schema
+  target: dev
+"""
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    @mock.patch.object(Path, 'exists', autospec=True)
+    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_target_options(self, exists, mock_prompt, mock_confirm):
+
+        def exists_side_effect(path):
+            # Override responses on specific files, default to 'real world' if not overriden
+            return {
+                'profiles.yml': False,
+                'target_options.yml': False,
+            }.get(path.name, os.path.exists(path))
+
+        exists.side_effect = exists_side_effect
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+        manager.prompt.side_effect = [
+            1,
+        ]
+        self.run_dbt(['init'])
+        manager.assert_has_calls([
+            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
+        ])
+
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+            assert f.read() == """test:
+  outputs:
+
+    dev:
+      type: postgres
+      threads: [1 or more]
+      host: [host]
+      port: [port]
+      user: [dev_username]
+      pass: [dev_password]
+      dbname: [dbname]
+      schema: [dev_schema]
+
+    prod:
+      type: postgres
+      threads: [1 or more]
+      host: [host]
+      port: [port]
+      user: [prod_username]
+      pass: [prod_password]
+      dbname: [dbname]
+      schema: [prod_schema]
+
+  target: dev
+"""
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    @mock.patch.object(Path, 'exists', autospec=True)
+    def test_postgres_init_task_in_project_with_profile_template_without_existing_profiles_yml(self, exists, mock_prompt, mock_confirm):
+
+        def exists_side_effect(path):
+            # Override responses on specific files, default to 'real world' if not overriden
+            return {
+                'profiles.yml': False,
+            }.get(path.name, os.path.exists(path))
+        exists.side_effect = exists_side_effect
+
+        with open("profile_template.yml", 'w') as f:
+            f.write("""prompts:
+  - pg_username
+  - pg_password
+profile:
+  my_profile:
+    outputs:
+      dev:
+        type: postgres
+        threads: 4
+        host: localhost
+        port: 5432
+        user: "{{ pg_username }}"
+        pass: "{{ pg_password }}"
+        dbname: my_db
+        schema: my_schema
+    target: dev""")
+
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+        manager.prompt.side_effect = [
+            "test_username",
+            "test_password"
+        ]
+        self.run_dbt(['init'])
+        manager.assert_has_calls([
+            call.prompt('pg_username'),
+            call.prompt('pg_password')
+        ])
+
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+            assert f.read() == """my_profile:
+  outputs:
+    dev:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: test_username
+      pass: test_password
+      dbname: my_db
+      schema: my_schema
+  target: dev
+"""

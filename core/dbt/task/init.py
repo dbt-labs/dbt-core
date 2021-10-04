@@ -1,5 +1,6 @@
 import copy
 import os
+from pathlib import Path
 import re
 import shutil
 from typing import Optional
@@ -61,7 +62,8 @@ class InitTask(BaseTask):
 
     def create_profiles_dir(self, profiles_dir: str) -> bool:
         """Create the user's profiles directory if it doesn't already exist."""
-        if not os.path.exists(profiles_dir):
+        profiles_path = Path(profiles_dir)
+        if profiles_path.exists():
             msg = "Creating dbt configuration folder at {}"
             logger.info(msg.format(profiles_dir))
             dbt.clients.system.make_directory(profiles_dir)
@@ -69,7 +71,9 @@ class InitTask(BaseTask):
         return False
 
     def create_profile_from_sample(self, adapter: str, profile_name: str):
-        """Create a profile entry using the adapter's sample_profiles.yml"""
+        """Create a profile entry using the adapter's sample_profiles.yml
+
+        Renames the profile in sample_profiles.yml to match that of the project."""
         # Line below raises an exception if the specified adapter is not found
         load_plugin(adapter)
         adapter_path = get_include_paths(adapter)[0]
@@ -81,13 +85,15 @@ class InitTask(BaseTask):
             with open(sample_profiles_path, "r") as f:
                 sample_profile = f.read()
             sample_profile_name = list(yaml.load(sample_profile).keys())[0]
+            # Use a regex to replace the name of the sample_profile with
+            # that of the project without losing any comments from the sample
             sample_profile = re.sub(
                 f"^{sample_profile_name}:",
                 f"{profile_name}:",
                 sample_profile
             )
-            profiles_filepath = os.path.join(flags.PROFILES_DIR, "profiles.yml")
-            if os.path.exists(profiles_filepath):
+            profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+            if profiles_filepath.exists():
                 with open(profiles_filepath, "a") as f:
                     f.write("\n" + sample_profile)
             else:
@@ -159,11 +165,11 @@ class InitTask(BaseTask):
 
     def write_profile(
         self, profile: dict, profile_name: str
-    ) -> str:
+    ) -> Path:
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
-        profiles_filepath = os.path.join(flags.PROFILES_DIR, "profiles.yml")
-        if os.path.exists(profiles_filepath):
+        profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+        if profiles_filepath.exists():
             with open(profiles_filepath, "r+") as f:
                 profiles = yaml.load(f) or {}
                 profiles[profile_name] = profile
@@ -212,8 +218,8 @@ class InitTask(BaseTask):
         """Using either a provided profile name or that specified in dbt_project.yml,
         check if the profile already exists in profiles.yml, and if so ask the
         user whether to proceed and overwrite it."""
-        profiles_file = os.path.join(flags.PROFILES_DIR, "profiles.yml")
-        if not os.path.exists(profiles_file):
+        profiles_file = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+        if not profiles_file.exists():
             return True
         profile_name = (
             profile_name or self.get_profile_name_from_current_project()
@@ -240,7 +246,7 @@ class InitTask(BaseTask):
             render_vars[template_variable] = click.prompt(template_variable)
         profile = profile_template["profile"][profile_name]
         profile_str = yaml.dump(profile)
-        profile_str = Template(profile_str).render(vars=render_vars)
+        profile_str = Template(profile_str).render(render_vars)
         profile = yaml.load(profile_str)
         profiles_filepath = self.write_profile(profile, profile_name)
         logger.info(
@@ -277,8 +283,9 @@ class InitTask(BaseTask):
             # just setup the user's profile.
             logger.info("Setting up your profile.")
             profile_name = self.get_profile_name_from_current_project()
-            if os.path.exists("profile_template.yml"):
-                self.create_profile_using_profile_template(profile_name)
+            profile_template_path = Path("profile_template.yml")
+            if profile_template_path.exists():
+                self.create_profile_using_profile_template()
             else:
                 if not self.check_if_can_write_profile(profile_name=profile_name):
                     return
@@ -290,7 +297,8 @@ class InitTask(BaseTask):
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.
             project_name = click.prompt("What is the desired project name?")
-            if os.path.exists(project_name):
+            project_path = Path(project_name)
+            if project_path.exists():
                 logger.info(
                     f"A project called {project_name} already exists here."
                 )
