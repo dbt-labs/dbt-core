@@ -40,12 +40,12 @@ class TestInit(DBTIntegrationTest):
         manager.prompt.side_effect = [
             1,
             4,
-            "localhost",
+            'localhost',
             5432,
-            "test_user",
-            "test_password",
-            "test_db",
-            "test_schema",
+            'test_user',
+            'test_password',
+            'test_db',
+            'test_schema',
         ]
 
         self.run_dbt(['init'])
@@ -62,7 +62,7 @@ class TestInit(DBTIntegrationTest):
             call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
         ])
 
-        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == """config:
   send_anonymous_usage_stats: false
 test:
@@ -97,12 +97,12 @@ test:
         manager.prompt.side_effect = [
             1,
             4,
-            "localhost",
+            'localhost',
             5432,
-            "test_user",
-            "test_password",
-            "test_db",
-            "test_schema",
+            'test_user',
+            'test_password',
+            'test_db',
+            'test_schema',
         ]
 
         self.run_dbt(['init'])
@@ -118,46 +118,7 @@ test:
             call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
         ])
 
-        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
-            assert f.read() == """test:
-  outputs:
-    dev:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: test_user
-      pass: test_password
-      dbname: test_db
-      schema: test_schema
-  target: dev
-"""
-
-    @use_profile('postgres')
-    @mock.patch('click.confirm')
-    @mock.patch('click.prompt')
-    @mock.patch.object(Path, 'exists', autospec=True)
-    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_target_options(self, exists, mock_prompt, mock_confirm):
-
-        def exists_side_effect(path):
-            # Override responses on specific files, default to 'real world' if not overriden
-            return {
-                'profiles.yml': False,
-                'target_options.yml': False,
-            }.get(path.name, os.path.exists(path))
-
-        exists.side_effect = exists_side_effect
-        manager = Mock()
-        manager.attach_mock(mock_prompt, 'prompt')
-        manager.attach_mock(mock_confirm, 'confirm')
-        manager.prompt.side_effect = [
-            1,
-        ]
-        self.run_dbt(['init'])
-        manager.assert_has_calls([
-            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
-        ])
-        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == """test:
   outputs:
     dev:
@@ -197,7 +158,7 @@ test:
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
         ])
 
-        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == """test:
   outputs:
 
@@ -259,8 +220,8 @@ profile:
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
         manager.prompt.side_effect = [
-            "test_username",
-            "test_password"
+            'test_username',
+            'test_password'
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
@@ -268,7 +229,7 @@ profile:
             call.prompt('pg_password')
         ])
 
-        with open(os.path.join(self.test_root_dir, 'profiles.yml'), "r") as f:
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == """my_profile:
   outputs:
     dev:
@@ -282,3 +243,4 @@ profile:
       schema: my_schema
   target: dev
 """
+
