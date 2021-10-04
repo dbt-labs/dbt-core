@@ -16,6 +16,7 @@
 - Skip partial parsing if certain macros have changed ([#3810](https://github.com/dbt-labs/dbt/issues/3810), [#3982](https://github.com/dbt-labs/dbt/pull/3892))
 - Enable cataloging of unlogged Postgres tables ([3961](https://github.com/dbt-labs/dbt/issues/3961), [#3993](https://github.com/dbt-labs/dbt/pull/3993))
 - Fix multiple disabled nodes ([#4013](https://github.com/dbt-labs/dbt/issues/4013), [#4018](https://github.com/dbt-labs/dbt/pull/4018))
+- Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
 
 ### Under the hood
 
