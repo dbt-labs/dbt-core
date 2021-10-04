@@ -46,9 +46,9 @@ class TestInit(DBTIntegrationTest):
             "test_db",
             "test_schema",
         ]
-        self.run_dbt(['init', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
+        self.run_dbt(['init'])
         manager.assert_has_calls([
-            call.confirm('The profile test already exists in /Users/niall.woodward/.dbt/profiles.yml. Continue and overwrite it?'),
+            call.confirm(f'The profile test already exists in {self.test_root_dir}/profiles.yml. Continue and overwrite it?'),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
             call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
