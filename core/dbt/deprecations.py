@@ -55,7 +55,7 @@ class PackageInstallPathDeprecation(DBTDeprecation):
     _name = 'install-packages-path'
     _description = '''\
     The default package install path has changed from `dbt_modules` to `dbt_packages`.
-    Please update `clean-targets` in `dbt_project.yml` and `.gitignore`.
+    Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
     Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
     '''
 
