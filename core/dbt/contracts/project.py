@@ -185,7 +185,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     clean_targets: Optional[List[str]] = None
     profile: Optional[str] = None
     log_path: Optional[str] = None
-    modules_path: Optional[str] = None
+    packages_install_path: Optional[str] = None
     quoting: Optional[Quoting] = None
     on_run_start: Optional[List[str]] = field(default_factory=list_str)
     on_run_end: Optional[List[str]] = field(default_factory=list_str)

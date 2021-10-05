@@ -98,7 +98,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,
             log_path=project.log_path,
-            modules_path=project.modules_path,
+            packages_install_path=project.packages_install_path,
             quoting=quoting,
             models=project.models,
             on_run_start=project.on_run_start,
@@ -338,7 +338,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                     f'dbt found {count_packages_specified} package(s) '
                     f'specified in packages.yml, but only '
                     f'{count_packages_installed} package(s) installed '
-                    f'in {self.modules_path}. Run "dbt deps" to '
+                    f'in {self.packages_install_path}. Run "dbt deps" to '
                     f'install package dependencies.'
                 )
             project_paths = itertools.chain(
@@ -376,7 +376,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 yield project.project_name, project
 
     def _get_project_directories(self) -> Iterator[Path]:
-        root = Path(self.project_root) / self.modules_path
+        root = Path(self.project_root) / self.packages_install_path
 
         if root.exists():
             for path in root.iterdir():
@@ -494,7 +494,7 @@ class UnsetProfileConfig(RuntimeConfig):
             snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,
             log_path=project.log_path,
-            modules_path=project.modules_path,
+            packages_install_path=project.packages_install_path,
             quoting=project.quoting,  # we never use this anyway.
             models=project.models,
             on_run_start=project.on_run_start,

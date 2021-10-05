@@ -91,7 +91,7 @@ class PinnedPackage(BasePackage):
 
     def get_installation_path(self, project, renderer):
         dest_dirname = self.get_project_name(project, renderer)
-        return os.path.join(project.modules_path, dest_dirname)
+        return os.path.join(project.packages_install_path, dest_dirname)
 
     def get_subdirectory(self):
         return None

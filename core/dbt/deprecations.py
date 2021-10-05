@@ -51,6 +51,15 @@ class PackageRedirectDeprecation(DBTDeprecation):
     '''
 
 
+class PackageInstallPathDeprecation(DBTDeprecation):
+    _name = 'install-packages-path'
+    _description = '''\
+    The default package install path has changed from `dbt_modules` to `dbt_packages`.
+    Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
+    Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
 a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -89,6 +98,7 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
+    PackageInstallPathDeprecation(),
     PackageRedirectDeprecation()
 ]
 

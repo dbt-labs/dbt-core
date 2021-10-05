@@ -431,7 +431,7 @@ def _build_clean_subparser(subparsers, base_subparser):
         parents=[base_subparser],
         help='''
         Delete all folders in the clean-targets list
-        (usually the dbt_modules and target directories.)
+        (usually the dbt_packages and target directories.)
         '''
     )
     sub.set_defaults(cls=clean_task.CleanTask, which='clean', rpc_method=None)

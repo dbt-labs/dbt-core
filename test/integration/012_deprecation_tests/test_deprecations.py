@@ -35,6 +35,34 @@ class TestDeprecations(BaseTestDeprecations):
         self.assertEqual(expected, deprecations.active_deprecations)
 
 
+class TestPackageInstallPathDeprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('models-trivial')
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "clean-targets": ["dbt_modules"]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_package_path(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(["clean"])
+        expected = {'install-packages-path'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+    @use_profile('postgres')
+    def test_postgres_package_path_not_set(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['--warn-error', 'clean'])
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        assert 'path has changed from `dbt_modules` to `dbt_packages`.' in exc_str
+
+
 class TestPackageRedirectDeprecation(BaseTestDeprecations):
     @property
     def models(self):
