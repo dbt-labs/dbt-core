@@ -111,7 +111,7 @@ class TestExitCodesDeps(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
+                    'revision': 'dbt/1.0.0',
                 }
             ]
         }

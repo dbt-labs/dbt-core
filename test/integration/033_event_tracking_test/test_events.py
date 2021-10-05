@@ -1,4 +1,4 @@
-# NOTE: turning off event tracking tests!
+# NOTE: turning off event tracking tests! [#3631](https://github.com/dbt-labs/dbt/issues/3631)
 # from test.integration.base import DBTIntegrationTest, use_profile
 # import hashlib
 # import os
@@ -234,7 +234,7 @@
 #             'packages': [
 #                 {
 #                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-#                     'revision': 'dbt/0.17.0',
+#                     'revision': 'dbt/1.0.0',
 #                 },
 #             ],
 #         }
