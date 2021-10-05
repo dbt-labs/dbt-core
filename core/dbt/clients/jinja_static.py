@@ -111,7 +111,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
     # keyword arguments
     if func_call.kwargs:
         for kwarg in func_call.kwargs:
-            if kwarg.key == 'macro_name':
+            if kwarg.key == "macro_name":
                 # This will remain to enable static resolution
                 if type(kwarg.value).__name__ == "Const":
                     func_name = kwarg.value.value

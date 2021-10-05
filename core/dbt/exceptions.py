@@ -674,7 +674,7 @@ def macro_not_found(model, target_macro_id):
 
 
 def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
-    msg = '''\
+    msg = """\
     The "packages" argument of adapter.dispatch() has been deprecated.
     Use the "macro_namespace" argument instead.
 
@@ -683,7 +683,7 @@ def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
     For more information, see:
 
     https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch
-    '''
+    """
     raise_compiler_error(msg.format(macro_name))
 
 

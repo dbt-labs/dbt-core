@@ -129,7 +129,7 @@ class BaseDatabaseWrapper:
         search_packages: List[Optional[str]]
 
         if '.' in macro_name:
-            suggest_macro_namespace, suggest_macro_name = macro_name.split('.', 1)
+            suggest_macro_namespace, suggest_macro_name = macro_name.split(".", 1)
             msg = (
                 f'In adapter.dispatch, got a macro name of "{macro_name}", '
                 f'but "." is not a valid macro name component. Did you mean '
@@ -152,7 +152,7 @@ class BaseDatabaseWrapper:
         else:
             # Not a string and not None so must be a list
             raise CompilationException(
-                f'In adapter.dispatch, got a list macro_namespace argument '
+                f"In adapter.dispatch, got a list macro_namespace argument "
                 f'("{macro_namespace}"), but macro_namespace should be None or a string.'
             )
 
