@@ -69,7 +69,7 @@ class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
 
         download_url = metadata.downloads.tarball
         system.download_with_retries(download_url, tar_path)
-        deps_path = project.modules_path
+        deps_path = project.packages_install_path
         package_name = self.get_project_name(project, renderer)
         system.untar_package(tar_path, deps_path, package_name)
 

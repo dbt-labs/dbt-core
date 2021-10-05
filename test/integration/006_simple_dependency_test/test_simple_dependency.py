@@ -173,7 +173,7 @@ class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_simple_dependency_deps(self):
         self.run_dbt(["deps"])
-        self.assertEqual(len(os.listdir('dbt_modules')), 2)
+        self.assertEqual(len(os.listdir('dbt_packages')), 2)
 
 
 class TestSimpleDependencyBranch(DBTIntegrationTest):

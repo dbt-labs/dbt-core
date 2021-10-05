@@ -596,7 +596,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.target_path, 'target')
         self.assertEqual(project.clean_targets, ['target'])
         self.assertEqual(project.log_path, 'logs')
-        self.assertEqual(project.modules_path, 'dbt_modules')
+        self.assertEqual(project.packages_install_path, 'dbt_packages')
         self.assertEqual(project.quoting, {})
         self.assertEqual(project.models, {})
         self.assertEqual(project.on_run_start, [])
@@ -643,7 +643,7 @@ class TestProject(BaseConfigTest):
             'target-path': 'other-target',
             'clean-targets': ['another-target'],
             'log-path': 'other-logs',
-            'modules-path': 'other-dbt_modules',
+            'packages-install-path': 'other-dbt_packages',
             'quoting': {'identifier': False},
             'models': {
                 'pre-hook': ['{{ logging.log_model_start_event() }}'],
@@ -713,7 +713,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.target_path, 'other-target')
         self.assertEqual(project.clean_targets, ['another-target'])
         self.assertEqual(project.log_path, 'other-logs')
-        self.assertEqual(project.modules_path, 'other-dbt_modules')
+        self.assertEqual(project.packages_install_path, 'other-dbt_packages')
         self.assertEqual(project.quoting, {'identifier': False})
         self.assertEqual(project.models, {
             'pre-hook': ['{{ logging.log_model_start_event() }}'],
@@ -1208,7 +1208,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.target_path, 'target')
         self.assertEqual(config.clean_targets, ['target'])
         self.assertEqual(config.log_path, 'logs')
-        self.assertEqual(config.modules_path, 'dbt_modules')
+        self.assertEqual(config.packages_install_path, 'dbt_packages')
         self.assertEqual(config.quoting, {'database': True, 'identifier': True, 'schema': True})
         self.assertEqual(config.models, {})
         self.assertEqual(config.on_run_start, [])

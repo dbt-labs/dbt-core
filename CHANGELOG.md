@@ -25,6 +25,7 @@
 - Enact deprecation for `adapter-macro` and replace deprecation warning with an exception. ([#3901](https://github.com/dbt-labs/dbt/issues/3901))
 - Add warning when trying to put a node under the wrong key.  ie. A seed under models in a `schema.yml` file. ([#3899](https://github.com/dbt-labs/dbt/issues/3899))
 - Plugins for `redshift`, `snowflake`, and `bigquery` have moved to separate repos: [`dbt-redshift`](https://github.com/dbt-labs/dbt-redshift), [`dbt-snowflake`](https://github.com/dbt-labs/dbt-snowflake), [`dbt-bigquery`](https://github.com/dbt-labs/dbt-bigquery)
+- Change the default dbt packages installation directory to `dbt_packages` from `dbt_modules`.  Also rename `module-path` to `packages-install-path` to allow default overrides of package install directory.  Deprecation warning added for projects using the old `dbt_modules` name without specifying a `packages-install-path`.  ([#3523](https://github.com/dbt-labs/dbt/issues/3523))
 
 Contributors:
 
