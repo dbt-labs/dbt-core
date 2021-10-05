@@ -32,6 +32,7 @@ VERSION_CHECK = None
 FAIL_FAST = None
 SEND_ANONYMOUS_USAGE_STATS = None
 PRINTER_WIDTH = 80
+WHICH = None
 
 # Global CLI defaults. These flags are set from three places:
 # CLI args, environment variables, and user_config (profiles.yml).
@@ -97,13 +98,15 @@ def set_from_args(args, user_config):
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, \
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
         USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, GREEDY, \
-        VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH
+        VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
+        WHICH
 
     STRICT_MODE = False  # backwards compatibility
     # cli args without user_config or env var option
     FULL_REFRESH = getattr(args, 'full_refresh', FULL_REFRESH)
     STORE_FAILURES = getattr(args, 'store_failures', STORE_FAILURES)
     GREEDY = getattr(args, 'greedy', GREEDY)
+    WHICH = getattr(args, 'which', WHICH)
 
     # global cli flags with env var and user_config alternatives
     USE_EXPERIMENTAL_PARSER = get_flag_value('USE_EXPERIMENTAL_PARSER', args, user_config)
