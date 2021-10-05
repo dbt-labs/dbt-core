@@ -37,9 +37,11 @@ class CleanTask(BaseTask):
         and cleans the project paths that are not protected.
         """
         move_to_nearest_project_dir(self.args)
-        if ('dbt_modules' in self.config.clean_targets and
+        if (
            self.config.packages_install_path not in self.config.clean_targets):
-            deprecations.warn('install-packages-path')
+            and self.config.packages_install_path not in self.config.clean_targets
+        ):
+            deprecations.warn("install-packages-path")
         for path in self.config.clean_targets:
             fire_event(CheckCleanPath(path=path))
             if not self.__is_protected_path(path):
