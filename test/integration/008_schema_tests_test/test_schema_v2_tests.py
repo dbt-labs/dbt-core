@@ -231,13 +231,13 @@ class TestHooksInTests(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "on-run-start": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
-            "on-run-end": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
+            "on-run-start": ["{{ log('hooks called in tests -- good!') if execute }}"],
+            "on-run-end": ["{{ log('hooks called in tests -- good!') if execute }}"],
         }
 
     @use_profile('postgres')
     def test_postgres_hooks_dont_run_for_tests(self):
-        # This would fail if the hooks ran
+        # This passes now that hooks run, a behavior we changed in v1.0
         results = self.run_dbt(['test', '--model', 'ephemeral'])
         self.assertEqual(len(results), 1)
         for result in results:
