@@ -13,7 +13,7 @@ class TestAnalyses(DBTIntegrationTest):
         return "models"
 
     def analysis_path(self):
-        return "analysis"
+        return "analyses"
 
     @property
     def project_config(self):
@@ -28,8 +28,8 @@ class TestAnalyses(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_analyses(self):
-        compiled_analysis_path = os.path.normpath('target/compiled/test/analysis')
-        path_1 = os.path.join(compiled_analysis_path, 'analysis.sql')
+        compiled_analysis_path = os.path.normpath('target/compiled/test/analyses')
+        path_1 = os.path.join(compiled_analysis_path, 'my_analysis.sql')
         path_2 = os.path.join(compiled_analysis_path, 'raw_stuff.sql')
 
         self.run_dbt(['clean'])
@@ -37,7 +37,7 @@ class TestAnalyses(DBTIntegrationTest):
         results = self.run_dbt(["compile"])
         self.assertEqual(len(results), 3)
         manifest = get_manifest()
-        analysis_id = 'analysis.test.analysis'
+        analysis_id = 'analysis.test.my_analysis'
         self.assertIn(analysis_id, manifest.nodes)
         node = manifest.nodes[analysis_id]
         self.assertEqual(node.description, 'This is my analysis')
