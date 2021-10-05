@@ -1,3 +1,3 @@
 {% macro test_call_pkg_macro(model) %}
-    select {{ local_utils.current_timestamp() }}
+    select {{ adapter.dispatch('current_timestamp', macro_namespace = 'local_utils')() }}
 {% endmacro %}

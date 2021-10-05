@@ -96,7 +96,6 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
         possible_macro_calls.append(func_name)
 
     # packages positional argument
-    packages = None
     macro_namespace = None
     packages_arg = None
     packages_arg_type = None
@@ -109,13 +108,7 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
     # keyword arguments
     if func_call.kwargs:
         for kwarg in func_call.kwargs:
-            if kwarg.key == 'packages':
-                # The packages keyword will be deprecated and
-                # eventually removed
-                packages_arg = kwarg.value
-                # This can be a List or a Call
-                packages_arg_type = type(kwarg.value).__name__
-            elif kwarg.key == 'macro_name':
+            if kwarg.key == 'macro_name':
                 # This will remain to enable static resolution
                 if type(kwarg.value).__name__ == 'Const':
                     func_name = kwarg.value.value
@@ -142,63 +135,10 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
         elif packages_arg_type == 'Const':
             # This will remain to enable static resolution
             macro_namespace = packages_arg.value
-        elif packages_arg_type == 'Call':
-            # This is deprecated and should be removed eventually.
-            # It is here to support (hackily) common ways of providing
-            # a packages list to adapter.dispatch
-            if (hasattr(packages_arg, 'node') and
-                    hasattr(packages_arg.node, 'node') and
-                    hasattr(packages_arg.node.node, 'name') and
-                    hasattr(packages_arg.node, 'attr')):
-                package_name = packages_arg.node.node.name
-                macro_name = packages_arg.node.attr
-                if (macro_name.startswith('_get') and 'namespaces' in macro_name):
-                    # noqa: https://github.com/dbt-labs/dbt-utils/blob/9e9407b/macros/cross_db_utils/_get_utils_namespaces.sql
-                    var_name = f'{package_name}_dispatch_list'
-                    # hard code compatibility for fivetran_utils, just a teensy bit different
-                    # noqa: https://github.com/fivetran/dbt_fivetran_utils/blob/0978ba2/macros/_get_utils_namespaces.sql
-                    if package_name == 'fivetran_utils':
-                        default_packages = ['dbt_utils', 'fivetran_utils']
-                    else:
-                        default_packages = [package_name]
-
-                    namespace_names = get_dispatch_list(ctx, var_name, default_packages)
-                    packages = []
-                    if namespace_names:
-                        packages.extend(namespace_names)
-                else:
-                    msg = (
-                        f"As of v0.19.2, custom macros, such as '{macro_name}', are no longer "
-                        "supported in the 'packages' argument of 'adapter.dispatch()'.\n"
-                        f"See https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch "
-                        "for details."
-                    ).strip()
-                    raise_compiler_error(msg)
-        elif packages_arg_type == 'Add':
-            # This logic is for when there is a variable and an addition of a list,
-            # like: packages = (var('local_utils_dispatch_list', []) + ['local_utils2'])
-            # This is deprecated and should be removed eventually.
-            namespace_var = None
-            default_namespaces = []
-            # This might be a single call or it might be the 'left' piece in an addition
-            for var_call in packages_arg.find_all(jinja2.nodes.Call):
-                if (hasattr(var_call, 'node') and
-                        var_call.node.name == 'var' and
-                        hasattr(var_call, 'args')):
-                    namespace_var = var_call.args[0].value
-            if hasattr(packages_arg, 'right'):  # we have a default list of namespaces
-                for item in packages_arg.right.items:
-                    default_namespaces.append(item.value)
-            if namespace_var:
-                namespace_names = get_dispatch_list(ctx, namespace_var, default_namespaces)
-                packages = []
-                if namespace_names:
-                    packages.extend(namespace_names)
 
     if db_wrapper:
         macro = db_wrapper.dispatch(
             func_name,
-            packages=packages,
             macro_namespace=macro_namespace
         ).macro
         func_name = f'{macro.package_name}.{macro.name}'
@@ -206,20 +146,9 @@ def statically_parse_adapter_dispatch(func_call, ctx, db_wrapper):
     else:  # this is only for test/unit/test_macro_calls.py
         if macro_namespace:
             packages = [macro_namespace]
-        if packages is None:
+        else:
             packages = []
         for package_name in packages:
             possible_macro_calls.append(f'{package_name}.{func_name}')
 
     return possible_macro_calls
-
-
-def get_dispatch_list(ctx, var_name, default_packages):
-    namespace_list = None
-    try:
-        # match the logic currently used in package _get_namespaces() macro
-        namespace_list = ctx['var'](var_name) + default_packages
-    except Exception:
-        pass
-    namespace_list = namespace_list if namespace_list else default_packages
-    return namespace_list

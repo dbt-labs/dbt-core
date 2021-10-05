@@ -3,6 +3,7 @@
 ### Breaking changes
 
 - The two type of test definitions are now "singular" and "generic" (instead of "data" and "schema", respectively). The `test_type:` selection method accepts `test_type:singular` and `test_type:generic`. (It will also accept `test_type:schema` and `test_type:data` for backwards compatibility) ([#3234](https://github.com/dbt-labs/dbt/issues/3234), [#3880](https://github.com/dbt-labs/dbt/pull/3880)). **Not backwards compatible:** The `--data` and `--schema` flags to `dbt test` are no longer supported, and tests no longer have the tags `'data'` and `'schema'` automatically applied.
+- Deprecated the use of the `packages` arg `adapter.dispatch` in favor of the `macro_namespace` arg. ([#3895](https://github.com/dbt-labs/dbt/issues/3895))
 
 ### Features
 - Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))

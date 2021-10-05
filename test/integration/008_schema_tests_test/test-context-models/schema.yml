@@ -9,5 +9,5 @@ models:
     - name: model_c
       tests:
         - call_pkg_macro
-        - local_utils.pkg_and_dispatch
+        - local_utils.dispatch
         - my_datediff
