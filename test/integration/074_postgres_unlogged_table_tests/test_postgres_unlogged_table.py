@@ -54,6 +54,9 @@ class TestPostgresUnloggedTable(DBTIntegrationTest):
             WHERE relname = '{table_name}'
         """
         sql = sql.format(table_name=table_name, schema=self.unique_schema())
+
         result, = self.run_sql(sql, fetch='one')
+
         self.assertEqual(len(result),  1)
+
         return result
