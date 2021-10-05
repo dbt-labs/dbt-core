@@ -244,3 +244,117 @@ profile:
   target: dev
 """
 
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
+    def test_postgres_init_task_outside_of_project(self, mock_prompt, mock_confirm):
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+
+        # Start by removing the dbt_project.yml so that we're not in an existing project
+        os.remove('dbt_project.yml')
+
+        project_name = self.get_project_name()
+        manager.prompt.side_effect = [
+            project_name,
+            1,
+            4,
+            'localhost',
+            5432,
+            'test_username',
+            'test_password',
+            'test_db',
+            'test_schema',
+        ]
+        self.run_dbt(['init'])
+        manager.assert_has_calls([
+            call.prompt('What is the desired project name?'),
+            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
+            call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
+            call.prompt('port', default=5432, hide_input=False, type=click.INT),
+            call.prompt('user (dev username)', default=None, hide_input=False, type=None),
+            call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
+            call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+        ])
+
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
+            assert f.read() == f"""config:
+  send_anonymous_usage_stats: false
+test:
+  outputs:
+    default2:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: root
+      pass: password
+      dbname: dbt
+      schema: {self.unique_schema()}
+    noaccess:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: noaccess
+      pass: password
+      dbname: dbt
+      schema: {self.unique_schema()}
+  target: default2
+{project_name}:
+  outputs:
+    dev:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: test_username
+      pass: test_password
+      dbname: test_db
+      schema: test_schema
+  target: dev
+"""
+
+        with open(os.path.join(self.test_root_dir, project_name, 'dbt_project.yml'), 'r') as f:
+            assert f.read() == f"""
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: '{project_name}'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: '{project_name}'
+
+# These configurations specify where dbt should look for different types of files.
+# The `source-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+source-paths: ["models"]
+analysis-paths: ["analysis"]
+test-paths: ["tests"]
+data-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_modules"
+
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
+# In this example config, we tell dbt to build all models in the example/ directory
+# as tables. These settings can be overridden in the individual model files
+# using the `{{{{ config(...) }}}}` macro.
+models:
+  {project_name}:
+    # Config indicated by + and applies to all files under models/example/
+    example:
+      +materialized: view
+"""
