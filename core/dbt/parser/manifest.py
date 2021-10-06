@@ -6,6 +6,7 @@ import traceback
 from typing import (
     Dict, Optional, Mapping, Callable, Any, List, Type, Union, Tuple
 )
+from itertools import chain
 import time
 
 import dbt.exceptions
@@ -893,7 +894,9 @@ def _warn_for_unused_resource_config_paths(
     manifest: Manifest, config: RuntimeConfig
 ) -> None:
     resource_fqns: Mapping[str, PathSet] = manifest.get_resource_fqns()
-    disabled_fqns: PathSet = frozenset(tuple(n.fqn) for n in manifest.disabled.values())
+    disabled_fqns: PathSet = frozenset(
+        tuple(n.fqn) for n in list(chain.from_iterable(manifest.disabled.values()))
+    )
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 

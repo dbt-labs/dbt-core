@@ -15,6 +15,7 @@
 - Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
 - Skip partial parsing if certain macros have changed ([#3810](https://github.com/dbt-labs/dbt/issues/3810), [#3982](https://github.com/dbt-labs/dbt/pull/3892))
 - Enable cataloging of unlogged Postgres tables ([3961](https://github.com/dbt-labs/dbt/issues/3961), [#3993](https://github.com/dbt-labs/dbt/pull/3993))
+- Fix multiple disabled nodes ([#4013](https://github.com/dbt-labs/dbt/issues/4013), [#4018](https://github.com/dbt-labs/dbt/pull/4018))
 
 ### Under the hood
 
