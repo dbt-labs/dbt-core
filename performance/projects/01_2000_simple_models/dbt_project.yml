@@ -14,7 +14,7 @@ profile: 'default'
 # The `source-paths` config, for example, states that source models can be found
 # in the "models/" directory. You probably won't need to change these!
 source-paths: ["models"]
-analysis-paths: ["analysis"] 
+analysis-paths: ["analyses"] 
 test-paths: ["tests"]
 data-paths: ["data"]
 macro-paths: ["macros"]
@@ -22,7 +22,7 @@ macro-paths: ["macros"]
 target-path: "target"  # directory which will store compiled SQL files
 clean-targets:         # directories to be removed by `dbt clean`
     - "target"
-    - "dbt_modules"
+    - "dbt_packages"
 
 # You can define configurations for models in the `source-paths` directory here.
 # Using these configurations, you can enable or disable models, change how they

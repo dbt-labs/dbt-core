@@ -9,4 +9,4 @@ models:
     - name: model_c
       tests:
         - call_pkg_macro
-        - test_utils.pkg_and_dispatch
+        - test_utils.dispatch

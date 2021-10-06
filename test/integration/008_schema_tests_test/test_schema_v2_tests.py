@@ -392,7 +392,7 @@ class TestSchemaTestContext(DBTIntegrationTest):
         self.assertEqual(len(results), 5)
         # call_pkg_macro_model_c_
         self.assertEqual(results[0].status, TestStatus.Fail)
-        # pkg_and_dispatch_model_c_
+        # dispatch_model_c_
         self.assertEqual(results[1].status, TestStatus.Fail)
         # my_datediff
         self.assertRegex(results[2].node.compiled_sql, r'1000')
@@ -449,10 +449,11 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
         run_result = self.run_dbt(['test'], expect_pass=False)
         results = run_result.results
         results = sorted(results, key=lambda r: r.node.name)
+        # breakpoint()
         self.assertEqual(len(results), 4)
         # call_pkg_macro_model_c_
         self.assertEqual(results[0].status, TestStatus.Fail)
-        # pkg_and_dispatch_model_c_
+        # dispatch_model_c_
         self.assertEqual(results[1].status, TestStatus.Fail)
         # type_one_model_a_
         self.assertEqual(results[2].status, TestStatus.Fail)

@@ -43,25 +43,20 @@ class DBTDeprecation:
             active_deprecations.add(self.name)
 
 
-class DispatchPackagesDeprecation(DBTDeprecation):
-    _name = 'dispatch-packages'
-    _description = '''\
-    The "packages" argument of adapter.dispatch() has been deprecated.
-    Use the "macro_namespace" argument instead.
-
-    Raised during dispatch for: {macro_name}
-
-    For more information, see:
-
-    https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch
-    '''
-
-
 class PackageRedirectDeprecation(DBTDeprecation):
     _name = 'package-redirect'
     _description = '''\
     The `{old_name}` package is deprecated in favor of `{new_name}`. Please update
     your `packages.yml` configuration to use `{new_name}` instead.
+    '''
+
+
+class PackageInstallPathDeprecation(DBTDeprecation):
+    _name = 'install-packages-path'
+    _description = '''\
+    The default package install path has changed from `dbt_modules` to `dbt_packages`.
+    Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
+    Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
     '''
 
 
@@ -103,7 +98,7 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
-    DispatchPackagesDeprecation(),
+    PackageInstallPathDeprecation(),
     PackageRedirectDeprecation()
 ]
 

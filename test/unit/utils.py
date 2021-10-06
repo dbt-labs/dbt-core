@@ -235,7 +235,7 @@ def generate_name_macros(package):
             unique_id=f'macro.{package}.{name}',
             package_name=package,
             original_file_path=normalize('macros/macro.sql'),
-            root_path='./dbt_modules/root',
+            root_path='./dbt_packages/root',
             path=normalize('macros/macro.sql'),
             macro_sql=sql,
         )

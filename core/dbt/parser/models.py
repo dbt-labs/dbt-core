@@ -11,6 +11,7 @@ from dbt import utils
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 from functools import reduce
 from itertools import chain
+import random
 from typing import Any, Dict, Iterator, List, Optional, Union
 
 
@@ -39,22 +40,35 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             logger.debug(f"1605: jinja rendering because of STATIC_PARSER flag. file: {node.path}")
             return
 
-        # only sample on normal runs, not when the experimental parser flag is on.
-        sample: bool = False
+        # only sample for experimental parser correctness on normal runs,
+        # not when the experimental parser flag is on.
+        exp_sample: bool = False
+        # sampling the stable static parser against jinja is significantly
+        # more expensive and therefor done far less frequently.
+        stable_sample: bool = False
+        # there are two samples above, and it is perfectly fine if both happen
+        # at the same time. If that happens, the experimental parser, stable
+        # parser, and jinja rendering will run on the same model file and
+        # send back codes for experimental v stable, and stable v jinja.
         if not flags.USE_EXPERIMENTAL_PARSER:
-            # sampling is explicitly disabled here, but use the following
+            # `True` roughly 1/5000 times this function is called
+            # sample = random.randint(1, 5001) == 5000
+            stable_sample = random.randint(1, 5001) == 5000
+            # sampling the experimental parser is explicitly disabled here, but use the following
             # commented code to sample a fraction of the time when new
-            # experimental features are added. (must also `import random`)
-            pass
+            # experimental features are added.
             # `True` roughly 1/100 times this function is called
-            # sample = random.randint(1, 101) == 100
+            # exp_sample = random.randint(1, 101) == 100
 
         # top-level declaration of variables
         statically_parsed: Optional[Union[str, Dict[str, List[Any]]]] = None
         experimental_sample: Optional[Union[str, Dict[str, List[Any]]]] = None
+        jinja_sample_node = None
+        jinja_sample_config = None
+        result = []
 
         # sample the experimental parser during a normal run
-        if sample:
+        if exp_sample:
             logger.debug(f"1610: conducting experimental parser sample on {node.path}")
             experimental_sample = self.run_experimental_parser(node)
         # use the experimental parser exclusively if the flag is on
@@ -90,6 +104,34 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # setting them in config._config_call_dict is sufficient
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
+
+            # only sample jinja for the purpose of comparing with the stable static parser
+            # if we know we don't need to fall back to jinja (i.e. - nothing to compare
+            # with jinja v jinja).
+            # This means we skip sampling for 40% of the 1/5000 samples. We could run the
+            # sampling rng here, but the effect would be the same since we would only roll
+            # it 40% of the time. So I've opted to keep all the rng code colocated above.
+            if stable_sample \
+                    and jinja_sample_node is not None \
+                    and jinja_sample_config is not None:
+                logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
+                # TODO are these deep copies this too expensive?
+                # TODO does this even mutate anything in `self`???
+                model_parser_copy = deepcopy(self)
+                jinja_sample_node = deepcopy(node)
+                jinja_sample_config = deepcopy(config)
+                # rendering mutates the node and the config
+                super(ModelParser, model_parser_copy) \
+                    .render_update(jinja_sample_node, jinja_sample_config)
+                # type-level branching to avoid Optional parameters in the
+                # `_get_stable_sample_result` type signature
+                if jinja_sample_node is not None and jinja_sample_config is not None:
+                    result.extend(_get_stable_sample_result(
+                        jinja_sample_node,
+                        jinja_sample_config,
+                        node,
+                        config
+                    ))
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
@@ -98,14 +140,16 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 f"1602: parser fallback to jinja rendering on {node.path}"
             )
 
-        # if we're sampling, compare for correctness
-        if sample:
-            result = _get_sample_result(
+        # if we're sampling the experimental parser, compare for correctness
+        if exp_sample:
+            result.extend(_get_exp_sample_result(
                 experimental_sample,
                 config_call_dict,
                 node,
                 config
-            )
+            ))
+        # only send the tracking event if there is at least one result code
+        if result:
             # fire a tracking event. this fires one event for every sample
             # so that we have data on a per file basis. Not only can we expect
             # no false positives or misses, we can expect the number model
@@ -232,7 +276,7 @@ def _shift_sources(
 
 
 # returns a list of string codes to be sent as a tracking event
-def _get_sample_result(
+def _get_exp_sample_result(
     sample_output: Optional[Union[str, Dict[str, Any]]],
     config_call_dict: Dict[str, Any],
     node: ParsedModelNode,
@@ -243,7 +287,7 @@ def _get_sample_result(
     if sample_output is None:
         result += ["09_experimental_parser_skipped"]
     # experimental parser couldn't parse
-    elif (isinstance(sample_output, str)):
+    elif isinstance(sample_output, str):
         if sample_output == "cannot_parse":
             result += ["01_experimental_parser_cannot_parse"]
         elif sample_output == "has_banned_macro":
@@ -288,5 +332,56 @@ def _get_sample_result(
         # if there are no errors, return a success value
         if not result:
             result = ["00_exact_match"]
+
+    return result
+
+
+# returns a list of string codes to be sent as a tracking event
+def _get_stable_sample_result(
+    sample_node: ParsedModelNode,
+    sample_config: ContextConfig,
+    node: ParsedModelNode,
+    config: ContextConfig
+) -> List[str]:
+    result: List[str] = []
+    # look for false positive configs
+    for k in config._config_call_dict:
+        if k not in config._config_call_dict:
+            result += ["82_stable_false_positive_config_value"]
+            break
+
+    # look for missed configs
+    for k in config._config_call_dict.keys():
+        if k not in sample_config._config_call_dict.keys():
+            result += ["83_stable_missed_config_value"]
+            break
+
+    # look for false positive sources
+    for s in sample_node.sources:
+        if s not in node.sources:
+            result += ["84_sample_false_positive_source_value"]
+            break
+
+    # look for missed sources
+    for s in node.sources:
+        if s not in sample_node.sources:
+            result += ["85_sample_missed_source_value"]
+            break
+
+    # look for false positive refs
+    for r in sample_node.refs:
+        if r not in node.refs:
+            result += ["86_sample_false_positive_ref_value"]
+            break
+
+    # look for missed refs
+    for r in node.refs:
+        if r not in sample_node.refs:
+            result += ["87_stable_missed_ref_value"]
+            break
+
+    # if there are no errors, return a success value
+    if not result:
+        result = ["80_stable_exact_match"]
 
     return result

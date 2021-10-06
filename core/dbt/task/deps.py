@@ -43,7 +43,7 @@ class DepsTask(BaseTask):
         )
 
     def run(self):
-        system.make_directory(self.config.modules_path)
+        system.make_directory(self.config.packages_install_path)
         packages = self.config.packages.packages
         if not packages:
             logger.info('Warning: No packages were found in packages.yml')

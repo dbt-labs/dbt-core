@@ -6,7 +6,6 @@ from typing import (
 )
 from typing_extensions import Protocol
 
-from dbt import deprecations
 from dbt.adapters.base.column import Column
 from dbt.adapters.factory import (
     get_adapter, get_adapter_package_names, get_adapter_type_names
@@ -40,6 +39,7 @@ from dbt.exceptions import (
     InternalException,
     ValidationException,
     RuntimeException,
+    macro_invalid_dispatch_arg,
     missing_config,
     raise_compiler_error,
     ref_invalid_args,
@@ -120,24 +120,24 @@ class BaseDatabaseWrapper:
         self,
         macro_name: str,
         macro_namespace: Optional[str] = None,
-        packages: Optional[List[str]] = None,
+        packages: Optional[List[str]] = None,  # eventually remove since it's fully deprecated
     ) -> MacroGenerator:
         search_packages: List[Optional[str]]
 
         if '.' in macro_name:
-            suggest_package, suggest_macro_name = macro_name.split('.', 1)
+            suggest_macro_namespace, suggest_macro_name = macro_name.split('.', 1)
             msg = (
                 f'In adapter.dispatch, got a macro name of "{macro_name}", '
                 f'but "." is not a valid macro name component. Did you mean '
                 f'`adapter.dispatch("{suggest_macro_name}", '
-                f'packages=["{suggest_package}"])`?'
+                f'macro_namespace="{suggest_macro_namespace}")`?'
             )
             raise CompilationException(msg)
 
         if packages is not None:
-            deprecations.warn('dispatch-packages', macro_name=macro_name)
+            raise macro_invalid_dispatch_arg(macro_name)
 
-        namespace = packages if packages else macro_namespace
+        namespace = macro_namespace
 
         if namespace is None:
             search_packages = [None]
@@ -145,14 +145,12 @@ class BaseDatabaseWrapper:
             search_packages = self._adapter.config.get_macro_search_order(namespace)
             if not search_packages and namespace in self._adapter.config.dependencies:
                 search_packages = [namespace]
-            if not search_packages:
-                raise CompilationException(
-                    f'In adapter.dispatch, got a string packages argument '
-                    f'("{packages}"), but packages should be None or a list.'
-                )
         else:
             # Not a string and not None so must be a list
-            search_packages = namespace
+            raise CompilationException(
+                f'In adapter.dispatch, got a list macro_namespace argument '
+                f'("{macro_namespace}"), but macro_namespace should be None or a string.'
+            )
 
         attempts = []
 

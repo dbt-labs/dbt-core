@@ -2,6 +2,7 @@ import os.path
 import os
 import shutil
 
+from dbt import deprecations
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.config import UnsetProfileConfig
@@ -33,6 +34,9 @@ class CleanTask(BaseTask):
         and cleans the project paths that are not protected.
         """
         move_to_nearest_project_dir(self.args)
+        if ('dbt_modules' in self.config.clean_targets and
+           self.config.packages_install_path != 'dbt_modules'):
+            deprecations.warn('install-packages-path')
         for path in self.config.clean_targets:
             logger.info("Checking {}/*".format(path))
             if not self.__is_protected_path(path):

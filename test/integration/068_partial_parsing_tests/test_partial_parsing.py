@@ -224,7 +224,7 @@ class TestSources(DBTIntegrationTest):
             'data-paths': ['seed'],
             'test-paths': ['tests'],
             'macro-paths': ['macros-b'],
-            'analysis-paths': ['analysis'],
+            'analysis-paths': ['analyses'],
             'seeds': {
                 'quote_columns': False,
             },
@@ -248,8 +248,8 @@ class TestSources(DBTIntegrationTest):
             os.remove(normalize('target/partial_parse.msgpack'))
         if os.path.exists(normalize('tests/my_test.sql')):
             os.remove(normalize('tests/my_test.sql'))
-        if os.path.exists(normalize('analysis/my_analysis.sql')):
-            os.remove(normalize('analysis/my_analysis.sql'))
+        if os.path.exists(normalize('analyses/my_analysis.sql')):
+            os.remove(normalize('analyses/my_analysis.sql'))
         if os.path.exists(normalize('macros-b/tests.sql')):
             os.remove(normalize('macros-b/tests.sql'))
 
@@ -345,7 +345,7 @@ class TestSources(DBTIntegrationTest):
         self.assertIn(test_id, manifest.nodes)
 
         # Add an analysis
-        shutil.copyfile('extra-files/my_analysis.sql', 'analysis/my_analysis.sql')
+        shutil.copyfile('extra-files/my_analysis.sql', 'analyses/my_analysis.sql')
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
 
@@ -356,7 +356,7 @@ class TestSources(DBTIntegrationTest):
         self.assertEqual(len(manifest.nodes), 9)
 
         # Remove analysis
-        os.remove(normalize('analysis/my_analysis.sql'))
+        os.remove(normalize('analyses/my_analysis.sql'))
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
         self.assertEqual(len(manifest.nodes), 8)

@@ -327,8 +327,8 @@ class PartialProject(RenderComponents):
         source_paths: List[str] = value_or(cfg.source_paths, ['models'])
         macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
         data_paths: List[str] = value_or(cfg.data_paths, ['data'])
-        test_paths: List[str] = value_or(cfg.test_paths, ['test'])
-        analysis_paths: List[str] = value_or(cfg.analysis_paths, [])
+        test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
+        analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
 
         all_source_paths: List[str] = _all_source_paths(
@@ -341,7 +341,7 @@ class PartialProject(RenderComponents):
         target_path: str = value_or(cfg.target_path, 'target')
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
         log_path: str = value_or(cfg.log_path, 'logs')
-        modules_path: str = value_or(cfg.modules_path, 'dbt_modules')
+        packages_install_path: str = value_or(cfg.packages_install_path, 'dbt_packages')
         # in the default case we'll populate this once we know the adapter type
         # It would be nice to just pass along a Quoting here, but that would
         # break many things
@@ -399,7 +399,7 @@ class PartialProject(RenderComponents):
             snapshot_paths=snapshot_paths,
             clean_targets=clean_targets,
             log_path=log_path,
-            modules_path=modules_path,
+            packages_install_path=packages_install_path,
             quoting=quoting,
             models=models,
             on_run_start=on_run_start,
@@ -511,7 +511,7 @@ class Project:
     snapshot_paths: List[str]
     clean_targets: List[str]
     log_path: str
-    modules_path: str
+    packages_install_path: str
     quoting: Dict[str, Any]
     models: Dict[str, Any]
     on_run_start: List[str]

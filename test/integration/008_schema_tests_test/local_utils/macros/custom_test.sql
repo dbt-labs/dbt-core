@@ -1,7 +1,7 @@
-{% macro test_pkg_and_dispatch(model) -%}
-  {{ return(adapter.dispatch('test_pkg_and_dispatch', packages = local_utils._get_utils_namespaces())()) }}
+{% macro test_dispatch(model) -%}
+  {{ return(adapter.dispatch('test_dispatch', macro_namespace = 'local_utils')()) }}
 {%- endmacro %}
 
-{% macro default__test_pkg_and_dispatch(model) %}
-    select {{ local_utils.current_timestamp() }}
+{% macro default__test_dispatch(model) %}
+    select {{ adapter.dispatch('current_timestamp', macro_namespace = 'local_utils')() }}
 {% endmacro %}

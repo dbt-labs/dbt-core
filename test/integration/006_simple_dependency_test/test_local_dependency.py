@@ -296,7 +296,7 @@ class TestSimpleDependencyDuplicateName(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_local_dependency_same_name_sneaky(self):
-        os.makedirs('dbt_modules')
-        shutil.copytree('./duplicate_dependency', './dbt_modules/duplicate_dependency')
+        os.makedirs('dbt_packages')
+        shutil.copytree('./duplicate_dependency', './dbt_packages/duplicate_dependency')
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt(['compile'], expect_pass=False)

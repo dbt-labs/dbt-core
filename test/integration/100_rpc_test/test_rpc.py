@@ -1121,12 +1121,12 @@ class TestRPCServerDeps(HasRPCServer):
 
     def setUp(self):
         super().setUp()
-        if os.path.exists('./dbt_modules'):
-            shutil.rmtree('./dbt_modules')
+        if os.path.exists('./dbt_packages'):
+            shutil.rmtree('./dbt_packages')
 
     def tearDown(self):
-        if os.path.exists('./dbt_modules'):
-            shutil.rmtree('./dbt_modules')
+        if os.path.exists('./dbt_packages'):
+            shutil.rmtree('./dbt_packages')
         self.adapter.cleanup_connections()
         super().tearDown()
 
@@ -1144,7 +1144,7 @@ class TestRPCServerDeps(HasRPCServer):
         return "deps_models"
 
     def _check_start_predeps(self):
-        self.assertFalse(os.path.exists('./dbt_modules'))
+        self.assertFalse(os.path.exists('./dbt_packages'))
         status = self.assertIsResult(self.query('status').json())
         # will return an error because defined dependency is missing
         self.assertEqual(status['state'], 'error')
@@ -1155,8 +1155,8 @@ class TestRPCServerDeps(HasRPCServer):
 
         self.wait_for_state('ready', timestamp=status['timestamp'])
 
-        self.assertTrue(os.path.exists('./dbt_modules'))
-        self.assertEqual(len(os.listdir('./dbt_modules')), 1)
+        self.assertTrue(os.path.exists('./dbt_packages'))
+        self.assertEqual(len(os.listdir('./dbt_packages')), 1)
         self.assertIsResult(self.async_query('compile').json())
 
     @mark.flaky(rerun_filter=addr_in_use, max_runs=3)

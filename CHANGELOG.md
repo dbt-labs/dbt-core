@@ -3,6 +3,7 @@
 ### Breaking changes
 
 - The two type of test definitions are now "singular" and "generic" (instead of "data" and "schema", respectively). The `test_type:` selection method accepts `test_type:singular` and `test_type:generic`. (It will also accept `test_type:schema` and `test_type:data` for backwards compatibility) ([#3234](https://github.com/dbt-labs/dbt/issues/3234), [#3880](https://github.com/dbt-labs/dbt/pull/3880)). **Not backwards compatible:** The `--data` and `--schema` flags to `dbt test` are no longer supported, and tests no longer have the tags `'data'` and `'schema'` automatically applied.
+- Deprecated the use of the `packages` arg `adapter.dispatch` in favor of the `macro_namespace` arg. ([#3895](https://github.com/dbt-labs/dbt/issues/3895))
 
 ### Features
 - Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
@@ -14,6 +15,7 @@
 ### Fixes
 - Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
 - Skip partial parsing if certain macros have changed ([#3810](https://github.com/dbt-labs/dbt/issues/3810), [#3982](https://github.com/dbt-labs/dbt/pull/3892))
+- Enable cataloging of unlogged Postgres tables ([3961](https://github.com/dbt-labs/dbt/issues/3961), [#3993](https://github.com/dbt-labs/dbt/pull/3993))
 
 ### Under the hood
 
@@ -25,14 +27,19 @@
 - Enact deprecation for `adapter-macro` and replace deprecation warning with an exception. ([#3901](https://github.com/dbt-labs/dbt/issues/3901))
 - Add warning when trying to put a node under the wrong key.  ie. A seed under models in a `schema.yml` file. ([#3899](https://github.com/dbt-labs/dbt/issues/3899))
 - Plugins for `redshift`, `snowflake`, and `bigquery` have moved to separate repos: [`dbt-redshift`](https://github.com/dbt-labs/dbt-redshift), [`dbt-snowflake`](https://github.com/dbt-labs/dbt-snowflake), [`dbt-bigquery`](https://github.com/dbt-labs/dbt-bigquery)
+- Change the default dbt packages installation directory to `dbt_packages` from `dbt_modules`.  Also rename `module-path` to `packages-install-path` to allow default overrides of package install directory.  Deprecation warning added for projects using the old `dbt_modules` name without specifying a `packages-install-path`.  ([#3523](https://github.com/dbt-labs/dbt/issues/3523))
+- Update the default project paths to be `analysis-paths = ['analyses']` and `test-paths = ['tests]`. Also have starter project set `analysis-paths: ['analyses']` from now on.  ([#2659](https://github.com/dbt-labs/dbt/issues/2659))
 
 Contributors:
 
 - [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
 - [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt/issues/3952))
 - [@NiallRees](https://github.com/NiallRees) ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
+- [@samlader](https://github.com/samlader) ([#3993](https://github.com/dbt-labs/dbt/pull/3993))
 
-## dbt 0.21.0 (Release TBD)
+## dbt 0.21.0 (October 04, 2021)
+
+## dbt 0.21.0rc2 (September 27, 2021)
 
 ### Fixes
 - Fix batching for large seeds on Snowflake ([#3941](https://github.com/dbt-labs/dbt/issues/3941), [#3942](https://github.com/dbt-labs/dbt/pull/3942))
