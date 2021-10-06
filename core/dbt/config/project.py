@@ -342,8 +342,8 @@ class PartialProject(RenderComponents):
         seed_paths: List[str] = value_or(
             cfg.seed_paths if "seed-paths" in rendered.project_dict else cfg.data_paths, ["seeds"]
         )
-        test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
-        analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
+        test_paths: List[str] = value_or(cfg.test_paths, ["tests"])
+        analysis_paths: List[str] = value_or(cfg.analysis_paths, ["analyses"])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
 
         all_source_paths: List[str] = _all_source_paths(
