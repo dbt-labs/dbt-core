@@ -296,17 +296,17 @@ class PartialProject(RenderComponents):
     def check_config_path(self, project_dict, deprecated_path, exp_path):
         if deprecated_path in project_dict:
             if exp_path in project_dict:
-                # TODO: write better message
                 msg = (
                     '{deprecated_path} and {exp_path} cannot both be defined. The '
                     '`{deprecated_path}` config has been deprecated in favor of `{exp_path}`. '
                     'Please update your `dbt_project.yml` configuration to reflect this '
-                    'change.'.format(deprecated_path, exp_path)
+                    'change.'
                 )
-                raise DbtProjectError(msg)
+                raise DbtProjectError(msg.format(deprecated_path=deprecated_path,
+                                                 exp_path=exp_path))
             deprecations.warn('project_config_path',
-                              old_config=search_path,
-                              new_config=exp_path)
+                              deprecated_path=deprecated_path,
+                              exp_path=exp_path)
 
     def create_project(self, rendered: RenderComponents) -> 'Project':
         unrendered = RenderComponents(

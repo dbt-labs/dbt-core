@@ -63,7 +63,7 @@ class PackageInstallPathDeprecation(DBTDeprecation):
 class ConfigPathDeprecation(DBTDeprecation):
     _name = 'project_config_path'
     _description = '''\
-    The `{old_config}` config has been deprecated in favor of `{new_config}`.
+    The `{deprecated_path}` config has been deprecated in favor of `{exp_path}`.
     Please update your `dbt_project.yml` configuration to reflect this change.
     '''
 
