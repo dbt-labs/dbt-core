@@ -5,7 +5,7 @@ import random
 import time
 from typing import Dict, Any, Set
 
-import oyaml as yaml
+import yaml
 
 from dbt import flags
 

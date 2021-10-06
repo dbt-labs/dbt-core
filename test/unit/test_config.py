@@ -8,7 +8,7 @@ import unittest
 import pytest
 
 from unittest import mock
-import oyaml as yaml
+import yaml
 
 import dbt.config
 import dbt.exceptions

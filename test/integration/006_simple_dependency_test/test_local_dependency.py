@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import os
 import json
 import shutil
-import oyaml as yaml
+import yaml
 from unittest import mock
 
 import dbt.semver

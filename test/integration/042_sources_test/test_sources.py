@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta
 
-import oyaml as yaml
+import yaml
 
 from dbt.exceptions import CompilationException
 import dbt.tracking

@@ -1,6 +1,6 @@
 import os
 import pytest
-import oyaml as yaml
+import yaml
 from .util import (
     assert_has_threads,
     get_querier,

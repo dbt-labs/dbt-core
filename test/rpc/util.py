@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from typing import Dict, Any, Optional, Union, List
 
 import requests
-import oyaml as yaml
+import yaml
 
 import dbt.flags
 from dbt.adapters.factory import get_adapter, register_adapter

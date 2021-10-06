@@ -1,6 +1,6 @@
 import dbt.exceptions
 import textwrap
-import oyaml as yaml
+import yaml
 import unittest
 from dbt.config.selectors import SelectorDict
 

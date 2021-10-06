@@ -1,5 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import oyaml as yaml
+import yaml
 
 
 class TestGraphSelection(DBTIntegrationTest):

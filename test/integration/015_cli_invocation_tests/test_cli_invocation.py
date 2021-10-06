@@ -4,7 +4,7 @@ import os
 import shutil
 import pytest
 import tempfile
-import oyaml as yaml
+import yaml
 from typing import Dict
 
 

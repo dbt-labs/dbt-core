@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 import pytest
 import unittest
-import oyaml as yaml
+import yaml
 
 from dbt.clients.jinja import get_rendered
 from dbt.clients.jinja import get_template
