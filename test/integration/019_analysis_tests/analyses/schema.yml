@@ -1,5 +1,5 @@
 version: 2
 
 analyses:
-  - name: analysis
+  - name: my_analysis
     description: "This is my analysis"

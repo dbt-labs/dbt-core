@@ -327,8 +327,8 @@ class PartialProject(RenderComponents):
         source_paths: List[str] = value_or(cfg.source_paths, ['models'])
         macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
         data_paths: List[str] = value_or(cfg.data_paths, ['data'])
-        test_paths: List[str] = value_or(cfg.test_paths, ['test'])
-        analysis_paths: List[str] = value_or(cfg.analysis_paths, [])
+        test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
+        analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
 
         all_source_paths: List[str] = _all_source_paths(
