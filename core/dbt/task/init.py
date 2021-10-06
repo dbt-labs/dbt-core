@@ -168,6 +168,8 @@ class InitTask(BaseTask):
     ) -> Path:
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
+        # Create the profile directory if it doesn't exist
+        os.makedirs(flags.PROFILES_DIR, exist_ok=True)
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         if profiles_filepath.exists():
             with open(profiles_filepath, "r+") as f:
