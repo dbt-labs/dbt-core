@@ -50,7 +50,6 @@ setup(
     ],
     install_requires=[
         'Jinja2==2.11.3',
-        'oyaml>=1.0',
         'agate>=1.6,<1.6.2',
         'click>=8,<9',
         'colorama>=0.3.9,<0.4.5',

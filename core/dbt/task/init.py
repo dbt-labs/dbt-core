@@ -5,7 +5,7 @@ import re
 import shutil
 from typing import Optional
 
-import oyaml as yaml
+import yaml
 import click
 from jinja2 import Template
 

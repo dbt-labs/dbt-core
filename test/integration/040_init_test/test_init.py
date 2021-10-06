@@ -68,14 +68,14 @@ class TestInit(DBTIntegrationTest):
 test:
   outputs:
     dev:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: test_user
-      pass: test_password
       dbname: test_db
+      host: localhost
+      pass: test_password
+      port: 5432
       schema: test_schema
+      threads: 4
+      type: postgres
+      user: test_user
   target: dev
 """
 
@@ -122,14 +122,14 @@ test:
             assert f.read() == """test:
   outputs:
     dev:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: test_user
-      pass: test_password
       dbname: test_db
+      host: localhost
+      pass: test_password
+      port: 5432
       schema: test_schema
+      threads: 4
+      type: postgres
+      user: test_user
   target: dev
 """
 
@@ -233,14 +233,14 @@ profile:
             assert f.read() == """my_profile:
   outputs:
     dev:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: test_username
-      pass: test_password
       dbname: my_db
+      host: localhost
+      pass: test_password
+      port: 5432
       schema: my_schema
+      threads: 4
+      type: postgres
+      user: test_username
   target: dev
 """
 
@@ -289,14 +289,14 @@ profile:
 test:
   outputs:
     dev:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: test_username
-      pass: test_password
       dbname: test_db
+      host: localhost
+      pass: test_password
+      port: 5432
       schema: test_schema
+      threads: 4
+      type: postgres
+      user: test_username
   target: dev
 """
 
@@ -339,39 +339,39 @@ test:
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
             assert f.read() == f"""config:
   send_anonymous_usage_stats: false
-test:
-  outputs:
-    default2:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: root
-      pass: password
-      dbname: dbt
-      schema: {self.unique_schema()}
-    noaccess:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: noaccess
-      pass: password
-      dbname: dbt
-      schema: {self.unique_schema()}
-  target: default2
 {project_name}:
   outputs:
     dev:
-      type: postgres
-      threads: 4
-      host: localhost
-      port: 5432
-      user: test_username
-      pass: test_password
       dbname: test_db
+      host: localhost
+      pass: test_password
+      port: 5432
       schema: test_schema
+      threads: 4
+      type: postgres
+      user: test_username
   target: dev
+test:
+  outputs:
+    default2:
+      dbname: dbt
+      host: localhost
+      pass: password
+      port: 5432
+      schema: {self.unique_schema()}
+      threads: 4
+      type: postgres
+      user: root
+    noaccess:
+      dbname: dbt
+      host: localhost
+      pass: password
+      port: 5432
+      schema: {self.unique_schema()}
+      threads: 4
+      type: postgres
+      user: noaccess
+  target: default2
 """
 
         with open(os.path.join(self.test_root_dir, project_name, 'dbt_project.yml'), 'r') as f:
