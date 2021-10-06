@@ -14,6 +14,7 @@
 ### Fixes
 - Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
 - Skip partial parsing if certain macros have changed ([#3810](https://github.com/dbt-labs/dbt/issues/3810), [#3982](https://github.com/dbt-labs/dbt/pull/3892))
+- Enable cataloging of unlogged Postgres tables ([3961](https://github.com/dbt-labs/dbt/issues/3961), [#3993](https://github.com/dbt-labs/dbt/pull/3993))
 
 ### Under the hood
 
@@ -32,6 +33,7 @@ Contributors:
 
 - [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
 - [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt/issues/3952))
+- [@samlader](https://github.com/samlader) ([#3993](https://github.com/dbt-labs/dbt/pull/3993))
 
 ## dbt 0.21.0 (October 04, 2021)
 

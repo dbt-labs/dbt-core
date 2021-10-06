@@ -1,0 +1,8 @@
+version: 2
+models:
+  - name: table_unlogged
+    description: "Unlogged table model"
+    columns:
+      - name: column_a
+        description: "Sample description"
+        quote: true
