@@ -149,13 +149,13 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['SchemaParser'] = read_files_for_parser(
-        project, files, project.all_model_paths, '.yml', ParseFileType.Schema, saved_files
+        project, files, project.all_source_paths, '.yml', ParseFileType.Schema, saved_files
     )
 
     # Also read .yaml files for schema files. Might be better to change
     # 'read_files_for_parser' accept an array in the future.
     yaml_files = read_files_for_parser(
-        project, files, project.all_model_paths, '.yaml', ParseFileType.Schema, saved_files
+        project, files, project.all_source_paths, '.yaml', ParseFileType.Schema, saved_files
     )
     project_files['SchemaParser'].extend(yaml_files)
 

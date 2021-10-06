@@ -9,6 +9,7 @@ from typing_extensions import Protocol, runtime_checkable
 import hashlib
 import os
 
+from dbt import deprecations
 from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
 from dbt.clients.system import load_file_contents
@@ -122,7 +123,7 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
-def _all_model_paths(
+def _all_source_paths(
     model_paths: List[str],
     data_paths: List[str],
     snapshot_paths: List[str],
@@ -302,13 +303,14 @@ class PartialProject(RenderComponents):
             rendered.project_dict,
             verify_version=self.verify_version,
         )
-
         if 'source-paths' in rendered.project_dict:
-            msg = (
-                'The `source-paths` alias has been deprecated in favor of `models-paths`. '
-                'Please update `dbt_project.yml` to reflect this change.'
-            )
-            raise DbtProjectError(validator_error_message(msg))
+            deprecations.warn('project_config_path', old_config='source_paths', new_config='model_paths')
+            if 'model_paths' in rendered.project_dict:
+                # TODO: write better message
+                msg = (
+                '`source-paths` and `models-paths` cannot both be defined. '
+                )
+                raise DbtProjectError(validator_error_message(msg))
 
         try:
             ProjectContract.validate(rendered.project_dict)
@@ -331,19 +333,25 @@ class PartialProject(RenderComponents):
         # to have been a cli argument.
         profile_name = cfg.profile
         # these are all the defaults
-        model_paths: List[str] = value_or(cfg.model_paths, ['models'])
+        # `source_paths` is deprecated but still allowed. Copy it into 
+        # `model_paths` to simlify logic throughout the rest of the system.
+        if 'source-paths' in rendered.project_dict:
+            model_paths: List[str] = value_or(cfg.source_paths, ['models'])
+        else:
+            model_paths: List[str] = value_or(cfg.model_paths, ['models'])
+
         macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
         data_paths: List[str] = value_or(cfg.data_paths, ['data'])
         test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
 
-        all_model_paths: List[str] = _all_model_paths(
+        all_source_paths: List[str] = _all_source_paths(
             model_paths, data_paths, snapshot_paths, analysis_paths,
             macro_paths
         )
 
-        docs_paths: List[str] = value_or(cfg.docs_paths, all_model_paths)
+        docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
         asset_paths: List[str] = value_or(cfg.asset_paths, [])
         target_path: str = value_or(cfg.target_path, 'target')
         clean_targets: List[str] = value_or(cfg.clean_targets, [target_path])
@@ -389,7 +397,6 @@ class PartialProject(RenderComponents):
             # of dicts.
             manifest_selectors = SelectorDict.parse_from_selectors_list(
                 rendered.selectors_dict['selectors'])
-
         project = Project(
             project_name=name,
             version=version,
@@ -538,8 +545,8 @@ class Project:
     unrendered: RenderComponents
 
     @property
-    def all_model_paths(self) -> List[str]:
-        return _all_model_paths(
+    def all_source_paths(self) -> List[str]:
+        return _all_source_paths(
             self.model_paths, self.data_paths, self.snapshot_paths,
             self.analysis_paths, self.macro_paths
         )
