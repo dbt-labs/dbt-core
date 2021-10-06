@@ -304,6 +304,17 @@ class TestProfile(BaseConfigTest):
         self.assertIn('default', str(exc.exception))
 
     def test_missing_target(self):
+        self.default_project_data.update({
+            'model-paths': ['models'],
+            'source-paths': ['other-models'],
+        })
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:            
+            project = project_from_config_norender(self.default_project_data)
+
+        self.assertIn('source-paths and model-paths', str(exc.exception))
+        self.assertIn('cannot both be defined.', str(exc.exception))
+
+    def test_extra_path(self):
         profile = self.default_profile_data['default']
         del profile['target']
         profile['outputs']['default'] = profile['outputs']['postgres']
