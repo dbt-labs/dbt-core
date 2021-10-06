@@ -285,14 +285,19 @@ class InitTask(BaseTask):
             profile_name = self.get_profile_name_from_current_project()
             profile_template_path = Path("profile_template.yml")
             if profile_template_path.exists():
-                self.create_profile_using_profile_template()
-            else:
-                if not self.check_if_can_write_profile(profile_name=profile_name):
+                try:
+                    # This relies on a valid profile_template.yml from the user,
+                    # so use a try: except to fall back to the default on failure
+                    self.create_profile_using_profile_template()
                     return
-                adapter = self.ask_for_adapter_choice()
-                self.create_profile_from_scratch(
-                    adapter, profile_name=profile_name
-                )
+                except Exception:
+                    logger.info("Invalid profile_template.yml in project.")
+            if not self.check_if_can_write_profile(profile_name=profile_name):
+                return
+            adapter = self.ask_for_adapter_choice()
+            self.create_profile_from_scratch(
+                adapter, profile_name=profile_name
+            )
         else:
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.

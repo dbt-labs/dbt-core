@@ -247,6 +247,62 @@ profile:
     @use_profile('postgres')
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
+    def test_postgres_init_task_in_project_with_invalid_profile_template(self, mock_prompt, mock_confirm):
+        """Test that when an invalid profile_template.yml is provided,
+        init command falls back to the target_options.yml"""
+
+        with open("profile_template.yml", 'w') as f:
+            f.write("""invalid template""")
+
+        manager = Mock()
+        manager.attach_mock(mock_prompt, 'prompt')
+        manager.attach_mock(mock_confirm, 'confirm')
+        manager.confirm.side_effect = ["y"]
+        manager.prompt.side_effect = [
+            1,
+            4,
+            'localhost',
+            5432,
+            'test_username',
+            'test_password',
+            'test_db',
+            'test_schema',
+        ]
+
+        self.run_dbt(['init'])
+
+        manager.assert_has_calls([
+            call.confirm(f'The profile test already exists in {self.test_root_dir}/profiles.yml. Continue and overwrite it?'),
+            call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
+            call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
+            call.prompt('port', default=5432, hide_input=False, type=click.INT),
+            call.prompt('user (dev username)', default=None, hide_input=False, type=None),
+            call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
+            call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+        ])
+
+        with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
+            assert f.read() == """config:
+  send_anonymous_usage_stats: false
+test:
+  outputs:
+    dev:
+      type: postgres
+      threads: 4
+      host: localhost
+      port: 5432
+      user: test_username
+      pass: test_password
+      dbname: test_db
+      schema: test_schema
+  target: dev
+"""
+
+    @use_profile('postgres')
+    @mock.patch('click.confirm')
+    @mock.patch('click.prompt')
     def test_postgres_init_task_outside_of_project(self, mock_prompt, mock_confirm):
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
