@@ -304,11 +304,13 @@ class PartialProject(RenderComponents):
             verify_version=self.verify_version,
         )
         if 'source-paths' in rendered.project_dict:
-            deprecations.warn('project_config_path', old_config='source_paths', new_config='model_paths')
+            deprecations.warn('project_config_path',
+                              old_config='source_paths',
+                              new_config='model_paths')
             if 'model_paths' in rendered.project_dict:
                 # TODO: write better message
                 msg = (
-                '`source-paths` and `models-paths` cannot both be defined. '
+                    '`source-paths` and `models-paths` cannot both be defined. '
                 )
                 raise DbtProjectError(validator_error_message(msg))
 
@@ -333,13 +335,14 @@ class PartialProject(RenderComponents):
         # to have been a cli argument.
         profile_name = cfg.profile
         # these are all the defaults
-        # `source_paths` is deprecated but still allowed. Copy it into 
+        # `source_paths` is deprecated but still allowed. Copy it into
         # `model_paths` to simlify logic throughout the rest of the system.
         if 'source-paths' in rendered.project_dict:
-            model_paths: List[str] = value_or(cfg.source_paths, ['models'])
+            model_config_override = cfg.source_paths
         else:
-            model_paths: List[str] = value_or(cfg.model_paths, ['models'])
+            model_config_override = cfg.model_paths
 
+        model_paths: List[str] = value_or(model_config_override, ['models'])
         macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
         data_paths: List[str] = value_or(cfg.data_paths, ['data'])
         test_paths: List[str] = value_or(cfg.test_paths, ['tests'])

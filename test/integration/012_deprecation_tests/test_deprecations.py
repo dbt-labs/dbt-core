@@ -7,6 +7,7 @@ import dbt.exceptions
 class BaseTestDeprecations(DBTIntegrationTest):
     def setUp(self):
         super().setUp()
+        # breakpoint()
         deprecations.reset_deprecations()
 
     @property
@@ -16,6 +17,35 @@ class BaseTestDeprecations(DBTIntegrationTest):
     @staticmethod
     def dir(path):
         return path.lstrip("/")
+
+
+class TestConfigPathDeprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('models')
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'source-paths': [self.dir('models')]
+        }
+    
+    @use_profile('postgres')
+    def test_postgres_source_path(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(['debug'])
+        expected = {'project_config_path'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+    @use_profile('postgres')
+    def test_postgres_source_path_fail(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['--warn-error', 'debug'])
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        expected = "The `source_paths` config has been deprecated"
+        assert expected in exc_str
 
 
 class TestDeprecations(BaseTestDeprecations):

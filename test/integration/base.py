@@ -283,8 +283,8 @@ class DBTIntegrationTest(unittest.TestCase):
         return _profile_from_test_name(test_name)
 
     def _symlink_test_folders(self):
-        for entry in os.listdir(self.test_original_model_path):
-            src = os.path.join(self.test_original_model_path, entry)
+        for entry in os.listdir(self.test_original_source_path):
+            src = os.path.join(self.test_original_source_path, entry)
             tst = os.path.join(self.test_root_dir, entry)
             if os.path.isdir(src) or src.endswith('.sql'):
                 # symlink all sql files and all directories.
@@ -309,7 +309,7 @@ class DBTIntegrationTest(unittest.TestCase):
         # before we go anywhere, collect the initial path info
         self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
         _really_makedirs(self._logs_dir)
-        self.test_original_model_path = _pytest_get_test_root()
+        self.test_original_source_path = _pytest_get_test_root()
         self.test_root_dir = self._generate_test_root_dir()
 
         os.chdir(self.test_root_dir)
@@ -319,7 +319,7 @@ class DBTIntegrationTest(unittest.TestCase):
             msg = '\n\t'.join((
                 'Failed to symlink test folders!',
                 'initial_dir={0.initial_dir}',
-                'test_original_model_path={0.test_original_model_path}',
+                'test_original_source_path={0.test_original_source_path}',
                 'test_root_dir={0.test_root_dir}'
             )).format(self)
             logger.exception(msg)
