@@ -304,6 +304,15 @@ class TestProfile(BaseConfigTest):
         self.assertIn('default', str(exc.exception))
 
     def test_missing_target(self):
+        profile = self.default_profile_data['default']
+        del profile['target']
+        profile['outputs']['default'] = profile['outputs']['postgres']
+        profile = self.from_raw_profiles()
+        self.assertEqual(profile.profile_name, 'default')
+        self.assertEqual(profile.target_name, 'default')
+        self.assertEqual(profile.credentials.type, 'postgres')
+
+    def test_extra_path(self):
         self.default_project_data.update({
             'model-paths': ['models'],
             'source-paths': ['other-models'],
@@ -313,15 +322,6 @@ class TestProfile(BaseConfigTest):
 
         self.assertIn('source-paths and model-paths', str(exc.exception))
         self.assertIn('cannot both be defined.', str(exc.exception))
-
-    def test_extra_path(self):
-        profile = self.default_profile_data['default']
-        del profile['target']
-        profile['outputs']['default'] = profile['outputs']['postgres']
-        profile = self.from_raw_profiles()
-        self.assertEqual(profile.profile_name, 'default')
-        self.assertEqual(profile.target_name, 'default')
-        self.assertEqual(profile.credentials.type, 'postgres')
 
     def test_profile_invalid_project(self):
         renderer = empty_profile_renderer()
