@@ -1,3 +1,8 @@
+## dbt 0.21.1 (TBD)
+
+### Fixes
+- Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4057](https://github.com/dbt-labs/dbt/pull/4057))
+
 ## dbt 0.21.0 (October 04, 2021)
 
 ## dbt 0.21.0rc2 (September 27, 2021)
