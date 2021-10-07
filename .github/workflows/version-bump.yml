@@ -18,16 +18,17 @@ name: Version Bump
 
 on:
   workflow_dispatch:
+    inputs:
+      version_number:
+       description: 'The version number to bump to'
+       required: true
+      is_dry_run:
+       description: 'Creates a draft PR to allow testing instead of committing to a branch'
+       required: true
+       default: 'true'  
   repository_dispatch:
     types: [version-bump]
   
-# Default version number and dry run setting in case we have to run this
-# Action manually and not from a repository_dispatch event.
-# These should be updated if that is the case.
-env:
-  version_number_default: '0.22.0'
-  is_dry_run_default: true
- 
 jobs:
   bump:
     runs-on: ubuntu-latest
@@ -38,11 +39,13 @@ jobs:
       - name: Set version and dry run values
         id: variables
         env:
-          VERSION_NUMBER: "${{ github.event.client_payload.version_number == '' && env.version_number_default || github.event.client_payload.version_number }}"
-          IS_DRY_RUN: "${{ github.event.client_payload.is_dry_run == '' && env.is_dry_run_default || github.event.client_payload.is_dry_run }}"
+          VERSION_NUMBER: "${{ github.event.client_payload.version_number == '' && github.event.inputs.version_number || github.event.client_payload.version_number }}"
+          IS_DRY_RUN: "${{ github.event.client_payload.is_dry_run == '' && github.event.inputs.is_dry_run || github.event.client_payload.is_dry_run }}"
         run: |
-          echo Dispatch event version: ${{ github.event.client_payload.version_number }}
-          echo Dispatch event dry run: ${{ github.event.client_payload.is_dry_run }}
+          echo Repository dispatch event version: ${{ github.event.client_payload.version_number }}
+          echo Repository dispatch event dry run: ${{ github.event.client_payload.is_dry_run }}
+          echo Workflow dispatch event version: ${{ github.event.inputs.version_number }}
+          echo Workflow dispatch event dry run: ${{ github.event.inputs.is_dry_run }}
           echo ::set-output name=VERSION_NUMBER::$VERSION_NUMBER
           echo ::set-output name=IS_DRY_RUN::$IS_DRY_RUN
 
