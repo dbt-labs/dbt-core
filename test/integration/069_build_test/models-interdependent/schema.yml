@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: model_a
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: ref('model_b')
+              field: id
+          - relationships:
+              to: ref('model_c')
+              field: id
+
+  - name: model_b
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: ref('model_a')
+              field: id
+          - relationships:
+              to: ref('model_c')
+              field: id
+
+  - name: model_c
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: ref('model_a')
+              field: id
+          - relationships:
+              to: ref('model_b')
+              field: id

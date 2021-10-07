@@ -22,6 +22,7 @@
 - Fix multiple disabled nodes ([#4013](https://github.com/dbt-labs/dbt/issues/4013), [#4018](https://github.com/dbt-labs/dbt/pull/4018))
 - Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
 - Return an error instead of a warning when runing with `--warn-error` and no models are selected ([#4006](https://github.com/dbt-labs/dbt/issues/4006), [#4019](https://github.com/dbt-labs/dbt/pull/4019))
+- Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4022](https://github.com/dbt-labs/dbt/pull/4022))
 
 ### Under the hood
 
