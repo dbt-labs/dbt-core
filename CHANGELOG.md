@@ -29,12 +29,14 @@
 - Plugins for `redshift`, `snowflake`, and `bigquery` have moved to separate repos: [`dbt-redshift`](https://github.com/dbt-labs/dbt-redshift), [`dbt-snowflake`](https://github.com/dbt-labs/dbt-snowflake), [`dbt-bigquery`](https://github.com/dbt-labs/dbt-bigquery)
 - Change the default dbt packages installation directory to `dbt_packages` from `dbt_modules`.  Also rename `module-path` to `packages-install-path` to allow default overrides of package install directory.  Deprecation warning added for projects using the old `dbt_modules` name without specifying a `packages-install-path`.  ([#3523](https://github.com/dbt-labs/dbt/issues/3523))
 - Update the default project paths to be `analysis-paths = ['analyses']` and `test-paths = ['tests]`. Also have starter project set `analysis-paths: ['analyses']` from now on.  ([#2659](https://github.com/dbt-labs/dbt/issues/2659))
+- Define the data type of `sources` as an array of arrays of string in the manifest artifacts. ([#3966](https://github.com/dbt-labs/dbt/issues/3966), [#3967](https://github.com/dbt-labs/dbt/pull/3967))
 
 Contributors:
 
-- [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/issues/3920))
-- [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt/issues/3952))
+- [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt/pull/3922))
+- [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt/pull/3953))
 - [@samlader](https://github.com/samlader) ([#3993](https://github.com/dbt-labs/dbt/pull/3993))
+- [@yu-iskw](https://github.com/yu-iskw) ([#3967](https://github.com/dbt-labs/dbt/pull/3967))
 
 ## dbt 0.21.0 (October 04, 2021)
 

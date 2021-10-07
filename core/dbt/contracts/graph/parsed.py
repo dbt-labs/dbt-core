@@ -182,7 +182,7 @@ class ParsedNodeMandatory(
 class ParsedNodeDefaults(ParsedNodeMandatory):
     tags: List[str] = field(default_factory=list)
     refs: List[List[str]] = field(default_factory=list)
-    sources: List[List[Any]] = field(default_factory=list)
+    sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     description: str = field(default='')
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
