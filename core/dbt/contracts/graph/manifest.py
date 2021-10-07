@@ -1006,6 +1006,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.exposures.append(exposure.unique_id)
 
     def add_disabled_nofile(self, node: CompileResultNode):
+        # There can be multiple disabled nodes for the same unique_id
         if node.unique_id in self.disabled:
             self.disabled[node.unique_id].append(node)
         else:
