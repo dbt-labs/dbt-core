@@ -344,7 +344,7 @@ class PartialParsing:
                 elem_patch = None
                 if dict_key in schema_file.dict_from_yaml:
                     for elem in schema_file.dict_from_yaml[dict_key]:
-                        if elem['name'] == node.name:
+                        if elem["name"] == node.name:
                             elem_patch = elem
                             break
                 if elem_patch:
