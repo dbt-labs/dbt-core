@@ -1124,8 +1124,8 @@ class WritableManifest(ArtifactMixin):
             description="A mapping from child nodes to their dependencies",
         )
     )
-    disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(metadata=dict(
-        description='A mapping of the disabled nodes in the target'
+    child_map: Optional[NodeEdgeMap] = field(
+        metadata=dict(
             description="A mapping from parent nodes to their dependents",
         )
     )
