@@ -25,7 +25,7 @@ class TestSimpleDependency(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': '1.0',
+                    'revision': '1.1',
                 }
             ]
         }
@@ -161,7 +161,7 @@ class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
                 {
 
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'config-version-2-deps'
+                    'revision': 'config-1.0.0-deps'
                 },
                 {
                     'git': 'https://github.com/dbt-labs/dbt-utils',
