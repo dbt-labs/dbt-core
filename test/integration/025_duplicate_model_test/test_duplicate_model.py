@@ -1,5 +1,5 @@
 from dbt.exceptions import CompilationException
-from test.integration.base import DBTIntegrationTest, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile, get_manifest
 
 
 class TestDuplicateModelEnabled(DBTIntegrationTest):
@@ -150,3 +150,21 @@ class TestModelTestOverlap(DBTIntegrationTest):
         self.run_dbt(['compile'])
         self.run_dbt(['--partial-parse', 'compile'])
         self.run_dbt(['--partial-parse', 'compile'])
+
+
+class TestMultipleDisabledModels(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "duplicate_model_025"
+
+    @property
+    def models(self):
+        return "models-5"
+
+    @use_profile('postgres')
+    def test_postgres_multiple_disabled_models(self):
+        self.run_dbt(['run'])
+        manifest = get_manifest()
+        model_id = 'model.test.model_alt'
+        self.assertIn(model_id, manifest.nodes)

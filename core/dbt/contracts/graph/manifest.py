@@ -382,7 +382,7 @@ N = TypeVar('N', bound=Searchable)
 
 
 @dataclass
-class NameSearcher(Generic[N]):
+class DisabledNameSearcher():
     name: str
     package: Optional[str]
     nodetypes: List[NodeType]
@@ -404,9 +404,10 @@ class NameSearcher(Generic[N]):
 
     def search(self, haystack) -> Optional[N]:
         """Find an entry in the given iterable by name."""
-        for model in haystack.values():
-            if self._matches(model):
-                return model
+        for model_list in haystack.values():
+            for model in model_list:
+                if self._matches(model):
+                    return model
         return None
 
 
@@ -563,10 +564,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
     flat_graph: Dict[str, Any] = field(default_factory=dict)
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
-    # Moved from the ParseResult object
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
-    # following is from ParseResult
-    disabled: MutableMapping[str, CompileResultNode] = field(default_factory=dict)
+    disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
@@ -653,7 +652,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     def find_disabled_by_name(
         self, name: str, package: Optional[str] = None
     ) -> Optional[ManifestNode]:
-        searcher: NameSearcher = NameSearcher(
+        searcher: DisabledNameSearcher = DisabledNameSearcher(
             name, package, NodeType.refable()
         )
         result = searcher.search(self.disabled)
@@ -663,7 +662,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self, source_name: str, table_name: str, package: Optional[str] = None
     ) -> Optional[ParsedSourceDefinition]:
         search_name = f'{source_name}.{table_name}'
-        searcher: NameSearcher = NameSearcher(
+        searcher: DisabledNameSearcher = DisabledNameSearcher(
             search_name, package, [NodeType.Source]
         )
         result = searcher.search(self.disabled)
@@ -1007,9 +1006,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.exposures.append(exposure.unique_id)
 
     def add_disabled_nofile(self, node: CompileResultNode):
-        # a disabled node should only show up once
-        _check_duplicates(node, self.disabled)
-        self.disabled[node.unique_id] = node
+        if node.unique_id in self.disabled:
+            self.disabled[node.unique_id].append(node)
+        else:
+            self.disabled[node.unique_id] = [node]
 
     def add_disabled(self, source_file: AnySourceFile, node: CompileResultNode, test_from=None):
         self.add_disabled_nofile(node)
@@ -1099,8 +1099,8 @@ class WritableManifest(ArtifactMixin):
             'The selectors defined in selectors.yml'
         ))
     )
-    disabled: Optional[Mapping[UniqueID, CompileResultNode]] = field(metadata=dict(
-        description='A list of the disabled nodes in the target'
+    disabled: Optional[Mapping[UniqueID, List[CompileResultNode]]] = field(metadata=dict(
+        description='A mapping of the disabled nodes in the target'
     ))
     parent_map: Optional[NodeEdgeMap] = field(metadata=dict(
         description='A mapping from child nodes to their dependencies',
