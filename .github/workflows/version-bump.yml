@@ -60,7 +60,7 @@ jobs:
           pip install --upgrade pip     
           
       - name: Create PR branch
-        if: ${{ steps.variables.outputs.IS_DRY_RUN }}
+        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'true' }}
         run: |
           git checkout -b bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_$GITHUB_RUN_ID
           git push origin bumping-version/${{steps.variables.outputs.VERSION_NUMBER}}_$GITHUB_RUN_ID
@@ -82,7 +82,7 @@ jobs:
 
       - name: Commit version bump directly
         uses: EndBug/add-and-commit@v7
-        if: ${{ !steps.variables.outputs.IS_DRY_RUN }}
+        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'false' }}
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
@@ -90,7 +90,7 @@ jobs:
 
       - name: Commit version bump to branch
         uses: EndBug/add-and-commit@v7
-        if: ${{ steps.variables.outputs.IS_DRY_RUN }}
+        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'true' }}
         with:
           author_name: 'Github Build Bot'
           author_email: 'buildbot@fishtownanalytics.com'
@@ -100,7 +100,7 @@ jobs:
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
-        if: ${{ steps.variables.outputs.IS_DRY_RUN }}
+        if: ${{ steps.variables.outputs.IS_DRY_RUN == 'true' }}
         with:
           author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
           draft: true
