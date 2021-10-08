@@ -196,10 +196,7 @@ def track_run(task):
     try:
         yield
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
-            config=task.config, args=task.args, result_type="ok"
-        )
-    except (NotImplementedException,
-            FailedToConnectException) as e:
+    except (NotImplementedException, FailedToConnectException) as e:
         fire_event(MainEncounteredError(e=str(e)))
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
