@@ -173,7 +173,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     version: Union[SemverString, float]
     config_version: int
     project_root: Optional[str] = None
-    source_paths: Optional[List[str]] = None
+    model_paths: Optional[List[str]] = None
     macro_paths: Optional[List[str]] = None
     data_paths: Optional[List[str]] = None
     test_paths: Optional[List[str]] = None

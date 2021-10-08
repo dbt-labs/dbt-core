@@ -212,7 +212,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        # dbt-utils containts a schema test (equality)
+        # dbt-utils contains a schema test (equality)
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {

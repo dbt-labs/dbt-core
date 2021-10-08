@@ -698,7 +698,7 @@
 #     def project_config(self):
 #         return {
 #             'config-version': 2,
-#             "source-paths": [self.dir("model-compilation-error")],
+#             "model-paths": [self.dir("model-compilation-error")],
 #         }
 
 #     @use_profile("postgres")

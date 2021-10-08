@@ -22,7 +22,7 @@ class CleanTask(BaseTask):
         This function identifies protected paths, so as not to clean them.
         """
         abs_path = os.path.abspath(path)
-        protected_paths = self.config.source_paths + \
+        protected_paths = self.config.model_paths + \
             self.config.test_paths + ['.']
         protected_abs_paths = [os.path.abspath(p) for p in protected_paths]
         return abs_path in set(protected_abs_paths) or \

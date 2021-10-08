@@ -16,7 +16,7 @@ class TestDefaultSelectors(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'source-paths': ['models'],
+            'model-paths': ['models'],
             'data-paths': ['data'],
             'seeds': {
                 'quote_columns': False,

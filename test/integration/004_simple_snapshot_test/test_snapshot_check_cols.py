@@ -18,7 +18,7 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
             'config-version': 2,
             "snapshot-paths": ['check-snapshots'],
             "test-paths": ['check-snapshots-expected'],
-            "source-paths": [],
+            "model-paths": [],
         }
 
     def test_snapshot_check_cols_cycle(self):

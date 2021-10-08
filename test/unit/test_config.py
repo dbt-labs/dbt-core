@@ -586,7 +586,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.version, '0.0.1')
         self.assertEqual(project.profile_name, 'default')
         self.assertEqual(project.project_root, '/invalid-root-path')
-        self.assertEqual(project.source_paths, ['models'])
+        self.assertEqual(project.model_paths, ['models'])
         self.assertEqual(project.macro_paths, ['macros'])
         self.assertEqual(project.data_paths, ['data'])
         self.assertEqual(project.test_paths, ['tests'])
@@ -620,7 +620,7 @@ class TestProject(BaseConfigTest):
 
     def test_implicit_overrides(self):
         self.default_project_data.update({
-            'source-paths': ['other-models'],
+            'model-paths': ['other-models'],
             'target-path': 'other-target',
         })
         project = project_from_config_norender(self.default_project_data)
@@ -633,7 +633,7 @@ class TestProject(BaseConfigTest):
 
     def test_all_overrides(self):
         self.default_project_data.update({
-            'source-paths': ['other-models'],
+            'model-paths': ['other-models'],
             'macro-paths': ['other-macros'],
             'data-paths': ['other-data'],
             'test-paths': ['other-tests'],
@@ -703,7 +703,7 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.version, '0.0.1')
         self.assertEqual(project.profile_name, 'default')
         self.assertEqual(project.project_root, '/invalid-root-path')
-        self.assertEqual(project.source_paths, ['other-models'])
+        self.assertEqual(project.model_paths, ['other-models'])
         self.assertEqual(project.macro_paths, ['other-macros'])
         self.assertEqual(project.data_paths, ['other-data'])
         self.assertEqual(project.test_paths, ['other-tests'])
@@ -1198,7 +1198,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         # on osx, for example, these are not necessarily equal due to /private
         self.assertTrue(os.path.samefile(config.project_root,
                                          self.project_dir))
-        self.assertEqual(config.source_paths, ['models'])
+        self.assertEqual(config.model_paths, ['models'])
         self.assertEqual(config.macro_paths, ['macros'])
         self.assertEqual(config.data_paths, ['data'])
         self.assertEqual(config.test_paths, ['tests'])

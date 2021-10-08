@@ -5,7 +5,7 @@ config-version: 2
 
 profile: 'default'
 
-source-paths: ["models"]
+model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
 data-paths: ["data"]
