@@ -138,7 +138,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         if alternate_db is None:
             alternate_db = self.alternative_database
         project = {
-            "data-paths": [self.dir("seed")],
+            "seed-paths": [self.dir("seed")],
             'macro-paths': [self.dir('macros')],
             'snapshot-paths': [self.dir('snapshot')],
             'vars': {

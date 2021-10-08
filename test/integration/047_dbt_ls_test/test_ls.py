@@ -27,7 +27,7 @@ class TestStrictUndefined(DBTIntegrationTest):
             'analysis-paths': [self.dir('analyses')],
             'snapshot-paths': [self.dir('snapshots')],
             'macro-paths': [self.dir('macros')],
-            'data-paths': [self.dir('data')],
+            'seed-paths': [self.dir('seeds')],
             'test-paths': [self.dir('tests')],
             'seeds': {
                 'quote_columns': False,
@@ -339,11 +339,11 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'meta': {},
                 },
                 'unique_id': 'seed.test.seed',
-                'original_file_path': normalize('data/seed.csv'),
+                'original_file_path': normalize('seeds/seed.csv'),
                 'alias': 'seed',
                 'resource_type': 'seed',
             },
-            'path': self.dir('data/seed.csv'),
+            'path': self.dir('seeds/seed.csv'),
         }
         self.expect_given_output(['--resource-type', 'seed'], expectations)
 

@@ -177,6 +177,7 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     model_paths: Optional[List[str]] = None
     macro_paths: Optional[List[str]] = None
     data_paths: Optional[List[str]] = None
+    seed_paths: Optional[List[str]] = None
     test_paths: Optional[List[str]] = None
     analysis_paths: Optional[List[str]] = None
     docs_paths: Optional[List[str]] = None

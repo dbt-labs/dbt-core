@@ -16,7 +16,7 @@ profile: 'default'
 model-paths: ["models"]
 analysis-paths: ["analyses"] 
 test-paths: ["tests"]
-data-paths: ["data"]
+seed-paths: ["seeds"]
 macro-paths: ["macros"]
 
 target-path: "target"  # directory which will store compiled SQL files

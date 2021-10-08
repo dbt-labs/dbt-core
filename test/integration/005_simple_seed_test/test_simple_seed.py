@@ -21,7 +21,7 @@ class TestSimpleSeed(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data'],
+            'seed-paths': ['seeds'],
             'seeds': {
                 'quote_columns': False,
             }
@@ -105,7 +105,7 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data'],
+            'seed-paths': ['seeds'],
             'seeds': {
                 "schema": "custom_schema",
                 'quote_columns': False,
@@ -156,7 +156,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data-config'],
+            'seed-paths': ['seeds-config'],
             'seeds': {
                 "test": {
                     "seed_enabled": {
@@ -211,7 +211,7 @@ class TestSeedParsing(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data-bad'],
+            'seed-paths': ['seeds-bad'],
             'seeds': {
                 'quote_columns': False,
             },
@@ -244,7 +244,7 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data-bom'],
+            'seed-paths': ['seeds-bom'],
             'seeds': {
                 'quote_columns': False,
             },
@@ -253,7 +253,7 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_simple_seed(self):
         # first make sure nobody "fixed" the file by accident
-        seed_path = os.path.join(self.config.data_paths[0], 'seed_bom.csv')
+        seed_path = os.path.join(self.config.seed_paths[0], 'seed_bom.csv')
         # 'data-bom/seed_bom.csv'
         with open(seed_path, encoding='utf-8') as fp:
             self.assertEqual(fp.read(1), u'\ufeff')
@@ -276,7 +276,7 @@ class TestSimpleSeedWithUnicode(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data-unicode'],
+            'seed-paths': ['seeds-unicode'],
             'seeds': {
                 'quote_columns': False,
             }
@@ -302,7 +302,7 @@ class TestSimpleSeedWithDots(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data-dottedseed'],
+            'seed-paths': ['seeds-dottedseed'],
             'seeds': {
                 'quote_columns': False,
             }
@@ -326,14 +326,14 @@ class TestSimpleBigSeedBatched(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "data-paths": ['data-big'],
+            'seed-paths': ['seeds-big'],
             'seeds': {
                 'quote_columns': False,
             }
         }
 
     def test_big_batched_seed(self):
-        with open('data-big/my_seed.csv', 'w') as f:
+        with open('seeds-big/my_seed.csv', 'w') as f:
             writer = csv.writer(f)
             writer.writerow(['id'])
             for i in range(0, 20000):

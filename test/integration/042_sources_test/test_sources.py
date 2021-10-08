@@ -24,7 +24,7 @@ class BaseSourcesTest(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
             'seeds': {
                 'quote_columns': True,

@@ -17,7 +17,7 @@ class TestDefaultSelectors(DBTIntegrationTest):
         return {
             'config-version': 2,
             'model-paths': ['models'],
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'seeds': {
                 'quote_columns': False,
             },

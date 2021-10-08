@@ -8,7 +8,7 @@ profile: 'default'
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
-data-paths: ["data"]
+seed-paths: ["seeds"]
 macro-paths: ["macros"]
 
 require-dbt-version: '>=0.1.0'

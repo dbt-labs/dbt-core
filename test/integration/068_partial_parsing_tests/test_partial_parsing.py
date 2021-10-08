@@ -247,7 +247,7 @@ class TestSources(DBTIntegrationTest):
     def project_config(self):
         cfg = {
             'config-version': 2,
-            'data-paths': ['seed'],
+            'seed-paths': ['seed'],
             'test-paths': ['tests'],
             'macro-paths': ['macros-b'],
             'analysis-paths': ['analyses'],

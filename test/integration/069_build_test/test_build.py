@@ -12,7 +12,7 @@ class TestBuildBase(DBTIntegrationTest):
         return {
             "config-version": 2,
             "snapshot-paths": ["snapshots"],
-            "data-paths": ["data"],
+            "seed-paths": ["seeds"],
             "seeds": {
                 "quote_columns": False,
             },
