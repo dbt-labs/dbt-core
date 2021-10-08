@@ -726,7 +726,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             chain(self.nodes.values(), self.sources.values())
         )
 
-    # This is used in dbt.task.rpc.sql_commands 'add_new_refs'
     def deepcopy(self):
         return Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
