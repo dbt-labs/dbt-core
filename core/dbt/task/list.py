@@ -69,7 +69,7 @@ class ListTask(GraphRunnableTask):
         spec = self.get_selection_spec()
         nodes = sorted(selector.get_selected(spec))
         if not nodes:
-            warn_or_error('No nodes selected!')
+            warn_or_error("No nodes selected!")
             return
         if self.manifest is None:
             raise InternalException("manifest is None in _iterate_selected_nodes")
