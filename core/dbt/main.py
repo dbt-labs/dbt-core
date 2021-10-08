@@ -42,11 +42,7 @@ import dbt.tracking
 
 from dbt.utils import ExitCodes, args_to_dict
 from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
-from dbt.exceptions import (
-    InternalException,
-    NotImplementedException,
-    FailedToConnectException
-)
+from dbt.exceptions import InternalException, NotImplementedException, FailedToConnectException
 
 
 class DBTVersion(argparse.Action):
@@ -1117,7 +1113,8 @@ def parse_args(args, cls=DBTArgumentParser):
     seed_sub = _build_seed_subparser(subs, base_subparser)
     # --threads, --no-version-check
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                          seed_sub, parse_sub, build_sub)
+        run_sub, compile_sub, generate_sub, test_sub, seed_sub, parse_sub, build_sub
+    )
     # --select, --exclude
     # list_sub sets up its own arguments.
     _add_selection_arguments(
