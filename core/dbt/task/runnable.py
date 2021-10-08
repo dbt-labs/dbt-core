@@ -41,6 +41,7 @@ from dbt.exceptions import (
     NotImplementedException,
     RuntimeException,
     FailFastException,
+    warn_or_error,
 )
 
 from dbt.graph import (
@@ -443,8 +444,8 @@ class GraphRunnableTask(ManifestTask):
             )
 
         if len(self._flattened_nodes) == 0:
-            logger.warning("\nWARNING: Nothing to do. Try checking your model "
-                           "configs and model specification args")
+            warn_or_error("\nWARNING: Nothing to do. Try checking your model "
+                          "configs and model specification args")
             result = self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),
