@@ -1,0 +1,14 @@
+name: 'Close stale issues and PRs'
+on:
+  schedule:
+    - cron: '30 1 * * *'
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v4
+        with:
+          stale-issue-message: 'This issue has been marked as Stale because it has been open for 180 days with no activity. Remove the stale label or comment on the issue, or it will be closed in 7 days.'
+          stale-pr-message: 'This PR has been marked as Stale because it has been open for 180 days with no activity. Remove the stale label or comment on the PR, or it will be closed in 7 days.'
+          days-before-stale: 180
