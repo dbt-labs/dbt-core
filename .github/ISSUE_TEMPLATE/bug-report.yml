@@ -76,7 +76,7 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: Anything else?
+      label: Additional Context
       description: |
         Links? References? Anything that will give us more context about the issue you are encountering!
 
