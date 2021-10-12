@@ -133,7 +133,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
+          pip install --upgrade pip --user
           pip install --upgrade setuptools wheel twine check-wheel-contents
           pip --version
 
