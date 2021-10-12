@@ -29,7 +29,11 @@ if [[ -n $CIRCLECI ]]; then
 	connect_circle
 fi
 
-until pg_isready -h ${PGHOST} -p ${PGPORT} -U ${PGUSER}; do
+for i in {1..10}; do
+	if $(pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}") ; then
+		break
+	fi
+
     echo "Waiting for postgres to be ready..."
     sleep 2;
 done;
