@@ -89,7 +89,7 @@ class TestDeferState(DBTIntegrationTest):
         # copy files over from the happy times when we had a good target
         self.copy_state()
 
-        self.use_default_project({'source-paths': ['changed_models']})
+        self.use_default_project({'model-paths': ['changed_models']})
         # the sql here is just wrong, so it should fail
         self.run_dbt(
             ['run', '-m', 'view_model', '--state', 'state', '--defer', '--target', 'otherschema'],
@@ -101,7 +101,7 @@ class TestDeferState(DBTIntegrationTest):
             expect_pass=True,
         )
 
-        self.use_default_project({'source-paths': ['changed_models_bad']})
+        self.use_default_project({'model-paths': ['changed_models_bad']})
         # this should fail because the table model refs a broken ephemeral
         # model, which it should see
         self.run_dbt(
@@ -135,7 +135,7 @@ class TestDeferState(DBTIntegrationTest):
         # copy files over from the happy times when we had a good target
         self.copy_state()
 
-        self.use_default_project({'source-paths': ['changed_models_missing']})
+        self.use_default_project({'model-paths': ['changed_models_missing']})
         # ephemeral_model is now gone. previously this caused a
         # keyerror (dbt#2875), now it should pass
         self.run_dbt(

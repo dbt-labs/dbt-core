@@ -33,7 +33,7 @@ class TestDocs(DBTIntegrationTest):
     def project_config(self):
         cfg = {
             'config-version': 2,
-            'data-paths': ['seed-docs'],
+            'seed-paths': ['seed-docs'],
             'seeds': {
                 'quote_columns': False,
             },

@@ -205,14 +205,14 @@ class TestCustomSchemaTests(DBTIntegrationTest):
                 },
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
+                    'revision': 'dbt/1.0.0',
                 },
             ]
         }
 
     @property
     def project_config(self):
-        # dbt-utils containts a schema test (equality)
+        # dbt-utils contains a schema test (equality)
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {

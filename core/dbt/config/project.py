@@ -9,6 +9,7 @@ from typing_extensions import Protocol, runtime_checkable
 import hashlib
 import os
 
+from dbt import deprecations
 from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
 from dbt.clients.system import load_file_contents
@@ -123,13 +124,13 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
 
 
 def _all_source_paths(
-    source_paths: List[str],
-    data_paths: List[str],
+    model_paths: List[str],
+    seed_paths: List[str],
     snapshot_paths: List[str],
     analysis_paths: List[str],
     macro_paths: List[str],
 ) -> List[str]:
-    return list(chain(source_paths, data_paths, snapshot_paths, analysis_paths,
+    return list(chain(model_paths, seed_paths, snapshot_paths, analysis_paths,
                       macro_paths))
 
 
@@ -292,6 +293,21 @@ class PartialProject(RenderComponents):
                 exc.path = os.path.join(self.project_root, 'dbt_project.yml')
             raise
 
+    def check_config_path(self, project_dict, deprecated_path, exp_path):
+        if deprecated_path in project_dict:
+            if exp_path in project_dict:
+                msg = (
+                    '{deprecated_path} and {exp_path} cannot both be defined. The '
+                    '`{deprecated_path}` config has been deprecated in favor of `{exp_path}`. '
+                    'Please update your `dbt_project.yml` configuration to reflect this '
+                    'change.'
+                )
+                raise DbtProjectError(msg.format(deprecated_path=deprecated_path,
+                                                 exp_path=exp_path))
+            deprecations.warn('project_config_path',
+                              deprecated_path=deprecated_path,
+                              exp_path=exp_path)
+
     def create_project(self, rendered: RenderComponents) -> 'Project':
         unrendered = RenderComponents(
             project_dict=self.project_dict,
@@ -302,6 +318,9 @@ class PartialProject(RenderComponents):
             rendered.project_dict,
             verify_version=self.verify_version,
         )
+
+        self.check_config_path(rendered.project_dict, 'source-paths', 'model-paths')
+        self.check_config_path(rendered.project_dict, 'data-paths', 'seed-paths')
 
         try:
             ProjectContract.validate(rendered.project_dict)
@@ -324,15 +343,24 @@ class PartialProject(RenderComponents):
         # to have been a cli argument.
         profile_name = cfg.profile
         # these are all the defaults
-        source_paths: List[str] = value_or(cfg.source_paths, ['models'])
+
+        # `source_paths` is deprecated but still allowed. Copy it into
+        # `model_paths` to simlify logic throughout the rest of the system.
+        model_paths: List[str] = value_or(cfg.model_paths
+                                          if 'model-paths' in rendered.project_dict
+                                          else cfg.source_paths, ['models'])
         macro_paths: List[str] = value_or(cfg.macro_paths, ['macros'])
-        data_paths: List[str] = value_or(cfg.data_paths, ['data'])
+        # `data_paths` is deprecated but still allowed. Copy it into
+        # `seed_paths` to simlify logic throughout the rest of the system.
+        seed_paths: List[str] = value_or(cfg.seed_paths
+                                         if 'seed-paths' in rendered.project_dict
+                                         else cfg.data_paths, ['seeds'])
         test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ['snapshots'])
 
         all_source_paths: List[str] = _all_source_paths(
-            source_paths, data_paths, snapshot_paths, analysis_paths,
+            model_paths, seed_paths, snapshot_paths, analysis_paths,
             macro_paths
         )
 
@@ -382,15 +410,14 @@ class PartialProject(RenderComponents):
             # of dicts.
             manifest_selectors = SelectorDict.parse_from_selectors_list(
                 rendered.selectors_dict['selectors'])
-
         project = Project(
             project_name=name,
             version=version,
             project_root=project_root,
             profile_name=profile_name,
-            source_paths=source_paths,
+            model_paths=model_paths,
             macro_paths=macro_paths,
-            data_paths=data_paths,
+            seed_paths=seed_paths,
             test_paths=test_paths,
             analysis_paths=analysis_paths,
             docs_paths=docs_paths,
@@ -500,9 +527,9 @@ class Project:
     version: Union[SemverString, float]
     project_root: str
     profile_name: Optional[str]
-    source_paths: List[str]
+    model_paths: List[str]
     macro_paths: List[str]
-    data_paths: List[str]
+    seed_paths: List[str]
     test_paths: List[str]
     analysis_paths: List[str]
     docs_paths: List[str]
@@ -533,7 +560,7 @@ class Project:
     @property
     def all_source_paths(self) -> List[str]:
         return _all_source_paths(
-            self.source_paths, self.data_paths, self.snapshot_paths,
+            self.model_paths, self.seed_paths, self.snapshot_paths,
             self.analysis_paths, self.macro_paths
         )
 
@@ -561,9 +588,9 @@ class Project:
             'version': self.version,
             'project-root': self.project_root,
             'profile': self.profile_name,
-            'source-paths': self.source_paths,
+            'model-paths': self.model_paths,
             'macro-paths': self.macro_paths,
-            'data-paths': self.data_paths,
+            'seed-paths': self.seed_paths,
             'test-paths': self.test_paths,
             'analysis-paths': self.analysis_paths,
             'docs-paths': self.docs_paths,

@@ -138,7 +138,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         if alternate_db is None:
             alternate_db = self.alternative_database
         project = {
-            "data-paths": [self.dir("seed")],
+            "seed-paths": [self.dir("seed")],
             'macro-paths': [self.dir('macros')],
             'snapshot-paths': [self.dir('snapshot')],
             'vars': {
@@ -1986,7 +1986,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres_references(self):
         self.run_and_generate(
-            {'source-paths': [self.dir('ref_models')]},
+            {'model-paths': [self.dir('ref_models')]},
             model_count=2,
             alternate_db=self.default_database
         )
