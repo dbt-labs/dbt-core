@@ -140,7 +140,7 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['ModelParser'] = read_files_for_parser(
-        project, files, project.model_paths, '.sql', ParseFileType.Model, saved_files
+        project, files, project.model_paths, ".sql", ParseFileType.Model, saved_files
     )
 
     project_files['SnapshotParser'] = read_files_for_parser(
@@ -161,7 +161,7 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['SeedParser'] = read_files_for_parser(
-        project, files, project.seed_paths, '.csv', ParseFileType.Seed, saved_files
+        project, files, project.seed_paths, ".csv", ParseFileType.Seed, saved_files
     )
 
     project_files['DocumentationParser'] = read_files_for_parser(

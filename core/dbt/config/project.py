@@ -282,16 +282,19 @@ class PartialProject(RenderComponents):
         if deprecated_path in project_dict:
             if exp_path in project_dict:
                 msg = (
-                    '{deprecated_path} and {exp_path} cannot both be defined. The '
-                    '`{deprecated_path}` config has been deprecated in favor of `{exp_path}`. '
-                    'Please update your `dbt_project.yml` configuration to reflect this '
-                    'change.'
+                    "{deprecated_path} and {exp_path} cannot both be defined. The "
+                    "`{deprecated_path}` config has been deprecated in favor of `{exp_path}`. "
+                    "Please update your `dbt_project.yml` configuration to reflect this "
+                    "change."
                 )
-                raise DbtProjectError(msg.format(deprecated_path=deprecated_path,
-                                                 exp_path=exp_path))
+                raise DbtProjectError(
+                    msg.format(deprecated_path=deprecated_path, exp_path=exp_path)
             deprecations.warn(f'project-config-{deprecated_path}',
-                              deprecated_path=deprecated_path,
-                              exp_path=exp_path)
+            deprecations.warn(
+                f"project-config-{deprecated_path}",
+                deprecated_path=deprecated_path,
+                exp_path=exp_path,
+            )
 
     def create_project(self, rendered: RenderComponents) -> "Project":
         unrendered = RenderComponents(
@@ -304,8 +307,8 @@ class PartialProject(RenderComponents):
             verify_version=self.verify_version,
         )
 
-        self.check_config_path(rendered.project_dict, 'source-paths', 'model-paths')
-        self.check_config_path(rendered.project_dict, 'data-paths', 'seed-paths')
+        self.check_config_path(rendered.project_dict, "source-paths", "model-paths")
+        self.check_config_path(rendered.project_dict, "data-paths", "seed-paths")
 
         try:
             ProjectContract.validate(rendered.project_dict)
@@ -329,16 +332,16 @@ class PartialProject(RenderComponents):
 
         # `source_paths` is deprecated but still allowed. Copy it into
         # `model_paths` to simlify logic throughout the rest of the system.
-        model_paths: List[str] = value_or(cfg.model_paths
-                                          if 'model-paths' in rendered.project_dict
-                                          else cfg.source_paths, ['models'])
+        model_paths: List[str] = value_or(
+            cfg.model_paths if "model-paths" in rendered.project_dict else cfg.source_paths,
+            ["models"],
         )
         macro_paths: List[str] = value_or(cfg.macro_paths, ["macros"])
         # `data_paths` is deprecated but still allowed. Copy it into
         # `seed_paths` to simlify logic throughout the rest of the system.
-        seed_paths: List[str] = value_or(cfg.seed_paths
-                                         if 'seed-paths' in rendered.project_dict
-                                         else cfg.data_paths, ['seeds'])
+        seed_paths: List[str] = value_or(
+            cfg.seed_paths if "seed-paths" in rendered.project_dict else cfg.data_paths, ["seeds"]
+        )
         test_paths: List[str] = value_or(cfg.test_paths, ['tests'])
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ['analyses'])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
@@ -541,7 +544,7 @@ class Project:
     @property
     def all_source_paths(self) -> List[str]:
         return _all_source_paths(
-            self.model_paths, self.seed_paths, self.snapshot_paths,
+            self.model_paths,
             self.seed_paths,
             self.snapshot_paths,
             self.analysis_paths,
@@ -579,9 +582,9 @@ class Project:
                 "name": self.project_name,
                 "version": self.version,
                 "project-root": self.project_root,
-            'model-paths': self.model_paths,
+                "profile": self.profile_name,
                 "model-paths": self.model_paths,
-            'seed-paths': self.seed_paths,
+                "macro-paths": self.macro_paths,
                 "seed-paths": self.seed_paths,
                 "test-paths": self.test_paths,
                 "analysis-paths": self.analysis_paths,

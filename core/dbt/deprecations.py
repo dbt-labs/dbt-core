@@ -61,10 +61,10 @@ class PackageInstallPathDeprecation(DBTDeprecation):
 
 
 class ConfigPathDeprecation(DBTDeprecation):
-    _description = '''\
+    _description = """\
     The `{deprecated_path}` config has been renamed to `{exp_path}`.
     Please update your `dbt_project.yml` configuration to reflect this change.
-    '''
+    """
 
 
 class ConfigSourcePathDeprecation(ConfigPathDeprecation):
