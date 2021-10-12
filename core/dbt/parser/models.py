@@ -63,6 +63,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # top-level declaration of variables
         statically_parsed: Optional[Union[str, Dict[str, List[Any]]]] = None
         experimental_sample: Optional[Union[str, Dict[str, List[Any]]]] = None
+        config_call_dict: Dict[str, Any] = {}
         jinja_sample_node = None
         jinja_sample_config = None
         result = []
@@ -80,12 +81,53 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # if the static parser succeeded, extract some data in easy-to-compare formats
         if isinstance(statically_parsed, dict):
-            config_call_dict = _get_config_call_dict(statically_parsed)
+            # only sample jinja for the purpose of comparing with the stable static parser
+            # if we know we don't need to fall back to jinja (i.e. - nothing to compare
+            # with jinja v jinja).
+            # This means we skip sampling for 40% of the 1/5000 samples. We could run the
+            # sampling rng here, but the effect would be the same since we would only roll
+            # it 40% of the time. So I've opted to keep all the rng code colocated above.
+            if stable_sample:
+                logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
+                # if this will _never_ mutate anything `self` we could avoid these deep copies,
+                # but we can't really guarantee that going forward.
+                model_parser_copy = ModelParser(
+                    deepcopy(self.project),
+                    deepcopy(self.manifest),
+                    deepcopy(self.root_project)
+                )
+                jinja_sample_node = deepcopy(node)
+                jinja_sample_config = deepcopy(config)
+                # rendering mutates the node and the config
+                super(ModelParser, model_parser_copy) \
+                    .render_update(jinja_sample_node, jinja_sample_config)
+                # type-level branching to avoid Optional parameters in the
+                # `_get_stable_sample_result` type signature
+                if jinja_sample_node is not None and jinja_sample_config is not None:
+                    result.extend(_get_stable_sample_result(
+                        jinja_sample_node,
+                        jinja_sample_config,
+                        node,
+                        config
+                    ))
 
             # since it doesn't need python jinja, fit the refs, sources, and configs
             # into the node. Down the line the rest of the node will be updated with
             # this information. (e.g. depends_on etc.)
+            config_call_dict = _get_config_call_dict(statically_parsed)
             config._config_call_dict = config_call_dict
+
+            # if we're sampling the experimental parser, compare for correctness
+            # this _must_ be done before calling `self.update_parsed_node_config(node, config)`
+            # so that refs pulled from hooks in the project.yml don't end up in our comparison
+            # which the static parser cannot pick up since it does not read yml files.
+            if exp_sample:
+                result.extend(_get_exp_sample_result(
+                    experimental_sample,
+                    config_call_dict,
+                    node,
+                    config
+                ))
 
             # this uses the updated config to set all the right things in the node.
             # if there are hooks present, it WILL render jinja. Will need to change
@@ -105,33 +147,6 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
 
-            # only sample jinja for the purpose of comparing with the stable static parser
-            # if we know we don't need to fall back to jinja (i.e. - nothing to compare
-            # with jinja v jinja).
-            # This means we skip sampling for 40% of the 1/5000 samples. We could run the
-            # sampling rng here, but the effect would be the same since we would only roll
-            # it 40% of the time. So I've opted to keep all the rng code colocated above.
-            if stable_sample \
-                    and jinja_sample_node is not None \
-                    and jinja_sample_config is not None:
-                logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
-                # TODO are these deep copies this too expensive?
-                # TODO does this even mutate anything in `self`???
-                model_parser_copy = deepcopy(self)
-                jinja_sample_node = deepcopy(node)
-                jinja_sample_config = deepcopy(config)
-                # rendering mutates the node and the config
-                super(ModelParser, model_parser_copy) \
-                    .render_update(jinja_sample_node, jinja_sample_config)
-                # type-level branching to avoid Optional parameters in the
-                # `_get_stable_sample_result` type signature
-                if jinja_sample_node is not None and jinja_sample_config is not None:
-                    result.extend(_get_stable_sample_result(
-                        jinja_sample_node,
-                        jinja_sample_config,
-                        node,
-                        config
-                    ))
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
@@ -140,14 +155,6 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 f"1602: parser fallback to jinja rendering on {node.path}"
             )
 
-        # if we're sampling the experimental parser, compare for correctness
-        if exp_sample:
-            result.extend(_get_exp_sample_result(
-                experimental_sample,
-                config_call_dict,
-                node,
-                config
-            ))
         # only send the tracking event if there is at least one result code
         if result:
             # fire a tracking event. this fires one event for every sample
