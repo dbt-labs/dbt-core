@@ -49,7 +49,7 @@ from dbt.exceptions import (
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
-from dbt.parser.singular_test import SingularTestParser
+from dbt.parser.test import TestParser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
@@ -277,11 +277,13 @@ class ManifestLoader:
         if skip_parsing:
             logger.debug("Partial parsing enabled, no changes found, skipping parsing")
         else:
-            # Load Macros
+            # Load Macros and tests
             # We need to parse the macros first, so they're resolvable when
-            # the other files are loaded
+            # the other files are loaded.  Alsoi need to parse tests, specifically 
+            # generic tests
             start_load_macros = time.perf_counter()
             self.load_and_parse_macros(project_parser_files)
+            self.load_and_parse_generic_tests(project_parser_files)
 
             # If we're partially parsing check that certain macros have not been changed
             if self.partially_parsing and self.skip_partial_parsing_because_of_macros():
@@ -293,6 +295,7 @@ class ManifestLoader:
                 project_parser_files = orig_project_parser_files
                 self.partially_parsing = False
                 self.load_and_parse_macros(project_parser_files)
+                self.load_and_parse_generic_tests(project_parser_files)
 
             self._perf_info.load_macros_elapsed = (time.perf_counter() - start_load_macros)
 
@@ -302,7 +305,7 @@ class ManifestLoader:
 
             # Load the rest of the files except for schema yaml files
             parser_types: List[Type[Parser]] = [
-                ModelParser, SnapshotParser, AnalysisParser, SingularTestParser,
+                ModelParser, SnapshotParser, AnalysisParser,
                 SeedParser, DocumentationParser, HookParser]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -383,6 +386,25 @@ class ManifestLoader:
                 continue
             parser = MacroParser(project, self.manifest)
             for file_id in parser_files['MacroParser']:
+                block = FileBlock(self.manifest.files[file_id])
+                parser.parse_file(block)
+                # increment parsed path count for performance tracking
+                self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+
+        self.build_macro_resolver()
+        # Look at changed macros and update the macro.depends_on.macros
+        self.macro_depends_on()
+
+    def load_and_parse_generic_tests(self, project_parser_files):
+        for project in self.all_projects.values():
+            if project.project_name not in project_parser_files:
+                continue
+            parser_files = project_parser_files[project.project_name]
+            # todo: make below block work for generic tests
+            if 'TestParser' not in parser_files:
+                continue
+            parser = TestParser(project, self.manifest)
+            for file_id in parser_files['TestParser']:
                 block = FileBlock(self.manifest.files[file_id])
                 parser.parse_file(block)
                 # increment parsed path count for performance tracking
