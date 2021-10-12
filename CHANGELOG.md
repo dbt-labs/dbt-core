@@ -1,4 +1,6 @@
-## dbt 1.0.0 (Release TBD)
+## dbt-core 1.0.0 (Release TBD)
+
+## dbt-core 1.0.0b1 (October 11, 2021)
 
 ## dbt 1.0.0b1 (October 11, 2021)
 
