@@ -116,7 +116,7 @@ def _get_tests_for_node(manifest: Manifest, unique_id: UniqueID) -> List[UniqueI
     tests = []
     if unique_id in manifest.child_map:
         for child_unique_id in manifest.child_map[unique_id]:
-            if child_unique_id.startswith('test.'):
+            if child_unique_id.startswith("test."):
                 tests.append(child_unique_id)
 
     return tests
