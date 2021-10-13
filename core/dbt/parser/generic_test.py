@@ -4,19 +4,19 @@ import jinja2
 
 from dbt.exceptions import CompilationException
 from dbt.clients import jinja
-from dbt.contracts.graph.parsed import ParsedGenericTestNode, ParsedSingularTestNode
+from dbt.contracts.graph.parsed import ParsedGenericTestNode
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
-from dbt.contracts.files import FilePath, SourceFile
+from dbt.contracts.files import SourceFile
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-from dbt.parser.base import BaseParser, SimpleSQLParser
+from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
 from dbt.utils import MACRO_PREFIX  #TODO: should this be macro?
 from dbt.utils import get_pseudo_test_path
 
 
-class TestParser(BaseParser[ParsedGenericTestNode]):
+class GenericTestParser(BaseParser[ParsedGenericTestNode]):
 
     @property
     def resource_type(self) -> NodeType:
@@ -41,21 +41,6 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
             name=name,
             unique_id=unique_id,
         )
-
-    # next 3 funcs from SingularTestParser
-    def parse_unparsed_singular_test(self, dct, validate=True) -> ParsedSingularTestNode:
-        if validate:
-            ParsedSingularTestNode.validate(dct)
-        return ParsedSingularTestNode.from_dict(dct)
-
-    @property
-    def resource_type(self) -> NodeType:
-        return NodeType.Test
-
-    @classmethod
-    def get_compiled_path(cls, block: FileBlock):
-        return get_pseudo_test_path(block.name, block.path.relative_path)
-
 
     def parse_unparsed_generic_test(
         self, base_node: UnparsedMacro
@@ -104,13 +89,14 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
         original_file_path = source_file.path.original_file_path
         logger.debug("Parsing {}".format(original_file_path))
 
-        # TODO: determine here if it's a singular or generic test?  continue if generic, break off if singular
-        jinja_block = jinja.extract_toplevel_blocks(source_file.contents, allowed_blocks={'test'}, collect_raw_data=False,)
-        if not jinja_block:
-            # TODO: process singular test node
-            breakpoint()
+        # # TODO: determine here if it's a singular or generic test?  continue if generic, break off if singular
+        # jinja_block = jinja.extract_toplevel_blocks(source_file.contents, allowed_blocks={'test'}, collect_raw_data=False,)
+        # if not jinja_block:
+        #     # TODO: process singular test node
+        #     breakpoint()
 
         # this is really only used for error messages
+
         base_node = UnparsedMacro(
             path=original_file_path,
             original_file_path=original_file_path,
@@ -123,18 +109,3 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
         # will skip over singular tests since they won't have any nodes
         for node in self.parse_unparsed_generic_test(base_node):
             self.manifest.add_macro(block.file, node)
-
-
-class SingularTestParser(SimpleSQLParser[ParsedSingularTestNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedSingularTestNode:
-        if validate:
-            ParsedSingularTestNode.validate(dct)
-        return ParsedSingularTestNode.from_dict(dct)
-
-    @property
-    def resource_type(self) -> NodeType:
-        return NodeType.Test
-
-    @classmethod
-    def get_compiled_path(cls, block: FileBlock):
-        return get_pseudo_test_path(block.name, block.path.relative_path)

@@ -13,7 +13,8 @@ mssat_files = (
     ParseFileType.Seed,
     ParseFileType.Snapshot,
     ParseFileType.Analysis,
-    ParseFileType.Test,
+    ParseFileType.GenericTest,
+    ParseFileType.SingularTest,
 )
 
 

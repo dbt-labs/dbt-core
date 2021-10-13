@@ -21,7 +21,7 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
-from dbt.clients.jinja import get_rendered, MacroStack
+from dbt.clients.jinja import extract_toplevel_blocks, get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
@@ -49,7 +49,8 @@ from dbt.exceptions import (
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
-from dbt.parser.test import TestParser
+from dbt.parser.generic_test import GenericTestParser
+from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
@@ -305,7 +306,7 @@ class ManifestLoader:
 
             # Load the rest of the files except for schema yaml files
             parser_types: List[Type[Parser]] = [
-                ModelParser, SnapshotParser, AnalysisParser,
+                ModelParser, SnapshotParser, AnalysisParser, SingularTestParser,
                 SeedParser, DocumentationParser, HookParser]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -401,10 +402,10 @@ class ManifestLoader:
                 continue
             parser_files = project_parser_files[project.project_name]
             # todo: make below block work for generic tests
-            if 'TestParser' not in parser_files:
+            if 'GenericTestParser' not in parser_files:
                 continue
-            parser = TestParser(project, self.manifest)
-            for file_id in parser_files['TestParser']:
+            parser = GenericTestParser(project, self.manifest)
+            for file_id in parser_files['GenericTestParser']:
                 block = FileBlock(self.manifest.files[file_id])
                 parser.parse_file(block)
                 # increment parsed path count for performance tracking
@@ -449,6 +450,13 @@ class ManifestLoader:
                     else:
                         dct = block.file.dict_from_yaml
                     parser.parse_file(block, dct=dct)
+                elif isinstance(parser, SingularTestParser):
+                    # This will filter out generic tests since those are actually macros.  Singular test will return an empty list.
+                    # Really they shouldn't even be present but not sure how to filter them out
+                    jinja_block = extract_toplevel_blocks(block.contents, allowed_blocks={'test'}, collect_raw_data=False,)
+                    if jinja_block:
+                        continue
+                    parser.parse_file(block)
                 else:
                     parser.parse_file(block)
                 project_parsed_path_count = project_parsed_path_count + 1
