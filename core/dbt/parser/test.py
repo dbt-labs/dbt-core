@@ -16,26 +16,7 @@ from dbt.utils import MACRO_PREFIX  #TODO: should this be macro?
 from dbt.utils import get_pseudo_test_path
 
 
-class SingularTestParser(SimpleSQLParser[ParsedSingularTestNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedSingularTestNode:
-        if validate:
-            ParsedSingularTestNode.validate(dct)
-        return ParsedSingularTestNode.from_dict(dct)
-
-    @property
-    def resource_type(self) -> NodeType:
-        return NodeType.Test
-
-    @classmethod
-    def get_compiled_path(cls, block: FileBlock):
-        return get_pseudo_test_path(block.name, block.path.relative_path)
-
-
 class TestParser(BaseParser[ParsedGenericTestNode]):
-    def parse_from_dict(self, dct, validate=True) -> ParsedGenericTestNode:
-        if validate:
-            ParsedGenericTestNode.validate(dct)
-        return ParsedGenericTestNode.from_dict(dct)
 
     @property
     def resource_type(self) -> NodeType:
@@ -61,6 +42,21 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
             unique_id=unique_id,
         )
 
+    # next 3 funcs from SingularTestParser
+    def parse_unparsed_singular_test(self, dct, validate=True) -> ParsedSingularTestNode:
+        if validate:
+            ParsedSingularTestNode.validate(dct)
+        return ParsedSingularTestNode.from_dict(dct)
+
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.Test
+
+    @classmethod
+    def get_compiled_path(cls, block: FileBlock):
+        return get_pseudo_test_path(block.name, block.path.relative_path)
+
+
     def parse_unparsed_generic_test(
         self, base_node: UnparsedMacro
     ) -> Iterable[ParsedMacro]:
@@ -70,7 +66,7 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
                 jinja.extract_toplevel_blocks( base_node.raw_sql, allowed_blocks={'test'}, collect_raw_data=False,)
                 if isinstance(t, jinja.BlockTag)
             ]
-        except CompilationException as exc:  #TODO: if not jinga, handle as singuilar test
+        except CompilationException as exc:  #TODO: if not jinja, handle as singular test
             exc.add_node(base_node)
             raise
 
@@ -81,7 +77,7 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
                 e.add_node(base_node)
                 raise
 
-            # generic tests are structured as macro so we want to count the number of macro blocks
+            # generic tests are structured as macros so we want to count the number of macro blocks
             generic_test_nodes = list(ast.find_all(jinja2.nodes.Macro))
 
             if len(generic_test_nodes) != 1:
@@ -108,6 +104,12 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
         original_file_path = source_file.path.original_file_path
         logger.debug("Parsing {}".format(original_file_path))
 
+        # TODO: determine here if it's a singular or generic test?  continue if generic, break off if singular
+        jinja_block = jinja.extract_toplevel_blocks(source_file.contents, allowed_blocks={'test'}, collect_raw_data=False,)
+        if not jinja_block:
+            # TODO: process singular test node
+            breakpoint()
+
         # this is really only used for error messages
         base_node = UnparsedMacro(
             path=original_file_path,
@@ -118,9 +120,21 @@ class TestParser(BaseParser[ParsedGenericTestNode]):
             resource_type=NodeType.Macro,  #TODO: should it be macro? do we need a new node type?
         )
 
+        # will skip over singular tests since they won't have any nodes
         for node in self.parse_unparsed_generic_test(base_node):
             self.manifest.add_macro(block.file, node)
 
 
-# class TestParser(SingularTestParser, GenericTestParser):
-#     pass
+class SingularTestParser(SimpleSQLParser[ParsedSingularTestNode]):
+    def parse_from_dict(self, dct, validate=True) -> ParsedSingularTestNode:
+        if validate:
+            ParsedSingularTestNode.validate(dct)
+        return ParsedSingularTestNode.from_dict(dct)
+
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.Test
+
+    @classmethod
+    def get_compiled_path(cls, block: FileBlock):
+        return get_pseudo_test_path(block.name, block.path.relative_path)
