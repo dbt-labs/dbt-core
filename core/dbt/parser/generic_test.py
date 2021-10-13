@@ -56,6 +56,10 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             exc.add_node(base_node)
             raise
 
+        # even though singular tests were passed in since they're just raw sql (not jinja) 
+        # extract_toplevel_blocks just returns an empty list so we'll never process them 
+        # as generic tests
+
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
