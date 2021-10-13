@@ -280,7 +280,7 @@ class ManifestLoader:
         else:
             # Load Macros and tests
             # We need to parse the macros first, so they're resolvable when
-            # the other files are loaded.  Alsoi need to parse tests, specifically 
+            # the other files are loaded.  Also need to parse tests, specifically
             # generic tests
             start_load_macros = time.perf_counter()
             self.load_and_parse_macros(project_parser_files)
@@ -451,9 +451,12 @@ class ManifestLoader:
                         dct = block.file.dict_from_yaml
                     parser.parse_file(block, dct=dct)
                 elif isinstance(parser, SingularTestParser):
-                    # This will filter out generic tests since those are actually macros.  Singular test will return an empty list.
+                    # This will filter out generic tests since those are actually macros.
+                    # Singular test will return an empty list.
                     # Really they shouldn't even be present but not sure how to filter them out
-                    jinja_block = extract_toplevel_blocks(block.contents, allowed_blocks={'test'}, collect_raw_data=False,)
+                    jinja_block = extract_toplevel_blocks(block.contents,
+                                                          allowed_blocks={'test'},
+                                                          collect_raw_data=False,)
                     if jinja_block:
                         continue
                     parser.parse_file(block)

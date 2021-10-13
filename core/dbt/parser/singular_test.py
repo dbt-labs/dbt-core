@@ -1,4 +1,3 @@
-from dbt.clients import jinja
 from dbt.contracts.graph.parsed import ParsedSingularTestNode
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser

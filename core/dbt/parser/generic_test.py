@@ -12,8 +12,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
-from dbt.utils import MACRO_PREFIX  #TODO: should this be macro?
-from dbt.utils import get_pseudo_test_path
+from dbt.utils import MACRO_PREFIX  # TODO: should this be macro?
 
 
 class GenericTestParser(BaseParser[ParsedGenericTestNode]):
@@ -48,10 +47,12 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
         try:
             blocks: List[jinja.BlockTag] = [
                 t for t in
-                jinja.extract_toplevel_blocks( base_node.raw_sql, allowed_blocks={'test'}, collect_raw_data=False,)
+                jinja.extract_toplevel_blocks(base_node.raw_sql,
+                                              allowed_blocks={'test'},
+                                              collect_raw_data=False,)
                 if isinstance(t, jinja.BlockTag)
             ]
-        except CompilationException as exc:  #TODO: if not jinja, handle as singular test
+        except CompilationException as exc:
             exc.add_node(base_node)
             raise
 
@@ -89,12 +90,6 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
         original_file_path = source_file.path.original_file_path
         logger.debug("Parsing {}".format(original_file_path))
 
-        # # TODO: determine here if it's a singular or generic test?  continue if generic, break off if singular
-        # jinja_block = jinja.extract_toplevel_blocks(source_file.contents, allowed_blocks={'test'}, collect_raw_data=False,)
-        # if not jinja_block:
-        #     # TODO: process singular test node
-        #     breakpoint()
-
         # this is really only used for error messages
 
         base_node = UnparsedMacro(
@@ -103,7 +98,7 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             package_name=self.project.project_name,
             raw_sql=source_file.contents,
             root_path=self.project.project_root,
-            resource_type=NodeType.Macro,  #TODO: should it be macro? do we need a new node type?
+            resource_type=NodeType.Macro,  # TODO: should it be macro? do we need a new node type?
         )
 
         # will skip over singular tests since they won't have any nodes
