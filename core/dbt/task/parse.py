@@ -81,6 +81,7 @@ class ParseTask(ConfiguredTask):
         self.graph = compiler.compile(self.manifest)
 
     def run(self):
+        events.register(Progress(ParseStart))
         print_timestamped_line('Start parsing.')
         self.get_full_manifest()
         if self.args.compile:
