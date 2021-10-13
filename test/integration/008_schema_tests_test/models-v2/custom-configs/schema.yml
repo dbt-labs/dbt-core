@@ -25,6 +25,6 @@ models:
             where: "\"favorite_color\" = 'red'"
   - name: "table.copy.with.dots"
     description: "A copy of the table with a gross name"
-    # passes, see https://github.com/dbt-labs/dbt/issues/3857
+    # passes, see https://github.com/dbt-labs/dbt-core/issues/3857
     tests:
       - where

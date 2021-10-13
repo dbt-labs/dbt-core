@@ -166,7 +166,7 @@ class ConfiguredTask(BaseTask):
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
-the error persists, open an issue at https://github.com/dbt-labs/dbt
+the error persists, open an issue at https://github.com/dbt-labs/dbt-core
 """.strip()
 
 

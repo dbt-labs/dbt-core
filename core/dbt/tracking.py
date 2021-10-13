@@ -133,7 +133,7 @@ class User:
         # will change in every dbt invocation until the user points to a
         # profile dir file which contains a valid profiles.yml file.
         #
-        # See: https://github.com/dbt-labs/dbt/issues/1645
+        # See: https://github.com/dbt-labs/dbt-core/issues/1645
 
         user = {"id": str(uuid.uuid4())}
 
