@@ -93,10 +93,10 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
     for fp in fp_list:
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
-        # singular tests live in /tests but only generic tests live 
+        # singular tests live in /tests but only generic tests live
         # in /tests/generic so we want to skip those
         elif (parse_file_type == ParseFileType.SingularTest and
-             'generic/' in fp.relative_path):
+              'generic/' in fp.relative_path):
             continue
         else:
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
@@ -147,7 +147,7 @@ def read_files(project, files, parser_files, saved_files):
 
     # all generic tests within /tests must be nested under a /generic subfolder
     project_files['GenericTestParser'] = read_files_for_parser(
-        project, files, ["{}{}".format(test_path,'/generic') for test_path in project.test_paths], 
+        project, files, ["{}{}".format(test_path, '/generic') for test_path in project.test_paths],
         '.sql', ParseFileType.GenericTest, saved_files
     )
 

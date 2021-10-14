@@ -21,7 +21,7 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
-from dbt.clients.jinja import extract_toplevel_blocks, get_rendered, MacroStack
+from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
@@ -388,7 +388,7 @@ class ManifestLoader:
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking
                     self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
-            # generic tests hisotrically lives in the macros directoy but can now be nested 
+            # generic tests hisotrically lives in the macros directoy but can now be nested
             # in a /generic directory under /tests so we want to process them here as well
             elif 'GenericTestParser' not in parser_files:
                 parser = GenericTestParser(project, self.manifest)
@@ -401,7 +401,6 @@ class ManifestLoader:
         self.build_macro_resolver()
         # Look at changed macros and update the macro.depends_on.macros
         self.macro_depends_on()
-
 
     # Parse the files in the 'parser_files' dictionary, for parsers listed in
     # 'parser_types'
