@@ -284,7 +284,6 @@ class ManifestLoader:
             # generic tests
             start_load_macros = time.perf_counter()
             self.load_and_parse_macros(project_parser_files)
-            self.load_and_parse_generic_tests(project_parser_files)
 
             # If we're partially parsing check that certain macros have not been changed
             if self.partially_parsing and self.skip_partial_parsing_because_of_macros():
@@ -296,7 +295,6 @@ class ManifestLoader:
                 project_parser_files = orig_project_parser_files
                 self.partially_parsing = False
                 self.load_and_parse_macros(project_parser_files)
-                self.load_and_parse_generic_tests(project_parser_files)
 
             self._perf_info.load_macros_elapsed = (time.perf_counter() - start_load_macros)
 
@@ -383,37 +381,27 @@ class ManifestLoader:
             if project.project_name not in project_parser_files:
                 continue
             parser_files = project_parser_files[project.project_name]
-            if 'MacroParser' not in parser_files:
-                continue
-            parser = MacroParser(project, self.manifest)
-            for file_id in parser_files['MacroParser']:
-                block = FileBlock(self.manifest.files[file_id])
-                parser.parse_file(block)
-                # increment parsed path count for performance tracking
-                self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+            if 'MacroParser' in parser_files:
+                parser = MacroParser(project, self.manifest)
+                for file_id in parser_files['MacroParser']:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+            # generic tests hisotrically lives in the macros directoy but can now be nested 
+            # in a /generic directory under /tests so we want to process them here as well
+            elif 'GenericTestParser' not in parser_files:
+                parser = GenericTestParser(project, self.manifest)
+                for file_id in parser_files['GenericTestParser']:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
 
         self.build_macro_resolver()
         # Look at changed macros and update the macro.depends_on.macros
         self.macro_depends_on()
 
-    def load_and_parse_generic_tests(self, project_parser_files):
-        for project in self.all_projects.values():
-            if project.project_name not in project_parser_files:
-                continue
-            parser_files = project_parser_files[project.project_name]
-            # todo: make below block work for generic tests
-            if 'GenericTestParser' not in parser_files:
-                continue
-            parser = GenericTestParser(project, self.manifest)
-            for file_id in parser_files['GenericTestParser']:
-                block = FileBlock(self.manifest.files[file_id])
-                parser.parse_file(block)
-                # increment parsed path count for performance tracking
-                self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
-
-        self.build_macro_resolver()
-        # Look at changed macros and update the macro.depends_on.macros
-        self.macro_depends_on()
 
     # Parse the files in the 'parser_files' dictionary, for parsers listed in
     # 'parser_types'
@@ -450,16 +438,6 @@ class ManifestLoader:
                     else:
                         dct = block.file.dict_from_yaml
                     parser.parse_file(block, dct=dct)
-                elif isinstance(parser, SingularTestParser):
-                    # This will filter out generic tests since those are actually macros.
-                    # Singular test will return an empty list.
-                    # Really they shouldn't even be present but not sure how to filter them out
-                    jinja_block = extract_toplevel_blocks(block.contents,
-                                                          allowed_blocks={'test'},
-                                                          collect_raw_data=False,)
-                    if jinja_block:
-                        continue
-                    parser.parse_file(block)
                 else:
                     parser.parse_file(block)
                 project_parsed_path_count = project_parsed_path_count + 1
