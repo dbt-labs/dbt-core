@@ -78,8 +78,6 @@ def env_set_path(key: str) -> Optional[Path]:
         return Path(value)
 
 
-SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
-SINGLE_THREADED_HANDLER = env_set_truthy('DBT_SINGLE_THREADED_HANDLER')
 MACRO_DEBUGGING = env_set_truthy('DBT_MACRO_DEBUGGING')
 DEFER_MODE = env_set_truthy('DBT_DEFER_TO_STATE')
 ARTIFACT_STATE_PATH = env_set_path('DBT_ARTIFACT_STATE_PATH')
