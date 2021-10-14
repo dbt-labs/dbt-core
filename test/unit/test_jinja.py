@@ -687,7 +687,7 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].block_name, 'more_doc')
 
     def test_unclosed_model_quotes(self):
-        # test case for https://github.com/dbt-labs/dbt/issues/1533
+        # test case for https://github.com/dbt-labs/dbt-core/issues/1533
         body = '{% model my_model -%} select * from "something"."something_else{% endmodel %}'
         blocks = extract_toplevel_blocks(body, allowed_blocks={'model'}, collect_raw_data=False)
         self.assertEqual(len(blocks), 1)
