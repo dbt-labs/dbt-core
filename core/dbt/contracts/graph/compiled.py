@@ -8,6 +8,7 @@ from dbt.contracts.graph.parsed import (
     ParsedExposure,
     ParsedResource,
     ParsedRPCNode,
+    ParsedSqlNode,
     ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
@@ -81,9 +82,15 @@ class CompiledModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
 
 
+# TODO: rm?
 @dataclass
 class CompiledRPCNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+
+
+@dataclass
+class CompiledSqlNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.SqlOperation]})
 
 
 @dataclass
@@ -200,6 +207,7 @@ NonSourceParsedNode = Union[
     ParsedHookNode,
     ParsedModelNode,
     ParsedRPCNode,
+    ParsedSqlNode,
     ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
