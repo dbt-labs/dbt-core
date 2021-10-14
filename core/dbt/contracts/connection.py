@@ -136,9 +136,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         Return the field from Credentials that can uniquely identify
         one team/organization using this adapter
         """
-        raise NotImplementedError(
-            'unique_field not implemented for base credentials class'
-        )
+        raise NotImplementedError("unique_field not implemented for base credentials class")
 
     def hashed_unique_field(self) -> str:
         return hashlib.md5(self.unique_field.encode('utf-8')).hexdigest()
