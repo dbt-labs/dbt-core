@@ -22,7 +22,6 @@
 - Fix multiple disabled nodes ([#4013](https://github.com/dbt-labs/dbt/issues/4013), [#4018](https://github.com/dbt-labs/dbt/pull/4018))
 - Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
 - Return an error instead of a warning when runing with `--warn-error` and no models are selected ([#4006](https://github.com/dbt-labs/dbt/issues/4006), [#4019](https://github.com/dbt-labs/dbt/pull/4019))
-- Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4022](https://github.com/dbt-labs/dbt/pull/4022))
 
 ### Under the hood
 
@@ -46,6 +45,12 @@ Contributors:
 - [@samlader](https://github.com/samlader) ([#3993](https://github.com/dbt-labs/dbt-core/pull/3993))
 - [@yu-iskw](https://github.com/yu-iskw) ([#3967](https://github.com/dbt-labs/dbt-core/pull/3967))
 - [@laxjesse](https://github.com/laxjesse) ([#4019](https://github.com/dbt-labs/dbt-core/pull/4019))
+
+## dbt 0.21.1 (Release TBD)
+
+### Fixes
+- Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4022](https://github.com/dbt-labs/dbt/pull/4022))
+- Switch `unique_field` from abstractproperty to optional property. Add docstring ([#4025](https://github.com/dbt-labs/dbt/issues/4025), [#4028](https://github.com/dbt-labs/dbt/pull/4028))
 
 ## dbt 0.21.0 (October 04, 2021)
 
