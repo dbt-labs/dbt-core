@@ -768,7 +768,7 @@ def system_error(operation_name):
     raise_compiler_error(
         "dbt encountered an error when attempting to {}. "
         "If this error persists, please create an issue at: \n\n"
-        "https://github.com/dbt-labs/dbt-core"
+        "https://github.com/dbt-labs/dbt-core".format(operation_name)
     )
 
 
