@@ -1,12 +1,13 @@
 ## dbt-core 1.0.0 (Release TBD)
 
+### Breaking changes
+- Enable `on-run-start` and `on-run-end` hooks for `dbt test`. Add `flags.WHICH` to execution context, representing current task ([#3463](https://github.com/dbt-labs/dbt-core/issues/3463), [#4004](https://github.com/dbt-labs/dbt-core/pull/4004))
+
 ### Under the hood
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
 
 ## dbt-core 1.0.0b1 (October 11, 2021)
-
-## dbt 1.0.0b1 (October 11, 2021)
 
 ### Breaking changes
 
