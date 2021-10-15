@@ -3,6 +3,7 @@
 ### Fixes
 - Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4057](https://github.com/dbt-labs/dbt/pull/4057))
 - Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
+- Fixed bug with `error_if` test option ([#4070](https://github.com/dbt-labs/dbt-core/pull/4070))
 
 
 ## dbt 0.21.0 (October 04, 2021)
