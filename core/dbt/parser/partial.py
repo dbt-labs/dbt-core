@@ -302,8 +302,10 @@ class PartialParsing:
             # delete node in saved
             node = self.saved_manifest.nodes.pop(unique_id)
             self.deleted_manifest.nodes[unique_id] = node
-        elif (source_file.file_id in self.disabled_by_file_id and
-                unique_id in self.saved_manifest.disabled):
+        elif (
+            source_file.file_id in self.disabled_by_file_id
+            and unique_id in self.saved_manifest.disabled
+        ):
             # This node is disabled. Find the node and remove it from disabled dictionary.
             for dis_index, dis_node in enumerate(self.saved_manifest.disabled[unique_id]):
                 if dis_node.file_id == source_file.file_id:

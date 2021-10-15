@@ -120,7 +120,7 @@ class SourceLookup(dbtClassMixin):
     def get_unique_id(self, search_name, package: Optional[PackageName]):
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: 'Manifest'):
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
@@ -187,8 +187,7 @@ class RefableLookup(dbtClassMixin):
 
 # This handles both models/seeds/snapshots and sources
 class DisabledLookup(dbtClassMixin):
-
-    def __init__(self, manifest: 'Manifest'):
+    def __init__(self, manifest: "Manifest"):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
@@ -601,7 +600,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _disabled_lookup: Optional[DisabledLookup] = field(
-        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _analysis_lookup: Optional[AnalysisLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -911,7 +910,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         current_project: str,
         node_package: str,
     ) -> MaybeParsedSource:
-        search_name = f'{target_source_name}.{target_table_name}'
+        search_name = f"{target_source_name}.{target_table_name}"
         candidates = _search_packages(current_project, node_package)
 
         source: Optional[ParsedSourceDefinition] = None
@@ -924,7 +923,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             if disabled is None:
                 disabled = self.disabled_lookup.find(
-                    f'{target_source_name}.{target_table_name}', pkg
+                    f"{target_source_name}.{target_table_name}", pkg
                 )
 
         if disabled:
