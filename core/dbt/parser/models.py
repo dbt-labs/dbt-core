@@ -121,12 +121,36 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # this _must_ be done before calling `self.update_parsed_node_config(node, config)`
             # so that refs pulled from hooks in the project.yml don't end up in our comparison
             # which the static parser cannot pick up since it does not read yml files.
-            if exp_sample:
+            if experimental_sample:
+                # if the experimental parser succeeded, make a full copy of model parser
+                # and populate _everything_ into it so it can be compared apples-to-apples
+                # with a fully jinja-rendered project. This is necessary because the experimental
+                # parser will likely add features that the existing static parser will fail on
+                # so comparing those directly would give us bad results.
+                if isinstance(experimental_sample, dict):
+                    # TODO pull out into method
+                    model_parser_copy = ModelParser(
+                        deepcopy(self.project),
+                        deepcopy(self.manifest),
+                        deepcopy(self.root_project)
+                    )
+
+                    node_copy = deepcopy(node)
+                    config_copy = deepcopy(config)
+
+                    model_parser_copy.populate(
+                        node_copy,
+                        config_copy,
+                        experimental_sample['refs'],
+                        experimental_sample['sources'],
+                        dict(experimental_sample['configs'])
+                    )
+
                 result.extend(_get_exp_sample_result(
                     experimental_sample,
                     config_call_dict,
-                    node,
-                    config
+                    node_copy,
+                    config_copy
                 ))
 
             # update the unrendered config with values from the file.
