@@ -129,21 +129,15 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                     config
                 ))
 
-            # this uses the updated config to set all the right things in the node.
-            # if there are hooks present, it WILL render jinja. Will need to change
-            # when the experimental parser supports hooks
-            self.update_parsed_node_config(node, config)
-
             # update the unrendered config with values from the file.
             # values from yaml files are in there already
-            node.unrendered_config.update(dict(statically_parsed['configs']))
-
-            # set refs and sources on the node object
-            node.refs += statically_parsed['refs']
-            node.sources += statically_parsed['sources']
-
-            # configs don't need to be merged into the node
-            # setting them in config._config_call_dict is sufficient
+            self.populate(
+                node,
+                config,
+                statically_parsed['refs'],
+                statically_parsed['sources'],
+                dict(statically_parsed['configs'])
+            )
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
 
@@ -254,6 +248,32 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             all_banned_macro_keys,
             False
         )
+
+    # this method updates the model note rendered and unrendered config as well
+    # as the node object. Used to populate these values when circumventing jinja
+    # rendering like the static parser.
+    def populate(
+        self,
+        node: ParsedModelNode,
+        config: ContextConfig,
+        refs: List[List[str]],
+        sources: List[List[str]],
+        configs: Dict[str, Any]
+    ):
+        # if there are hooks present this, it WILL render jinja. Will need to change
+        # when the experimental parser supports hooks
+        self.update_parsed_node_config(node, config)
+
+        # update the unrendered config with values from the file.
+        # values from yaml files are in there already
+        node.unrendered_config.update(configs)
+
+        # set refs and sources on the node object
+        node.refs += refs
+        node.sources += sources
+
+        # configs don't need to be merged into the node because they
+        # are read from config._config_call_dict
 
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
