@@ -1073,6 +1073,16 @@ class DBTIntegrationTest(unittest.TestCase):
                 end.strftime(datefmt))
         )
 
+    def copy_file(self, src, dest) -> None:
+        # move files in the temp testing dir created
+        shutil.copyfile(
+            os.path.join(self.test_root_dir, src),
+            os.path.join(self.test_root_dir, dest),
+        )
+
+    def rm_file(self, src) -> None:
+        os.remove(os.path.join(self.test_root_dir, src))
+
 
 def use_profile(profile_name):
     """A decorator to declare a test method as using a particular profile.

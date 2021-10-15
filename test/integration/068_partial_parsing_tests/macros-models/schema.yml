@@ -1,8 +1,0 @@
-
-version: 2
-
-models:
-    - name: model_a
-      tests:
-        - type_one
-        - type_two
