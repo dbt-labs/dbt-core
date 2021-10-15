@@ -369,7 +369,7 @@ class TestBuilder(Generic[Testable]):
         if self.warn_if is not None:
             config["warn_if"] = self.warn_if
         if self.error_if is not None:
-            config['error_if'] = self.error_if
+            config["error_if"] = self.error_if
         if self.fail_calc is not None:
             config["fail_calc"] = self.fail_calc
         if self.store_failures is not None:
