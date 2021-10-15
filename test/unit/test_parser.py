@@ -10,8 +10,8 @@ import dbt.parser
 from dbt import tracking
 from dbt.exceptions import CompilationException
 from dbt.parser import (
-    ModelParser, MacroParser, SingularTestParser, SchemaParser,
-    SnapshotParser, AnalysisParser
+    ModelParser, MacroParser, SingularTestParser, GenericTestParser,
+    SchemaParser, SnapshotParser, AnalysisParser
 )
 from dbt.parser.schemas import (
     TestablePatchParser, SourceParser, AnalysisPatchParser, MacroPatchParser
@@ -28,8 +28,8 @@ from dbt.contracts.graph.model_config import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, DependsOn, ColumnInfo,
-    ParsedSingularTestNode, ParsedSnapshotNode, ParsedAnalysisNode,
-    UnpatchedSourceDefinition
+    ParsedSingularTestNode, ParsedGenericTestNode, ParsedSnapshotNode, 
+    ParsedAnalysisNode, UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
 import itertools
@@ -847,6 +847,40 @@ class SingularTestParserTest(BaseParserTest):
         file_id = 'snowplow://' + normalize('tests/test_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ['test.snowplow.test_1'])
+
+
+class GenericTestParserTest(BaseParserTest):
+# generic tests in the test-paths directory currently leverage the macro parser 
+    def setUp(self):
+        super().setUp()
+        self.parser = GenericTestParser(
+            project=self.snowplow_project_config,
+            manifest=Manifest()
+        )
+
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'tests/generic')
+
+    def test_basic(self):
+        raw_sql = '{% test not_null(model, column_name) %}select * from {{ model }} where {{ column_name }} is null {% endtest %}'
+        block = self.file_block_for(raw_sql, 'test_1.sql')
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.macros.values())[0]
+        expected = ParsedMacro(
+            name='test_not_null',
+            resource_type=NodeType.Macro,
+            unique_id='test.snowplow.test_not_null',
+            package_name='snowplow',
+            original_file_path=normalize('tests/generic/test_1.sql'),
+            root_path=get_abs_os_path('./dbt_packages/snowplow'),
+            path=normalize('tests/generic/test_1.sql'),
+            macro_sql=raw_sql,
+        )
+        assertEqualNodes(node, expected)
+        file_id = 'snowplow://' + normalize('tests/generic/test_1.sql')
+        self.assertIn(file_id, self.parser.manifest.files)
+        self.assertEqual(self.parser.manifest.files[file_id].macros, ['test.snowplow.test_not_null'])
 
 
 class AnalysisParserTest(BaseParserTest):
