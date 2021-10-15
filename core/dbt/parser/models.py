@@ -123,6 +123,8 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 # with a fully jinja-rendered project. This is necessary because the experimental
                 # parser will likely add features that the existing static parser will fail on
                 # so comparing those directly would give us bad results.
+                node_copy = None
+                config_copy = None
                 if isinstance(experimental_sample, dict):
                     model_parser_copy = self.deepcopy()
                     node_copy = deepcopy(node)
@@ -138,8 +140,8 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 result.extend(_get_exp_sample_result(
                     experimental_sample,
                     config_call_dict,
-                    node_copy,
-                    config_copy
+                    node_copy or node,
+                    config_copy or config
                 ))
 
             # update the unrendered config with values from the file.
