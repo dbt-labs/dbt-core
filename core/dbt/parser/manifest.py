@@ -388,7 +388,7 @@ class ManifestLoader:
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking
                     self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
-            # generic tests hisotrically lives in the macros directoy but can now be nested
+            # generic tests hisotrically lived in the macros directoy but can now be nested
             # in a /generic directory under /tests so we want to process them here as well
             if 'GenericTestParser' in parser_files:
                 parser = GenericTestParser(project, self.manifest)
