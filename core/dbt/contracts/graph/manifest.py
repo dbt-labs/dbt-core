@@ -873,9 +873,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(
-                    target_model_name, pkg
-                )
+                disabled = self.disabled_lookup.find(target_model_name, pkg)
 
         if disabled:
             return Disabled(disabled[0])
