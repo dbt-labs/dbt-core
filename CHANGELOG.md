@@ -8,7 +8,7 @@
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
 
-### Contributors
+Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - [@matt-winkler](https://github.com/matt-winkler) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 
@@ -49,7 +49,7 @@
 - Define the data type of `sources` as an array of arrays of string in the manifest artifacts. ([#3966](https://github.com/dbt-labs/dbt-core/issues/3966), [#3967](https://github.com/dbt-labs/dbt-core/pull/3967))
 - Marked `source-paths` and `data-paths` as deprecated keys in `dbt_project.yml` in favor of `model-paths` and `seed-paths` respectively.([#1607](https://github.com/dbt-labs/dbt-core/issues/1607))
 
-### Contributors
+Contributors:
 
 - [@dave-connors-3](https://github.com/dave-connors-3) ([#3920](https://github.com/dbt-labs/dbt-core/pull/3922))
 - [@kadero](https://github.com/kadero) ([#3952](https://github.com/dbt-labs/dbt-core/pull/3953))
