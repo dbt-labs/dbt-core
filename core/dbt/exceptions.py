@@ -606,14 +606,6 @@ def source_target_not_found(
     raise_compiler_error(msg, model)
 
 
-def ref_disabled_dependency(model, target_model):
-    raise_compiler_error(
-        "Model '{}' depends on model '{}' which is disabled in "
-        "the project config".format(model.unique_id,
-                                    target_model.unique_id),
-        model)
-
-
 def dependency_not_found(model, target_model_name):
     raise_compiler_error(
         "'{}' depends on '{}' which is not in the graph!"

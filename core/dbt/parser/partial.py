@@ -60,6 +60,7 @@ class PartialParsing:
         self.build_file_diff()
         self.processing_file = None
         self.deleted_special_override_macro = False
+        self.disabled_by_file_id = self.saved_manifest.build_disabled_by_file_id()
 
     def skip_parsing(self):
         return (
@@ -267,13 +268,18 @@ class PartialParsing:
             # delete node in saved
             node = self.saved_manifest.nodes.pop(unique_id)
             self.deleted_manifest.nodes[unique_id] = node
-        elif unique_id in self.saved_manifest.disabled:
+        elif (source_file.file_id in self.disabled_by_file_id and
+                unique_id in self.saved_manifest.disabled):
+            # This node is disabled. Find the node and remove it from disabled dictionary.
             for dis_index, dis_node in enumerate(self.saved_manifest.disabled[unique_id]):
                 if dis_node.file_id == source_file.file_id:
                     node = dis_node
                     break
             if dis_node:
-                del self.saved_manifest.disabled[dis_index]
+                # Remove node from disabled and unique_id from disabled dict if necessary
+                del self.saved_manifest.disabled[unique_id][dis_index]
+                if not self.saved_manifest.disabled[unique_id]:
+                    self.saved_manifest.disabled.pop(unique_id)
         else:
             # Has already been deleted by another action
             return
