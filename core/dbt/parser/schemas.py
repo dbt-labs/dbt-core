@@ -827,11 +827,11 @@ class NodePatchParser(
                 f'file {source_file.path.original_file_path}'
             )
         if unique_id is None:
-            # Node might be disabled. Following call returns first matching node encountered.
-            found_node = self.manifest.find_disabled_by_name(patch.package_name, patch.name)
-            if found_node:
+            # Node might be disabled. Following call returns list of matching disabled nodes
+            found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
+            if found_nodes:
                 # There might be multiple disabled nodes for this model
-                for node in self.manifest.disabled[found_node.unique_id]:
+                for node in found_nodes:
                     # We're saving the patch_path because we need to schedule
                     # re-application of the patch in partial parsing.
                     node.patch_path = source_file.file_id
