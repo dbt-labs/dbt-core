@@ -91,11 +91,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
                 # if this will _never_ mutate anything `self` we could avoid these deep copies,
                 # but we can't really guarantee that going forward.
-                model_parser_copy = ModelParser(
-                    deepcopy(self.project),
-                    deepcopy(self.manifest),
-                    deepcopy(self.root_project)
-                )
+                model_parser_copy = self.deepcopy()
                 jinja_sample_node = deepcopy(node)
                 jinja_sample_config = deepcopy(config)
                 # rendering mutates the node and the config
@@ -128,16 +124,9 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 # parser will likely add features that the existing static parser will fail on
                 # so comparing those directly would give us bad results.
                 if isinstance(experimental_sample, dict):
-                    # TODO pull out into method
-                    model_parser_copy = ModelParser(
-                        deepcopy(self.project),
-                        deepcopy(self.manifest),
-                        deepcopy(self.root_project)
-                    )
-
+                    model_parser_copy = self.deepcopy()
                     node_copy = deepcopy(node)
                     config_copy = deepcopy(config)
-
                     model_parser_copy.populate(
                         node_copy,
                         config_copy,
@@ -298,6 +287,14 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # configs don't need to be merged into the node because they
         # are read from config._config_call_dict
+
+    # for whatever reason this works when `deepcopy(self) does not.`
+    def deepcopy(self):
+        return ModelParser(
+            deepcopy(self.project),
+            deepcopy(self.manifest),
+            deepcopy(self.root_project)
+        )
 
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
