@@ -95,6 +95,69 @@ class TestSchemaTests(DBTIntegrationTest):
         for result in test_results:
             self.assertTestFailed(result)
 
+class TestLimitedSchemaTests(DBTIntegrationTest):
+
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("seed.sql")
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "models-v2/limit_null"
+
+    def run_schema_validations(self):
+        args = FakeArgs()
+        test_task = TestTask(args, self.config)
+        return test_task.run()
+    
+    def assertTestFailed(self, result):
+        self.assertEqual(result.status, "fail")
+        self.assertFalse(result.skipped)
+        self.assertTrue(
+            result.failures > 0,
+            'test {} did not fail'.format(result.node.name)
+        )
+
+    def assertTestWarn(self, result):
+        self.assertEqual(result.status, "warn")
+        self.assertFalse(result.skipped)
+        self.assertTrue(
+            result.failures > 0,
+            'test {} passed without expected warning'.format(result.node.name)
+        )
+
+    def assertTestPassed(self, result):
+        self.assertEqual(result.status, "pass")
+        self.assertFalse(result.skipped)
+        self.assertEqual(
+            result.failures, 0,
+            'test {} failed'.format(result.node.name)
+        )
+
+    @use_profile('postgres')
+    def test_postgres_limit_schema_tests(self):
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
+        test_results = self.run_schema_validations()
+        self.assertEqual(len(test_results), 3)
+
+        for result in test_results:
+            # assert that all deliberately failing tests actually fail
+            if 'failure' in result.node.name:
+                self.assertTestFailed(result)
+            # assert that tests with warnings have them
+            elif 'warning' in result.node.name:
+                self.assertTestWarn(result)
+            # assert that actual tests pass
+            else:
+                self.assertTestPassed(result)
+        # warnings are also marked as failures
+        self.assertEqual(sum(x.failures for x in test_results), 3)
+
 
 class TestMalformedSchemaTests(DBTIntegrationTest):
 

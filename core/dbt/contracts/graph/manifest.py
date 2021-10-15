@@ -95,24 +95,23 @@ class DocLookup(dbtClassMixin):
 
 class SourceLookup(dbtClassMixin):
     def __init__(self, manifest: 'Manifest'):
-        self.storage: Dict[Tuple[str, str], Dict[PackageName, UniqueID]] = {}
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName]):
-        return find_unique_id_for_package(self.storage, key, package)
+    def get_unique_id(self, search_name, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: 'Manifest'):
-        unique_id = self.get_unique_id(key, package)
+    def find(self, search_name, package: Optional[PackageName], manifest: 'Manifest'):
+        unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
     def add_source(self, source: ParsedSourceDefinition):
-        key = (source.source_name, source.name)
-        if key not in self.storage:
-            self.storage[key] = {}
+        if source.search_name not in self.storage:
+            self.storage[source.search_name] = {}
 
-        self.storage[key][source.package_name] = source.unique_id
+        self.storage[source.search_name][source.package_name] = source.unique_id
 
     def populate(self, manifest):
         for source in manifest.sources.values():
@@ -167,6 +166,43 @@ class RefableLookup(dbtClassMixin):
                 f'Node {unique_id} found in cache but not found in manifest'
             )
         return manifest.nodes[unique_id]
+
+
+# This handles both models/seeds/snapshots and sources
+class DisabledLookup(dbtClassMixin):
+
+    def __init__(self, manifest: 'Manifest'):
+        self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
+        self.populate(manifest)
+
+    def populate(self, manifest):
+        for node in list(chain.from_iterable(manifest.disabled.values())):
+            self.add_node(node)
+
+    def add_node(self, node):
+        if node.search_name not in self.storage:
+            self.storage[node.search_name] = {}
+        if node.package_name not in self.storage[node.search_name]:
+            self.storage[node.search_name][node.package_name] = []
+        self.storage[node.search_name][node.package_name].append(node)
+
+    # This should return a list of disabled nodes. It's different from
+    # the other Lookup functions in that it returns full nodes, not just unique_ids
+    def find(self, search_name, package: Optional[PackageName]):
+        if search_name not in self.storage:
+            return None
+
+        pkg_dct: Mapping[PackageName, List[Any]] = self.storage[search_name]
+
+        if package is None:
+            if not pkg_dct:
+                return None
+            else:
+                return next(iter(pkg_dct.values()))
+        elif package in pkg_dct:
+            return pkg_dct[package]
+        else:
+            return None
 
 
 class AnalysisLookup(RefableLookup):
@@ -378,39 +414,6 @@ class Searchable(Protocol):
         raise NotImplementedError('search_name not implemented')
 
 
-N = TypeVar('N', bound=Searchable)
-
-
-@dataclass
-class DisabledNameSearcher():
-    name: str
-    package: Optional[str]
-    nodetypes: List[NodeType]
-
-    def _matches(self, model: N) -> bool:
-        """Return True if the model matches the given name, package, and type.
-
-        If package is None, any package is allowed.
-        nodetypes should be a container of NodeTypes that implements the 'in'
-        operator.
-        """
-        if model.resource_type not in self.nodetypes:
-            return False
-
-        if self.name != model.search_name:
-            return False
-
-        return self.package is None or self.package == model.package_name
-
-    def search(self, haystack) -> Optional[N]:
-        """Find an entry in the given iterable by name."""
-        for model_list in haystack.values():
-            for model in model_list:
-                if self._matches(model):
-                    return model
-        return None
-
-
 D = TypeVar('D')
 
 
@@ -576,6 +579,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     _ref_lookup: Optional[RefableLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
+    _disabled_lookup: Optional[DisabledLookup] = field(
+        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
     _analysis_lookup: Optional[AnalysisLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
@@ -649,26 +655,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             }
         }
 
-    def find_disabled_by_name(
-        self, name: str, package: Optional[str] = None
-    ) -> Optional[ManifestNode]:
-        searcher: DisabledNameSearcher = DisabledNameSearcher(
-            name, package, NodeType.refable()
-        )
-        result = searcher.search(self.disabled)
-        return result
-
-    def find_disabled_source_by_name(
-        self, source_name: str, table_name: str, package: Optional[str] = None
-    ) -> Optional[ParsedSourceDefinition]:
-        search_name = f'{source_name}.{table_name}'
-        searcher: DisabledNameSearcher = DisabledNameSearcher(
-            search_name, package, [NodeType.Source]
-        )
-        result = searcher.search(self.disabled)
-        if result is not None:
-            assert isinstance(result, ParsedSourceDefinition)
-        return result
+    def build_disabled_by_file_id(self):
+        disabled_by_file_id = {}
+        for node_list in self.disabled.values():
+            for node in node_list:
+                disabled_by_file_id[node.file_id] = node
+        return disabled_by_file_id
 
     def _materialization_candidates_for(
         self, project_name: str,
@@ -819,6 +811,15 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self._ref_lookup = RefableLookup(self)
 
     @property
+    def disabled_lookup(self) -> DisabledLookup:
+        if self._disabled_lookup is None:
+            self._disabled_lookup = DisabledLookup(self)
+        return self._disabled_lookup
+
+    def rebuild_disabled_lookup(self):
+        self._disabled_lookup = DisabledLookup(self)
+
+    @property
     def analysis_lookup(self) -> AnalysisLookup:
         if self._analysis_lookup is None:
             self._analysis_lookup = AnalysisLookup(self)
@@ -835,7 +836,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     ) -> MaybeNonSource:
 
         node: Optional[ManifestNode] = None
-        disabled: Optional[ManifestNode] = None
+        disabled: Optional[List[ManifestNode]] = None
 
         candidates = _search_packages(
             current_project, node_package, target_model_package
@@ -848,12 +849,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.find_disabled_by_name(
+                disabled = self.disabled_lookup.find(
                     target_model_name, pkg
                 )
 
-        if disabled is not None:
-            return Disabled(disabled)
+        if disabled:
+            return Disabled(disabled[0])
         return None
 
     # Called by dbt.parser.manifest._resolve_sources_for_exposure
@@ -865,24 +866,24 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         current_project: str,
         node_package: str
     ) -> MaybeParsedSource:
-        key = (target_source_name, target_table_name)
+        search_name = f'{target_source_name}.{target_table_name}'
         candidates = _search_packages(current_project, node_package)
 
         source: Optional[ParsedSourceDefinition] = None
-        disabled: Optional[ParsedSourceDefinition] = None
+        disabled: Optional[List[ParsedSourceDefinition]] = None
 
         for pkg in candidates:
-            source = self.source_lookup.find(key, pkg, self)
+            source = self.source_lookup.find(search_name, pkg, self)
             if source is not None and source.config.enabled:
                 return source
 
             if disabled is None:
-                disabled = self.find_disabled_source_by_name(
-                    target_source_name, target_table_name, pkg
+                disabled = self.disabled_lookup.find(
+                    f'{target_source_name}.{target_table_name}', pkg
                 )
 
-        if disabled is not None:
-            return Disabled(disabled)
+        if disabled:
+            return Disabled(disabled[0])
         return None
 
     # Called by DocsRuntimeContext.doc
@@ -1050,6 +1051,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
+            self._disabled_lookup,
+            self._analysis_lookup,
         )
         return self.__class__, args
 

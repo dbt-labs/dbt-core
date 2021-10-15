@@ -36,7 +36,7 @@ setup(
     long_description=description,
     author="dbt Labs",
     author_email="info@dbtlabs.com",
-    url="https://github.com/dbt-labs/dbt",
+    url="https://github.com/dbt-labs/dbt-core",
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     include_package_data = True,
     test_suite='test',
