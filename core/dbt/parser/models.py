@@ -67,7 +67,6 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         exp_sample_config: Optional[ContextConfig] = None
         jinja_sample_node: Optional[ParsedModelNode] = None
         jinja_sample_config: Optional[ContextConfig] = None
-        config_call_dict: Dict[str, Any] = {}
         result = []
 
         # sample the experimental parser only during a normal run
@@ -118,13 +117,10 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 super(ModelParser, model_parser_copy) \
                     .render_update(jinja_sample_node, jinja_sample_config)
 
-            # since it doesn't need python jinja, fit the refs, sources, and configs
-            # into the node. Down the line the rest of the node will be updated with
-            # this information. (e.g. depends_on etc.)
-            config_call_dict = _get_config_call_dict(statically_parsed)
-            config._config_call_dict = config_call_dict
+            # manually fit configs in
+            config._config_call_dict = _get_config_call_dict(statically_parsed)
 
-            # update the unrendered config with values from the file.
+            # update the unrendered config with values from the static parser.
             # values from yaml files are in there already
             self.populate(
                 node,
