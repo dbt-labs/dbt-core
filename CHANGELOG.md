@@ -3,7 +3,10 @@
 ### Fixes
 - Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4057](https://github.com/dbt-labs/dbt/pull/4057))
 - Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
+- Include only relational nodes in `database_schema_set` ([#4063](https://github.com/dbt-labs/dbt-core/issues/4063), [#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
 
+Contributors:
+- [@ljhopkins2](https://github.com/ljhopkins2) ([#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
 
 ## dbt 0.21.0 (October 04, 2021)
 
