@@ -12,7 +12,7 @@ from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignor
 from functools import reduce
 from itertools import chain
 import random
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -67,7 +67,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         exp_sample_config: Optional[ContextConfig] = None
         jinja_sample_node: Optional[ParsedModelNode] = None
         jinja_sample_config: Optional[ContextConfig] = None
-        result = []
+        result: List[str] = []
 
         # sample the experimental parser only during a normal run
         if exp_sample and not flags.USE_EXPERIMENTAL_PARSER:
@@ -132,21 +132,21 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
             # if we took a jinja sample, compare now that the base node has been populated
             if jinja_sample_node is not None and jinja_sample_config is not None:
-                result.extend(_get_stable_sample_result(
+                result = _get_stable_sample_result(
                     jinja_sample_node,
                     jinja_sample_config,
                     node,
                     config
-                ))
+                )
 
             # if we took an experimental sample, compare now that the base node has been populated
             if exp_sample_node is not None and exp_sample_config is not None:
-                result.extend(_get_exp_sample_result(
+                result = _get_exp_sample_result(
                     exp_sample_node,
                     exp_sample_config,
                     node,
                     config,
-                ))
+                )
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
 
@@ -326,8 +326,13 @@ def _get_exp_sample_result(
     node: ParsedModelNode,
     config: ContextConfig
 ) -> List[str]:
-    result: List[str] = _get_sample_result(sample_node, sample_config, node, config)
-    return list(map(lambda code: f"0{code}", result))
+    result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
+
+    def process(codemsg):
+        code, msg = codemsg
+        return f"0{code}_experimental_{msg}"
+
+    return list(map(process, result))
 
 
 # returns a list of string codes to be sent as a tracking event
@@ -337,8 +342,13 @@ def _get_stable_sample_result(
     node: ParsedModelNode,
     config: ContextConfig
 ) -> List[str]:
-    result: List[str] = _get_sample_result(sample_node, sample_config, node, config)
-    return list(map(lambda code: f"8{code}", result))
+    result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
+
+    def process(codemsg):
+        code, msg = codemsg
+        return f"8{code}_stable_{msg}"
+
+    return list(map(process, result))
 
 
 # returns a list of string codes that need a single digit prefix to be prepended
@@ -348,46 +358,46 @@ def _get_sample_result(
     sample_config: ContextConfig,
     node: ParsedModelNode,
     config: ContextConfig
-) -> List[str]:
-    result: List[str] = []
+) -> List[Tuple[int, str]]:
+    result: List[Tuple[int, str]] = []
     # look for false positive configs
     for k in config._config_call_dict:
         if k not in config._config_call_dict:
-            result += ["2_stable_false_positive_config_value"]
+            result += [(2, "false_positive_config_value")]
             break
 
     # look for missed configs
     for k in config._config_call_dict.keys():
         if k not in sample_config._config_call_dict.keys():
-            result += ["3_stable_missed_config_value"]
+            result += [(3, "missed_config_value")]
             break
 
     # look for false positive sources
     for s in sample_node.sources:
         if s not in node.sources:
-            result += ["4_sample_false_positive_source_value"]
+            result += [(4, "false_positive_source_value")]
             break
 
     # look for missed sources
     for s in node.sources:
         if s not in sample_node.sources:
-            result += ["5_sample_missed_source_value"]
+            result += [(5, "missed_source_value")]
             break
 
     # look for false positive refs
     for r in sample_node.refs:
         if r not in node.refs:
-            result += ["6_sample_false_positive_ref_value"]
+            result += [(6, "false_positive_ref_value")]
             break
 
     # look for missed refs
     for r in node.refs:
         if r not in sample_node.refs:
-            result += ["7_stable_missed_ref_value"]
+            result += [(7, "missed_ref_value")]
             break
 
     # if there are no errors, return a success value
     if not result:
-        result = ["0_stable_exact_match"]
+        result = [(0, "exact_match")]
 
     return result
