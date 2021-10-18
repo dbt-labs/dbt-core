@@ -224,6 +224,38 @@ class TestHooksInTests(DBTIntegrationTest):
 
     @property
     def models(self):
+        # this makes things easier
+        return "ephemeral"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "on-run-start": ["{{ log('hooks called in tests -- good!') if execute }}"],
+            "on-run-end": ["{{ log('hooks called in tests -- good!') if execute }}"],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_hooks_do_run_for_tests(self):
+        # This passes now that hooks run, a behavior we changed in v1.0
+        results = self.run_dbt(['test', '--model', 'ephemeral'])
+        self.assertEqual(len(results), 1)
+        for result in results:
+            self.assertEqual(result.status, "pass")
+            self.assertFalse(result.skipped)
+            self.assertEqual(
+                result.failures, 0,
+                'test {} failed'.format(result.node.name)
+            )
+
+class TestHooksForWhich(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
         # test ephemeral models so we don't need to do a run (which would fail)
         return "ephemeral"
 
@@ -231,12 +263,12 @@ class TestHooksInTests(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            "on-run-start": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
-            "on-run-end": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
+            "on-run-start": ["{{exceptions.raise_compiler_error('hooks called in tests -- error') if (execute and flags.WHICH != 'test') }}"],
+            "on-run-end": ["{{exceptions.raise_compiler_error('hooks called in tests -- error') if (execute and flags.WHICH != 'test') }}"],
         }
 
     @use_profile('postgres')
-    def test_postgres_hooks_dont_run_for_tests(self):
+    def test_postgres_these_hooks_dont_run_for_tests(self):
         # This would fail if the hooks ran
         results = self.run_dbt(['test', '--model', 'ephemeral'])
         self.assertEqual(len(results), 1)
