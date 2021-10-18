@@ -234,9 +234,7 @@ class ConfiguredParser(
 
         # this goes through the process of rendering, but just throws away
         # the rendered result. The "macro capture" is the point?
-        get_rendered(
-            parsed_node.raw_sql, context, parsed_node, capture_macros=True
-        )
+        get_rendered(parsed_node.raw_sql, context, parsed_node, capture_macros=True)
         return context
 
     # This is taking the original config for the node, converting it to a dict,
