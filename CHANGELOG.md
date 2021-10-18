@@ -12,6 +12,9 @@
 - Add `result:<status>` selectors to automatically rerun failed tests and erroneous models. This makes it easier to rerun failed dbt jobs with a simple selector flag instead of restarting from the beginning or manually running the dbt models in scope. ([#3859](https://github.com/dbt-labs/dbt/issues/3891), [#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - `dbt init` is now interactive, generating profiles.yml when run inside existing project ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
 
+### Fixes
+- Added support for tests on databases that lack real boolean types. ([#4084](https://github.com/dbt-labs/dbt-core/issues/4084))
+
 ### Under the hood
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))

@@ -34,6 +34,12 @@ class TestResultData(dbtClassMixin):
     should_warn: bool
     should_error: bool
 
+    @classmethod
+    def validate(cls, data):
+        data['should_warn'] = bool(data.get('should_warn'))
+        data['should_error'] = bool(data.get('should_error'))
+        super().validate(data)
+
 
 class TestRunner(CompileRunner):
     def describe_node(self):
