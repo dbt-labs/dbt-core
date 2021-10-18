@@ -101,7 +101,7 @@ def set_from_args(args, user_config):
     # N.B. Multiple `globals` are purely for line length.
     # Because `global` is a parser directive (as opposed to a language construct)
     # black insists in putting them all on one line
-        VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
+    global STRICT_MODE, FULL_REFRESH, WARN_ERROR, USE_EXPERIMENTAL_PARSER, STATIC_PARSER
     global WRITE_JSON, PARTIAL_PARSE, USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT
     global INDIRECT_SELECTION, VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS
     global PRINTER_WIDTH, WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE
@@ -110,7 +110,7 @@ def set_from_args(args, user_config):
     # cli args without user_config or env var option
     FULL_REFRESH = getattr(args, 'full_refresh', FULL_REFRESH)
     STORE_FAILURES = getattr(args, "store_failures", STORE_FAILURES)
-    WHICH = getattr(args, 'which', WHICH)
+    WHICH = getattr(args, "which", WHICH)
 
     # global cli flags with env var and user_config alternatives
     USE_EXPERIMENTAL_PARSER = get_flag_value("USE_EXPERIMENTAL_PARSER", args, user_config)
