@@ -20,7 +20,7 @@ class PreviousState:
                 exc.add_filename(str(manifest_path))
                 raise
 
-        results_path = self.path / 'run_results.json'
+        results_path = self.path / "run_results.json"
         if results_path.exists() and results_path.is_file():
             try:
                 # we want to bail with an error if schema versions don't match

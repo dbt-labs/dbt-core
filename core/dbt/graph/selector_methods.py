@@ -47,7 +47,7 @@ class MethodName(StrEnum):
     State = "state"
     Exposure = "exposure"
     Metric = "metric"
-    Result = 'result'
+    Result = "result"
 
 
 def is_selected_node(fqn: List[str], node_selector: str):
@@ -543,16 +543,11 @@ class StateSelectorMethod(SelectorMethod):
 
 
 class ResultSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.results is None:
-            raise InternalException(
-                'No comparison run_results'
-            )
+            raise InternalException("No comparison run_results")
         matches = set(
-            result.unique_id for result in self.previous_state.results
-            if result.status == selector
+            result.unique_id for result in self.previous_state.results if result.status == selector
         )
         for node, real_node in self.all_nodes(included_nodes):
             if node in matches:
