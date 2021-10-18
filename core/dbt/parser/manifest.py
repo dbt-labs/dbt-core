@@ -25,7 +25,7 @@ from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
-from dbt.context.docs import generate_runtime_docs
+from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider
@@ -136,7 +136,7 @@ class ManifestLoader:
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
         self.macro_resolver = None  # built after macros are loaded
-        self.started_at = int(time.time())
+        self.started_at = time.time()
         # This is a MacroQueryStringSetter callable, which is called
         # later after we set the MacroManifest in the adapter. It sets
         # up the query headers.
@@ -772,7 +772,7 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 node,
                 self.manifest,
@@ -782,7 +782,7 @@ class ManifestLoader:
         for source in self.manifest.sources.values():
             if source.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 source,
                 self.manifest,
@@ -792,7 +792,7 @@ class ManifestLoader:
         for macro in self.manifest.macros.values():
             if macro.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 macro,
                 self.manifest,
@@ -802,7 +802,7 @@ class ManifestLoader:
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 exposure,
                 self.manifest,
@@ -1144,7 +1144,7 @@ def _process_sources_for_node(
 def process_macro(
     config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro
 ) -> None:
-    ctx = generate_runtime_docs(
+    ctx = generate_runtime_docs_context(
         config,
         macro,
         manifest,
@@ -1163,5 +1163,5 @@ def process_node(
         manifest, config.project_name, node
     )
     _process_refs_for_node(manifest, config.project_name, node)
-    ctx = generate_runtime_docs(config, node, manifest, config.project_name)
+    ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)

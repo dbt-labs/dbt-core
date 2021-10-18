@@ -151,7 +151,7 @@ class ParsedNodeMixins(dbtClassMixin):
         # Note: config should already be updated
         self.patch_path: Optional[str] = patch.file_id
         # update created_at so process_docs will run in partial parsing
-        self.created_at = int(time.time())
+        self.created_at = time.time()
         self.description = patch.description
         self.columns = patch.columns
         self.meta = patch.meta
@@ -193,7 +193,7 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     build_path: Optional[str] = None
     deferred: bool = False
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
-    created_at: int = field(default_factory=lambda: int(time.time()))
+    created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
 
     def write_node(self, target_path: str, subdirectory: str, payload: str):
@@ -493,12 +493,12 @@ class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     docs: Docs = field(default_factory=Docs)
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
-    created_at: int = field(default_factory=lambda: int(time.time()))
+    created_at: float = field(default_factory=lambda: time.time())
 
     def patch(self, patch: ParsedMacroPatch):
         self.patch_path: Optional[str] = patch.file_id
         self.description = patch.description
-        self.created_at = int(time.time())
+        self.created_at = time.time()
         self.meta = patch.meta
         self.docs = patch.docs
         self.arguments = patch.arguments
@@ -614,7 +614,7 @@ class ParsedSourceDefinition(
     patch_path: Optional[Path] = None
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
-    created_at: int = field(default_factory=lambda: int(time.time()))
+    created_at: float = field(default_factory=lambda: time.time())
 
     def same_database_representation(
         self, other: 'ParsedSourceDefinition'
@@ -725,7 +725,7 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
-    created_at: int = field(default_factory=lambda: int(time.time()))
+    created_at: float = field(default_factory=lambda: time.time())
 
     @property
     def depends_on_nodes(self):

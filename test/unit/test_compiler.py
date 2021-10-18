@@ -60,13 +60,13 @@ class CompilerTest(unittest.TestCase):
 
         self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
 
-        self._generate_runtime_model_patch = patch.object(
-            dbt.compilation, 'generate_runtime_model')
-        self.mock_generate_runtime_model = self._generate_runtime_model_patch.start()
+        self._generate_runtime_model_context_patch = patch.object(
+            dbt.compilation, 'generate_runtime_model_context')
+        self.mock_generate_runtime_model_context = self._generate_runtime_model_context_patch.start()
 
         inject_adapter(Plugin.adapter(self.config), Plugin)
 
-        def mock_generate_runtime_model_context(model, config, manifest):
+        def mock_generate_runtime_model_context_meth(model, config, manifest):
             def ref(name):
                 result = f'__dbt__cte__{name}'
                 unique_id = f'model.root.{name}'
@@ -74,10 +74,10 @@ class CompilerTest(unittest.TestCase):
                 return result
             return {'ref': ref}
 
-        self.mock_generate_runtime_model.side_effect = mock_generate_runtime_model_context
+        self.mock_generate_runtime_model_context.side_effect = mock_generate_runtime_model_context_meth
 
     def tearDown(self):
-        self._generate_runtime_model_patch.stop()
+        self._generate_runtime_model_context_patch.stop()
         clear_plugin(Plugin)
 
     def test__prepend_ctes__already_has_cte(self):
