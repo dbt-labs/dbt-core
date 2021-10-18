@@ -36,6 +36,7 @@ Contributors:
 - Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt-core/issues/3377), [#3939](https://github.com/dbt-labs/dbt-core/pull/3939))
 - Generic test FQNs have changed to include the relative path, resource, and column (if applicable) where they are defined. This makes it easier to configure them from the `tests` block in `dbt_project.yml` ([#3259](https://github.com/dbt-labs/dbt-core/pull/3259), [#3880](https://github.com/dbt-labs/dbt-core/pull/3880)
 - Turn on partial parsing by default ([#3867](https://github.com/dbt-labs/dbt-core/issues/3867), [#3989](https://github.com/dbt-labs/dbt-core/issues/3989))
+- Generic test can now be added under a `generic` subfolder in the `test-paths` directory. ([#4052](https://github.com/dbt-labs/dbt-core/pull/4052))
 
 ### Fixes
 - Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
