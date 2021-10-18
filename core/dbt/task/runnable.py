@@ -1,5 +1,6 @@
 import os
 import time
+import json
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
@@ -14,6 +15,7 @@ from .printer import (
 )
 
 from dbt import ui
+from dbt.clients.system import write_file
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.factory import get_adapter
@@ -69,6 +71,9 @@ class ManifestTask(ConfiguredTask):
         if flags.WRITE_JSON:
             path = os.path.join(self.config.target_path, MANIFEST_FILE_NAME)
             self.manifest.write(path)
+        if os.getenv('DBT_WRITE_FILES'):
+            path = os.path.join(self.config.target_path, 'files.json')
+            write_file(path, json.dumps(self.manifest.files, cls=dbt.utils.JSONEncoder, indent=4))
 
     def load_manifest(self):
         self.manifest = ManifestLoader.get_full_manifest(self.config)

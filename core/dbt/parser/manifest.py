@@ -247,12 +247,17 @@ class ManifestLoader:
                     # get file info for local logs
                     parse_file_type = None
                     file_id = partial_parsing.processing_file
-                    if file_id and file_id in self.manifest.files:
-                        old_file = self.manifest.files[file_id]
-                        parse_file_type = old_file.parse_file_type
-                        logger.debug(f"Partial parsing exception processing file {file_id}")
-                        file_dict = old_file.to_dict()
-                        logger.debug(f"PP file: {file_dict}")
+                    if file_id:
+                        source_file = None
+                        if file_id in self.saved_manifest.files:
+                            source_file = self.saved_manifest.files[file_id]
+                        elif file_id in self.manifest.files:
+                            source_file = self.manifest.files[file_id]
+                        if source_file:
+                            parse_file_type = source_file.parse_file_type
+                            logger.debug(f"Partial parsing exception processing file {file_id}")
+                            file_dict = source_file.to_dict()
+                            logger.debug(f"PP file: {file_dict}")
                     exc_info['parse_file_type'] = parse_file_type
                     logger.debug(f"PP exception info: {exc_info}")
 
@@ -310,6 +315,7 @@ class ManifestLoader:
             # aren't in place yet
             self.manifest.rebuild_ref_lookup()
             self.manifest.rebuild_doc_lookup()
+            self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
             parser_types = [SchemaParser]

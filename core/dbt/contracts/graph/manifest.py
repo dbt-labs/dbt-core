@@ -169,6 +169,43 @@ class RefableLookup(dbtClassMixin):
         return manifest.nodes[unique_id]
 
 
+class DisabledLookup(dbtClassMixin):
+    # model, seed, snapshot
+    _lookup_types: ClassVar[set] = set(NodeType.refable())
+
+    def __init__(self, manifest: 'Manifest'):
+        self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
+        self.populate(manifest)
+
+    def populate(self, manifest):
+        for node in manifest.disabled:
+            self.add_node(node)
+        for node in list(chain.from_iterable(manifest._disabled.values())):
+            self.add_node(node)
+
+    def add_node(self, node: ManifestNode):
+        if node.resource_type in self._lookup_types:
+            if node.name not in self.storage:
+                self.storage[node.name] = {}
+            if node.package_name not in self.storage[node.name]:
+                self.storage[node.name][node.package_name] = []
+            self.storage[node.name][node.package_name].append(node)
+
+    # This should return a list of disabled nodes
+    def find(self, key, package: PackageName):
+        if key not in self.storage:
+            return None
+
+        pkg_dct: Mapping[PackageName, List[ManifestNode]] = self.storage[key]
+
+        if not pkg_dct:
+            return None
+        elif package in pkg_dct:
+            return pkg_dct[package]
+        else:
+            return None
+
+
 class AnalysisLookup(RefableLookup):
     _lookup_types: ClassVar[set] = set([NodeType.Analysis])
 
@@ -568,7 +605,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     # Moved from the ParseResult object
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
-    # following is from ParseResult
+    # following contains new disabled nodes until parsing is finished. This changes in 1.0.0
     _disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
@@ -577,6 +614,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
     _ref_lookup: Optional[RefableLookup] = field(
+        default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
+    )
+    _disabled_lookup: Optional[DisabledLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
     )
     _analysis_lookup: Optional[AnalysisLookup] = field(
@@ -651,6 +691,15 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 for k, v in self.sources.items()
             }
         }
+
+    def build_disabled_by_file_id(self):
+        disabled_by_file_id = {}
+        for node in self.disabled:
+            disabled_by_file_id[node.file_id] = node
+        for node_list in self._disabled.values():
+            for node in node_list:
+                disabled_by_file_id[node.file_id] = node
+        return disabled_by_file_id
 
     def find_disabled_by_name(
         self, name: str, package: Optional[str] = None
@@ -821,6 +870,15 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     def rebuild_ref_lookup(self):
         self._ref_lookup = RefableLookup(self)
+
+    @property
+    def disabled_lookup(self) -> DisabledLookup:
+        if self._disabled_lookup is None:
+            self._disabled_lookup = DisabledLookup(self)
+        return self._disabled_lookup
+
+    def rebuild_disabled_lookup(self):
+        self._disabled_lookup = DisabledLookup(self)
 
     @property
     def analysis_lookup(self) -> AnalysisLookup:
@@ -1054,6 +1112,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
+            self._disabled_lookup,
+            self._analysis_lookup
         )
         return self.__class__, args
 

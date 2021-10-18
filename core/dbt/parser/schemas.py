@@ -825,6 +825,10 @@ class NodePatchParser(
             )
         if unique_id is None:
             # This will usually happen when a node is disabled
+            disabled_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
+            if disabled_nodes:
+                for node in disabled_nodes:
+                    node.patch_path = source_file.file_id
             return
 
         # patches can't be overwritten

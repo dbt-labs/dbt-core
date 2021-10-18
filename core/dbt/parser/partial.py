@@ -47,6 +47,7 @@ class PartialParsing:
         self.macro_child_map: Dict[str, List[str]] = {}
         self.build_file_diff()
         self.processing_file = None
+        self.disabled_by_file_id = self.saved_manifest.build_disabled_by_file_id()
 
     def skip_parsing(self):
         return (
@@ -233,23 +234,37 @@ class PartialParsing:
             return
 
         # These files only have one node.
-        unique_id = old_source_file.nodes[0]
+        unique_id = None
+        if old_source_file.nodes:
+            unique_id = old_source_file.nodes[0]
+        else:
+            # It's not clear when this would actually happen.
+            # Logging in case there are other associated errors.
+            logger.debug(f"Partial parsing: node not found for source_file {old_source_file}")
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
         self.deleted_manifest.files[file_id] = old_source_file
         self.saved_files[file_id] = new_source_file
         self.add_to_pp_files(new_source_file)
-        self.remove_node_in_saved(new_source_file, unique_id)
+        if unique_id:
+            self.remove_node_in_saved(new_source_file, unique_id)
 
     def remove_node_in_saved(self, source_file, unique_id):
-        # Has already been deleted by another action
-        if unique_id not in self.saved_manifest.nodes:
+        if unique_id in self.saved_manifest.nodes:
+            # delete node in saved
+            node = self.saved_manifest.nodes.pop(unique_id)
+            self.deleted_manifest.nodes[unique_id] = node
+        elif source_file.file_id in self.disabled_by_file_id:
+            for dis_index, dis_node in self.saved_manifest.disabled:
+                if dis_node.file_id == source_file.file_id:
+                    node = dis_node
+                    break
+            if dis_node:
+                del self.saved_manifest.disabled[dis_index]
+        else:
+            # Has already been deleted by another action
             return
-
-        # delete node in saved
-        node = self.saved_manifest.nodes.pop(unique_id)
-        self.deleted_manifest.nodes[unique_id] = node
 
         # look at patch_path in model node to see if we need
         # to reapply a patch from a schema_file.
@@ -261,15 +276,22 @@ class PartialParsing:
                 schema_file = self.saved_files[file_id]
                 dict_key = parse_file_type_to_key[source_file.parse_file_type]
                 # look for a matching list dictionary
-                for elem in schema_file.dict_from_yaml[dict_key]:
-                    if elem['name'] == node.name:
-                        elem_patch = elem
-                        break
+                elem_patch = None
+                if dict_key in schema_file.dict_from_yaml:
+                    for elem in schema_file.dict_from_yaml[dict_key]:
+                        if elem['name'] == node.name:
+                            elem_patch = elem
+                            break
                 if elem_patch:
                     self.delete_schema_mssa_links(schema_file, dict_key, elem_patch)
                     self.merge_patch(schema_file, dict_key, elem_patch)
                     if unique_id in schema_file.node_patches:
                         schema_file.node_patches.remove(unique_id)
+            if unique_id in self.saved_manifest.disabled:
+                # We have a patch_path in disabled nodes with a patch so
+                # that we can connect the patch to the node
+                for node in self.saved_manifest.disabled[unique_id]:
+                    node.patch_path = None
 
     def update_macro_in_saved(self, new_source_file, old_source_file):
         if self.already_scheduled_for_parsing(old_source_file):
@@ -290,7 +312,8 @@ class PartialParsing:
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
         if not source_file.nodes:
-            raise Exception(f"No nodes found for source file {source_file.file_id}")
+            logger.debug(f"No nodes found for source file {source_file.file_id}")
+            return
         # There is generally only 1 node for SQL files, except for macros
         for unique_id in source_file.nodes:
             self.remove_node_in_saved(source_file, unique_id)
@@ -299,7 +322,10 @@ class PartialParsing:
     # We need to re-parse nodes that reference another removed node
     def schedule_referencing_nodes_for_parsing(self, unique_id):
         # Look at "children", i.e. nodes that reference this node
-        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
+        if unique_id in self.saved_manifest.child_map:
+            self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
+        else:
+            logger.debug(f"Partial parsing: {unique_id} not found in child_map")
 
     def schedule_nodes_for_parsing(self, unique_ids):
         for unique_id in unique_ids:
