@@ -13,7 +13,7 @@ from dbt.context.providers import (
     generate_parser_model,
     generate_generate_component_name_macro,
 )
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
 from dbt.context.context_config import (
@@ -260,17 +260,13 @@ class ConfiguredParser(
         # Given the parsed node and a ContextConfig to use during parsing,
         # render the node's sql wtih macro capture enabled.
         # Note: this mutates the config object when config calls are rendered.
+        context = self._context_for(parsed_node, config)
 
-        # during parsing, we don't have a connection, but we might need one, so
-        # we have to acquire it.
-        with get_adapter(self.root_project).connection_for(parsed_node):
-            context = self._context_for(parsed_node, config)
-
-            # this goes through the process of rendering, but just throws away
-            # the rendered result. The "macro capture" is the point?
-            get_rendered(
-                parsed_node.raw_sql, context, parsed_node, capture_macros=True
-            )
+        # this goes through the process of rendering, but just throws away
+        # the rendered result. The "macro capture" is the point?
+        get_rendered(
+            parsed_node.raw_sql, context, parsed_node, capture_macros=True
+        )
         return context
 
     # This is taking the original config for the node, converting it to a dict,
