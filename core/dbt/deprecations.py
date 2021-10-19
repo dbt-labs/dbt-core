@@ -60,6 +60,14 @@ class PackageInstallPathDeprecation(DBTDeprecation):
     '''
 
 
+class ConfigPathDeprecation(DBTDeprecation):
+    _name = 'project_config_path'
+    _description = '''\
+    The `{deprecated_path}` config has been deprecated in favor of `{exp_path}`.
+    Please update your `dbt_project.yml` configuration to reflect this change.
+    '''
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
 a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -98,6 +106,7 @@ def warn(name, *args, **kwargs):
 active_deprecations: Set[str] = set()
 
 deprecations_list: List[DBTDeprecation] = [
+    ConfigPathDeprecation(),
     PackageInstallPathDeprecation(),
     PackageRedirectDeprecation()
 ]

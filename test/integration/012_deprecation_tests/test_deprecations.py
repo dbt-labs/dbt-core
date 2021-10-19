@@ -18,6 +18,36 @@ class BaseTestDeprecations(DBTIntegrationTest):
         return path.lstrip("/")
 
 
+class TestConfigPathDeprecation(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('models')
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'data-paths': ['data']
+        }
+    
+    @use_profile('postgres')
+    def test_postgres_data_path(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(['debug'])
+        expected = {'project_config_path'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+    @use_profile('postgres')
+    def test_postgres_data_path_fail(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['--warn-error', 'debug'])
+        exc_str = ' '.join(str(exc.exception).split())  # flatten all whitespace
+        expected = "The `data-paths` config has been deprecated"
+        assert expected in exc_str
+
+
+
 class TestDeprecations(BaseTestDeprecations):
     @property
     def models(self):

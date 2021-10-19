@@ -137,13 +137,13 @@ def handle(parsed):
     validate_and_mutate_args(parsed)
     with open(os.path.join(parsed.search_directory, 'dbt_project.yml')) as fp:
         project = yaml.safe_load(fp)
-    source_dirs = project.get('source-paths', ['models'])
+    model_dirs = project.get('model-paths', ['models'])
     if parsed.apply:
         print('converting the following files to the v2 spec:')
     else:
         print('would convert the following files to the v2 spec:')
-    for source_dir in source_dirs:
-        search_path = os.path.join(parsed.search_directory, source_dir)
+    for model_dir in model_dirs:
+        search_path = os.path.join(parsed.search_directory, model_dir)
         convert_project(search_path, parsed.backup, parsed.apply,
                         parsed.extra_complex_tests)
     if not parsed.apply:

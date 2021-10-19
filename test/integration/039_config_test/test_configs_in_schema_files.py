@@ -17,7 +17,7 @@ class TestSchemaFileConfigs(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data-alt'],
+            'seed-paths': ['seeds-alt'],
             'models': {
                 '+meta': {
                     'company': 'NuMade',

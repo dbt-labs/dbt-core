@@ -184,7 +184,7 @@ class TestVarDependencyInheritance(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['dependency-data'],
+            'seed-paths': ['dependency-seeds'],
             'vars': {
                 'first_dep_override': 'dep_never_overridden',
                 'test': {

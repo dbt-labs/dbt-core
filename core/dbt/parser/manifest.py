@@ -319,6 +319,7 @@ class ManifestLoader:
             # aren't in place yet
             self.manifest.rebuild_ref_lookup()
             self.manifest.rebuild_doc_lookup()
+            self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
             parser_types = [SchemaParser]
@@ -343,6 +344,8 @@ class ManifestLoader:
             self._perf_info.patch_sources_elapsed = (
                 time.perf_counter() - start_patch
             )
+            # We need to rebuild disabled in order to include disabled sources
+            self.manifest.rebuild_disabled_lookup()
 
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors

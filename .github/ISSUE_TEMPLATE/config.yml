@@ -1,0 +1,16 @@
+contact_links:
+  - name: Create an issue for dbt-redshift
+    url: https://github.com/dbt-labs/dbt-redshift/issues/new/choose
+    about: Report a bug or request a feature for dbt-redshift
+  - name: Create an issue for dbt-bigquery
+    url: https://github.com/dbt-labs/dbt-bigquery/issues/new/choose
+    about: Report a bug or request a feature for dbt-bigquery
+  - name: Create an issue for dbt-snowflake
+    url: https://github.com/dbt-labs/dbt-snowflake/issues/new/choose
+    about: Report a bug or request a feature for dbt-snowflake
+  - name: Ask a question or get support
+    url: https://docs.getdbt.com/docs/guides/getting-help
+    about: Ask a question or request support
+  - name: Questions on Stack Overflow
+    url: https://stackoverflow.com/questions/tagged/dbt
+    about: Look at questions/answers at Stack Overflow

@@ -312,6 +312,17 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.target_name, 'default')
         self.assertEqual(profile.credentials.type, 'postgres')
 
+    def test_extra_path(self):
+        self.default_project_data.update({
+            'model-paths': ['models'],
+            'source-paths': ['other-models'],
+        })
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:            
+            project = project_from_config_norender(self.default_project_data)
+
+        self.assertIn('source-paths and model-paths', str(exc.exception))
+        self.assertIn('cannot both be defined.', str(exc.exception))
+
     def test_profile_invalid_project(self):
         renderer = empty_profile_renderer()
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
@@ -586,12 +597,12 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.version, '0.0.1')
         self.assertEqual(project.profile_name, 'default')
         self.assertEqual(project.project_root, '/invalid-root-path')
-        self.assertEqual(project.source_paths, ['models'])
+        self.assertEqual(project.model_paths, ['models'])
         self.assertEqual(project.macro_paths, ['macros'])
-        self.assertEqual(project.data_paths, ['data'])
+        self.assertEqual(project.seed_paths, ['seeds'])
         self.assertEqual(project.test_paths, ['tests'])
         self.assertEqual(project.analysis_paths, ['analyses'])
-        self.assertEqual(project.docs_paths, ['models', 'data', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(project.docs_paths, ['models', 'seeds', 'snapshots', 'analyses', 'macros'])
         self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, 'target')
         self.assertEqual(project.clean_targets, ['target'])
@@ -620,11 +631,11 @@ class TestProject(BaseConfigTest):
 
     def test_implicit_overrides(self):
         self.default_project_data.update({
-            'source-paths': ['other-models'],
+            'model-paths': ['other-models'],
             'target-path': 'other-target',
         })
         project = project_from_config_norender(self.default_project_data)
-        self.assertEqual(project.docs_paths, ['other-models', 'data', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(project.docs_paths, ['other-models', 'seeds', 'snapshots', 'analyses', 'macros'])
         self.assertEqual(project.clean_targets, ['other-target'])
 
     def test_hashed_name(self):
@@ -633,9 +644,9 @@ class TestProject(BaseConfigTest):
 
     def test_all_overrides(self):
         self.default_project_data.update({
-            'source-paths': ['other-models'],
+            'model-paths': ['other-models'],
             'macro-paths': ['other-macros'],
-            'data-paths': ['other-data'],
+            'seed-paths': ['other-seeds'],
             'test-paths': ['other-tests'],
             'analysis-paths': ['other-analyses'],
             'docs-paths': ['docs'],
@@ -703,9 +714,9 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.version, '0.0.1')
         self.assertEqual(project.profile_name, 'default')
         self.assertEqual(project.project_root, '/invalid-root-path')
-        self.assertEqual(project.source_paths, ['other-models'])
+        self.assertEqual(project.model_paths, ['other-models'])
         self.assertEqual(project.macro_paths, ['other-macros'])
-        self.assertEqual(project.data_paths, ['other-data'])
+        self.assertEqual(project.seed_paths, ['other-seeds'])
         self.assertEqual(project.test_paths, ['other-tests'])
         self.assertEqual(project.analysis_paths, ['other-analyses'])
         self.assertEqual(project.docs_paths, ['docs'])
@@ -1198,12 +1209,12 @@ class TestRuntimeConfigFiles(BaseFileTest):
         # on osx, for example, these are not necessarily equal due to /private
         self.assertTrue(os.path.samefile(config.project_root,
                                          self.project_dir))
-        self.assertEqual(config.source_paths, ['models'])
+        self.assertEqual(config.model_paths, ['models'])
         self.assertEqual(config.macro_paths, ['macros'])
-        self.assertEqual(config.data_paths, ['data'])
+        self.assertEqual(config.seed_paths, ['seeds'])
         self.assertEqual(config.test_paths, ['tests'])
         self.assertEqual(config.analysis_paths, ['analyses'])
-        self.assertEqual(config.docs_paths, ['models', 'data', 'snapshots', 'analyses', 'macros'])
+        self.assertEqual(config.docs_paths, ['models', 'seeds', 'snapshots', 'analyses', 'macros'])
         self.assertEqual(config.asset_paths, [])
         self.assertEqual(config.target_path, 'target')
         self.assertEqual(config.clean_targets, ['target'])

@@ -1,23 +1,10 @@
 from dbt.exceptions import CompilationException
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
-from test.integration.base import DBTIntegrationTest, use_profile, normalize
+from test.integration.base import DBTIntegrationTest, use_profile, normalize, get_manifest
 import shutil
 import os
 
-
-# Note: every test case needs to have separate directories, otherwise
-# they will interfere with each other when tests are multi-threaded
-
-def get_manifest():
-    path = './target/partial_parse.msgpack'
-    if os.path.exists(path):
-        with open(path, 'rb') as fp:
-            manifest_mp = fp.read()
-        manifest: Manifest = Manifest.from_msgpack(manifest_mp)
-        return manifest
-    else:
-        return None
 
 class TestDocs(DBTIntegrationTest):
 
@@ -27,43 +14,50 @@ class TestDocs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "models-docs"
+        return "models"
 
     @property
     def project_config(self):
-        cfg = {
+        return {
             'config-version': 2,
-            'data-paths': ['seed-docs'],
+            'seed-paths': ['seeds'],
+            'test-paths': ['tests'],
+            'macro-paths': ['macros'],
+            'analysis-paths': ['analyses'],
+            'snapshot-paths': ['snapshots'],
             'seeds': {
                 'quote_columns': False,
             },
-            'macro-paths': ['macros-docs'],
         }
-        return cfg
 
-    def tearDown(self):
-        if os.path.exists(normalize('models-docs/customers.md')):
-            os.remove(normalize('models-docs/customers.md'))
-        if os.path.exists(normalize('models-docs/schema.yml')):
-            os.remove(normalize('models-docs/schema.yml'))
+    def setup_directories(self):
+        os.mkdir(os.path.join(self.test_root_dir, 'models'))
+        os.mkdir(os.path.join(self.test_root_dir, 'tests'))
+        os.mkdir(os.path.join(self.test_root_dir, 'seeds'))
+        os.mkdir(os.path.join(self.test_root_dir, 'macros'))
+        os.mkdir(os.path.join(self.test_root_dir, 'analyses'))
+        os.mkdir(os.path.join(self.test_root_dir, 'snapshots'))
 
 
     @use_profile('postgres')
     def test_postgres_pp_docs(self):
         # initial run
-        self.run_dbt(['clean'])
+        self.setup_directories()
+        self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
+        self.copy_file('test-files/raw_customers.csv', 'seeds/raw_customers.csv')
+        self.copy_file('test-files/my_macro-docs.sql', 'macros/my_macro.sql')
         results = self.run_dbt(["run"])
         self.assertEqual(len(results), 1)
 
         # Add docs file customers.md
-        shutil.copyfile('extra-files/customers1.md', 'models-docs/customers.md')
+        self.copy_file('test-files/customers1.md', 'models/customers.md')
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
         self.assertEqual(len(manifest.docs), 2)
         model_one_node = manifest.nodes['model.test.model_one']
 
         # Add schema file with 'docs' description
-        shutil.copyfile('extra-files/schema-docs.yml', 'models-docs/schema.yml')
+        self.copy_file('test-files/schema-docs.yml', 'models/schema.yml')
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
         self.assertEqual(len(manifest.docs), 2)
@@ -80,7 +74,7 @@ class TestDocs(DBTIntegrationTest):
         self.assertEqual(model_node.description, 'This table contains customer data')
 
         # Update the doc file
-        shutil.copyfile('extra-files/customers2.md', 'models-docs/customers.md')
+        self.copy_file('test-files/customers2.md', 'models/customers.md')
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
         self.assertEqual(len(manifest.docs), 2)
@@ -91,7 +85,7 @@ class TestDocs(DBTIntegrationTest):
         self.assertRegex(model_node.description, r'LOTS')
 
         # Add a macro patch, source and exposure with doc
-        shutil.copyfile('extra-files/schema-docs2.yml', 'models-docs/schema.yml')
+        self.copy_file('test-files/schema-docs2.yml', 'models/schema.yml')
         results = self.run_dbt(["--partial-parse", "run"])
         self.assertEqual(len(results), 1)
         manifest = get_manifest()
@@ -107,7 +101,7 @@ class TestDocs(DBTIntegrationTest):
 
 
         # update the doc file again
-        shutil.copyfile('extra-files/customers1.md', 'models-docs/customers.md')
+        self.copy_file('test-files/customers1.md', 'models/customers.md')
         results = self.run_dbt(["--partial-parse", "run"])
         manifest = get_manifest()
         source_file = manifest.files[doc_file_id]

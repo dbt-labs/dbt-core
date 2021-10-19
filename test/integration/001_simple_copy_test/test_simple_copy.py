@@ -39,7 +39,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
     @property
     def project_config(self):
-        return self.seed_quote_cfg_with({"data-paths": [self.dir("seed-initial")]})
+        return self.seed_quote_cfg_with({"seed-paths": [self.dir("seed-initial")]})
 
     @use_profile("postgres")
     def test__postgres__simple_copy(self):
@@ -50,7 +50,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
-        self.use_default_project({"data-paths": [self.dir("seed-update")]})
+        self.use_default_project({"seed-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results), 1)
         results = self.run_dbt()
@@ -93,7 +93,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
     @use_profile("presto")
     def test__presto__simple_copy(self):
-        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
+        self.use_default_project({"seed-paths": [self.dir("seed-initial")]})
 
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
@@ -113,7 +113,7 @@ class TestShouting(BaseTestSimpleCopy):
 
     @property
     def project_config(self):
-        return self.seed_quote_cfg_with({"data-paths": [self.dir("seed-initial")]})
+        return self.seed_quote_cfg_with({"seed-paths": [self.dir("seed-initial")]})
 
     @use_profile("postgres")
     def test__postgres__simple_copy_loud(self):
@@ -124,7 +124,7 @@ class TestShouting(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["seed", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
-        self.use_default_project({"data-paths": [self.dir("seed-update")]})
+        self.use_default_project({"seed-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
@@ -180,7 +180,7 @@ class TestQuotedDatabase(BaseTestSimpleCopy):
             'quoting': {
                 'database': True,
             },
-            "data-paths": [self.dir("seed-initial")],
+            "seed-paths": [self.dir("seed-initial")],
         })
 
     def seed_get_json(self, expect_pass=True):

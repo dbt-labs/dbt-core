@@ -8,8 +8,8 @@ from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
 from dbt.node_types import NodeType
-from dbt.exceptions import RuntimeException, InternalException
-from dbt.logger import log_manager, GLOBAL_LOGGER as logger
+from dbt.exceptions import RuntimeException, InternalException, warn_or_error
+from dbt.logger import log_manager
 
 
 class ListTask(GraphRunnableTask):
@@ -61,7 +61,7 @@ class ListTask(GraphRunnableTask):
         spec = self.get_selection_spec()
         nodes = sorted(selector.get_selected(spec))
         if not nodes:
-            logger.warning('No nodes selected!')
+            warn_or_error('No nodes selected!')
             return
         if self.manifest is None:
             raise InternalException(

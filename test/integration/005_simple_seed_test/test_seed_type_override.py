@@ -11,7 +11,7 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data-config'],
+            'seed-paths': ['seeds-config'],
             'macro-paths': ['macros'],
             'seeds': {
                 'test': {

@@ -41,7 +41,7 @@ def _dbt_psycopg2_name():
 
 
 package_name = "dbt-postgres"
-package_version = "0.21.0rc1"
+package_version = "1.0.0b1"
 description = """The postgres adpter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -58,7 +58,7 @@ setup(
     long_description_content_type='text/markdown',
     author="dbt Labs",
     author_email="info@dbtlabs.com",
-    url="https://github.com/dbt-labs/dbt",
+    url="https://github.com/dbt-labs/dbt-core",
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         'dbt': [

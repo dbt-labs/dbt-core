@@ -8,4 +8,4 @@ profile: 'default'
 seeds:
   quote_columns: False
 
-data-paths: ['data']
+seed-paths: ['seeds']

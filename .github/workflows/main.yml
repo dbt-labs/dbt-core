@@ -61,7 +61,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
+          pip install --user --upgrade pip
           pip install tox
           pip --version
           tox --version
@@ -96,7 +96,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
+          pip install --user --upgrade pip
           pip install tox
           pip --version
           tox --version
@@ -133,7 +133,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
+          pip install --user --upgrade pip
           pip install --upgrade setuptools wheel twine check-wheel-contents
           pip --version
 
@@ -177,7 +177,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
+          pip install --user --upgrade pip
           pip install --upgrade wheel
           pip --version
 

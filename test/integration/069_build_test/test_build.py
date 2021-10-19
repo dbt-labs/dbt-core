@@ -1,5 +1,7 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile, normalize
 import yaml
+import shutil
+import os
 
 
 class TestBuildBase(DBTIntegrationTest):
@@ -12,7 +14,7 @@ class TestBuildBase(DBTIntegrationTest):
         return {
             "config-version": 2,
             "snapshot-paths": ["snapshots"],
-            "data-paths": ["data"],
+            "seed-paths": ["seeds"],
             "seeds": {
                 "quote_columns": False,
             },
@@ -79,3 +81,40 @@ class TestCircularRelationshipTestsBuild(TestBuildBase):
         actual = [r.status for r in results]
         expected = ['success']*7 + ['pass']*2
         self.assertEqual(sorted(actual), sorted(expected))
+
+class TestInterdependentModels(TestBuildBase):
+
+    @property
+    def project_config(self):
+        return {
+            "config-version": 2,
+            "snapshot-paths": ["snapshots-none"],
+            "seeds": {
+                "quote_columns": False,
+            },
+        }
+
+    @property
+    def models(self):
+        return "models-interdependent"
+
+    def tearDown(self):
+        if os.path.exists(normalize('models-interdependent/model_b.sql')):
+            os.remove(normalize('models-interdependent/model_b.sql'))
+
+
+    @use_profile("postgres")
+    def test__postgres_interdependent_models(self):
+        # check that basic build works
+        shutil.copyfile('test-files/model_b.sql', 'models-interdependent/model_b.sql')
+        results = self.build()
+        self.assertEqual(len(results), 16)
+
+        # return null from model_b
+        shutil.copyfile('test-files/model_b_null.sql', 'models-interdependent/model_b.sql')
+        results = self.build(expect_pass=False)
+        self.assertEqual(len(results), 16)
+        actual = [str(r.status) for r in results]
+        expected = ['error']*4 + ['skipped']*7 + ['pass']*2 + ['success']*3
+        self.assertEqual(sorted(actual), sorted(expected))
+

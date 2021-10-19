@@ -25,7 +25,7 @@ class TestSimpleDependency(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': '1.0',
+                    'revision': '1.1',
                 }
             ]
         }
@@ -129,11 +129,11 @@ class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
+                    'revision': 'dbt/1.0.0',
                 },
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project.git',
-                    'revision': 'dbt/0.17.0',
+                    'revision': 'dbt/1.0.0',
                 }
             ]
         }
@@ -161,7 +161,7 @@ class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
                 {
 
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'config-version-2-deps'
+                    'revision': 'config-1.0.0-deps'
                 },
                 {
                     'git': 'https://github.com/dbt-labs/dbt-utils',
@@ -196,7 +196,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
+                    'revision': 'dbt/1.0.0',
                 },
             ]
         }

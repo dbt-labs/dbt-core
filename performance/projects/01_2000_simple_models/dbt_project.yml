@@ -11,12 +11,12 @@ config-version: 2
 profile: 'default'
 
 # These configurations specify where dbt should look for different types of files.
-# The `source-paths` config, for example, states that source models can be found
+# The `model-paths` config, for example, states that source models can be found
 # in the "models/" directory. You probably won't need to change these!
-source-paths: ["models"]
+model-paths: ["models"]
 analysis-paths: ["analyses"] 
 test-paths: ["tests"]
-data-paths: ["data"]
+seed-paths: ["seeds"]
 macro-paths: ["macros"]
 
 target-path: "target"  # directory which will store compiled SQL files
@@ -24,7 +24,7 @@ clean-targets:         # directories to be removed by `dbt clean`
     - "target"
     - "dbt_packages"
 
-# You can define configurations for models in the `source-paths` directory here.
+# You can define configurations for models in the `model-paths` directory here.
 # Using these configurations, you can enable or disable models, change how they
 # are materialized, and more!
 

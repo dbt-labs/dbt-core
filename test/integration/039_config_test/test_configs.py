@@ -17,7 +17,7 @@ class TestConfigs(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'models': {
                 'test': {
                     'tagged': {
@@ -80,7 +80,7 @@ class TestTargetConfigs(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
             'seeds': {
                 'quote_columns': False,
@@ -138,7 +138,7 @@ class TestDisabledConfigs(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'test-paths': ['tests'],
             'models': {
                 'test': {
@@ -205,7 +205,7 @@ class TestUnusedModelConfigs(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'test-paths': ['does-not-exist'],
             'models': {
                 'test': {
@@ -256,7 +256,7 @@ class TestConfigIndivTests(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'test-paths': ['tests'],
             'seeds': {
                 'quote_columns': False,

@@ -1,3 +1,0 @@
-rm this directory, either:
-- move tests to the rpc directory
-- ensure that this is covered by tests elsewhere

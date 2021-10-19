@@ -172,7 +172,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
+          pip install --user --upgrade pip
           pip install tox
           pip --version
           tox --version
