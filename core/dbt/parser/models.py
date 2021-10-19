@@ -149,7 +149,12 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 )
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
-
+        # if the static parser failed, add the correct messages for tracking
+        if isinstance(statically_parsed, str):
+            if statically_parsed == "cannot_parse":
+                result += ["01_stable_parser_cannot_parse"]
+            elif statically_parsed == "has_banned_macro":
+                result += ["08_has_banned_macro"]
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
