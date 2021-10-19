@@ -106,7 +106,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # This means we skip sampling for 40% of the 1/5000 samples. We could run the
             # sampling rng here, but the effect would be the same since we would only roll
             # it 40% of the time. So I've opted to keep all the rng code colocated above.
-            if stable_sample:
+            if stable_sample and not flags.USE_EXPERIMENTAL_PARSER:
                 logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
                 # if this will _never_ mutate anything `self` we could avoid these deep copies,
                 # but we can't really guarantee that going forward.
