@@ -81,7 +81,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # conducted after this model has been fully rendered either by the static parser
             # or by full jinja rendering
             if isinstance(experimental_sample, dict):
-                model_parser_copy = self.deepcopy()
+                model_parser_copy = self.paritial_deepcopy()
                 exp_sample_node = deepcopy(node)
                 exp_sample_config = deepcopy(config)
                 model_parser_copy.populate(
@@ -110,7 +110,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
                 # if this will _never_ mutate anything `self` we could avoid these deep copies,
                 # but we can't really guarantee that going forward.
-                model_parser_copy = self.deepcopy()
+                model_parser_copy = self.paritial_deepcopy()
                 jinja_sample_node = deepcopy(node)
                 jinja_sample_config = deepcopy(config)
                 # rendering mutates the node and the config
@@ -289,11 +289,11 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # configs don't need to be merged into the node because they
         # are read from config._config_call_dict
 
-    # for whatever reason this works when `deepcopy(self) does not.`
-    def deepcopy(self):
+    # the manifest is often huge so this method avoids deepcopying it
+    def paritial_deepcopy(self):
         return ModelParser(
             deepcopy(self.project),
-            deepcopy(self.manifest),
+            self.manifest,
             deepcopy(self.root_project)
         )
 
