@@ -466,6 +466,15 @@ def invalid_type_error(method_name, arg_name, got_value, expected_type,
                          got_value=got_value, got_type=got_type))
 
 
+def invalid_bool_error(got_value) -> NoReturn:
+    """Raise a CompilationException when an adapter method available to macros
+    has changed.
+    """
+    msg = ("Macro 'get_test_sql' contains '{got_value}'.  It is not type 'bool' "
+           "and cannot not be converted reliably to a bool.")
+    raise_compiler_error(msg.format(got_value=got_value))
+
+
 def ref_invalid_args(model, args) -> NoReturn:
     raise_compiler_error(
         "ref() takes at most two arguments ({} given)".format(len(args)),

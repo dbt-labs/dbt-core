@@ -1,3 +1,5 @@
+from distutils.util import strtobool
+
 from dataclasses import dataclass
 from dbt import utils
 from dbt.dataclass_schema import dbtClassMixin
@@ -19,6 +21,7 @@ from dbt.context.providers import generate_runtime_model
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
     InternalException,
+    invalid_bool_error,
     missing_materialization
 )
 from dbt.graph import (
@@ -36,8 +39,23 @@ class TestResultData(dbtClassMixin):
 
     @classmethod
     def validate(cls, data):
-        data['should_warn'] = bool(data.get('should_warn'))
-        data['should_error'] = bool(data.get('should_error'))
+        # if it's type string let python decide if it's a valid value to convert to bool
+        if type(data['should_warn']) == str:
+            try:
+                data['should_warn'] = bool(strtobool(data.get('should_warn')))
+            except ValueError:
+                raise invalid_bool_error(data['should_warn'])
+        # need this so we catch both true bools and 0/1
+        else:
+            data['should_warn'] = bool(data.get('should_warn'))
+
+        if type(data['should_error']) == str:
+            try:
+                data['should_error'] = bool(strtobool(data.get('should_error')))
+            except ValueError:
+                raise invalid_bool_error(data['should_error'])
+        else:
+            data['should_error'] = bool(data.get('should_error'))
         super().validate(data)
 
 

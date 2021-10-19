@@ -229,6 +229,32 @@ class TestOtherBoolType(DBTIntegrationTest):
         self.assertEqual(sum(x.failures for x in test_results), 3)
 
 
+class TestNonBoolType(DBTIntegrationTest):
+# make sure we throw an error if an invalie "boolean" is used in to get_test_sql
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "models-v2/override_get_test_models_fail"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["macros-v2/override_get_test_macros_fail"],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_limit_schema_tests(self):
+        with self.assertRaises(CompilationException):
+            self.run_dbt()
+
+
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
