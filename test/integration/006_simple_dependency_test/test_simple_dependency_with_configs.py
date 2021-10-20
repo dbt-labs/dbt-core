@@ -23,7 +23,7 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'with-configs-0.17.0',
+                    'revision': 'with-configs-1.0.0',
                 },
             ]
         }
@@ -59,7 +59,7 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'with-configs-0.17.0',
+                    'revision': 'with-configs-1.0.0',
                 },
             ]
         }

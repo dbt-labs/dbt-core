@@ -174,8 +174,10 @@ class Project(HyphenatedDbtClassMixin, Replaceable):
     config_version: int
     project_root: Optional[str] = None
     source_paths: Optional[List[str]] = None
+    model_paths: Optional[List[str]] = None
     macro_paths: Optional[List[str]] = None
     data_paths: Optional[List[str]] = None
+    seed_paths: Optional[List[str]] = None
     test_paths: Optional[List[str]] = None
     analysis_paths: Optional[List[str]] = None
     docs_paths: Optional[List[str]] = None

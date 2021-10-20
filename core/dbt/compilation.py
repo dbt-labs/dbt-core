@@ -111,12 +111,13 @@ def _get_tests_for_node(manifest: Manifest, unique_id: UniqueID) -> List[UniqueI
     """ Get a list of tests that depend on the node with the
     provided unique id """
 
-    return [
-        node.unique_id
-        for _, node in manifest.nodes.items()
-        if node.resource_type == NodeType.Test and
-        unique_id in node.depends_on_nodes
-    ]
+    tests = []
+    if unique_id in manifest.child_map:
+        for child_unique_id in manifest.child_map[unique_id]:
+            if child_unique_id.startswith('test.'):
+                tests.append(child_unique_id)
+
+    return tests
 
 
 class Linker:
@@ -429,6 +430,8 @@ class Compiler:
 
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
+
+        manifest.build_parent_and_child_maps()
 
         self.resolve_graph(linker, manifest)
 

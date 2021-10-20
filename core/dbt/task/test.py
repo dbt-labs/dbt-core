@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from dbt import utils
 from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Union
+from typing import Union
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -24,7 +24,7 @@ from dbt.exceptions import (
 from dbt.graph import (
     ResourceTypeSelector,
 )
-from dbt.node_types import NodeType, RunHookType
+from dbt.node_types import NodeType
 from dbt import flags
 
 
@@ -164,12 +164,6 @@ class TestTask(RunTask):
 
     def raise_on_first_error(self):
         return False
-
-    def safe_run_hooks(
-        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
-    ) -> None:
-        # Don't execute on-run-* hooks for tests
-        pass
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:

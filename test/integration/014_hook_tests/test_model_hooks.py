@@ -207,7 +207,7 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'models': {},
             'seeds': {
                 'post-hook': [
@@ -231,7 +231,7 @@ class TestPrePostModelHooksOnSeedsPlusPrefixed(TestPrePostModelHooksOnSeeds):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'models': {},
             'seeds': {
                 '+post-hook': [
@@ -248,7 +248,7 @@ class TestPrePostModelHooksOnSeedsPlusPrefixedWhitespace(TestPrePostModelHooksOn
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'models': {},
             'seeds': {
                 '+ post-hook': [
@@ -273,7 +273,7 @@ class TestPrePostModelHooksOnSnapshots(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'snapshot-paths': ['test-snapshots'],
             'models': {},
             'snapshots': {
@@ -358,7 +358,7 @@ class TestPrePostSnapshotHooksInConfigKwargs(TestPrePostModelHooksOnSnapshots):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'snapshot-paths': ['test-kwargs-snapshots'],
             'models': {},
             'seeds': {

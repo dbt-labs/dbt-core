@@ -14,7 +14,7 @@ class TestSeverity(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data'],
+            'seed-paths': ['seeds'],
             'test-paths': ['tests'],
             'seeds': {
                 'quote_columns': False,

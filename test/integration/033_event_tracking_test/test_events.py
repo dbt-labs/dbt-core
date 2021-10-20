@@ -1,4 +1,4 @@
-# NOTE: turning off event tracking tests!
+# NOTE: turning off event tracking tests! [#3631](https://github.com/dbt-labs/dbt-core/issues/3631)
 # from test.integration.base import DBTIntegrationTest, use_profile
 # import hashlib
 # import os
@@ -234,7 +234,7 @@
 #             'packages': [
 #                 {
 #                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-#                     'revision': 'dbt/0.17.0',
+#                     'revision': 'dbt/1.0.0',
 #                 },
 #             ],
 #         }
@@ -243,7 +243,7 @@
 #     def project_config(self):
 #         return {
 #             'config-version': 2,
-#             "data-paths": [self.dir("data")],
+#             "seed-paths": [self.dir("data")],
 #             "test-paths": [self.dir("test")],
 #             'seeds': {
 #                 'quote_columns': False,
@@ -698,7 +698,7 @@
 #     def project_config(self):
 #         return {
 #             'config-version': 2,
-#             "source-paths": [self.dir("model-compilation-error")],
+#             "model-paths": [self.dir("model-compilation-error")],
 #         }
 
 #     @use_profile("postgres")

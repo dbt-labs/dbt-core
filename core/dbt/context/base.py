@@ -524,12 +524,8 @@ class BaseContext(metaclass=ContextMeta):
             -- no-op
             {% endif %}
 
-        The list of valid flags are:
-
-        - `flags.FULL_REFRESH`: True if `--full-refresh` was provided on the
-            command line
-        - `flags.NON_DESTRUCTIVE`: True if `--non-destructive` was provided on
-            the command line
+        This supports all flags defined in flags submodule (core/dbt/flags.py)
+        TODO: Replace with object that provides read-only access to flag values
         """
         return flags
 

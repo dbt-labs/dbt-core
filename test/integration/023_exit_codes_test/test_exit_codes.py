@@ -111,7 +111,7 @@ class TestExitCodesDeps(DBTIntegrationTest):
             "packages": [
                 {
                     'git': 'https://github.com/dbt-labs/dbt-integration-project',
-                    'revision': 'dbt/0.17.0',
+                    'revision': 'dbt/1.0.0',
                 }
             ]
         }
@@ -162,7 +162,7 @@ class TestExitCodesSeed(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data-good'],
+            'seed-paths': ['seeds-good'],
             'seeds': {
                 'quote_columns': False,
             },
@@ -188,7 +188,7 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['data-bad'],
+            'seed-paths': ['seeds-bad'],
             'seeds': {
                 'quote_columns': False,
             },

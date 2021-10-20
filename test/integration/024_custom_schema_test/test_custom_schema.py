@@ -319,7 +319,7 @@ class TestCustomSchemaWithCustomMacroFromModelName(DBTIntegrationTest):
         return {
             'config-version': 2,
             'macro-paths': ['custom-macros-multischema'],
-            'data-paths': ['seed'],
+            'seed-paths': ['seed'],
             'seeds': {
                 'quote_columns': False,
             },            
