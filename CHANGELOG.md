@@ -5,8 +5,12 @@
 - Enable `on-run-start` and `on-run-end` hooks for `dbt test`. Add `flags.WHICH` to execution context, representing current task ([#3463](https://github.com/dbt-labs/dbt-core/issues/3463), [#4004](https://github.com/dbt-labs/dbt-core/pull/4004))
 
 ### Features
-
+- Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
+- Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt/issues/3377), [#3939](https://github.com/dbt-labs/dbt/pull/3939))
+- Generic test FQNs have changed to include the relative path, resource, and column (if applicable) where they are defined. This makes it easier to configure them from the `tests` block in `dbt_project.yml` ([#3259](https://github.com/dbt-labs/dbt/pull/3259), [#3880](https://github.com/dbt-labs/dbt/pull/3880)
+- Turn on partial parsing by default ([#3867](https://github.com/dbt-labs/dbt/issues/3867), [#3989](https://github.com/dbt-labs/dbt/issues/3989))
 - Add `result:<status>` selectors to automatically rerun failed tests and erroneous models. This makes it easier to rerun failed dbt jobs with a simple selector flag instead of restarting from the beginning or manually running the dbt models in scope. ([#3859](https://github.com/dbt-labs/dbt/issues/3891), [#4017](https://github.com/dbt-labs/dbt/pull/4017))
+- `dbt init` is now interactive, generating profiles.yml when run inside existing project ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
 
 ### Under the hood
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
@@ -16,6 +20,7 @@
 Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - [@matt-winkler](https://github.com/matt-winkler) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
+- [@NiallRees](https://github.com/NiallRees) ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
 
 ## dbt-core 1.0.0b1 (October 11, 2021)
 
