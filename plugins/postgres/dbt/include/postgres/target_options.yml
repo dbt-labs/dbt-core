@@ -1,0 +1,19 @@
+_fixed_type: postgres
+threads:
+  hint: '1 or more'
+  type: 'int'
+  default: 1
+host:
+  hint: 'hostname for the instance'
+port:
+  default: 5432
+  type: 'int'
+user:
+  hint: 'dev username'
+pass:
+  hint: 'dev password'
+  hide_input: true
+dbname:
+  hint: 'default database that dbt will build objects in'
+schema:
+  hint: 'default schema that dbt will build objects in'

@@ -248,7 +248,6 @@ def run_from_args(parsed):
 
     with track_run(task):
         results = task.run()
-
     return task, results
 
 
@@ -343,20 +342,6 @@ def _build_init_subparser(subparsers, base_subparser):
         help='''
         Initialize a new DBT project.
         '''
-    )
-    sub.add_argument(
-        'project_name',
-        type=str,
-        help='''
-        Name of the new project
-        ''',
-    )
-    sub.add_argument(
-        '--adapter',
-        type=str,
-        help='''
-        Write sample profiles.yml for which adapter
-        ''',
     )
     sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
     return sub
