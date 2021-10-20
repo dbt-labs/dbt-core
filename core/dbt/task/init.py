@@ -84,7 +84,7 @@ class InitTask(BaseTask):
         else:
             with open(sample_profiles_path, "r") as f:
                 sample_profile = f.read()
-            sample_profile_name = list(yaml.load(sample_profile).keys())[0]
+            sample_profile_name = list(yaml.safe_load(sample_profile).keys())[0]
             # Use a regex to replace the name of the sample_profile with
             # that of the project without losing any comments from the sample
             sample_profile = re.sub(
@@ -160,7 +160,7 @@ class InitTask(BaseTask):
         profile name.
         """
         with open("dbt_project.yml") as f:
-            dbt_project = yaml.load(f)
+            dbt_project = yaml.safe_load(f)
         return dbt_project["profile"]
 
     def write_profile(
@@ -173,7 +173,7 @@ class InitTask(BaseTask):
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         if profiles_filepath.exists():
             with open(profiles_filepath, "r+") as f:
-                profiles = yaml.load(f) or {}
+                profiles = yaml.safe_load(f) or {}
                 profiles[profile_name] = profile
                 f.seek(0)
                 yaml.dump(profiles, f)
@@ -209,7 +209,7 @@ class InitTask(BaseTask):
 
         if target_options_path.exists():
             with open(target_options_path) as f:
-                target_options = yaml.load(f)
+                target_options = yaml.safe_load(f)
             self.create_profile_from_target_options(target_options, profile_name)
         else:
             # For adapters without a target_options.yml defined, fallback on
@@ -227,7 +227,7 @@ class InitTask(BaseTask):
             profile_name or self.get_profile_name_from_current_project()
         )
         with open(profiles_file, "r") as f:
-            profiles = yaml.load(f) or {}
+            profiles = yaml.safe_load(f) or {}
         if profile_name in profiles.keys():
             response = click.confirm(
                 f"The profile {profile_name} already exists in "
@@ -240,7 +240,7 @@ class InitTask(BaseTask):
     def create_profile_using_profile_template(self):
         """Create a profile using profile_template.yml"""
         with open("profile_template.yml") as f:
-            profile_template = yaml.load(f)
+            profile_template = yaml.safe_load(f)
         profile_name = list(profile_template["profile"].keys())[0]
         self.check_if_can_write_profile(profile_name)
         render_vars = {}
@@ -249,7 +249,7 @@ class InitTask(BaseTask):
         profile = profile_template["profile"][profile_name]
         profile_str = yaml.dump(profile)
         profile_str = Template(profile_str).render(render_vars)
-        profile = yaml.load(profile_str)
+        profile = yaml.safe_load(profile_str)
         profiles_filepath = self.write_profile(profile, profile_name)
         logger.info(
             f"Profile {profile_name} written to {profiles_filepath} using "
