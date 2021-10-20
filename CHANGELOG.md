@@ -12,10 +12,12 @@
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
 - Remove connection from `render_with_context` during parsing, thereby removing misleading log message ([#3137](https://github.com/dbt-labs/dbt-core/issues/3137), [#4062](https://github.com/dbt-labas/dbt-core/pull/4062))
+- Wait for postgres docker container to be ready in `setup_db.sh`. ([#3876](https://github.com/dbt-labs/dbt-core/issues/3876), [#3908](https://github.com/dbt-labs/dbt-core/pull/3908))
 
 Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - [@matt-winkler](https://github.com/matt-winkler) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
+- [@rvacaru](https://github.com/rvacaru) ([#3908](https://github.com/dbt-labs/dbt/pull/3908))
 
 ## dbt-core 1.0.0b1 (October 11, 2021)
 
@@ -110,7 +112,6 @@ Contributors:
 - Introduce a macro, `get_where_subquery`, for tests that use `where` config. Alias filtering subquery as `dbt_subquery` instead of resource identifier ([#3857](https://github.com/dbt-labs/dbt-core/issues/3857), [#3859](https://github.com/dbt-labs/dbt-core/issues/3859))
 - Use group by column_name in accepted_values test for compatibility with most database engines ([#3905](https://github.com/dbt-labs/dbt-core/issues/3905), [#3906](https://github.com/dbt-labs/dbt-core/pull/3906))
 - Separated table vs view configuration for BigQuery since some configuration is not possible to set for tables vs views. ([#3682](https://github.com/dbt-labs/dbt-core/issues/3682), [#3691](https://github.com/dbt-labs/dbt-core/issues/3682))
-- Wait for postgres docker container to be ready in `setup_db.sh`. ([#3876](https://github.com/dbt-labs/dbt/pull/3908))
 
 ### Under the hood
 
@@ -136,7 +137,6 @@ Contributors:
 - [@Kayrnt](https://github.com/Kayrnt) ([3707](https://github.com/dbt-labs/dbt-core/pull/3707))
 - [@TeddyCr](https://github.com/TeddyCr) ([#3448](https://github.com/dbt-labs/dbt-core/pull/3865))
 - [@sdebruyn](https://github.com/sdebruyn) ([#3906](https://github.com/dbt-labs/dbt-core/pull/3906))
-- [@rvacaru](https://github.com/rvacaru) ([#3908](https://github.com/dbt-labs/dbt/pull/3908))
 
 ## dbt 0.21.0b2 (August 19, 2021)
 
