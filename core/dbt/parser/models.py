@@ -128,10 +128,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # if we took a jinja sample, compare now that the base node has been populated
             if jinja_sample_node is not None and jinja_sample_config is not None:
                 result = _get_stable_sample_result(
-                    jinja_sample_node,
-                    jinja_sample_config,
-                    node,
-                    config
+                    jinja_sample_node, jinja_sample_config, node, config
                 )
 
             # if we took an experimental sample, compare now that the base node has been populated
@@ -278,11 +275,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
     # the manifest is often huge so this method avoids deepcopying it
     def partial_deepcopy(self):
-        return ModelParser(
-            deepcopy(self.project),
-            self.manifest,
-            deepcopy(self.root_project)
-        )
+        return ModelParser(deepcopy(self.project), self.manifest, deepcopy(self.root_project))
 
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
@@ -347,7 +340,7 @@ def _get_sample_result(
     sample_node: ParsedModelNode,
     sample_config: ContextConfig,
     node: ParsedModelNode,
-    config: ContextConfig
+    config: ContextConfig,
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     # look for false positive configs
