@@ -12,7 +12,7 @@ from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignor
 from functools import reduce
 from itertools import chain
 import random
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 
 class ModelParser(SimpleSQLParser[ParsedModelNode]):
@@ -63,14 +63,34 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         # top-level declaration of variables
         statically_parsed: Optional[Union[str, Dict[str, List[Any]]]] = None
         experimental_sample: Optional[Union[str, Dict[str, List[Any]]]] = None
-        jinja_sample_node = None
-        jinja_sample_config = None
-        result = []
+        exp_sample_node: Optional[ParsedModelNode] = None
+        exp_sample_config: Optional[ContextConfig] = None
+        jinja_sample_node: Optional[ParsedModelNode] = None
+        jinja_sample_config: Optional[ContextConfig] = None
+        result: List[str] = []
 
-        # sample the experimental parser during a normal run
-        if exp_sample:
+        # sample the experimental parser only during a normal run
+        if exp_sample and not flags.USE_EXPERIMENTAL_PARSER:
             logger.debug(f"1610: conducting experimental parser sample on {node.path}")
             experimental_sample = self.run_experimental_parser(node)
+            # if the experimental parser succeeded, make a full copy of model parser
+            # and populate _everything_ into it so it can be compared apples-to-apples
+            # with a fully jinja-rendered project. This is necessary because the experimental
+            # parser will likely add features that the existing static parser will fail on
+            # so comparing those directly would give us bad results. The comparison will be
+            # conducted after this model has been fully rendered either by the static parser
+            # or by full jinja rendering
+            if isinstance(experimental_sample, dict):
+                model_parser_copy = self.partial_deepcopy()
+                exp_sample_node = deepcopy(node)
+                exp_sample_config = deepcopy(config)
+                model_parser_copy.populate(
+                    exp_sample_node,
+                    exp_sample_config,
+                    experimental_sample['refs'],
+                    experimental_sample['sources'],
+                    dict(experimental_sample['configs'])
+                )
         # use the experimental parser exclusively if the flag is on
         if flags.USE_EXPERIMENTAL_PARSER:
             statically_parsed = self.run_experimental_parser(node)
@@ -80,58 +100,66 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # if the static parser succeeded, extract some data in easy-to-compare formats
         if isinstance(statically_parsed, dict):
-            config_call_dict = _get_config_call_dict(statically_parsed)
-
-            # since it doesn't need python jinja, fit the refs, sources, and configs
-            # into the node. Down the line the rest of the node will be updated with
-            # this information. (e.g. depends_on etc.)
-            config._config_call_dict = config_call_dict
-
-            # this uses the updated config to set all the right things in the node.
-            # if there are hooks present, it WILL render jinja. Will need to change
-            # when the experimental parser supports hooks
-            self.update_parsed_node_config(node, config)
-
-            # update the unrendered config with values from the file.
-            # values from yaml files are in there already
-            node.unrendered_config.update(dict(statically_parsed['configs']))
-
-            # set refs and sources on the node object
-            node.refs += statically_parsed['refs']
-            node.sources += statically_parsed['sources']
-
-            # configs don't need to be merged into the node
-            # setting them in config._config_call_dict is sufficient
-
-            self.manifest._parsing_info.static_analysis_parsed_path_count += 1
-
             # only sample jinja for the purpose of comparing with the stable static parser
             # if we know we don't need to fall back to jinja (i.e. - nothing to compare
             # with jinja v jinja).
             # This means we skip sampling for 40% of the 1/5000 samples. We could run the
             # sampling rng here, but the effect would be the same since we would only roll
             # it 40% of the time. So I've opted to keep all the rng code colocated above.
-            if stable_sample \
-                    and jinja_sample_node is not None \
-                    and jinja_sample_config is not None:
+            if stable_sample and not flags.USE_EXPERIMENTAL_PARSER:
                 logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
-                # TODO are these deep copies this too expensive?
-                # TODO does this even mutate anything in `self`???
-                model_parser_copy = deepcopy(self)
+                # if this will _never_ mutate anything `self` we could avoid these deep copies,
+                # but we can't really guarantee that going forward.
+                model_parser_copy = self.partial_deepcopy()
                 jinja_sample_node = deepcopy(node)
                 jinja_sample_config = deepcopy(config)
                 # rendering mutates the node and the config
                 super(ModelParser, model_parser_copy) \
                     .render_update(jinja_sample_node, jinja_sample_config)
-                # type-level branching to avoid Optional parameters in the
-                # `_get_stable_sample_result` type signature
-                if jinja_sample_node is not None and jinja_sample_config is not None:
-                    result.extend(_get_stable_sample_result(
-                        jinja_sample_node,
-                        jinja_sample_config,
-                        node,
-                        config
-                    ))
+
+            # manually fit configs in
+            config._config_call_dict = _get_config_call_dict(statically_parsed)
+
+            # update the unrendered config with values from the static parser.
+            # values from yaml files are in there already
+            self.populate(
+                node,
+                config,
+                statically_parsed['refs'],
+                statically_parsed['sources'],
+                dict(statically_parsed['configs'])
+            )
+
+            # if we took a jinja sample, compare now that the base node has been populated
+            if jinja_sample_node is not None and jinja_sample_config is not None:
+                result = _get_stable_sample_result(
+                    jinja_sample_node,
+                    jinja_sample_config,
+                    node,
+                    config
+                )
+
+            # if we took an experimental sample, compare now that the base node has been populated
+            if exp_sample_node is not None and exp_sample_config is not None:
+                result = _get_exp_sample_result(
+                    exp_sample_node,
+                    exp_sample_config,
+                    node,
+                    config,
+                )
+
+            self.manifest._parsing_info.static_analysis_parsed_path_count += 1
+        # if the static parser failed, add the correct messages for tracking
+        elif isinstance(statically_parsed, str):
+            if statically_parsed == "cannot_parse":
+                result += ["01_stable_parser_cannot_parse"]
+            elif statically_parsed == "has_banned_macro":
+                result += ["08_has_banned_macro"]
+
+            super().render_update(node, config)
+            logger.debug(
+                f"1602: parser fallback to jinja rendering on {node.path}"
+            )
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
@@ -140,14 +168,6 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 f"1602: parser fallback to jinja rendering on {node.path}"
             )
 
-        # if we're sampling the experimental parser, compare for correctness
-        if exp_sample:
-            result.extend(_get_exp_sample_result(
-                experimental_sample,
-                config_call_dict,
-                node,
-                config
-            ))
         # only send the tracking event if there is at least one result code
         if result:
             # fire a tracking event. this fires one event for every sample
@@ -248,6 +268,40 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             False
         )
 
+    # this method updates the model note rendered and unrendered config as well
+    # as the node object. Used to populate these values when circumventing jinja
+    # rendering like the static parser.
+    def populate(
+        self,
+        node: ParsedModelNode,
+        config: ContextConfig,
+        refs: List[List[str]],
+        sources: List[List[str]],
+        configs: Dict[str, Any]
+    ):
+        # if there are hooks present this, it WILL render jinja. Will need to change
+        # when the experimental parser supports hooks
+        self.update_parsed_node_config(node, config)
+
+        # update the unrendered config with values from the file.
+        # values from yaml files are in there already
+        node.unrendered_config.update(configs)
+
+        # set refs and sources on the node object
+        node.refs += refs
+        node.sources += sources
+
+        # configs don't need to be merged into the node because they
+        # are read from config._config_call_dict
+
+    # the manifest is often huge so this method avoids deepcopying it
+    def partial_deepcopy(self):
+        return ModelParser(
+            deepcopy(self.project),
+            self.manifest,
+            deepcopy(self.root_project)
+        )
+
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
 def _get_config_call_dict(
@@ -277,63 +331,18 @@ def _shift_sources(
 
 # returns a list of string codes to be sent as a tracking event
 def _get_exp_sample_result(
-    sample_output: Optional[Union[str, Dict[str, Any]]],
-    config_call_dict: Dict[str, Any],
+    sample_node: ParsedModelNode,
+    sample_config: ContextConfig,
     node: ParsedModelNode,
     config: ContextConfig
 ) -> List[str]:
-    result: List[str] = []
-    # experimental parser didn't run
-    if sample_output is None:
-        result += ["09_experimental_parser_skipped"]
-    # experimental parser couldn't parse
-    elif isinstance(sample_output, str):
-        if sample_output == "cannot_parse":
-            result += ["01_experimental_parser_cannot_parse"]
-        elif sample_output == "has_banned_macro":
-            result += ["08_has_banned_macro"]
-    else:
-        # look for false positive configs
-        for k in config_call_dict.keys():
-            if k not in config._config_call_dict:
-                result += ["02_false_positive_config_value"]
-                break
+    result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
 
-        # look for missed configs
-        for k in config._config_call_dict.keys():
-            if k not in config_call_dict:
-                result += ["03_missed_config_value"]
-                break
+    def process(codemsg):
+        code, msg = codemsg
+        return f"0{code}_experimental_{msg}"
 
-        # look for false positive sources
-        for s in sample_output['sources']:
-            if s not in node.sources:
-                result += ["04_false_positive_source_value"]
-                break
-
-        # look for missed sources
-        for s in node.sources:
-            if s not in sample_output['sources']:
-                result += ["05_missed_source_value"]
-                break
-
-        # look for false positive refs
-        for r in sample_output['refs']:
-            if r not in node.refs:
-                result += ["06_false_positive_ref_value"]
-                break
-
-        # look for missed refs
-        for r in node.refs:
-            if r not in sample_output['refs']:
-                result += ["07_missed_ref_value"]
-                break
-
-        # if there are no errors, return a success value
-        if not result:
-            result = ["00_exact_match"]
-
-    return result
+    return list(map(process, result))
 
 
 # returns a list of string codes to be sent as a tracking event
@@ -343,45 +352,62 @@ def _get_stable_sample_result(
     node: ParsedModelNode,
     config: ContextConfig
 ) -> List[str]:
-    result: List[str] = []
+    result: List[Tuple[int, str]] = _get_sample_result(sample_node, sample_config, node, config)
+
+    def process(codemsg):
+        code, msg = codemsg
+        return f"8{code}_stable_{msg}"
+
+    return list(map(process, result))
+
+
+# returns a list of string codes that need a single digit prefix to be prepended
+# before being sent as a tracking event
+def _get_sample_result(
+    sample_node: ParsedModelNode,
+    sample_config: ContextConfig,
+    node: ParsedModelNode,
+    config: ContextConfig
+) -> List[Tuple[int, str]]:
+    result: List[Tuple[int, str]] = []
     # look for false positive configs
     for k in config._config_call_dict:
         if k not in config._config_call_dict:
-            result += ["82_stable_false_positive_config_value"]
+            result += [(2, "false_positive_config_value")]
             break
 
     # look for missed configs
     for k in config._config_call_dict.keys():
         if k not in sample_config._config_call_dict.keys():
-            result += ["83_stable_missed_config_value"]
+            result += [(3, "missed_config_value")]
             break
 
     # look for false positive sources
     for s in sample_node.sources:
         if s not in node.sources:
-            result += ["84_sample_false_positive_source_value"]
+            result += [(4, "false_positive_source_value")]
             break
 
     # look for missed sources
     for s in node.sources:
         if s not in sample_node.sources:
-            result += ["85_sample_missed_source_value"]
+            result += [(5, "missed_source_value")]
             break
 
     # look for false positive refs
     for r in sample_node.refs:
         if r not in node.refs:
-            result += ["86_sample_false_positive_ref_value"]
+            result += [(6, "false_positive_ref_value")]
             break
 
     # look for missed refs
     for r in node.refs:
         if r not in sample_node.refs:
-            result += ["87_stable_missed_ref_value"]
+            result += [(7, "missed_ref_value")]
             break
 
     # if there are no errors, return a success value
     if not result:
-        result = ["80_stable_exact_match"]
+        result = [(0, "exact_match")]
 
     return result
