@@ -64,7 +64,7 @@ click_type_mapping = {
     "int": click.INT,
     "float": click.FLOAT,
     "bool": click.BOOL,
-    None: None
+    None: None,
 }
 
 
@@ -100,11 +100,7 @@ class InitTask(BaseTask):
             sample_profile_name = list(yaml.safe_load(sample_profile).keys())[0]
             # Use a regex to replace the name of the sample_profile with
             # that of the project without losing any comments from the sample
-            sample_profile = re.sub(
-                f"^{sample_profile_name}:",
-                f"{profile_name}:",
-                sample_profile
-            )
+            sample_profile = re.sub(f"^{sample_profile_name}:", f"{profile_name}:", sample_profile)
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
             if profiles_filepath.exists():
                 with open(profiles_filepath, "a") as f:
@@ -127,7 +123,7 @@ class InitTask(BaseTask):
             slack_url=SLACK_URL,
         )
 
-    def generate_target_from_input(
+    def generate_target_from_input(self, profile_template: dict, target: dict = {}) -> dict:
         self,
         profile_template: dict,
         target: dict = {}
@@ -139,9 +135,10 @@ class InitTask(BaseTask):
             if key.startswith("_choose"):
                 choice_type = key[8:].replace("_", " ")
                 option_list = list(value.keys())
-                prompt_msg = "\n".join([
-                    f"[{n+1}] {v}" for n, v in enumerate(option_list)
-                ]) + f"\nDesired {choice_type} option (enter a number)"
+                prompt_msg = (
+                    "\n".join([f"[{n+1}] {v}" for n, v in enumerate(option_list)])
+                    + f"\nDesired {choice_type} option (enter a number)"
+                )
                 numeric_choice = click.prompt(prompt_msg, type=click.INT)
                 choice = option_list[numeric_choice - 1]
                 # Complete the chosen option's values in a recursive call
@@ -198,12 +195,7 @@ class InitTask(BaseTask):
         initial_target = profile_template.get('fixed', {})
         prompts = profile_template.get('prompts', {})
         target = self.generate_target_from_input(prompts, initial_target)
-        profile = {
-            "outputs": {
-                "dev": target
-            },
-            "target": "dev"
-        }
+        profile = {"outputs": {"dev": target}, "target": "dev"}
         self.write_profile(profile, profile_name)
 
     def create_profile_from_target(self, adapter: str, profile_name: str):
@@ -236,9 +228,7 @@ class InitTask(BaseTask):
         profiles_file = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         if not profiles_file.exists():
             return True
-        profile_name = (
-            profile_name or self.get_profile_name_from_current_project()
-        )
+        profile_name = profile_name or self.get_profile_name_from_current_project()
         with open(profiles_file, "r") as f:
             profiles = yaml.safe_load(f) or {}
         if profile_name in profiles.keys():
@@ -264,10 +254,10 @@ class InitTask(BaseTask):
         """Ask the user which adapter (database) they'd like to use."""
         available_adapters = list(_get_adapter_plugin_names())
         prompt_msg = (
-            "Which database would you like to use?\n" +
-            "\n".join([f"[{n+1}] {v}" for n, v in enumerate(available_adapters)]) +
-            "\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)" +
-            "\n\nEnter a number"
+            "Which database would you like to use?\n"
+            + "\n".join([f"[{n+1}] {v}" for n, v in enumerate(available_adapters)])
+            + "\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)"
+            + "\n\nEnter a number"
         )
         numeric_choice = click.prompt(prompt_msg, type=click.INT)
         return available_adapters[numeric_choice - 1]
