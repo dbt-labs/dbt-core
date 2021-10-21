@@ -93,11 +93,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 model_parser_copy = self.partial_deepcopy()
                 exp_sample_node = deepcopy(node)
                 exp_sample_config = deepcopy(config)
-                model_parser_copy.populate(
-                    exp_sample_node,
-                    exp_sample_config,
-                    experimental_sample
-                )
+                model_parser_copy.populate(exp_sample_node, exp_sample_config, experimental_sample)
         # use the experimental parser exclusively if the flag is on
         if flags.USE_EXPERIMENTAL_PARSER:
             statically_parsed = self.run_experimental_parser(node)
@@ -126,11 +122,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
             # update the unrendered config with values from the static parser.
             # values from yaml files are in there already
-            self.populate(
-                node,
-                config,
-                statically_parsed
-            )
+            self.populate(node, config, statically_parsed)
 
             # if we took a jinja sample, compare now that the base node has been populated
             if jinja_sample_node is not None and jinja_sample_config is not None:
@@ -263,10 +255,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
     # as the node object. Used to populate these values when circumventing jinja
     # rendering like the static parser.
     def populate(
-        self,
-        node: ParsedModelNode,
-        config: ContextConfig,
-        statically_parsed: Dict[str, Any]
+        self, node: ParsedModelNode, config: ContextConfig, statically_parsed: Dict[str, Any]
     ):
         # manually fit configs in
         config._config_call_dict = _get_config_call_dict(statically_parsed)
