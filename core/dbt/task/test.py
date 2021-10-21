@@ -38,9 +38,9 @@ class TestResultData(dbtClassMixin):
     should_error: bool
 
     @classmethod
-    def validate(self, cls, data):
-        data['should_warn'] = self.convert_bool_type(data['should_warn'])
-        data['should_error'] = self.convert_bool_type(data['should_error'])
+    def validate(cls, data):
+        data['should_warn'] = cls.convert_bool_type(data['should_warn'])
+        data['should_error'] = cls.convert_bool_type(data['should_error'])
         super().validate(data)
 
     def convert_bool_type(field) -> bool:
@@ -123,7 +123,7 @@ class TestRunner(CompileRunner):
                 map(utils._coerce_decimal, table.rows[0])
             )
         )
-        TestResultData.validate(self, test_result_dct)
+        TestResultData.validate(test_result_dct)
         return TestResultData.from_dict(test_result_dct)
 
     def execute(self, test: CompiledTestNode, manifest: Manifest):
