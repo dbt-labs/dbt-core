@@ -257,11 +257,11 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already
-        node.unrendered_config.update(dict(statically_parsed['configs']))
+        node.unrendered_config.update(dict(statically_parsed["configs"]))
 
         # set refs and sources on the node object
-        node.refs += statically_parsed['refs']
-        node.sources += statically_parsed['sources']
+        node.refs += statically_parsed["refs"]
+        node.sources += statically_parsed["sources"]
 
         # configs don't need to be merged into the node because they
         # are read from config._config_call_dict
