@@ -19,15 +19,15 @@ class TestInit(DBTIntegrationTest):
         super().tearDown()
 
     def get_project_name(self):
-        return "my_project_{}".format(self.unique_schema())
+        return 'my_project_{}'.format(self.unique_schema())
 
     @property
     def schema(self):
-        return "init_040"
+        return 'init_040'
 
     @property
     def models(self):
-        return "models"
+        return 'models'
 
     @use_profile('postgres')
     @mock.patch('click.confirm')
