@@ -261,7 +261,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             False
         )
 
-    # this method updates the model note rendered and unrendered config as well
+    # this method updates the model node rendered and unrendered config as well
     # as the node object. Used to populate these values when circumventing jinja
     # rendering like the static parser.
     def populate(
