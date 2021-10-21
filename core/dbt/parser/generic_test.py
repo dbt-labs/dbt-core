@@ -12,7 +12,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
-from dbt.utils import MACRO_PREFIX  # TODO: should this be macro?
+from dbt.utils import MACRO_PREFIX
 
 
 class GenericTestParser(BaseParser[ParsedGenericTestNode]):
@@ -47,9 +47,11 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
         try:
             blocks: List[jinja.BlockTag] = [
                 t for t in
-                jinja.extract_toplevel_blocks(base_node.raw_sql,
-                                              allowed_blocks={'test'},
-                                              collect_raw_data=False,)
+                jinja.extract_toplevel_blocks(
+                    base_node.raw_sql,
+                    allowed_blocks={'test'},
+                    collect_raw_data=False,
+                )
                 if isinstance(t, jinja.BlockTag)
             ]
         except CompilationException as exc:
@@ -91,7 +93,6 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
         logger.debug("Parsing {}".format(original_file_path))
 
         # this is really only used for error messages
-
         base_node = UnparsedMacro(
             path=original_file_path,
             original_file_path=original_file_path,

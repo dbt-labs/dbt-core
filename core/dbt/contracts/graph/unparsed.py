@@ -46,7 +46,6 @@ class UnparsedMacro(UnparsedBaseNode, HasSQL):
 
 @dataclass
 class UnparsedGenericTest(UnparsedBaseNode, HasSQL):
-    # TODO: should this be nodeType macro?
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
 
 
