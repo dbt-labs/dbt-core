@@ -593,19 +593,21 @@ class StaticModelParserUnitTest(BaseParserTest):
     def file_block_for(self, data, filename):
         return super().file_block_for(data, filename, 'models')
 
-    # tests that when the ref built-in is overriden with a macro definition
-    # that the ModelParser can detect it. This does not test that the static
-    # parser does not run in this case. That test is in integration test suite 072
+    # tests that configs get extracted properly. the function should respect merge behavior,
+    # but becuase it's only reading from one dictionary it won't matter except in edge cases
+    # like this example with tags changing type to a list.
     def test_config_shifting(self):
         static_parser_result = {
             'configs': {
                 'hello': 'world',
-                'flag': True
+                'flag': True,
+                'tags': 'tag'
             }
         }
         expected = {
             'hello': 'world',
-            'flag': True
+            'flag': True,
+            'tags': ['tag']
         }
         got = _get_config_call_dict(static_parser_result)
         self.assertEqual(expected, got)
