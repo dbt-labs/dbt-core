@@ -303,7 +303,7 @@ def _get_config_call_dict(
 ) -> Dict[str, Any]:
     config_call_dict: Dict[str, Any] = {}
 
-    for c in static_parser_result['configs'].items():
+    for c in dict(static_parser_result['configs']).items():
         ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
 
     return config_call_dict
