@@ -19,15 +19,15 @@ class TestInit(DBTIntegrationTest):
         super().tearDown()
 
     def get_project_name(self):
-        return "my_project_{}".format(self.unique_schema())
+        return 'my_project_{}'.format(self.unique_schema())
 
     @property
     def schema(self):
-        return "init_040"
+        return 'init_040'
 
     @property
     def models(self):
-        return "models"
+        return 'models'
 
     @use_profile('postgres')
     @mock.patch('click.confirm')
@@ -51,7 +51,7 @@ class TestInit(DBTIntegrationTest):
         self.run_dbt(['init'])
 
         manager.assert_has_calls([
-            call.confirm(f'The profile test already exists in {self.test_root_dir}/profiles.yml. Continue and overwrite it?'),
+            call.confirm(f"The profile test already exists in {os.path.join(self.test_root_dir, 'profiles.yml')}. Continue and overwrite it?"),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
             call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
@@ -272,7 +272,7 @@ profile:
         self.run_dbt(['init'])
 
         manager.assert_has_calls([
-            call.confirm(f'The profile test already exists in {self.test_root_dir}/profiles.yml. Continue and overwrite it?'),
+            call.confirm(f"The profile test already exists in {os.path.join(self.test_root_dir, 'profiles.yml')}. Continue and overwrite it?"),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
             call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
