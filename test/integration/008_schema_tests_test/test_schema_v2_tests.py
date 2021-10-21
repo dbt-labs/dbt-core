@@ -230,7 +230,7 @@ class TestOtherBoolType(DBTIntegrationTest):
 
 
 class TestNonBoolType(DBTIntegrationTest):
-# make sure we throw an error if an invalie "boolean" is used in to get_test_sql
+# make sure we throw an error if an invalid "boolean" is used in to get_test_sql
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
@@ -249,10 +249,21 @@ class TestNonBoolType(DBTIntegrationTest):
             "macro-paths": ["macros-v2/override_get_test_macros_fail"],
         }
 
+    def run_schema_validations(self):
+        args = FakeArgs()
+
+        test_task = TestTask(args, self.config)
+        return test_task.run()
+
     @use_profile('postgres')
     def test_postgres_limit_schema_tests(self):
-        with self.assertRaises(CompilationException):
-            self.run_dbt()
+        results = self.run_dbt()
+
+        run_result = self.run_dbt(['test'], expect_pass=False)
+        results = run_result.results
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].status, TestStatus.Error)
+        self.assertRegex(results[0].message, r"'get_test_sql' returns 'x'")
 
 
 class TestMalformedSchemaTests(DBTIntegrationTest):

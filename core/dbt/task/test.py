@@ -44,7 +44,7 @@ class TestResultData(dbtClassMixin):
             try:
                 data['should_warn'] = bool(strtobool(data.get('should_warn')))
             except ValueError:
-                raise invalid_bool_error(data['should_warn'])
+                raise invalid_bool_error(data['should_warn'], 'get_test_sql')
         # need this so we catch both true bools and 0/1
         else:
             data['should_warn'] = bool(data.get('should_warn'))
@@ -53,7 +53,7 @@ class TestResultData(dbtClassMixin):
             try:
                 data['should_error'] = bool(strtobool(data.get('should_error')))
             except ValueError:
-                raise invalid_bool_error(data['should_error'])
+                raise invalid_bool_error(data['should_error'], 'get_test_sql')
         else:
             data['should_error'] = bool(data.get('should_error'))
         super().validate(data)
