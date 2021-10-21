@@ -291,7 +291,7 @@ def build_node_edges(nodes: List[ManifestNode]):
     return _sort_values(forward_edges), _sort_values(backward_edges)
 
 
-# Build a map of children of macros
+# Build a map of children of macros and generic tests
 def build_macro_edges(nodes: List[Any]):
     forward_edges: Dict[str, List[str]] = {
         n.unique_id: [] for n in nodes if n.unique_id.startswith('macro') or n.depends_on.macros

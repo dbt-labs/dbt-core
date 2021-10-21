@@ -544,7 +544,6 @@ class TestSchemaTestContextWithMacroNamespace(DBTIntegrationTest):
         run_result = self.run_dbt(['test'], expect_pass=False)
         results = run_result.results
         results = sorted(results, key=lambda r: r.node.name)
-        # breakpoint()
         self.assertEqual(len(results), 4)
         # call_pkg_macro_model_c_
         self.assertEqual(results[0].status, TestStatus.Fail)

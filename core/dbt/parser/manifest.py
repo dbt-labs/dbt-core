@@ -49,6 +49,7 @@ from dbt.exceptions import (
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
+from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.hooks import HookParser
@@ -277,9 +278,10 @@ class ManifestLoader:
         if skip_parsing:
             logger.debug("Partial parsing enabled, no changes found, skipping parsing")
         else:
-            # Load Macros
+            # Load Macros and tests
             # We need to parse the macros first, so they're resolvable when
-            # the other files are loaded
+            # the other files are loaded.  Also need to parse tests, specifically
+            # generic tests
             start_load_macros = time.perf_counter()
             self.load_and_parse_macros(project_parser_files)
 
@@ -379,14 +381,22 @@ class ManifestLoader:
             if project.project_name not in project_parser_files:
                 continue
             parser_files = project_parser_files[project.project_name]
-            if 'MacroParser' not in parser_files:
-                continue
-            parser = MacroParser(project, self.manifest)
-            for file_id in parser_files['MacroParser']:
-                block = FileBlock(self.manifest.files[file_id])
-                parser.parse_file(block)
-                # increment parsed path count for performance tracking
-                self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+            if 'MacroParser' in parser_files:
+                parser = MacroParser(project, self.manifest)
+                for file_id in parser_files['MacroParser']:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+            # generic tests hisotrically lived in the macros directoy but can now be nested
+            # in a /generic directory under /tests so we want to process them here as well
+            if 'GenericTestParser' in parser_files:
+                parser = GenericTestParser(project, self.manifest)
+                for file_id in parser_files['GenericTestParser']:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
 
         self.build_macro_resolver()
         # Look at changed macros and update the macro.depends_on.macros

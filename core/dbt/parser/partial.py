@@ -13,7 +13,12 @@ mssat_files = (
     ParseFileType.Seed,
     ParseFileType.Snapshot,
     ParseFileType.Analysis,
-    ParseFileType.Test,
+    ParseFileType.SingularTest,
+)
+
+mg_files = (
+    ParseFileType.Macro,
+    ParseFileType.GenericTest,
 )
 
 
@@ -88,7 +93,7 @@ class PartialParsing:
             if self.saved_files[file_id].parse_file_type == ParseFileType.Schema:
                 deleted_schema_files.append(file_id)
             else:
-                if self.saved_files[file_id].parse_file_type == ParseFileType.Macro:
+                if self.saved_files[file_id].parse_file_type in mg_files:
                     changed_or_deleted_macro_file = True
                 deleted.append(file_id)
 
@@ -106,7 +111,7 @@ class PartialParsing:
                         raise Exception(f"Serialization failure for {file_id}")
                     changed_schema_files.append(file_id)
                 else:
-                    if self.saved_files[file_id].parse_file_type == ParseFileType.Macro:
+                    if self.saved_files[file_id].parse_file_type in mg_files:
                         changed_or_deleted_macro_file = True
                     changed.append(file_id)
         file_diff = {
@@ -213,7 +218,7 @@ class PartialParsing:
             self.deleted_manifest.files[file_id] = self.saved_manifest.files.pop(file_id)
 
         # macros
-        if saved_source_file.parse_file_type == ParseFileType.Macro:
+        if saved_source_file.parse_file_type in mg_files:
             self.delete_macro_file(saved_source_file, follow_references=True)
 
         # docs
@@ -229,7 +234,7 @@ class PartialParsing:
 
         if new_source_file.parse_file_type in mssat_files:
             self.update_mssat_in_saved(new_source_file, old_source_file)
-        elif new_source_file.parse_file_type == ParseFileType.Macro:
+        elif new_source_file.parse_file_type in mg_files:
             self.update_macro_in_saved(new_source_file, old_source_file)
         elif new_source_file.parse_file_type == ParseFileType.Documentation:
             self.update_doc_in_saved(new_source_file, old_source_file)
