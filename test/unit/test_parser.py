@@ -720,6 +720,22 @@ class StaticModelParserUnitTest(BaseParserTest):
         result = _get_sample_result(sample_node, sample_config, node, config)
         self.assertEqual([(2, "false_positive_config_value")], result)
 
+    def test_exp_sample_results(self):
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+        result = _get_exp_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual(["00_experimental_exact_match"], result)
+
+    def test_stable_sample_results(self):
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+        result = _get_stable_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual(["80_stable_exact_match"], result)
+
 
 class SnapshotParserTest(BaseParserTest):
     def setUp(self):
