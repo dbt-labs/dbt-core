@@ -504,8 +504,10 @@ def invalid_bool_error(got_value, macro_name) -> NoReturn:
     """Raise a CompilationException when an macro expects a boolean but gets some
     other value.
     """
-    msg = ("Macro '{macro_name}' returns '{got_value}'.  It is not type 'bool' "
-           "and cannot not be converted reliably to a bool.")
+    msg = (
+        "Macro '{macro_name}' returns '{got_value}'.  It is not type 'bool' "
+        "and cannot not be converted reliably to a bool."
+    )
     raise_compiler_error(msg.format(macro_name=macro_name, got_value=got_value))
 
 

@@ -44,8 +44,8 @@ class TestResultData(dbtClassMixin):
 
     @classmethod
     def validate(cls, data):
-        data['should_warn'] = cls.convert_bool_type(data['should_warn'])
-        data['should_error'] = cls.convert_bool_type(data['should_error'])
+        data["should_warn"] = cls.convert_bool_type(data["should_warn"])
+        data["should_error"] = cls.convert_bool_type(data["should_error"])
         super().validate(data)
 
     def convert_bool_type(field) -> bool:
@@ -54,7 +54,7 @@ class TestResultData(dbtClassMixin):
             try:
                 return bool(strtobool(field))  # type: ignore
             except ValueError:
-                raise invalid_bool_error(field, 'get_test_sql')
+                raise invalid_bool_error(field, "get_test_sql")
 
         # need this so we catch both true bools and 0/1
         return bool(field)
