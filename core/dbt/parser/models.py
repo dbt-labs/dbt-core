@@ -299,7 +299,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
 def _get_config_call_dict(
-    static_parser_result: Dict[str, List[Any]]
+    static_parser_result: Dict[str, Any]
 ) -> Dict[str, Any]:
     config_call_dict: Dict[str, Any] = {}
 
