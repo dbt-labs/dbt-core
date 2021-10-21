@@ -467,7 +467,7 @@ def invalid_type_error(method_name, arg_name, got_value, expected_type,
 
 
 def invalid_bool_error(got_value, macro_name) -> NoReturn:
-    """Raise a CompilationException when an macro expects a boolean but gets some 
+    """Raise a CompilationException when an macro expects a boolean but gets some
     other value.
     """
     msg = ("Macro '{macro_name}' returns '{got_value}'.  It is not type 'bool' "

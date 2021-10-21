@@ -258,7 +258,7 @@ class TestNonBoolType(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_limit_schema_tests(self):
         results = self.run_dbt()
-
+        self.assertEqual(len(results), 1)
         run_result = self.run_dbt(['test'], expect_pass=False)
         results = run_result.results
         self.assertEqual(len(results), 1)

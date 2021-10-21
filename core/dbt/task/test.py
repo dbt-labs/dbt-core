@@ -38,25 +38,21 @@ class TestResultData(dbtClassMixin):
     should_error: bool
 
     @classmethod
-    def validate(cls, data):
-        # if it's type string let python decide if it's a valid value to convert to bool
-        if type(data['should_warn']) == str:
-            try:
-                data['should_warn'] = bool(strtobool(data.get('should_warn')))
-            except ValueError:
-                raise invalid_bool_error(data['should_warn'], 'get_test_sql')
-        # need this so we catch both true bools and 0/1
-        else:
-            data['should_warn'] = bool(data.get('should_warn'))
-
-        if type(data['should_error']) == str:
-            try:
-                data['should_error'] = bool(strtobool(data.get('should_error')))
-            except ValueError:
-                raise invalid_bool_error(data['should_error'], 'get_test_sql')
-        else:
-            data['should_error'] = bool(data.get('should_error'))
+    def validate(self, cls, data):
+        data['should_warn'] = self.convert_bool_type(data['should_warn'])
+        data['should_error'] = self.convert_bool_type(data['should_error'])
         super().validate(data)
+
+    def convert_bool_type(field) -> bool:
+        # if it's type string let python decide if it's a valid value to convert to bool
+        if isinstance(field, str):
+            try:
+                return bool(strtobool(field))  # type: ignore
+            except ValueError:
+                raise invalid_bool_error(field, 'get_test_sql')
+
+        # need this so we catch both true bools and 0/1
+        return bool(field)
 
 
 class TestRunner(CompileRunner):
@@ -127,7 +123,7 @@ class TestRunner(CompileRunner):
                 map(utils._coerce_decimal, table.rows[0])
             )
         )
-        TestResultData.validate(test_result_dct)
+        TestResultData.validate(self, test_result_dct)
         return TestResultData.from_dict(test_result_dct)
 
     def execute(self, test: CompiledTestNode, manifest: Manifest):
