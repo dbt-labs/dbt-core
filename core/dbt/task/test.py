@@ -25,9 +25,7 @@ from dbt.events.types import (
     PrintPassTestResult,
     PrintWarnTestResult,
     PrintFailureTestResult,
-    InternalException,
-    invalid_bool_error,
-    missing_materialization
+    PrintStartLine,
 )
 from dbt.exceptions import InternalException, invalid_bool_error, missing_materialization
 from dbt.graph import (
