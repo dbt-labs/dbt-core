@@ -398,18 +398,18 @@ class ManifestLoader:
             if project.project_name not in project_parser_files:
                 continue
             parser_files = project_parser_files[project.project_name]
-            if 'MacroParser' in parser_files:
+            if "MacroParser" in parser_files:
                 parser = MacroParser(project, self.manifest)
-                for file_id in parser_files['MacroParser']:
+                for file_id in parser_files["MacroParser"]:
                     block = FileBlock(self.manifest.files[file_id])
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking
                     self._perf_info.parsed_path_count += 1
             # generic tests hisotrically lived in the macros directoy but can now be nested
             # in a /generic directory under /tests so we want to process them here as well
-            if 'GenericTestParser' in parser_files:
+            if "GenericTestParser" in parser_files:
                 parser = GenericTestParser(project, self.manifest)
-                for file_id in parser_files['GenericTestParser']:
+                for file_id in parser_files["GenericTestParser"]:
                     block = FileBlock(self.manifest.files[file_id])
                     parser.parse_file(block)
                     # increment parsed path count for performance tracking

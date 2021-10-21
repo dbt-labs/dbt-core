@@ -152,11 +152,11 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files["SingularTestParser"] = read_files_for_parser(
-        project, files, project.test_paths, '.sql', ParseFileType.SingularTest, saved_files
+        project, files, project.test_paths, ".sql", ParseFileType.SingularTest, saved_files
     )
 
     # all generic tests within /tests must be nested under a /generic subfolder
-    project_files['GenericTestParser'] = read_files_for_parser(
+    project_files["GenericTestParser"] = read_files_for_parser(
         project, files, project.generic_test_paths, ".sql", ParseFileType.GenericTest, saved_files
     )
 

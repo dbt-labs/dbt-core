@@ -18,8 +18,8 @@ class ParseFileType(StrEnum):
     Model = "model"
     Snapshot = "snapshot"
     Analysis = "analysis"
-    SingularTest = 'singular_test'
-    GenericTest = 'generic_test'
+    SingularTest = "singular_test"
+    GenericTest = "generic_test"
     Seed = "seed"
     Documentation = "docs"
     Schema = "schema"
@@ -31,8 +31,8 @@ parse_file_type_to_parser = {
     ParseFileType.Model: 'ModelParser',
     ParseFileType.Snapshot: 'SnapshotParser',
     ParseFileType.Analysis: 'AnalysisParser',
-    ParseFileType.SingularTest: 'SingularTestParser',
-    ParseFileType.GenericTest: 'GenericTestParser',
+    ParseFileType.SingularTest: "SingularTestParser",
+    ParseFileType.GenericTest: "GenericTestParser",
     ParseFileType.Seed: 'SeedParser',
     ParseFileType.Documentation: 'DocumentationParser',
     ParseFileType.Schema: 'SchemaParser',
