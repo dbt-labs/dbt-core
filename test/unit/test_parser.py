@@ -5,9 +5,11 @@ from unittest import mock
 import os
 import yaml
 
+from copy import deepcopy
 import dbt.flags
 import dbt.parser
 from dbt import tracking
+from dbt.context.context_config import ContextConfig
 from dbt.exceptions import CompilationException
 from dbt.parser import (
     ModelParser, MacroParser, SingularTestParser, SchemaParser,
@@ -589,6 +591,29 @@ class StaticModelParserUnitTest(BaseParserTest):
             manifest=self.manifest,
             root_project=self.root_project_config,
         )
+        self.example_node = ParsedModelNode(
+            alias='model_1',
+            name='model_1',
+            database='test',
+            schema='analytics',
+            resource_type=NodeType.Model,
+            unique_id='model.snowplow.model_1',
+            fqn=['snowplow', 'nested', 'model_1'],
+            package_name='snowplow',
+            original_file_path=normalize('models/nested/model_1.sql'),
+            root_path=get_abs_os_path('./dbt_packages/snowplow'),
+            config=NodeConfig(materialized='table'),
+            path=normalize('nested/model_1.sql'),
+            raw_sql='{{ config(materialized="table") }}select 1 as id',
+            checksum=None,
+            unrendered_config={'materialized': 'table'},
+        )
+        self.example_config = ContextConfig(
+            self.root_project_config,
+            self.example_node.fqn,
+            self.example_node.resource_type,
+            self.snowplow_project_config,
+        )
 
     def file_block_for(self, data, filename):
         return super().file_block_for(data, filename, 'models')
@@ -621,6 +646,19 @@ class StaticModelParserUnitTest(BaseParserTest):
         }
         got = _shift_sources(static_parser_result)
         self.assertEqual(expected, got)
+
+    def test_sample_results(self):
+        # --- missed ref --- #
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+
+        sample_node.refs = []
+        node.refs = ['myref']
+
+        result = _get_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual([(7, "missed_ref_value")], result)
 
 
 class SnapshotParserTest(BaseParserTest):
