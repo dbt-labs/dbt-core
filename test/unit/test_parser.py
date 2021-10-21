@@ -612,6 +612,16 @@ class StaticModelParserUnitTest(BaseParserTest):
         got = _get_config_call_dict(static_parser_result)
         self.assertEqual(expected, got)
 
+    def test_source_shifting(self):
+        static_parser_result = {
+            'sources': [('abc', 'def'), ('x', 'y')]
+        }
+        expected = {
+            'sources': [['abc', 'def'], ['x', 'y']]
+        }
+        got = _shift_sources(static_parser_result)
+        self.assertEqual(expected, got)
+
 
 class SnapshotParserTest(BaseParserTest):
     def setUp(self):
