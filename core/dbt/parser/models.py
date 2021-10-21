@@ -371,8 +371,8 @@ def _get_sample_result(
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     # look for false positive configs
-    for k in config._config_call_dict:
-        if k not in config._config_call_dict:
+    for k in sample_config._config_call_dict.keys():
+        if k not in config._config_call_dict.keys():
             result += [(2, "false_positive_config_value")]
             break
 

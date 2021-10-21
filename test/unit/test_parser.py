@@ -660,6 +660,66 @@ class StaticModelParserUnitTest(BaseParserTest):
         result = _get_sample_result(sample_node, sample_config, node, config)
         self.assertEqual([(7, "missed_ref_value")], result)
 
+        # --- false positive ref --- #
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+
+        sample_node.refs = ['myref']
+        node.refs = []
+
+        result = _get_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual([(6, "false_positive_ref_value")], result)
+
+        # --- missed source --- #
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+
+        sample_node.sources = []
+        node.sources = [['abc', 'def']]
+
+        result = _get_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual([(5, 'missed_source_value')], result)
+
+        # --- false positive source --- #
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+
+        sample_node.sources = [['abc', 'def']]
+        node.sources = []
+
+        result = _get_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual([(4, 'false_positive_source_value')], result)
+
+        # --- missed config --- #
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+
+        sample_config._config_call_dict = {}
+        config._config_call_dict = {'key': 'value'}
+
+        result = _get_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual([(3, 'missed_config_value')], result)
+
+        # --- false positive config --- #
+        node = deepcopy(self.example_node)
+        config = deepcopy(self.example_config)
+        sample_node = deepcopy(self.example_node)
+        sample_config = deepcopy(self.example_config)
+
+        sample_config._config_call_dict = {'key': 'value'}
+        config._config_call_dict = {}
+
+        result = _get_sample_result(sample_node, sample_config, node, config)
+        self.assertEqual([(2, "false_positive_config_value")], result)
+
 
 class SnapshotParserTest(BaseParserTest):
     def setUp(self):
