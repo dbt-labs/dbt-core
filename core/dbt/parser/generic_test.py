@@ -19,7 +19,7 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
 
     @property
     def resource_type(self) -> NodeType:
-        return NodeType.Test
+        return NodeType.Macro
 
     @classmethod
     def get_compiled_path(cls, block: FileBlock):
