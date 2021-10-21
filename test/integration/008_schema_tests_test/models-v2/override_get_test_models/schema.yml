@@ -1,0 +1,31 @@
+version: 2
+
+models:
+    - name: my_model_pass
+      description: "The table has 1 null values, and we're okay with that, until it's more than 1."
+      columns:
+        - name: id
+          description: "The number of responses for this favorite color - purple will be null"
+          tests:
+            - not_null:
+                error_if: '>1'
+                warn_if: '>1'
+
+    - name: my_model_warning
+      description: "The table has 1 null values, and we're okay with that, but let us know"
+      columns:
+        - name: id
+          description: "The number of responses for this favorite color - purple will be null"
+          tests:
+            - not_null:
+                error_if: '>1'
+
+    - name: my_model_failure
+      description: "The table has 2 null values, and we're not okay with that"
+      columns:
+        - name: id
+          description: "The number of responses for this favorite color - purple will be null"
+          tests:
+            - not_null:
+                error_if: '>1'
+
