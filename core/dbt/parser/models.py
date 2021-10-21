@@ -88,18 +88,13 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 model_parser_copy.populate(
                     exp_sample_node,
                     exp_sample_config,
-                    experimentally_parsed['refs'],
-                    experimentally_parsed['sources'],
-                    dict(experimentally_parsed['configs'])
+                    experimentally_parsed
                 )
 
             super().render_update(node, config)
 
         # if the --use-experimental-parser flag was set, and the experimental parser succeeded
         elif isinstance(experimentally_parsed, dict):
-            # manually fit configs in
-            config._config_call_dict = _get_config_call_dict(experimentally_parsed)
-
             # update the unrendered config with values from the static parser.
             # values from yaml files are in there already
             self.populate(
@@ -185,21 +180,22 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         self,
         node: ParsedModelNode,
         config: ContextConfig,
-        refs: List[List[str]],
-        sources: List[List[str]],
-        configs: Dict[str, Any]
+        experimentally_parsed: Dict[str, Any]
     ):
+        # manually fit configs in
+        config._config_call_dict = _get_config_call_dict(experimentally_parsed)
+
         # if there are hooks present this, it WILL render jinja. Will need to change
         # when the experimental parser supports hooks
         self.update_parsed_node_config(node, config)
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already
-        node.unrendered_config.update(configs)
+        node.unrendered_config.update(experimentally_parsed['configs'])
 
         # set refs and sources on the node object
-        node.refs += refs
-        node.sources += sources
+        node.refs += experimentally_parsed['refs']
+        node.sources += experimentally_parsed['sources']
 
         # configs don't need to be merged into the node because they
         # are read from config._config_call_dict
@@ -251,7 +247,7 @@ def _get_sample_result(
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     # look for false positive configs
-    for k in config._config_call_dict:
+    for k in sample_config._config_call_dict:
         if k not in config._config_call_dict:
             result += [(2, "false_positive_config_value")]
             break
