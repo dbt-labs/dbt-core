@@ -870,7 +870,7 @@ class GenericTestParserTest(BaseParserTest):
         expected = ParsedMacro(
             name='test_not_null',
             resource_type=NodeType.Macro,
-            unique_id='test.snowplow.test_not_null',
+            unique_id='macro.snowplow.test_not_null',
             package_name='snowplow',
             original_file_path=normalize('tests/generic/test_1.sql'),
             root_path=get_abs_os_path('./dbt_packages/snowplow'),
@@ -880,7 +880,7 @@ class GenericTestParserTest(BaseParserTest):
         assertEqualNodes(node, expected)
         file_id = 'snowplow://' + normalize('tests/generic/test_1.sql')
         self.assertIn(file_id, self.parser.manifest.files)
-        self.assertEqual(self.parser.manifest.files[file_id].macros, ['test.snowplow.test_not_null'])
+        self.assertEqual(self.parser.manifest.files[file_id].macros, ['macro.snowplow.test_not_null'])
 
 
 class AnalysisParserTest(BaseParserTest):
