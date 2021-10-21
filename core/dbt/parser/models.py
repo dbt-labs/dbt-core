@@ -87,9 +87,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 model_parser_copy.populate(
                     exp_sample_node,
                     exp_sample_config,
-                    experimental_sample['refs'],
-                    experimental_sample['sources'],
-                    dict(experimental_sample['configs'])
+                    experimental_sample
                 )
         # use the experimental parser exclusively if the flag is on
         if flags.USE_EXPERIMENTAL_PARSER:
@@ -117,17 +115,12 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 super(ModelParser, model_parser_copy) \
                     .render_update(jinja_sample_node, jinja_sample_config)
 
-            # manually fit configs in
-            config._config_call_dict = _get_config_call_dict(statically_parsed)
-
             # update the unrendered config with values from the static parser.
             # values from yaml files are in there already
             self.populate(
                 node,
                 config,
-                statically_parsed['refs'],
-                statically_parsed['sources'],
-                dict(statically_parsed['configs'])
+                statically_parsed
             )
 
             # if we took a jinja sample, compare now that the base node has been populated
@@ -268,28 +261,29 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             False
         )
 
-    # this method updates the model note rendered and unrendered config as well
+    # this method updates the model node rendered and unrendered config as well
     # as the node object. Used to populate these values when circumventing jinja
     # rendering like the static parser.
     def populate(
         self,
         node: ParsedModelNode,
         config: ContextConfig,
-        refs: List[List[str]],
-        sources: List[List[str]],
-        configs: Dict[str, Any]
+        statically_parsed: Dict[str, Any]
     ):
+        # manually fit configs in
+        config._config_call_dict = _get_config_call_dict(statically_parsed)
+
         # if there are hooks present this, it WILL render jinja. Will need to change
         # when the experimental parser supports hooks
         self.update_parsed_node_config(node, config)
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already
-        node.unrendered_config.update(configs)
+        node.unrendered_config.update(dict(statically_parsed['configs']))
 
         # set refs and sources on the node object
-        node.refs += refs
-        node.sources += sources
+        node.refs += statically_parsed['refs']
+        node.sources += statically_parsed['sources']
 
         # configs don't need to be merged into the node because they
         # are read from config._config_call_dict
@@ -305,7 +299,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
 # pure function. safe to use elsewhere, but unlikely to be useful outside this file.
 def _get_config_call_dict(
-    static_parser_result: Dict[str, List[Any]]
+    static_parser_result: Dict[str, Any]
 ) -> Dict[str, Any]:
     config_call_dict: Dict[str, Any] = {}
 
@@ -371,8 +365,8 @@ def _get_sample_result(
 ) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     # look for false positive configs
-    for k in config._config_call_dict:
-        if k not in config._config_call_dict:
+    for k in sample_config._config_call_dict.keys():
+        if k not in config._config_call_dict.keys():
             result += [(2, "false_positive_config_value")]
             break
 
