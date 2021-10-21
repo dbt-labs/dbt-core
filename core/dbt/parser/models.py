@@ -100,9 +100,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             self.populate(
                 node,
                 config,
-                experimentally_parsed['refs'],
-                experimentally_parsed['sources'],
-                dict(experimentally_parsed['configs'])
+                experimentally_parsed
             )
 
             self.manifest._parsing_info.static_analysis_parsed_path_count += 1
