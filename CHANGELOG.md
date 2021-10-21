@@ -16,11 +16,13 @@
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
 - Remove connection from `render_with_context` during parsing, thereby removing misleading log message ([#3137](https://github.com/dbt-labs/dbt-core/issues/3137), [#4062](https://github.com/dbt-labas/dbt-core/pull/4062))
+- Wait for postgres docker container to be ready in `setup_db.sh`. ([#3876](https://github.com/dbt-labs/dbt-core/issues/3876), [#3908](https://github.com/dbt-labs/dbt-core/pull/3908))
 
 Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - [@matt-winkler](https://github.com/matt-winkler) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - [@NiallRees](https://github.com/NiallRees) ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
+- [@rvacaru](https://github.com/rvacaru) ([#3908](https://github.com/dbt-labs/dbt/pull/3908))
 
 ## dbt-core 1.0.0b1 (October 11, 2021)
 

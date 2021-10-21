@@ -174,8 +174,6 @@ docker-compose up -d database
 PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
 ```
 
-Note that you may need to run the previous command twice as it does not currently wait for the database to be running before attempting to run commands against it.  This will be fixed with [#3876](https://github.com/dbt-labs/dbt-core/issues/3876).
-
 `dbt` uses test credentials specified in a `test.env` file in the root of the repository for non-Postgres databases. This `test.env` file is git-ignored, but please be _extra_ careful to never check in credentials or other sensitive information when developing against `dbt`. To create your `test.env` file, copy the provided sample file, then supply your relevant credentials. This step is only required to use non-Postgres databases.
 
 ```
