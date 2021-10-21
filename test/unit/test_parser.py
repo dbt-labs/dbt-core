@@ -623,16 +623,17 @@ class StaticModelParserUnitTest(BaseParserTest):
     # like this example with tags changing type to a list.
     def test_config_shifting(self):
         static_parser_result = {
-            'configs': {
-                'hello': 'world',
-                'flag': True,
-                'tags': 'tag'
-            }
+            'configs': [
+                ('hello', 'world'),
+                ('flag', True),
+                ('tags', 'tag1'),
+                ('tags', 'tag2')
+            ]
         }
         expected = {
             'hello': 'world',
             'flag': True,
-            'tags': ['tag']
+            'tags': ['tag1', 'tag2']
         }
         got = _get_config_call_dict(static_parser_result)
         self.assertEqual(expected, got)
