@@ -32,6 +32,9 @@ from dbt.contracts.graph.parsed import (
     UnpatchedSourceDefinition
 )
 from dbt.contracts.graph.unparsed import Docs
+from dbt.parser.models import (
+    _get_config_call_dict, _shift_sources, _get_exp_sample_result, _get_stable_sample_result, _get_sample_result
+)
 import itertools
 from .utils import config_from_parts_or_dicts, normalize, generate_name_macros, MockNode, MockSource, MockDocumentation
 
@@ -570,6 +573,42 @@ class StaticModelParserTest(BaseParserTest):
         )
 
         assert(self.parser._has_banned_macro(node))
+
+# TODO 
+class StaticModelParserUnitTest(BaseParserTest):
+    # _get_config_call_dict
+    # _shift_sources
+    # _get_exp_sample_result
+    # _get_stable_sample_result
+    # _get_sample_result
+
+    def setUp(self):
+        super().setUp()
+        self.parser = ModelParser(
+            project=self.snowplow_project_config,
+            manifest=self.manifest,
+            root_project=self.root_project_config,
+        )
+
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'models')
+
+    # tests that when the ref built-in is overriden with a macro definition
+    # that the ModelParser can detect it. This does not test that the static
+    # parser does not run in this case. That test is in integration test suite 072
+    def test_config_shifting(self):
+        static_parser_result = {
+            'configs': {
+                'hello': 'world',
+                'flag': True
+            }
+        }
+        expected = {
+            'hello': 'world',
+            'flag': True
+        }
+        got = _get_config_call_dict(static_parser_result)
+        self.assertEqual(expected, got)
 
 
 class SnapshotParserTest(BaseParserTest):
