@@ -119,6 +119,11 @@ class TestMacroOverrideBuiltin(DBTIntegrationTest):
 
 
 class TestMacroOverridePackage(DBTIntegrationTest):
+    """
+    The macro in `override-postgres-get-columns-macros` should override the
+    `get_columns_in_relation` macro by default.
+    """
+
     @property
     def schema(self):
         return "test_macros_016"
@@ -142,6 +147,12 @@ class TestMacroOverridePackage(DBTIntegrationTest):
 
 
 class TestMacroNotOverridePackage(DBTIntegrationTest):
+    """
+    The macro in `override-postgres-get-columns-macros` does NOT override the
+    `get_columns_in_relation` macro because we tell dispatch to not look at the
+    postgres macros.
+    """
+
     @property
     def schema(self):
         return "test_macros_016"
