@@ -137,13 +137,13 @@ test:
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
     @mock.patch.object(Path, 'exists', autospec=True)
-    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_target_options(self, exists, mock_prompt, mock_confirm):
+    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_profile_template(self, exists, mock_prompt, mock_confirm):
 
         def exists_side_effect(path):
             # Override responses on specific files, default to 'real world' if not overriden
             return {
                 'profiles.yml': False,
-                'target_options.yml': False,
+                'profile_template.yml': False,
             }.get(path.name, os.path.exists(path))
 
         exists.side_effect = exists_side_effect
@@ -248,8 +248,8 @@ _fixed_schema: my_schema""")
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
     def test_postgres_init_task_in_project_with_invalid_profile_template(self, mock_prompt, mock_confirm):
-        """Test that when an invalid profile_template.yml is provided,
-        init command falls back to the target_options.yml"""
+        """Test that when an invalid profile_template.yml is provided in the project,
+        init command falls back to the target's profile_template.yml"""
 
         with open("profile_template.yml", 'w') as f:
             f.write("""invalid template""")

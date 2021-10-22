@@ -117,13 +117,13 @@ class InitTask(BaseTask):
 
     def generate_target_from_input(
         self,
-        target_options: dict,
+        profile_template: dict,
         target: dict = {}
     ) -> dict:
-        """Generate a target configuration from target_options and user input.
+        """Generate a target configuration from profile_template and user input.
         """
-        target_options_local = copy.deepcopy(target_options)
-        for key, value in target_options_local.items():
+        profile_template_local = copy.deepcopy(profile_template)
+        for key, value in profile_template_local.items():
             if key.startswith("_choose"):
                 choice_type = key[8:].replace("_", " ")
                 option_list = list(value.keys())
@@ -134,7 +134,7 @@ class InitTask(BaseTask):
                 choice = option_list[numeric_choice - 1]
                 # Complete the chosen option's values in a recursive call
                 target = self.generate_target_from_input(
-                    target_options_local[key][choice], target
+                    profile_template_local[key][choice], target
                 )
             else:
                 if key.startswith("_fixed"):
@@ -181,9 +181,9 @@ class InitTask(BaseTask):
             with open(profiles_filepath, "w") as f:
                 yaml.dump(profiles, f)
 
-    def create_profile_from_target_options(self, target_options: dict, profile_name: str):
-        """Create and write a profile using the supplied target_options."""
-        target = self.generate_target_from_input(target_options)
+    def create_profile_from_profile_template(self, profile_template: dict, profile_name: str):
+        """Create and write a profile using the supplied profile_template."""
+        target = self.generate_target_from_input(profile_template)
         profile = {
             "outputs": {
                 "dev": target
@@ -193,24 +193,25 @@ class InitTask(BaseTask):
         self.write_profile(profile, profile_name)
 
     def create_profile_from_scratch(self, adapter: str, profile_name: str):
-        """Create a profile without defaults using target_options.yml if available, or
+        """Create a profile without defaults using profile_template.yml if available, or
         sample_profiles.yml as a fallback."""
         # Line below raises an exception if the specified adapter is not found
         load_plugin(adapter)
         adapter_path = get_include_paths(adapter)[0]
-        target_options_path = adapter_path / "target_options.yml"
+        profile_template_path = adapter_path / "profile_template.yml"
 
-        if target_options_path.exists():
-            with open(target_options_path) as f:
-                target_options = yaml.safe_load(f)
-            self.create_profile_from_target_options(target_options, profile_name)
+        if profile_template_path.exists():
+            with open(profile_template_path) as f:
+                profile_template = yaml.safe_load(f)
+            self.create_profile_from_profile_template(profile_template, profile_name)
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
             logger.info(
-                f"Profile {profile_name} written to {profiles_filepath} using "
-                "your supplied values. Run 'dbt debug' to validate the connection."
+                f"Profile {profile_name} written to {profiles_filepath} using target's "
+                " profile_template.yml and your supplied values. Run 'dbt debug' to "
+                "validate the connection."
             )
         else:
-            # For adapters without a target_options.yml defined, fallback on
+            # For adapters without a profile_template.yml defined, fallback on
             # sample_profiles.yml
             self.create_profile_from_sample(adapter, profile_name)
 
@@ -239,11 +240,12 @@ class InitTask(BaseTask):
         """Create a profile using profile_template.yml"""
         with open("profile_template.yml") as f:
             profile_template = yaml.safe_load(f)
-        self.create_profile_from_target_options(profile_template, profile_name)
+        self.create_profile_from_profile_template(profile_template, profile_name)
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         logger.info(
-            f"Profile {profile_name} written to {profiles_filepath} using profile_template.yml"
-            "and your supplied values. Run 'dbt debug' to validate the connection."
+            f"Profile {profile_name} written to {profiles_filepath} using project's "
+            "profile_template.yml and your supplied values. Run 'dbt debug' to "
+            "validate the connection."
         )
 
     def ask_for_adapter_choice(self) -> str:
@@ -275,7 +277,7 @@ class InitTask(BaseTask):
             logger.info("Setting up your profile.")
             profile_name = self.get_profile_name_from_current_project()
             # If a profile_template.yml exists in the project root, that effectively
-            # overrides the target_options.yml for the given target.
+            # overrides the profile_template.yml for the given target.
             profile_template_path = Path("profile_template.yml")
             if profile_template_path.exists():
                 try:
