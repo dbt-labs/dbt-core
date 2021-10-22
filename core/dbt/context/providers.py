@@ -144,7 +144,7 @@ class BaseDatabaseWrapper:
         elif isinstance(namespace, str):
             search_packages = self._adapter.config.get_macro_search_order(namespace)
             if not search_packages and namespace in self._adapter.config.dependencies:
-                search_packages = [namespace]
+                search_packages = [self.config.project_name, namespace]
         else:
             # Not a string and not None so must be a list
             raise CompilationException(
@@ -162,10 +162,10 @@ class BaseDatabaseWrapper:
                     macro = self._namespace.get_from_package(
                         package_name, search_name
                     )
-                except CompilationException as exc:
-                    raise CompilationException(
-                        f'In dispatch: {exc.msg}',
-                    ) from exc
+                except CompilationException:
+                    # Only raise CompilationException if macro is not found in
+                    # any package
+                    macro = None
 
                 if package_name is None:
                     attempts.append(search_name)

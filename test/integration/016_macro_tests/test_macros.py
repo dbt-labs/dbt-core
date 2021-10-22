@@ -118,6 +118,64 @@ class TestMacroOverrideBuiltin(DBTIntegrationTest):
         self.run_dbt()
 
 
+class TestMacroOverridePackage(DBTIntegrationTest):
+    """
+    The macro in `override-postgres-get-columns-macros` should override the
+    `get_columns_in_relation` macro by default.
+    """
+
+    @property
+    def schema(self):
+        return "test_macros_016"
+
+    @property
+    def models(self):
+        return 'override-get-columns-models'
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'macro-paths': ['override-postgres-get-columns-macros'],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_overrides(self):
+        # the first time, the model doesn't exist
+        self.run_dbt()
+        self.run_dbt()
+
+
+class TestMacroNotOverridePackage(DBTIntegrationTest):
+    """
+    The macro in `override-postgres-get-columns-macros` does NOT override the
+    `get_columns_in_relation` macro because we tell dispatch to not look at the
+    postgres macros.
+    """
+
+    @property
+    def schema(self):
+        return "test_macros_016"
+
+    @property
+    def models(self):
+        return 'override-get-columns-models'
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'macro-paths': ['override-postgres-get-columns-macros'],
+            'dispatch': [{'macro_namespace': 'dbt', 'search_order': ['dbt']}],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_overrides(self):
+        # the first time, the model doesn't exist
+        self.run_dbt(expect_pass=False)
+        self.run_dbt(expect_pass=False)
+
+
 class TestDispatchMacroOverrideBuiltin(TestMacroOverrideBuiltin):
     # test the same functionality as above, but this time,
     # dbt.get_columns_in_relation will dispatch to a default__ macro
