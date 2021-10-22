@@ -144,7 +144,7 @@ class BaseDatabaseWrapper:
         elif isinstance(namespace, str):
             search_packages = self._adapter.config.get_macro_search_order(namespace)
             if not search_packages and namespace in self._adapter.config.dependencies:
-                search_packages = [self.config.project, namespace]
+                search_packages = [self.config.project_name, namespace]
         else:
             # Not a string and not None so must be a list
             raise CompilationException(
