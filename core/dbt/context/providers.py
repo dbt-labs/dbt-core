@@ -162,10 +162,10 @@ class BaseDatabaseWrapper:
                     macro = self._namespace.get_from_package(
                         package_name, search_name
                     )
-                except CompilationException as exc:
-                    raise CompilationException(
-                        f'In dispatch: {exc.msg}',
-                    ) from exc
+                except CompilationException:
+                    # Only raise CompilationException if macro is not found in
+                    # any package
+                    macro = None
 
                 if package_name is None:
                     attempts.append(search_name)
