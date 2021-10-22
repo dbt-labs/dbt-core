@@ -137,17 +137,21 @@ class InitTask(BaseTask):
                     profile_template_local[key][choice], target
                 )
             else:
-                hide_input = value.get("hide_input", False)
-                default = value.get("default", None)
-                hint = value.get("hint", None)
-                type = click_type_mapping[value.get("type", None)]
-                text = key + (f" ({hint})" if hint else "")
-                target[key] = click.prompt(
-                    text,
-                    default=default,
-                    hide_input=hide_input,
-                    type=type
-                )
+                if key.startswith("_fixed"):
+                    # _fixed prefixed keys are not presented to the user
+                    target[key[7:]] = value
+                else:
+                    hide_input = value.get("hide_input", False)
+                    default = value.get("default", None)
+                    hint = value.get("hint", None)
+                    type = click_type_mapping[value.get("type", None)]
+                    text = key + (f" ({hint})" if hint else "")
+                    target[key] = click.prompt(
+                        text,
+                        default=default,
+                        hide_input=hide_input,
+                        type=type
+                    )
         return target
 
     def get_profile_name_from_current_project(self) -> str:
@@ -205,7 +209,7 @@ class InitTask(BaseTask):
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
             logger.info(
                 f"Profile {profile_name} written to {profiles_filepath} using target's "
-                " profile_template.yml and your supplied values. Run 'dbt debug' to "
+                "profile_template.yml and your supplied values. Run 'dbt debug' to "
                 "validate the connection."
             )
         else:
