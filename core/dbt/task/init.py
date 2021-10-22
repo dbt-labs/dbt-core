@@ -100,7 +100,7 @@ class InitTask(BaseTask):
                     f.write(sample_profile)
                 logger.info(
                     f"Profile {profile_name} written to {profiles_filepath} "
-                    "using sample configuration. Once updated, you'll be able to "
+                    "using target's sample configuration. Once updated, you'll be able to "
                     "start developing with dbt."
                 )
 
@@ -137,21 +137,17 @@ class InitTask(BaseTask):
                     profile_template_local[key][choice], target
                 )
             else:
-                if key.startswith("_fixed"):
-                    # _fixed prefixed keys are not presented to the user
-                    target[key[7:]] = value
-                else:
-                    hide_input = value.get("hide_input", False)
-                    default = value.get("default", None)
-                    hint = value.get("hint", None)
-                    type = click_type_mapping[value.get("type", None)]
-                    text = key + (f" ({hint})" if hint else "")
-                    target[key] = click.prompt(
-                        text,
-                        default=default,
-                        hide_input=hide_input,
-                        type=type
-                    )
+                hide_input = value.get("hide_input", False)
+                default = value.get("default", None)
+                hint = value.get("hint", None)
+                type = click_type_mapping[value.get("type", None)]
+                text = key + (f" ({hint})" if hint else "")
+                target[key] = click.prompt(
+                    text,
+                    default=default,
+                    hide_input=hide_input,
+                    type=type
+                )
         return target
 
     def get_profile_name_from_current_project(self) -> str:
@@ -183,7 +179,9 @@ class InitTask(BaseTask):
 
     def create_profile_from_profile_template(self, profile_template: dict, profile_name: str):
         """Create and write a profile using the supplied profile_template."""
-        target = self.generate_target_from_input(profile_template)
+        initial_target = profile_template.get('fixed', {})
+        prompts = profile_template.get('prompts', {})
+        target = self.generate_target_from_input(prompts, initial_target)
         profile = {
             "outputs": {
                 "dev": target
@@ -192,8 +190,8 @@ class InitTask(BaseTask):
         }
         self.write_profile(profile, profile_name)
 
-    def create_profile_from_scratch(self, adapter: str, profile_name: str):
-        """Create a profile without defaults using profile_template.yml if available, or
+    def create_profile_from_target(self, adapter: str, profile_name: str):
+        """Create a profile without defaults using target's profile_template.yml if available, or
         sample_profiles.yml as a fallback."""
         # Line below raises an exception if the specified adapter is not found
         load_plugin(adapter)
@@ -236,8 +234,8 @@ class InitTask(BaseTask):
         else:
             return True
 
-    def create_profile_using_profile_template(self, profile_name):
-        """Create a profile using profile_template.yml"""
+    def create_profile_using_project_profile_template(self, profile_name):
+        """Create a profile using the project's profile_template.yml"""
         with open("profile_template.yml") as f:
             profile_template = yaml.safe_load(f)
         self.create_profile_from_profile_template(profile_template, profile_name)
@@ -283,14 +281,14 @@ class InitTask(BaseTask):
                 try:
                     # This relies on a valid profile_template.yml from the user,
                     # so use a try: except to fall back to the default on failure
-                    self.create_profile_using_profile_template(profile_name)
+                    self.create_profile_using_project_profile_template(profile_name)
                     return
                 except Exception:
                     logger.info("Invalid profile_template.yml in project.")
             if not self.check_if_can_write_profile(profile_name=profile_name):
                 return
             adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_scratch(
+            self.create_profile_from_target(
                 adapter, profile_name=profile_name
             )
         else:
@@ -318,7 +316,7 @@ class InitTask(BaseTask):
             if not self.check_if_can_write_profile(profile_name=project_name):
                 return
             adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_scratch(
+            self.create_profile_from_target(
                 adapter, profile_name=project_name
             )
             logger.info(self.get_addendum(project_name, profiles_dir))
