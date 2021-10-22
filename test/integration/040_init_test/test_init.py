@@ -39,13 +39,13 @@ class TestInit(DBTIntegrationTest):
         manager.confirm.side_effect = ["y"]
         manager.prompt.side_effect = [
             1,
-            4,
             'localhost',
             5432,
             'test_user',
             'test_password',
             'test_db',
             'test_schema',
+            4,
         ]
 
         self.run_dbt(['init'])
@@ -53,13 +53,13 @@ class TestInit(DBTIntegrationTest):
         manager.assert_has_calls([
             call.confirm(f"The profile test already exists in {os.path.join(self.test_root_dir, 'profiles.yml')}. Continue and overwrite it?"),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
-            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
             call.prompt('port', default=5432, hide_input=False, type=click.INT),
             call.prompt('user (dev username)', default=None, hide_input=False, type=None),
             call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
             call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
-            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
         ])
 
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
@@ -96,26 +96,26 @@ test:
         manager.attach_mock(mock_prompt, 'prompt')
         manager.prompt.side_effect = [
             1,
-            4,
             'localhost',
             5432,
             'test_user',
             'test_password',
             'test_db',
             'test_schema',
+            4,
         ]
 
         self.run_dbt(['init'])
 
         manager.assert_has_calls([
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
-            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
             call.prompt('port', default=5432, hide_input=False, type=click.INT),
             call.prompt('user (dev username)', default=None, hide_input=False, type=None),
             call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
             call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
-            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT)
         ])
 
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
@@ -137,13 +137,13 @@ test:
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
     @mock.patch.object(Path, 'exists', autospec=True)
-    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_target_options(self, exists, mock_prompt, mock_confirm):
+    def test_postgres_init_task_in_project_without_existing_profiles_yml_or_profile_template(self, exists, mock_prompt, mock_confirm):
 
         def exists_side_effect(path):
             # Override responses on specific files, default to 'real world' if not overriden
             return {
                 'profiles.yml': False,
-                'target_options.yml': False,
+                'profile_template.yml': False,
             }.get(path.name, os.path.exists(path))
 
         exists.side_effect = exists_side_effect
@@ -199,38 +199,40 @@ test:
         exists.side_effect = exists_side_effect
 
         with open("profile_template.yml", 'w') as f:
-            f.write("""prompts:
-  - pg_username
-  - pg_password
-profile:
-  my_profile:
-    outputs:
-      dev:
-        type: postgres
-        threads: 4
-        host: localhost
-        port: 5432
-        user: "{{ pg_username }}"
-        pass: "{{ pg_password }}"
-        dbname: my_db
-        schema: my_schema
-    target: dev""")
+            f.write("""fixed:
+  type: postgres
+  threads: 4
+  host: localhost
+  dbname: my_db
+  schema: my_schema
+prompts:
+  port:
+    hint: 'The port (for integer test purposes)'
+    type: int
+    default: 5432
+  user:
+    hint: 'Your username'
+  pass:
+    hint: 'Your password'
+    hide_input: true""")
 
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
         manager.prompt.side_effect = [
+            5432,
             'test_username',
             'test_password'
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
-            call.prompt('pg_username'),
-            call.prompt('pg_password')
+            call.prompt('port (The port (for integer test purposes))', default=5432, hide_input=False, type=click.INT),
+            call.prompt('user (Your username)', default=None, hide_input=False, type=None),
+            call.prompt('pass (Your password)', default=None, hide_input=True, type=None)
         ])
 
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
-            assert f.read() == """my_profile:
+            assert f.read() == """test:
   outputs:
     dev:
       dbname: my_db
@@ -248,8 +250,8 @@ profile:
     @mock.patch('click.confirm')
     @mock.patch('click.prompt')
     def test_postgres_init_task_in_project_with_invalid_profile_template(self, mock_prompt, mock_confirm):
-        """Test that when an invalid profile_template.yml is provided,
-        init command falls back to the target_options.yml"""
+        """Test that when an invalid profile_template.yml is provided in the project,
+        init command falls back to the target's profile_template.yml"""
 
         with open("profile_template.yml", 'w') as f:
             f.write("""invalid template""")
@@ -260,13 +262,13 @@ profile:
         manager.confirm.side_effect = ["y"]
         manager.prompt.side_effect = [
             1,
-            4,
             'localhost',
             5432,
             'test_username',
             'test_password',
             'test_db',
             'test_schema',
+            4,
         ]
 
         self.run_dbt(['init'])
@@ -274,13 +276,13 @@ profile:
         manager.assert_has_calls([
             call.confirm(f"The profile test already exists in {os.path.join(self.test_root_dir, 'profiles.yml')}. Continue and overwrite it?"),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
-            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
             call.prompt('port', default=5432, hide_input=False, type=click.INT),
             call.prompt('user (dev username)', default=None, hide_input=False, type=None),
             call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
             call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
-            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT)
         ])
 
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
@@ -315,25 +317,25 @@ test:
         manager.prompt.side_effect = [
             project_name,
             1,
-            4,
             'localhost',
             5432,
             'test_username',
             'test_password',
             'test_db',
             'test_schema',
+            4,
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
             call.prompt('What is the desired project name?'),
             call.prompt("Which database would you like to use?\n[1] postgres\n\n(Don't see the one you want? https://docs.getdbt.com/docs/available-adapters)\n\nEnter a number", type=click.INT),
-            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
             call.prompt('host (hostname for the instance)', default=None, hide_input=False, type=None),
             call.prompt('port', default=5432, hide_input=False, type=click.INT),
             call.prompt('user (dev username)', default=None, hide_input=False, type=None),
             call.prompt('pass (dev password)', default=None, hide_input=True, type=None),
             call.prompt('dbname (default database that dbt will build objects in)', default=None, hide_input=False, type=None),
-            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None)
+            call.prompt('schema (default schema that dbt will build objects in)', default=None, hide_input=False, type=None),
+            call.prompt('threads (1 or more)', default=1, hide_input=False, type=click.INT),
         ])
 
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
