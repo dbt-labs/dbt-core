@@ -517,7 +517,7 @@ class TestTests(BasePPTest):
     @use_profile('postgres')
     def test_postgres_pp_generic_tests(self):
 
-        # initial run 
+        # initial runs
         self.setup_directories()
         self.copy_file('test-files/orders.sql', 'models/orders.sql')
         self.copy_file('test-files/generic_schema.yml', 'models/schema.yml')
