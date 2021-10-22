@@ -5,9 +5,11 @@
 - Switch `unique_field` from abstractproperty to optional property. Add docstring ([#4025](https://github.com/dbt-labs/dbt-core/issues/4025), [#4028](https://github.com/dbt-labs/dbt-core/pull/4028))
 - Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
 - Include only relational nodes in `database_schema_set` ([#4063](https://github.com/dbt-labs/dbt-core/issues/4063), [#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
+- Prefer macros defined in the project over the ones in a package by default ([#4106](https://github.com/dbt-labs/dbt-core/issues/4106), [#4114](https://github.com/dbt-labs/dbt-core/pull/4114)) 
 
 Contributors:
 - [@ljhopkins2](https://github.com/ljhopkins2) ([#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
+- [@JCZuurmond](https://github.com/jczuurmond) ([#4114](https://github.com/dbt-labs/dbt-core/pull/4114))
 
 ## dbt 0.21.0 (October 04, 2021)
 
