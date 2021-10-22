@@ -152,10 +152,7 @@ class InitTask(BaseTask):
                     type = click_type_mapping[value.get("type", None)]
                     text = key + (f" ({hint})" if hint else "")
                     target[key] = click.prompt(
-                        text,
-                        default=default,
-                        hide_input=hide_input,
-                        type=type
+                        text, default=default, hide_input=hide_input, type=type
                     )
         return target
 
