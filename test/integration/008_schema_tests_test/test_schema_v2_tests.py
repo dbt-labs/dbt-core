@@ -204,7 +204,7 @@ class TestDefaultBoolType(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_limit_schema_tests(self):
-        results = self.run_dbt()
+        results = self.run_dbt(strict=False)
         self.assertEqual(len(results), 3)
         test_results = self.run_schema_validations()
         self.assertEqual(len(test_results), 3)
@@ -275,7 +275,7 @@ class TestOtherBoolType(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_limit_schema_tests(self):
-        results = self.run_dbt()
+        results = self.run_dbt(strict=False)
         self.assertEqual(len(results), 3)
         test_results = self.run_schema_validations()
         self.assertEqual(len(test_results), 3)
