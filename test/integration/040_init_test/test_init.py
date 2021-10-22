@@ -199,38 +199,38 @@ test:
         exists.side_effect = exists_side_effect
 
         with open("profile_template.yml", 'w') as f:
-            f.write("""prompts:
-  - pg_username
-  - pg_password
-profile:
-  my_profile:
-    outputs:
-      dev:
-        type: postgres
-        threads: 4
-        host: localhost
-        port: 5432
-        user: "{{ pg_username }}"
-        pass: "{{ pg_password }}"
-        dbname: my_db
-        schema: my_schema
-    target: dev""")
+            f.write("""_fixed_type: postgres
+_fixed_threads: 4
+_fixed_host: localhost
+port:
+  hint: 'The port (for integer test purposes)'
+  type: int
+  default: 5432
+user:
+  hint: 'Your username'
+pass:
+  hint: 'Your password'
+  hide_input: true
+_fixed_dbname: my_db
+_fixed_schema: my_schema""")
 
         manager = Mock()
         manager.attach_mock(mock_prompt, 'prompt')
         manager.attach_mock(mock_confirm, 'confirm')
         manager.prompt.side_effect = [
+            5432,
             'test_username',
             'test_password'
         ]
         self.run_dbt(['init'])
         manager.assert_has_calls([
-            call.prompt('pg_username'),
-            call.prompt('pg_password')
+            call.prompt('port (The port (for integer test purposes))', default=5432, hide_input=False, type=click.INT),
+            call.prompt('user (Your username)', default=None, hide_input=False, type=None),
+            call.prompt('pass (Your password)', default=None, hide_input=True, type=None)
         ])
 
         with open(os.path.join(self.test_root_dir, 'profiles.yml'), 'r') as f:
-            assert f.read() == """my_profile:
+            assert f.read() == """test:
   outputs:
     dev:
       dbname: my_db

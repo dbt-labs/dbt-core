@@ -7,7 +7,6 @@ from typing import Optional
 
 import yaml
 import click
-from jinja2 import Template
 
 import dbt.config
 import dbt.clients.system
@@ -63,7 +62,7 @@ class InitTask(BaseTask):
     def create_profiles_dir(self, profiles_dir: str) -> bool:
         """Create the user's profiles directory if it doesn't already exist."""
         profiles_path = Path(profiles_dir)
-        if profiles_path.exists():
+        if not profiles_path.exists():
             msg = "Creating dbt configuration folder at {}"
             logger.info(msg.format(profiles_dir))
             dbt.clients.system.make_directory(profiles_dir)
@@ -165,11 +164,10 @@ class InitTask(BaseTask):
 
     def write_profile(
         self, profile: dict, profile_name: str
-    ) -> Path:
+    ):
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
         # Create the profile directory if it doesn't exist
-        os.makedirs(flags.PROFILES_DIR, exist_ok=True)
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         if profiles_filepath.exists():
             with open(profiles_filepath, "r+") as f:
@@ -182,7 +180,6 @@ class InitTask(BaseTask):
             profiles = {profile_name: profile}
             with open(profiles_filepath, "w") as f:
                 yaml.dump(profiles, f)
-        return profiles_filepath
 
     def create_profile_from_target_options(self, target_options: dict, profile_name: str):
         """Create and write a profile using the supplied target_options."""
@@ -193,11 +190,7 @@ class InitTask(BaseTask):
             },
             "target": "dev"
         }
-        profiles_filepath = self.write_profile(profile, profile_name)
-        logger.info(
-            f"Profile {profile_name} written to {profiles_filepath} using "
-            "your supplied values. Run 'dbt debug' to validate the connection."
-        )
+        self.write_profile(profile, profile_name)
 
     def create_profile_from_scratch(self, adapter: str, profile_name: str):
         """Create a profile without defaults using target_options.yml if available, or
@@ -211,6 +204,11 @@ class InitTask(BaseTask):
             with open(target_options_path) as f:
                 target_options = yaml.safe_load(f)
             self.create_profile_from_target_options(target_options, profile_name)
+            profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
+            logger.info(
+                f"Profile {profile_name} written to {profiles_filepath} using "
+                "your supplied values. Run 'dbt debug' to validate the connection."
+            )
         else:
             # For adapters without a target_options.yml defined, fallback on
             # sample_profiles.yml
@@ -237,24 +235,15 @@ class InitTask(BaseTask):
         else:
             return True
 
-    def create_profile_using_profile_template(self):
+    def create_profile_using_profile_template(self, profile_name):
         """Create a profile using profile_template.yml"""
         with open("profile_template.yml") as f:
             profile_template = yaml.safe_load(f)
-        profile_name = list(profile_template["profile"].keys())[0]
-        self.check_if_can_write_profile(profile_name)
-        render_vars = {}
-        for template_variable in profile_template["prompts"]:
-            render_vars[template_variable] = click.prompt(template_variable)
-        profile = profile_template["profile"][profile_name]
-        profile_str = yaml.dump(profile)
-        profile_str = Template(profile_str).render(render_vars)
-        profile = yaml.safe_load(profile_str)
-        profiles_filepath = self.write_profile(profile, profile_name)
+        self.create_profile_from_target_options(profile_template, profile_name)
+        profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         logger.info(
-            f"Profile {profile_name} written to {profiles_filepath} using "
-            "profile_template.yml and your supplied values. Run 'dbt debug' "
-            "to validate the connection."
+            f"Profile {profile_name} written to {profiles_filepath} using profile_template.yml"
+            "and your supplied values. Run 'dbt debug' to validate the connection."
         )
 
     def ask_for_adapter_choice(self) -> str:
@@ -285,12 +274,14 @@ class InitTask(BaseTask):
             # just setup the user's profile.
             logger.info("Setting up your profile.")
             profile_name = self.get_profile_name_from_current_project()
+            # If a profile_template.yml exists in the project root, that effectively
+            # overrides the target_options.yml for the given target.
             profile_template_path = Path("profile_template.yml")
             if profile_template_path.exists():
                 try:
                     # This relies on a valid profile_template.yml from the user,
                     # so use a try: except to fall back to the default on failure
-                    self.create_profile_using_profile_template()
+                    self.create_profile_using_profile_template(profile_name)
                     return
                 except Exception:
                     logger.info("Invalid profile_template.yml in project.")
