@@ -125,12 +125,7 @@ class InitTask(BaseTask):
         )
 
     def generate_target_from_input(self, profile_template: dict, target: dict = {}) -> dict:
-        self,
-        profile_template: dict,
-        target: dict = {}
-    ) -> dict:
-        """Generate a target configuration from profile_template and user input.
-        """
+        """Generate a target configuration from profile_template and user input."""
         profile_template_local = copy.deepcopy(profile_template)
         for key, value in profile_template_local.items():
             if key.startswith("_choose"):
@@ -172,9 +167,7 @@ class InitTask(BaseTask):
             dbt_project = yaml.safe_load(f)
         return dbt_project["profile"]
 
-    def write_profile(
-        self, profile: dict, profile_name: str
-    ):
+    def write_profile(self, profile: dict, profile_name: str):
         """Given a profile, write it to the current project's profiles.yml.
         This will overwrite any profile with a matching name."""
         # Create the profile directory if it doesn't exist
@@ -303,9 +296,7 @@ class InitTask(BaseTask):
                 except Exception:
                     fire_event(InvalidProfileTemplateYAML())
             adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_target(
-                adapter, profile_name=profile_name
-            )
+            self.create_profile_from_target(adapter, profile_name=profile_name)
             return
 
         # When dbt init is run outside of an existing project,
@@ -329,8 +320,6 @@ class InitTask(BaseTask):
             if not self.check_if_can_write_profile(profile_name=project_name):
                 return
             adapter = self.ask_for_adapter_choice()
-            self.create_profile_from_target(
-                adapter, profile_name=project_name
-            )
+            self.create_profile_from_target(adapter, profile_name=project_name)
             msg = self.get_addendum(project_name, profiles_dir)
             fire_event(GetAddendum(msg=msg))
