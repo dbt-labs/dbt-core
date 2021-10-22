@@ -24,6 +24,7 @@ Contributors:
 - [@matt-winkler](https://github.com/matt-winkler) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
 - [@NiallRees](https://github.com/NiallRees) ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
 - [@rvacaru](https://github.com/rvacaru) ([#3908](https://github.com/dbt-labs/dbt/pull/3908))
+- [@JCZuurmond](https://github.com/jczuurmond) ([#4114](https://github.com/dbt-labs/dbt-core/pull/4114))
 
 ## dbt-core 1.0.0b1 (October 11, 2021)
 
