@@ -183,8 +183,8 @@ class InitTask(BaseTask):
 
     def create_profile_from_profile_template(self, profile_template: dict, profile_name: str):
         """Create and write a profile using the supplied profile_template."""
-        initial_target = profile_template.get('fixed', {})
-        prompts = profile_template.get('prompts', {})
+        initial_target = profile_template.get("fixed", {})
+        prompts = profile_template.get("prompts", {})
         target = self.generate_target_from_input(prompts, initial_target)
         profile = {"outputs": {"dev": target}, "target": "dev"}
         self.write_profile(profile, profile_name)
