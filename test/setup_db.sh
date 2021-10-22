@@ -30,7 +30,7 @@ if [[ -n $CIRCLECI ]]; then
 fi
 
 for i in {1..10}; do
-	if $(pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}") ; then
+	if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" ; then
 		break
 	fi
 
