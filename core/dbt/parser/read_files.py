@@ -120,7 +120,7 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
         else:
             if parse_file_type == ParseFileType.SingularTest:
                 path = pathlib.Path(fp.relative_path)
-                if path.parts[0] == 'generic':
+                if path.parts[0] == "generic":
                     continue
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
