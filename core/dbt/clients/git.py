@@ -11,12 +11,14 @@ def _is_commit(revision: str) -> bool:
     # match SHA-1 git commit
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
 
+
 def _raise_git_cloning_error(repo, revision, error):
     stderr = error.stderr.decode('utf-8').strip()
     if 'usage: git' in stderr:
         stderr = stderr.split('\nusage: git')[0]
 
     dbt.exceptions.bad_package_spec(repo, revision, stderr)
+
 
 def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None):
     has_revision = revision is not None
@@ -46,8 +48,6 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
         result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
     except dbt.exceptions.CommandResultError as exc:
         _raise_git_cloning_error(repo, revision, exc)
-    except:
-        raise
 
     if subdirectory:
         cwd_subdir = os.path.join(cwd, dirname or '')
@@ -56,8 +56,6 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
             run_cmd(cwd_subdir, clone_cmd_subdir)
         except dbt.exceptions.CommandResultError as exc:
             _raise_git_cloning_error(repo, revision, exc)
-        except:
-            raise
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, '.git'))
