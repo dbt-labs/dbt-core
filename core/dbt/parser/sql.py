@@ -37,10 +37,10 @@ class SqlBlockParser(SimpleSQLParser[ParsedSqlNode]):
         if not isinstance(block, SqlBlock):
             raise InternalException(
                 'While parsing SQL operation, got an actual file block instead of '
-                'an RPC block: {}'.format(block)
+                'an SQL block: {}'.format(block)
             )
 
-        return os.path.join('rpc', block.name)
+        return os.path.join('sql', block.name)
 
     def parse_remote(self, sql: str, name: str) -> ParsedSqlNode:
         source_file = SourceFile.remote(sql, self.project.project_name)

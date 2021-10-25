@@ -79,8 +79,7 @@ def compile_sql(manifest, project_path, sql):
 
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
     runner = SqlCompileRunner(config, adapter, node, 1, 1)
-    compiled = runner.compile(manifest)
-    return runner.execute(compiled, manifest)
+    return runner.safe_run(manifest)
 
 
 def execute_sql(manifest, project_path, sql):
@@ -88,8 +87,8 @@ def execute_sql(manifest, project_path, sql):
 
     config, node, adapter = _get_operation_node(manifest, project_path, sql)
     runner = SqlExecuteRunner(config, adapter, node, 1, 1)
-    compiled = runner.compile(manifest)
-    return runner.execute(compiled, manifest)
+    # TODO: use same interface for runner
+    return runner.safe_run(manifest)
 
 
 def parse_to_manifest(config):

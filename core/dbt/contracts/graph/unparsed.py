@@ -60,6 +60,7 @@ class UnparsedNode(UnparsedBaseNode, HasSQL):
         NodeType.Operation,
         NodeType.Seed,
         NodeType.RPCCall,
+        NodeType.SqlOperation,
     ]})
 
     @property

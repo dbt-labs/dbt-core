@@ -11,7 +11,6 @@ from dbt.contracts.sql import (
 )
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.task.compile import CompileRunner
-# from dbt.rpc.error import dbt_error, RPCException, server_error
 
 
 SQLResult = TypeVar('SQLResult', bound=RemoteCompileResultMixin)
@@ -28,7 +27,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt.exceptions.RuntimeException):
                 e.add_node(ctx.node)
-            return dbt_error(e)
+            return e
 
     def before_execute(self):
         pass
