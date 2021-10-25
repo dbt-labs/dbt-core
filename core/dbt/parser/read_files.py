@@ -1,3 +1,4 @@
+import pathlib
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
@@ -95,10 +96,11 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
             fb_list.append(load_seed_source_file(fp, project.project_name))
         # singular tests live in /tests but only generic tests live
         # in /tests/generic so we want to skip those
-        elif (parse_file_type == ParseFileType.SingularTest and
-              'generic/' in fp.relative_path):
-            continue
         else:
+            if parse_file_type == ParseFileType.SingularTest:
+                path = pathlib.Path(fp.relative_path)
+                if path.parts[0] == 'generic':
+                    continue
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
             if file:
