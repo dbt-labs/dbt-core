@@ -16,6 +16,8 @@ def _raise_git_cloning_error(repo, revision, error):
     stderr = error.stderr.decode('utf-8').strip()
     if 'usage: git' in stderr:
         stderr = stderr.split('\nusage: git')[0]
+    if re.match("fatal: destination path '(.+)' already exists", stderr):
+        raise error
 
     dbt.exceptions.bad_package_spec(repo, revision, stderr)
 
