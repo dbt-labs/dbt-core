@@ -523,6 +523,9 @@ class TestTests(BasePPTest):
         self.copy_file('test-files/generic_schema.yml', 'models/schema.yml')
         results = self.run_dbt()
         self.assertEqual(len(results), 1)
+        manifest = get_manifest()
+        expected_nodes = ['model.test.orders', 'test.test.unique_orders_id.1360ecc70e']
+        self.assertCountEqual(expected_nodes, list(manifest.nodes.keys()))
 
         # add generic test in test-path
         self.copy_file('test-files/generic_test.sql', 'tests/generic/generic_test.sql')
@@ -532,7 +535,8 @@ class TestTests(BasePPTest):
         manifest = get_manifest()
         test_id = 'test.test.is_odd_orders_id.82834fdc5b'
         self.assertIn(test_id, manifest.nodes)
-        self.assertEqual(len(manifest.nodes), 3)
+        expected_nodes = ['model.test.orders', 'test.test.unique_orders_id.1360ecc70e', 'test.test.is_odd_orders_id.82834fdc5b']
+        self.assertCountEqual(expected_nodes, list(manifest.nodes.keys()))
 
         # edit generic test in test-path
         self.copy_file('test-files/generic_test_edited.sql', 'tests/generic/generic_test.sql')
@@ -541,4 +545,5 @@ class TestTests(BasePPTest):
         manifest = get_manifest()
         test_id = 'test.test.is_odd_orders_id.82834fdc5b'
         self.assertIn(test_id, manifest.nodes)
-        self.assertEqual(len(manifest.nodes), 3)
+        expected_nodes = ['model.test.orders', 'test.test.unique_orders_id.1360ecc70e', 'test.test.is_odd_orders_id.82834fdc5b']
+        self.assertCountEqual(expected_nodes, list(manifest.nodes.keys()))
