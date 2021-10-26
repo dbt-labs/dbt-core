@@ -41,7 +41,7 @@ class BasePPTest(DBTIntegrationTest):
         # delete files in this directory without tests interfering with each other.
         os.mkdir(os.path.join(self.test_root_dir, 'models'))
         os.mkdir(os.path.join(self.test_root_dir, 'tests'))
-        os.mkdir(os.path.join(self.test_root_dir, 'tests/generic'))
+        os.mkdir(os.path.join(self.test_root_dir, 'tests', 'generic'))
         os.mkdir(os.path.join(self.test_root_dir, 'seeds'))
         os.mkdir(os.path.join(self.test_root_dir, 'macros'))
         os.mkdir(os.path.join(self.test_root_dir, 'analyses'))
