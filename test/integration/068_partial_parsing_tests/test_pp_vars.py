@@ -84,3 +84,5 @@ class EnvVarTest(BasePPTest):
         self.assertEqual(expected_env_vars, manifest.env_vars)
         self.assertNotEqual(model_created_at, manifest.nodes[model_id].created_at)
 
+        # delete the env var to cleanup
+        del os.environ['ENV_VAR_TEST']
