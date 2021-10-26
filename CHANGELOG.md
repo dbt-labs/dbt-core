@@ -27,6 +27,7 @@ Contributors:
 - Wait for postgres docker container to be ready in `setup_db.sh`. ([#3876](https://github.com/dbt-labs/dbt-core/issues/3876), [#3908](https://github.com/dbt-labs/dbt-core/pull/3908))
 - Prefer macros defined in the project over the ones in a package by default ([#4106](https://github.com/dbt-labs/dbt-core/issues/4106), [#4114](https://github.com/dbt-labs/dbt-core/pull/4114)) 
 - Dependency updates ([#4079](https://github.com/dbt-labs/dbt-core/pull/4079)), ([#3532](https://github.com/dbt-labs/dbt-core/pull/3532)
+- Schedule partial parsing for SQL files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4101](https://github.com/dbt-labs/dbt-core/pull/4101))
 
 Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))

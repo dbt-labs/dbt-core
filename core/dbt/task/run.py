@@ -20,7 +20,7 @@ from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
-from dbt.context.providers import generate_runtime_model
+from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
@@ -225,7 +225,7 @@ class ModelRunner(CompileRunner):
         raise CompilationException(msg, node=model)
 
     def execute(self, model, manifest):
-        context = generate_runtime_model(
+        context = generate_runtime_model_context(
             model, self.config, manifest
         )
 

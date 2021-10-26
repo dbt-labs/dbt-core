@@ -17,8 +17,7 @@ from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfig,
 )
-from dbt.context.configured import generate_schema_yml
-from dbt.context.target import generate_target_context
+from dbt.context.configured import generate_schema_yml_context
 from dbt.context.providers import (
     generate_parse_exposure, generate_test_context
 )
@@ -168,18 +167,10 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         self, project, manifest, root_project,
     ) -> None:
         super().__init__(project, manifest, root_project)
-        all_v_2 = (
-            self.root_project.config_version == 2 and
-            self.project.config_version == 2
+
+        self.render_ctx = generate_schema_yml_context(
+            self.root_project, self.project.project_name
         )
-        if all_v_2:
-            self.render_ctx = generate_schema_yml(
-                self.root_project, self.project.project_name
-            )
-        else:
-            self.render_ctx = generate_target_context(
-                self.root_project, self.root_project.cli_vars
-            )
 
         self.raw_renderer = SchemaYamlRenderer(self.render_ctx)
 

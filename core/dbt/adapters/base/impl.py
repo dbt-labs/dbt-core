@@ -968,10 +968,10 @@ class BaseAdapter(metaclass=AdapterMeta):
                 'dbt could not find a macro with the name "{}" in {}'
                 .format(macro_name, package_name)
             )
-        # This causes a reference cycle, as generate_runtime_macro()
+        # This causes a reference cycle, as generate_runtime_macro_context()
         # ends up calling get_adapter, so the import has to be here.
-        from dbt.context.providers import generate_runtime_macro
-        macro_context = generate_runtime_macro(
+        from dbt.context.providers import generate_runtime_macro_context
+        macro_context = generate_runtime_macro_context(
             macro=macro,
             config=self.config,
             manifest=manifest,

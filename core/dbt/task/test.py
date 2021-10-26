@@ -17,7 +17,7 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
-from dbt.context.providers import generate_runtime_model
+from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
     InternalException,
@@ -75,7 +75,7 @@ class TestRunner(CompileRunner):
         test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
         manifest: Manifest
     ) -> TestResultData:
-        context = generate_runtime_model(
+        context = generate_runtime_model_context(
             test, self.config, manifest
         )
 

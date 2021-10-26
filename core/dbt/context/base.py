@@ -160,9 +160,12 @@ class Var:
 
 
 class BaseContext(metaclass=ContextMeta):
+    # subclass is TargetContext
     def __init__(self, cli_vars):
         self._ctx = {}
         self.cli_vars = cli_vars
+        # Save the env_vars encountered using this
+        self.env_vars = {}
 
     def generate_builtins(self):
         builtins: Dict[str, Any] = {}
@@ -271,17 +274,21 @@ class BaseContext(metaclass=ContextMeta):
         return Var(self._ctx, self.cli_vars)
 
     @contextmember
-    @staticmethod
-    def env_var(var: str, default: Optional[str] = None) -> str:
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
         """The env_var() function. Return the environment variable named 'var'.
         If there is no such environment variable set, return the default.
 
         If the default is None, raise an exception for an undefined variable.
         """
+        return_value = None
         if var in os.environ:
-            return os.environ[var]
+            return_value = os.environ[var]
         elif default is not None:
-            return default
+            return_value = default
+
+        if return_value is not None:
+            self.env_vars[var] = return_value
+            return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
             undefined_error(msg)

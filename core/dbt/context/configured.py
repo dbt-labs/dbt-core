@@ -9,6 +9,7 @@ from dbt.context.target import TargetContext
 
 
 class ConfiguredContext(TargetContext):
+    # subclasses are SchemaYamlContext, MacroResolvingContext, ManifestContext
     config: AdapterRequiredConfig
 
     def __init__(
@@ -64,6 +65,7 @@ class ConfiguredVar(Var):
 
 
 class SchemaYamlContext(ConfiguredContext):
+    # subclass is DocsRuntimeContext
     def __init__(self, config, project_name: str):
         super().__init__(config)
         self._project_name = project_name
@@ -86,7 +88,7 @@ class MacroResolvingContext(ConfiguredContext):
         )
 
 
-def generate_schema_yml(
+def generate_schema_yml_context(
     config: AdapterRequiredConfig, project_name: str
 ) -> Dict[str, Any]:
     ctx = SchemaYamlContext(config, project_name)
