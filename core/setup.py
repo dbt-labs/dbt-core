@@ -20,8 +20,8 @@ except ImportError:
 
 
 # use README from repository root
-this_directory = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-with open(os.path.join(this_directory, 'README.md')) as f:
+root_directory = os.path.abspath(os.path.join(os.path.dirname(__file__),'..'))
+with open(os.path.join(root_directory, 'README.md')) as f:
     long_description = f.read()
 
 
