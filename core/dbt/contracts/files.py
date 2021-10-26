@@ -255,7 +255,7 @@ class SchemaSourceFile(BaseSourceFile):
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
         # Remove partial parsing specific data
-        for key in ('pp_test_index', 'pp_dict'):
+        for key in ("pp_test_index", "pp_dict"):
             if key in dct:
                 del dct[key]
         return dct

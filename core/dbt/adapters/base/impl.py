@@ -904,6 +904,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         # This causes a reference cycle, as generate_runtime_macro_context()
         # ends up calling get_adapter, so the import has to be here.
         from dbt.context.providers import generate_runtime_macro_context
+
         macro_context = generate_runtime_macro_context(
             macro=macro,
             config=self.config,
