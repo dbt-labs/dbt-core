@@ -40,11 +40,6 @@ setup(
     author="dbt Labs",
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
-    packages=[],
-    install_requires=[
-        'dbt-core=={}'.format(package_version),
-        'dbt-postgres=={}'.format(package_version),
-    ],
     zip_safe=False,
     classifiers=[
         'Development Status :: 5 - Production/Stable',
@@ -62,3 +57,13 @@ setup(
     ],
     python_requires=">=3.6.2",
 )
+
+
+print('')
+print('As of v1.0.0, `pip install dbt` is no longer supported.')
+print('Instead, please use either:')
+print('  - `pip install dbt-core`, for core functionality')
+print('  - `pip install dbt-<adapter>`, to use dbt with your database, platform, or query engine')
+print('See full list: https://docs.getdbt.com/docs/available-adapters')
+print('')
+sys.exit(1)

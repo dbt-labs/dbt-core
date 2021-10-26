@@ -19,21 +19,23 @@ except ImportError:
     sys.exit(1)
 
 
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+# use README from repository root
+this_directory = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+with open(os.path.join(this_directory, 'README.md')) as f:
+    long_description = f.read()
 
 
 package_name = "dbt-core"
 package_version = "1.0.0b2"
-description = """dbt (data build tool) is a command line tool that helps \
-analysts and engineers transform data in their warehouse more effectively"""
+description = """With dbt, data analysts and engineers can build analytics \
+the way engineers build applications."""
 
 
 setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description=description,
+    long_description=long_description,
     author="dbt Labs",
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
