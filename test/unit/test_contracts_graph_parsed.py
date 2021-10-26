@@ -1906,6 +1906,7 @@ def complex_parsed_source_definition_dict():
         },
         'freshness': {
             'warn_after': {'period': 'hour', 'count': 1},
+            'error_after': {}
         },
         'loaded_at_field': 'loaded_at',
         'unrendered_config': {},

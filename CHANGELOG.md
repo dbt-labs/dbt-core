@@ -1,5 +1,11 @@
 ## dbt-core 1.0.0 (Release TBD)
 
+### Features
+- Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
+
+Contributors:
+- [@kadero](https://github.com/kadero) ([3955](https://github.com/dbt-labs/dbt-core/pull/3955))
+
 ## dbt-core 1.0.0b2 (October 25, 2021)
 
 ### Breaking changes
