@@ -128,9 +128,7 @@ class TestRunner(CompileRunner):
     def execute_test(
         self, test: Union[CompiledSingularTestNode, CompiledGenericTestNode], manifest: Manifest
     ) -> TestResultData:
-        context = generate_runtime_model_context(
-            test, self.config, manifest
-        )
+        context = generate_runtime_model_context(test, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name,
