@@ -224,11 +224,7 @@ class ConfiguredParser(
             raise ParsingException(msg, node=node)
 
     def _context_for(self, parsed_node: IntermediateNode, config: ContextConfig) -> Dict[str, Any]:
-        self, parsed_node: IntermediateNode, config: ContextConfig
-    ) -> Dict[str, Any]:
-        return generate_parser_model_context(
-            parsed_node, self.root_project, self.manifest, config
-        )
+        return generate_parser_model_context(parsed_node, self.root_project, self.manifest, config)
 
     def render_with_context(self, parsed_node: IntermediateNode, config: ContextConfig):
         # Given the parsed node and a ContextConfig to use during parsing,
