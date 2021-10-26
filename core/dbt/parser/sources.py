@@ -22,7 +22,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     FreshnessThreshold,
     UnparsedColumn,
-    Time
+    Time,
 )
 from dbt.exceptions import warn_or_error, InternalException
 from dbt.node_types import NodeType
