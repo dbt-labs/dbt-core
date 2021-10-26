@@ -390,8 +390,9 @@ class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message='Error running command'):
         super().__init__(message)
         self.cwd = cwd
+        self.cmd = cmd
         for secret in get_secret_env():
-            self.cmd = str(cmd).replace(secret, "*****")
+            self.cmd = str(self.cmd).replace(secret, "*****")
         self.args = (cwd, cmd, message)
 
     def __str__(self):
