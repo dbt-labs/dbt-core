@@ -3,6 +3,7 @@ import functools
 from typing import NoReturn, Optional, Mapping, Any
 
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import get_secret_env
 from dbt.node_types import NodeType
 from dbt import flags
 from dbt.ui import line_wrap_message
@@ -389,7 +390,8 @@ class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message='Error running command'):
         super().__init__(message)
         self.cwd = cwd
-        self.cmd = cmd
+        for secret in get_secret_env():
+            self.cmd = str(cmd).replace(secret, "*****")
         self.args = (cwd, cmd, message)
 
     def __str__(self):
