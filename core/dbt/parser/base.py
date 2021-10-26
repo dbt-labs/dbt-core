@@ -78,9 +78,7 @@ class RelationUpdate:
         if macro is None:
             raise InternalException(f"No macro with name generate_{component}_name found")
 
-        root_context = generate_generate_name_macro_context(
-            macro, config, manifest
-        )
+        root_context = generate_generate_name_macro_context(macro, config, manifest)
         self.updater = MacroGenerator(macro, root_context)
         self.component = component
 
