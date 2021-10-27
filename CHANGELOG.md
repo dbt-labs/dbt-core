@@ -4,7 +4,7 @@
 - Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
 
 ### Fixes
-- Changes unit tests using assertRaisesRegexp to assertRaisesRegex
+- Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex`
 
 Contributors:
 - [@kadero](https://github.com/kadero) ([3955](https://github.com/dbt-labs/dbt-core/pull/3955))
