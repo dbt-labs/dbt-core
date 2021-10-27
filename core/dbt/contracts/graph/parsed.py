@@ -267,7 +267,7 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
             return ParsedSeedNode.from_dict(dct)
         elif resource_type == "rpc":
             return ParsedRPCNode.from_dict(dct)
-        elif resource_type == 'sql':
+        elif resource_type == "sql":
             return ParsedSqlNode.from_dict(dct)
         elif resource_type == "test":
             if "test_metadata" in dct:
@@ -372,7 +372,7 @@ class ParsedRPCNode(ParsedNode):
 
 @dataclass
 class ParsedSqlNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.SqlOperation]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
 def same_seeds(first: ParsedNode, second: ParsedNode) -> bool:

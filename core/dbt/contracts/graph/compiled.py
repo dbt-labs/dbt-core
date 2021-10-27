@@ -89,7 +89,7 @@ class CompiledRPCNode(CompiledNode):
 
 @dataclass
 class CompiledSqlNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.SqlOperation]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.SqlOperation]})
 
 
 @dataclass

@@ -12,7 +12,7 @@ class NodeType(StrEnum):
     Seed = "seed"
     # TODO: rm?
     RPCCall = "rpc"
-    SqlOperation = 'sql'
+    SqlOperation = "sql"
     Documentation = "docs"
     Source = 'source'
     Macro = "macro"
@@ -30,7 +30,7 @@ class NodeType(StrEnum):
             cls.Seed,
             cls.Documentation,
             cls.RPCCall,
-            cls.SqlOperation
+            cls.SqlOperation,
         ]
 
     @classmethod

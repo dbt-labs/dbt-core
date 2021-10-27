@@ -58,7 +58,7 @@ class UnparsedNode(UnparsedBaseNode, HasSQL):
                 NodeType.Test,
                 NodeType.Snapshot,
                 NodeType.Operation,
-        NodeType.SqlOperation,
+                NodeType.Seed,
                 NodeType.RPCCall,
                 NodeType.SqlOperation,
             ]
