@@ -1,7 +1,7 @@
 
 import dbt.logger as logger  # type: ignore # TODO eventually remove dependency on this logger
 from dbt.events.history import EVENT_HISTORY
-from dbt.events.types import *
+from dbt.events.types import *  # noqa: F403
 from dbt.events.types import ParsingProgressBase, ManifestProgressBase
 from typing import NoReturn
 

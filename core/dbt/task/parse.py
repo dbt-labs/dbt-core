@@ -13,7 +13,10 @@ from dbt.parser.manifest import (
 )
 from dbt.logger import DbtProcessState, print_timestamped_line
 from dbt.clients.system import write_file
-from dbt.events.types import *
+from dbt.events.types import (
+    ManifestDependenciesLoaded, ManifestLoaderCreated, ManifestLoaded, ManifestChecked,
+    ManifestFlatGraphBuilt, ParsingStart, ParsingCompiling, ParsingWritingManifest, ParsingDone
+)
 from dbt.events.functions import fire_event
 from dbt.graph import Graph
 import time
