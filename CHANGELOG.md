@@ -25,6 +25,7 @@ Contributors:
 - `dbt init` is now interactive, generating profiles.yml when run inside existing project ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
 
 ### Under the hood
+
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
 - Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
 - Remove connection from `render_with_context` during parsing, thereby removing misleading log message ([#3137](https://github.com/dbt-labs/dbt-core/issues/3137), [#4062](https://github.com/dbt-labas/dbt-core/pull/4062))
@@ -65,7 +66,6 @@ Contributors:
 - Fixed bug with `error_if` test option ([#4070](https://github.com/dbt-labs/dbt-core/pull/4070))
 
 ### Under the hood
-
 - Enact deprecation for `materialization-return` and replace deprecation warning with an exception. ([#3896](https://github.com/dbt-labs/dbt-core/issues/3896))
 - Build catalog for only relational, non-ephemeral nodes in the graph ([#3920](https://github.com/dbt-labs/dbt-core/issues/3920))
 - Enact deprecation to remove the `release` arg from the `execute_macro` method. ([#3900](https://github.com/dbt-labs/dbt-core/issues/3900))
@@ -94,6 +94,7 @@ Contributors:
 - Switch `unique_field` from abstractproperty to optional property. Add docstring ([#4025](https://github.com/dbt-labs/dbt/issues/4025), [#4028](https://github.com/dbt-labs/dbt/pull/4028))
 - Include only relational nodes in `database_schema_set` ([#4063](https://github.com/dbt-labs/dbt-core/issues/4063), [#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
 - Added support for tests on databases that lack real boolean types. ([#4084](https://github.com/dbt-labs/dbt-core/issues/4084))
+- Scrub secrets coming from `CommandError`s so they don't get exposed in logs. ([#4138](https://github.com/dbt-labs/dbt-core/pull/4138))
 
 Contributors:
 - [@ljhopkins2](https://github.com/ljhopkins2) ([#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
