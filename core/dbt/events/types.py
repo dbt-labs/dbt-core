@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from typing import Union
 
 
 # The following classes represent the data necessary to describe a
@@ -8,12 +9,41 @@ from abc import ABCMeta, abstractmethod
 # that the necessary methods are defined.
 
 
-# top-level superclass for all events
-class Event():
+# Hierarchy for log levels. Applies to all events, not just events
+# where the destination is a log file.
+Level = Union[TestLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel]
+
+
+# in preparation for #3977
+class TestLevel():
     pass
 
 
-class CliEventABC(Event, metaclass=ABCMeta):
+class DebugLevel():
+    pass
+
+
+class InfoLevel():
+    pass
+
+
+class WarnLevel():
+    pass
+
+
+class ErrorLevel():
+    pass
+
+
+
+# top-level superclass for all events
+class Event(metaclass=ABCMeta):
+    @abstractmethod
+    def level(self) -> Level:
+        raise Exception("level not implemented for event")
+
+
+class CliEventABC(metaclass=ABCMeta):
     # Solely the human readable message. Timestamps and formatting will be added by the logger
     @abstractmethod
     def cli_msg(self) -> str:
@@ -21,8 +51,9 @@ class CliEventABC(Event, metaclass=ABCMeta):
 
 
 # base class used for type-level membership checking only
-class ParsingProgressBase():
-    pass
+class ParsingProgressBase(Event):
+    def level(self):
+        return InfoLevel()
 
 
 class ParsingStart(CliEventABC, ParsingProgressBase):
@@ -46,8 +77,9 @@ class ParsingDone(CliEventABC, ParsingProgressBase):
 
 
 # base class used for type-level membership checking only
-class ManifestProgressBase():
-    pass
+class ManifestProgressBase(Event):
+    def level(self):
+        return InfoLevel()
 
 
 class ManifestDependenciesLoaded(CliEventABC, ManifestProgressBase):
