@@ -331,7 +331,7 @@
        
             {% for column in add_columns %}
                add column {{ column.name }} {{ column.data_type }}{{ ',' if not loop.last }}
-            {% endfor %}{{ ',' if remove_columns | length > 0 }}
+            {% endfor %}{{ ',' if add_columns and remove_columns }}
             
             {% for column in remove_columns %}
                 drop column {{ column.name }}{{ ',' if not loop.last }}
