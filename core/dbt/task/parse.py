@@ -15,7 +15,8 @@ from dbt.logger import DbtProcessState, print_timestamped_line
 from dbt.clients.system import write_file
 from dbt.events.types import (
     ManifestDependenciesLoaded, ManifestLoaderCreated, ManifestLoaded, ManifestChecked,
-    ManifestFlatGraphBuilt, ParsingStart, ParsingCompiling, ParsingWritingManifest, ParsingDone
+    ManifestFlatGraphBuilt, ParsingStart, ParsingCompiling, ParsingWritingManifest, ParsingDone,
+    ReportPerformancePath
 )
 from dbt.events.functions import fire_event
 from dbt.graph import Graph
@@ -45,7 +46,7 @@ class ParseTask(ConfiguredTask):
         path = os.path.join(self.config.target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self.loader._perf_info,
                                     cls=dbt.utils.JSONEncoder, indent=4))
-        print_timestamped_line(f"Performance info: {path}")
+        fire_event(ReportPerformancePath(path=path))
 
     # This method takes code that normally exists in other files
     # and pulls it in here, to simplify logging and make the
