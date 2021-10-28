@@ -95,6 +95,7 @@ Contributors:
 - Include only relational nodes in `database_schema_set` ([#4063](https://github.com/dbt-labs/dbt-core/issues/4063), [#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
 - Added support for tests on databases that lack real boolean types. ([#4084](https://github.com/dbt-labs/dbt-core/issues/4084))
 - Scrub secrets coming from `CommandError`s so they don't get exposed in logs. ([#4138](https://github.com/dbt-labs/dbt-core/pull/4138))
+- Syntax fix in `alter_relation_add_remove_columns` if only removing columns in `on_schema_change: sync_all_columns` ([#4147](https://github.com/dbt-labs/dbt-core/issues/4147))
 
 Contributors:
 - [@ljhopkins2](https://github.com/ljhopkins2) ([#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
