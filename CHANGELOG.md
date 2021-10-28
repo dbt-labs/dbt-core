@@ -9,6 +9,7 @@
 - Added support for tests on databases that lack real boolean types. ([#4084](https://github.com/dbt-labs/dbt-core/issues/4084))
 - Prefer macros defined in the project over the ones in a package by default ([#4106](https://github.com/dbt-labs/dbt-core/issues/4106), [#4114](https://github.com/dbt-labs/dbt-core/pull/4114))
 - Scrub secrets coming from `CommandError`s so they don't get exposed in logs. ([#4138](https://github.com/dbt-labs/dbt-core/pull/4138))
+- Syntax fix in `alter_relation_add_remove_columns` if only removing columns in `on_schema_change: sync_all_columns` ([#4147](https://github.com/dbt-labs/dbt-core/issues/4147), [#4148](https://github.com/dbt-labs/dbt-core/pull/4148))
 
 
 Contributors:
