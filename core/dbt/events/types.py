@@ -1,5 +1,4 @@
 from abc import ABCMeta, abstractmethod
-from typing import Union
 
 
 # types to represent log levels
@@ -30,11 +29,6 @@ class ErrorLevel():
         return "error"
 
 
-# Hierarchy for log levels. Applies to all events, not just events
-# where the destination is a log file.
-Level = Union[TestLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel]
-
-
 # The following classes represent the data necessary to describe a
 # particular event to both human readable logs, and machine reliable
 # event streams. classes extend superclasses that indicate what
@@ -51,7 +45,7 @@ class Event(metaclass=ABCMeta):
 
 
 class CliEventABC(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger
+    # Solely the human readable message. Timestamps and formatting will be added by the logger.
     @abstractmethod
     def cli_msg(self) -> str:
         raise Exception("cli_msg not implemented for cli event")

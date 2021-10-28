@@ -1,17 +1,7 @@
 
 import dbt.logger as logger  # type: ignore # TODO eventually remove dependency on this logger
 from dbt.events.history import EVENT_HISTORY
-from dbt.events.types import (
-    CliEventABC, Event, Level, TestLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel
-)
-from typing import NoReturn
-
-
-# common trick for getting mypy to do exhaustiveness checks
-# will come up with something like `"assert_never" has incompatible type`
-# if something is missing.
-def assert_never(x: NoReturn) -> NoReturn:
-    raise AssertionError("Unhandled type: {}".format(type(x).__name__))
+from dbt.events.types import CliEventABC, Event
 
 
 # top-level method for accessing the new eventing system
