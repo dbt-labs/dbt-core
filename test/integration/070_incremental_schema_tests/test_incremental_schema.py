@@ -1,7 +1,7 @@
 from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 
 
-class TestSelectionExpansion(DBTIntegrationTest):
+class TestIncrementalSchemaChange(DBTIntegrationTest):
     @property
     def schema(self):
         return "test_incremental_schema_069"
