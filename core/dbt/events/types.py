@@ -39,71 +39,57 @@ Level = Union[TestLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel]
 
 # top-level superclass for all events
 class Event(metaclass=ABCMeta):
-    @abstractmethod
-    def level(self) -> Level:
-        raise Exception("level not implemented for event")
+    pass
 
 
-class CliEventABC(metaclass=ABCMeta):
+class CliEventABC(Event, metaclass=ABCMeta):
     # Solely the human readable message. Timestamps and formatting will be added by the logger
     @abstractmethod
     def cli_msg(self) -> str:
         raise Exception("cli_msg not implemented for cli event")
 
 
-# base class used for type-level membership checking only
-class ParsingProgressBase(Event):
-    def level(self):
-        return InfoLevel()
-
-
-class ParsingStart(CliEventABC, ParsingProgressBase):
+class ParsingStart(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Start parsing."
 
 
-class ParsingCompiling(CliEventABC, ParsingProgressBase):
+class ParsingCompiling(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Compiling."
 
 
-class ParsingWritingManifest(CliEventABC, ParsingProgressBase):
+class ParsingWritingManifest(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Writing manifest."
 
 
-class ParsingDone(CliEventABC, ParsingProgressBase):
+class ParsingDone(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Done."
 
 
-# base class used for type-level membership checking only
-class ManifestProgressBase(Event):
-    def level(self):
-        return InfoLevel()
-
-
-class ManifestDependenciesLoaded(CliEventABC, ManifestProgressBase):
+class ManifestDependenciesLoaded(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Dependencies loaded"
 
 
-class ManifestLoaderCreated(CliEventABC, ManifestProgressBase):
+class ManifestLoaderCreated(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "ManifestLoader created"
 
 
-class ManifestLoaded(CliEventABC, ManifestProgressBase):
+class ManifestLoaded(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Manifest loaded"
 
 
-class ManifestChecked(CliEventABC, ManifestProgressBase):
+class ManifestChecked(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Manifest checked"
 
 
-class ManifestFlatGraphBuilt(CliEventABC, ManifestProgressBase):
+class ManifestFlatGraphBuilt(CliEventABC, InfoLevel):
     def cli_msg(self) -> str:
         return "Flat graph built"
 
