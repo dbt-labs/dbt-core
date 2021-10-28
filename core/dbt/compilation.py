@@ -438,22 +438,22 @@ class Compiler:
     def add_test_edges(self, linker: Linker, manifest: Manifest) -> None:
         """ This method adds additional edges to the DAG. For a given non-test
         executable node, add an edge from an upstream test to the given node if
-        the set of nodes the test depends on is a proper/strict subset of the
-        upstream nodes for the given node. """
+        the set of nodes the test depends on is a subset of the upstream nodes
+        for the given node. """
 
         # Given a graph:
         # model1 --> model2 --> model3
-        #   |         |
-        #   |        \/
-        #  \/      test 2
+        #   |             |
+        #   |            \/
+        #  \/          test 2
         # test1
         #
         # Produce the following graph:
         # model1 --> model2 --> model3
-        #   |         |         /\ /\
-        #   |        \/         |  |
-        #  \/      test2 -------   |
-        # test1 -------------------
+        #   |       /\    |      /\ /\
+        #   |       |    \/      |  |
+        #  \/       |  test2 ----|  |
+        # test1 ----|---------------|
 
         for node_id in linker.graph:
             # If node is executable (in manifest.nodes) and does _not_
@@ -491,11 +491,9 @@ class Compiler:
                     )
 
                     # If the set of nodes that an upstream test depends on
-                    # is a proper (or strict) subset of all upstream nodes of
-                    # the current node, add an edge from the upstream test
-                    # to the current node. Must be a proper/strict subset to
-                    # avoid adding a circular dependency to the graph.
-                    if (test_depends_on < upstream_nodes):
+                    # is a subset of all upstream nodes of the current node,
+                    # add an edge from the upstream test to the current node.
+                    if (test_depends_on.issubset(upstream_nodes)):
                         linker.graph.add_edge(
                             upstream_test,
                             node_id

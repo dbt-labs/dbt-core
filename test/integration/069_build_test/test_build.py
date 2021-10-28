@@ -82,6 +82,29 @@ class TestCircularRelationshipTestsBuild(TestBuildBase):
         expected = ['success']*7 + ['pass']*2
         self.assertEqual(sorted(actual), sorted(expected))
 
+
+class TestSimpleBlockingTest(TestBuildBase):
+    @property
+    def models(self):
+        return "models-simple-blocking"
+        
+    @property
+    def project_config(self):
+        return {
+            "config-version": 2,
+            "snapshot-paths": ["does-not-exist"],
+            "seed-paths": ["does-not-exist"],
+        }
+
+    @use_profile("postgres")
+    def test__postgres_simple_blocking_test(self):
+        """ Ensure that a failed test on model_a always blocks model_b """
+        results = self.build(expect_pass=False)
+        actual = [r.status for r in results]
+        expected = ['success', 'fail', 'skipped']
+        self.assertEqual(sorted(actual), sorted(expected))
+
+
 class TestInterdependentModels(TestBuildBase):
 
     @property
