@@ -6,23 +6,28 @@ from typing import Union
 
 # in preparation for #3977
 class TestLevel():
-    pass
+    def level_tag(self) -> str:
+        return "test"
 
 
 class DebugLevel():
-    pass
+    def level_tag(self) -> str:
+        return "debug"
 
 
 class InfoLevel():
-    pass
+    def level_tag(self) -> str:
+        return "info"
 
 
 class WarnLevel():
-    pass
+    def level_tag(self) -> str:
+        return "warn"
 
 
 class ErrorLevel():
-    pass
+    def level_tag(self) -> str:
+        return "error"
 
 
 # Hierarchy for log levels. Applies to all events, not just events
@@ -39,7 +44,10 @@ Level = Union[TestLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel]
 
 # top-level superclass for all events
 class Event(metaclass=ABCMeta):
-    pass
+    # do not define this yourself. inherit it from one of the above level types.
+    @abstractmethod
+    def level_tag(self) -> str:
+        raise Exception("level_tag not implemented for event")
 
 
 class CliEventABC(Event, metaclass=ABCMeta):
@@ -49,47 +57,47 @@ class CliEventABC(Event, metaclass=ABCMeta):
         raise Exception("cli_msg not implemented for cli event")
 
 
-class ParsingStart(CliEventABC, InfoLevel):
+class ParsingStart(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Start parsing."
 
 
-class ParsingCompiling(CliEventABC, InfoLevel):
+class ParsingCompiling(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Compiling."
 
 
-class ParsingWritingManifest(CliEventABC, InfoLevel):
+class ParsingWritingManifest(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Writing manifest."
 
 
-class ParsingDone(CliEventABC, InfoLevel):
+class ParsingDone(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Done."
 
 
-class ManifestDependenciesLoaded(CliEventABC, InfoLevel):
+class ManifestDependenciesLoaded(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Dependencies loaded"
 
 
-class ManifestLoaderCreated(CliEventABC, InfoLevel):
+class ManifestLoaderCreated(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "ManifestLoader created"
 
 
-class ManifestLoaded(CliEventABC, InfoLevel):
+class ManifestLoaded(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Manifest loaded"
 
 
-class ManifestChecked(CliEventABC, InfoLevel):
+class ManifestChecked(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Manifest checked"
 
 
-class ManifestFlatGraphBuilt(CliEventABC, InfoLevel):
+class ManifestFlatGraphBuilt(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return "Flat graph built"
 

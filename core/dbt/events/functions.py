@@ -21,16 +21,16 @@ def assert_never(x: NoReturn) -> NoReturn:
 def fire_event(e: Event) -> None:
     EVENT_HISTORY.append(e)
     if isinstance(e, CliEventABC):
-        if isinstance(e, TestLevel):
+        if e.level_tag == 'test':
             # TODO after implmenting #3977 send to new test level
             logger.GLOBAL_LOGGER.debug(logger.timestamped_line(e.cli_msg()))
-        elif isinstance(e, DebugLevel):
+        elif e.level_tag == 'debug':
             logger.GLOBAL_LOGGER.debug(logger.timestamped_line(e.cli_msg()))
-        elif isinstance(e, InfoLevel):
+        elif e.level_tag == 'info':
             logger.GLOBAL_LOGGER.info(logger.timestamped_line(e.cli_msg()))
-        elif isinstance(e, WarnLevel):
+        elif e.level_tag == 'warn':
             logger.GLOBAL_LOGGER.warning()(logger.timestamped_line(e.cli_msg()))
-        elif isinstance(e, ErrorLevel):
+        elif e.level_tag == 'error':
             logger.GLOBAL_LOGGER.error(logger.timestamped_line(e.cli_msg()))
         else:
             raise AssertionError("Event with unhandled level: {}".format(type(e).__name__))
