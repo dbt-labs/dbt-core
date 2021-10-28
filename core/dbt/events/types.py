@@ -1,6 +1,5 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-import dbt
 
 
 # types to represent log levels
@@ -101,6 +100,7 @@ class ManifestFlatGraphBuilt(InfoLevel, CliEventABC):
 @dataclass
 class ReportPerformancePath(InfoLevel, CliEventABC):
     path: str
+
     def cli_msg(self) -> str:
         return f"Performance info: {self.path}"
 

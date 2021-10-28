@@ -11,7 +11,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.parser.manifest import (
     Manifest, ManifestLoader, _check_manifest
 )
-from dbt.logger import DbtProcessState, print_timestamped_line
+from dbt.logger import DbtProcessState
 from dbt.clients.system import write_file
 from dbt.events.types import (
     ManifestDependenciesLoaded, ManifestLoaderCreated, ManifestLoaded, ManifestChecked,
