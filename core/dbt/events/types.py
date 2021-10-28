@@ -121,3 +121,4 @@ if 1 == 0:
     ManifestLoaded()
     ManifestChecked()
     ManifestFlatGraphBuilt()
+    ReportPerformancePath(path='')
