@@ -2,11 +2,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Union
 
 
-# The following classes represent the data necessary to describe a
-# particular event to both human readable logs, and machine reliable
-# event streams. classes extend superclasses that indicate what
-# destinations they are intended for, which mypy uses to enforce
-# that the necessary methods are defined.
+# types to represent log levels
 
 # in preparation for #3977
 class TestLevel():
@@ -32,6 +28,13 @@ class ErrorLevel():
 # Hierarchy for log levels. Applies to all events, not just events
 # where the destination is a log file.
 Level = Union[TestLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel]
+
+
+# The following classes represent the data necessary to describe a
+# particular event to both human readable logs, and machine reliable
+# event streams. classes extend superclasses that indicate what
+# destinations they are intended for, which mypy uses to enforce
+# that the necessary methods are defined.
 
 
 # top-level superclass for all events
