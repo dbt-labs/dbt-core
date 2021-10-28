@@ -207,7 +207,6 @@ class TestDispatchMacroOverrideBuiltin(TestMacroOverrideBuiltin):
     def test_postgres_overrides(self):
         self.run_dbt(["deps"])
         super().test_postgres_overrides()
-<<<<<<< HEAD
 
 
 class TestAdapterMacroDeprecated(DBTIntegrationTest):
@@ -233,5 +232,3 @@ class TestAdapterMacroDeprecated(DBTIntegrationTest):
             self.run_dbt(['run'])
 
         assert 'The "adapter_macro" macro has been deprecated' in str(exc.value)
-=======
->>>>>>> 343402ad (Add integration tests)
