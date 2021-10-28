@@ -46,7 +46,7 @@
 
 
 {% macro get_or_create_relation(database, schema, identifier, type) -%}
-  {{ adapter.dispatch('get_or_create_relation', 'dbt')(database, schema, identifier, type) }}
+  {{ return(adapter.dispatch('get_or_create_relation', 'dbt')(database, schema, identifier, type)) }}
 {% endmacro %}
 
 {% macro default__get_or_create_relation(database, schema, identifier, type) %}

@@ -574,7 +574,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             if k not in {'macro_sql'}
         }
         # Windows means we can't hard-code these.
-        helpers_path = Normalized('macros/materializations/helpers.sql')
+        helpers_path = Normalized('macros/etc/column_helpers.sql')
         root_path = Normalized(os.path.join(
             self.dbt_core_install_root, 'include', 'global_project'
         ))
