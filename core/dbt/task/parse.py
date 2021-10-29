@@ -12,9 +12,16 @@ from dbt.parser.manifest import Manifest, ManifestLoader, _check_manifest
 from dbt.logger import DbtProcessState
 from dbt.clients.system import write_file
 from dbt.events.types import (
-    ManifestDependenciesLoaded, ManifestLoaderCreated, ManifestLoaded, ManifestChecked,
-    ManifestFlatGraphBuilt, ParsingStart, ParsingCompiling, ParsingWritingManifest, ParsingDone,
-    ReportPerformancePath
+    ManifestDependenciesLoaded,
+    ManifestLoaderCreated,
+    ManifestLoaded,
+    ManifestChecked,
+    ManifestFlatGraphBuilt,
+    ParsingStart,
+    ParsingCompiling,
+    ParsingWritingManifest,
+    ParsingDone,
+    ReportPerformancePath,
 )
 from dbt.events.functions import fire_event
 from dbt.graph import Graph
