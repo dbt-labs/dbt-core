@@ -106,7 +106,7 @@ class ReportPerformancePath(InfoLevel, CliEventABC):
 
 
 @dataclass
-class MacroInfoLog(InfoLevel, CliEventABC):
+class MacroEventInfo(InfoLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
@@ -114,7 +114,7 @@ class MacroInfoLog(InfoLevel, CliEventABC):
 
 
 @dataclass
-class MacroDebugLog(DebugLevel, CliEventABC):
+class MacroEventDebug(DebugLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
@@ -138,5 +138,5 @@ if 1 == 0:
     ManifestChecked()
     ManifestFlatGraphBuilt()
     ReportPerformancePath(path='')
-    MacroInfoLog(msg='')
-    MacroDebugLog(msg='')
+    MacroEventInfo(msg='')
+    MacroEventDebug(msg='')
