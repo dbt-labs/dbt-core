@@ -234,6 +234,34 @@ class SystemReportReturnCode(DebugLevel, CliEventABC):
         return f"command return code={self.code}"
 
 
+@dataclass
+class SelectorAlertUpto3UnusedNodes(InfoLevel, CliEventABC):
+    node_names: List[str]
+
+    def cli_msg(self) -> str:
+        summary_nodes_str = ("\n  - ").join(self.node_names[:3])
+        and_more_str = (
+            f"\n  - and {len(self.node_names) - 3} more" if len(self.node_names) > 4 else ""
+        )
+        return (
+            f"\nSome tests were excluded because at least one parent is not selected. "
+            f"Use the --greedy flag to include them."
+            f"\n  - {summary_nodes_str}{and_more_str}"
+        )
+
+
+@dataclass
+class SelectorAlertAllUnusedNodes(DebugLevel, CliEventABC):
+    node_names: List[str]
+
+    def cli_msg(self) -> str:
+        debug_nodes_str = ("\n  - ").join(self.node_names)
+        return (
+            f"Full list of tests that were excluded:"
+            f"\n  - {debug_nodes_str}"
+        )
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so

@@ -5,6 +5,8 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec
 
+from dbt.events.functions import fire_event
+from dbt.events.types import SelectorAlertUpto3UnusedNodes, SelectorAlertAllUnusedNodes
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.exceptions import (
@@ -30,21 +32,9 @@ def alert_non_existence(raw_spec, nodes):
 
 
 def alert_unused_nodes(raw_spec, node_names):
-    summary_nodes_str = ("\n  - ").join(node_names[:3])
-    debug_nodes_str = ("\n  - ").join(node_names)
-    and_more_str = f"\n  - and {len(node_names) - 3} more" if len(node_names) > 4 else ""
-    summary_msg = (
-        f"\nSome tests were excluded because at least one parent is not selected. "
-        f"Use the --greedy flag to include them."
-        f"\n  - {summary_nodes_str}{and_more_str}"
-    )
-    logger.info(summary_msg)
+    fire_event(SelectorAlertUpto3UnusedNodes(node_names=node_names))
     if len(node_names) > 4:
-        debug_msg = (
-            f"Full list of tests that were excluded:"
-            f"\n  - {debug_nodes_str}"
-        )
-        logger.debug(debug_msg)
+        fire_event(SelectorAlertAllUnusedNodes(node_names=node_names))
 
 
 def can_select_indirectly(node):
