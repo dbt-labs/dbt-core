@@ -201,6 +201,15 @@ class SystemCouldNotWrite(DebugLevel, CliEventABC):
         )
 
 
+@dataclass
+class SystemExecutingCmd(DebugLevel, CliEventABC):
+    cmd: str
+
+    def cli_msg(self) -> str:
+        return f'Executing "{" ".join(self.cmd)}"'
+
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -227,3 +236,4 @@ if 1 == 0:
     GitProgressCheckedOutAt(end_sha='')
     SystemErrorRetrievingModTime(path='')
     SystemCouldNotWrite(path='', reason='', exc=Exception(''))
+    SystemExecutingCmd(cmd='')

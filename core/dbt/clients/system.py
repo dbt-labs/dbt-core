@@ -17,7 +17,7 @@ from typing import (
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SystemErrorRetrievingModTime, SystemCouldNotWrite
+    SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd
 )
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -411,7 +411,7 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 def run_cmd(
     cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None
 ) -> Tuple[bytes, bytes]:
-    logger.debug('Executing "{}"'.format(' '.join(cmd)))
+    fire_event(SystemExecutingCmd(cmd=cmd))
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
