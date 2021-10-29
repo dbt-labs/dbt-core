@@ -17,8 +17,12 @@ from typing import (
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd, SystemStdOutMsg,
-    SystemStdErrMsg, SystemReportReturnCode
+    SystemErrorRetrievingModTime,
+    SystemCouldNotWrite,
+    SystemExecutingCmd,
+    SystemStdOutMsg,
+    SystemStdErrMsg,
+    SystemReportReturnCode,
 )
 import dbt.exceptions
 from dbt.utils import _connection_exception_retry as connection_exception_retry

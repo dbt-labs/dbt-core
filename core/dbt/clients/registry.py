@@ -1,10 +1,7 @@
 import functools
 import requests
 from dbt.events.functions import fire_event
-from dbt.events.types import (
-    RegistryProgressMakingGETRequest,
-    RegistryProgressGETResponse
-)
+from dbt.events.types import RegistryProgressMakingGETRequest, RegistryProgressGETResponse
 from dbt.utils import memoized, _connection_exception_retry as connection_exception_retry
 from dbt import deprecations
 import os
