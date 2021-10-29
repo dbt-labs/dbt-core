@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
+from typing import List
 
 
 # types to represent log levels
@@ -203,11 +204,26 @@ class SystemCouldNotWrite(DebugLevel, CliEventABC):
 
 @dataclass
 class SystemExecutingCmd(DebugLevel, CliEventABC):
-    cmd: str
+    cmd: List[str]
 
     def cli_msg(self) -> str:
         return f'Executing "{" ".join(self.cmd)}"'
 
+
+@dataclass
+class SystemStdOutMsg(DebugLevel, CliEventABC):
+    bmsg: bytes
+
+    def cli_msg(self) -> str:
+        return f'STDOUT: "{str(self.bmsg)}"'
+
+
+@dataclass
+class SystemStdErrMsg(DebugLevel, CliEventABC):
+    bmsg: bytes
+
+    def cli_msg(self) -> str:
+        return f'STDERR: "{str(self.bmsg)}"'
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -236,4 +252,6 @@ if 1 == 0:
     GitProgressCheckedOutAt(end_sha='')
     SystemErrorRetrievingModTime(path='')
     SystemCouldNotWrite(path='', reason='', exc=Exception(''))
-    SystemExecutingCmd(cmd='')
+    SystemExecutingCmd(cmd=[''])
+    SystemStdOutMsg(bmsg=b'')
+    SystemStdErrMsg(bmsg=b'')

@@ -17,7 +17,8 @@ from typing import (
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd
+    SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd, SystemStdOutMsg,
+    SystemStdErrMsg
 )
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -437,8 +438,8 @@ def run_cmd(
     except OSError as exc:
         _interpret_oserror(exc, cwd, cmd)
 
-    logger.debug('STDOUT: "{!s}"'.format(out))
-    logger.debug('STDERR: "{!s}"'.format(err))
+    fire_event(SystemStdOutMsg(bmsg=out))
+    fire_event(SystemStdErrMsg(bmsg=err))
 
     if proc.returncode != 0:
         logger.debug('command return code={}'.format(proc.returncode))
