@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import List
+from typing import Any, List
 
 
 # types to represent log levels
@@ -29,6 +29,13 @@ class WarnLevel():
 class ErrorLevel():
     def level_tag(self) -> str:
         return "error"
+
+
+@dataclass
+class ShowException():
+    exc_info: Any = None
+    stack_info: Any = None
+    extra: Any = None
 
 
 # The following classes represent the data necessary to describe a
@@ -233,6 +240,20 @@ class SystemReportReturnCode(DebugLevel, CliEventABC):
     def cli_msg(self) -> str:
         return f"command return code={self.code}"
 
+class MacroEventInfo(InfoLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
+
+
+@dataclass
+class MacroEventDebug(DebugLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
+
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
@@ -264,3 +285,5 @@ if 1 == 0:
     SystemStdOutMsg(bmsg=b'')
     SystemStdErrMsg(bmsg=b'')
     SystemReportReturnCode(code=0)
+    MacroEventInfo(msg='')
+    MacroEventDebug(msg='')
