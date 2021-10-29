@@ -41,7 +41,7 @@ def fire_event(e: Event) -> None:
                 extra=e.extra
             )
         elif e.level_tag() == 'warn' and not isinstance(e, ShowException):
-            logger.GLOBAL_LOGGER.warning()(logger.timestamped_line(e.cli_msg()))
+            logger.GLOBAL_LOGGER.warning(logger.timestamped_line(e.cli_msg()))
         elif e.level_tag() == 'warn' and isinstance(e, ShowException):
             logger.GLOBAL_LOGGER.warning(
                 logger.timestamped_line(e.cli_msg()),
