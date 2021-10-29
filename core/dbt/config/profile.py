@@ -292,7 +292,7 @@ class Profile(HasCredentials):
             target_name = renderer.render_value(raw_profile['target'])
         else:
             target_name = 'default'
-            fire_event(MissingProfileTarget(profile_name, target_name))
+            fire_event(MissingProfileTarget(profile_name=profile_name, target_name=target_name))
 
         raw_profile_data = cls._get_profile_data(
             raw_profile, profile_name, target_name

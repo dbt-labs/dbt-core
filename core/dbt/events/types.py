@@ -1,9 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List
-from typing import (
-    Optional, Union
-)
+from typing import Any, List, Optional
 
 
 # types to represent log levels
@@ -313,12 +310,13 @@ class MissingProfileTarget(InfoLevel, CliEventABC):
         return f"target not specified in profile '{self.profile_name}', using '{self.target_name}'"
 
 
+#  TODO: this should have exc_info=True
 @dataclass
 class ProfileLoadError(DebugLevel, CliEventABC):
-    exc: Union
+    exc: Exception
 
     def cli_msg(self) -> str:
-        return f"Profile not loaded due to error: {self.exc}" #, exc, exc_info=True
+        return f"Profile not loaded due to error: {self.exc}"
 
 
 @dataclass
@@ -395,6 +393,6 @@ if 1 == 0:
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
     MissingProfileTarget(profile_name='', target_name='')
-    ProfileLoadError()
+    ProfileLoadError(exc=Exception(''))
     ProfileNotFound(profile_name='')
     InvalidVarsYAML()
