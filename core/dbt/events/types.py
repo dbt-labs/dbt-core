@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import List
+from typing import Any, List
 
 
 # types to represent log levels
@@ -29,6 +29,13 @@ class WarnLevel():
 class ErrorLevel():
     def level_tag(self) -> str:
         return "error"
+
+
+@dataclass
+class ShowException():
+    exc_info: Any = None
+    stack_info: Any = None
+    extra: Any = None
 
 
 # The following classes represent the data necessary to describe a
@@ -274,6 +281,19 @@ class SelectorReportInvalidSelector(InfoLevel, CliEventABC):
             f"The '{self.spec_method}' selector specified in {self.raw_spec} is "
             f"invalid. Must be one of [{valid_selectors}]"
         )
+class MacroEventInfo(InfoLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
+
+
+@dataclass
+class MacroEventDebug(DebugLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -309,3 +329,5 @@ if 1 == 0:
     SelectorAlertUpto3UnusedNodes(node_names=[])
     SelectorAlertAllUnusedNodes(node_names=[])
     SelectorReportInvalidSelector(selector_methods={'': ''}, spec_method='', raw_spec='')
+    MacroEventInfo(msg='')
+    MacroEventDebug(msg='')

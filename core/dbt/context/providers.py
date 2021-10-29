@@ -49,7 +49,6 @@ from dbt.exceptions import (
     wrapped_exports,
 )
 from dbt.config import IsFQNResource
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import NodeType
 
 from dbt.utils import (
