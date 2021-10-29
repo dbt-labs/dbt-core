@@ -281,6 +281,9 @@ class SelectorReportInvalidSelector(InfoLevel, CliEventABC):
             f"The '{self.spec_method}' selector specified in {self.raw_spec} is "
             f"invalid. Must be one of [{valid_selectors}]"
         )
+
+
+@dataclass
 class MacroEventInfo(InfoLevel, CliEventABC):
     msg: str
 
