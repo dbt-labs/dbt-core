@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List
 
 
 # types to represent log levels
@@ -114,6 +114,134 @@ class ReportPerformancePath(InfoLevel, CliEventABC):
 
 
 @dataclass
+class GitSparseCheckoutSubdirectory(DebugLevel, CliEventABC):
+    subdir: str
+
+    def cli_msg(self) -> str:
+        return f"  Subdirectory specified: {self.subdir}, using sparse checkout."
+
+
+@dataclass
+class GitProgressCheckoutRevision(DebugLevel, CliEventABC):
+    revision: str
+
+    def cli_msg(self) -> str:
+        return f"  Checking out revision {self.revision}."
+
+
+@dataclass
+class GitProgressUpdatingExistingDependency(DebugLevel, CliEventABC):
+    dir: str
+
+    def cli_msg(self) -> str:
+        return f"Updating existing dependency {self.dir}."
+
+
+@dataclass
+class GitProgressPullingNewDependency(DebugLevel, CliEventABC):
+    dir: str
+
+    def cli_msg(self) -> str:
+        return f"Pulling new dependency {self.dir}."
+
+
+@dataclass
+class GitNothingToDo(DebugLevel, CliEventABC):
+    sha: str
+
+    def cli_msg(self) -> str:
+        return f"Already at {self.sha}, nothing to do."
+
+
+@dataclass
+class GitProgressUpdatedCheckoutRange(DebugLevel, CliEventABC):
+    start_sha: str
+    end_sha: str
+
+    def cli_msg(self) -> str:
+        return f"  Updated checkout from {self.start_sha} to {self.end_sha}."
+
+
+@dataclass
+class GitProgressCheckedOutAt(DebugLevel, CliEventABC):
+    end_sha: str
+
+    def cli_msg(self) -> str:
+        return f"  Checked out at {self.end_sha}."
+
+
+@dataclass
+class RegistryProgressMakingGETRequest(DebugLevel, CliEventABC):
+    url: str
+
+    def cli_msg(self) -> str:
+        return f"Making package registry request: GET {self.url}"
+
+
+@dataclass
+class RegistryProgressGETResponse(DebugLevel, CliEventABC):
+    url: str
+    resp_code: int
+
+    def cli_msg(self) -> str:
+        return f"Response from registry: GET {self.url} {self.resp_code}"
+
+
+# TODO this was actually `logger.exception(...)` not `logger.error(...)`
+@dataclass
+class SystemErrorRetrievingModTime(ErrorLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Error retrieving modification time for file {self.path}"
+
+
+@dataclass
+class SystemCouldNotWrite(DebugLevel, CliEventABC):
+    path: str
+    reason: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return (
+            f"Could not write to path {self.path}({len(self.path)} characters): "
+            f"{self.reason}\nexception: {self.exc}"
+        )
+
+
+@dataclass
+class SystemExecutingCmd(DebugLevel, CliEventABC):
+    cmd: List[str]
+
+    def cli_msg(self) -> str:
+        return f'Executing "{" ".join(self.cmd)}"'
+
+
+@dataclass
+class SystemStdOutMsg(DebugLevel, CliEventABC):
+    bmsg: bytes
+
+    def cli_msg(self) -> str:
+        return f'STDOUT: "{str(self.bmsg)}"'
+
+
+@dataclass
+class SystemStdErrMsg(DebugLevel, CliEventABC):
+    bmsg: bytes
+
+    def cli_msg(self) -> str:
+        return f'STDERR: "{str(self.bmsg)}"'
+
+
+@dataclass
+class SystemReportReturnCode(DebugLevel, CliEventABC):
+    code: int
+
+    def cli_msg(self) -> str:
+        return f"command return code={self.code}"
+
+
+@dataclass
 class MacroEventInfo(InfoLevel, CliEventABC):
     msg: str
 
@@ -146,5 +274,18 @@ if 1 == 0:
     ManifestChecked()
     ManifestFlatGraphBuilt()
     ReportPerformancePath(path='')
+    GitSparseCheckoutSubdirectory(subdir='')
+    GitProgressCheckoutRevision(revision='')
+    GitProgressUpdatingExistingDependency(dir='')
+    GitProgressPullingNewDependency(dir='')
+    GitNothingToDo(sha='')
+    GitProgressUpdatedCheckoutRange(start_sha='', end_sha='')
+    GitProgressCheckedOutAt(end_sha='')
+    SystemErrorRetrievingModTime(path='')
+    SystemCouldNotWrite(path='', reason='', exc=Exception(''))
+    SystemExecutingCmd(cmd=[''])
+    SystemStdOutMsg(bmsg=b'')
+    SystemStdErrMsg(bmsg=b'')
+    SystemReportReturnCode(code=0)
     MacroEventInfo(msg='')
     MacroEventDebug(msg='')
