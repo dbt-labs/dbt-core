@@ -655,8 +655,12 @@ def get_timestamp():
     return time.strftime("%H:%M:%S")
 
 
+def timestamped_line(msg: str) -> str:
+    return "{} | {}".format(get_timestamp(), msg)
+
+
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
         msg = dbt.ui.color(msg, use_color)
 
-    GLOBAL_LOGGER.info("{} | {}".format(get_timestamp(), msg))
+    GLOBAL_LOGGER.info(timestamped_line(msg))
