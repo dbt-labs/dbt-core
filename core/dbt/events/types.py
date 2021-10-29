@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import List
 
 
 # types to represent log levels
@@ -306,4 +306,6 @@ if 1 == 0:
     SystemStdOutMsg(bmsg=b'')
     SystemStdErrMsg(bmsg=b'')
     SystemReportReturnCode(code=0)
-    SelectorReportInvalidSelector(selector_methods={'':''}, spec_method='', raw_spec='')
+    SelectorAlertUpto3UnusedNodes(node_names=[])
+    SelectorAlertAllUnusedNodes(node_names=[])
+    SelectorReportInvalidSelector(selector_methods={'': ''}, spec_method='', raw_spec='')
