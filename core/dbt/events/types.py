@@ -240,6 +240,8 @@ class SystemReportReturnCode(DebugLevel, CliEventABC):
     def cli_msg(self) -> str:
         return f"command return code={self.code}"
 
+
+@dataclass
 class MacroEventInfo(InfoLevel, CliEventABC):
     msg: str
 
