@@ -93,11 +93,11 @@ class Graph:
                 target_nodes = [x for _, x in new_graph.out_edges(node)]
 
                 new_edges = product(source_nodes, target_nodes)
-                new_edges = [
+                non_cyclic_new_edges = [
                     (source, target) for source, target in new_edges if source != target
                 ]  # removes cyclic refs
 
-                new_graph.add_edges_from(new_edges)
+                new_graph.add_edges_from(non_cyclic_new_edges)
                 new_graph.remove_node(node)
 
         for node in include_nodes:
