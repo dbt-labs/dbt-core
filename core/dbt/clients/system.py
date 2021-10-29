@@ -18,10 +18,9 @@ from typing import (
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     SystemErrorRetrievingModTime, SystemCouldNotWrite, SystemExecutingCmd, SystemStdOutMsg,
-    SystemStdErrMsg
+    SystemStdErrMsg, SystemReportReturnCode
 )
 import dbt.exceptions
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import _connection_exception_retry as connection_exception_retry
 
 if sys.platform == 'win32':
@@ -442,7 +441,7 @@ def run_cmd(
     fire_event(SystemStdErrMsg(bmsg=err))
 
     if proc.returncode != 0:
-        logger.debug('command return code={}'.format(proc.returncode))
+        fire_event(SystemReportReturnCode(code=proc.returncode))
         raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode,
                                                 out, err)
 

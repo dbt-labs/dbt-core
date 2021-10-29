@@ -226,6 +226,14 @@ class SystemStdErrMsg(DebugLevel, CliEventABC):
         return f'STDERR: "{str(self.bmsg)}"'
 
 
+@dataclass
+class SystemReportReturnCode(DebugLevel, CliEventABC):
+    code: int
+
+    def cli_msg(self) -> str:
+        return f"command return code={self.code}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -255,3 +263,4 @@ if 1 == 0:
     SystemExecutingCmd(cmd=[''])
     SystemStdOutMsg(bmsg=b'')
     SystemStdErrMsg(bmsg=b'')
+    SystemReportReturnCode(code=0)
