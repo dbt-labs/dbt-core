@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List
 
 
 # types to represent log levels
@@ -262,6 +262,20 @@ class SelectorAlertAllUnusedNodes(DebugLevel, CliEventABC):
         )
 
 
+@dataclass
+class SelectorReportInvalidSelector(InfoLevel, CliEventABC):
+    selector_methods: dict
+    spec_method: str
+    raw_spec: str
+
+    def cli_msg(self) -> str:
+        valid_selectors = ", ".join(self.selector_methods)
+        return (
+            f"The '{self.spec_method}' selector specified in {self.raw_spec} is "
+            f"invalid. Must be one of [{valid_selectors}]"
+        )
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -292,3 +306,4 @@ if 1 == 0:
     SystemStdOutMsg(bmsg=b'')
     SystemStdErrMsg(bmsg=b'')
     SystemReportReturnCode(code=0)
+    SelectorReportInvalidSelector(selector_methods={'':''}, spec_method='', raw_spec='')
