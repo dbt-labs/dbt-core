@@ -4,7 +4,7 @@ import os
 from collections import namedtuple
 
 RuntimeArgs = namedtuple(
-    'RuntimeArgs', 'project_dir profiles_dir single_threaded'
+    'RuntimeArgs', 'project_dir profiles_dir single_threaded profile_name'
 )
 
 
@@ -19,7 +19,7 @@ def get_dbt_config(project_dir, single_threaded=False):
 
     # Construct a phony config
     config = RuntimeConfig.from_args(RuntimeArgs(
-        project_dir, profiles_dir, single_threaded
+        project_dir, profiles_dir, single_threaded, 'user'
     ))
     # Clear previously registered adapters--
     # this fixes cacheing behavior on the dbt-server
