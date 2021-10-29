@@ -273,7 +273,7 @@ class TimingInfoCollected(DebugLevel, CliEventABC):
 @dataclass
 class MergedFromState(DebugLevel, CliEventABC):
     nbr_merged: int
-    sample: list
+    sample: List
 
     def cli_msg(self) -> str:
         return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"

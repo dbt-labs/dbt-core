@@ -938,7 +938,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         # log up to 5 items
         sample = list(islice(merged, 5))
-        fire_event(MergedFromState(len(merged), sample))
+        fire_event(MergedFromState(nbr_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
 

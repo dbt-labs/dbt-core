@@ -102,7 +102,7 @@ class LazyHandle:
         self.opener = opener
 
     def resolve(self, connection: Connection) -> Connection:
-        fire_event(NewConnectionOpening(connection.state))
+        fire_event(NewConnectionOpening(connection_state=connection.state))
         return self.opener(connection)
 
 
