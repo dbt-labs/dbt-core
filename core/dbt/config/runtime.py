@@ -535,7 +535,7 @@ class UnsetProfileConfig(RuntimeConfig):
                 args, profile_renderer, profile_name
             )
         except (DbtProjectError, DbtProfileError) as exc:
-            fire_event(ProfileLoadError(exc, exc_info=True))
+            fire_event(ProfileLoadError(exc)) #, exc_info=True))
             fire_event(ProfileNotFound(profile_name))
             # return the poisoned form
             profile = UnsetProfile()

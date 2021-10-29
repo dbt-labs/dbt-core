@@ -1,6 +1,9 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List
+from typing import (
+    Optional, Union
+)
 
 
 # types to represent log levels
@@ -312,15 +315,15 @@ class MissingProfileTarget(InfoLevel, CliEventABC):
 
 @dataclass
 class ProfileLoadError(DebugLevel, CliEventABC):
-    profile_name: str
+    exc: Union
 
     def cli_msg(self) -> str:
-        return f"Profile not loaded due to error: {}", exc, exc_info=True
+        return f"Profile not loaded due to error: {self.exc}" #, exc, exc_info=True
 
 
 @dataclass
 class ProfileNotFound(InfoLevel, CliEventABC):
-    profile_name: str
+    profile_name: Optional[str]
 
     def cli_msg(self) -> str:
         return f'No profile "{self.profile_name}" found, continuing with no target'

@@ -4,7 +4,6 @@ from dbt.clients import yaml_helper
 from dbt.events.functions import fire_event
 from dbt.exceptions import raise_compiler_error, ValidationException
 from dbt.events.types import InvalidVarsYAML
-from dbt.events.functions import fire_event
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
