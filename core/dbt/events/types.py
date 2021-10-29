@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 
 # types to represent log levels
@@ -28,6 +29,13 @@ class WarnLevel():
 class ErrorLevel():
     def level_tag(self) -> str:
         return "error"
+
+
+@dataclass
+class ShowException():
+    exc_info: Any = None
+    stack_info: Any = None
+    extra: Any = None
 
 
 # The following classes represent the data necessary to describe a
