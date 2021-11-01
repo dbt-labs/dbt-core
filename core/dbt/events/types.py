@@ -315,6 +315,7 @@ class MissingProfileTarget(InfoLevel, CliEventABC):
 
 @dataclass
 class ProfileLoadError(ShowException, DebugLevel, CliEventABC):
+    # TODO: remove default value once we drop Python 3.6 support
     exc: Exception = Exception('')
 
     def cli_msg(self) -> str:
