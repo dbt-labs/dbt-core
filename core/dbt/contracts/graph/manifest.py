@@ -29,7 +29,8 @@ from dbt.exceptions import (
     raise_duplicate_resource_name, raise_compiler_error,
 )
 from dbt.helper_types import PathSet
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import MergedFromState
 from dbt.node_types import NodeType
 from dbt.ui import line_wrap_message
 from dbt import flags
@@ -958,9 +959,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         # log up to 5 items
         sample = list(islice(merged, 5))
-        logger.debug(
-            f'Merged {len(merged)} items from state (sample: {sample})'
-        )
+        fire_event(MergedFromState(nbr_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
 

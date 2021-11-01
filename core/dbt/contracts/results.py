@@ -11,10 +11,11 @@ from dbt.contracts.util import (
     schema_version,
 )
 from dbt.exceptions import InternalException
+from dbt.events.functions import fire_event
+from dbt.events.types import TimingInfoCollected
 from dbt.logger import (
     TimingProcessor,
     JsonOnly,
-    GLOBAL_LOGGER as logger,
 )
 from dbt.utils import lowercase
 from dbt.dataclass_schema import dbtClassMixin, StrEnum
@@ -54,7 +55,7 @@ class collect_timing_info:
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
         with JsonOnly(), TimingProcessor(self.timing_info):
-            logger.debug('finished collecting timing info')
+            fire_event(TimingInfoCollected())
 
 
 class NodeStatus(StrEnum):
