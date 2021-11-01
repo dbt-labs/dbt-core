@@ -712,6 +712,114 @@ class RunningOperationUncaughtError(ShowException, ErrorLevel, CliEventABC):
         return f'Encountered an error while running operation: {self.exc}'
 
 
+class DbtProjectError(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Encountered an error while reading the project:"
+
+
+@dataclass
+class DbtProjectErrorException(ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"  ERROR: {str(self.exc)}"
+
+
+class DbtProfileError(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Encountered an error while reading profiles:"
+
+
+@dataclass
+class DbtProfileErrorException(ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"  ERROR: {str(self.exc)}"
+
+
+class ProfileListTitle(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Defined profiles:"
+
+
+@dataclass
+class ListSingleProfile(InfoLevel, CliEventABC):
+    profile: str
+
+    def cli_msg(self) -> str:
+        return f" - {self.profile}"
+
+
+class NoDefinedProfiles(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "There are no profiles defined in your profiles.yml file"
+
+
+class ProfileHelpMessage(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        PROFILES_HELP_MESSAGE = """
+For more information on configuring profiles, please consult the dbt docs:
+
+https://docs.getdbt.com/docs/configure-your-profile
+"""
+        return PROFILES_HELP_MESSAGE
+
+
+@dataclass
+class CatchableExceptionOnRun(ShowException, DebugLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return str(self.exc)
+
+
+@dataclass
+class InternalExceptionOnRun(DebugLevel, CliEventABC):
+    build_path: str
+    exc: Exception  
+
+    def cli_msg(self) -> str:
+        prefix = 'Internal error executing {}'.format(self.build_path)
+
+        INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
+the error persists, open an issue at https://github.com/dbt-labs/dbt-core
+""".strip()
+
+        return "{prefix}\n{error}\n\n{note}".format(
+            prefix=red(prefix),
+            error=str(self.exc).strip(),
+            note=INTERNAL_ERROR_STRING
+        )
+
+
+@dataclass
+class GenericExceptionOnRun(ShowException, ErrorLevel, CliEventABC):
+    build_path: str
+    unique_id: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        node_description = self.build_path
+        if node_description is None:
+            node_description = self.unique_id
+        prefix = "Unhandled error while executing {}".format(node_description)
+        return "{prefix}\n{error}".format(
+            prefix=red(prefix),
+            error=str(self.exc).strip()
+        )
+
+
+@dataclass
+class NodeConnectionReleaseError(ShowException, DebugLevel, CliEventABC):
+    node_name: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return ('Error releasing connection for node {}: {!s}'
+                .format(self.node_name, self.exc))
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -794,3 +902,15 @@ if 1 == 0:
     DetailsHandleGenericException()
     RunningOperationCaughtError(exc=Exception(''))
     RunningOperationUncaughtError(exc=Exception(''))
+    DbtProjectError()
+    DbtProjectErrorException(exc=Exception(''))
+    DbtProfileError()
+    DbtProfileErrorException(exc=Exception(''))
+    ProfileListTitle()
+    ListSingleProfile(profile='')
+    NoDefinedProfiles()
+    ProfileHelpMessage()
+    CatchableExceptionOnRun(exc=Exception(''))
+    InternalExceptionOnRun(build_path='', exc=Exception(''))
+    GenericExceptionOnRun(build_path='', unique_id='', exc=Exception(''))
+    NodeConnectionReleaseError(node_name='', exc=Exception(''))

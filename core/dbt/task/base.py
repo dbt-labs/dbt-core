@@ -16,11 +16,13 @@ from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
     InternalException
 )
-from dbt.logger import GLOBAL_LOGGER as logger, log_manager
+from dbt.logger import GLOBAL_LOGGER as log_manager
 from dbt.events.functions import fire_event
-from dbt.events.types import(
-    CatchRunException, HandleInternalException, MessageHandleGenericException,
-    DetailsHandleGenericException,
+from dbt.events.types import (
+    DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
+    ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
+    CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
+    NodeConnectionReleaseError,
 )
 from .printer import print_skip_caused_by_error, print_skip_line
 
@@ -52,13 +54,6 @@ def read_profiles(profiles_dir=None):
     return profiles
 
 
-PROFILES_HELP_MESSAGE = """
-For more information on configuring profiles, please consult the dbt docs:
-
-https://docs.getdbt.com/docs/configure-your-profile
-"""
-
-
 class BaseTask(metaclass=ABCMeta):
     ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
@@ -87,28 +82,27 @@ class BaseTask(metaclass=ABCMeta):
         try:
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
-            logger.error("Encountered an error while reading the project:")
-            logger.error("  ERROR: {}".format(str(exc)))
+            fire_event(DbtProjectError())
+            fire_event(DbtProjectErrorException(exc=exc))
 
             tracking.track_invalid_invocation(
                 args=args,
                 result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
         except dbt.exceptions.DbtProfileError as exc:
-            logger.error("Encountered an error while reading profiles:")
-            logger.error("  ERROR {}".format(str(exc)))
+            fire_event(DbtProfileError())
+            fire_event(DbtProfileErrorException(exc=exc))
 
             all_profiles = read_profiles(flags.PROFILES_DIR).keys()
 
             if len(all_profiles) > 0:
-                logger.info("Defined profiles:")
+                fire_event(ProfileListTitle())
                 for profile in all_profiles:
-                    logger.info(" - {}".format(profile))
+                    fire_event(ListSingleProfile(profile=profile))
             else:
-                logger.info("There are no profiles defined in your "
-                            "profiles.yml file")
+                fire_event(NoDefinedProfiles())
 
-            logger.info(PROFILES_HELP_MESSAGE)
+            fire_event(ProfileHelpMessage())
 
             tracking.track_invalid_invocation(
                 args=args,
@@ -307,20 +301,18 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        fire_event(CatchRunException(exc=e))
+        fire_event(CatchableExceptionOnRun(exc=e))
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        build_path = self.node.build_path
-
-        fire_event(HandleInternalException(build_path=build_path, exc=e))
+        fire_event(InternalExceptionOnRun(build_path=self.node.build_path, exc=e))
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
-        fire_event(MessageHandleGenericException(build_path=self.node.build_path,
-                                                 unique_id=self.node.unique_id,
-                                                 exc=e))
-        fire_event(DetailsHandleGenericException())
+        fire_event(GenericExceptionOnRun(build_path=self.node.build_path,
+                                         unique_id=self.node.unique_id,
+                                         exc=e))
+
         return str(e)
 
     def handle_exception(self, e, ctx):
@@ -370,10 +362,7 @@ class BaseRunner(metaclass=ABCMeta):
         try:
             self.adapter.release_connection()
         except Exception as exc:
-            logger.debug(
-                'Error releasing connection for node {}: {!s}\n{}'
-                .format(self.node.name, exc, traceback.format_exc())
-            )
+            fire_event(NodeConnectionReleaseError(node_name=self.node.name, exc=exc))
             return str(exc)
 
         return None
