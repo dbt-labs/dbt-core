@@ -27,7 +27,7 @@ from dbt.events.types import (
     PartialParsingFailedBecauseConfigChange, PartialParsingFailedBecauseProfileChange,
     PartialParsingFailedBecauseNewProjectDependency, PartialParsingFailedBecauseHashChanged,
     PartialParsingNotEnabled, ParsedFileLoadFailed, PartialParseSaveFileNotFound,
-    
+    InvalidDisabledSourceInTestNode, InvalidRefInTestNode
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
@@ -835,7 +835,7 @@ def invalid_ref_fail_unless_test(node, target_model_name,
             node, target_model_name, target_model_package, disabled
         )
         if disabled:
-            logger.debug(warning_tag(msg))
+            fire_event(InvalidRefInTestNode(msg=msg))
         else:
             warn_or_error(
                 msg,
@@ -858,7 +858,7 @@ def invalid_source_fail_unless_test(
             node, target_name, target_table_name, disabled
         )
         if disabled:
-            logger.debug(warning_tag(msg))
+            fire_event(InvalidDisabledSourceInTestNode(msg=msg))
         else:
             warn_or_error(
                 msg,
