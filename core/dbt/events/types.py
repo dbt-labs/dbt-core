@@ -470,6 +470,70 @@ class PartialParseSaveFileNotFound(InfoLevel, CliEventABC):
         return ("Partial parse save file not found. Starting full parse.")
 
 
+@dataclass
+class StaticParserCausedJinjaRendering(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1605: jinja rendering because of STATIC_PARSER flag. file: {self.path}"
+
+
+@dataclass
+class UsingExperimentalParser(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1610: conducting experimental parser sample on {self.path}"
+
+
+@dataclass
+class SampleFullJinjaRendering(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1611: conducting full jinja rendering sample on {self.path}"
+
+
+@dataclass
+class StaticParserFallbackJinjaRendering(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1602: parser fallback to jinja rendering on {self.path}"
+
+
+@dataclass
+class StaticParsingMacroOverrideDetected(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1601: detected macro override of ref/source/config in the scope of {self.path}"
+
+
+@dataclass
+class StaticParserSuccess(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1699: static parser successfully parsed {self.path}"
+
+
+@dataclass
+class StaticParserFailure(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1603: static parser failed on {self.path}"
+
+
+@dataclass
+class ExperimentalParserSuccess(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1698: experimental parser successfully parsed {self.path}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -527,3 +591,11 @@ if 1 == 0:
     PartialParsingFailedBecauseHashChanged()
     ParsedFileLoadFailed(path='', exc=Exception(''))
     PartialParseSaveFileNotFound()
+    StaticParserCausedJinjaRendering(path='')
+    UsingExperimentalParser(path='')
+    SampleFullJinjaRendering(path='')
+    StaticParserFallbackJinjaRendering(path='')
+    StaticParsingMacroOverrideDetected(path='')
+    StaticParserSuccess(path='')
+    StaticParserFailure(path='')
+    ExperimentalParserSuccess(path='')

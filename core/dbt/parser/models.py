@@ -2,7 +2,13 @@ from copy import deepcopy
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.graph.parsed import ParsedModelNode
 import dbt.flags as flags
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    StaticParserCausedJinjaRendering, UsingExperimentalParser,
+    SampleFullJinjaRendering, StaticParserFallbackJinjaRendering,
+    StaticParsingMacroOverrideDetected, StaticParserSuccess, StaticParserFailure,
+    ExperimentalParserSuccess, ExperimentalParserFailure
+)
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
@@ -37,7 +43,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
         if not flags.STATIC_PARSER:
             # jinja rendering
             super().render_update(node, config)
-            logger.debug(f"1605: jinja rendering because of STATIC_PARSER flag. file: {node.path}")
+            fire_event(StaticParserCausedJinjaRendering(path=node.path))
             return
 
         # only sample for experimental parser correctness on normal runs,
@@ -71,7 +77,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
 
         # sample the experimental parser only during a normal run
         if exp_sample and not flags.USE_EXPERIMENTAL_PARSER:
-            logger.debug(f"1610: conducting experimental parser sample on {node.path}")
+            fire_event(UsingExperimentalParser(path=node.path))
             experimental_sample = self.run_experimental_parser(node)
             # if the experimental parser succeeded, make a full copy of model parser
             # and populate _everything_ into it so it can be compared apples-to-apples
@@ -105,7 +111,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # sampling rng here, but the effect would be the same since we would only roll
             # it 40% of the time. So I've opted to keep all the rng code colocated above.
             if stable_sample and not flags.USE_EXPERIMENTAL_PARSER:
-                logger.debug(f"1611: conducting full jinja rendering sample on {node.path}")
+                fire_event(SampleFullJinjaRendering(path=node.path))
                 # if this will _never_ mutate anything `self` we could avoid these deep copies,
                 # but we can't really guarantee that going forward.
                 model_parser_copy = self.partial_deepcopy()
@@ -150,17 +156,12 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
                 result += ["08_has_banned_macro"]
 
             super().render_update(node, config)
-            logger.debug(
-                f"1602: parser fallback to jinja rendering on {node.path}"
-            )
+            fire_event(StaticParserFallbackJinjaRendering(path=node.path))
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
             super().render_update(node, config)
-            logger.debug(
-                f"1602: parser fallback to jinja rendering on {node.path}"
-            )
-
+            fire_event(StaticParserFallbackJinjaRendering(path=node.path))
         # only send the tracking event if there is at least one result code
         if result:
             # fire a tracking event. this fires one event for every sample
@@ -183,9 +184,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # this log line is used for integration testing. If you change
             # the code at the beginning of the line change the tests in
             # test/integration/072_experimental_parser_tests/test_all_experimental_parser.py
-            logger.debug(
-                f"1601: detected macro override of ref/source/config in the scope of {node.path}"
-            )
+            fire_event(StaticParsingMacroOverrideDetected(path=node.path))
             return "has_banned_macro"
 
         # run the stable static parser and return the results
@@ -193,15 +192,13 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             statically_parsed = py_extract_from_source(
                 node.raw_sql
             )
-            logger.debug(f"1699: static parser successfully parsed {node.path}")
+            fire_event(StaticParserSuccess(path=node.path))
             return _shift_sources(statically_parsed)
         # if we want information on what features are barring the static
         # parser from reading model files, this is where we would add that
         # since that information is stored in the `ExtractionError`.
         except ExtractionError:
-            logger.debug(
-                f"1603: static parser failed on {node.path}"
-            )
+            fire_event(StaticParserFailure(path=node.path))
             return "cannot_parse"
 
     def run_experimental_parser(
@@ -212,9 +209,7 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             # this log line is used for integration testing. If you change
             # the code at the beginning of the line change the tests in
             # test/integration/072_experimental_parser_tests/test_all_experimental_parser.py
-            logger.debug(
-                f"1601: detected macro override of ref/source/config in the scope of {node.path}"
-            )
+            fire_event(StaticParsingMacroOverrideDetected(path=node.path))
             return "has_banned_macro"
 
         # run the experimental parser and return the results
@@ -225,15 +220,13 @@ class ModelParser(SimpleSQLParser[ParsedModelNode]):
             experimentally_parsed = py_extract_from_source(
                 node.raw_sql
             )
-            logger.debug(f"1698: experimental parser successfully parsed {node.path}")
+            fire_event(ExperimentalParserSuccess(path=node.path))
             return _shift_sources(experimentally_parsed)
         # if we want information on what features are barring the experimental
         # parser from reading model files, this is where we would add that
         # since that information is stored in the `ExtractionError`.
         except ExtractionError:
-            logger.debug(
-                f"1604: experimental parser failed on {node.path}"
-            )
+            fire_event(ExperimentalParserFailure(path=node.path))
             return "cannot_parse"
 
     # checks for banned macros
