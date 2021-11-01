@@ -299,6 +299,28 @@ class MacroEventDebug(DebugLevel, CliEventABC):
         return self.msg
 
 
+@dataclass
+class NewConnectionOpening(DebugLevel, CliEventABC):
+    connection_state: str
+
+    def cli_msg(self) -> str:
+        return f"Opening a new connection, currently in state {self.connection_state}"
+
+
+class TimingInfoCollected(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "finished collecting timing info"
+
+
+@dataclass
+class MergedFromState(DebugLevel, CliEventABC):
+    nbr_merged: int
+    sample: List
+
+    def cli_msg(self) -> str:
+        return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -334,3 +356,6 @@ if 1 == 0:
     SelectorReportInvalidSelector(selector_methods={'': ''}, spec_method='', raw_spec='')
     MacroEventInfo(msg='')
     MacroEventDebug(msg='')
+    NewConnectionOpening(connection_state='')
+    TimingInfoCollected()
+    MergedFromState(nbr_merged=0, sample=[])
