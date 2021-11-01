@@ -313,10 +313,9 @@ class MissingProfileTarget(InfoLevel, CliEventABC):
         return f"target not specified in profile '{self.profile_name}', using '{self.target_name}'"
 
 
-#  TODO: this should have exc_info=True
 @dataclass
-class ProfileLoadError(DebugLevel, CliEventABC):
-    exc: Exception
+class ProfileLoadError(ShowException, DebugLevel, CliEventABC):
+    exc: Exception = Exception('')
 
     def cli_msg(self) -> str:
         return f"Profile not loaded due to error: {self.exc}"
