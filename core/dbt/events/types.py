@@ -2471,7 +2471,7 @@ if 1 == 0:
     AdapterImportError(exc=Exception())
     PluginLoadError()
     SystemReportReturnCode(returncode=0)
-    NewConnectionOpening(connection_state='')
+    NewConnectionOpening(connection_state="")
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
     MissingProfileTarget(profile_name='', target_name='')
