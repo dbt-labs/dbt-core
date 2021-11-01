@@ -457,11 +457,11 @@ class PartialParsingNotEnabled(DebugLevel, CliEventABC):
         return ("Partial parsing not enabled")
 
 
-# TODO: add in exc_info=True
 @dataclass
-class ParsedFileLoadFailed(DebugLevel, CliEventABC):
-    path: str
-    exc: Exception
+class ParsedFileLoadFailed(ShowException, DebugLevel, CliEventABC):
+    # TODO: remove defaults when Python 3.6 support is dropped
+    path: str = ''
+    exc: Exception = Exception('')
 
     def cli_msg(self) -> str:
         return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
@@ -480,6 +480,8 @@ class StaticParserCausedJinjaRendering(DebugLevel, CliEventABC):
         return f"1605: jinja rendering because of STATIC_PARSER flag. file: {self.path}"
 
 
+# TODO: Experimental/static parser uses these for testing and some may be a good use case for
+#       the `TestLevel` logger once we implement it.  Some will probably stay `DebugLevel`.
 @dataclass
 class UsingExperimentalParser(DebugLevel, CliEventABC):
     path: str
