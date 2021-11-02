@@ -1149,7 +1149,7 @@ class RunningOperationCaughtError(ErrorLevel):
     code: str = "Q001"
 
     def message(self) -> str:
-        return f'Encountered an error while running operation: {self.exc}'
+        return f"Encountered an error while running operation: {self.exc}"
 
 
 @dataclass
@@ -1158,7 +1158,7 @@ class RunningOperationUncaughtError(ErrorLevel):
     code: str = "FF01"
 
     def message(self) -> str:
-        return f'Encountered an error while running operation: {self.exc}'
+        return f"Encountered an error while running operation: {self.exc}"
 
 
 @dataclass
@@ -1249,16 +1249,14 @@ class InternalExceptionOnRun(DebugLevel):
     code: str = "W003"
 
     def message(self) -> str:
-        prefix = 'Internal error executing {}'.format(self.build_path)
+        prefix = "Internal error executing {}".format(self.build_path)
 
         INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
 the error persists, open an issue at https://github.com/dbt-labs/dbt-core
 """.strip()
 
         return "{prefix}\n{error}\n\n{note}".format(
-            prefix=ui.red(prefix),
-            error=str(self.exc).strip(),
-            note=INTERNAL_ERROR_STRING
+            prefix=ui.red(prefix), error=str(self.exc).strip(), note=INTERNAL_ERROR_STRING
         )
 
 
@@ -1284,10 +1282,7 @@ class GenericExceptionOnRun(ErrorLevel):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(
-            prefix=ui.red(prefix),
-            error=str(self.exc).strip()
-        )
+        return "{prefix}\n{error}".format(prefix=ui.red(prefix), error=str(self.exc).strip())
 
 
 @dataclass
@@ -1297,8 +1292,7 @@ class NodeConnectionReleaseError(ShowException, DebugLevel):
     code: str = "W005"
 
     def message(self) -> str:
-        return ('Error releasing connection for node {}: {!s}'
-                .format(self.node_name, self.exc))
+        return "Error releasing connection for node {}: {!s}".format(self.node_name, self.exc)
 
 
 @dataclass
@@ -1347,8 +1341,7 @@ class OpenCommand(InfoLevel):
 
 {open_cmd} {profiles_dir}"""
         message = PROFILE_DIR_MESSAGE.format(
-            open_cmd=self.open_cmd,
-            profiles_dir=self.profiles_dir
+            open_cmd=self.open_cmd, profiles_dir=self.profiles_dir
         )
 
         return message
@@ -1359,7 +1352,7 @@ class DepsNoPackagesFound(InfoLevel):
     code: str = "M013"
 
     def message(self) -> str:
-        return 'Warning: No packages were found in packages.yml'
+        return "Warning: No packages were found in packages.yml"
 
 
 @dataclass
@@ -1413,7 +1406,9 @@ class DepsNotifyUpdatesAvailable(InfoLevel):
 
     def message(self) -> str:
         return "Updates available for packages: {} \
-                \nUpdate your versions in packages.yml, then run dbt deps'.format(self.packages))
+                \nUpdate your versions in packages.yml, then run dbt deps".format(
+            self.packages
+        )
 
 
 @dataclass
@@ -1430,7 +1425,7 @@ class EmptyLine(InfoLevel):
     code: str = "Z017"
 
     def message(self) -> str:
-        return ''
+        return ""
 
 
 @dataclass
@@ -1440,7 +1435,7 @@ class HooksRunning(InfoLevel):
     code: str = "E039"
 
     def message(self) -> str:
-        plural = 'hook' if self.num_hooks == 1 else 'hooks'
+        plural = "hook" if self.num_hooks == 1 else "hooks"
         return f"Running {self.num_hooks} {self.hook_type} {plural}"
 
 
@@ -1460,8 +1455,10 @@ class WriteCatalogFailure(ErrorLevel):
     code: str = "E041"
 
     def message(self) -> str:
-        return (f"dbt encountered {self.num_exceptions} failure{(self.num_exceptions != 1) * 's'} "
-                "while writing the catalog")
+        return (
+            f"dbt encountered {self.num_exceptions} failure{(self.num_exceptions != 1) * 's'} "
+            "while writing the catalog"
+        )
 
 
 @dataclass
@@ -2519,37 +2516,37 @@ if 1 == 0:
     PartialParsingDeletedExposure(unique_id="")
     InvalidDisabledSourceInTestNode(msg="")
     InvalidRefInTestNode(msg="")
-    RunningOperationCaughtError(exc=Exception(''))
-    RunningOperationUncaughtError(exc=Exception(''))
+    RunningOperationCaughtError(exc=Exception(""))
+    RunningOperationUncaughtError(exc=Exception(""))
     DbtProjectError()
-    DbtProjectErrorException(exc=Exception(''))
+    DbtProjectErrorException(exc=Exception(""))
     DbtProfileError()
-    DbtProfileErrorException(exc=Exception(''))
+    DbtProfileErrorException(exc=Exception(""))
     ProfileListTitle()
-    ListSingleProfile(profile='')
+    ListSingleProfile(profile="")
     NoDefinedProfiles()
     ProfileHelpMessage()
-    CatchableExceptionOnRun(exc=Exception(''))
-    InternalExceptionOnRun(build_path='', exc=Exception(''))
+    CatchableExceptionOnRun(exc=Exception(""))
+    InternalExceptionOnRun(build_path="", exc=Exception(""))
     GenericExceptionOnRun(build_path="", unique_id="", exc=Exception(""))
-    NodeConnectionReleaseError(node_name='', exc=Exception(''))
-    CheckCleanPath(path='')
-    ConfirmCleanPath(path='')
-    ProtectedCleanPath(path='')
+    NodeConnectionReleaseError(node_name="", exc=Exception(""))
+    CheckCleanPath(path="")
+    ConfirmCleanPath(path="")
+    ProtectedCleanPath(path="")
     FinishedCleanPaths()
-    OpenCommand(open_cmd='', profiles_dir='')
+    OpenCommand(open_cmd="", profiles_dir="")
     DepsNoPackagesFound()
     DepsStartPackageInstall(package_name='')
-    DepsInstallInfo(version_name='')
-    DepsUpdateAvailable(version_latest='')
-    DepsListSubdirectory(subdirectory='')
+    DepsInstallInfo(version_name="")
+    DepsUpdateAvailable(version_latest="")
+    DepsListSubdirectory(subdirectory="")
     DepsNotifyUpdatesAvailable(packages=[])
-    DatabaseErrorRunning(hook_type='')
+    DatabaseErrorRunning(hook_type="")
     EmptyLine()
-    HooksRunning(num_hooks=0, hook_type='')
-    HookFinished(stat_line='', execution='')
+    HooksRunning(num_hooks=0, hook_type="")
+    HookFinished(stat_line="", execution="")
     WriteCatalogFailure(num_exceptions=0)
-    CatalogWritten(path='')
+    CatalogWritten(path="")
     CannotGenerateDocs()
     BuildingCatalog()
     CompileComplete()

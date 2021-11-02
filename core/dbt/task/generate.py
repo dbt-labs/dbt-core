@@ -18,7 +18,10 @@ from dbt.exceptions import InternalException
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    WriteCatalogFailure, CatalogWritten, CannotGenerateDocs, BuildingCatalog
+    WriteCatalogFailure,
+    CatalogWritten,
+    CannotGenerateDocs,
+    BuildingCatalog,
 )
 from dbt.parser.manifest import ManifestLoader
 import dbt.utils

@@ -24,9 +24,9 @@ from dbt.logger import log_manager
 import dbt.events.functions as event_logger
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
-    ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
-    CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
+    DbtProjectError,
+    DbtProjectErrorException,
+    DbtProfileError,
     DbtProfileErrorException,
     ProfileListTitle,
     ListSingleProfile,

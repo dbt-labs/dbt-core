@@ -6,7 +6,10 @@ from dbt import deprecations
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    CheckCleanPath, ConfirmCleanPath, ProtectedCleanPath, FinishedCleanPaths
+    CheckCleanPath,
+    ConfirmCleanPath,
+    ProtectedCleanPath,
+    FinishedCleanPaths,
 )
 from dbt.config import UnsetProfileConfig
 

@@ -12,7 +12,9 @@ from dbt.contracts.results import RunOperationResultsArtifact
 from dbt.exceptions import InternalException
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    RunningOperationCaughtError, RunningOperationUncaughtError, PrintDebugStackTrace
+    RunningOperationCaughtError,
+    RunningOperationUncaughtError,
+    PrintDebugStackTrace,
 )
 
 
