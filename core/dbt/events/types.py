@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 
 
 # types to represent log levels
@@ -371,6 +371,105 @@ class MacroFileParse(DebugLevel, CliEventABC):
         return f"Parsing {self.path}"
 
 
+class PartialParsingFullReparseBecauseOfError(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Partial parsing enabled but an error occurred. Switching to a full re-parse."
+
+
+@dataclass
+class PartialParsingExceptionFile(DebugLevel, CliEventABC):
+    file: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing exception processing file {self.file}"
+
+
+@dataclass
+class PartialParsingFile(DebugLevel, CliEventABC):
+    file_dict: Dict
+
+    def cli_msg(self) -> str:
+        return f"PP file: {self.file_dict}"
+
+
+@dataclass
+class PartialParsingException(DebugLevel, CliEventABC):
+    exc_info: Dict
+
+    def cli_msg(self) -> str:
+        return f"PP exception info: {self.exc_info}"
+
+
+class PartialParsingSkipParsing(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Partial parsing enabled, no changes found, skipping parsing"
+
+
+class PartialParsingMacroChangeStartFullParse(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Change detected to override macro used during parsing. Starting full parse."
+
+
+@dataclass
+class ManifestWrongMetadataVersion(DebugLevel, CliEventABC):
+    version: str
+
+    def cli_msg(self) -> str:
+        return "Manifest metadata did not contain correct version. Contained '{self.version}' instead."
+
+
+@dataclass
+class PartialParsingVersionMismatch(InfoLevel, CliEventABC):
+    saved_version: str
+    current_version: str
+
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because of a dbt version mismatch. "
+               f"Saved manifest version: {self.saved_version}. "
+               f"Current version: {self.current_version}.")
+
+
+class PartialParsingFailedBecauseConfigChange(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because config vars, "
+                "config profile, or config target have changed")
+
+
+class PartialParsingFailedBecauseProfileChange(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because profile has changed")
+
+
+class PartialParsingFailedBecauseNewProjectDependency(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because a project dependency has been added")
+
+
+class PartialParsingFailedBecauseHashChanged(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because a project config has changed")
+
+
+class PartialParsingNotEnabled(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Partial parsing not enabled")
+
+
+# TODO: add in exc_info=True
+@dataclass
+class ParsedFileLoadFailed(DebugLevel, CliEventABC):
+    path: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
+
+
+class PartialParseSaveFileNotFound(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Partial parse save file not found. Starting full parse.")
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -415,3 +514,16 @@ if 1 == 0:
     InvalidVarsYAML()
     GenericTestFileParse(path='')
     MacroFileParse(path='')
+    PartialParsingFullReparseBecauseOfError(file='')
+    PartialParsingFile(file_dict={})
+    PartialParsingException(exc_info={})
+    PartialParsingSkipParsing()
+    PartialParsingMacroChangeStartFullParse()
+    ManifestWrongMetadataVersion(version='')
+    PartialParsingVersionMismatch(saved_version='', current_version='')
+    PartialParsingFailedBecauseConfigChange()
+    PartialParsingFailedBecauseProfileChange()
+    PartialParsingFailedBecauseNewProjectDependency()
+    PartialParsingFailedBecauseHashChanged()
+    ParsedFileLoadFailed(path='', exc=Exception(''))
+    PartialParseSaveFileNotFound()
