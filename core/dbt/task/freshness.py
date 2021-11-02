@@ -16,7 +16,8 @@ from dbt.contracts.results import (
     SourceFreshnessResult, FreshnessStatus
 )
 from dbt.exceptions import RuntimeException, InternalException
-from dbt.logger import print_timestamped_line
+from dbt.events.functions import fire_event
+from dbt.events.types import FreshnessCheckComplete
 from dbt.node_types import NodeType
 
 from dbt.graph import ResourceTypeSelector
@@ -170,4 +171,4 @@ class FreshnessTask(GraphRunnableTask):
             ):
                 print_run_result_error(result)
 
-        print_timestamped_line('Done.')
+        fire_event(FreshnessCheckComplete())

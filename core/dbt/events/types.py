@@ -994,6 +994,11 @@ class CompileComplete(InfoLevel, CliEventABC):
         return "Done."
 
 
+class FreshnessCheckComplete(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Done."
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1108,3 +1113,4 @@ if 1 == 0:
     CannotGenerateDocs()
     BuildingCatalog()
     CompileComplete()
+    FreshnessCheckComplete()
