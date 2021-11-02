@@ -921,6 +921,37 @@ class DepsNotifyUpdatesAvailable(InfoLevel, CliEventABC):
                 self.packages)
 
 
+@dataclass
+class DatabaseErrorRunning(InfoLevel, CliEventABC):
+    hook_type: str
+
+    def cli_msg(self) -> str:
+        return f"Database error while running {self.hook_type}"
+
+
+class EmptyLine(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ''
+
+
+@dataclass
+class HooksRunning(InfoLevel, CliEventABC):
+    num_hooks: int
+    hook_type: str
+
+    def cli_msg(self) -> str:
+        plural = 'hook' if self.num_hooks == 1 else 'hooks'
+        return f"Running {self.num_hooks} {self.hook_type} {plural}"
+
+
+@dataclass
+class HookFinished(InfoLevel, CliEventABC):
+    stat_line: str
+    execution: str
+
+    def cli_msg(self) -> str:
+        return f"Finished running {self.stat_line}{self.execution}."
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1026,3 +1057,7 @@ if 1 == 0:
     DepsUpdateAvailable(version_latest='')
     DepsListSubdirectory(subdirectory='')
     DepsNotifyUpdatesAvailable(packages=[])
+    DatabaseErrorRunning(hook_type='')
+    EmptyLine()
+    HooksRunning(num_hooks=0, hook_type='')
+    HookFinished(stat_line='', execution='')
