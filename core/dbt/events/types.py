@@ -1102,4 +1102,3 @@ if 1 == 0:
     CatalogWritten(path='')
     CannotGenerateDocs()
     BuildingCatalog()
-
