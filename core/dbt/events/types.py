@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Optional
 
 
 # types to represent log levels
@@ -305,6 +305,36 @@ class MacroEventDebug(DebugLevel, CliEventABC):
 
 
 @dataclass
+class MissingProfileTarget(InfoLevel, CliEventABC):
+    profile_name: str
+    target_name: str
+
+    def cli_msg(self) -> str:
+        return f"target not specified in profile '{self.profile_name}', using '{self.target_name}'"
+
+
+@dataclass
+class ProfileLoadError(ShowException, DebugLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"Profile not loaded due to error: {self.exc}"
+
+
+@dataclass
+class ProfileNotFound(InfoLevel, CliEventABC):
+    profile_name: Optional[str]
+
+    def cli_msg(self) -> str:
+        return f'No profile "{self.profile_name}" found, continuing with no target'
+
+
+class InvalidVarsYAML(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "The YAML provided in the --vars argument is not valid.\n"
+
+
+@dataclass
 class NewConnectionOpening(DebugLevel, CliEventABC):
     connection_state: str
 
@@ -364,3 +394,7 @@ if 1 == 0:
     NewConnectionOpening(connection_state='')
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
+    MissingProfileTarget(profile_name='', target_name='')
+    ProfileLoadError(exc=Exception(''))
+    ProfileNotFound(profile_name='')
+    InvalidVarsYAML()

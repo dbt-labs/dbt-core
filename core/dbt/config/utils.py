@@ -1,8 +1,9 @@
 from typing import Dict, Any
 
 from dbt.clients import yaml_helper
+from dbt.events.functions import fire_event
 from dbt.exceptions import raise_compiler_error, ValidationException
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.types import InvalidVarsYAML
 
 
 def parse_cli_vars(var_string: str) -> Dict[str, Any]:
@@ -17,7 +18,5 @@ def parse_cli_vars(var_string: str) -> Dict[str, Any]:
                 "The --vars argument must be a YAML dictionary, but was "
                 "of type '{}'".format(type_name))
     except ValidationException:
-        logger.error(
-            "The YAML provided in the --vars argument is not valid.\n"
-        )
+        fire_event(InvalidVarsYAML())
         raise
