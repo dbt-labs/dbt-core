@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
+from dbt.contracts.files import AnySourceFile
 
 
 # types to represent log levels
@@ -534,6 +535,100 @@ class ExperimentalParserSuccess(DebugLevel, CliEventABC):
         return f"1698: experimental parser successfully parsed {self.path}"
 
 
+@dataclass
+class ExperimentalParserFailure(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1604: experimental parser failed on {self.path}"
+
+
+@dataclass
+class PartialParsingEnabled(DebugLevel, CliEventABC):
+    deleted: int
+    added: int
+    changed: int
+
+
+    def cli_msg(self) -> str:
+        return (f"Partial parsing enabled: "
+                f"{self.deleted} files deleted, "
+                f"{self.added} files added, "
+                f"{self.changed} files changed.")
+
+
+@dataclass
+class PartialParsingAddedFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: added file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingDeletedFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: deleted file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingUpdatedFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: updated file: {self.file_id}"
+
+
+@dataclass
+class ParsingParsingNodeMissingInSourceFile(DebugLevel, CliEventABC):
+    source_file: AnySourceFile
+
+    def cli_msg(self) -> str:
+        f"Partial parsing: node not found for source_file {self.source_file}"
+
+
+@dataclass
+class PartialParsingMissingNodes(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"No nodes found for source file {self.file_id}"
+
+
+@dataclass
+class PartialParsingChildMapMissingUniqueID(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: {self.unique_id} not found in child_map"
+
+
+@dataclass
+class PartialParsingUpdateSchemaFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: update schema file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingDeletedSource(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: deleted source {self.unique_id}"
+
+
+@dataclass
+class PartialParsingDeletedExposure(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: deleted exposure {self.unique_id}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -599,3 +694,14 @@ if 1 == 0:
     StaticParserSuccess(path='')
     StaticParserFailure(path='')
     ExperimentalParserSuccess(path='')
+    ExperimentalParserFailure(path='')
+    PartialParsingEnabled(deleted=0, added=0, changed=0)
+    PartialParsingAddedFile(file_id='')
+    PartialParsingDeletedFile(file_id='')
+    PartialParsingUpdatedFile(file_id='')
+    ParsingParsingNodeMissingInSourceFile(source_file=AnySourceFile)
+    PartialParsingMissingNodes(file_id='')
+    PartialParsingChildMapMissingUniqueID(unique_id='')
+    PartialParsingUpdateSchemaFile(file_id='')
+    PartialParsingDeletedSource(unique_id='')
+    PartialParsingDeletedExposure(uniquer_id='')

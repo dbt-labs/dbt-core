@@ -4,7 +4,13 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import (
     AnySourceFile, ParseFileType, parse_file_type_to_parser,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    PartialParsingEnabled, PartialParsingAddedFile, PartialParsingDeletedFile,
+    PartialParsingUpdatedFile, ParsingParsingNodeMissingInSourceFile, PartialParsingMissingNodes,
+    PartialParsingChildMapMissingUniqueID, PartialParsingUpdateSchemaFile,
+    PartialParsingDeletedSource, PartialParsingDeletedExposure
+)
 from dbt.node_types import NodeType
 
 
@@ -124,10 +130,9 @@ class PartialParsing:
         }
         if changed_or_deleted_macro_file:
             self.macro_child_map = self.saved_manifest.build_macro_child_map()
-        logger.debug(f"Partial parsing enabled: "
-                     f"{len(deleted) + len(deleted_schema_files)} files deleted, "
-                     f"{len(added)} files added, "
-                     f"{len(changed) + len(changed_schema_files)} files changed.")
+        deleted = len(deleted) + len(deleted_schema_files)
+        changed = len(changed) + len(changed_schema_files)
+        fire_event(PartialParsingEnabled(deleted=deleted, added=len(added), changed=changed))
         self.file_diff = file_diff
 
     # generate the list of files that need parsing
@@ -193,7 +198,7 @@ class PartialParsing:
         self.saved_files[file_id] = source_file
         # update pp_files to parse
         self.add_to_pp_files(source_file)
-        logger.debug(f"Partial parsing: added file: {file_id}")
+        fire_event(PartialParsingAddedFile(file_id=file_id))
 
     def handle_added_schema_file(self, source_file):
         source_file.pp_dict = source_file.dict_from_yaml.copy()
@@ -225,7 +230,7 @@ class PartialParsing:
         if saved_source_file.parse_file_type == ParseFileType.Documentation:
             self.delete_doc_node(saved_source_file)
 
-        logger.debug(f"Partial parsing: deleted file: {file_id}")
+        fire_event(PartialParsingDeletedFile(file_id=file_id))
 
     # Updates for non-schema files
     def update_in_saved(self, file_id):
@@ -240,7 +245,7 @@ class PartialParsing:
             self.update_doc_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
-        logger.debug(f"Partial parsing: updated file: {file_id}")
+        fire_event(PartialParsingUpdatedFile(file_id=file_id))
 
     # Models, seeds, snapshots: patches and tests
     # analyses: patches, no tests
@@ -258,7 +263,7 @@ class PartialParsing:
         else:
             # It's not clear when this would actually happen.
             # Logging in case there are other associated errors.
-            logger.debug(f"Partial parsing: node not found for source_file {old_source_file}")
+            fire_event(ParsingParsingNodeMissingInSourceFile(source_file=old_source_file))
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
@@ -335,7 +340,7 @@ class PartialParsing:
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
         if not source_file.nodes:
-            logger.debug(f"No nodes found for source file {source_file.file_id}")
+            fire_event(PartialParsingMissingNodes(file_id=source_file.file_id))
             return
         # There is generally only 1 node for SQL files, except for macros
         for unique_id in source_file.nodes:
@@ -348,7 +353,7 @@ class PartialParsing:
         if unique_id in self.saved_manifest.child_map:
             self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
         else:
-            logger.debug(f"Partial parsing: {unique_id} not found in child_map")
+            fire_event(PartialParsingChildMapMissingUniqueID(unique_id=unique_id))
 
     def schedule_nodes_for_parsing(self, unique_ids):
         for unique_id in unique_ids:
@@ -540,7 +545,7 @@ class PartialParsing:
         # schedule parsing
         self.add_to_pp_files(saved_schema_file)
         # schema_file pp_dict should have been generated already
-        logger.debug(f"Partial parsing: update schema file: {file_id}")
+        fire_event(PartialParsingUpdateSchemaFile(file_id=file_id))
 
     # Delete schema files -- a variation on change_schema_file
     def delete_schema_file(self, file_id):
@@ -734,7 +739,7 @@ class PartialParsing:
                     self.deleted_manifest.sources[unique_id] = source
                     schema_file.sources.remove(unique_id)
                     self.schedule_referencing_nodes_for_parsing(unique_id)
-                    logger.debug(f"Partial parsing: deleted source {unique_id}")
+                    fire_event(PartialParsingDeletedSource(unique_id=unique_id))
 
     def delete_schema_macro_patch(self, schema_file, macro):
         # This is just macro patches that need to be reapplied
@@ -762,7 +767,7 @@ class PartialParsing:
                     self.deleted_manifest.exposures[unique_id] = \
                         self.saved_manifest.exposures.pop(unique_id)
                     schema_file.exposures.remove(unique_id)
-                    logger.debug(f"Partial parsing: deleted exposure {unique_id}")
+                    fire_event(PartialParsingDeletedExposure(unique_id=unique_id))
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
