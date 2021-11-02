@@ -14,7 +14,7 @@ from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
     InternalException
 )
-from dbt.logger import GLOBAL_LOGGER as log_manager
+from dbt.logger import log_manager
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
