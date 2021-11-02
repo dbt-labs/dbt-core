@@ -362,8 +362,8 @@ class InvalidVarsYAML(ErrorLevel, CliEventABC):
 
 @dataclass
 class CatchRunException(ShowException, DebugLevel, CliEventABC):
-    build_path: Any = ''
-    exc: Exception = ''
+    build_path: Any
+    exc: Exception
 
     def cli_msg(self) -> str:
         INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If the \
@@ -380,7 +380,7 @@ class CatchRunException(ShowException, DebugLevel, CliEventABC):
 
 @dataclass
 class HandleInternalException(ShowException, DebugLevel, CliEventABC):
-    exc: Exception = ''
+    exc: Exception
 
     def cli_msg(self) -> str:
         return str(self.exc)
@@ -922,12 +922,11 @@ class DepsListSubdirectory(InfoLevel, CliEventABC):
 
 @dataclass
 class DepsNotifyUpdatesAvailable(InfoLevel, CliEventABC):
-    packages: List
+    packages: List[str]
 
     def cli_msg(self) -> str:
         return ('\nUpdates available for packages: {} \
-                \nUpdate your versions in packages.yml, then run dbt deps',
-                self.packages)
+                \nUpdate your versions in packages.yml, then run dbt deps'.format(self.packages))
 
 
 @dataclass

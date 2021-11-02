@@ -1,6 +1,5 @@
 import threading
 
-from dbt.contracts.graph.manifest import find_unique_id_for_package
 from .runnable import GraphRunnableTask
 from .base import BaseRunner
 
