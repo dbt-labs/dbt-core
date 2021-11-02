@@ -697,6 +697,19 @@ class InvalidRefInTestNode(WarnLevel, CliEventABC):
 
     def cli_msg(self) -> str:
         return warning_tag(self.msg)
+class RunningOperationCaughtError(ShowException, ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f'Encountered an error while running operation: {self.exc}'
+
+
+@dataclass
+class RunningOperationUncaughtError(ShowException, ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f'Encountered an error while running operation: {self.exc}'
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -779,3 +792,5 @@ if 1 == 0:
     InvalidRefInTestNode(msg='')
     MessageHandleGenericException(build_path='', unique_id='', exc=Exception(''))
     DetailsHandleGenericException()
+    RunningOperationCaughtError(exc=Exception(''))
+    RunningOperationUncaughtError(exc=Exception(''))
