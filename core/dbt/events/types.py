@@ -903,10 +903,7 @@ class DepsUpdateAvailable(InfoLevel, CliEventABC):
         return f"  Updated version available: {self.version_latest}"
 
 
-@dataclass
 class DepsUTD(InfoLevel, CliEventABC):
-    version_latest: str
-
     def cli_msg(self) -> str:
         return "  Up to date!"
 
