@@ -1,9 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
-from dbt.ui import warning_tag
-import dataclasses
-from typing import Any, List, Optional
 from dbt import ui
 
 
@@ -688,7 +685,7 @@ class InvalidDisabledSourceInTestNode(WarnLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return warning_tag(self.msg)
+        return ui.warning_tag(self.msg)
 
 
 @dataclass
@@ -696,8 +693,10 @@ class InvalidRefInTestNode(WarnLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return warning_tag(self.msg)
-class RunningOperationCaughtError(ShowException, ErrorLevel, CliEventABC):
+        return ui.warning_tag(self.msg)
+
+
+@dataclass
 class RunningOperationCaughtError(ErrorLevel, CliEventABC):
     exc: Exception
 
