@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
-from dbt.ui import warning_tag
+from dbt import ui
 
 
 # types to represent log levels
@@ -306,6 +306,28 @@ class MacroEventDebug(DebugLevel, CliEventABC):
 
 
 @dataclass
+class NewConnectionOpening(DebugLevel, CliEventABC):
+    connection_state: str
+
+    def cli_msg(self) -> str:
+        return f"Opening a new connection, currently in state {self.connection_state}"
+
+
+class TimingInfoCollected(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "finished collecting timing info"
+
+
+@dataclass
+class MergedFromState(DebugLevel, CliEventABC):
+    nbr_merged: int
+    sample: List
+
+    def cli_msg(self) -> str:
+        return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
+
+
+@dataclass
 class MissingProfileTarget(InfoLevel, CliEventABC):
     profile_name: str
     target_name: str
@@ -336,25 +358,52 @@ class InvalidVarsYAML(ErrorLevel, CliEventABC):
 
 
 @dataclass
-class NewConnectionOpening(DebugLevel, CliEventABC):
-    connection_state: str
+class CatchRunException(ShowException, DebugLevel, CliEventABC):
+    build_path: Any
+    exc: Exception
 
     def cli_msg(self) -> str:
-        return f"Opening a new connection, currently in state {self.connection_state}"
-
-
-class TimingInfoCollected(DebugLevel, CliEventABC):
-    def cli_msg(self) -> str:
-        return "finished collecting timing info"
+        INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If the \
+                            error persists, open an issue at https://github.com/dbt-labs/dbt-core
+                            """.strip()
+        prefix = f'Internal error executing {self.build_path}'
+        error = "{prefix}\n{error}\n\n{note}".format(
+                prefix=ui.red(prefix),
+                error=str(self.exc).strip(),
+                note=INTERNAL_ERROR_STRING
+        )
+        return error
 
 
 @dataclass
-class MergedFromState(DebugLevel, CliEventABC):
-    nbr_merged: int
-    sample: List
+class HandleInternalException(ShowException, DebugLevel, CliEventABC):
+    exc: Exception
 
     def cli_msg(self) -> str:
-        return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
+        return str(self.exc)
+
+
+@dataclass
+class MessageHandleGenericException(ErrorLevel, CliEventABC):
+    build_path: str
+    unique_id: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        node_description = self.build_path
+        if node_description is None:
+            node_description = self.unique_id
+        prefix = "Unhandled error while executing {}".format(node_description)
+        return "{prefix}\n{error}".format(
+            prefix=ui.red(prefix),
+            error=str(self.exc).strip()
+        )
+
+
+@dataclass
+class DetailsHandleGenericException(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ''
 
 
 @dataclass
@@ -636,7 +685,7 @@ class InvalidDisabledSourceInTestNode(WarnLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return warning_tag(self.msg)
+        return ui.warning_tag(self.msg)
 
 
 @dataclass
@@ -644,7 +693,305 @@ class InvalidRefInTestNode(WarnLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return warning_tag(self.msg)
+        return ui.warning_tag(self.msg)
+
+
+@dataclass
+class RunningOperationCaughtError(ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f'Encountered an error while running operation: {self.exc}'
+
+
+@dataclass
+class RunningOperationUncaughtError(ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f'Encountered an error while running operation: {self.exc}'
+
+
+class DbtProjectError(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Encountered an error while reading the project:"
+
+
+@dataclass
+class DbtProjectErrorException(ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"  ERROR: {str(self.exc)}"
+
+
+class DbtProfileError(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Encountered an error while reading profiles:"
+
+
+@dataclass
+class DbtProfileErrorException(ErrorLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"  ERROR: {str(self.exc)}"
+
+
+class ProfileListTitle(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Defined profiles:"
+
+
+@dataclass
+class ListSingleProfile(InfoLevel, CliEventABC):
+    profile: str
+
+    def cli_msg(self) -> str:
+        return f" - {self.profile}"
+
+
+class NoDefinedProfiles(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "There are no profiles defined in your profiles.yml file"
+
+
+class ProfileHelpMessage(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        PROFILES_HELP_MESSAGE = """
+For more information on configuring profiles, please consult the dbt docs:
+
+https://docs.getdbt.com/docs/configure-your-profile
+"""
+        return PROFILES_HELP_MESSAGE
+
+
+@dataclass
+class CatchableExceptionOnRun(ShowException, DebugLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return str(self.exc)
+
+
+@dataclass
+class InternalExceptionOnRun(DebugLevel, CliEventABC):
+    build_path: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        prefix = 'Internal error executing {}'.format(self.build_path)
+
+        INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
+the error persists, open an issue at https://github.com/dbt-labs/dbt-core
+""".strip()
+
+        return "{prefix}\n{error}\n\n{note}".format(
+            prefix=ui.red(prefix),
+            error=str(self.exc).strip(),
+            note=INTERNAL_ERROR_STRING
+        )
+
+
+# This prints the stack trace at the debug level while allowing just the nice exception message
+# at the error level - or whatever other level chosen.  Used in multiple places.
+@dataclass
+class PrintDebugStackTrace(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ""
+
+
+@dataclass
+class GenericExceptionOnRun(ErrorLevel, CliEventABC):
+    build_path: str
+    unique_id: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        node_description = self.build_path
+        if node_description is None:
+            node_description = self.unique_id
+        prefix = "Unhandled error while executing {}".format(node_description)
+        return "{prefix}\n{error}".format(
+            prefix=ui.red(prefix),
+            error=str(self.exc).strip()
+        )
+
+
+@dataclass
+class NodeConnectionReleaseError(ShowException, DebugLevel, CliEventABC):
+    node_name: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return ('Error releasing connection for node {}: {!s}'
+                .format(self.node_name, self.exc))
+
+
+@dataclass
+class CheckCleanPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Checking {self.path}/*"
+
+
+@dataclass
+class ConfirmCleanPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Cleaned {self.path}/*"
+
+
+@dataclass
+class ProtectedCleanPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"ERROR: not cleaning {self.path}/* because it is protected"
+
+
+class FinishedCleanPaths(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Finished cleaning all paths."
+
+
+@dataclass
+class OpenCommand(InfoLevel, CliEventABC):
+    open_cmd: str
+    profiles_dir: str
+
+    def cli_msg(self) -> str:
+        PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
+
+{open_cmd} {profiles_dir}"""
+        message = PROFILE_DIR_MESSAGE.format(
+            open_cmd=self.open_cmd,
+            profiles_dir=self.profiles_dir
+        )
+
+        return message
+
+
+class DepsNoPackagesFound(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return 'Warning: No packages were found in packages.yml'
+
+
+@dataclass
+class DepsStartPackageInstall(InfoLevel, CliEventABC):
+    package: str
+
+    def cli_msg(self) -> str:
+        return f"Installing {self.package}"
+
+
+@dataclass
+class DepsInstallInfo(InfoLevel, CliEventABC):
+    version_name: str
+
+    def cli_msg(self) -> str:
+        return f"  Installed from {self.version_name}"
+
+
+@dataclass
+class DepsUpdateAvailable(InfoLevel, CliEventABC):
+    version_latest: str
+
+    def cli_msg(self) -> str:
+        return f"  Updated version available: {self.version_latest}"
+
+
+class DepsUTD(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "  Up to date!"
+
+
+@dataclass
+class DepsListSubdirectory(InfoLevel, CliEventABC):
+    subdirectory: str
+
+    def cli_msg(self) -> str:
+        return f"   and subdirectory {self.subdirectory}"
+
+
+@dataclass
+class DepsNotifyUpdatesAvailable(InfoLevel, CliEventABC):
+    packages: List[str]
+
+    def cli_msg(self) -> str:
+        return ('\nUpdates available for packages: {} \
+                \nUpdate your versions in packages.yml, then run dbt deps'.format(self.packages))
+
+
+@dataclass
+class DatabaseErrorRunning(InfoLevel, CliEventABC):
+    hook_type: str
+
+    def cli_msg(self) -> str:
+        return f"Database error while running {self.hook_type}"
+
+
+class EmptyLine(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ''
+
+
+@dataclass
+class HooksRunning(InfoLevel, CliEventABC):
+    num_hooks: int
+    hook_type: str
+
+    def cli_msg(self) -> str:
+        plural = 'hook' if self.num_hooks == 1 else 'hooks'
+        return f"Running {self.num_hooks} {self.hook_type} {plural}"
+
+
+@dataclass
+class HookFinished(InfoLevel, CliEventABC):
+    stat_line: str
+    execution: str
+
+    def cli_msg(self) -> str:
+        return f"Finished running {self.stat_line}{self.execution}."
+
+
+@dataclass
+class WriteCatalogFailure(ErrorLevel, CliEventABC):
+    num_exceptions: int
+
+    def cli_msg(self) -> str:
+        return (f"dbt encountered {self.num_exceptions} failure{(self.num_exceptions != 1) * 's'} "
+                "while writing the catalog")
+
+
+@dataclass
+class CatalogWritten(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Catalog written to {self.path}"
+
+
+class CannotGenerateDocs(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "compile failed, cannot generate docs"
+
+
+class BuildingCatalog(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Building catalog"
+
+
+class CompileComplete(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Done."
+
+
+class FreshnessCheckComplete(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Done."
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -725,3 +1072,40 @@ if 1 == 0:
     PartialParsingDeletedExposure(unique_id='')
     InvalidDisabledSourceInTestNode(msg='')
     InvalidRefInTestNode(msg='')
+    MessageHandleGenericException(build_path='', unique_id='', exc=Exception(''))
+    DetailsHandleGenericException()
+    RunningOperationCaughtError(exc=Exception(''))
+    RunningOperationUncaughtError(exc=Exception(''))
+    DbtProjectError()
+    DbtProjectErrorException(exc=Exception(''))
+    DbtProfileError()
+    DbtProfileErrorException(exc=Exception(''))
+    ProfileListTitle()
+    ListSingleProfile(profile='')
+    NoDefinedProfiles()
+    ProfileHelpMessage()
+    CatchableExceptionOnRun(exc=Exception(''))
+    InternalExceptionOnRun(build_path='', exc=Exception(''))
+    GenericExceptionOnRun(build_path='', unique_id='', exc=Exception(''))
+    NodeConnectionReleaseError(node_name='', exc=Exception(''))
+    CheckCleanPath(path='')
+    ConfirmCleanPath(path='')
+    ProtectedCleanPath(path='')
+    FinishedCleanPaths()
+    OpenCommand(open_cmd='', profiles_dir='')
+    DepsNoPackagesFound()
+    DepsStartPackageInstall(package='')
+    DepsInstallInfo(version_name='')
+    DepsUpdateAvailable(version_latest='')
+    DepsListSubdirectory(subdirectory='')
+    DepsNotifyUpdatesAvailable(packages=[])
+    DatabaseErrorRunning(hook_type='')
+    EmptyLine()
+    HooksRunning(num_hooks=0, hook_type='')
+    HookFinished(stat_line='', execution='')
+    WriteCatalogFailure(num_exceptions=0)
+    CatalogWritten(path='')
+    CannotGenerateDocs()
+    BuildingCatalog()
+    CompileComplete()
+    FreshnessCheckComplete()

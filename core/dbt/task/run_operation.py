@@ -10,7 +10,10 @@ from dbt.adapters.factory import get_adapter
 from dbt.config.utils import parse_cli_vars
 from dbt.contracts.results import RunOperationResultsArtifact
 from dbt.exceptions import InternalException
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    RunningOperationCaughtError, RunningOperationUncaughtError, PrintDebugStackTrace
+)
 
 
 class RunOperationTask(ManifestTask):
@@ -53,18 +56,12 @@ class RunOperationTask(ManifestTask):
         try:
             self._run_unsafe()
         except dbt.exceptions.Exception as exc:
-            logger.error(
-                'Encountered an error while running operation: {}'
-                .format(exc)
-            )
-            logger.debug('', exc_info=True)
+            fire_event(RunningOperationCaughtError(exc=exc))
+            fire_event(PrintDebugStackTrace())
             success = False
         except Exception as exc:
-            logger.error(
-                'Encountered an uncaught exception while running operation: {}'
-                .format(exc)
-            )
-            logger.debug('', exc_info=True)
+            fire_event(RunningOperationUncaughtError(exc=exc))
+            fire_event(PrintDebugStackTrace())
             success = False
         else:
             success = True
