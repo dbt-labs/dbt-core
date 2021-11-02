@@ -50,7 +50,7 @@ setup(
         'protobuf>=3.13.0,<4',
         'google-cloud-core>=1.3.0,<2',
         'google-cloud-bigquery>=1.25.0,<3',
-        'google-api-core>=1.16.0,<2',
+        'google-api-core>=1.16.0,<1.31.3',
         'googleapis-common-protos>=1.6.0,<2',
         'six>=1.14.0',
     ],
