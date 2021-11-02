@@ -849,6 +849,23 @@ class FinishedCleanPaths(InfoLevel, CliEventABC):
         return "Finished cleaning all paths."
 
 
+@dataclass
+class OpenCommand(InfoLevel, CliEventABC):
+    open_cmd: str
+    profiles_dir: str
+
+    def cli_msg(self) -> str:
+        PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
+
+{open_cmd} {profiles_dir}"""
+        message =  PROFILE_DIR_MESSAGE.format(
+            open_cmd=self.open_cmd,
+            profiles_dir=self.profiles_dir
+        )
+
+        return message
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -947,3 +964,4 @@ if 1 == 0:
     ConfirmCleanPath(path='')
     ProtectedCleanPath(path='')
     FinishedCleanPaths()
+    OpenCommand(open_cmd='', profiles_dir='')

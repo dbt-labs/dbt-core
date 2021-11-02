@@ -4,7 +4,8 @@ import platform
 import sys
 from typing import Optional, Dict, Any, List
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import OpenCommand
 from dbt import flags
 import dbt.clients.system
 import dbt.exceptions
@@ -108,7 +109,7 @@ class DebugTask(BaseTask):
             profiles_dir=self.profiles_dir
         )
 
-        logger.info(message)
+        fire_event(OpenCommand(open_cmd=open_cmd, profiles_dir=self.profiles_dir))
 
     def run(self):
         if self.args.config_dir:
