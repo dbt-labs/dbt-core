@@ -953,6 +953,33 @@ class HookFinished(InfoLevel, CliEventABC):
         return f"Finished running {self.stat_line}{self.execution}."
 
 
+@dataclass
+class WriteCatalogFailure(ErrorLevel, CliEventABC):
+    num_exceptions: int
+
+    def cli_msg(self) -> str:
+        return (f"dbt encountered {self.num_exceptions} failure{(self.num_exceptions != 1) * 's'} "
+                "while writing the catalog")
+
+
+@dataclass
+class CatalogWritten(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Catalog written to {self.path}"
+
+
+class CannotGenerateDocs(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "compile failed, cannot generate docs"
+
+
+class BuildingCatalog(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Building catalog"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1062,3 +1089,8 @@ if 1 == 0:
     EmptyLine()
     HooksRunning(num_hooks=0, hook_type='')
     HookFinished(stat_line='', execution='')
+    WriteCatalogFailure(num_exceptions=0)
+    CatalogWritten(path='')
+    CannotGenerateDocs()
+    BuildingCatalog()
+
