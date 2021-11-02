@@ -33,9 +33,14 @@ class ErrorLevel():
 
 @dataclass
 class ShowException():
-    exc_info: Any = None
-    stack_info: Any = None
-    extra: Any = None
+    # N.B.:
+    # As long as we stick with the current convention of setting the member vars in the
+    # `cli_msg` method of subclasses, this is a safe operation.
+    # If that ever changes we'll want to reassess.
+    def __post_init__(self):
+        self.exc_info: Any = None
+        self.stack_info: Any = None
+        self.extra: Any = None
 
 
 # The following classes represent the data necessary to describe a
