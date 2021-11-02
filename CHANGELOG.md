@@ -13,6 +13,7 @@
 - Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135),[#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
 - Add downstream test edges for `build` task _only_. Restore previous graph construction, compilation performance, and node selection behavior (`test+`) for all other tasks ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135), [#4143](https://github.com/dbt-labs/dbt-core/pull/4143))
 - Don't require a strict/proper subset when adding testing edges to specialized graph for `build` ([#4158](https://github.com/dbt-labs/dbt-core/issues/4135), [#4158](https://github.com/dbt-labs/dbt-core/pull/4160))
+- Capping `google-api-core` to version `1.31.3` due to `protobuf` dependency conflict ([#4192](https://github.com/dbt-labs/dbt-core/pull/4192))
 
 Contributors:
 - [@ljhopkins2](https://github.com/ljhopkins2) ([#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
