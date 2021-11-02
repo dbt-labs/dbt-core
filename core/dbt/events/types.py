@@ -866,6 +866,62 @@ class OpenCommand(InfoLevel, CliEventABC):
         return message
 
 
+class DepsNoPackagesFound(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return 'Warning: No packages were found in packages.yml'
+
+
+@dataclass
+class DepsStartPackageInstall(InfoLevel, CliEventABC):
+    package: str
+
+    def cli_msg(self) -> str:
+        return f"Installing {self.package}"
+
+
+@dataclass
+class DepsInstallInfo(InfoLevel, CliEventABC):
+    version_name: str
+
+    def cli_msg(self) -> str:
+        return f"  Installed from {self.version_name}"
+
+
+@dataclass
+class DepsUpdateAvailable(InfoLevel, CliEventABC):
+    version_latest: str
+
+    def cli_msg(self) -> str:
+        return f"  Updated version available: {self.version_latest}"
+
+
+@dataclass
+class DepsUTD(InfoLevel, CliEventABC):
+    version_latest: str
+
+    def cli_msg(self) -> str:
+        return "  Up to date!"
+
+
+@dataclass
+class DepsListSubdirectory(InfoLevel, CliEventABC):
+    subdirectory: str
+
+    def cli_msg(self) -> str:
+        return f"   and subdirectory {self.subdirectory}"
+
+
+@dataclass
+class DepsNotifyUpdatesAvailable(InfoLevel, CliEventABC):
+    packages: List
+
+    def cli_msg(self) -> str:
+        return ('\nUpdates available for packages: {} \
+                \nUpdate your versions in packages.yml, then run dbt deps',
+                self.packages)
+
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -965,3 +1021,10 @@ if 1 == 0:
     ProtectedCleanPath(path='')
     FinishedCleanPaths()
     OpenCommand(open_cmd='', profiles_dir='')
+    DepsNoPackagesFound()
+    DepsStartPackageInstall(package='')
+    DepsInstallInfo(version_name='')
+    DepsUpdateAvailable(version_latest='')
+    DepsListSubdirectory(subdirectory='')
+    DepsNotifyUpdatesAvailable(packages=[])
+
