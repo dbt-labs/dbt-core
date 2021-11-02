@@ -19,7 +19,8 @@ from dbt.helper_types import FQNPath, PathSet
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.relation import ComponentName
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.types import ProfileLoadError, ProfileNotFound
+from dbt.events.functions import fire_event
 from dbt.ui import warning_tag
 
 from dbt.contracts.project import Configuration, UserConfig
@@ -544,13 +545,8 @@ class UnsetProfileConfig(RuntimeConfig):
                 args, profile_renderer, profile_name
             )
         except (DbtProjectError, DbtProfileError) as exc:
-            logger.debug(
-                'Profile not loaded due to error: {}', exc, exc_info=True
-            )
-            logger.info(
-                'No profile "{}" found, continuing with no target',
-                profile_name
-            )
+            fire_event(ProfileLoadError(exc=exc))
+            fire_event(ProfileNotFound(profile_name=profile_name))
             # return the poisoned form
             profile = UnsetProfile()
             # disable anonymous usage statistics
