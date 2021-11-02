@@ -12,7 +12,7 @@ from dbt.contracts.results import RunOperationResultsArtifact
 from dbt.exceptions import InternalException
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    RunningOperationCaughtError, RunningOperationUncaughtError
+    RunningOperationCaughtError, RunningOperationUncaughtError, PrintDebugStackTrace
 )
 
 
@@ -57,9 +57,11 @@ class RunOperationTask(ManifestTask):
             self._run_unsafe()
         except dbt.exceptions.Exception as exc:
             fire_event(RunningOperationCaughtError(exc=exc))
+            fire_event(PrintDebugStackTrace())
             success = False
         except Exception as exc:
             fire_event(RunningOperationUncaughtError(exc=exc))
+            fire_event(PrintDebugStackTrace())
             success = False
         else:
             success = True

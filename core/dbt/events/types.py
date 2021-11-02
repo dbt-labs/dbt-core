@@ -698,6 +698,7 @@ class InvalidRefInTestNode(WarnLevel, CliEventABC):
     def cli_msg(self) -> str:
         return warning_tag(self.msg)
 class RunningOperationCaughtError(ShowException, ErrorLevel, CliEventABC):
+class RunningOperationCaughtError(ErrorLevel, CliEventABC):
     exc: Exception
 
     def cli_msg(self) -> str:
@@ -705,7 +706,7 @@ class RunningOperationCaughtError(ShowException, ErrorLevel, CliEventABC):
 
 
 @dataclass
-class RunningOperationUncaughtError(ShowException, ErrorLevel, CliEventABC):
+class RunningOperationUncaughtError(ErrorLevel, CliEventABC):
     exc: Exception
 
     def cli_msg(self) -> str:
@@ -793,8 +794,16 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
         )
 
 
+# This prints the stack trace at the debug level while allowing just the nice exception message
+# at the error level - or whatever other level chosen.  Used in multiple places.
 @dataclass
-class GenericExceptionOnRun(ShowException, ErrorLevel, CliEventABC):
+class PrintDebugStackTrace(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ""
+
+
+@dataclass
+class GenericExceptionOnRun(ErrorLevel, CliEventABC):
     build_path: str
     unique_id: str
     exc: Exception

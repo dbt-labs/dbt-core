@@ -20,7 +20,7 @@ from dbt.events.types import (
     DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
     ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
     CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
-    NodeConnectionReleaseError,
+    NodeConnectionReleaseError, PrintDebugStackTrace
 )
 from .printer import print_skip_caused_by_error, print_skip_line
 
@@ -310,6 +310,7 @@ class BaseRunner(metaclass=ABCMeta):
         fire_event(GenericExceptionOnRun(build_path=self.node.build_path,
                                          unique_id=self.node.unique_id,
                                          exc=e))
+        fire_event(PrintDebugStackTrace())
 
         return str(e)
 
