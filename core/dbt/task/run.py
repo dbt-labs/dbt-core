@@ -32,14 +32,14 @@ from dbt.exceptions import (
     RuntimeException,
     missing_materialization,
 )
+from dbt.events.functions import fire_event
+from dbt.events.types import DatabaseErrorRunning, EmptyLine, HooksRunning, HookFinished
 from dbt.logger import (
-    GLOBAL_LOGGER as logger,
     TextOnly,
     HookMetadata,
     UniqueID,
     TimestampNamed,
     DbtModelState,
-    print_timestamped_line,
 )
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
@@ -308,12 +308,10 @@ class RunTask(CompileTask):
             return
         num_hooks = len(ordered_hooks)
 
-        plural = 'hook' if num_hooks == 1 else 'hooks'
         with TextOnly():
-            print_timestamped_line("")
-        print_timestamped_line(
-            'Running {} {} {}'.format(num_hooks, hook_type, plural)
-        )
+            fire_event(EmptyLine())
+        fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
+
         startctx = TimestampNamed('node_started_at')
         finishctx = TimestampNamed('node_finished_at')
 
@@ -344,7 +342,7 @@ class RunTask(CompileTask):
         self._total_executed += len(ordered_hooks)
 
         with TextOnly():
-            print_timestamped_line("")
+            fire_event(EmptyLine())
 
     def safe_run_hooks(
         self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
@@ -352,7 +350,7 @@ class RunTask(CompileTask):
         try:
             self.run_hooks(adapter, hook_type, extra_context)
         except RuntimeException:
-            logger.info("Database error while running {}".format(hook_type))
+            fire_event(DatabaseErrorRunning(hook_type))
             raise
 
     def print_results_line(self, results, execution_time):
@@ -366,10 +364,8 @@ class RunTask(CompileTask):
                 execution_time=execution_time)
 
         with TextOnly():
-            print_timestamped_line("")
-        print_timestamped_line(
-            "Finished running {stat_line}{execution}."
-            .format(stat_line=stat_line, execution=execution))
+            fire_event(EmptyLine())
+        fire_event(HookFinished(stat_line=stat_line, execution=execution))
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
         if not self.args.defer:
