@@ -93,7 +93,7 @@ class TestSimpleBlockingTest(TestBuildBase):
         return {
             "config-version": 2,
             "snapshot-paths": ["does-not-exist"],
-            "seed-paths": ["does-not-exist"],
+            "data-paths": ["does-not-exist"],
         }
 
     @use_profile("postgres")
