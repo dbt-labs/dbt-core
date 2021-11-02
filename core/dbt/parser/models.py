@@ -4,10 +4,15 @@ from dbt.contracts.graph.parsed import ParsedModelNode
 import dbt.flags as flags
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    StaticParserCausedJinjaRendering, UsingExperimentalParser,
-    SampleFullJinjaRendering, StaticParserFallbackJinjaRendering,
-    StaticParsingMacroOverrideDetected, StaticParserSuccess, StaticParserFailure,
-    ExperimentalParserSuccess, ExperimentalParserFailure
+    StaticParserCausedJinjaRendering,
+    UsingExperimentalParser,
+    SampleFullJinjaRendering,
+    StaticParserFallbackJinjaRendering,
+    StaticParsingMacroOverrideDetected,
+    StaticParserSuccess,
+    StaticParserFailure,
+    ExperimentalParserSuccess,
+    ExperimentalParserFailure,
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser

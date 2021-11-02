@@ -864,8 +864,10 @@ class ManifestWrongMetadataVersion(DebugLevel):
     code: str = "I022"
 
     def message(self) -> str:
-        return ("Manifest metadata did not contain correct version. "
-                f"Contained '{self.version}' instead.")
+        return (
+            "Manifest metadata did not contain correct version. "
+            f"Contained '{self.version}' instead."
+        )
 
 
 @dataclass
@@ -875,9 +877,11 @@ class PartialParsingVersionMismatch(InfoLevel):
     code: str = "I023"
 
     def message(self) -> str:
-        return ("Unable to do partial parsing because of a dbt version mismatch. "
-                f"Saved manifest version: {self.saved_version}. "
-                f"Current version: {self.current_version}.")
+        return (
+            "Unable to do partial parsing because of a dbt version mismatch. "
+            f"Saved manifest version: {self.saved_version}. "
+            f"Current version: {self.current_version}."
+        )
 
 
 @dataclass
@@ -885,8 +889,10 @@ class PartialParsingFailedBecauseConfigChange(InfoLevel):
     code: str = "I024"
 
     def message(self) -> str:
-        return ("Unable to do partial parsing because config vars, "
-                "config profile, or config target have changed")
+        return (
+            "Unable to do partial parsing because config vars, "
+            "config profile, or config target have changed"
+        )
 
 
 @dataclass
@@ -894,7 +900,7 @@ class PartialParsingFailedBecauseProfileChange(InfoLevel):
     code: str = "I025"
 
     def message(self) -> str:
-        return ("Unable to do partial parsing because profile has changed")
+        return "Unable to do partial parsing because profile has changed"
 
 
 @dataclass
@@ -902,7 +908,7 @@ class PartialParsingFailedBecauseNewProjectDependency(InfoLevel):
     code: str = "I026"
 
     def message(self) -> str:
-        return ("Unable to do partial parsing because a project dependency has been added")
+        return "Unable to do partial parsing because a project dependency has been added"
 
 
 @dataclass
@@ -910,7 +916,7 @@ class PartialParsingFailedBecauseHashChanged(InfoLevel):
     code: str = "I027"
 
     def message(self) -> str:
-        return ("Unable to do partial parsing because a project config has changed")
+        return "Unable to do partial parsing because a project config has changed"
 
 
 @dataclass
@@ -918,7 +924,7 @@ class PartialParsingNotEnabled(DebugLevel):
     code: str = "I028"
 
     def message(self) -> str:
-        return ("Partial parsing not enabled")
+        return "Partial parsing not enabled"
 
 
 @dataclass
@@ -936,7 +942,7 @@ class PartialParseSaveFileNotFound(InfoLevel):
     code: str = "I030"
 
     def message(self) -> str:
-        return ("Partial parse save file not found. Starting full parse.")
+        return "Partial parse save file not found. Starting full parse."
 
 
 @dataclass
@@ -1030,10 +1036,12 @@ class PartialParsingEnabled(DebugLevel):
     code: str = "I040"
 
     def message(self) -> str:
-        return (f"Partial parsing enabled: "
-                f"{self.deleted} files deleted, "
-                f"{self.added} files added, "
-                f"{self.changed} files changed.")
+        return (
+            f"Partial parsing enabled: "
+            f"{self.deleted} files deleted, "
+            f"{self.added} files added, "
+            f"{self.changed} files changed."
+        )
 
 
 @dataclass
@@ -2473,44 +2481,44 @@ if 1 == 0:
     MergedFromState(nbr_merged=0, sample=[])
     MissingProfileTarget(profile_name='', target_name='')
     InvalidVarsYAML()
-    GenericTestFileParse(path='')
-    MacroFileParse(path='')
+    GenericTestFileParse(path="")
+    MacroFileParse(path="")
     PartialParsingFullReparseBecauseOfError()
     PartialParsingFile(file_dict={})
     PartialParsingExceptionFile(file='')
     PartialParsingException(exc_info={})
     PartialParsingSkipParsing()
     PartialParsingMacroChangeStartFullParse()
-    ManifestWrongMetadataVersion(version='')
-    PartialParsingVersionMismatch(saved_version='', current_version='')
+    ManifestWrongMetadataVersion(version="")
+    PartialParsingVersionMismatch(saved_version="", current_version="")
     PartialParsingFailedBecauseConfigChange()
     PartialParsingFailedBecauseProfileChange()
     PartialParsingFailedBecauseNewProjectDependency()
     PartialParsingFailedBecauseHashChanged()
     PartialParsingDeletedMetric(id="")
-    ParsedFileLoadFailed(path='', exc=Exception(''))
+    ParsedFileLoadFailed(path="", exc=Exception(""))
     PartialParseSaveFileNotFound()
-    StaticParserCausedJinjaRendering(path='')
-    UsingExperimentalParser(path='')
-    SampleFullJinjaRendering(path='')
-    StaticParserFallbackJinjaRendering(path='')
-    StaticParsingMacroOverrideDetected(path='')
-    StaticParserSuccess(path='')
-    StaticParserFailure(path='')
-    ExperimentalParserSuccess(path='')
-    ExperimentalParserFailure(path='')
+    StaticParserCausedJinjaRendering(path="")
+    UsingExperimentalParser(path="")
+    SampleFullJinjaRendering(path="")
+    StaticParserFallbackJinjaRendering(path="")
+    StaticParsingMacroOverrideDetected(path="")
+    StaticParserSuccess(path="")
+    StaticParserFailure(path="")
+    ExperimentalParserSuccess(path="")
+    ExperimentalParserFailure(path="")
     PartialParsingEnabled(deleted=0, added=0, changed=0)
-    PartialParsingAddedFile(file_id='')
-    PartialParsingDeletedFile(file_id='')
-    PartialParsingUpdatedFile(file_id='')
-    PartialParsingNodeMissingInSourceFile(source_file='')
-    PartialParsingMissingNodes(file_id='')
-    PartialParsingChildMapMissingUniqueID(unique_id='')
-    PartialParsingUpdateSchemaFile(file_id='')
-    PartialParsingDeletedSource(unique_id='')
-    PartialParsingDeletedExposure(unique_id='')
-    InvalidDisabledSourceInTestNode(msg='')
-    InvalidRefInTestNode(msg='')
+    PartialParsingAddedFile(file_id="")
+    PartialParsingDeletedFile(file_id="")
+    PartialParsingUpdatedFile(file_id="")
+    PartialParsingNodeMissingInSourceFile(source_file="")
+    PartialParsingMissingNodes(file_id="")
+    PartialParsingChildMapMissingUniqueID(unique_id="")
+    PartialParsingUpdateSchemaFile(file_id="")
+    PartialParsingDeletedSource(unique_id="")
+    PartialParsingDeletedExposure(unique_id="")
+    InvalidDisabledSourceInTestNode(msg="")
+    InvalidRefInTestNode(msg="")
     RunningOperationCaughtError(exc=Exception(''))
     RunningOperationUncaughtError(exc=Exception(''))
     DbtProjectError()

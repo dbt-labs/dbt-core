@@ -9,9 +9,9 @@ from dbt.contracts.files import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    PartialParsingEnabled, PartialParsingAddedFile, PartialParsingDeletedFile,
-    PartialParsingUpdatedFile, PartialParsingNodeMissingInSourceFile, PartialParsingMissingNodes,
-    PartialParsingChildMapMissingUniqueID, PartialParsingUpdateSchemaFile,
+    PartialParsingEnabled,
+    PartialParsingAddedFile,
+    PartialParsingDeletedFile,
     PartialParsingDeletedSource, PartialParsingDeletedExposure, PartialParsingDeletedMetric
 )
 from dbt.node_types import NodeType

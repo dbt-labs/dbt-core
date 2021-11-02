@@ -21,12 +21,12 @@ from dbt.adapters.factory import (
 from dbt.helper_types import PathSet
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
-    PartialParsingFullReparseBecauseOfError, PartialParsingExceptionFile, PartialParsingFile,
-    PartialParsingException, PartialParsingSkipParsing, PartialParsingMacroChangeStartFullParse,
-    ManifestWrongMetadataVersion, PartialParsingVersionMismatch,
-    PartialParsingFailedBecauseConfigChange, PartialParsingFailedBecauseProfileChange,
-    PartialParsingFailedBecauseNewProjectDependency, PartialParsingFailedBecauseHashChanged,
-    PartialParsingNotEnabled, ParsedFileLoadFailed, PartialParseSaveFileNotFound,
+    PartialParsingFullReparseBecauseOfError,
+    PartialParsingExceptionFile,
+    PartialParsingFile,
+    PartialParsingException,
+    PartialParsingSkipParsing,
+    PartialParsingMacroChangeStartFullParse,
     InvalidDisabledSourceInTestNode, InvalidRefInTestNode, PartialParsingProjectEnvVarsChanged,
     PartialParsingProfileEnvVarsChanged
 )
@@ -533,8 +533,8 @@ class ManifestLoader:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
             if self.manifest.metadata.dbt_version != __version__:
-                fire_event(ManifestWrongMetadataVersion(
-                    version=self.manifest.metadata.dbt_version)
+                fire_event(
+                    ManifestWrongMetadataVersion(version=self.manifest.metadata.dbt_version)
                 )
                 self.manifest.metadata.dbt_version = __version__
             manifest_msgpack = self.manifest.to_msgpack()
@@ -553,8 +553,11 @@ class ManifestLoader:
 
         if manifest.metadata.dbt_version != __version__:
             # #3757 log both versions because of reports of invalid cases of mismatch.
-            fire_event(PartialParsingVersionMismatch(saved_version=manifest.metadata.dbt_version,
-                                                     current_version=__version__))
+            fire_event(
+                PartialParsingVersionMismatch(
+                    saved_version=manifest.metadata.dbt_version, current_version=__version__
+                )
+            )
             # If the version is wrong, the other checks might not work
             return False, ReparseReason.version_mismatch
         if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
