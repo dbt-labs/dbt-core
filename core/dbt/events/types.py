@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
+from dbt.ui import warning_tag
 
 
 # types to represent log levels
@@ -356,6 +357,296 @@ class MergedFromState(DebugLevel, CliEventABC):
         return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
 
 
+@dataclass
+class GenericTestFileParse(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Parsing {self.path}"
+
+
+@dataclass
+class MacroFileParse(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Parsing {self.path}"
+
+
+class PartialParsingFullReparseBecauseOfError(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Partial parsing enabled but an error occurred. Switching to a full re-parse."
+
+
+@dataclass
+class PartialParsingExceptionFile(DebugLevel, CliEventABC):
+    file: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing exception processing file {self.file}"
+
+
+@dataclass
+class PartialParsingFile(DebugLevel, CliEventABC):
+    file_dict: Dict
+
+    def cli_msg(self) -> str:
+        return f"PP file: {self.file_dict}"
+
+
+@dataclass
+class PartialParsingException(DebugLevel, CliEventABC):
+    exc_info: Dict
+
+    def cli_msg(self) -> str:
+        return f"PP exception info: {self.exc_info}"
+
+
+class PartialParsingSkipParsing(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Partial parsing enabled, no changes found, skipping parsing"
+
+
+class PartialParsingMacroChangeStartFullParse(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Change detected to override macro used during parsing. Starting full parse."
+
+
+@dataclass
+class ManifestWrongMetadataVersion(DebugLevel, CliEventABC):
+    version: str
+
+    def cli_msg(self) -> str:
+        return ("Manifest metadata did not contain correct version. "
+                f"Contained '{self.version}' instead.")
+
+
+@dataclass
+class PartialParsingVersionMismatch(InfoLevel, CliEventABC):
+    saved_version: str
+    current_version: str
+
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because of a dbt version mismatch. "
+                f"Saved manifest version: {self.saved_version}. "
+                f"Current version: {self.current_version}.")
+
+
+class PartialParsingFailedBecauseConfigChange(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because config vars, "
+                "config profile, or config target have changed")
+
+
+class PartialParsingFailedBecauseProfileChange(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because profile has changed")
+
+
+class PartialParsingFailedBecauseNewProjectDependency(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because a project dependency has been added")
+
+
+class PartialParsingFailedBecauseHashChanged(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Unable to do partial parsing because a project config has changed")
+
+
+class PartialParsingNotEnabled(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Partial parsing not enabled")
+
+
+@dataclass
+class ParsedFileLoadFailed(ShowException, DebugLevel, CliEventABC):
+    path: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
+
+
+class PartialParseSaveFileNotFound(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ("Partial parse save file not found. Starting full parse.")
+
+
+@dataclass
+class StaticParserCausedJinjaRendering(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1605: jinja rendering because of STATIC_PARSER flag. file: {self.path}"
+
+
+# TODO: Experimental/static parser uses these for testing and some may be a good use case for
+#       the `TestLevel` logger once we implement it.  Some will probably stay `DebugLevel`.
+@dataclass
+class UsingExperimentalParser(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1610: conducting experimental parser sample on {self.path}"
+
+
+@dataclass
+class SampleFullJinjaRendering(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1611: conducting full jinja rendering sample on {self.path}"
+
+
+@dataclass
+class StaticParserFallbackJinjaRendering(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1602: parser fallback to jinja rendering on {self.path}"
+
+
+@dataclass
+class StaticParsingMacroOverrideDetected(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1601: detected macro override of ref/source/config in the scope of {self.path}"
+
+
+@dataclass
+class StaticParserSuccess(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1699: static parser successfully parsed {self.path}"
+
+
+@dataclass
+class StaticParserFailure(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1603: static parser failed on {self.path}"
+
+
+@dataclass
+class ExperimentalParserSuccess(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1698: experimental parser successfully parsed {self.path}"
+
+
+@dataclass
+class ExperimentalParserFailure(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"1604: experimental parser failed on {self.path}"
+
+
+@dataclass
+class PartialParsingEnabled(DebugLevel, CliEventABC):
+    deleted: int
+    added: int
+    changed: int
+
+    def cli_msg(self) -> str:
+        return (f"Partial parsing enabled: "
+                f"{self.deleted} files deleted, "
+                f"{self.added} files added, "
+                f"{self.changed} files changed.")
+
+
+@dataclass
+class PartialParsingAddedFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: added file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingDeletedFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: deleted file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingUpdatedFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: updated file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingNodeMissingInSourceFile(DebugLevel, CliEventABC):
+    source_file: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: node not found for source_file {self.source_file}"
+
+
+@dataclass
+class PartialParsingMissingNodes(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"No nodes found for source file {self.file_id}"
+
+
+@dataclass
+class PartialParsingChildMapMissingUniqueID(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: {self.unique_id} not found in child_map"
+
+
+@dataclass
+class PartialParsingUpdateSchemaFile(DebugLevel, CliEventABC):
+    file_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: update schema file: {self.file_id}"
+
+
+@dataclass
+class PartialParsingDeletedSource(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: deleted source {self.unique_id}"
+
+
+@dataclass
+class PartialParsingDeletedExposure(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Partial parsing: deleted exposure {self.unique_id}"
+
+
+@dataclass
+class InvalidDisabledSourceInTestNode(WarnLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return warning_tag(self.msg)
+
+
+@dataclass
+class InvalidRefInTestNode(WarnLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return warning_tag(self.msg)
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -398,3 +689,39 @@ if 1 == 0:
     ProfileLoadError(exc=Exception(''))
     ProfileNotFound(profile_name='')
     InvalidVarsYAML()
+    GenericTestFileParse(path='')
+    MacroFileParse(path='')
+    PartialParsingFullReparseBecauseOfError()
+    PartialParsingFile(file_dict={})
+    PartialParsingException(exc_info={})
+    PartialParsingSkipParsing()
+    PartialParsingMacroChangeStartFullParse()
+    ManifestWrongMetadataVersion(version='')
+    PartialParsingVersionMismatch(saved_version='', current_version='')
+    PartialParsingFailedBecauseConfigChange()
+    PartialParsingFailedBecauseProfileChange()
+    PartialParsingFailedBecauseNewProjectDependency()
+    PartialParsingFailedBecauseHashChanged()
+    ParsedFileLoadFailed(path='', exc=Exception(''))
+    PartialParseSaveFileNotFound()
+    StaticParserCausedJinjaRendering(path='')
+    UsingExperimentalParser(path='')
+    SampleFullJinjaRendering(path='')
+    StaticParserFallbackJinjaRendering(path='')
+    StaticParsingMacroOverrideDetected(path='')
+    StaticParserSuccess(path='')
+    StaticParserFailure(path='')
+    ExperimentalParserSuccess(path='')
+    ExperimentalParserFailure(path='')
+    PartialParsingEnabled(deleted=0, added=0, changed=0)
+    PartialParsingAddedFile(file_id='')
+    PartialParsingDeletedFile(file_id='')
+    PartialParsingUpdatedFile(file_id='')
+    PartialParsingNodeMissingInSourceFile(source_file='')
+    PartialParsingMissingNodes(file_id='')
+    PartialParsingChildMapMissingUniqueID(unique_id='')
+    PartialParsingUpdateSchemaFile(file_id='')
+    PartialParsingDeletedSource(unique_id='')
+    PartialParsingDeletedExposure(unique_id='')
+    InvalidDisabledSourceInTestNode(msg='')
+    InvalidRefInTestNode(msg='')
