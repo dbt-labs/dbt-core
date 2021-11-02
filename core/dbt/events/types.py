@@ -2474,7 +2474,7 @@ if 1 == 0:
     NewConnectionOpening(connection_state="")
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
-    MissingProfileTarget(profile_name='', target_name='')
+    MissingProfileTarget(profile_name="", target_name="")
     InvalidVarsYAML()
     GenericTestFileParse(path="")
     MacroFileParse(path="")
