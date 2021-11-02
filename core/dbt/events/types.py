@@ -820,6 +820,35 @@ class NodeConnectionReleaseError(ShowException, DebugLevel, CliEventABC):
                 .format(self.node_name, self.exc))
 
 
+@dataclass
+class CheckCleanPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Checking {self.path}/*"
+
+
+@dataclass
+class ConfirmCleanPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Cleaned {self.path}/*"
+
+
+@dataclass
+class ProtectedCleanPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"ERROR: not cleaning {self.path}/* because it is protected"
+
+
+class FinishedCleanPaths(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Finished cleaning all paths."
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -914,3 +943,7 @@ if 1 == 0:
     InternalExceptionOnRun(build_path='', exc=Exception(''))
     GenericExceptionOnRun(build_path='', unique_id='', exc=Exception(''))
     NodeConnectionReleaseError(node_name='', exc=Exception(''))
+    CheckCleanPath(path='')
+    ConfirmCleanPath(path='')
+    ProtectedCleanPath(path='')
+    FinishedCleanPaths()
