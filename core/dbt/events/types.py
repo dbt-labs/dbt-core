@@ -356,6 +356,13 @@ class MergedFromState(DebugLevel, CliEventABC):
         return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
 
 
+class GenericTestFileParse(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Parsing {self.path}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -398,3 +405,4 @@ if 1 == 0:
     ProfileLoadError(exc=Exception(''))
     ProfileNotFound(profile_name='')
     InvalidVarsYAML()
+    GenericTestFileParse(path='')
