@@ -302,6 +302,33 @@ class MacroEventDebug(DebugLevel, CliEventABC):
 
     def cli_msg(self) -> str:
         return self.msg
+class MissingProfileTarget(InfoLevel, CliEventABC):
+    profile_name: str
+    target_name: str
+
+    def cli_msg(self) -> str:
+        return f"target not specified in profile '{self.profile_name}', using '{self.target_name}'"
+
+
+@dataclass
+class ProfileLoadError(DebugLevel, CliEventABC):
+    profile_name: str
+
+    def cli_msg(self) -> str:
+        return f"Profile not loaded due to error: {}", exc, exc_info=True
+
+
+@dataclass
+class ProfileNotFound(InfoLevel, CliEventABC):
+    profile_name: str
+
+    def cli_msg(self) -> str:
+        return f'No profile "{self.profile_name}" found, continuing with no target'
+
+
+class InvalidVarsYAML(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "The YAML provided in the --vars argument is not valid.\n"
 
 
 @dataclass
@@ -364,3 +391,7 @@ if 1 == 0:
     NewConnectionOpening(connection_state='')
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
+    MissingProfileTarget(profile_name='', target_name='')
+    ProfileLoadError()
+    ProfileNotFound(profile_name='')
+    InvalidVarsYAML()
