@@ -17,6 +17,11 @@ from dbt.exceptions import (
     InternalException
 )
 from dbt.logger import GLOBAL_LOGGER as logger, log_manager
+from dbt.events.functions import fire_event
+from dbt.events.types import(
+    CatchRunException, HandleInternalException, MessageHandleGenericException,
+    DetailsHandleGenericException,
+)
 from .printer import print_skip_caused_by_error, print_skip_line
 
 
@@ -165,11 +170,6 @@ class ConfiguredTask(BaseTask):
         return super().from_args(args)
 
 
-INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
-the error persists, open an issue at https://github.com/dbt-labs/dbt-core
-""".strip()
-
-
 class ExecutionContext:
     """During execution and error handling, dbt makes use of mutable state:
     timing information and the newest (compiled vs executed) form of the node.
@@ -307,33 +307,20 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        logger.debug(str(e), exc_info=True)
+        fire_event(CatchRunException(exc=e))
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
         build_path = self.node.build_path
-        prefix = 'Internal error executing {}'.format(build_path)
 
-        error = "{prefix}\n{error}\n\n{note}".format(
-            prefix=ui.red(prefix),
-            error=str(e).strip(),
-            note=INTERNAL_ERROR_STRING
-        )
-        logger.debug(error, exc_info=True)
+        fire_event(HandleInternalException(build_path=build_path, exc=e))
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
-        node_description = self.node.build_path
-        if node_description is None:
-            node_description = self.node.unique_id
-        prefix = "Unhandled error while executing {}".format(node_description)
-        error = "{prefix}\n{error}".format(
-            prefix=ui.red(prefix),
-            error=str(e).strip()
-        )
-
-        logger.error(error)
-        logger.debug('', exc_info=True)
+        fire_event(MessageHandleGenericException(build_path=self.node.build_path,
+                                                 unique_id=self.node.unique_id,
+                                                 exc=e))
+        fire_event(DetailsHandleGenericException())
         return str(e)
 
     def handle_exception(self, e, ctx):

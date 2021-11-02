@@ -2,6 +2,9 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
 from dbt.ui import warning_tag
+import dataclasses
+from typing import Any, List, Optional
+from dbt import ui
 
 
 # types to represent log levels
@@ -306,6 +309,28 @@ class MacroEventDebug(DebugLevel, CliEventABC):
 
 
 @dataclass
+class NewConnectionOpening(DebugLevel, CliEventABC):
+    connection_state: str
+
+    def cli_msg(self) -> str:
+        return f"Opening a new connection, currently in state {self.connection_state}"
+
+
+class TimingInfoCollected(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "finished collecting timing info"
+
+
+@dataclass
+class MergedFromState(DebugLevel, CliEventABC):
+    nbr_merged: int
+    sample: List
+
+    def cli_msg(self) -> str:
+        return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
+
+
+@dataclass
 class MissingProfileTarget(InfoLevel, CliEventABC):
     profile_name: str
     target_name: str
@@ -336,25 +361,52 @@ class InvalidVarsYAML(ErrorLevel, CliEventABC):
 
 
 @dataclass
-class NewConnectionOpening(DebugLevel, CliEventABC):
-    connection_state: str
+class CatchRunException(ShowException, DebugLevel, CliEventABC):
+    build_path: Any = ''
+    exc: Exception = ''
 
     def cli_msg(self) -> str:
-        return f"Opening a new connection, currently in state {self.connection_state}"
-
-
-class TimingInfoCollected(DebugLevel, CliEventABC):
-    def cli_msg(self) -> str:
-        return "finished collecting timing info"
+        INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If the \
+                            error persists, open an issue at https://github.com/dbt-labs/dbt-core
+                            """.strip()
+        prefix = f'Internal error executing {self.build_path}'
+        error = "{prefix}\n{error}\n\n{note}".format(
+                prefix=ui.red(prefix),
+                error=str(self.exc).strip(),
+                note=INTERNAL_ERROR_STRING
+            )
+        return str(self.exc)
 
 
 @dataclass
-class MergedFromState(DebugLevel, CliEventABC):
-    nbr_merged: int
-    sample: List
+class HandleInternalException(ShowException, DebugLevel, CliEventABC):
+    exc: Exception = ''
 
     def cli_msg(self) -> str:
-        return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
+        return str(self.exc)
+
+
+@dataclass
+class MessageHandleGenericException(ErrorLevel, CliEventABC):
+    build_path: str
+    unique_id: str
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        node_description = self.build_path
+        if node_description is None:
+            node_description = self.unique_id
+        prefix = "Unhandled error while executing {}".format(node_description)
+        return "{prefix}\n{error}".format(
+            prefix=ui.red(prefix),
+            error=str(self.exc).strip()
+        )
+
+
+@dataclass
+class DetailsHandleGenericException(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ''
 
 
 @dataclass
@@ -725,3 +777,5 @@ if 1 == 0:
     PartialParsingDeletedExposure(unique_id='')
     InvalidDisabledSourceInTestNode(msg='')
     InvalidRefInTestNode(msg='')
+    MessageHandleGenericException(build_path='', unique_id='', exc=Exception(''))
+    DetailsHandleGenericException()
