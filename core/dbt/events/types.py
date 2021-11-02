@@ -357,6 +357,7 @@ class MergedFromState(DebugLevel, CliEventABC):
         return f"Merged {self.nbr_merged} items from state (sample: {self.sample})"
 
 
+@dataclass
 class GenericTestFileParse(DebugLevel, CliEventABC):
     path: str
 
@@ -459,9 +460,8 @@ class PartialParsingNotEnabled(DebugLevel, CliEventABC):
 
 @dataclass
 class ParsedFileLoadFailed(ShowException, DebugLevel, CliEventABC):
-    # TODO: remove defaults when Python 3.6 support is dropped
-    path: str = ''
-    exc: Exception = Exception('')
+    path: str
+    exc: Exception
 
     def cli_msg(self) -> str:
         return f"Failed to load parsed file from disk at {self.path}: {self.exc}"
