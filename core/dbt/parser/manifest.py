@@ -526,7 +526,9 @@ class ManifestLoader:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
             if self.manifest.metadata.dbt_version != __version__:
-                fire_event(ManifestWrongMetadataVersion(version=self.manifest.metadata.dbt_version))
+                fire_event(ManifestWrongMetadataVersion(
+                    version=self.manifest.metadata.dbt_version)
+                )
                 self.manifest.metadata.dbt_version = __version__
             manifest_msgpack = self.manifest.to_msgpack()
             make_directory(os.path.dirname(path))

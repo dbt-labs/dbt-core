@@ -7,7 +7,7 @@ from dbt.contracts.files import (
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     PartialParsingEnabled, PartialParsingAddedFile, PartialParsingDeletedFile,
-    PartialParsingUpdatedFile, ParsingParsingNodeMissingInSourceFile, PartialParsingMissingNodes,
+    PartialParsingUpdatedFile, PartialParsingNodeMissingInSourceFile, PartialParsingMissingNodes,
     PartialParsingChildMapMissingUniqueID, PartialParsingUpdateSchemaFile,
     PartialParsingDeletedSource, PartialParsingDeletedExposure
 )
@@ -263,7 +263,7 @@ class PartialParsing:
         else:
             # It's not clear when this would actually happen.
             # Logging in case there are other associated errors.
-            fire_event(ParsingParsingNodeMissingInSourceFile(source_file=old_source_file))
+            fire_event(PartialParsingNodeMissingInSourceFile(source_file=old_source_file))
 
         # replace source_file in saved and add to parsing list
         file_id = new_source_file.file_id
