@@ -374,8 +374,8 @@ class CatchRunException(ShowException, DebugLevel, CliEventABC):
                 prefix=ui.red(prefix),
                 error=str(self.exc).strip(),
                 note=INTERNAL_ERROR_STRING
-            )
-        return str(self.exc)
+        )
+        return error
 
 
 @dataclass
@@ -777,7 +777,7 @@ class CatchableExceptionOnRun(ShowException, DebugLevel, CliEventABC):
 @dataclass
 class InternalExceptionOnRun(DebugLevel, CliEventABC):
     build_path: str
-    exc: Exception  
+    exc: Exception
 
     def cli_msg(self) -> str:
         prefix = 'Internal error executing {}'.format(self.build_path)
@@ -787,7 +787,7 @@ the error persists, open an issue at https://github.com/dbt-labs/dbt-core
 """.strip()
 
         return "{prefix}\n{error}\n\n{note}".format(
-            prefix=red(prefix),
+            prefix=ui.red(prefix),
             error=str(self.exc).strip(),
             note=INTERNAL_ERROR_STRING
         )
@@ -805,7 +805,7 @@ class GenericExceptionOnRun(ShowException, ErrorLevel, CliEventABC):
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
         return "{prefix}\n{error}".format(
-            prefix=red(prefix),
+            prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
 
@@ -858,7 +858,7 @@ class OpenCommand(InfoLevel, CliEventABC):
         PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 
 {open_cmd} {profiles_dir}"""
-        message =  PROFILE_DIR_MESSAGE.format(
+        message = PROFILE_DIR_MESSAGE.format(
             open_cmd=self.open_cmd,
             profiles_dir=self.profiles_dir
         )
@@ -919,7 +919,6 @@ class DepsNotifyUpdatesAvailable(InfoLevel, CliEventABC):
         return ('\nUpdates available for packages: {} \
                 \nUpdate your versions in packages.yml, then run dbt deps',
                 self.packages)
-
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -1027,4 +1026,3 @@ if 1 == 0:
     DepsUpdateAvailable(version_latest='')
     DepsListSubdirectory(subdirectory='')
     DepsNotifyUpdatesAvailable(packages=[])
-

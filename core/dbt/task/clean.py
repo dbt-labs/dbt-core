@@ -47,5 +47,5 @@ class CleanTask(BaseTask):
                 fire_event(ConfirmCleanPath(path=path))
             else:
                 fire_event(ProtectedCleanPath(path=path))
-        
+
         fire_event(FinishedCleanPaths())

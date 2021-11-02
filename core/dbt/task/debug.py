@@ -103,12 +103,6 @@ class DebugTask(BaseTask):
 
     def path_info(self):
         open_cmd = dbt.clients.system.open_dir_cmd()
-
-        message = PROFILE_DIR_MESSAGE.format(
-            open_cmd=open_cmd,
-            profiles_dir=self.profiles_dir
-        )
-
         fire_event(OpenCommand(open_cmd=open_cmd, profiles_dir=self.profiles_dir))
 
     def run(self):

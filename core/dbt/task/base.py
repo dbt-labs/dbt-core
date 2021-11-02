@@ -1,12 +1,10 @@
 import os
 import threading
 import time
-import traceback
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union, Dict, Any, Optional
 
 from dbt import tracking
-from dbt import ui
 from dbt import flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
