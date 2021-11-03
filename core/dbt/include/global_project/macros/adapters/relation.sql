@@ -66,18 +66,19 @@
 {% endmacro %}
 
 
-{# here for backwards compatibility #}
-{% macro drop_relation_if_exists(relation) %}
-  {% if relation is not none %}
-    {{ adapter.drop_relation(relation) }}
-  {% endif %}
-{% endmacro %}
-
-{# here for backwards compatibility #}
+{# a user-friendly interface into adapter.get_relation #}
 {% macro load_relation(relation) %}
   {% do return(adapter.get_relation(
     database=relation.database,
     schema=relation.schema,
     identifier=relation.identifier
   )) -%}
+{% endmacro %}
+
+
+{# not used much, here for backwards compatibility #}
+{% macro drop_relation_if_exists(relation) %}
+  {% if relation is not none %}
+    {{ adapter.drop_relation(relation) }}
+  {% endif %}
 {% endmacro %}
