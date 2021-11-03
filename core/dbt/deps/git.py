@@ -12,7 +12,8 @@ from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.exceptions import (
     ExecutableError, warn_or_error, raise_dependency_error
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import EnsureGitInstalled
 from dbt import ui
 
 PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
@@ -81,11 +82,7 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
             )
         except ExecutableError as exc:
             if exc.cmd and exc.cmd[0] == 'git':
-                logger.error(
-                    'Make sure git is installed on your machine. More '
-                    'information: '
-                    'https://docs.getdbt.com/docs/package-management'
-                )
+                fire_event(EnsureGitInstalled())
             raise
         return os.path.join(get_downloads_path(), dir_)
 
