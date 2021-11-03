@@ -1658,6 +1658,39 @@ class WritingInjectedSQLForNode(DebugLevel, CliEventABC):
         return f'Writing injected SQL for node "{self.unique_id}"'
 
 
+class DisableTracking(WarnLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Error sending message, disabling tracking"
+
+
+@dataclass
+class SendingEvent(DebugLevel, CliEventABC):
+    kwargs: str
+
+    def cli_msg(self) -> str:
+        return f"Sending event: {self.kwargs}"
+
+
+class SendEventFailure(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "An error was encountered while trying to send an event"
+
+
+class FlushEvents(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Flushing usage events"
+
+
+class FlushEventsFailure(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "An error was encountered while trying to flush usage events"
+
+
+class TrackingInitializeFailure(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Got an exception trying to initialize tracking"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1834,3 +1867,9 @@ if 1 == 0:
     FoundStats(stat_line='')
     CompilingNode(unique_id='')
     WritingInjectedSQLForNode(unique_id='')
+    DisableTracking()
+    SendingEvent(kwargs='')
+    SendEventFailure()
+    FlushEvents()
+    FlushEventsFailure()
+    TrackingInitializeFailure()
