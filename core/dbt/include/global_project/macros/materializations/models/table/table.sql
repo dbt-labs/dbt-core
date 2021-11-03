@@ -43,7 +43,7 @@
 
   -- build model
   {% call statement('main') -%}
-    {{ create_table_as(False, intermediate_relation, sql) }}
+    {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
   {%- endcall %}
 
   -- cleanup

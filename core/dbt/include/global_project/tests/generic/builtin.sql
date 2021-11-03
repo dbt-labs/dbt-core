@@ -1,10 +1,10 @@
-{#
+/* {#
   Generic tests can be defined in `macros/` or in `tests/generic`.
   These four tests are built into the dbt-core global project.
   To support extensibility to other adapters and SQL dialects,
   they call 'dispatched' macros. By default, they will use
   the SQL defined in `global_project/macros/generic_test_sql`
-#}
+#} */
 
 {% test unique(model, column_name) %}
     {% set macro = adapter.dispatch('test_unique', 'dbt') %}

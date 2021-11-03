@@ -1,27 +1,4 @@
-{% macro create_view_as(relation, sql) -%}
-  {{ adapter.dispatch('create_view_as', 'dbt')(relation, sql) }}
-{%- endmacro %}
-
-{% macro default__create_view_as(relation, sql) -%}
-  {%- set sql_header = config.get('sql_header', none) -%}
-
-  {{ sql_header if sql_header is not none }}
-  create view {{ relation }} as (
-    {{ sql }}
-  );
-{% endmacro %}
-
-
-{% macro handle_existing_table(full_refresh, old_relation) %}
-    {{ adapter.dispatch('handle_existing_table', 'dbt')(full_refresh, old_relation) }}
-{% endmacro %}
-
-{% macro default__handle_existing_table(full_refresh, old_relation) %}
-    {{ log("Dropping relation " ~ old_relation ~ " because it is of type " ~ old_relation.type) }}
-    {{ adapter.drop_relation(old_relation) }}
-{% endmacro %}
-
-{# /*
+/* {# 
        Core materialization implementation. BigQuery and Snowflake are similar
        because both can use `create or replace view` where the resulting view schema
        is not necessarily the same as the existing view. On Redshift, this would
@@ -30,8 +7,7 @@
        This implementation is superior to the create_temp, swap_with_existing, drop_old
        paradigm because transactions don't run DDL queries atomically on Snowflake. By using
        `create or replace view`, the materialization becomes atomic in nature.
-    */
-#}
+#} */
 
 {% macro create_or_replace_view() %}
   {%- set identifier = model['alias'] -%}
@@ -55,7 +31,7 @@
 
   -- build model
   {% call statement('main') -%}
-    {{ create_view_as(target_relation, sql) }}
+    {{ get_create_view_as_sql(target_relation, sql) }}
   {%- endcall %}
 
   {{ run_hooks(post_hooks) }}
