@@ -34,11 +34,26 @@ def get_task_by_type(type):
     # TODO: we need to tell dbt-server what tasks are available
     from dbt.task.run import RunTask
     from dbt.task.list import ListTask
+    from dbt.task.seed import SeedTask
+    from dbt.task.test import TestTask
+    from dbt.task.build import BuildTask
+    from dbt.task.snapshot import SnapshotTask
+    from dbt.task.run_operation import RunOperationTask
 
     if type == 'run':
         return RunTask
+    elif type == 'test':
+        return TestTask
     elif type == 'list':
         return ListTask
+    elif type == 'seed':
+        return SeedTask
+    elif type == 'build':
+        return BuildTask
+    elif type == 'snapshot':
+        return SnapshotTask
+    elif type == 'run_operation':
+        return RunOperationTask
 
     raise RuntimeException('not a valid task')
 
