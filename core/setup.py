@@ -19,9 +19,8 @@ except ImportError:
     sys.exit(1)
 
 
-# use README from repository root
-root_directory = os.path.abspath(os.path.join(os.path.dirname(__file__),'..'))
-with open(os.path.join(root_directory, 'README.md')) as f:
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
 
