@@ -1,12 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Set, Union
 
-# TODO: somehow, this causes unit tests to fail
-# from dbt.contracts.connection import AdapterResponse
-
-# TODO: turn on once typing issues are resolved.. causes mypy crash
-# from dbt.adapters.base.relation import BaseRelation
+from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 
 # types to represent log levels
 
@@ -389,9 +385,7 @@ class CacheMiss(DebugLevel, CliEventABC):
 class ListRelations(DebugLevel, CliEventABC):
     database: Optional[str]
     schema: str
-    relations: List[
-        Any
-    ]  # TODO: should be BaseRelation, but it breaks mypy (see imports)
+    relations: List[BaseRelation]
 
     def cli_msg(self) -> str:
         return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
@@ -417,7 +411,7 @@ class SQLQuery(DebugLevel, CliEventABC):
 
 @dataclass
 class SQLQueryStatus(DebugLevel, CliEventABC):
-    status: Any  # TODO should be Union[AdapterResponse, str], breaks unittests (see imports)
+    status: Union[AdapterResponse, str]
     elapsed: float
 
     def cli_msg(self) -> str:
@@ -444,7 +438,7 @@ class ColTypeChange(DebugLevel, CliEventABC):
 
 @dataclass
 class SchemaCreation(DebugLevel, CliEventABC):
-    relation: Any  # TODO should be BaseRelation, but it breaks mypy (see imports)
+    relation: BaseRelation
 
     def cli_msg(self) -> str:
         return f'Creating schema "{self.relation}"'
@@ -452,10 +446,141 @@ class SchemaCreation(DebugLevel, CliEventABC):
 
 @dataclass
 class SchemaDrop(DebugLevel, CliEventABC):
-    relation: Any  # TODO should be BaseRelation, but it breaks mypy (see imports)
+    relation: BaseRelation
 
     def cli_msg(self) -> str:
         return f'Dropping schema "{self.relation}".'
+
+
+# TODO pretty sure this is only ever called in dead code
+# see: core/dbt/adapters/cache.py _add_link vs add_link
+@dataclass
+class UncachedRelation(DebugLevel, CliEventABC):
+    dep_key: _ReferenceKey
+    ref_key: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return (
+            f"{self.dep_key} references {str(self.ref_key)} "
+            "but {self.ref_key.database}.{self.ref_key.schema}"
+            "is not in the cache, skipping assumed external relation"
+        )
+
+
+@dataclass
+class AddLink(DebugLevel, CliEventABC):
+    dep_key: _ReferenceKey
+    ref_key: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return f"adding link, {self.dep_key} references {self.ref_key}"
+
+
+@dataclass
+class AddRelation(DebugLevel, CliEventABC):
+    relation: _CachedRelation
+
+    def cli_msg(self) -> str:
+        return f"Adding relation: {str(self.relation)}"
+
+
+@dataclass
+class DropMissingRelation(DebugLevel, CliEventABC):
+    relation: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return f"dropped a nonexistent relationship: {str(self.relation)}"
+
+
+@dataclass
+class DropCascade(DebugLevel, CliEventABC):
+    dropped: _ReferenceKey
+    consequences: Set[_ReferenceKey]
+
+    def cli_msg(self) -> str:
+        return f"drop {self.dropped} is cascading to {self.consequences}"
+
+
+@dataclass
+class DropRelation(DebugLevel, CliEventABC):
+    dropped: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return f"Dropping relation: {self.dropped}"
+
+
+@dataclass
+class UpdateReference(DebugLevel, CliEventABC):
+    old_key: _ReferenceKey
+    new_key: _ReferenceKey
+    cached_key: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return f"updated reference from {self.old_key} -> {self.cached_key} to "\
+            "{self.new_key} -> {self.cached_key}"
+
+
+@dataclass
+class TemporaryRelation(DebugLevel, CliEventABC):
+    key: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return f"old key {self.key} not found in self.relations, assuming temporary"
+
+
+@dataclass
+class RenameSchema(DebugLevel, CliEventABC):
+    old_key: _ReferenceKey
+    new_key: _ReferenceKey
+
+    def cli_msg(self) -> str:
+        return f"Renaming relation {self.old_key} to {self.new_key}"
+
+
+@dataclass
+class DumpBeforeAddGraph(DebugLevel, CliEventABC):
+    graph: Dict[str, List[str]]
+
+    def cli_msg(self) -> str:
+        return f"before adding: {str(self.graph)}"
+
+
+@dataclass
+class DumpAfterAddGraph(DebugLevel, CliEventABC):
+    graph: Dict[str, List[str]]
+
+    def cli_msg(self) -> str:
+        return f"after adding: {str(self.graph)}"
+
+
+@dataclass
+class DumpBeforeRenameSchema(DebugLevel, CliEventABC):
+    graph: Dict[str, List[str]]
+
+    def cli_msg(self) -> str:
+        return f"before rename: {self.graph}"
+
+
+@dataclass
+class DumpAfterRenameSchema(DebugLevel, CliEventABC):
+    graph: Dict[str, List[str]]
+
+    def cli_msg(self) -> str:
+        return f"after rename: {self.graph}"
+
+
+@dataclass
+class AdapterImportError(InfoLevel, CliEventABC):
+    exc: ModuleNotFoundError
+
+    def cli_msg(self) -> str:
+        return f"Error importing adapter: {self.exc}"
+
+
+@dataclass
+class PluginLoadError(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self):
+        pass
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -510,5 +635,35 @@ if 1 == 0:
     SQLQueryStatus(status="", elapsed=0.1)
     SQLCommit(conn_name="")
     ColTypeChange(orig_type="", new_type="", table="")
-    SchemaCreation(relation="")
-    SchemaDrop(relation="")
+    SchemaCreation(relation=BaseRelation())
+    SchemaDrop(relation=BaseRelation())
+    UncachedRelation(
+        dep_key=_ReferenceKey(database="", schema="", identifier=""),
+        ref_key=_ReferenceKey(database="", schema="", identifier=""),
+    )
+    AddLink(
+        dep_key=_ReferenceKey(database="", schema="", identifier=""),
+        ref_key=_ReferenceKey(database="", schema="", identifier=""),
+    )
+    AddRelation(relation=_CachedRelation())
+    DropMissingRelation(relation=_ReferenceKey(database="", schema="", identifier=""))
+    DropCascade(
+        dropped=_ReferenceKey(database="", schema="", identifier=""),
+        consequences={_ReferenceKey(database="", schema="", identifier="")},
+    )
+    UpdateReference(
+        old_key=_ReferenceKey(database="", schema="", identifier=""),
+        new_key=_ReferenceKey(database="", schema="", identifier=""),
+        cached_key=_ReferenceKey(database="", schema="", identifier=""),
+    )
+    TemporaryRelation(key=_ReferenceKey(database="", schema="", identifier=""))
+    RenameSchema(
+        old_key=_ReferenceKey(database="", schema="", identifier=""),
+        new_key=_ReferenceKey(database="", schema="", identifier="")
+    )
+    DumpBeforeAddGraph({"": [""]})
+    DumpAfterAddGraph({"": [""]})
+    DumpBeforeRenameSchema({"": [""]})
+    DumpAfterRenameSchema({"": [""]})
+    AdapterImportError(ModuleNotFoundError())
+    PluginLoadError()
