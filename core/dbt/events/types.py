@@ -1622,6 +1622,16 @@ class EnsureGitInstalled(ErrorLevel, CliEventABC):
                 'https://docs.getdbt.com/docs/package-management')
 
 
+class DepsCreatingLocalSymlink(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return '  Creating symlink to local dependency.'
+
+
+class DepsSymlinkNotAvailable(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return '  Symlinks are not available on this OS, copying dependency.'
+
+
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
@@ -1794,3 +1804,5 @@ if 1 == 0:
     GetAddendum(msg='')
     DepsSetDownloadDirectory(path='')
     EnsureGitInstalled()
+    DepsCreatingLocalSymlink()
+    DepsSymlinkNotAvailable()

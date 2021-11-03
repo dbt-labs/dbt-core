@@ -6,7 +6,8 @@ from dbt.contracts.project import (
     ProjectPackageMetadata,
     LocalPackage,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
 
 
 class LocalPackageMixin:
@@ -57,12 +58,11 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
                 system.remove_file(dest_path)
 
         if can_create_symlink:
-            logger.debug('  Creating symlink to local dependency.')
+            fire_event(DepsCreatingLocalSymlink())
             system.make_symlink(src_path, dest_path)
 
         else:
-            logger.debug('  Symlinks are not available on this '
-                         'OS, copying dependency.')
+            fire_event(DepsSymlinkNotAvailable())
             shutil.copytree(src_path, dest_path)
 
 
