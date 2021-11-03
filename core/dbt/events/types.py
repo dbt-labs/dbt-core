@@ -1691,6 +1691,15 @@ class TrackingInitializeFailure(ShowException, DebugLevel, CliEventABC):
         return "Got an exception trying to initialize tracking"
 
 
+@dataclass
+class RetryExternalCall(DebugLevel, CliEventABC):
+    attempt: int
+    max: int
+
+    def cli_msg(self) -> str:
+        return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1873,3 +1882,4 @@ if 1 == 0:
     FlushEvents()
     FlushEventsFailure()
     TrackingInitializeFailure()
+    RetryExternalCall(attempts=0, max=0)
