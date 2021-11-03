@@ -1,8 +1,10 @@
+from distutils.util import strtobool
+
 from dataclasses import dataclass
 from dbt import utils
 from dbt.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Union
+from typing import Union
 
 from .compile import CompileRunner
 from .run import RunTask
@@ -15,16 +17,17 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
-from dbt.context.providers import generate_runtime_model
+from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt.exceptions import (
     InternalException,
+    invalid_bool_error,
     missing_materialization
 )
 from dbt.graph import (
     ResourceTypeSelector,
 )
-from dbt.node_types import NodeType, RunHookType
+from dbt.node_types import NodeType
 from dbt import flags
 
 
@@ -33,6 +36,23 @@ class TestResultData(dbtClassMixin):
     failures: int
     should_warn: bool
     should_error: bool
+
+    @classmethod
+    def validate(cls, data):
+        data['should_warn'] = cls.convert_bool_type(data['should_warn'])
+        data['should_error'] = cls.convert_bool_type(data['should_error'])
+        super().validate(data)
+
+    def convert_bool_type(field) -> bool:
+        # if it's type string let python decide if it's a valid value to convert to bool
+        if isinstance(field, str):
+            try:
+                return bool(strtobool(field))  # type: ignore
+            except ValueError:
+                raise invalid_bool_error(field, 'get_test_sql')
+
+        # need this so we catch both true bools and 0/1
+        return bool(field)
 
 
 class TestRunner(CompileRunner):
@@ -55,7 +75,7 @@ class TestRunner(CompileRunner):
         test: Union[CompiledSingularTestNode, CompiledGenericTestNode],
         manifest: Manifest
     ) -> TestResultData:
-        context = generate_runtime_model(
+        context = generate_runtime_model_context(
             test, self.config, manifest
         )
 
@@ -164,12 +184,6 @@ class TestTask(RunTask):
 
     def raise_on_first_error(self):
         return False
-
-    def safe_run_hooks(
-        self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
-    ) -> None:
-        # Don't execute on-run-* hooks for tests
-        pass
 
     def get_node_selector(self) -> TestSelector:
         if self.manifest is None or self.graph is None:

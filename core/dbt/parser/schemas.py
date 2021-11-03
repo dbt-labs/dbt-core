@@ -17,8 +17,7 @@ from dbt.config.renderer import SchemaYamlRenderer
 from dbt.context.context_config import (
     ContextConfig,
 )
-from dbt.context.configured import generate_schema_yml
-from dbt.context.target import generate_target_context
+from dbt.context.configured import generate_schema_yml_context
 from dbt.context.providers import (
     generate_parse_exposure, generate_parse_metrics, generate_test_context
 )
@@ -170,18 +169,10 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         self, project, manifest, root_project,
     ) -> None:
         super().__init__(project, manifest, root_project)
-        all_v_2 = (
-            self.root_project.config_version == 2 and
-            self.project.config_version == 2
+
+        self.render_ctx = generate_schema_yml_context(
+            self.root_project, self.project.project_name
         )
-        if all_v_2:
-            self.render_ctx = generate_schema_yml(
-                self.root_project, self.project.project_name
-            )
-        else:
-            self.render_ctx = generate_target_context(
-                self.root_project, self.root_project.cli_vars
-            )
 
         self.raw_renderer = SchemaYamlRenderer(self.render_ctx)
 
@@ -835,11 +826,11 @@ class NodePatchParser(
                 f'file {source_file.path.original_file_path}'
             )
         if unique_id is None:
-            # Node might be disabled. Following call returns first matching node encountered.
-            found_node = self.manifest.find_disabled_by_name(patch.package_name, patch.name)
-            if found_node:
+            # Node might be disabled. Following call returns list of matching disabled nodes
+            found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
+            if found_nodes:
                 # There might be multiple disabled nodes for this model
-                for node in self.manifest.disabled[found_node.unique_id]:
+                for node in found_nodes:
                     # We're saving the patch_path because we need to schedule
                     # re-application of the patch in partial parsing.
                     node.patch_path = source_file.file_id

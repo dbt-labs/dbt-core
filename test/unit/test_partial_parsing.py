@@ -23,6 +23,7 @@ class TestPartialParsing(unittest.TestCase):
             project_name=project_name,
             parse_file_type=ParseFileType.Model,
             nodes=['model.my_test.my_model'],
+            env_vars=[],
         )
         schema_file = SchemaSourceFile(
             path=FilePath(project_root=project_root, searched_path='models', relative_path='schema.yml', modification_time=time.time()),
@@ -31,6 +32,7 @@ class TestPartialParsing(unittest.TestCase):
             parse_file_type=ParseFileType.Schema,
             dfy={'version': 2, 'models': [{'name': 'my_model', 'description': 'Test model'}]},
             ndp=['model.my_test.my_model'],
+            env_vars={},
         )
         self.saved_files = {model_file.file_id: model_file, schema_file.file_id: schema_file}
         model_node = self.get_model('my_model')

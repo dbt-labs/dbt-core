@@ -17,6 +17,7 @@ class ManifestContext(ConfiguredContext):
     The given macros can override any previous context values, which will be
     available as if they were accessed relative to the package name.
     """
+    # subclasses are QueryHeaderContext and ProviderContext
     def __init__(
         self,
         config: AdapterRequiredConfig,

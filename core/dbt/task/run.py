@@ -20,7 +20,7 @@ from dbt import tracking
 from dbt import utils
 from dbt.adapters.base import BaseRelation
 from dbt.clients.jinja import MacroGenerator
-from dbt.context.providers import generate_runtime_model
+from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import WritableManifest
 from dbt.contracts.graph.model_config import Hook
@@ -225,7 +225,7 @@ class ModelRunner(CompileRunner):
         raise CompilationException(msg, node=model)
 
     def execute(self, model, manifest):
-        context = generate_runtime_model(
+        context = generate_runtime_model_context(
             model, self.config, manifest
         )
 
@@ -414,13 +414,13 @@ class RunTask(CompileTask):
 
     def after_run(self, adapter, results):
         # in on-run-end hooks, provide the value 'database_schemas', which is a
-        # list  of unique database, schema pairs that successfully executed
-        # models  were in. for backwards compatibility, include the old
+        # list of unique (database, schema) pairs that successfully executed
+        # models were in. For backwards compatibility, include the old
         # 'schemas', which did not include database information.
 
         database_schema_set: Set[Tuple[Optional[str], str]] = {
             (r.node.database, r.node.schema) for r in results
-            if r.status not in (
+            if r.node.is_relational and r.status not in (
                 NodeStatus.Error,
                 NodeStatus.Fail,
                 NodeStatus.Skipped

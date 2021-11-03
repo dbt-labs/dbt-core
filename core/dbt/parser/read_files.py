@@ -1,3 +1,4 @@
+import pathlib
 from dbt.clients.system import load_file_contents
 from dbt.contracts.files import (
     FilePath, ParseFileType, SourceFile, FileHash, AnySourceFile, SchemaSourceFile
@@ -93,7 +94,13 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files):
     for fp in fp_list:
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
+        # singular tests live in /tests but only generic tests live
+        # in /tests/generic so we want to skip those
         else:
+            if parse_file_type == ParseFileType.SingularTest:
+                path = pathlib.Path(fp.relative_path)
+                if path.parts[0] == 'generic':
+                    continue
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
             if file:
@@ -137,7 +144,12 @@ def read_files(project, files, parser_files, saved_files):
     )
 
     project_files['SingularTestParser'] = read_files_for_parser(
-        project, files, project.test_paths, '.sql', ParseFileType.Test, saved_files
+        project, files, project.test_paths, '.sql', ParseFileType.SingularTest, saved_files
+    )
+
+    # all generic tests within /tests must be nested under a /generic subfolder
+    project_files['GenericTestParser'] = read_files_for_parser(
+        project, files, project.generic_test_paths, '.sql', ParseFileType.GenericTest, saved_files
     )
 
     project_files['SeedParser'] = read_files_for_parser(

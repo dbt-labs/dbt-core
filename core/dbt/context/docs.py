@@ -75,7 +75,7 @@ class DocsRuntimeContext(SchemaYamlContext):
         return target_doc.block_contents
 
 
-def generate_runtime_docs(
+def generate_runtime_docs_context(
     config: RuntimeConfig,
     target: Any,
     manifest: Manifest,

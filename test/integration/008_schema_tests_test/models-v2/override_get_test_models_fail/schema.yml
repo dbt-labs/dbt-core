@@ -1,0 +1,12 @@
+version: 2
+
+models:
+    - name: my_model
+      description: "The table has 1 null values, and we're not okay with that."
+      columns:
+        - name: id
+          description: "The number of responses for this favorite color - purple will be null"
+          tests:
+            - not_null
+
+

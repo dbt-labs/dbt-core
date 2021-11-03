@@ -385,7 +385,7 @@ def test_query_header_context(config_postgres, manifest_fx):
 
 
 def test_macro_runtime_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
-    ctx = providers.generate_runtime_macro(
+    ctx = providers.generate_runtime_macro_context(
         macro=manifest_fx.macros['macro.root.macro_a'],
         config=config_postgres,
         manifest=manifest_fx,
@@ -395,7 +395,7 @@ def test_macro_runtime_context(config_postgres, manifest_fx, get_adapter, get_in
 
 
 def test_model_parse_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
-    ctx = providers.generate_parser_model(
+    ctx = providers.generate_parser_model_context(
         model=mock_model(),
         config=config_postgres,
         manifest=manifest_fx,
@@ -405,7 +405,7 @@ def test_model_parse_context(config_postgres, manifest_fx, get_adapter, get_incl
 
 
 def test_model_runtime_context(config_postgres, manifest_fx, get_adapter, get_include_paths):
-    ctx = providers.generate_runtime_model(
+    ctx = providers.generate_runtime_model_context(
         model=mock_model(),
         config=config_postgres,
         manifest=manifest_fx,
@@ -414,7 +414,7 @@ def test_model_runtime_context(config_postgres, manifest_fx, get_adapter, get_in
 
 
 def test_docs_runtime_context(config_postgres):
-    ctx = docs.generate_runtime_docs(config_postgres, mock_model(), [], 'root')
+    ctx = docs.generate_runtime_docs_context(config_postgres, mock_model(), [], 'root')
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
 
 

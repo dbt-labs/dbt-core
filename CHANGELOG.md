@@ -1,8 +1,48 @@
 ## dbt-core 1.0.0 (Release TBD)
 
-## dbt-core 1.0.0b1 (October 11, 2021)
+### Features
+- Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
+- Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135),[#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
+### Fixes
+- Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex`
 
-## dbt 1.0.0b1 (October 11, 2021)
+Contributors:
+- [@kadero](https://github.com/kadero) ([3955](https://github.com/dbt-labs/dbt-core/pull/3955))
+- [@frankcash](https://github.com/frankcash) ([4136](https://github.com/dbt-labs/dbt-core/pull/4136))
+
+## dbt-core 1.0.0b2 (October 25, 2021)
+
+### Breaking changes
+
+- Enable `on-run-start` and `on-run-end` hooks for `dbt test`. Add `flags.WHICH` to execution context, representing current task ([#3463](https://github.com/dbt-labs/dbt-core/issues/3463), [#4004](https://github.com/dbt-labs/dbt-core/pull/4004))
+
+### Features
+- Normalize global CLI arguments/flags ([#2990](https://github.com/dbt-labs/dbt/issues/2990), [#3839](https://github.com/dbt-labs/dbt/pull/3839))
+- Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt/issues/3377), [#3939](https://github.com/dbt-labs/dbt/pull/3939))
+- Generic test FQNs have changed to include the relative path, resource, and column (if applicable) where they are defined. This makes it easier to configure them from the `tests` block in `dbt_project.yml` ([#3259](https://github.com/dbt-labs/dbt/pull/3259), [#3880](https://github.com/dbt-labs/dbt/pull/3880)
+- Turn on partial parsing by default ([#3867](https://github.com/dbt-labs/dbt/issues/3867), [#3989](https://github.com/dbt-labs/dbt/issues/3989))
+- Add `result:<status>` selectors to automatically rerun failed tests and erroneous models. This makes it easier to rerun failed dbt jobs with a simple selector flag instead of restarting from the beginning or manually running the dbt models in scope. ([#3859](https://github.com/dbt-labs/dbt/issues/3891), [#4017](https://github.com/dbt-labs/dbt/pull/4017))
+- `dbt init` is now interactive, generating profiles.yml when run inside existing project ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
+
+### Under the hood
+
+- Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
+- Make finding disabled nodes more consistent ([#4069](https://github.com/dbt-labs/dbt-core/issues/4069), [#4073](https://github.com/dbt-labas/dbt-core/pull/4073))
+- Remove connection from `render_with_context` during parsing, thereby removing misleading log message ([#3137](https://github.com/dbt-labs/dbt-core/issues/3137), [#4062](https://github.com/dbt-labas/dbt-core/pull/4062))
+- Wait for postgres docker container to be ready in `setup_db.sh`. ([#3876](https://github.com/dbt-labs/dbt-core/issues/3876), [#3908](https://github.com/dbt-labs/dbt-core/pull/3908))
+- Prefer macros defined in the project over the ones in a package by default ([#4106](https://github.com/dbt-labs/dbt-core/issues/4106), [#4114](https://github.com/dbt-labs/dbt-core/pull/4114)) 
+- Dependency updates ([#4079](https://github.com/dbt-labs/dbt-core/pull/4079)), ([#3532](https://github.com/dbt-labs/dbt-core/pull/3532)
+- Schedule partial parsing for SQL files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4101](https://github.com/dbt-labs/dbt-core/pull/4101))
+
+Contributors:
+- [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
+- [@matt-winkler](https://github.com/matt-winkler) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))
+- [@NiallRees](https://github.com/NiallRees) ([#3625](https://github.com/dbt-labs/dbt/pull/3625))
+- [@rvacaru](https://github.com/rvacaru) ([#3908](https://github.com/dbt-labs/dbt/pull/3908))
+- [@JCZuurmond](https://github.com/jczuurmond) ([#4114](https://github.com/dbt-labs/dbt-core/pull/4114))
+- [@ljhopkins2](https://github.com/dbt-labs/dbt-core/pull/4079)
+
+## dbt-core 1.0.0b1 (October 11, 2021)
 
 ### Breaking changes
 
@@ -14,6 +54,7 @@
 - Turns on the static parser by default and adds the flag `--no-static-parser` to disable it. ([#3377](https://github.com/dbt-labs/dbt-core/issues/3377), [#3939](https://github.com/dbt-labs/dbt-core/pull/3939))
 - Generic test FQNs have changed to include the relative path, resource, and column (if applicable) where they are defined. This makes it easier to configure them from the `tests` block in `dbt_project.yml` ([#3259](https://github.com/dbt-labs/dbt-core/pull/3259), [#3880](https://github.com/dbt-labs/dbt-core/pull/3880)
 - Turn on partial parsing by default ([#3867](https://github.com/dbt-labs/dbt-core/issues/3867), [#3989](https://github.com/dbt-labs/dbt-core/issues/3989))
+- Generic test can now be added under a `generic` subfolder in the `test-paths` directory. ([#4052](https://github.com/dbt-labs/dbt-core/pull/4052))
 
 ### Fixes
 - Add generic tests defined on sources to the manifest once, not twice ([#3347](https://github.com/dbt-labs/dbt/issues/3347), [#3880](https://github.com/dbt-labs/dbt/pull/3880))
@@ -22,10 +63,9 @@
 - Fix multiple disabled nodes ([#4013](https://github.com/dbt-labs/dbt/issues/4013), [#4018](https://github.com/dbt-labs/dbt/pull/4018))
 - Fix multiple partial parsing errors ([#3996](https://github.com/dbt-labs/dbt/issues/3006), [#4020](https://github.com/dbt-labs/dbt/pull/4018))
 - Return an error instead of a warning when runing with `--warn-error` and no models are selected ([#4006](https://github.com/dbt-labs/dbt/issues/4006), [#4019](https://github.com/dbt-labs/dbt/pull/4019))
-- Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4022](https://github.com/dbt-labs/dbt/pull/4022))
+- Fixed bug with `error_if` test option ([#4070](https://github.com/dbt-labs/dbt-core/pull/4070))
 
 ### Under the hood
-
 - Enact deprecation for `materialization-return` and replace deprecation warning with an exception. ([#3896](https://github.com/dbt-labs/dbt-core/issues/3896))
 - Build catalog for only relational, non-ephemeral nodes in the graph ([#3920](https://github.com/dbt-labs/dbt-core/issues/3920))
 - Enact deprecation to remove the `release` arg from the `execute_macro` method. ([#3900](https://github.com/dbt-labs/dbt-core/issues/3900))
@@ -46,6 +86,22 @@ Contributors:
 - [@samlader](https://github.com/samlader) ([#3993](https://github.com/dbt-labs/dbt-core/pull/3993))
 - [@yu-iskw](https://github.com/yu-iskw) ([#3967](https://github.com/dbt-labs/dbt-core/pull/3967))
 - [@laxjesse](https://github.com/laxjesse) ([#4019](https://github.com/dbt-labs/dbt-core/pull/4019))
+
+## dbt 0.21.1 (Release TBD)
+
+### Fixes
+- Performance: Use child_map to find tests for nodes in resolve_graph ([#4012](https://github.com/dbt-labs/dbt/issues/4012), [#4022](https://github.com/dbt-labs/dbt/pull/4022))
+- Switch `unique_field` from abstractproperty to optional property. Add docstring ([#4025](https://github.com/dbt-labs/dbt/issues/4025), [#4028](https://github.com/dbt-labs/dbt/pull/4028))
+- Include only relational nodes in `database_schema_set` ([#4063](https://github.com/dbt-labs/dbt-core/issues/4063), [#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
+- Added support for tests on databases that lack real boolean types. ([#4084](https://github.com/dbt-labs/dbt-core/issues/4084))
+- Scrub secrets coming from `CommandError`s so they don't get exposed in logs. ([#4138](https://github.com/dbt-labs/dbt-core/pull/4138))
+- Syntax fix in `alter_relation_add_remove_columns` if only removing columns in `on_schema_change: sync_all_columns` ([#4147](https://github.com/dbt-labs/dbt-core/issues/4147))
+- Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135),[#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
+- Add downstream test edges for `build` task _only_. Restore previous graph construction, compilation performance, and node selection behavior (`test+`) for all other tasks ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135), [#4143](https://github.com/dbt-labs/dbt-core/pull/4143))
+- Don't require a strict/proper subset when adding testing edges to specialized graph for `build` ([#4158](https://github.com/dbt-labs/dbt-core/issues/4135), [#4158](https://github.com/dbt-labs/dbt-core/pull/4160))
+
+Contributors:
+- [@ljhopkins2](https://github.com/ljhopkins2) ([#4077](https://github.com/dbt-labs/dbt-core/pull/4077))
 
 ## dbt 0.21.0 (October 04, 2021)
 

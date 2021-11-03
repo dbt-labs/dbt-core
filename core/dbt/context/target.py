@@ -8,6 +8,7 @@ from dbt.context.base import (
 
 
 class TargetContext(BaseContext):
+    # subclass is ConfiguredContext
     def __init__(self, config: HasCredentials, cli_vars: Dict[str, Any]):
         super().__init__(cli_vars=cli_vars)
         self.config = config

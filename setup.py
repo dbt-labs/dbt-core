@@ -24,7 +24,7 @@ with open(os.path.join(this_directory, 'README.md')) as f:
 
 
 package_name = "dbt"
-package_version = "1.0.0b1"
+package_version = "1.0.0b2"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -39,7 +39,7 @@ setup(
 
     author="dbt Labs",
     author_email="info@dbtlabs.com",
-    url="https://github.com/dbt-labs/dbt",
+    url="https://github.com/dbt-labs/dbt-core",
     packages=[],
     install_requires=[
         'dbt-core=={}'.format(package_version),

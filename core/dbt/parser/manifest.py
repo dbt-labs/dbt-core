@@ -25,7 +25,7 @@ from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
-from dbt.context.docs import generate_runtime_docs
+from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider
@@ -49,6 +49,7 @@ from dbt.exceptions import (
 )
 from dbt.parser.base import Parser
 from dbt.parser.analysis import AnalysisParser
+from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.hooks import HookParser
@@ -135,7 +136,7 @@ class ManifestLoader:
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
         self.macro_resolver = None  # built after macros are loaded
-        self.started_at = int(time.time())
+        self.started_at = time.time()
         # This is a MacroQueryStringSetter callable, which is called
         # later after we set the MacroManifest in the adapter. It sets
         # up the query headers.
@@ -277,9 +278,10 @@ class ManifestLoader:
         if skip_parsing:
             logger.debug("Partial parsing enabled, no changes found, skipping parsing")
         else:
-            # Load Macros
+            # Load Macros and tests
             # We need to parse the macros first, so they're resolvable when
-            # the other files are loaded
+            # the other files are loaded.  Also need to parse tests, specifically
+            # generic tests
             start_load_macros = time.perf_counter()
             self.load_and_parse_macros(project_parser_files)
 
@@ -319,6 +321,7 @@ class ManifestLoader:
             # aren't in place yet
             self.manifest.rebuild_ref_lookup()
             self.manifest.rebuild_doc_lookup()
+            self.manifest.rebuild_disabled_lookup()
 
             # Load yaml files
             parser_types = [SchemaParser]
@@ -343,6 +346,8 @@ class ManifestLoader:
             self._perf_info.patch_sources_elapsed = (
                 time.perf_counter() - start_patch
             )
+            # We need to rebuild disabled in order to include disabled sources
+            self.manifest.rebuild_disabled_lookup()
 
             # copy the selectors from the root_project to the manifest
             self.manifest.selectors = self.root_project.manifest_selectors
@@ -376,14 +381,22 @@ class ManifestLoader:
             if project.project_name not in project_parser_files:
                 continue
             parser_files = project_parser_files[project.project_name]
-            if 'MacroParser' not in parser_files:
-                continue
-            parser = MacroParser(project, self.manifest)
-            for file_id in parser_files['MacroParser']:
-                block = FileBlock(self.manifest.files[file_id])
-                parser.parse_file(block)
-                # increment parsed path count for performance tracking
-                self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+            if 'MacroParser' in parser_files:
+                parser = MacroParser(project, self.manifest)
+                for file_id in parser_files['MacroParser']:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
+            # generic tests hisotrically lived in the macros directoy but can now be nested
+            # in a /generic directory under /tests so we want to process them here as well
+            if 'GenericTestParser' in parser_files:
+                parser = GenericTestParser(project, self.manifest)
+                for file_id in parser_files['GenericTestParser']:
+                    block = FileBlock(self.manifest.files[file_id])
+                    parser.parse_file(block)
+                    # increment parsed path count for performance tracking
+                    self._perf_info.parsed_path_count = self._perf_info.parsed_path_count + 1
 
         self.build_macro_resolver()
         # Look at changed macros and update the macro.depends_on.macros
@@ -763,7 +776,7 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 node,
                 self.manifest,
@@ -773,7 +786,7 @@ class ManifestLoader:
         for source in self.manifest.sources.values():
             if source.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 source,
                 self.manifest,
@@ -783,7 +796,7 @@ class ManifestLoader:
         for macro in self.manifest.macros.values():
             if macro.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 macro,
                 self.manifest,
@@ -793,7 +806,7 @@ class ManifestLoader:
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 exposure,
                 self.manifest,
@@ -1218,7 +1231,7 @@ def _process_sources_for_node(
 def process_macro(
     config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro
 ) -> None:
-    ctx = generate_runtime_docs(
+    ctx = generate_runtime_docs_context(
         config,
         macro,
         manifest,
@@ -1237,5 +1250,5 @@ def process_node(
         manifest, config.project_name, node
     )
     _process_refs_for_node(manifest, config.project_name, node)
-    ctx = generate_runtime_docs(config, node, manifest, config.project_name)
+    ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)

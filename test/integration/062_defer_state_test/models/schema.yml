@@ -4,6 +4,7 @@ models:
     columns:
       - name: id
         tests:
-          - unique
+          - unique:
+              severity: error
           - not_null
       - name: name

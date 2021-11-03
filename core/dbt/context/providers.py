@@ -11,7 +11,7 @@ from dbt.adapters.factory import (
     get_adapter, get_adapter_package_names, get_adapter_type_names
 )
 from dbt.clients import agate_helper
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
+from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, undefined_error
 from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
@@ -50,7 +50,7 @@ from dbt.exceptions import (
     wrapped_exports,
 )
 from dbt.config import IsFQNResource
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.logger import GLOBAL_LOGGER as logger, SECRET_ENV_PREFIX  # noqa
 from dbt.node_types import NodeType
 
 from dbt.utils import (
@@ -145,7 +145,7 @@ class BaseDatabaseWrapper:
         elif isinstance(namespace, str):
             search_packages = self._adapter.config.get_macro_search_order(namespace)
             if not search_packages and namespace in self._adapter.config.dependencies:
-                search_packages = [namespace]
+                search_packages = [self.config.project_name, namespace]
         else:
             # Not a string and not None so must be a list
             raise CompilationException(
@@ -163,10 +163,10 @@ class BaseDatabaseWrapper:
                     macro = self._namespace.get_from_package(
                         package_name, search_name
                     )
-                except CompilationException as exc:
-                    raise CompilationException(
-                        f'In dispatch: {exc.msg}',
-                    ) from exc
+                except CompilationException:
+                    # Only raise CompilationException if macro is not found in
+                    # any package
+                    macro = None
 
                 if package_name is None:
                     attempts.append(search_name)
@@ -637,6 +637,7 @@ T = TypeVar('T')
 
 # Base context collection, used for parsing configs.
 class ProviderContext(ManifestContext):
+    # subclasses are MacroContext, ModelContext, TestContext
     def __init__(
         self,
         model,
@@ -1162,6 +1163,30 @@ class ProviderContext(ManifestContext):
         )
         raise CompilationException(msg)
 
+    @contextmember
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        """The env_var() function. Return the environment variable named 'var'.
+        If there is no such environment variable set, return the default.
+
+        If the default is None, raise an exception for an undefined variable.
+        """
+        return_value = None
+        if var in os.environ:
+            return_value = os.environ[var]
+        elif default is not None:
+            return_value = default
+
+        if return_value is not None:
+            # Save the env_var value in the manifest and the var name in the source_file
+            if not var.startswith(SECRET_ENV_PREFIX) and self.model:
+                self.manifest.env_vars[var] = return_value
+                source_file = self.manifest.files[self.model.file_id]
+                source_file.env_vars.append(var)
+            return return_value
+        else:
+            msg = f"Env var required but not provided: '{var}'"
+            undefined_error(msg)
+
 
 class MacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:
@@ -1263,7 +1288,7 @@ class ModelContext(ProviderContext):
 
 
 # This is called by '_context_for', used in 'render_with_context'
-def generate_parser_model(
+def generate_parser_model_context(
     model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1280,7 +1305,7 @@ def generate_parser_model(
     return ctx.to_dict()
 
 
-def generate_generate_component_name_macro(
+def generate_generate_name_macro_context(
     macro: ParsedMacro,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1291,7 +1316,7 @@ def generate_generate_component_name_macro(
     return ctx.to_dict()
 
 
-def generate_runtime_model(
+def generate_runtime_model_context(
     model: ManifestNode,
     config: RuntimeConfig,
     manifest: Manifest,
@@ -1302,7 +1327,7 @@ def generate_runtime_model(
     return ctx.to_dict()
 
 
-def generate_runtime_macro(
+def generate_runtime_macro_context(
     macro: ParsedMacro,
     config: RuntimeConfig,
     manifest: Manifest,

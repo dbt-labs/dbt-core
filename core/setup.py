@@ -24,7 +24,7 @@ def read(fname):
 
 
 package_name = "dbt-core"
-package_version = "1.0.0b1"
+package_version = "1.0.0b2"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -50,8 +50,8 @@ setup(
     ],
     install_requires=[
         'Jinja2==2.11.3',
-        'PyYAML>=3.11',
         'agate>=1.6,<1.6.2',
+        'click>=8,<9',
         'colorama>=0.3.9,<0.4.5',
         'dataclasses>=0.6,<0.9;python_version<"3.7"',
         'hologram==0.0.14',
@@ -60,7 +60,7 @@ setup(
         'mashumaro==2.5',
         'minimal-snowplow-tracker==0.0.2',
         'networkx>=2.3,<3',
-        'packaging~=20.9',
+        'packaging>=20.9,<22.0',
         'sqlparse>=0.2.3,<0.5',
         'dbt-extractor==0.4.0',
         'typing-extensions>=3.7.4,<3.11',

@@ -45,6 +45,11 @@ class UnparsedMacro(UnparsedBaseNode, HasSQL):
 
 
 @dataclass
+class UnparsedGenericTest(UnparsedBaseNode, HasSQL):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
+
+
+@dataclass
 class UnparsedNode(UnparsedBaseNode, HasSQL):
     name: str
     resource_type: NodeType = field(metadata={'restrict': [
@@ -55,6 +60,7 @@ class UnparsedNode(UnparsedBaseNode, HasSQL):
         NodeType.Operation,
         NodeType.Seed,
         NodeType.RPCCall,
+        NodeType.SqlOperation,
     ]})
 
     @property
@@ -162,20 +168,25 @@ class TimePeriod(StrEnum):
 
 
 @dataclass
-class Time(dbtClassMixin, Replaceable):
-    count: int
-    period: TimePeriod
+class Time(dbtClassMixin, Mergeable):
+    count: Optional[int] = None
+    period: Optional[TimePeriod] = None
 
     def exceeded(self, actual_age: float) -> bool:
-        kwargs = {self.period.plural(): self.count}
+        if self.period is None or self.count is None:
+            return False
+        kwargs: Dict[str, int] = {self.period.plural(): self.count}
         difference = timedelta(**kwargs).total_seconds()
         return actual_age > difference
+
+    def __bool__(self):
+        return self.count is not None and self.period is not None
 
 
 @dataclass
 class FreshnessThreshold(dbtClassMixin, Mergeable):
-    warn_after: Optional[Time] = None
-    error_after: Optional[Time] = None
+    warn_after: Optional[Time] = field(default_factory=Time)
+    error_after: Optional[Time] = field(default_factory=Time)
     filter: Optional[str] = None
 
     def status(self, age: float) -> "dbt.contracts.results.FreshnessStatus":
@@ -188,7 +199,7 @@ class FreshnessThreshold(dbtClassMixin, Mergeable):
             return FreshnessStatus.Pass
 
     def __bool__(self):
-        return self.warn_after is not None or self.error_after is not None
+        return bool(self.warn_after) or bool(self.error_after)
 
 
 @dataclass

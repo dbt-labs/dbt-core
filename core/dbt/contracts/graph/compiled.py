@@ -9,6 +9,7 @@ from dbt.contracts.graph.parsed import (
     ParsedMetric,
     ParsedResource,
     ParsedRPCNode,
+    ParsedSqlNode,
     ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,
@@ -82,9 +83,15 @@ class CompiledModelNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
 
 
+# TODO: rm?
 @dataclass
 class CompiledRPCNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+
+
+@dataclass
+class CompiledSqlNode(CompiledNode):
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.SqlOperation]})
 
 
 @dataclass
@@ -143,6 +150,7 @@ PARSED_TYPES: Dict[Type[CompiledNode], Type[ParsedResource]] = {
     CompiledModelNode: ParsedModelNode,
     CompiledHookNode: ParsedHookNode,
     CompiledRPCNode: ParsedRPCNode,
+    CompiledSqlNode: ParsedSqlNode,
     CompiledSeedNode: ParsedSeedNode,
     CompiledSnapshotNode: ParsedSnapshotNode,
     CompiledSingularTestNode: ParsedSingularTestNode,
@@ -155,6 +163,7 @@ COMPILED_TYPES: Dict[Type[ParsedResource], Type[CompiledNode]] = {
     ParsedModelNode: CompiledModelNode,
     ParsedHookNode: CompiledHookNode,
     ParsedRPCNode: CompiledRPCNode,
+    ParsedSqlNode: CompiledSqlNode,
     ParsedSeedNode: CompiledSeedNode,
     ParsedSnapshotNode: CompiledSnapshotNode,
     ParsedSingularTestNode: CompiledSingularTestNode,
@@ -190,6 +199,7 @@ NonSourceCompiledNode = Union[
     CompiledModelNode,
     CompiledHookNode,
     CompiledRPCNode,
+    CompiledSqlNode,
     CompiledGenericTestNode,
     CompiledSeedNode,
     CompiledSnapshotNode,
@@ -201,6 +211,7 @@ NonSourceParsedNode = Union[
     ParsedHookNode,
     ParsedModelNode,
     ParsedRPCNode,
+    ParsedSqlNode,
     ParsedGenericTestNode,
     ParsedSeedNode,
     ParsedSnapshotNode,

@@ -18,7 +18,8 @@ class ParseFileType(StrEnum):
     Model = 'model'
     Snapshot = 'snapshot'
     Analysis = 'analysis'
-    Test = 'test'
+    SingularTest = 'singular_test'
+    GenericTest = 'generic_test'
     Seed = 'seed'
     Documentation = 'docs'
     Schema = 'schema'
@@ -30,7 +31,8 @@ parse_file_type_to_parser = {
     ParseFileType.Model: 'ModelParser',
     ParseFileType.Snapshot: 'SnapshotParser',
     ParseFileType.Analysis: 'AnalysisParser',
-    ParseFileType.Test: 'SingularTestParser',
+    ParseFileType.SingularTest: 'SingularTestParser',
+    ParseFileType.GenericTest: 'GenericTestParser',
     ParseFileType.Seed: 'SeedParser',
     ParseFileType.Documentation: 'DocumentationParser',
     ParseFileType.Schema: 'SchemaParser',
@@ -188,6 +190,7 @@ class SourceFile(BaseSourceFile):
     nodes: List[str] = field(default_factory=list)
     docs: List[str] = field(default_factory=list)
     macros: List[str] = field(default_factory=list)
+    env_vars: List[str] = field(default_factory=list)
 
     @classmethod
     def big_seed(cls, path: FilePath) -> 'SourceFile':
@@ -229,6 +232,7 @@ class SchemaSourceFile(BaseSourceFile):
     # Patches are only against external sources. Sources can be
     # created too, but those are in 'sources'
     sop: List[SourceKey] = field(default_factory=list)
+    env_vars: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -251,7 +255,7 @@ class SchemaSourceFile(BaseSourceFile):
     def __post_serialize__(self, dct):
         dct = super().__post_serialize__(dct)
         # Remove partial parsing specific data
-        for key in ('pp_files', 'pp_test_index', 'pp_dict'):
+        for key in ('pp_test_index', 'pp_dict'):
             if key in dct:
                 del dct[key]
         return dct

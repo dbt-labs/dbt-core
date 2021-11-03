@@ -564,6 +564,13 @@ class Project:
             self.analysis_paths, self.macro_paths
         )
 
+    @property
+    def generic_test_paths(self):
+        generic_test_paths = []
+        for test_path in self.test_paths:
+            generic_test_paths.append(os.path.join(test_path, 'generic'))
+        return generic_test_paths
+
     def __str__(self):
         cfg = self.to_project_config(with_packages=True)
         return str(cfg)

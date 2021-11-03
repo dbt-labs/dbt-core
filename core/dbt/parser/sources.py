@@ -24,6 +24,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceTableDefinition,
     FreshnessThreshold,
     UnparsedColumn,
+    Time
 )
 from dbt.exceptions import warn_or_error, InternalException
 from dbt.node_types import NodeType
@@ -339,11 +340,29 @@ class SourcePatcher:
         return '\n'.join(msg)
 
 
+def merge_freshness_time_thresholds(
+    base: Optional[Time], update: Optional[Time]
+) -> Optional[Time]:
+    if base and update:
+        return base.merged(update)
+    elif update is None:
+        return None
+    else:
+        return update or base
+
+
 def merge_freshness(
     base: Optional[FreshnessThreshold], update: Optional[FreshnessThreshold]
 ) -> Optional[FreshnessThreshold]:
     if base is not None and update is not None:
-        return base.merged(update)
+        merged_freshness = base.merged(update)
+        # merge one level deeper the error_after and warn_after thresholds
+        merged_error_after = merge_freshness_time_thresholds(base.error_after, update.error_after)
+        merged_warn_after = merge_freshness_time_thresholds(base.warn_after, update.warn_after)
+
+        merged_freshness.error_after = merged_error_after
+        merged_freshness.warn_after = merged_warn_after
+        return merged_freshness
     elif base is None and update is not None:
         return update
     else:

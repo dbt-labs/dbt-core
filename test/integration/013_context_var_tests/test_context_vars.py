@@ -1,5 +1,5 @@
 from dbt.logger import SECRET_ENV_PREFIX
-from test.integration.base import DBTIntegrationTest, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile, get_manifest
 
 import os
 
@@ -95,6 +95,10 @@ class TestContextVars(DBTIntegrationTest):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
+
+        manifest = get_manifest()
+        expected = {'DBT_TEST_013_ENV_VAR': '1', 'DBT_TEST_013_NOT_SECRET': 'regular_variable'}
+        self.assertEqual(manifest.env_vars, expected)
 
         this = '"{}"."{}"."context"'.format(self.default_database,
                                             self.unique_schema())

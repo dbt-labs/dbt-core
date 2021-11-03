@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: orders
+    description: "Some order data"
+    columns:
+      - name: id
+        tests:
+          - unique

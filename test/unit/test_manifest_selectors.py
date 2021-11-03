@@ -71,7 +71,7 @@ class SelectorUnitTest(unittest.TestCase):
         definition = sel_dict['nightly_selector']['definition']
         self.assertEqual(expected, definition)
 
- 
+
     def test_single_key_value_definition(self):
         dct = get_selector_dict('''\
             selectors:
