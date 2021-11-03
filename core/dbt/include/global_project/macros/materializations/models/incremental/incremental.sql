@@ -4,7 +4,7 @@
   {% set unique_key = config.get('unique_key') %}
 
   {% set target_relation = this.incorporate(type='table') %}
-  {% set existing_relation = get_relation(this) %}
+  {% set existing_relation = adapter.get_relation(this) %}
   {% set tmp_relation = make_temp_relation(target_relation) %}
   {%- set full_refresh_mode = (should_full_refresh()) -%}
 
