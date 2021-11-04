@@ -94,7 +94,7 @@ Contributors:
 ## dbt 0.21.1 (Release TBD)
 
 ### Fixes
-- Add `get_where_subquery` to test macro namespace, fixing tests  
+- Add `get_where_subquery` to test macro namespace, fixing custom generic tests that rely on introspecting the `model` arg at parse time ([#4195](https://github.com/dbt-labs/dbt/issues/4195), [#4197](https://github.com/dbt-labs/dbt/pull/4197))
 
 ## dbt 0.21.1rc1 (November 03, 2021)
 
