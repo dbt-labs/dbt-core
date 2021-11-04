@@ -1109,7 +1109,6 @@ class FirstRunResultError(ErrorLevel, CliEventABC):
 
 @dataclass
 class AfterFirstRunResultError(ErrorLevel, CliEventABC):
-class IntegrationTestSetupFailure(ShowException, ErrorLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
@@ -1720,6 +1719,17 @@ class GeneralWarningException(WarnLevel, CliEventABC):
         if self.log_fmt is not None:
             return self.log_fmt.format(str(self.exc))
         return str(self.exc)
+
+
+@dataclass
+class IntegrationTestSetupFailure(ShowException, ErrorLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
+
+
+@dataclass
 class IntegrationTestTearDownFailure(ShowException, ErrorLevel, CliEventABC):
     dir: str
 
@@ -1933,3 +1943,4 @@ if 1 == 0:
     IntegrationTestSetupFailure(msg='')
     IntegrationTestTearDownFailure(dir='')
     IntegrationTestInvokingWithArgs(final_args=[])
+    IntegrationTestTestConnection(conn_name='', sql='')
