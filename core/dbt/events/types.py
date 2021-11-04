@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Callable, List, Optional, Set, Union
 
 from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 
@@ -539,34 +539,34 @@ class RenameSchema(DebugLevel, CliEventABC):
 
 @dataclass
 class DumpBeforeAddGraph(DebugLevel, CliEventABC):
-    graph: Dict[str, List[str]]
+    func: Callable
 
     def cli_msg(self) -> str:
-        return f"before adding: {str(self.graph)}"
+        return f"before adding: {self.func()}"
 
 
 @dataclass
 class DumpAfterAddGraph(DebugLevel, CliEventABC):
-    graph: Dict[str, List[str]]
+    func: Callable
 
     def cli_msg(self) -> str:
-        return f"after adding: {str(self.graph)}"
+        return f"after adding: {self.func()}"
 
 
 @dataclass
 class DumpBeforeRenameSchema(DebugLevel, CliEventABC):
-    graph: Dict[str, List[str]]
+    func: Callable
 
     def cli_msg(self) -> str:
-        return f"before rename: {self.graph}"
+        return f"before rename: {self.func()}"
 
 
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, CliEventABC):
-    graph: Dict[str, List[str]]
+    func: Callable
 
     def cli_msg(self) -> str:
-        return f"after rename: {self.graph}"
+        return f"after rename: {self.func()}"
 
 
 @dataclass
@@ -661,9 +661,9 @@ if 1 == 0:
         old_key=_ReferenceKey(database="", schema="", identifier=""),
         new_key=_ReferenceKey(database="", schema="", identifier="")
     )
-    DumpBeforeAddGraph({"": [""]})
-    DumpAfterAddGraph({"": [""]})
-    DumpBeforeRenameSchema({"": [""]})
-    DumpAfterRenameSchema({"": [""]})
+    DumpBeforeAddGraph(lambda: None)
+    DumpAfterAddGraph(lambda: None)
+    DumpBeforeRenameSchema(lambda: None)
+    DumpAfterRenameSchema(lambda: None)
     AdapterImportError(ModuleNotFoundError())
     PluginLoadError()

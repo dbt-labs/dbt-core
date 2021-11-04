@@ -289,7 +289,6 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Check if the schema is cached, and by default logs if it is not."""
 
         if (database, schema) not in self.cache:
-            # TODO:  This makes mypy angry, fix before turning it on
             fire_event(
                 CacheMiss(
                     conn_name=self.nice_connection_name,

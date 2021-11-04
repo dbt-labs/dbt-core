@@ -335,14 +335,11 @@ class RelationsCache:
         """
         cached = _CachedRelation(relation)
         fire_event(AddRelation(relation=cached))
-        # TODO: conditionally fire this event (logger.disabled, if it was std python logger)
-        fire_event(DumpBeforeAddGraph(graph=self.dump_graph()))
+        fire_event(DumpBeforeAddGraph(graph_func=self.dump_graph))
 
         with self.lock:
             self._setdefault(cached)
-
-        # TODO: conditionally fire this event (logger.disabled, if it was std python logger)
-        fire_event(DumpAfterAddGraph(graph=self.dump_graph()))
+        fire_event(DumpAfterAddGraph(graph_func=self.dump_graph()))
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
@@ -456,8 +453,7 @@ class RelationsCache:
         new_key = _make_key(new)
         fire_event(RenameSchema(old_key=old_key, new_key=new_key))
 
-        # TODO: conditionally fire this event (logger.disabled, if it was std python logger)
-        fire_event(DumpBeforeRenameSchema(graph=self.dump_graph()))
+        fire_event(DumpBeforeRenameSchema(graph_func=self.dump_graph))
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
@@ -465,8 +461,7 @@ class RelationsCache:
             else:
                 self._setdefault(_CachedRelation(new))
 
-        # TODO: conditionally fire this event (logger.disabled, if it was std python logger)
-        DumpAfterRenameSchema(graph=self.dump_graph())
+        fire_event(DumpAfterRenameSchema(graph_func=self.dump_graph))
 
     def get_relations(
         self, database: Optional[str], schema: Optional[str]
