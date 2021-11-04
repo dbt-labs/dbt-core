@@ -1634,6 +1634,30 @@ class DepsSymlinkNotAvailable(DebugLevel, CliEventABC):
         return '  Symlinks are not available on this OS, copying dependency.'
 
 
+@dataclass
+class FoundStats(InfoLevel, CliEventABC):
+    stat_line: str
+
+    def cli_msg(self) -> str:
+        return f"Found {self.stat_line}"
+
+
+@dataclass
+class CompilingNode(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Compiling {self.unique_id}"
+
+
+@dataclass
+class WritingInjectedSQLForNode(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f'Writing injected SQL for node "{self.unique_id}"'
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1807,3 +1831,6 @@ if 1 == 0:
     EnsureGitInstalled()
     DepsCreatingLocalSymlink()
     DepsSymlinkNotAvailable()
+    FoundStats(stat_line='')
+    CompilingNode(unique_id='')
+    WritingInjectedSQLForNode(unique_id='')

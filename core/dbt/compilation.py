@@ -26,7 +26,8 @@ from dbt.exceptions import (
     RuntimeException,
 )
 from dbt.graph import Graph
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import FoundStats, CompilingNode, WritingInjectedSQLForNode
 from dbt.node_types import NodeType
 from dbt.utils import pluralize
 import dbt.tracking
@@ -68,7 +69,7 @@ def print_compile_stats(stats):
         if t in names
     ])
 
-    logger.info("Found {}".format(stat_line))
+    fire_event(FoundStats(stat_line=stat_line))
 
 
 def _node_enabled(node: ManifestNode):
@@ -366,7 +367,7 @@ class Compiler:
         if extra_context is None:
             extra_context = {}
 
-        logger.debug("Compiling {}".format(node.unique_id))
+        fire_event(CompilingNode(unique_id=node.unique_id))
 
         data = node.to_dict(omit_none=True)
         data.update({
@@ -520,7 +521,7 @@ class Compiler:
         if (not node.extra_ctes_injected or
                 node.resource_type == NodeType.Snapshot):
             return node
-        logger.debug(f'Writing injected SQL for node "{node.unique_id}"')
+        fire_event(WritingInjectedSQLForNode(unique_id=node.unique_id))
 
         if node.compiled_sql:
             node.compiled_path = node.write_node(
