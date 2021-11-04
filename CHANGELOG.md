@@ -3,8 +3,12 @@
 ### Features
 - Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
 - Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135),[#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
+
 ### Fixes
 - Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex`
+
+### Under the hood
+- Bump artifact schema versions for 1.0.0: manifest v4, run results v4, sources v3. Notable changes: schema test + data test nodes are renamed to generic test + singular test nodes; freshness threshold default values ([#4191](https://github.com/dbt-labs/dbt-core/pull/4191))
 
 Contributors:
 - [@kadero](https://github.com/kadero) ([3955](https://github.com/dbt-labs/dbt-core/pull/3955))

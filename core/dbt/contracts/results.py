@@ -185,7 +185,7 @@ class RunExecutionResult(
 
 
 @dataclass
-@schema_version('run-results', 3)
+@schema_version('run-results', 4)
 class RunResultsArtifact(ExecutionResult, ArtifactMixin):
     results: Sequence[RunResultOutput]
     args: Dict[str, Any] = field(default_factory=dict)
@@ -369,7 +369,7 @@ class FreshnessResult(ExecutionResult):
 
 
 @dataclass
-@schema_version('sources', 2)
+@schema_version('sources', 3)
 class FreshnessExecutionResultArtifact(
     ArtifactMixin,
     VersionedSchema,
