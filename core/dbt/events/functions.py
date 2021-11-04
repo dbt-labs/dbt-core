@@ -9,7 +9,7 @@ from typing import List
 def env_secrets() -> List[str]:
     return [
         v for k, v in os.environ.items()
-        if k.startswith('DBT_ENV_SECRET_')
+        if k.startswith(logger.SECRET_ENV_PREFIX)
     ]
 
 
