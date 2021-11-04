@@ -659,7 +659,6 @@ def timestamped_line(msg: str) -> str:
     return "{} | {}".format(get_timestamp(), msg)
 
 
-# TODO: I *think* this may be obsolete once /task gets merged in?
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
         msg = dbt.ui.color(msg, use_color)

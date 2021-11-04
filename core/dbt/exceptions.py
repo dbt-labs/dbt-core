@@ -1,8 +1,10 @@
 import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
+from dbt.events.functions import fire_event
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import GeneralWarning
 from dbt.node_types import NodeType
 from dbt import flags
 from dbt.ui import line_wrap_message, warning_tag
@@ -976,19 +978,14 @@ def warn_or_error(msg, node=None, log_fmt=None):
     if flags.WARN_ERROR:
         raise_compiler_error(msg, node)
     else:
-        if log_fmt is not None:
-            msg = log_fmt.format(msg)
-        logger.warning(msg)
+        fire_event(GeneralWarning(msg=msg, log_fmt=log_fmt))
 
 
 def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        msg = str(exc)
-        if log_fmt is not None:
-            msg = log_fmt.format(msg)
-        logger.warning(msg)
+        fire_event(GeneralWarning(msg=str(exc), log_fmt=log_fmt))
 
 
 def warn(msg, node=None):

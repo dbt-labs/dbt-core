@@ -5,6 +5,7 @@ from dbt import ui
 from dbt import utils
 from dbt.node_types import NodeType
 from dbt.events.format import format_fancy_output_line
+from dbt.flags import LOG_FORMAT
 
 
 # types to represent log levels
@@ -1699,6 +1700,16 @@ class RetryExternalCall(DebugLevel, CliEventABC):
     def cli_msg(self) -> str:
         return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
 
+
+@dataclass
+class GeneralWarning(WarnLevel, CliEventABC):
+    msg: str
+    log_fmt: LOG_FORMAT
+
+    def cli_msg(self) -> str:
+        if self.log_fmt is not None:
+            return self.log_fmt.format(self.msg)
+        return self.msg
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
