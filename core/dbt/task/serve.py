@@ -28,8 +28,7 @@ class ServeTask(ConfiguredTask):
 
         # mypy doesn't think SimpleHTTPRequestHandler is ok here, but it is
         httpd = TCPServer(  # type: ignore
-            (address, port),
-            SimpleHTTPRequestHandler  # type: ignore
+            (address, port), SimpleHTTPRequestHandler  # type: ignore
         )  # type: ignore
 
         if self.args.open_browser:
