@@ -229,4 +229,55 @@ class EnvVarTest(BasePPTest):
         del os.environ['TEST_SCHEMA_VAR']
         del os.environ['ENV_VAR_COLOR']
         del os.environ['ENV_VAR_SOME_KEY']
+        del os.environ['ENV_VAR_OWNER']
 
+
+class ProjectEnvVarTest(BasePPTest):
+
+    @property
+    def project_config(self):
+        # Need to set the environment variable here initially because
+        # the unittest setup does a load_config.
+        os.environ['ENV_VAR_NAME'] = "Jane Smith"
+        return {
+            'config-version': 2,
+            'seed-paths': ['seeds'],
+            'test-paths': ['tests'],
+            'macro-paths': ['macros'],
+            'seeds': {
+                'quote_columns': False,
+            },
+            'models': {
+                '+meta': {
+                    'meta_name': "{{ env_var('ENV_VAR_NAME') }}"
+                }
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_project_env_vars(self):
+
+        # Initial run
+        self.setup_directories()
+        self.copy_file('test-files/model_one.sql', 'models/model_one.sql')
+        self.run_dbt(['clean'])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results), 1)
+        manifest = get_manifest()
+        state_check = manifest.state_check
+        model_id = 'model.test.model_one'
+        model = manifest.nodes[model_id]
+        self.assertEqual(model.config.meta['meta_name'], 'Jane Smith')
+        env_vars_hash_checksum = state_check.env_vars_hash.checksum
+
+        # Change the environment variable
+        os.environ['ENV_VAR_NAME'] = "Jane Doe"
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results), 1)
+        manifest = get_manifest()
+        model = manifest.nodes[model_id]
+        self.assertEqual(model.config.meta['meta_name'], 'Jane Doe')
+        self.assertNotEqual(env_vars_hash_checksum, manifest.state_check.env_vars_hash.checksum)
+
+        # cleanup
+        del os.environ['ENV_VAR_NAME']

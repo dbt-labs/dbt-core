@@ -47,7 +47,7 @@ def empty_profile_renderer():
 
 
 def empty_project_renderer():
-    return dbt.config.renderer.DbtProjectYamlRenderer(generate_base_context({}))
+    return dbt.config.renderer.DbtProjectYamlRenderer()
 
 
 model_config = {
@@ -943,13 +943,14 @@ class TestVariableProjectFile(BaseFileTest):
         self.default_project_data['project-root'] = self.project_dir
 
     def test_cli_and_env_vars(self):
-        renderer = dbt.config.renderer.DbtProjectYamlRenderer(generate_base_context({'cli_version': '0.1.2'}))
+        renderer = dbt.config.renderer.DbtProjectYamlRenderer(None, {'cli_version': '0.1.2'})
         with mock.patch.dict(os.environ, self.env_override):
             project = dbt.config.Project.from_project_root(
                 self.project_dir,
                 renderer,
             )
 
+        self.assertEqual(renderer.ctx_obj.env_vars, {'env_value_profile': 'default'})
         self.assertEqual(project.version, "0.1.2")
         self.assertEqual(project.project_name, 'blah')
         self.assertEqual(project.profile_name, 'default')
