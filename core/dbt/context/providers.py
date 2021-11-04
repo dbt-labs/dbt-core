@@ -1391,7 +1391,7 @@ class TestContext(ProviderContext):
         depends_on_macros = []
         # all generic tests use a macro named 'get_where_subquery' to wrap 'model' arg
         # see generic_test_builders.build_model_str
-        get_where_subquery = self.macro_resolver.macros_by_name.get('get_where_subquery')
+        get_where_subquery = self.macro_resolver.macros_by_name.get("get_where_subquery")
         if get_where_subquery:
             depends_on_macros.append(get_where_subquery.unique_id)
         if self.model.depends_on and self.model.depends_on.macros:
