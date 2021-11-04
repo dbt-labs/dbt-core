@@ -618,7 +618,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         return fn()
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
         if attempt <= max_attempts - 1:
-            fire_event(RetryExternalCall(attempt=attempt, max = max_attempts))
+            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:

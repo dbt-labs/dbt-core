@@ -1704,12 +1704,13 @@ class RetryExternalCall(DebugLevel, CliEventABC):
 @dataclass
 class GeneralWarning(WarnLevel, CliEventABC):
     msg: str
-    log_fmt: LOG_FORMAT
+    log_fmt: str
 
     def cli_msg(self) -> str:
         if self.log_fmt is not None:
             return self.log_fmt.format(self.msg)
         return self.msg
+
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
@@ -1893,4 +1894,4 @@ if 1 == 0:
     FlushEvents()
     FlushEventsFailure()
     TrackingInitializeFailure()
-    RetryExternalCall(attempts=0, max=0)
+    RetryExternalCall(attempt=0, max=0)

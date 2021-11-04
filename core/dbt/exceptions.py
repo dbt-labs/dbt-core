@@ -2,8 +2,6 @@ import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
 from dbt.events.functions import fire_event
-
-from dbt.events.functions import fire_event
 from dbt.events.types import GeneralWarning
 from dbt.node_types import NodeType
 from dbt import flags
