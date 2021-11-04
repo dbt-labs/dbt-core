@@ -268,7 +268,7 @@ class SelectorAlertAllUnusedNodes(DebugLevel, CliEventABC):
 
     def cli_msg(self) -> str:
         debug_nodes_str = ("\n  - ").join(self.node_names)
-        return f"Full list of tests that were excluded:" f"\n  - {debug_nodes_str}"
+        return f"Full list of tests that were excluded:\n  - {debug_nodes_str}"
 
 
 @dataclass
