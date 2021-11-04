@@ -29,7 +29,7 @@ from dbt.graph import Graph
 from dbt.events.functions import fire_event
 from dbt.events.types import FoundStats, CompilingNode, WritingInjectedSQLForNode
 from dbt.node_types import NodeType
-from dbt.utils import pluralize
+from dbt.events.format import pluralize
 import dbt.tracking
 
 graph_file_name = 'graph.gpickle'

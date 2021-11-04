@@ -2,10 +2,8 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
 from dbt import ui
-from dbt import utils
 from dbt.node_types import NodeType
-from dbt.events.format import format_fancy_output_line
-from dbt.flags import LOG_FORMAT
+from dbt.events.format import format_fancy_output_line, pluralize
 
 
 # types to represent log levels
@@ -1124,8 +1122,8 @@ class EndOfRunSummary(InfoLevel, CliEventABC):
     keyboard_interrupt: bool = False
 
     def cli_msg(self) -> str:
-        error_plural = utils.pluralize(self.num_errors, 'error')
-        warn_plural = utils.pluralize(self.num_warnings, 'warning')
+        error_plural = pluralize(self.num_errors, 'error')
+        warn_plural = pluralize(self.num_warnings, 'warning')
         if self.keyboard_interrupt:
             message = ui.yellow('Exited because of keyboard interrupt.')
         elif self.num_errors > 0:
@@ -1702,7 +1700,7 @@ class RetryExternalCall(DebugLevel, CliEventABC):
 
 
 @dataclass
-class GeneralWarning(WarnLevel, CliEventABC):
+class GeneralWarningMsg(WarnLevel, CliEventABC):
     msg: str
     log_fmt: str
 
@@ -1710,6 +1708,17 @@ class GeneralWarning(WarnLevel, CliEventABC):
         if self.log_fmt is not None:
             return self.log_fmt.format(self.msg)
         return self.msg
+
+
+@dataclass
+class GeneralWarningException(WarnLevel, CliEventABC):
+    exc: Exception
+    log_fmt: str
+
+    def cli_msg(self) -> str:
+        if self.log_fmt is not None:
+            return self.log_fmt.format(str(self.exc))
+        return str(self.exc)
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -1841,6 +1850,7 @@ if 1 == 0:
     CheckNodeTestFailure(relation_name='')
     FirstRunResultError(msg='')
     AfterFirstRunResultError(msg='')
+    EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
     PrintStartLine(description='', index=0, total=0)
     PrintHookStartLine(statement='', index=0, total=0, truncate=False)
     PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False)
@@ -1895,3 +1905,5 @@ if 1 == 0:
     FlushEventsFailure()
     TrackingInitializeFailure()
     RetryExternalCall(attempt=0, max=0)
+    GeneralWarningMsg(msg='', log_fmt='')
+    GeneralWarningException(exc=Exception(''), log_fmt='')

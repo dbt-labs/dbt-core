@@ -25,8 +25,6 @@ from typing import (
 
 import dbt.exceptions
 
-from dbt.node_types import NodeType
-
 DECIMALS: Tuple[Type[Any], ...]
 try:
     import cdecimal  # typing: ignore
@@ -395,22 +393,6 @@ def translate_aliases(
     """
     translator = Translator(aliases, recurse)
     return translator.translate(kwargs)
-
-
-def _pluralize(string: Union[str, NodeType]) -> str:
-    try:
-        convert = NodeType(string)
-    except ValueError:
-        return f'{string}s'
-    else:
-        return convert.pluralize()
-
-
-def pluralize(count, string: Union[str, NodeType]):
-    pluralized: str = str(string)
-    if count != 1:
-        pluralized = _pluralize(string)
-    return f'{count} {pluralized}'
 
 
 # Note that this only affects hologram json validation.
