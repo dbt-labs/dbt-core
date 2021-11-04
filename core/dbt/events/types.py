@@ -1608,6 +1608,13 @@ class GetAddendum(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return self.msg
 
+class DepsSetDownloadDirectory(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Set downloads directory='{self.path}'"
+
+
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
@@ -1778,3 +1785,4 @@ if 1 == 0:
     InvalidProfileTemplateYAML()
     ProjectNameAlreadyExists(name='')
     GetAddendum(msg='')
+    DepsSetDownloadDirectory(path='')
