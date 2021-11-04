@@ -1608,6 +1608,8 @@ class GetAddendum(InfoLevel, CliEventABC):
     def cli_msg(self) -> str:
         return self.msg
 
+
+@dataclass
 class DepsSetDownloadDirectory(DebugLevel, CliEventABC):
     path: str
 
