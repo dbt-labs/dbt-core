@@ -30,9 +30,15 @@ from dbt.exceptions import (
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
-    DatabaseErrorRunning, EmptyLine, HooksRunning, HookFinished,
-    PrintModelErrorResultLine, PrintModelResultLine, PrintStartLine,
-    PrintHookEndLine, PrintHookStartLine
+    DatabaseErrorRunning,
+    EmptyLine,
+    HooksRunning,
+    HookFinished,
+    PrintModelErrorResultLine,
+    PrintModelResultLine,
+    PrintStartLine,
+    PrintHookEndLine,
+    PrintHookStartLine,
 )
 from dbt.logger import (
     TextOnly,

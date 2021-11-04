@@ -16,8 +16,12 @@ from dbt.contracts.results import (
 from dbt.exceptions import RuntimeException, InternalException
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    FreshnessCheckComplete, PrintStartLine, PrintHookEndErrorLine,
-    PrintHookEndErrorStaleLine, PrintHookEndWarnLine, PrintHookEndPassLine
+    FreshnessCheckComplete,
+    PrintStartLine,
+    PrintHookEndErrorLine,
+    PrintHookEndErrorStaleLine,
+    PrintHookEndWarnLine,
+    PrintHookEndPassLine,
 )
 from dbt.node_types import NodeType
 
@@ -44,7 +48,7 @@ class FreshnessRunner(BaseRunner):
         )
 
     def after_execute(self, result):
-        if hasattr(result, 'node'):
+        if hasattr(result, "node"):
             source_name = result.node.source_name
             table_name = result.node.name
         else:

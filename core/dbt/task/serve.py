@@ -16,7 +16,7 @@ class ServeTask(ConfiguredTask):
         os.chdir(self.config.target_path)
 
         port = self.args.port
-        address = '0.0.0.0'
+        address = "0.0.0.0"
 
         shutil.copyfile(DOCS_INDEX_FILE_PATH, 'index.html')
 

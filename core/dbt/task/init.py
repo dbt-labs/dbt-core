@@ -18,9 +18,16 @@ from dbt.contracts.project import Name as ProjectName
 
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    StarterProjectPath, ConfigFolderDirectory, NoSampleProfileFound, ProfileWrittenWithSample,
-    ProfileWrittenWithTargetTemplateYAML, ProfileWrittenWithProjectTemplateYAML, SettingUpProfile,
-    InvalidProfileTemplateYAML, ProjectNameAlreadyExists, GetAddendum
+    StarterProjectPath,
+    ConfigFolderDirectory,
+    NoSampleProfileFound,
+    ProfileWrittenWithSample,
+    ProfileWrittenWithTargetTemplateYAML,
+    ProfileWrittenWithProjectTemplateYAML,
+    SettingUpProfile,
+    InvalidProfileTemplateYAML,
+    ProjectNameAlreadyExists,
+    GetAddendum,
 )
 
 from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
@@ -106,10 +113,7 @@ class InitTask(BaseTask):
                 with open(profiles_filepath, "w") as f:
                     f.write(sample_profile)
                 fire_event(
-                    ProfileWrittenWithSample(
-                        name=profile_name,
-                        path=str(profiles_filepath)
-                    )
+                    ProfileWrittenWithSample(name=profile_name, path=str(profiles_filepath))
                 )
 
     def get_addendum(self, project_name: str, profiles_path: str) -> str:
@@ -217,8 +221,7 @@ class InitTask(BaseTask):
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
             fire_event(
                 ProfileWrittenWithTargetTemplateYAML(
-                    name=profile_name,
-                    path=str(profiles_filepath)
+                    name=profile_name, path=str(profiles_filepath)
                 )
             )
         else:
@@ -254,10 +257,7 @@ class InitTask(BaseTask):
         self.create_profile_from_profile_template(profile_template, profile_name)
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
         fire_event(
-            ProfileWrittenWithProjectTemplateYAML(
-                name=profile_name,
-                path=str(profiles_filepath)
-            )
+            ProfileWrittenWithProjectTemplateYAML(name=profile_name, path=str(profiles_filepath))
         )
 
     def ask_for_adapter_choice(self) -> str:

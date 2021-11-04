@@ -12,7 +12,11 @@ from dbt.logger import TextOnly
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     SeedHeader,
-    PrintSeedResultLine, PrintStartLine
+    SeedHeaderSeparator,
+    EmptyLine,
+    PrintSeedErrorResultLine,
+    PrintSeedResultLine,
+    PrintStartLine,
 )
 from dbt.node_types import NodeType
 from dbt.contracts.results import NodeStatus

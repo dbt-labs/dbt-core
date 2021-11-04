@@ -5,9 +5,17 @@ from dbt.logger import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    EmptyLine, RunResultWarning, RunResultFailure, StatsLine, RunResultError,
-    RunResultErrorNoMessage, SQLCompiledPath, CheckNodeTestFailure, FirstRunResultError,
-    AfterFirstRunResultError, EndOfRunSummary
+    EmptyLine,
+    RunResultWarning,
+    RunResultFailure,
+    StatsLine,
+    RunResultError,
+    RunResultErrorNoMessage,
+    SQLCompiledPath,
+    CheckNodeTestFailure,
+    FirstRunResultError,
+    AfterFirstRunResultError,
+    EndOfRunSummary,
 )
 
 from dbt.tracking import InvocationProcessor
@@ -85,7 +93,7 @@ def print_run_result_error(
                 RunResultWarning(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
-                    path=result.node.original_file_path
+                    path=result.node.original_file_path,
                 )
             )
         else:
@@ -93,7 +101,7 @@ def print_run_result_error(
                 RunResultFailure(
                     resource_type=result.node.resource_type,
                     node_name=result.node.name,
-                    path=result.node.original_file_path
+                    path=result.node.original_file_path,
                 )
             )
 
@@ -145,7 +153,7 @@ def print_run_end_messages(results, keyboard_interrupt: bool = False) -> None:
             EndOfRunSummary(
                 num_errors=len(errors),
                 num_warnings=len(warnings),
-                keyboard_interrupt=keyboard_interrupt
+                keyboard_interrupt=keyboard_interrupt,
             )
         )
 

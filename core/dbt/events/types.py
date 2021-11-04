@@ -1553,7 +1553,7 @@ class RunResultWarning(WarnLevel):
     code: str = "Z021"
 
     def message(self) -> str:
-        info = 'Warning'
+        info = "Warning"
         return ui.yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
@@ -1565,7 +1565,7 @@ class RunResultFailure(ErrorLevel):
     code: str = "Z022"
 
     def message(self) -> str:
-        info = 'Failure'
+        info = "Failure"
         return ui.red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
 
 
@@ -1622,7 +1622,7 @@ class CheckNodeTestFailure(InfoLevel):
 
     def message(self) -> str:
         msg = f"select * from {self.relation_name}"
-        border = '-' * len(msg)
+        border = "-" * len(msg)
         return f"  See test failures:\n  {border}\n  {msg}\n  {border}"
 
 
@@ -1655,14 +1655,13 @@ class EndOfRunSummary(InfoLevel):
         error_plural = pluralize(self.num_errors, 'error')
         warn_plural = pluralize(self.num_warnings, 'warning')
         if self.keyboard_interrupt:
-            message = ui.yellow('Exited because of keyboard interrupt.')
+            message = ui.yellow("Exited because of keyboard interrupt.")
         elif self.num_errors > 0:
-            message = ui.red("Completed with {} and {}:".format(
-                error_plural, warn_plural))
+            message = ui.red("Completed with {} and {}:".format(error_plural, warn_plural))
         elif self.num_warnings > 0:
-            message = ui.yellow('Completed with {}:'.format(warn_plural))
+            message = ui.yellow("Completed with {}:".format(warn_plural))
         else:
-            message = ui.green('Completed successfully')
+            message = ui.green("Completed successfully")
         return message
 
 
@@ -1687,8 +1686,8 @@ class PrintHookStartLine(InfoLevel, NodeInfo):
 
     def message(self) -> str:
         msg = f"START hook: {self.statement}"
-        return format_fancy_output_line(msg=msg,
-                                        status='RUN',
+        return format_fancy_output_line(
+            msg=msg, status="RUN", index=self.index, total=self.total, truncate=True
                                         index=self.index,
                                         total=self.total,
                                         truncate=True)
@@ -1704,12 +1703,12 @@ class PrintHookEndLine(InfoLevel, NodeInfo):
     code: str = "Q007"
 
     def message(self) -> str:
-        msg = 'OK hook: {}'.format(self.statement)
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.green(self.status),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time,
+        msg = "OK hook: {}".format(self.statement)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.green(self.status),
+            index=self.index,
+            total=self.total,
             execution_time=self.execution_time,
             truncate=True,
         )
@@ -1726,13 +1725,12 @@ class SkippingDetails(InfoLevel, NodeInfo):
 
     def message(self) -> str:
         if self.resource_type in NodeType.refable():
-            msg = f'SKIP relation {self.schema}.{self.node_name}'
+            msg = f"SKIP relation {self.schema}.{self.node_name}"
         else:
-            msg = f'SKIP {self.resource_type} {self.node_name}'
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.yellow('SKIP'),
-                                        index=self.index,
-                                        total=self.total)
+            msg = f"SKIP {self.resource_type} {self.node_name}"
+        return format_fancy_output_line(
+            msg=msg, status=ui.yellow("SKIP"), index=self.index, total=self.total
+        )
 
 
 @dataclass
@@ -1746,11 +1744,13 @@ class PrintErrorTestResult(ErrorLevel, NodeInfo):
     def message(self) -> str:
         info = "ERROR"
         msg = f"{info} {self.name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(info),
-                                        index=self.index,
-                                        total=self.num_models,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(info),
+            index=self.index,
+            total=self.num_models,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1764,11 +1764,13 @@ class PrintPassTestResult(InfoLevel, NodeInfo):
     def message(self) -> str:
         info = "PASS"
         msg = f"{info} {self.name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.green(info),
-                                        index=self.index,
-                                        total=self.num_models,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.green(info),
+            index=self.index,
+            total=self.num_models,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1781,13 +1783,15 @@ class PrintWarnTestResult(WarnLevel, NodeInfo):
     code: str = "Q010"
 
     def message(self) -> str:
-        info = f'WARN {self.failures}'
+        info = f"WARN {self.failures}"
         msg = f"{info} {self.name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.yellow(info),
-                                        index=self.index,
-                                        total=self.num_models,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.yellow(info),
+            index=self.index,
+            total=self.num_models,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1800,13 +1804,15 @@ class PrintFailureTestResult(ErrorLevel, NodeInfo):
     code: str = "Q011"
 
     def message(self) -> str:
-        info = f'FAIL {self.failures}'
+        info = f"FAIL {self.failures}"
         msg = f"{info} {self.name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(info),
-                                        index=self.index,
-                                        total=self.num_models,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(info),
+            index=self.index,
+            total=self.num_models,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1818,11 +1824,10 @@ class PrintSkipBecauseError(ErrorLevel):
     code: str = "Z034"
 
     def message(self) -> str:
-        msg = f'SKIP relation {self.schema}.{self.relation} due to ephemeral model error'
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red('ERROR SKIP'),
-                                        index=self.index,
-                                        total=self.total)
+        msg = f"SKIP relation {self.schema}.{self.relation} due to ephemeral model error"
+        return format_fancy_output_line(
+            msg=msg, status=ui.red("ERROR SKIP"), index=self.index, total=self.total
+        )
 
 
 @dataclass
@@ -1837,11 +1842,13 @@ class PrintModelErrorResultLine(ErrorLevel, NodeInfo):
     def message(self) -> str:
         info = "ERROR creating"
         msg = f"{info} {self.description}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(self.status.upper()),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(self.status.upper()),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1856,11 +1863,13 @@ class PrintModelResultLine(InfoLevel, NodeInfo):
     def message(self) -> str:
         info = "OK created"
         msg = f"{info} {self.description}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.green(self.status),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.green(self.status),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1874,13 +1883,15 @@ class PrintSnapshotErrorResultLine(ErrorLevel, NodeInfo):
     code: str = "Q013"
 
     def message(self) -> str:
-        info = 'ERROR snapshotting'
+        info = "ERROR snapshotting"
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(self.status.upper()),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(self.status.upper()),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1894,13 +1905,15 @@ class PrintSnapshotResultLine(InfoLevel, NodeInfo):
     code: str = "Q014"
 
     def message(self) -> str:
-        info = 'OK snapshotted'
+        info = "OK snapshotted"
         msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.green(self.status),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.green(self.status),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1914,13 +1927,15 @@ class PrintSeedErrorResultLine(ErrorLevel, NodeInfo):
     code: str = "Q015"
 
     def message(self) -> str:
-        info = 'ERROR loading'
+        info = "ERROR loading"
         msg = f"{info} seed file {self.schema}.{self.relation}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(self.status.upper()),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(self.status.upper()),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1934,13 +1949,15 @@ class PrintSeedResultLine(InfoLevel, NodeInfo):
     code: str = "Q016"
 
     def message(self) -> str:
-        info = 'OK loaded'
+        info = "OK loaded"
         msg = f"{info} seed file {self.schema}.{self.relation}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.green(self.status),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.green(self.status),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1953,13 +1970,15 @@ class PrintHookEndErrorLine(ErrorLevel, NodeInfo):
     code: str = "Q017"
 
     def message(self) -> str:
-        info = 'ERROR'
+        info = "ERROR"
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(info),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(info),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1972,13 +1991,15 @@ class PrintHookEndErrorStaleLine(ErrorLevel, NodeInfo):
     code: str = "Q018"
 
     def message(self) -> str:
-        info = 'ERROR STALE'
+        info = "ERROR STALE"
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red(info),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.red(info),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -1991,13 +2012,15 @@ class PrintHookEndWarnLine(WarnLevel, NodeInfo):
     code: str = "Q019"
 
     def message(self) -> str:
-        info = 'WARN'
+        info = "WARN"
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.yellow(info),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.yellow(info),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -2010,13 +2033,15 @@ class PrintHookEndPassLine(InfoLevel, NodeInfo):
     code: str = "Q020"
 
     def message(self) -> str:
-        info = 'PASS'
+        info = "PASS"
         msg = f"{info} freshness of {self.source_name}.{self.table_name}"
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.green(info),
-                                        index=self.index,
-                                        total=self.total,
-                                        execution_time=self.execution_time)
+        return format_fancy_output_line(
+            msg=msg,
+            status=ui.green(info),
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 @dataclass
@@ -2025,11 +2050,8 @@ class PrintCancelLine(ErrorLevel):
     code: str = "Q021"
 
     def message(self) -> str:
-        msg = 'CANCEL query {}'.format(self.conn_name)
-        return format_fancy_output_line(msg=msg,
-                                        status=ui.red('CANCEL'),
-                                        index=None,
-                                        total=None)
+        msg = "CANCEL query {}".format(self.conn_name)
+        return format_fancy_output_line(msg=msg, status=ui.red("CANCEL"), index=None, total=None)
 
 
 @dataclass
@@ -2067,9 +2089,11 @@ class QueryCancelationUnsupported(InfoLevel):
     code: str = "Q025"
 
     def message(self) -> str:
-        msg = (f"The {self.type} adapter does not support query "
-               "cancellation. Some queries may still be "
-               "running!")
+        msg = (
+            f"The {self.type} adapter does not support query "
+            "cancellation. Some queries may still be "
+            "running!"
+        )
         return ui.yellow(msg)
 
 
@@ -2135,9 +2159,11 @@ class ProfileWrittenWithSample(InfoLevel):
     code: str = "A020"
 
     def message(self) -> str:
-        return (f"Profile {self.name} written to {self.path} "
-                "using target's sample configuration. Once updated, you'll be able to "
-                "start developing with dbt.")
+        return (
+            f"Profile {self.name} written to {self.path} "
+            "using target's sample configuration. Once updated, you'll be able to "
+            "start developing with dbt."
+        )
 
 
 @dataclass
@@ -2147,9 +2173,11 @@ class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
     code: str = "A021"
 
     def message(self) -> str:
-        return (f"Profile {self.name} written to {self.path} using target's "
-                "profile_template.yml and your supplied values. Run 'dbt debug' to "
-                "validate the connection.")
+        return (
+            f"Profile {self.name} written to {self.path} using target's "
+            "profile_template.yml and your supplied values. Run 'dbt debug' to "
+            "validate the connection."
+        )
 
 
 @dataclass
@@ -2159,9 +2187,11 @@ class ProfileWrittenWithProjectTemplateYAML(InfoLevel):
     code: str = "A022"
 
     def message(self) -> str:
-        return (f"Profile {self.name} written to {self.path} using project's "
-                "profile_template.yml and your supplied values. Run 'dbt debug' to "
-                "validate the connection.")
+        return (
+            f"Profile {self.name} written to {self.path} using project's "
+            "profile_template.yml and your supplied values. Run 'dbt debug' to "
+            "validate the connection."
+        )
 
 
 @dataclass
@@ -2519,20 +2549,20 @@ if 1 == 0:
     BuildingCatalog()
     CompileComplete()
     FreshnessCheckComplete()
-    ServingDocsPort(address='', port=0)
-    ServingDocsAccessInfo(port='')
+    ServingDocsPort(address="", port=0)
+    ServingDocsAccessInfo(port="")
     ServingDocsExitInfo()
-    SeedHeader(header='')
+    SeedHeader(header="")
     SeedHeaderSeparator(len_header=0)
-    RunResultWarning(resource_type='', node_name='', path='')
-    RunResultFailure(resource_type='', node_name='', path='')
+    RunResultWarning(resource_type="", node_name="", path="")
+    RunResultFailure(resource_type="", node_name="", path="")
     StatsLine(stats={})
-    RunResultError(msg='')
-    RunResultErrorNoMessage(status='')
-    SQLCompiledPath(path='')
-    CheckNodeTestFailure(relation_name='')
-    FirstRunResultError(msg='')
-    AfterFirstRunResultError(msg='')
+    RunResultError(msg="")
+    RunResultErrorNoMessage(status="")
+    SQLCompiledPath(path="")
+    CheckNodeTestFailure(relation_name="")
+    FirstRunResultError(msg="")
+    AfterFirstRunResultError(msg="")
     EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
     PrintStartLine(description="", index=0, total=0, node_info={})
     PrintHookStartLine(
@@ -2587,7 +2617,7 @@ if 1 == 0:
         failures=0,
         node_info={},
     )
-    PrintSkipBecauseError(schema='', relation='', index=0, total=0)
+    PrintSkipBecauseError(schema="", relation="", index=0, total=0)
     PrintModelErrorResultLine(
         description="",
         status="",
@@ -2672,24 +2702,24 @@ if 1 == 0:
         execution_time=0,
         node_info={},
     )
-    PrintCancelLine(conn_name='')
-    DefaultSelector(name='')
+    PrintCancelLine(conn_name="")
+    DefaultSelector(name="")
     NodeStart(node_info={}, unique_id="")
     NodeFinished(node_info={}, unique_id="", run_result={})
-    QueryCancelationUnsupported(type='')
+    QueryCancelationUnsupported(type="")
     ConcurrencyLine(num_threads=0, target_name='')
     NodeCompiling(node_info={}, unique_id="")
     NodeExecuting(node_info={}, unique_id="")
-    StarterProjectPath(dir='')
-    ConfigFolderDirectory(dir='')
-    NoSampleProfileFound(adapter='')
-    ProfileWrittenWithSample(name='', path='')
-    ProfileWrittenWithTargetTemplateYAML(name='', path='')
-    ProfileWrittenWithProjectTemplateYAML(name='', path='')
+    StarterProjectPath(dir="")
+    ConfigFolderDirectory(dir="")
+    NoSampleProfileFound(adapter="")
+    ProfileWrittenWithSample(name="", path="")
+    ProfileWrittenWithTargetTemplateYAML(name="", path="")
+    ProfileWrittenWithProjectTemplateYAML(name="", path="")
     SettingUpProfile()
     InvalidProfileTemplateYAML()
-    ProjectNameAlreadyExists(name='')
-    GetAddendum(msg='')
+    ProjectNameAlreadyExists(name="")
+    GetAddendum(msg="")
     DepsSetDownloadDirectory(path='')
     EnsureGitInstalled()
     DepsCreatingLocalSymlink()

@@ -21,9 +21,9 @@ from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    PrintErrorTestResult, PrintPassTestResult, PrintWarnTestResult,
-    PrintFailureTestResult, PrintStartLine
-)
+    PrintErrorTestResult,
+    PrintPassTestResult,
+    PrintWarnTestResult,
 from dbt.exceptions import (
     InternalException,
     invalid_bool_error,

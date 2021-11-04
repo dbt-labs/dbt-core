@@ -27,8 +27,13 @@ from dbt.logger import (
 )
 from dbt.events.functions import fire_event
 from dbt.events.types import (
-    EmptyLine, PrintCancelLine, DefaultSelector, NodeStart, NodeFinished,
-    QueryCancelationUnsupported, ConcurrencyLine
+    EmptyLine,
+    PrintCancelLine,
+    DefaultSelector,
+    NodeStart,
+    NodeFinished,
+    QueryCancelationUnsupported,
+    ConcurrencyLine,
 )
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
