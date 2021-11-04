@@ -1609,6 +1609,31 @@ class GetAddendum(InfoLevel, CliEventABC):
         return self.msg
 
 
+@dataclass
+class DepsSetDownloadDirectory(DebugLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"Set downloads directory='{self.path}'"
+
+
+class EnsureGitInstalled(ErrorLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return ('Make sure git is installed on your machine. More '
+                'information: '
+                'https://docs.getdbt.com/docs/package-management')
+
+
+class DepsCreatingLocalSymlink(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return '  Creating symlink to local dependency.'
+
+
+class DepsSymlinkNotAvailable(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return '  Symlinks are not available on this OS, copying dependency.'
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1778,3 +1803,7 @@ if 1 == 0:
     InvalidProfileTemplateYAML()
     ProjectNameAlreadyExists(name='')
     GetAddendum(msg='')
+    DepsSetDownloadDirectory(path='')
+    EnsureGitInstalled()
+    DepsCreatingLocalSymlink()
+    DepsSymlinkNotAvailable()
