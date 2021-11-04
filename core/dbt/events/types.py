@@ -2242,9 +2242,11 @@ class EnsureGitInstalled(ErrorLevel):
     code: str = "Z036"
 
     def message(self) -> str:
-        return ('Make sure git is installed on your machine. More '
-                'information: '
-                'https://docs.getdbt.com/docs/package-management')
+        return (
+            "Make sure git is installed on your machine. More "
+            "information: "
+            "https://docs.getdbt.com/docs/package-management"
+        )
 
 
 @dataclass
@@ -2252,7 +2254,7 @@ class DepsCreatingLocalSymlink(DebugLevel):
     code: str = "Z037"
 
     def message(self) -> str:
-        return '  Creating symlink to local dependency.'
+        return "  Creating symlink to local dependency."
 
 
 @dataclass
@@ -2260,7 +2262,7 @@ class DepsSymlinkNotAvailable(DebugLevel):
     code: str = "Z038"
 
     def message(self) -> str:
-        return '  Symlinks are not available on this OS, copying dependency.'
+        return "  Symlinks are not available on this OS, copying dependency."
 
 
 @dataclass
@@ -2720,7 +2722,7 @@ if 1 == 0:
     InvalidProfileTemplateYAML()
     ProjectNameAlreadyExists(name="")
     GetAddendum(msg="")
-    DepsSetDownloadDirectory(path='')
+    DepsSetDownloadDirectory(path="")
     EnsureGitInstalled()
     DepsCreatingLocalSymlink()
     DepsSymlinkNotAvailable()
