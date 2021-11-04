@@ -2,6 +2,9 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
 from dbt import ui
+from dbt import utils
+from dbt.node_types import NodeType
+from dbt.events.format import format_fancy_output_line
 
 
 # types to represent log levels
@@ -994,6 +997,618 @@ class FreshnessCheckComplete(InfoLevel, CliEventABC):
         return "Done."
 
 
+@dataclass
+class ServingDocsPort(InfoLevel, CliEventABC):
+    address: str
+    port: int
+
+    def cli_msg(self) -> str:
+        return f"Serving docs at {self.address}:{self.port}"
+
+
+@dataclass
+class ServingDocsAccessInfo(InfoLevel, CliEventABC):
+    port: str
+
+    def cli_msg(self) -> str:
+        return f"To access from your browser, navigate to:  http://localhost:{self.port}"
+
+
+class ServingDocsExitInfo(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Press Ctrl+C to exit.\n\n"
+
+
+@dataclass
+class SeedHeader(InfoLevel, CliEventABC):
+    header: str
+
+    def cli_msg(self) -> str:
+        return self.header
+
+
+@dataclass
+class SeedHeaderSeperator(InfoLevel, CliEventABC):
+    len_header: int
+
+    def cli_msg(self) -> str:
+        return "-" * self.len_header
+
+
+@dataclass
+class RunResultWarning(WarnLevel, CliEventABC):
+    resource_type: str
+    node_name: str
+    path: str
+
+    def cli_msg(self) -> str:
+        info = 'Warning'
+        return ui.yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+
+
+@dataclass
+class RunResultFailure(ErrorLevel, CliEventABC):
+    resource_type: str
+    node_name: str
+    path: str
+
+    def cli_msg(self) -> str:
+        info = 'Failure'
+        return ui.red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+
+
+@dataclass
+class StatsLine(InfoLevel, CliEventABC):
+    stats: Dict
+
+    def cli_msg(self) -> str:
+        stats_line = ("\nDone. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}")
+        return stats_line.format(**self.stats)
+
+
+@dataclass
+class RunResultError(ErrorLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return f"  {self.msg}"
+
+
+@dataclass
+class RunResultErrorNoMessage(ErrorLevel, CliEventABC):
+    status: str
+
+    def cli_msg(self) -> str:
+        return f"  Status: {self.status}"
+
+
+@dataclass
+class SQLCompiledPath(InfoLevel, CliEventABC):
+    path: str
+
+    def cli_msg(self) -> str:
+        return f"  compiled SQL at {self.path}"
+
+
+@dataclass
+class CheckNodeTestFailure(InfoLevel, CliEventABC):
+    relation_name: str
+
+    def cli_msg(self) -> str:
+        msg = f"select * from {self.relation_name}"
+        border = '-' * len(msg)
+        return f"  See test failures:\n  {border}\n  {msg}\n  {border}"
+
+
+@dataclass
+class FirstRunResultError(ErrorLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return ui.yellow(self.msg)
+
+
+@dataclass
+class AfterFirstRunResultError(ErrorLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
+
+
+@dataclass
+class EndOfRunSummary(InfoLevel, CliEventABC):
+    num_errors: int
+    num_warnings: int
+    keyboard_interrupt: bool = False
+
+    def cli_msg(self) -> str:
+        error_plural = utils.pluralize(self.num_errors, 'error')
+        warn_plural = utils.pluralize(self.num_warnings, 'warning')
+        if self.keyboard_interrupt:
+            message = ui.yellow('Exited because of keyboard interrupt.')
+        elif self.num_errors > 0:
+            message = ui.red("Completed with {} and {}:".format(
+                error_plural, warn_plural))
+        elif self.num_warnings > 0:
+            message = ui.yellow('Completed with {}:'.format(warn_plural))
+        else:
+            message = ui.green('Completed successfully')
+        return message
+
+
+@dataclass
+class PrintStartLine(InfoLevel, CliEventABC):
+    description: str
+    index: int
+    total: int
+
+    def cli_msg(self) -> str:
+        msg = "START {self.description}"
+        return format_fancy_output_line(msg=msg, status='RUN', index=self.index, total=self.total)
+
+
+@dataclass
+class PrintHookStartLine(InfoLevel, CliEventABC):
+    statement: str
+    index: int
+    total: int
+    truncate: bool
+
+    def cli_msg(self) -> str:
+        msg = "START hook: {self.statement}"
+        return format_fancy_output_line(msg=msg,
+                                        status='RUN',
+                                        index=self.index,
+                                        total=self.total,
+                                        truncate=self.truncate)
+
+
+@dataclass
+class PrintHookEndLine(InfoLevel, CliEventABC):
+    statement: str
+    status: str
+    index: int
+    total: int
+    execution_time: int
+    truncate: bool
+
+    def cli_msg(self) -> str:
+        msg = 'OK hook: {}'.format(self.statement)
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.green(self.status),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time,
+                                        truncate=self.truncate)
+
+
+@dataclass
+class SkippingDetails(InfoLevel, CliEventABC):
+    resource_type: str
+    schema: str
+    node_name: str
+    index: int
+    total: int
+
+    def cli_msg(self) -> str:
+        if self.resource_type in NodeType.refable():
+            msg = f'SKIP relation {self.schema}.{self.node_name}'
+        else:
+            msg = f'SKIP {self.resource_type} {self.node_name}'
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.yellow('SKIP'),
+                                        index=self.index,
+                                        total=self.total)
+
+
+@dataclass
+class PrintErrorTestResult(ErrorLevel, CliEventABC):
+    name: str
+    index: int
+    num_models: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = "ERROR"
+        msg = f"{info} {self.name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(info),
+                                        index=self.index,
+                                        total=self.num_models,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintPassTestResult(InfoLevel, CliEventABC):
+    name: str
+    index: int
+    num_models: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = "PASS"
+        msg = f"{info} {self.name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.green(info),
+                                        index=self.index,
+                                        total=self.num_models,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintWarnTestResult(WarnLevel, CliEventABC):
+    name: str
+    index: int
+    num_models: int
+    execution_time: int
+    failures: List[str]
+
+    def cli_msg(self) -> str:
+        info = f'WARN {self.failures}'
+        msg = f"{info} {self.name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.yellow(info),
+                                        index=self.index,
+                                        total=self.num_models,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintFailureTestResult(ErrorLevel, CliEventABC):
+    name: str
+    index: int
+    num_models: int
+    execution_time: int
+    failures: List[str]
+
+    def cli_msg(self) -> str:
+        info = f'FAIL {self.failures}'
+        msg = f"{info} {self.name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(info),
+                                        index=self.index,
+                                        total=self.num_models,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintSkipBecauseError(ErrorLevel, CliEventABC):
+    schema: str
+    relation: str
+    index: int
+    total: int
+
+    def cli_msg(self) -> str:
+        msg = f'SKIP relation {self.schema}.{self.relation} due to ephemeral model error'
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red('ERROR SKIP'),
+                                        index=self.index,
+                                        total=self.total)
+
+
+@dataclass
+class PrintModelErrorResultLine(ErrorLevel, CliEventABC):
+    description: str
+    status: str
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = "ERROR creating"
+        msg = f"{info} {self.description}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(self.status.upper()),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintModelResultLine(InfoLevel, CliEventABC):
+    description: str
+    status: str
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = "OK created"
+        msg = f"{info} {self.description}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.green(self.status),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintSnapshotErrorResultLine(ErrorLevel, CliEventABC):
+    status: str
+    description: str
+    cfg: Dict
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = 'ERROR snapshotting'
+        msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(self.status.upper()),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintSnapshotResultLine(InfoLevel, CliEventABC):
+    status: str
+    description: str
+    cfg: Dict
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = 'OK snapshotted'
+        msg = "{info} {description}".format(info=info, description=self.description, **self.cfg)
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.green(self.status),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintSeedErrorResultLine(ErrorLevel, CliEventABC):
+    status: str
+    index: int
+    total: int
+    execution_time: int
+    schema: str
+    relation: str
+
+    def cli_msg(self) -> str:
+        info = 'ERROR loading'
+        msg = f"{info} seed file {self.schema}.{self.relation}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(self.status.upper()),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintSeedResultLine(InfoLevel, CliEventABC):
+    status: str
+    index: int
+    total: int
+    execution_time: int
+    schema: str
+    relation: str
+
+    def cli_msg(self) -> str:
+        info = 'OK loaded'
+        msg = f"{info} seed file {self.schema}.{self.relation}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.green(self.status),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintHookEndErrorLine(ErrorLevel, CliEventABC):
+    source_name: str
+    table_name: str
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = 'ERROR'
+        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(info),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintHookEndErrorStaleLine(ErrorLevel, CliEventABC):
+    source_name: str
+    table_name: str
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = 'ERROR STALE'
+        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red(info),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintHookEndWarnLine(WarnLevel, CliEventABC):
+    source_name: str
+    table_name: str
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = 'WARN'
+        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.yellow(info),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintHookEndPassLine(InfoLevel, CliEventABC):
+    source_name: str
+    table_name: str
+    index: int
+    total: int
+    execution_time: int
+
+    def cli_msg(self) -> str:
+        info = 'PASS'
+        msg = f"{info} freshness of {self.source_name}.{self.table_name}"
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.green(info),
+                                        index=self.index,
+                                        total=self.total,
+                                        execution_time=self.execution_time)
+
+
+@dataclass
+class PrintCancelLine(ErrorLevel, CliEventABC):
+    conn_name: str
+
+    def cli_msg(self) -> str:
+        msg = 'CANCEL query {}'.format(self.conn_name)
+        return format_fancy_output_line(msg=msg,
+                                        status=ui.red('CANCEL'),
+                                        index=None,
+                                        total=None)
+
+
+@dataclass
+class DefaultSelector(InfoLevel, CliEventABC):
+    name: str
+
+    def cli_msg(self) -> str:
+        return f"Using default selector {self.name}"
+
+
+@dataclass
+class NodeStart(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Began running node {self.unique_id}"
+
+
+@dataclass
+class NodeFinished(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Finished running node {self.unique_id}"
+
+
+@dataclass
+class QueryCancelationUnsupported(InfoLevel, CliEventABC):
+    type: str
+
+    def cli_msg(self) -> str:
+        msg = (f"The {self.type} adapter does not support query "
+               "cancellation. Some queries may still be "
+               "running!")
+        return ui.yellow(msg)
+
+
+@dataclass
+class ConcurrencyLine(InfoLevel, CliEventABC):
+    concurrency_line: str
+
+    def cli_msg(self) -> str:
+        return self.concurrency_line
+
+
+@dataclass
+class StarterProjectPath(DebugLevel, CliEventABC):
+    dir: str
+
+    def cli_msg(self) -> str:
+        return f"Starter project path: {self.dir}"
+
+
+@dataclass
+class ConfigFolderDirectory(InfoLevel, CliEventABC):
+    dir: str
+
+    def cli_msg(self) -> str:
+        return f"Creating dbt configuration folder at {self.dir}"
+
+
+@dataclass
+class NoSampleProfileFound(InfoLevel, CliEventABC):
+    adapter: str
+
+    def cli_msg(self) -> str:
+        return f"No sample profile found for {self.adapter}."
+
+
+@dataclass
+class ProfileWrittenWithSample(InfoLevel, CliEventABC):
+    name: str
+    path: str
+
+    def cli_msg(self) -> str:
+        return (f"Profile {self.name} written to {self.path} "
+                "using target's sample configuration. Once updated, you'll be able to "
+                "start developing with dbt.")
+
+
+@dataclass
+class ProfileWrittenWithTargetTemplateYAML(InfoLevel, CliEventABC):
+    name: str
+    path: str
+
+    def cli_msg(self) -> str:
+        return (f"Profile {self.name} written to {self.path} using target's "
+                "profile_template.yml and your supplied values. Run 'dbt debug' to "
+                "validate the connection.")
+
+
+@dataclass
+class ProfileWrittenWithProjectTemplateYAML(InfoLevel, CliEventABC):
+    name: str
+    path: str
+
+    def cli_msg(self) -> str:
+        return (f"Profile {self.name} written to {self.path} using project's "
+                "profile_template.yml and your supplied values. Run 'dbt debug' to "
+                "validate the connection.")
+
+
+class SettingUpProfile(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Setting up your profile."
+
+
+class InvalidProfileTemplateYAML(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Invalid profile_template.yml in project."
+
+
+@dataclass
+class ProjectNameAlreadyExists(InfoLevel, CliEventABC):
+    name: str
+
+    def cli_msg(self) -> str:
+        return f"A project called {self.name} already exists here."
+
+
+@dataclass
+class GetAddendum(InfoLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return self.msg
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1109,3 +1724,57 @@ if 1 == 0:
     BuildingCatalog()
     CompileComplete()
     FreshnessCheckComplete()
+    ServingDocsPort(address='', port=0)
+    ServingDocsAccessInfo(port='')
+    ServingDocsExitInfo()
+    SeedHeader(header='')
+    SeedHeaderSeperator(len_header=0)
+    RunResultWarning(resource_type='', node_name='', path='')
+    RunResultFailure(resource_type='', node_name='', path='')
+    StatsLine(stats={})
+    RunResultError(msg='')
+    RunResultErrorNoMessage(status='')
+    SQLCompiledPath(path='')
+    CheckNodeTestFailure(relation_name='')
+    FirstRunResultError(msg='')
+    AfterFirstRunResultError(msg='')
+    PrintStartLine(description='', index=0, total=0)
+    PrintHookStartLine(statement='', index=0, total=0, truncate=False)
+    PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False)
+    SkippingDetails(resource_type='', schema='', node_name='', index=0, total=0)
+    PrintErrorTestResult(name='', index=0, num_models=0, execution_time=0)
+    PrintPassTestResult(name='', index=0, num_models=0, execution_time=0)
+    PrintWarnTestResult(name='', index=0, num_models=0, execution_time=0, failures=[])
+    PrintFailureTestResult(name='', index=0, num_models=0, execution_time=0, failures=[])
+    PrintSkipBecauseError(schema='', relation='', index=0, total=0)
+    PrintModelErrorResultLine(description='', status='', index=0, total=0, execution_time=0)
+    PrintModelResultLine(description='', status='', index=0, total=0, execution_time=0)
+    PrintSnapshotErrorResultLine(status='',
+                                 description='',
+                                 cfg={},
+                                 index=0,
+                                 total=0,
+                                 execution_time=0)
+    PrintSnapshotResultLine(status='', description='', cfg={}, index=0, total=0, execution_time=0)
+    PrintSeedErrorResultLine(status='', index=0, total=0, execution_time=0, schema='', relation='')
+    PrintSeedResultLine(status='', index=0, total=0, execution_time=0, schema='', relation='')
+    PrintHookEndErrorLine(source_name='', table_name='', index=0, total=0, execution_time=0)
+    PrintHookEndErrorStaleLine(source_name='', table_name='', index=0, total=0, execution_time=0)
+    PrintHookEndWarnLine(source_name='', table_name='', index=0, total=0, execution_time=0)
+    PrintHookEndPassLine(source_name='', table_name='', index=0, total=0, execution_time=0)
+    PrintCancelLine(conn_name='')
+    DefaultSelector(name='')
+    NodeStart(unique_id='')
+    NodeFinished(unique_id='')
+    QueryCancelationUnsupported(type='')
+    ConcurrencyLine(concurrency_line='')
+    StarterProjectPath(dir='')
+    ConfigFolderDirectory(dir='')
+    NoSampleProfileFound(adapter='')
+    ProfileWrittenWithSample(name='', path='')
+    ProfileWrittenWithTargetTemplateYAML(name='', path='')
+    ProfileWrittenWithProjectTemplateYAML(name='', path='')
+    SettingUpProfile()
+    InvalidProfileTemplateYAML()
+    ProjectNameAlreadyExists(name='')
+    GetAddendum(msg='')

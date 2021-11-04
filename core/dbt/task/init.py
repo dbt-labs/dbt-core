@@ -14,7 +14,12 @@ from dbt import flags
 from dbt.version import _get_adapter_plugin_names
 from dbt.adapters.factory import load_plugin, get_include_paths
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    StarterProjectPath, ConfigFolderDirectory, NoSampleProfileFound, ProfileWrittenWithSample,
+    ProfileWrittenWithTargetTemplateYAML, ProfileWrittenWithProjectTemplateYAML, SettingUpProfile,
+    InvalidProfileTemplateYAML, ProjectNameAlreadyExists, GetAddendum
+)
 
 from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
 
@@ -55,7 +60,7 @@ click_type_mapping = {
 
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name):
-        logger.debug("Starter project path: " + starter_project_directory)
+        fire_event(StarterProjectPath(dir=starter_project_directory))
         shutil.copytree(starter_project_directory, project_name,
                         ignore=shutil.ignore_patterns(*IGNORE_FILES))
 
@@ -63,8 +68,7 @@ class InitTask(BaseTask):
         """Create the user's profiles directory if it doesn't already exist."""
         profiles_path = Path(profiles_dir)
         if not profiles_path.exists():
-            msg = "Creating dbt configuration folder at {}"
-            logger.info(msg.format(profiles_dir))
+            fire_event(ConfigFolderDirectory(dir=profiles_dir))
             dbt.clients.system.make_directory(profiles_dir)
             return True
         return False
@@ -79,7 +83,7 @@ class InitTask(BaseTask):
         sample_profiles_path = adapter_path / "sample_profiles.yml"
 
         if not sample_profiles_path.exists():
-            logger.debug(f"No sample profile found for {adapter}.")
+            fire_event(NoSampleProfileFound(adapter=adapter))
         else:
             with open(sample_profiles_path, "r") as f:
                 sample_profile = f.read()
@@ -98,10 +102,11 @@ class InitTask(BaseTask):
             else:
                 with open(profiles_filepath, "w") as f:
                     f.write(sample_profile)
-                logger.info(
-                    f"Profile {profile_name} written to {profiles_filepath} "
-                    "using target's sample configuration. Once updated, you'll be able to "
-                    "start developing with dbt."
+                fire_event(
+                    ProfileWrittenWithSample(
+                        name=profile_name,
+                        path=str(profiles_filepath)
+                    )
                 )
 
     def get_addendum(self, project_name: str, profiles_path: str) -> str:
@@ -207,10 +212,11 @@ class InitTask(BaseTask):
                 profile_template = yaml.safe_load(f)
             self.create_profile_from_profile_template(profile_template, profile_name)
             profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
-            logger.info(
-                f"Profile {profile_name} written to {profiles_filepath} using target's "
-                "profile_template.yml and your supplied values. Run 'dbt debug' to "
-                "validate the connection."
+            fire_event(
+                ProfileWrittenWithTargetTemplateYAML(
+                    name=profile_name,
+                    path=str(profiles_filepath)
+                )
             )
         else:
             # For adapters without a profile_template.yml defined, fallback on
@@ -244,10 +250,11 @@ class InitTask(BaseTask):
             profile_template = yaml.safe_load(f)
         self.create_profile_from_profile_template(profile_template, profile_name)
         profiles_filepath = Path(flags.PROFILES_DIR) / Path("profiles.yml")
-        logger.info(
-            f"Profile {profile_name} written to {profiles_filepath} using project's "
-            "profile_template.yml and your supplied values. Run 'dbt debug' to "
-            "validate the connection."
+        fire_event(
+            ProfileWrittenWithProjectTemplateYAML(
+                name=profile_name,
+                path=str(profiles_filepath)
+            )
         )
 
     def ask_for_adapter_choice(self) -> str:
@@ -276,7 +283,7 @@ class InitTask(BaseTask):
         if in_project:
             # When dbt init is run inside an existing project,
             # just setup the user's profile.
-            logger.info("Setting up your profile.")
+            fire_event(SettingUpProfile())
             profile_name = self.get_profile_name_from_current_project()
             # If a profile_template.yml exists in the project root, that effectively
             # overrides the profile_template.yml for the given target.
@@ -288,7 +295,7 @@ class InitTask(BaseTask):
                     self.create_profile_using_project_profile_template(profile_name)
                     return
                 except Exception:
-                    logger.info("Invalid profile_template.yml in project.")
+                    fire_event(InvalidProfileTemplateYAML())
             if not self.check_if_can_write_profile(profile_name=profile_name):
                 return
             adapter = self.ask_for_adapter_choice()
@@ -301,9 +308,7 @@ class InitTask(BaseTask):
             project_name = click.prompt("What is the desired project name?")
             project_path = Path(project_name)
             if project_path.exists():
-                logger.info(
-                    f"A project called {project_name} already exists here."
-                )
+                fire_event(ProjectNameAlreadyExists(name=project_name))
                 return
 
             self.copy_starter_repo(project_name)
@@ -323,4 +328,5 @@ class InitTask(BaseTask):
             self.create_profile_from_target(
                 adapter, profile_name=project_name
             )
-            logger.info(self.get_addendum(project_name, profiles_dir))
+            msg = self.get_addendum(project_name, profiles_dir)
+            fire_event(GetAddendum(msg=msg))

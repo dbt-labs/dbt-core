@@ -20,10 +20,9 @@ from dbt.events.types import (
     DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
     ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
     CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
-    NodeConnectionReleaseError, PrintDebugStackTrace
+    NodeConnectionReleaseError, PrintDebugStackTrace, SkippingDetails, PrintSkipBecauseError
 )
-from .printer import print_skip_caused_by_error, print_skip_line
-
+from .printer import print_run_result_error
 
 from dbt.adapters.factory import register_adapter
 from dbt.config import RuntimeConfig, Project
@@ -309,9 +308,13 @@ class BaseRunner(metaclass=ABCMeta):
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
-        fire_event(GenericExceptionOnRun(build_path=self.node.build_path,
-                                         unique_id=self.node.unique_id,
-                                         exc=e))
+        fire_event(
+            GenericExceptionOnRun(
+                build_path=self.node.build_path,
+                unique_id=self.node.unique_id,
+                exc=e
+            )
+        )
         fire_event(PrintDebugStackTrace())
 
         return str(e)
@@ -394,14 +397,15 @@ class BaseRunner(metaclass=ABCMeta):
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
             if self._skip_caused_by_ephemeral_failure():
-                print_skip_caused_by_error(
-                    self.node,
-                    schema_name,
-                    node_name,
-                    self.node_index,
-                    self.num_nodes,
-                    self.skip_cause
+                fire_event(
+                    PrintSkipBecauseError(
+                        schema=schema_name,
+                        relation=node_name,
+                        index=self.node_index,
+                        total=self.num_nodes
+                    )
                 )
+                print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
                     raise InternalException(
                         'Skip cause not set but skip was somehow caused by '
@@ -415,12 +419,14 @@ class BaseRunner(metaclass=ABCMeta):
                             self.skip_cause.node.unique_id)
                 )
             else:
-                print_skip_line(
-                    self.node,
-                    schema_name,
-                    node_name,
-                    self.node_index,
-                    self.num_nodes
+                fire_event(
+                    SkippingDetails(
+                        resource_type=self.node.resource_type,
+                        schema=schema_name,
+                        node_name=node_name,
+                        index=self.node_index,
+                        total=self.num_nodes
+                    )
                 )
 
         node_result = self.skip_result(self.node, error_message)
