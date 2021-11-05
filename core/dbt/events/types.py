@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+import argparse
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
 from dbt import ui
@@ -66,6 +67,51 @@ class CliEventABC(Event, metaclass=ABCMeta):
     @abstractmethod
     def cli_msg(self) -> str:
         raise Exception("cli_msg not implemented for cli event")
+
+
+class MainKeyboardInterrupt(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "ctrl-c"
+
+
+@dataclass
+class MainEncounteredError(ErrorLevel, CliEventABC):
+    e: BaseException
+
+    def cli_msg(self) -> str:
+        return f"Encountered an error:\n{str(self.e)}"
+
+
+@dataclass
+class MainStackTrace(DebugLevel, CliEventABC):
+    stack_trace: str
+
+    def cli_msg(self) -> str:
+        return self.stack_trace
+
+
+@dataclass
+class MainReportVersion(InfoLevel, CliEventABC):
+    v: str  # could be VersionSpecifier instead if we resolved some circular imports
+
+    def cli_msg(self):
+        return f"Running with dbt{self.v}"
+
+
+@dataclass
+class MainReportArgs(DebugLevel, CliEventABC):
+    args: argparse.Namespace
+
+    def cli_msg(self):
+        return f"running dbt with arguments {str(self.args)}"
+
+
+@dataclass
+class MainTrackingUserState(DebugLevel, CliEventABC):
+    user_state: str
+
+    def cli_msg(self):
+        return f"Tracking: {self.user_state}"
 
 
 class ParsingStart(InfoLevel, CliEventABC):
@@ -1728,6 +1774,12 @@ class GeneralWarningException(WarnLevel, CliEventABC):
 #
 # TODO remove these lines once we run mypy everywhere.
 if 1 == 0:
+    MainReportVersion('')
+    MainKeyboardInterrupt()
+    MainEncounteredError(BaseException(''))
+    MainStackTrace('')
+    MainReportVersion('')
+    MainTrackingUserState('')
     ParsingStart()
     ParsingCompiling()
     ParsingWritingManifest()
