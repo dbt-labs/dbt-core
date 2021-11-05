@@ -18,15 +18,9 @@ for SUBPATH in core plugins/postgres
 do
     rm -rf "$DBT_PATH"/"$SUBPATH"/dist
     rm -rf "$DBT_PATH"/"$SUBPATH"/build
-    if [[ $SUBPATH == "core" ]]
-      then cp "$DBT_PATH"/README.md "$DBT_PATH"/"$SUBPATH"/
-      fi
     cd "$DBT_PATH"/"$SUBPATH"
     $PYTHON_BIN setup.py sdist bdist_wheel
     cp -r "$DBT_PATH"/"$SUBPATH"/dist/* "$DBT_PATH"/dist/
-    if [[ $SUBPATH == "core" ]]
-      then rm "$DBT_PATH"/"$SUBPATH"/README.md
-      fi
 done
 
 cd "$DBT_PATH"
