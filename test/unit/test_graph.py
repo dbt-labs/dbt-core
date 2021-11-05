@@ -22,8 +22,6 @@ try:
 except ImportError:
     from Queue import Empty
 
-from dbt.logger import GLOBAL_LOGGER as logger # noqa
-
 from .utils import config_from_parts_or_dicts, generate_name_macros, inject_plugin
 
 
