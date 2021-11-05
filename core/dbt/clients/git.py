@@ -28,9 +28,9 @@ def _is_commit(revision: str) -> bool:
 
 
 def _raise_git_cloning_error(repo, revision, error):
-    stderr = error.stderr.decode('utf-8').strip()
-    if 'usage: git' in stderr:
-        stderr = stderr.split('\nusage: git')[0]
+    stderr = error.stderr.decode("utf-8").strip()
+    if "usage: git" in stderr:
+        stderr = stderr.split("\nusage: git")[0]
     if re.match("fatal: destination path '(.+)' already exists", stderr):
         raise_git_cloning_error(error)
 
@@ -62,13 +62,13 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
     if dirname is not None:
         clone_cmd.append(dirname)
     try:
-        result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
+        result = run_cmd(cwd, clone_cmd, env={"LC_ALL": "C"})
     except CommandResultError as exc:
         _raise_git_cloning_error(repo, revision, exc)
 
     if subdirectory:
-        cwd_subdir = os.path.join(cwd, dirname or '')
-        clone_cmd_subdir = ['git', 'sparse-checkout', 'set', subdirectory]
+        cwd_subdir = os.path.join(cwd, dirname or "")
+        clone_cmd_subdir = ["git", "sparse-checkout", "set", subdirectory]
         try:
             run_cmd(cwd_subdir, clone_cmd_subdir)
         except CommandResultError as exc:
