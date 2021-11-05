@@ -1722,36 +1722,11 @@ class GeneralWarningException(WarnLevel, CliEventABC):
 
 
 @dataclass
-class IntegrationTestSetupFailure(ShowException, ErrorLevel, CliEventABC):
+class IntegrationTestMessage(ShowException, ErrorLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
         return self.msg
-
-
-@dataclass
-class IntegrationTestTearDownFailure(ShowException, ErrorLevel, CliEventABC):
-    dir: str
-
-    def cli_msg(self) -> str:
-        return f"Could not clean up after test - {self.dir} not removable"
-
-
-@dataclass
-class IntegrationTestInvokingWithArgs(InfoLevel, CliEventABC):
-    final_args: List[str]
-
-    def cli_msg(self) -> str:
-        return f"Invoking dbt with {self.final_args}"
-
-
-@dataclass
-class IntegrationTestTestConnection(DebugLevel, CliEventABC):
-    conn_name: str
-    sql: str
-
-    def cli_msg(self) -> str:
-        return f'test connection "{self.conn_name}" executing: {self.sql}'
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
@@ -1940,7 +1915,4 @@ if 1 == 0:
     RetryExternalCall(attempt=0, max=0)
     GeneralWarningMsg(msg='', log_fmt='')
     GeneralWarningException(exc=Exception(''), log_fmt='')
-    IntegrationTestSetupFailure(msg='')
-    IntegrationTestTearDownFailure(dir='')
-    IntegrationTestInvokingWithArgs(final_args=[])
-    IntegrationTestTestConnection(conn_name='', sql='')
+    IntegrationTestMessage(msg='')
