@@ -16,7 +16,7 @@ class IntegrationTestInfo(InfoLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return self.msg
+        return f"Integration Test: {self.msg}"
 
 
 @dataclass
@@ -24,7 +24,7 @@ class IntegrationTestDebug(DebugLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return self.msg
+        return f"Integration Test: {self.msg}"
 
 
 @dataclass
@@ -32,7 +32,7 @@ class IntegrationTestException(ShowException, ErrorLevel, CliEventABC):
     msg: str
 
     def cli_msg(self) -> str:
-        return self.msg
+        return f"Integration Test: {self.msg}"
 
 
 # since mypy doesn't run on every file we need to suggest to mypy that every
