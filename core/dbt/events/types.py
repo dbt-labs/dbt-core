@@ -542,8 +542,10 @@ class DumpBeforeAddGraph(DebugLevel, CliEventABC):
     graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
-        _graph_func = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
-        return f"before adding : {_graph_func()}"
+        # workaround for https://github.com/python/mypy/issues/6910
+        # TODO remove when we've upgraded to a mypy version without that bug
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"before adding : {func_returns}"
 
 
 @dataclass
@@ -551,6 +553,7 @@ class DumpAfterAddGraph(DebugLevel, CliEventABC):
     graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
         func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
         return f"after adding: {func_returns}"
 
@@ -560,6 +563,7 @@ class DumpBeforeRenameSchema(DebugLevel, CliEventABC):
     graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
         func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
         return f"before rename: {func_returns}"
 
@@ -569,6 +573,7 @@ class DumpAfterRenameSchema(DebugLevel, CliEventABC):
     graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
         func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
         return f"after rename: {func_returns}"
 
