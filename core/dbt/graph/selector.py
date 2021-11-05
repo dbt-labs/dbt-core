@@ -254,6 +254,10 @@ class NodeSelector(MethodManager):
     ) -> Set[UniqueId]:
         # Check tests previously selected indirectly to see if ALL their
         # parents are now present.
+        
+        # performance: if identical, skip the processing below
+        if set(direct_nodes) == set(indirect_nodes):
+            return direct_nodes
 
         selected = set(direct_nodes)
 
