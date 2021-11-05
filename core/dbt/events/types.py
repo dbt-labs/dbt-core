@@ -1721,14 +1721,6 @@ class GeneralWarningException(WarnLevel, CliEventABC):
         return str(self.exc)
 
 
-@dataclass
-class IntegrationTestMessage(ShowException, ErrorLevel, CliEventABC):
-    msg: str
-
-    def cli_msg(self) -> str:
-        return self.msg
-
-
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1915,4 +1907,3 @@ if 1 == 0:
     RetryExternalCall(attempt=0, max=0)
     GeneralWarningMsg(msg='', log_fmt='')
     GeneralWarningException(exc=Exception(''), log_fmt='')
-    IntegrationTestMessage(msg='')

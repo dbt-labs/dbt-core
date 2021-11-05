@@ -28,6 +28,22 @@ class IntegrationTestDebug(DebugLevel, CliEventABC):
 
 
 @dataclass
+class IntegrationTestWarn(WarnLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return f"Integration Test: {self.msg}"
+
+
+@dataclass
+class IntegrationTestError(ErrorLevel, CliEventABC):
+    msg: str
+
+    def cli_msg(self) -> str:
+        return f"Integration Test: {self.msg}"
+
+
+@dataclass
 class IntegrationTestException(ShowException, ErrorLevel, CliEventABC):
     msg: str
 
@@ -44,4 +60,6 @@ class IntegrationTestException(ShowException, ErrorLevel, CliEventABC):
 if 1 == 0:
     IntegrationTestInfo(msg='')
     IntegrationTestDebug(msg='')
+    IntegrationTestWarn(msg='')
+    IntegrationTestError(msg='')
     IntegrationTestException(msg='')
