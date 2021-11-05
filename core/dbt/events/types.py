@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Set, Union
+from typing import Any, Callable, cast, Dict, List, Optional, Set, Union
 
 from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 
@@ -539,34 +539,38 @@ class RenameSchema(DebugLevel, CliEventABC):
 
 @dataclass
 class DumpBeforeAddGraph(DebugLevel, CliEventABC):
-    func: Callable
+    graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
-        return f"before adding: {self.func()}"
+        _graph_func = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"before adding : {_graph_func()}"
 
 
 @dataclass
 class DumpAfterAddGraph(DebugLevel, CliEventABC):
-    func: Callable
+    graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
-        return f"after adding: {self.func()}"
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"after adding: {func_returns}"
 
 
 @dataclass
 class DumpBeforeRenameSchema(DebugLevel, CliEventABC):
-    func: Callable
+    graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
-        return f"before rename: {self.func()}"
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"before rename: {func_returns}"
 
 
 @dataclass
 class DumpAfterRenameSchema(DebugLevel, CliEventABC):
-    func: Callable
+    graph_func: Callable[[], Dict[str, List[str]]]
 
     def cli_msg(self) -> str:
-        return f"after rename: {self.func()}"
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"after rename: {func_returns}"
 
 
 @dataclass
@@ -589,6 +593,11 @@ class PluginLoadError(ShowException, DebugLevel, CliEventABC):
 # we need to skirt around that by computing something it doesn't check statically.
 #
 # TODO remove these lines once we run mypy everywhere.
+
+def dump_callable():
+    return {"": [""]}  # for instantiating `Dump...` methods which take callables.
+
+
 if 1 == 0:
     ParsingStart()
     ParsingCompiling()
@@ -661,9 +670,9 @@ if 1 == 0:
         old_key=_ReferenceKey(database="", schema="", identifier=""),
         new_key=_ReferenceKey(database="", schema="", identifier="")
     )
-    DumpBeforeAddGraph(lambda: None)
-    DumpAfterAddGraph(lambda: None)
-    DumpBeforeRenameSchema(lambda: None)
-    DumpAfterRenameSchema(lambda: None)
+    DumpBeforeAddGraph(dump_callable)
+    DumpAfterAddGraph(dump_callable)
+    DumpBeforeRenameSchema(dump_callable)
+    DumpAfterRenameSchema(dump_callable)
     AdapterImportError(ModuleNotFoundError())
     PluginLoadError()
