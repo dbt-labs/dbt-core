@@ -25,7 +25,11 @@ from dbt.config import RuntimeConfig
 from dbt.context import providers
 from dbt.logger import log_manager
 from dbt.events.functions import fire_event
-from dbt.events.types import IntegrationTestMessage
+from dbt.events.test_types import (
+    IntegrationTestInfo,
+    IntegrationTestDebug,
+    IntegrationTestException
+)
 from dbt.contracts.graph.manifest import Manifest
 
 
@@ -324,7 +328,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 'test_original_source_path={0.test_original_source_path}',
                 'test_root_dir={0.test_root_dir}'
             )).format(self)
-            fire_event(IntegrationTestMessage(msg=msg))
+            fire_event(IntegrationTestException(msg=msg))
 
             # if logging isn't set up, I still really want this message.
             print(msg)
@@ -435,7 +439,7 @@ class DBTIntegrationTest(unittest.TestCase):
             shutil.rmtree(self.test_root_dir)
         except EnvironmentError:
             msg = f"Could not clean up after test - {self.test_root_dir} not removable"
-            fire_event(IntegrationTestMessage(msg=msg))
+            fire_event(IntegrationTestException(msg=msg))
 
     def _get_schema_fqn(self, database, schema):
         schema_fqn = self.quote_as_configured(schema, 'schema')
@@ -549,7 +553,7 @@ class DBTIntegrationTest(unittest.TestCase):
             final_args.extend(['--profiles-dir', self.test_root_dir])
         final_args.append('--log-cache-events')
         msg = f"Invoking dbt with {final_args}"
-        fire_event(IntegrationTestMessage(msg=msg))
+        fire_event(IntegrationTestInfo(msg=msg))
         return dbt.handle_and_check(final_args)
 
     def run_sql_file(self, path, kwargs=None):
@@ -629,7 +633,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         with self.get_connection(connection_name) as conn:
             msg = f'test connection "{conn.name}" executing: {sql}'
-            fire_event(IntegrationTestMessage(msg=msg))
+            fire_event(IntegrationTestDebug(msg=msg))
             if self.adapter_type == 'presto':
                 return self.run_sql_presto(sql, fetch, conn)
             else:
