@@ -41,7 +41,6 @@ def gen_msg(e: CliEventABC) -> Generator[str, None, None]:
 # to files, etc.)
 def fire_event(e: Event) -> None:
     EVENT_HISTORY.append(e)
-    debug = flags.DEBUG
     if isinstance(e, CliEventABC):
         msg = gen_msg(e)
         if e.level_tag() == 'test' and not isinstance(e, ShowException):
@@ -57,7 +56,7 @@ def fire_event(e: Event) -> None:
             )
         # explicitly checking the debug flag here so that potentially expensive-to-construct
         # log messages are not constructed if debug messages are never shown.
-        elif e.level_tag() == 'debug' and not debug:
+        elif e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
         elif e.level_tag() == 'debug' and not isinstance(e, ShowException):
             logger.GLOBAL_LOGGER.debug(next(msg))
