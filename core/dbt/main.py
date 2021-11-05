@@ -11,8 +11,12 @@ from pathlib import Path
 import dbt.version
 from dbt.events.functions import fire_event, setup_event_logger
 from dbt.events.types import (
-    MainEncounteredError, MainKeyboardInterrupt, MainReportVersion, MainReportArgs,
-    MainTrackingUserState, MainStackTrace
+    MainEncounteredError,
+    MainKeyboardInterrupt,
+    MainReportVersion,
+    MainReportArgs,
+    MainTrackingUserState,
+    MainStackTrace,
 )
 import dbt.flags as flags
 import dbt.task.build as build_task
