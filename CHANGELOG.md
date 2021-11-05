@@ -82,6 +82,7 @@ Contributors:
 - Update the default project paths to be `analysis-paths = ['analyses']` and `test-paths = ['tests]`. Also have starter project set `analysis-paths: ['analyses']` from now on.  ([#2659](https://github.com/dbt-labs/dbt-core/issues/2659))
 - Define the data type of `sources` as an array of arrays of string in the manifest artifacts. ([#3966](https://github.com/dbt-labs/dbt-core/issues/3966), [#3967](https://github.com/dbt-labs/dbt-core/pull/3967))
 - Marked `source-paths` and `data-paths` as deprecated keys in `dbt_project.yml` in favor of `model-paths` and `seed-paths` respectively.([#1607](https://github.com/dbt-labs/dbt-core/issues/1607))
+- Surface git errors to `stdout` when cloning dbt packages from Github. ([#3167](https://github.com/dbt-labs/dbt-core/issues/3167))
 
 Contributors:
 
@@ -90,6 +91,7 @@ Contributors:
 - [@samlader](https://github.com/samlader) ([#3993](https://github.com/dbt-labs/dbt-core/pull/3993))
 - [@yu-iskw](https://github.com/yu-iskw) ([#3967](https://github.com/dbt-labs/dbt-core/pull/3967))
 - [@laxjesse](https://github.com/laxjesse) ([#4019](https://github.com/dbt-labs/dbt-core/pull/4019))
+- [@gitznik](https://github.com/Gitznik) ([#4124](https://github.com/dbt-labs/dbt-core/pull/4124))
 
 ## dbt 0.21.1 (Release TBD)
 
