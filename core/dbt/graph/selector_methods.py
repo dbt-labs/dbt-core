@@ -588,6 +588,7 @@ class MethodManager:
         MethodName.Config: ConfigSelectorMethod,
         MethodName.TestName: TestNameSelectorMethod,
         MethodName.TestType: TestTypeSelectorMethod,
+        MethodName.ResourceType: ResourceTypeSelectorMethod,
         MethodName.State: StateSelectorMethod,
         MethodName.Exposure: ExposureSelectorMethod,
         MethodName.Metric: MetricSelectorMethod,

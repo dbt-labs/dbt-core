@@ -155,6 +155,7 @@ class BaseDatabaseWrapper:
 
         attempts = []
 
+        # search_packages is None
         for package_name in search_packages:
             for prefix in self._get_adapter_macro_prefixes():
                 search_name = f'{prefix}__{macro_name}'
@@ -1381,6 +1382,14 @@ def generate_parse_exposure(
     }
 
 
+class MetricRefResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        if len(args) not in (1, 2):
+            ref_invalid_args(self.model, args)
+        self.model.refs.append(list(args))
+        return ''
+
+
 def generate_parse_metrics(
     metric: ParsedMetric,
     config: RuntimeConfig,
@@ -1388,20 +1397,13 @@ def generate_parse_metrics(
     package_name: str,
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
-    # TODO : Rename these, probably? Or at least make them generic
     return {
-        'ref': ExposureRefResolver(
+        'ref': MetricRefResolver(
             None,
             metric,
             project,
             manifest,
         ),
-        'source': ExposureSourceResolver(
-            None,
-            metric,
-            project,
-            manifest,
-        )
     }
 
 

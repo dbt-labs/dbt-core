@@ -232,7 +232,8 @@ CompileResultNode = Union[
     ParsedSourceDefinition,
 ]
 
-# anything that participates in the graph: sources, exposures, manifest nodes
+# anything that participates in the graph: sources, exposures, metrics,
+# or manifest nodes
 GraphMemberNode = Union[
     CompileResultNode,
     ParsedExposure,

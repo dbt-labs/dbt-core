@@ -816,7 +816,7 @@ class ManifestLoader:
         for metric in self.manifest.metrics.values():
             if metric.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 metric,
                 self.manifest,
@@ -838,10 +838,6 @@ class ManifestLoader:
             if exposure.created_at < self.started_at:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
-        for metric in self.manifest.metrics.values():
-            if metric.created_at < self.started_at:
-                continue
-            _process_sources_for_metric(self.manifest, current_project, metric)
 
 
 def invalid_ref_fail_unless_test(node, target_model_name,

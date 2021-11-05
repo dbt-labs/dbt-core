@@ -988,12 +988,16 @@ class MetricParser(YamlReader):
             model=unparsed.model,
             name=unparsed.name,
             description=unparsed.description,
-            display_name=unparsed.display_name,
-            agg=unparsed.agg,
+            label=unparsed.label,
+            type=unparsed.type,
             sql=unparsed.sql,
-            timestamp_field=unparsed.timestamp_field,
-            dimensions=unparsed.dimensions
+            timestamp=unparsed.timestamp,
+            dimensions=unparsed.dimensions,
+            time_grains=unparsed.time_grains,
+            filters=unparsed.filters,
+            meta=unparsed.meta
         )
+
         ctx = generate_parse_metrics(
             parsed,
             self.root_project,
@@ -1005,9 +1009,7 @@ class MetricParser(YamlReader):
             model_ref, ctx, parsed, capture_macros=True
         )
         # TODO : Partial parsing doesn't  work for these (yet!)
-        # TODO : List command does not work for metrics (yet!)
-        # TODO : Should callers `ref()` the model name in their yml files?
-        # parsed now has a populated refs/sources
+        # TODO : Listing intersecting metrics and models is weird
         return parsed
 
     def parse(self) -> Iterable[ParsedMetric]:
@@ -1018,4 +1020,5 @@ class MetricParser(YamlReader):
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise CompilationException(msg) from exc
+            import pdb; pdb.set_trace()
             yield self.parse_metric(unparsed)

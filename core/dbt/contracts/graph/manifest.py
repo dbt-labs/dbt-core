@@ -749,6 +749,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.exposures.values(),
             self.metrics.values(),
         ))
+        import pdb; pdb.set_trace()
         forward_edges, backward_edges = build_node_edges(edge_members)
         self.child_map = forward_edges
         self.parent_map = backward_edges
@@ -789,6 +790,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             return self.sources[unique_id]
         elif unique_id in self.exposures:
             return self.exposures[unique_id]
+        elif unique_id in self.metrics:
+            return self.metrics[unique_id]
         else:
             # something terrible has happened
             raise dbt.exceptions.InternalException(

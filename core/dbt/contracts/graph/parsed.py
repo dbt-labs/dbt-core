@@ -26,7 +26,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
-    ExposureOwner, ExposureType, MaturityType
+    ExposureOwner, ExposureType, MaturityType, MetricFilter
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -778,17 +778,21 @@ class ParsedExposure(UnparsedBaseNode, HasUniqueID, HasFqn):
             True
         )
 
+
 @dataclass
 class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     model: str
     name: str
     description: str
-    display_name: str
-    agg: str
-    sql: str
-    timestamp_field: str
+    label: str
+    type: str
+    sql: Optional[str]
+    timestamp: Optional[str]
+    filters: List[MetricFilter]
+    time_grains: List[str]
     dimensions: List[str]
     resource_type: NodeType = NodeType.Metric
+    meta: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
@@ -796,8 +800,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     @property
     def depends_on_nodes(self):
-        # TODO - I think this is a hack?
-        return [self.model]
+        return self.depends_on.nodes
 
     @property
     def search_name(self):
@@ -806,14 +809,17 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def same_dimensions(self, old: 'ParsedMetric') -> bool:
         return set(self.dimensions) == set(old.dimensions)
 
+    def same_filters(self, old: 'ParsedMetric') -> bool:
+        return set(self.filters) == set(old.filters)
+
     def same_everything(self, old: 'ParsedMetric') -> bool:
         keys = [
-            'model', 'description', 'display_name', 'agg', 'sql',
-            'timestamp_field'
+            'model', 'description', 'label', 'type', 'sql',
+            'timestamp'
         ]
 
         return all(
-            getattr(self, k, None) == getattr(other, k, None)
+            getattr(self, k, None) == getattr(old, k, None)
             for k in keys
         )
 
@@ -823,12 +829,12 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
         if old is None:
             return True
 
-
         return (
             self.same_dimensions(old) and
             self.same_everything(old) and
             True
         )
+
 
 ManifestNodes = Union[
     ParsedAnalysisNode,

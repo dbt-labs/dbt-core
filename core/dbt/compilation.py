@@ -53,6 +53,7 @@ def print_compile_stats(stats):
         NodeType.Seed: 'seed file',
         NodeType.Source: 'source',
         NodeType.Exposure: 'exposure',
+        NodeType.Metric: 'metric'
     }
 
     results = {k: 0 for k in names.keys()}
@@ -425,6 +426,8 @@ class Compiler:
             self.link_node(linker, node, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(linker, exposure, manifest)
+        for metric in manifest.metrics.values():
+            self.link_node(linker, metric, manifest)
 
         cycle = linker.find_cycles()
 
