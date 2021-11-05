@@ -16,7 +16,6 @@ from dbt import flags
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
-from dbt.context.base import generate_base_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.relation import ComponentName
@@ -117,6 +116,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             config_version=project.config_version,
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
+            profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             user_config=profile.user_config,
@@ -207,18 +207,22 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         )
 
         # build the profile using the base renderer and the one fact we know
+        # Note: only the named profile section is rendered. The rest of the
+        # profile is ignored.
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
-        profile_renderer = ProfileRenderer(generate_base_context(cli_vars))
+        profile_renderer = ProfileRenderer(cli_vars)
         profile_name = partial.render_profile_name(profile_renderer)
-
         profile = cls._get_rendered_profile(
             args, profile_renderer, profile_name
         )
+        # Save env_vars encountered in rendering for partial parsing
+        profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
 
         # get a new renderer using our target information and render the
         # project
         project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
         project = partial.render(project_renderer)
+        # Save env_vars encountered in rendering for partial parsing
         project.project_env_vars = project_renderer.ctx_obj.env_vars
         return (project, profile)
 
@@ -517,6 +521,7 @@ class UnsetProfileConfig(RuntimeConfig):
             config_version=project.config_version,
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
+            profile_env_vars=profile.profile_env_vars,
             profile_name='',
             target_name='',
             user_config=UnsetConfig(),

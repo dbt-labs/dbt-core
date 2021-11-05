@@ -52,6 +52,7 @@ Contributors:
 - Dependency updates ([#4079](https://github.com/dbt-labs/dbt-core/pull/4079)), ([#3532](https://github.com/dbt-labs/dbt-core/pull/3532)
 - Schedule partial parsing for SQL files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4101](https://github.com/dbt-labs/dbt-core/pull/4101))
 - Schedule partial parsing for schema files with env_var changes ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4162](https://github.com/dbt-labs/dbt-core/pull/4162))
+- Skip partial parsing when env_vars change in dbt_project or profile ([#3885](https://github.com/dbt-labs/dbt-core/issues/3885), [#4212](https://github.com/dbt-labs/dbt-core/pull/4212))
 
 Contributors:
 - [@sungchun12](https://github.com/sungchun12) ([#4017](https://github.com/dbt-labs/dbt/pull/4017))

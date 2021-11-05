@@ -43,7 +43,7 @@ def raises_nothing():
 
 
 def empty_profile_renderer():
-    return dbt.config.renderer.ProfileRenderer(generate_base_context({}))
+    return dbt.config.renderer.ProfileRenderer({})
 
 
 def empty_project_renderer():
@@ -509,7 +509,7 @@ class TestProfileFile(BaseFileTest):
     def test_cli_and_env_vars(self):
         self.args.target = 'cli-and-env-vars'
         self.args.vars = '{"cli_value_host": "cli-postgres-host"}'
-        renderer = dbt.config.renderer.ProfileRenderer(generate_base_context({'cli_value_host': 'cli-postgres-host'}))
+        renderer = dbt.config.renderer.ProfileRenderer({'cli_value_host': 'cli-postgres-host'})
         with mock.patch.dict(os.environ, self.env_override):
             profile = self.from_args(renderer=renderer)
             from_raw = self.from_raw_profile_info(

@@ -47,7 +47,7 @@ def profile_from_dict(profile, profile_name, cli_vars='{}'):
     if not isinstance(cli_vars, dict):
         cli_vars = parse_cli_vars(cli_vars)
 
-    renderer = ProfileRenderer(generate_base_context(cli_vars))
+    renderer = ProfileRenderer(cli_vars)
     return Profile.from_raw_profile_info(
         profile,
         profile_name,

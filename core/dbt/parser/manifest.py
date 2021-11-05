@@ -78,7 +78,8 @@ class ReparseReason(StrEnum):
     project_config_changed = '06_project_config_changed'
     load_file_failure = '07_load_file_failure'
     exception = '08_exception'
-    env_vars_changed = '09_env_vars_changed'
+    proj_env_vars_changed = '09_project_env_vars_changed'
+    prof_env_vars_changed = '10_profile_env_vars_changed'
 
 
 # Part of saved performance info
@@ -554,10 +555,18 @@ class ManifestLoader:
             logger.info("Unable to do partial parsing because profile has changed")
             valid = False
             reparse_reason = ReparseReason.profile_changed
-        if self.manifest.state_check.env_vars_hash != manifest.state_check.env_vars_hash:
-            logger.info("Unable to do partial parsing because env vars have changed")
+        if self.manifest.state_check.project_env_vars_hash != \
+                manifest.state_check.project_env_vars_hash:
+            logger.info("Unable to do partial parsing because env vars "
+                        "used in dbt_project.yml have changed")
             valid = False
-            reparse_reason = ReparseReason.env_vars_changed
+            reparse_reason = ReparseReason.proj_env_vars_changed
+        if self.manifest.state_check.profile_env_vars_hash != \
+                manifest.state_check.profile_env_vars_hash:
+            logger.info("Unable to do partial parsing because env vars "
+                        "used in profiles.yml have changed")
+            valid = False
+            reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
             k for k in self.manifest.state_check.project_hashes
@@ -660,6 +669,12 @@ class ManifestLoader:
         config = self.root_project
         all_projects = self.all_projects
         # if any of these change, we need to reject the parser
+
+        # Create a FileHash of vars string, profile name and target name
+        # This does not capture vars in dbt_project, just the command line
+        # arg vars, but since any changes to that file will cause state_check
+        # to not pass, it doesn't matter.  If we move to more granular checking
+        # of env_vars, that would need to change.
         vars_hash = FileHash.from_contents(
             '\x00'.join([
                 getattr(config.args, 'vars', '{}') or '{}',
@@ -669,26 +684,38 @@ class ManifestLoader:
             ])
         )
 
-        # Create a hash of the env_vars in the project
+        # Create a FileHash of the env_vars in the project
         key_list = list(config.project_env_vars.keys())
         key_list.sort()
         env_var_str = ''
         for key in key_list:
             env_var_str = env_var_str + f'{key}:{config.project_env_vars[key]}|'
-        env_vars_hash = FileHash.from_contents(env_var_str)
+        project_env_vars_hash = FileHash.from_contents(env_var_str)
 
+        # Create a FileHash of the env_vars in the project
+        key_list = list(config.profile_env_vars.keys())
+        key_list.sort()
+        env_var_str = ''
+        for key in key_list:
+            env_var_str = env_var_str + f'{key}:{config.profile_env_vars[key]}|'
+        profile_env_vars_hash = FileHash.from_contents(env_var_str)
+
+        # Create a FileHash of the profile file
         profile_path = os.path.join(flags.PROFILES_DIR, 'profiles.yml')
         with open(profile_path) as fp:
             profile_hash = FileHash.from_contents(fp.read())
 
+        # Create a FileHashes for dbt_project for all dependencies
         project_hashes = {}
         for name, project in all_projects.items():
             path = os.path.join(project.project_root, 'dbt_project.yml')
             with open(path) as fp:
                 project_hashes[name] = FileHash.from_contents(fp.read())
 
+        # Create the ManifestStateCheck object
         state_check = ManifestStateCheck(
-            env_vars_hash=env_vars_hash,
+            project_env_vars_hash=project_env_vars_hash,
+            profile_env_vars_hash=profile_env_vars_hash,
             vars_hash=vars_hash,
             profile_hash=profile_hash,
             project_hashes=project_hashes,

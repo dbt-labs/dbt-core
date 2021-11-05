@@ -102,7 +102,8 @@ class GraphTest(unittest.TestCase):
             config = self.root_project
             all_projects = self.all_projects
             return ManifestStateCheck(
-                env_vars_hash=FileHash.from_contents(''),
+                project_env_vars_hash=FileHash.from_contents(''),
+                profile_env_vars_hash=FileHash.from_contents(''),
                 vars_hash=FileHash.from_contents('vars'),
                 project_hashes={name: FileHash.from_contents(name) for name in all_projects},
                 profile_hash=FileHash.from_contents('profile'),
