@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from .types import (
     InfoLevel,
     DebugLevel,
+    WarnLevel,
     ErrorLevel,
     ShowException,
     CliEventABC
