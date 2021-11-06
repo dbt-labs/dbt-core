@@ -495,6 +495,24 @@ def untar_package(
         dbt.clients.system.rename(downloaded_path, desired_path, force=True)
 
 
+def resolve_tar_dir_name(TarFile: tarfile.TarFile):
+    tarfile_dir_list = [x.name for x in TarFile.getmembers() if x.isdir()]
+    tar_dir_name = os.path.commonpath(tarfile_dir_list)
+    return convert_path(tar_dir_name)
+
+
+def untar_tarfile(
+    TarFile: tarfile.TarFile, dest_dir: str, rename_to: Optional[str] = None
+) -> None:
+    tar_dir_name = dbt.clients.system.resolve_tar_dir_name(TarFile)
+    TarFile.extractall(path=dest_dir)
+
+    if rename_to:
+        downloaded_path = os.path.join(dest_dir, tar_dir_name)
+        desired_path = os.path.join(dest_dir, rename_to)
+        dbt.clients.system.rename(downloaded_path, desired_path, force=True)
+
+
 def chmod_and_retry(func, path, exc_info):
     """Define an error handler to pass to shutil.rmtree.
     On Windows, when a file is marked read-only as git likes to do, rmtree will
