@@ -3,6 +3,7 @@
 ### Breaking changes
 - Replace `greedy` flag/property for test selection with `indirect_selection: eager/cautious` flag/property. Set to `eager` by default. **Note:** This reverts test selection to its pre-v0.20 behavior by default. `dbt test -s my_model` _will_ select multi-parent tests, such as `relationships`, that depend on unselected resources. To achieve the behavior change in v0.20 + v0.21, set `--indirect-selection=cautious` on the CLI or `indirect_selection: cautious` in yaml selectors. ([#4082](https://github.com/dbt-labs/dbt-core/issues/4082), [#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
 - In v1.0.0, **`pip install dbt` will raise an explicit error.** Instead, please use `pip install dbt-<adapter>` (to use dbt with that database adapter), or `pip install dbt-core` (for core functionality). For parity with the previous behavior of `pip install dbt`, you can use: `pip install dbt-core dbt-postgres dbt-redshift dbt-snowflake dbt-bigquery` ([#4100](https://github.com/dbt-labs/dbt-core/issues/4100), [#4133](https://github.com/dbt-labs/dbt-core/pull/4133))
+- Reorganize the `global_project` (macros) into smaller files with clearer names. Remove unused global macros: `column_list`, `column_list_for_create_table`, `incremental_upsert` ([#4154](https://github.com/dbt-labs/dbt-core/pull/4154))
 
 ### Features
 - Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
