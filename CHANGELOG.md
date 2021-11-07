@@ -1,15 +1,20 @@
 ## dbt-core 1.0.0 (Release TBD)
 
+### Breaking changes
+- Replace `greedy` flag/property for test selection with `indirect_selection: eager/cautious` flag/property. Set to `eager` by default. **Note:** This reverts test selection to its pre-v0.20 behavior by default. `dbt test -s my_model` _will_ select multi-parent tests, such as `relationships`, that depend on unselected resources. To achieve the behavior change in v0.20 + v0.21, set `--indirect-selection=cautious` on the CLI or `indirect_selection: cautious` in yaml selectors. ([#4082](https://github.com/dbt-labs/dbt-core/issues/4082), [#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
+
 ### Features
 - Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
-- Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135),[#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
+- Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135), [#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
+
 ### Fixes
-- Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex`
+- Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex` ([#4136](https://github.com/dbt-labs/dbt-core/issues/4132), [#4136](https://github.com/dbt-labs/dbt-core/pull/4136))
 
 Contributors:
-- [@kadero](https://github.com/kadero) ([3955](https://github.com/dbt-labs/dbt-core/pull/3955))
-- [@frankcash](https://github.com/frankcash) ([4136](https://github.com/dbt-labs/dbt-core/pull/4136))
-
+- [@kadero](https://github.com/kadero) ([#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
+- [@frankcash](https://github.com/frankcash) ([#4136](https://github.com/dbt-labs/dbt-core/pull/4136))
+- [@VersusFacit](https://github.com/VersusFacit) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
+- [@joellabes](https://github.com/joellabes) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
 ## dbt-core 1.0.0b2 (October 25, 2021)
 
 ### Breaking changes
