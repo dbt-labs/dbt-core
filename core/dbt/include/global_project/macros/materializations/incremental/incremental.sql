@@ -53,8 +53,13 @@
     {% do adapter.expand_target_column_types(
              from_relation=tmp_relation,
              to_relation=target_relation) %}
-    {% do process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
-    {% set build_sql = incremental_upsert(tmp_relation, target_relation, unique_key=unique_key) %}
+    {#-- Process schema changes. Returns dict of changes if successful. Use source columns for upserting/merging --#}
+    {% set schema_changes_dict = process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
+    {% set dest_columns = schema_changes_dict.get('source_columns') %}
+    {% if not dest_columns %}
+      {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
+    {% endif %}
+    {% set build_sql = get_delete_insert_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) %}
   
   {% endif %}
 

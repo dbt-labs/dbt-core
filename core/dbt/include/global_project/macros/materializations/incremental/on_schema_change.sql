@@ -82,6 +82,7 @@
     'source_not_in_target': source_not_in_target,
     'target_not_in_source': target_not_in_source,
     'in_target_and_source': in_target_and_source,
+    'source_columns': source_columns,
     'target_columns': target_columns,
     'new_target_types': new_target_types
   } %}
