@@ -793,3 +793,30 @@ class TestWrongSpecificationBlock(DBTIntegrationTest):
 
         assert len(results) == 1
         assert results[0] == '{"name": "some_seed", "description": ""}'
+
+
+class TestSchemaTestContextWhereSubq(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        return "test-context-where-subq-models"
+
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            "macro-paths": ["test-context-where-subq-macros"],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_test_context_tests(self):
+        # This test tests that get_where_subquery() is included in TestContext + TestMacroNamespace,
+        # otherwise api.Relation.create() will return an error
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
+
+        results = self.run_dbt(['test'])
+        self.assertEqual(len(results), 1)

@@ -1,5 +1,5 @@
 {% macro get_where_subquery(relation) -%}
-    {% do return(adapter.dispatch('get_where_subquery')(relation)) %}
+    {% do return(adapter.dispatch('get_where_subquery', 'dbt')(relation)) %}
 {%- endmacro %}
 
 {% macro default__get_where_subquery(relation) -%}

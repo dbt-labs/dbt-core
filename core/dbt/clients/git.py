@@ -12,6 +12,16 @@ def _is_commit(revision: str) -> bool:
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
 
 
+def _raise_git_cloning_error(repo, revision, error):
+    stderr = error.stderr.decode('utf-8').strip()
+    if 'usage: git' in stderr:
+        stderr = stderr.split('\nusage: git')[0]
+    if re.match("fatal: destination path '(.+)' already exists", stderr):
+        raise error
+
+    dbt.exceptions.bad_package_spec(repo, revision, stderr)
+
+
 def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None):
     has_revision = revision is not None
     is_commit = _is_commit(revision or "")
@@ -36,10 +46,18 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
 
     if dirname is not None:
         clone_cmd.append(dirname)
-    result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
+    try:
+        result = run_cmd(cwd, clone_cmd, env={'LC_ALL': 'C'})
+    except dbt.exceptions.CommandResultError as exc:
+        _raise_git_cloning_error(repo, revision, exc)
 
     if subdirectory:
-        run_cmd(os.path.join(cwd, dirname or ''), ['git', 'sparse-checkout', 'set', subdirectory])
+        cwd_subdir = os.path.join(cwd, dirname or '')
+        clone_cmd_subdir = ['git', 'sparse-checkout', 'set', subdirectory]
+        try:
+            run_cmd(cwd_subdir, clone_cmd_subdir)
+        except dbt.exceptions.CommandResultError as exc:
+            _raise_git_cloning_error(repo, revision, exc)
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, '.git'))
@@ -111,7 +129,10 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
     except dbt.exceptions.CommandResultError as exc:
         err = exc.stderr.decode('utf-8')
         exists = re.match("fatal: destination path '(.+)' already exists", err)
-        if not exists:  # something else is wrong, raise it
+        if not exists:
+            print(
+                '\nSomething went wrong while cloning {}'.format(repo) +
+                '\nCheck the debug logs for more information')
             raise
 
     directory = None
