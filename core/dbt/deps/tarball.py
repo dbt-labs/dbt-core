@@ -8,7 +8,7 @@ from dbt.contracts.project import (
     ProjectPackageMetadata,
     TarballPackage,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+# from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class TarballPackageMixin:
@@ -29,7 +29,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         super().__init__(tarball)
         self.tarfile = self.get_tarfile()
         # init tarfile in class, and use tarfile as cache
-        # simpler for tempfile handling, and prevent multiple hits to 
+        # simpler for tempfile handling, and prevent multiple hits to
         # url (one for metadata, one for intall)
         self.tar_dir_name = self.validate_tarfile()
         # assumed structure is that tarfile has a root dir (package name)
@@ -64,11 +64,11 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         return tar
 
     def validate_tarfile(self):
-        # assumed structure is that tarfile has a root dir (package name)
-        # but we don't know what it is. will look for lone dir on root and 
-        # use that, error if multiple dirs on root (better way?)
-        #  todo? optional tarball root_dir arg (e.g. '.', 'mything', 'whatever) 
-        #  in package file?
+        ''' assumed structure is that tarfile has a root dir (package name)
+        but we don't know what it is. will look for lone dir on root and
+        use that, error if multiple dirs on root (better way?)
+          todo? optional tarball root_dir arg (e.g. '.', 'mything', 'whatever) 
+          in package file?'''
         tar_dir_name = system.resolve_tar_dir_name(self.tarfile)
 
         assert tar_dir_name != '', "package structure malformed"
@@ -76,7 +76,6 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         return tar_dir_name
 
     def _fetch_metadata(self, project, renderer):
-        
         tarfile = self.tarfile
         tar_dir_name = self.tar_dir_name
 
@@ -108,7 +107,7 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
         package_name = self.get_project_name(project, renderer)
         # tarfile.extractall(path=deps_path)
 
-        system.untar_tarfile(TarFile=self.tarfile, dest_dir=deps_path, 
+        system.untar_tarfile(TarFile=self.tarfile, dest_dir=deps_path,
                              rename_to=package_name)
 
 
