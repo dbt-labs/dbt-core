@@ -15,7 +15,7 @@
 
 {% endmacro %}
 
-{% macro compare_columns(source_columns, target_columns, should_include) %}
+{% macro diff_columns(source_columns, target_columns) %}
 
   {% set result = [] %}
   {% set source_names = source_columns | map(attribute = 'column') | list %}
@@ -23,21 +23,13 @@
    
    {# --check whether the name attribute exists in the target - this does not perform a data type check #}
    {% for sc in source_columns %}
-     {% if (sc.name in target_names) == should_include %}
+     {% if sc.name not in target_names %}
         {{ result.append(sc) }}
      {% endif %}
    {% endfor %}
   
   {{ return(result) }}
 
-{% endmacro %}
-
-{% macro diff_columns(source_columns, target_columns) %}
-  {{ return(compare_columns(source_columns, target_columns, false) ) }}
-{% endmacro %}
-
-{% macro intersect_columns(source_columns, target_columns) %}
-  {{ return(compare_columns(source_columns, target_columns, true) ) }}
 {% endmacro %}
 
 {% macro diff_column_data_types(source_columns, target_columns) %}
@@ -65,7 +57,6 @@
   {%- set target_columns = adapter.get_columns_in_relation(target_relation) -%}
   {%- set source_not_in_target = diff_columns(source_columns, target_columns) -%}
   {%- set target_not_in_source = diff_columns(target_columns, source_columns) -%}
-  {%- set in_target_and_source = intersect_columns(target_columns, source_columns) -%}
 
   {% set new_target_types = diff_column_data_types(source_columns, target_columns) %}
 
@@ -81,7 +72,6 @@
     'schema_changed': schema_changed,
     'source_not_in_target': source_not_in_target,
     'target_not_in_source': target_not_in_source,
-    'in_target_and_source': in_target_and_source,
     'source_columns': source_columns,
     'target_columns': target_columns,
     'new_target_types': new_target_types
@@ -175,7 +165,7 @@
       
       {% endif %}
 
-      {{ return(schema_changes_dict) }}
+      {{ return(schema_changes_dict['source_columns']) }}
     
     {% endif %}
 

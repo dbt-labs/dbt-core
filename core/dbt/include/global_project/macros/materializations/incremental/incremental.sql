@@ -54,8 +54,7 @@
              from_relation=tmp_relation,
              to_relation=target_relation) %}
     {#-- Process schema changes. Returns dict of changes if successful. Use source columns for upserting/merging --#}
-    {% set schema_changes_dict = process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
-    {% set dest_columns = schema_changes_dict.get('source_columns') %}
+    {% set dest_columns = process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
     {% if not dest_columns %}
       {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
     {% endif %}
