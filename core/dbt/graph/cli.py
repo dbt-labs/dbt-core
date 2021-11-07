@@ -155,10 +155,7 @@ def parse_union_definition(definition: Dict[str, Any]) -> SelectionSpec:
         union.raw = definition
         return union
     else:
-        return SelectionDifference(
-            components=[union, exclude],
-            raw=definition
-        )
+        return SelectionDifference(components=[union, exclude], raw=definition)
 
 
 def parse_intersection_definition(definition: Dict[str, Any]) -> SelectionSpec:
@@ -170,10 +167,7 @@ def parse_intersection_definition(definition: Dict[str, Any]) -> SelectionSpec:
         intersection.raw = definition
         return intersection
     else:
-        return SelectionDifference(
-            components=[intersection, exclude],
-            raw=definition
-        )
+        return SelectionDifference(components=[intersection, exclude], raw=definition)
 
 
 def parse_dict_definition(definition: Dict[str, Any]) -> SelectionSpec:
