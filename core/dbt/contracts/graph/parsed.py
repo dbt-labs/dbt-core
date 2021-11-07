@@ -806,22 +806,35 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def search_name(self):
         return self.name
 
+    def same_model(self, old: 'ParsedMetric') -> bool:
+        return self.model == old.model
+
     def same_dimensions(self, old: 'ParsedMetric') -> bool:
-        return set(self.dimensions) == set(old.dimensions)
+        return self.dimensions == old.dimensions
 
     def same_filters(self, old: 'ParsedMetric') -> bool:
-        return set(self.filters) == set(old.filters)
+        return self.filters == old.filters
 
-    def same_everything(self, old: 'ParsedMetric') -> bool:
-        keys = [
-            'model', 'description', 'label', 'type', 'sql',
-            'timestamp'
-        ]
+    def same_meta(self, old: 'ParsedMetric') -> bool:
+        return self.meta == old.meta
 
-        return all(
-            getattr(self, k, None) == getattr(old, k, None)
-            for k in keys
-        )
+    def same_description(self, old: 'ParsedMetric') -> bool:
+        return self.description == old.description
+
+    def same_label(self, old: 'ParsedMetric') -> bool:
+        return self.label == old.label
+
+    def same_type(self, old: 'ParsedMetric') -> bool:
+        return self.type == old.type
+
+    def same_sql(self, old: 'ParsedMetric') -> bool:
+        return self.sql == old.sql
+
+    def same_timestamp(self, old: 'ParsedMetric') -> bool:
+        return self.timestamp == old.timestamp
+
+    def same_time_grains(self, old: 'ParsedMetric') -> bool:
+        return self.time_grains == old.time_grains
 
     def same_contents(self, old: Optional['ParsedMetric']) -> bool:
         # existing when it didn't before is a change!
@@ -830,8 +843,16 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
             return True
 
         return (
+            self.same_model(old) and
             self.same_dimensions(old) and
-            self.same_everything(old) and
+            self.same_filters(old) and
+            self.same_meta(old) and
+            self.same_description(old) and
+            self.same_label(old) and
+            self.same_type(old) and
+            self.same_sql(old) and
+            self.same_timestamp(old) and
+            self.same_time_grains(old) and
             True
         )
 

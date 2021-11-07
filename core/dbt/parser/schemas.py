@@ -1004,12 +1004,10 @@ class MetricParser(YamlReader):
             self.schema_parser.manifest,
             package_name,
         )
-        model_ref = '{{ ref("' + unparsed.model + '") }}'
+        model_ref = '{{ ' + unparsed.model + ' }}'
         get_rendered(
             model_ref, ctx, parsed, capture_macros=True
         )
-        # TODO : Partial parsing doesn't  work for these (yet!)
-        # TODO : Listing intersecting metrics and models is weird
         return parsed
 
     def parse(self) -> Iterable[ParsedMetric]:
@@ -1020,5 +1018,4 @@ class MetricParser(YamlReader):
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
                 raise CompilationException(msg) from exc
-            import pdb; pdb.set_trace()
             yield self.parse_metric(unparsed)

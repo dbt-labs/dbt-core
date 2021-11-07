@@ -749,7 +749,6 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.exposures.values(),
             self.metrics.values(),
         ))
-        import pdb; pdb.set_trace()
         forward_edges, backward_edges = build_node_edges(edge_members)
         self.child_map = forward_edges
         self.parent_map = backward_edges
@@ -1061,6 +1060,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.macros,
             self.docs,
             self.exposures,
+            self.metrics,
             self.selectors,
             self.files,
             self.metadata,

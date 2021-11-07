@@ -155,7 +155,6 @@ class BaseDatabaseWrapper:
 
         attempts = []
 
-        # search_packages is None
         for package_name in search_packages:
             for prefix in self._get_adapter_macro_prefixes():
                 search_name = f'{prefix}__{macro_name}'
