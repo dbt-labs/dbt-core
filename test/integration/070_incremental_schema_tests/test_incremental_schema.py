@@ -44,6 +44,12 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
         compare_source = 'incremental_append_new_columns'
         compare_target = 'incremental_append_new_columns_target'
         self.run_twice_and_assert(select, compare_source, compare_target)
+        
+    def run_incremental_append_new_columns_remove_one(self):
+        select = 'model_a incremental_append_new_columns_remove_one incremental_append_new_columns_remove_one_target'
+        compare_source = 'incremental_append_new_columns_remove_one'
+        compare_target = 'incremental_append_new_columns_remove_one_target'
+        self.run_twice_and_assert(select, compare_source, compare_target)
 
     def run_incremental_sync_all_columns(self):
         select = 'model_a incremental_sync_all_columns incremental_sync_all_columns_target'
@@ -70,6 +76,7 @@ class TestIncrementalSchemaChange(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres__run_incremental_append_new_columns(self):
         self.run_incremental_append_new_columns()
+        self.run_incremental_append_new_columns_remove_one()
 
     @use_profile('postgres')
     def test__postgres__run_incremental_sync_all_columns(self):
