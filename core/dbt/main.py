@@ -377,13 +377,15 @@ def _build_build_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        '--greedy',
-        action='store_true',
+        '--indirect-selection',
+        choices=['eager', 'cautious'],
+        dest='indirect_selection',
         help='''
-        Select all tests that touch the selected resources,
-        even if they also depend on unselected resources
-        '''
+            Select all tests that are adjacent to selected resources,
+            even if they those resources have been explicitly selected.
+        ''',
     )
+
     resource_values: List[str] = [
         str(s) for s in build_task.BuildTask.ALL_RESOURCE_VALUES
     ] + ['all']
@@ -721,12 +723,13 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        '--greedy',
-        action='store_true',
+        '--indirect-selection',
+        choices=['eager', 'cautious'],
+        dest='indirect_selection',
         help='''
-        Select all tests that touch the selected resources,
-        even if they also depend on unselected resources
-        '''
+            Select all tests that are adjacent to selected resources,
+            even if they those resources have been explicitly selected.
+        ''',
     )
 
     sub.set_defaults(cls=test_task.TestTask, which='test', rpc_method='test')
@@ -824,12 +827,13 @@ def _build_list_subparser(subparsers, base_subparser):
         required=False,
     )
     sub.add_argument(
-        '--greedy',
-        action='store_true',
+        '--indirect-selection',
+        choices=['eager', 'cautious'],
+        dest='indirect_selection',
         help='''
-        Select all tests that touch the selected resources,
-        even if they also depend on unselected resources
-        '''
+            Select all tests that are adjacent to selected resources,
+            even if they those resources have been explicitly selected.
+        ''',
     )
     _add_common_selector_arguments(sub)
 

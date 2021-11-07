@@ -29,24 +29,6 @@ def alert_non_existence(raw_spec, nodes):
         )
 
 
-def alert_unused_nodes(raw_spec, node_names):
-    summary_nodes_str = ("\n  - ").join(node_names[:3])
-    debug_nodes_str = ("\n  - ").join(node_names)
-    and_more_str = f"\n  - and {len(node_names) - 3} more" if len(node_names) > 4 else ""
-    summary_msg = (
-        f"\nSome tests were excluded because at least one parent is not selected. "
-        f"Use the --greedy flag to include them."
-        f"\n  - {summary_nodes_str}{and_more_str}"
-    )
-    logger.info(summary_msg)
-    if len(node_names) > 4:
-        debug_msg = (
-            f"Full list of tests that were excluded:"
-            f"\n  - {debug_nodes_str}"
-        )
-        logger.debug(debug_msg)
-
-
 def can_select_indirectly(node):
     """If a node is not selected itself, but its parent(s) are, it may qualify
     for indirect selection.
@@ -113,7 +95,7 @@ class NodeSelector(MethodManager):
         neighbors = self.collect_specified_neighbors(spec, collected)
         direct_nodes, indirect_nodes = self.expand_selection(
             selected=(collected | neighbors),
-            greedy=spec.greedy
+            eagerly_expand=spec.eagerly_expand
         )
         return direct_nodes, indirect_nodes
 
@@ -217,21 +199,20 @@ class NodeSelector(MethodManager):
         }
 
     def expand_selection(
-        self, selected: Set[UniqueId], greedy: bool = False
+        self, selected: Set[UniqueId], eagerly_expand: bool = True
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
-        # Test selection can expand to include an implicitly/indirectly selected test.
-        # In this way, `dbt test -m model_a` also includes tests that directly depend on `model_a`.
-        # Expansion has two modes, GREEDY and NOT GREEDY.
+        # Test selection by default expands to include an implicitly/indirectly selected tests.
+        # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
+        # Expansion has two modes, EAGER and CAUTIOUS.
         #
-        # GREEDY mode: If ANY parent is selected, select the test. We use this for EXCLUSION.
+        # EAGER mode: If ANY parent is selected, select the test.
         #
-        # NOT GREEDY mode:
+        # CAUTIOUS mode:
         #  - If ALL parents are selected, select the test.
         #  - If ANY parent is missing, return it separately. We'll keep it around
         #    for later and see if its other parents show up.
-        # We use this for INCLUSION.
-        # Users can also opt in to inclusive GREEDY mode by passing --greedy flag,
-        # or by specifying `greedy: true` in a yaml selector
+        # Users can opt out of inclusive EAGER mode by passing --indirect-selection cautious
+        # CLI argument or by specifying `eagerly_expand: true` in a yaml selector
 
         direct_nodes = set(selected)
         indirect_nodes = set()
@@ -241,7 +222,7 @@ class NodeSelector(MethodManager):
                 node = self.manifest.nodes[unique_id]
                 if can_select_indirectly(node):
                     # should we add it in directly?
-                    if greedy or set(node.depends_on.nodes) <= set(selected):
+                    if eagerly_expand or set(node.depends_on.nodes) <= set(selected):
                         direct_nodes.add(unique_id)
                     # if not:
                     else:
@@ -281,16 +262,6 @@ class NodeSelector(MethodManager):
         """
         selected_nodes, indirect_only = self.select_nodes(spec)
         filtered_nodes = self.filter_selection(selected_nodes)
-
-        if indirect_only:
-            filtered_unused_nodes = self.filter_selection(indirect_only)
-            if filtered_unused_nodes and spec.greedy_warning:
-                # log anything that didn't make the cut
-                unused_node_names = []
-                for unique_id in filtered_unused_nodes:
-                    name = self.manifest.nodes[unique_id].name
-                    unused_node_names.append(name)
-                alert_unused_nodes(spec, unused_node_names)
 
         return filtered_nodes
 

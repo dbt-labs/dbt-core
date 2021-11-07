@@ -17,7 +17,7 @@ PROFILES_DIR = os.path.expanduser(
 STRICT_MODE = False  # Only here for backwards compatibility
 FULL_REFRESH = False  # subcommand
 STORE_FAILURES = False  # subcommand
-GREEDY = None  # subcommand
+EAGER_INDIRECT_SELECTION = True  # subcommand
 
 # Global CLI commands
 USE_EXPERIMENTAL_PARSER = None
@@ -95,7 +95,7 @@ MP_CONTEXT = _get_context()
 def set_from_args(args, user_config):
     global STRICT_MODE, FULL_REFRESH, WARN_ERROR, \
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
-        USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, GREEDY, \
+        USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, EAGER_INDIRECT_SELECTION, \
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
         WHICH
 
@@ -103,7 +103,7 @@ def set_from_args(args, user_config):
     # cli args without user_config or env var option
     FULL_REFRESH = getattr(args, 'full_refresh', FULL_REFRESH)
     STORE_FAILURES = getattr(args, 'store_failures', STORE_FAILURES)
-    GREEDY = getattr(args, 'greedy', GREEDY)
+    EAGER_INDIRECT_SELECTION = getattr(args, 'indirect_selection', 'eager') != 'cautious'
     WHICH = getattr(args, 'which', WHICH)
 
     # global cli flags with env var and user_config alternatives
