@@ -27,7 +27,8 @@ from dbt.events.types import (
     PartialParsingFailedBecauseConfigChange, PartialParsingFailedBecauseProfileChange,
     PartialParsingFailedBecauseNewProjectDependency, PartialParsingFailedBecauseHashChanged,
     PartialParsingNotEnabled, ParsedFileLoadFailed, PartialParseSaveFileNotFound,
-    InvalidDisabledSourceInTestNode, InvalidRefInTestNode
+    InvalidDisabledSourceInTestNode, InvalidRefInTestNode, PartialParsingProjectEnvVarsChanged,
+    PartialParsingProfileEnvVarsChanged
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
@@ -276,7 +277,7 @@ class ManifestLoader:
                             file_dict = source_file.to_dict()
                             fire_event(PartialParsingFile(file_dict=file_dict))
                     exc_info['parse_file_type'] = parse_file_type
-                    fire_event(PartialParsingException())
+                    fire_event(PartialParsingException(exc_info=exc_info))
 
                     # Send event
                     if dbt.tracking.active_user is not None:
@@ -564,14 +565,12 @@ class ManifestLoader:
             reparse_reason = ReparseReason.profile_changed
         if self.manifest.state_check.project_env_vars_hash != \
                 manifest.state_check.project_env_vars_hash:
-            logger.info("Unable to do partial parsing because env vars "
-                        "used in dbt_project.yml have changed")
+            fire_event(PartialParsingProjectEnvVarsChanged())
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
         if self.manifest.state_check.profile_env_vars_hash != \
                 manifest.state_check.profile_env_vars_hash:
-            logger.info("Unable to do partial parsing because env vars "
-                        "used in profiles.yml have changed")
+            fire_event(PartialParsingProfileEnvVarsChanged())
             valid = False
             reparse_reason = ReparseReason.prof_env_vars_changed
 
