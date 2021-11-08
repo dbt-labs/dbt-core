@@ -661,19 +661,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             "exposures": {k: v.to_dict(omit_none=False) for k, v in self.exposures.items()},
             "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
             "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
-            },
-            'metrics': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.metrics.items()
-            },
-            'nodes': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.nodes.items()
-            },
-            'sources': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.sources.items()
-            }
+            "sources": {k: v.to_dict(omit_none=False) for k, v in self.sources.items()},
         }
 
     def build_disabled_by_file_id(self):
