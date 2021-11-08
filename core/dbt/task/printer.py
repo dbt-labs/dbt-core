@@ -11,7 +11,7 @@ from dbt.events.types import (
 )
 
 from dbt.tracking import InvocationProcessor
-from dbt import utils
+from dbt.events.format import pluralize
 
 from dbt.contracts.results import (
     NodeStatus
@@ -33,7 +33,7 @@ def get_counts(flat_nodes) -> str:
         counts[t] = counts.get(t, 0) + 1
 
     stat_line = ", ".join(
-        [utils.pluralize(v, k) for k, v in counts.items()])
+        [pluralize(v, k) for k, v in counts.items()])
 
     return stat_line
 

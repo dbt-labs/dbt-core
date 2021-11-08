@@ -16,7 +16,7 @@ from dbt.config.utils import parse_cli_vars
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
-from dbt.utils import pluralize
+from dbt.events.format import pluralize
 from dbt.version import get_installed_version
 
 from dbt.task.base import BaseTask, get_nearest_project_dir

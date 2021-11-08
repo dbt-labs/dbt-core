@@ -14,7 +14,8 @@ import time
 
 from contextlib import contextmanager
 from dbt.exceptions import ConnectionException
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import RetryExternalCall
 from enum import Enum
 from typing_extensions import Protocol
 from typing import (
@@ -23,8 +24,6 @@ from typing import (
 )
 
 import dbt.exceptions
-
-from dbt.node_types import NodeType
 
 DECIMALS: Tuple[Type[Any], ...]
 try:
@@ -400,22 +399,6 @@ def translate_aliases(
     return translator.translate(kwargs)
 
 
-def _pluralize(string: Union[str, NodeType]) -> str:
-    try:
-        convert = NodeType(string)
-    except ValueError:
-        return f'{string}s'
-    else:
-        return convert.pluralize()
-
-
-def pluralize(count, string: Union[str, NodeType]):
-    pluralized: str = str(string)
-    if count != 1:
-        pluralized = _pluralize(string)
-    return f'{count} {pluralized}'
-
-
 # Note that this only affects hologram json validation.
 # It has no effect on mashumaro serialization.
 def restrict_to(*restrictions):
@@ -625,8 +608,7 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
         requests.exceptions.ContentDecodingError,
     ) as exc:
         if attempt <= max_attempts - 1:
-            logger.debug('Retrying external call. Attempt: ' +
-                         f'{attempt} Max attempts: {max_attempts}')
+            fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)
             _connection_exception_retry(fn, max_attempts, attempt + 1)
         else:
