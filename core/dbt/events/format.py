@@ -1,4 +1,3 @@
-import dbt.logger as logger  # type: ignore # TODO eventually remove dependency on this logger
 from dbt import ui
 from typing import Optional, Union
 from dbt.node_types import NodeType
@@ -13,9 +12,7 @@ def format_fancy_output_line(
         progress = ''
     else:
         progress = '{} of {} '.format(index, total)
-    # TODO: remove this formatting once we rip out all the old logger
-    prefix = "{timestamp} | {progress}{message}".format(
-        timestamp=logger.get_timestamp(),
+    prefix = "{progress}{message}".format(
         progress=progress,
         message=msg)
 
