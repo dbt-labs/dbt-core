@@ -199,7 +199,7 @@ def fire_event(e: Event) -> None:
     if isinstance(e, Cli):
         if e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
-        log_line = create_log_line(e, json_fmt=False, cli_dest=True)
+        log_line = create_log_line(e, json_fmt=this.format_json, cli_dest=True)
         if not isinstance(e, ShowException):
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
         # CliEventABC and ShowException
