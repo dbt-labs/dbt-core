@@ -32,14 +32,14 @@ EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
 # create the global file logger with no configuration
 global FILE_LOG
-FILE_LOG = logging.getLogger('default_file')
+FILE_LOG = logging.getLogger("default_file")
 null_handler = logging.NullHandler()
 FILE_LOG.addHandler(null_handler)
 
 # set up logger to go to stdout with defaults
 # setup_event_logger will be called once args have been parsed
 global STDOUT_LOG
-STDOUT_LOG = logging.getLogger('default_stdout')
+STDOUT_LOG = logging.getLogger("default_stdout")
 STDOUT_LOG.setLevel(logging.INFO)
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setLevel(logging.INFO)
@@ -75,7 +75,7 @@ def setup_event_logger(log_path, level_override=None):
     EVENT_HISTORY = deque(maxlen=flags.EVENT_BUFFER_SIZE)  # type: ignore
 
     make_log_dir_if_missing(log_path)
-    this.format_json = flags.LOG_FORMAT == 'json'
+    this.format_json = flags.LOG_FORMAT == "json"
     # USE_COLORS can be None if the app just started and the cli flags
     # havent been applied yet
     this.format_color = True if flags.USE_COLORS else False
@@ -84,7 +84,7 @@ def setup_event_logger(log_path, level_override=None):
     level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
     # overwrite the STDOUT_LOG logger with the configured one
-    this.STDOUT_LOG = logging.getLogger('configured_std_out')
+    this.STDOUT_LOG = logging.getLogger("configured_std_out")
     this.STDOUT_LOG.setLevel(level)
 
     FORMAT = "%(message)s"
@@ -101,7 +101,7 @@ def setup_event_logger(log_path, level_override=None):
     this.STDOUT_LOG.addHandler(stdout_handler)
 
     # overwrite the FILE_LOG logger with the configured one
-    this.FILE_LOG = logging.getLogger('configured_file')
+    this.FILE_LOG = logging.getLogger("configured_file")
     this.FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
@@ -245,16 +245,16 @@ def create_log_line(
 def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
     if not log_line:
         return
-    if level_tag == 'test':
+    if level_tag == "test":
         # TODO after implmenting #3977 send to new test level
         l.debug(log_line)
-    elif level_tag == 'debug':
+    elif level_tag == "debug":
         l.debug(log_line)
-    elif level_tag == 'info':
+    elif level_tag == "info":
         l.info(log_line)
-    elif level_tag == 'warn':
+    elif level_tag == "warn":
         l.warning(log_line)
-    elif level_tag == 'error':
+    elif level_tag == "error":
         l.error(log_line)
     else:
         raise AssertionError(
@@ -263,49 +263,19 @@ def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: s
 
 
 def send_exc_to_logger(
-    l: Logger,
-    level_tag: str,
-    log_line: str,
-    exc_info=True,
-    stack_info=False,
-    extra=False
+    l: Logger, level_tag: str, log_line: str, exc_info=True, stack_info=False, extra=False
 ):
-    if level_tag == 'test':
+    if level_tag == "test":
         # TODO after implmenting #3977 send to new test level
-        l.debug(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'debug':
-        l.debug(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'info':
-        l.info(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'warn':
-        l.warning(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
-    elif level_tag == 'error':
-        l.error(
-            log_line,
-            exc_info=exc_info,
-            stack_info=stack_info,
-            extra=extra
-        )
+        l.debug(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "debug":
+        l.debug(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "info":
+        l.info(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "warn":
+        l.warning(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
+    elif level_tag == "error":
+        l.error(log_line, exc_info=exc_info, stack_info=stack_info, extra=extra)
     else:
         raise AssertionError(
             f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
@@ -349,7 +319,7 @@ def fire_event(e: Event) -> None:
     if not isinstance(e, NoStdOut):
         # explicitly checking the debug flag here so that potentially expensive-to-construct
         # log messages are not constructed if debug messages are never shown.
-        if e.level_tag() == 'debug' and not flags.DEBUG:
+        if e.level_tag() == "debug" and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
 
         log_line = create_log_line(e)
