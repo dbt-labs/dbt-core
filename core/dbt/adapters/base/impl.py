@@ -29,7 +29,8 @@ from dbt.contracts.graph.compiled import (
 from dbt.contracts.graph.manifest import Manifest, MacroManifest
 from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.exceptions import warn_or_error
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import CacheMiss, ListRelations
 from dbt.utils import filter_null_values, executor
 
 from dbt.adapters.base.connections import Connection, AdapterResponse
@@ -288,9 +289,12 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Check if the schema is cached, and by default logs if it is not."""
 
         if (database, schema) not in self.cache:
-            logger.debug(
-                'On "{}": cache miss for schema "{}.{}", this is inefficient'
-                .format(self.nice_connection_name(), database, schema)
+            fire_event(
+                CacheMiss(
+                    conn_name=self.nice_connection_name,
+                    database=database,
+                    schema=schema
+                )
             )
             return False
         else:
@@ -672,9 +676,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         relations = self.list_relations_without_caching(
             schema_relation
         )
+        fire_event(ListRelations(database=database, schema=schema, relations=relations))
 
-        logger.debug('with database={}, schema={}, relations={}'
-                     .format(database, schema, relations))
         return relations
 
     def _make_match_kwargs(
