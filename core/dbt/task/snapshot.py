@@ -1,9 +1,11 @@
 from .run import ModelRunner, RunTask
-from .printer import print_snapshot_result_line
 
 from dbt.exceptions import InternalException
+from dbt.events.functions import fire_event
+from dbt.events.types import PrintSnapshotErrorResultLine, PrintSnapshotResultLine
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
+from dbt.contracts.results import NodeStatus
 
 
 class SnapshotRunner(ModelRunner):
@@ -11,11 +13,30 @@ class SnapshotRunner(ModelRunner):
         return "snapshot {}".format(self.get_node_representation())
 
     def print_result_line(self, result):
-        print_snapshot_result_line(
-            result,
-            self.get_node_representation(),
-            self.node_index,
-            self.num_nodes)
+        model = result.node
+        cfg = model.config.to_dict(omit_none=True)
+        if result.status == NodeStatus.Error:
+            fire_event(
+                PrintSnapshotErrorResultLine(
+                    status=result.status,
+                    description=self.get_node_representation(),
+                    cfg=cfg,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        else:
+            fire_event(
+                PrintSnapshotResultLine(
+                    status=result.message,
+                    description=self.get_node_representation(),
+                    cfg=cfg,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
 
 
 class SnapshotTask(RunTask):

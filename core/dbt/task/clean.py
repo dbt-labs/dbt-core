@@ -4,7 +4,10 @@ import shutil
 
 from dbt import deprecations
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    CheckCleanPath, ConfirmCleanPath, ProtectedCleanPath, FinishedCleanPaths
+)
 from dbt.config import UnsetProfileConfig
 
 
@@ -38,11 +41,11 @@ class CleanTask(BaseTask):
            self.config.packages_install_path != 'dbt_modules'):
             deprecations.warn('install-packages-path')
         for path in self.config.clean_targets:
-            logger.info("Checking {}/*".format(path))
+            fire_event(CheckCleanPath(path=path))
             if not self.__is_protected_path(path):
                 shutil.rmtree(path, True)
-                logger.info(" Cleaned {}/*".format(path))
+                fire_event(ConfirmCleanPath(path=path))
             else:
-                logger.info("ERROR: not cleaning {}/* because it is "
-                            "protected".format(path))
-        logger.info("Finished cleaning all paths.")
+                fire_event(ProtectedCleanPath(path=path))
+
+        fire_event(FinishedCleanPaths())

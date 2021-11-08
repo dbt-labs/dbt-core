@@ -26,7 +26,7 @@ On model pages, you'll see the immediate parents and children of the model you'r
 button at the top-right of this lineage pane, you'll be able to see all of the models that are used to build,
 or are built from, the model you're exploring.
 
-Once expanded, you'll be able to use the `--models` and `--exclude` model selection syntax to filter the
+Once expanded, you'll be able to use the `--select` and `--exclude` model selection syntax to filter the
 models in the graph. For more information on model selection, check out the [dbt docs](https://docs.getdbt.com/docs/model-selection-syntax).
 
 Note that you can also right-click on models to interactively filter and explore the graph.
@@ -38,6 +38,6 @@ Note that you can also right-click on models to interactively filter and explore
 - [What is dbt](https://docs.getdbt.com/docs/overview)?
 - Read the [dbt viewpoint](https://docs.getdbt.com/docs/viewpoint)
 - [Installation](https://docs.getdbt.com/docs/installation)
-- Join the [chat](https://community.getdbt.com/) on Slack for live questions and support.
+- Join the [dbt Community](https://www.getdbt.com/community/) for questions and discussion
 
 {% enddocs %}

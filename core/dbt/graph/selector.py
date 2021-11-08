@@ -6,9 +6,7 @@ from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec
 
 from dbt.events.functions import fire_event
-from dbt.events.types import (
-    SelectorAlertUpto3UnusedNodes, SelectorAlertAllUnusedNodes, SelectorReportInvalidSelector
-)
+from dbt.events.types import SelectorReportInvalidSelector
 from dbt.node_types import NodeType
 from dbt.exceptions import (
     InternalException,
@@ -30,12 +28,6 @@ def alert_non_existence(raw_spec, nodes):
             f"The selection criterion '{str(raw_spec)}' does not match"
             f" any nodes"
         )
-
-
-def alert_unused_nodes(raw_spec, node_names):
-    fire_event(SelectorAlertUpto3UnusedNodes(node_names=node_names))
-    if len(node_names) > 4:
-        fire_event(SelectorAlertAllUnusedNodes(node_names=node_names))
 
 
 def can_select_indirectly(node):
@@ -104,7 +96,7 @@ class NodeSelector(MethodManager):
         neighbors = self.collect_specified_neighbors(spec, collected)
         direct_nodes, indirect_nodes = self.expand_selection(
             selected=(collected | neighbors),
-            greedy=spec.greedy
+            eagerly_expand=spec.eagerly_expand
         )
         return direct_nodes, indirect_nodes
 
@@ -208,21 +200,20 @@ class NodeSelector(MethodManager):
         }
 
     def expand_selection(
-        self, selected: Set[UniqueId], greedy: bool = False
+        self, selected: Set[UniqueId], eagerly_expand: bool = True
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
-        # Test selection can expand to include an implicitly/indirectly selected test.
-        # In this way, `dbt test -m model_a` also includes tests that directly depend on `model_a`.
-        # Expansion has two modes, GREEDY and NOT GREEDY.
+        # Test selection by default expands to include an implicitly/indirectly selected tests.
+        # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
+        # Expansion has two modes, EAGER and CAUTIOUS.
         #
-        # GREEDY mode: If ANY parent is selected, select the test. We use this for EXCLUSION.
+        # EAGER mode: If ANY parent is selected, select the test.
         #
-        # NOT GREEDY mode:
+        # CAUTIOUS mode:
         #  - If ALL parents are selected, select the test.
         #  - If ANY parent is missing, return it separately. We'll keep it around
         #    for later and see if its other parents show up.
-        # We use this for INCLUSION.
-        # Users can also opt in to inclusive GREEDY mode by passing --greedy flag,
-        # or by specifying `greedy: true` in a yaml selector
+        # Users can opt out of inclusive EAGER mode by passing --indirect-selection cautious
+        # CLI argument or by specifying `eagerly_expand: true` in a yaml selector
 
         direct_nodes = set(selected)
         indirect_nodes = set()
@@ -232,7 +223,7 @@ class NodeSelector(MethodManager):
                 node = self.manifest.nodes[unique_id]
                 if can_select_indirectly(node):
                     # should we add it in directly?
-                    if greedy or set(node.depends_on.nodes) <= set(selected):
+                    if eagerly_expand or set(node.depends_on.nodes) <= set(selected):
                         direct_nodes.add(unique_id)
                     # if not:
                     else:
@@ -245,6 +236,10 @@ class NodeSelector(MethodManager):
     ) -> Set[UniqueId]:
         # Check tests previously selected indirectly to see if ALL their
         # parents are now present.
+
+        # performance: if identical, skip the processing below
+        if set(direct_nodes) == set(indirect_nodes):
+            return direct_nodes
 
         selected = set(direct_nodes)
 
@@ -268,16 +263,6 @@ class NodeSelector(MethodManager):
         """
         selected_nodes, indirect_only = self.select_nodes(spec)
         filtered_nodes = self.filter_selection(selected_nodes)
-
-        if indirect_only:
-            filtered_unused_nodes = self.filter_selection(indirect_only)
-            if filtered_unused_nodes and spec.greedy_warning:
-                # log anything that didn't make the cut
-                unused_node_names = []
-                for unique_id in filtered_unused_nodes:
-                    name = self.manifest.nodes[unique_id].name
-                    unused_node_names.append(name)
-                alert_unused_nodes(spec, unused_node_names)
 
         return filtered_nodes
 

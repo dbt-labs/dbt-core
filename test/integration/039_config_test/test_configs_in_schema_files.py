@@ -2,7 +2,7 @@ import os
 import shutil
 
 from test.integration.base import DBTIntegrationTest, use_profile, get_manifest, normalize
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 
 
 class TestSchemaFileConfigs(DBTIntegrationTest):
@@ -98,7 +98,7 @@ class TestSchemaFileConfigs(DBTIntegrationTest):
 
         # copy a schema file with multiple metas
         shutil.copyfile('extra-alt/untagged.yml', 'models-alt/untagged.yml')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(ParsingException):
             results = self.run_dbt(["run"])
 
         # copy a schema file with config key in top-level of test and in config dict

@@ -2,7 +2,9 @@ import builtins
 import functools
 from typing import NoReturn, Optional, Mapping, Any
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import get_secret_env
+from dbt.events.functions import fire_event
+from dbt.events.types import GeneralWarningMsg, GeneralWarningException
 from dbt.node_types import NodeType
 from dbt import flags
 from dbt.ui import line_wrap_message, warning_tag
@@ -242,6 +244,15 @@ class ValidationException(RuntimeException):
     MESSAGE = "Validation Error"
 
 
+class ParsingException(RuntimeException):
+    CODE = 10015
+    MESSAGE = "Parsing Error"
+
+    @property
+    def type(self):
+        return 'Parsing'
+
+
 class JSONValidationException(ValidationException):
     def __init__(self, typename, errors):
         self.typename = typename
@@ -390,6 +401,8 @@ class CommandError(RuntimeException):
         super().__init__(message)
         self.cwd = cwd
         self.cmd = cmd
+        for secret in get_secret_env():
+            self.cmd = str(self.cmd).replace(secret, "*****")
         self.args = (cwd, cmd, message)
 
     def __str__(self):
@@ -442,6 +455,10 @@ class InvalidSelectorException(RuntimeException):
 
 def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
+
+
+def raise_parsing_error(msg, node=None) -> NoReturn:
+    raise ParsingException(msg, node)
 
 
 def raise_database_error(msg, node=None) -> NoReturn:
@@ -976,19 +993,14 @@ def warn_or_error(msg, node=None, log_fmt=None):
     if flags.WARN_ERROR:
         raise_compiler_error(msg, node)
     else:
-        if log_fmt is not None:
-            msg = log_fmt.format(msg)
-        logger.warning(msg)
+        fire_event(GeneralWarningMsg(msg=msg, log_fmt=log_fmt))
 
 
 def warn_or_raise(exc, log_fmt=None):
     if flags.WARN_ERROR:
         raise exc
     else:
-        msg = str(exc)
-        if log_fmt is not None:
-            msg = log_fmt.format(msg)
-        logger.warning(msg)
+        fire_event(GeneralWarningException(exc=exc, log_fmt=log_fmt))
 
 
 def warn(msg, node=None):

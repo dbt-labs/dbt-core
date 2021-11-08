@@ -8,7 +8,8 @@ from dbt.contracts.graph.parsed import ParsedGenericTestNode
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.contracts.files import SourceFile
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import GenericTestFileParse
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
@@ -90,7 +91,7 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
         source_file = block.file
         assert isinstance(source_file.contents, str)
         original_file_path = source_file.path.original_file_path
-        logger.debug("Parsing {}".format(original_file_path))
+        fire_event(GenericTestFileParse(path=original_file_path))
 
         # this is really only used for error messages
         base_node = UnparsedMacro(

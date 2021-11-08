@@ -1,11 +1,13 @@
 import threading
+
 from .runnable import GraphRunnableTask
 from .base import BaseRunner
 
 from dbt.contracts.results import RunStatus, RunResult
 from dbt.exceptions import InternalException
 from dbt.graph import ResourceTypeSelector
-from dbt.logger import print_timestamped_line
+from dbt.events.functions import fire_event
+from dbt.events.types import CompileComplete
 from dbt.node_types import NodeType
 
 
@@ -53,4 +55,4 @@ class CompileTask(GraphRunnableTask):
         return CompileRunner
 
     def task_end_messages(self, results):
-        print_timestamped_line('Done.')
+        fire_event(CompileComplete())

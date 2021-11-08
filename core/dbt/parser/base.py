@@ -10,8 +10,8 @@ from dbt.dataclass_schema import ValidationError
 from dbt import utils
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import (
-    generate_parser_model,
-    generate_generate_component_name_macro,
+    generate_parser_model_context,
+    generate_generate_name_macro_context,
 )
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.clients.jinja import get_rendered
@@ -101,7 +101,7 @@ class RelationUpdate:
                 f'No macro with name generate_{component}_name found'
             )
 
-        root_context = generate_generate_component_name_macro(
+        root_context = generate_generate_name_macro_context(
             macro, config, manifest
         )
         self.updater = MacroGenerator(macro, root_context)
@@ -252,7 +252,7 @@ class ConfiguredParser(
     def _context_for(
         self, parsed_node: IntermediateNode, config: ContextConfig
     ) -> Dict[str, Any]:
-        return generate_parser_model(
+        return generate_parser_model_context(
             parsed_node, self.root_project, self.manifest, config
         )
 

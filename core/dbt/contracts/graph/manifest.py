@@ -29,7 +29,8 @@ from dbt.exceptions import (
     raise_duplicate_resource_name, raise_compiler_error,
 )
 from dbt.helper_types import PathSet
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import MergedFromState
 from dbt.node_types import NodeType
 from dbt.ui import line_wrap_message
 from dbt import flags
@@ -546,6 +547,8 @@ class ParsingInfo:
 @dataclass
 class ManifestStateCheck(dbtClassMixin):
     vars_hash: FileHash = field(default_factory=FileHash.empty)
+    project_env_vars_hash: FileHash = field(default_factory=FileHash.empty)
+    profile_env_vars_hash: FileHash = field(default_factory=FileHash.empty)
     profile_hash: FileHash = field(default_factory=FileHash.empty)
     project_hashes: MutableMapping[str, FileHash] = field(default_factory=dict)
 
@@ -569,6 +572,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
+    env_vars: MutableMapping[str, str] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
@@ -937,9 +941,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
         # log up to 5 items
         sample = list(islice(merged, 5))
-        logger.debug(
-            f'Merged {len(merged)} items from state (sample: {sample})'
-        )
+        fire_event(MergedFromState(nbr_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
 
@@ -1048,6 +1050,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.state_check,
             self.source_patches,
             self.disabled,
+            self.env_vars,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1070,7 +1073,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version('manifest', 3)
+@schema_version('manifest', 4)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=(
