@@ -37,7 +37,7 @@ from dbt.contracts.graph.manifest import (
     Manifest, Disabled, MacroManifest, ManifestStateCheck, ParsingInfo
 )
 from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure
+    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure, ParsedMetric
 )
 from dbt.contracts.util import Writable
 from dbt.exceptions import (
@@ -804,6 +804,10 @@ class ManifestLoader:
             if exposure.created_at < self.started_at:
                 continue
             _process_refs_for_exposure(self.manifest, current_project, exposure)
+        for metric in self.manifest.metrics.values():
+            if metric.created_at < self.started_at:
+                continue
+            _process_refs_for_metric(self.manifest, current_project, metric)
 
     # nodes: node and column descriptions
     # sources: source and table descriptions, column descriptions
@@ -850,6 +854,16 @@ class ManifestLoader:
                 config.project_name,
             )
             _process_docs_for_exposure(ctx, exposure)
+        for metric in self.manifest.metrics.values():
+            if metric.created_at < self.started_at:
+                continue
+            ctx = generate_runtime_docs_context(
+                config,
+                metric,
+                self.manifest,
+                config.project_name,
+            )
+            _process_docs_for_metrics(ctx, metric)
 
     # Loops through all nodes and exposures, for each element in
     # 'sources' array finds the source node and updates the
@@ -1028,6 +1042,12 @@ def _process_docs_for_exposure(
     exposure.description = get_rendered(exposure.description, context)
 
 
+def _process_docs_for_metrics(
+    context: Dict[str, Any], metric: ParsedMetric
+) -> None:
+    metric.description = get_rendered(metric.description, context)
+
+
 def _process_refs_for_exposure(
     manifest: Manifest, current_project: str, exposure: ParsedExposure
 ):
@@ -1067,6 +1087,47 @@ def _process_refs_for_exposure(
 
         exposure.depends_on.nodes.append(target_model_id)
         manifest.update_exposure(exposure)
+
+
+def _process_refs_for_metric(
+    manifest: Manifest, current_project: str, metric: ParsedMetric
+):
+    """Given a manifest and a metric in that manifest, process its refs"""
+    for ref in metric.refs:
+        target_model: Optional[Union[Disabled, ManifestNode]] = None
+        target_model_name: str
+        target_model_package: Optional[str] = None
+
+        if len(ref) == 1:
+            target_model_name = ref[0]
+        elif len(ref) == 2:
+            target_model_package, target_model_name = ref
+        else:
+            raise dbt.exceptions.InternalException(
+                f'Refs should always be 1 or 2 arguments - got {len(ref)}'
+            )
+
+        target_model = manifest.resolve_ref(
+            target_model_name,
+            target_model_package,
+            current_project,
+            metric.package_name,
+        )
+
+        if target_model is None or isinstance(target_model, Disabled):
+            # This may raise. Even if it doesn't, we don't want to add
+            # this exposure to the graph b/c there is no destination exposure
+            invalid_ref_fail_unless_test(
+                metric, target_model_name, target_model_package,
+                disabled=(isinstance(target_model, Disabled))
+            )
+
+            continue
+
+        target_model_id = target_model.unique_id
+
+        metric.depends_on.nodes.append(target_model_id)
+        manifest.update_metric(metric)
 
 
 def _process_refs_for_node(
@@ -1137,6 +1198,30 @@ def _process_sources_for_exposure(
         target_source_id = target_source.unique_id
         exposure.depends_on.nodes.append(target_source_id)
         manifest.update_exposure(exposure)
+
+
+def _process_sources_for_metric(
+    manifest: Manifest, current_project: str, metric: ParsedMetric
+):
+    target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
+    for source_name, table_name in metric.sources:
+        target_source = manifest.resolve_source(
+            source_name,
+            table_name,
+            current_project,
+            metric.package_name,
+        )
+        if target_source is None or isinstance(target_source, Disabled):
+            invalid_source_fail_unless_test(
+                metric,
+                source_name,
+                table_name,
+                disabled=(isinstance(target_source, Disabled))
+            )
+            continue
+        target_source_id = target_source.unique_id
+        metric.depends_on.nodes.append(target_source_id)
+        manifest.update_metric(metric)
 
 
 def _process_sources_for_node(

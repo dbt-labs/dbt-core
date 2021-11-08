@@ -9,6 +9,7 @@
 - Allow nullable `error_after` in source freshness ([#3874](https://github.com/dbt-labs/dbt-core/issues/3874), [#3955](https://github.com/dbt-labs/dbt-core/pull/3955))
 - Increase performance of graph subset selection ([#4135](https://github.com/dbt-labs/dbt-core/issues/4135),[#4155](https://github.com/dbt-labs/dbt-core/pull/4155))
 - Speed up node selection by skipping indirect node incorporation when not needed ([#4213](https://github.com/dbt-labs/dbt-core/issues/4213),[#4214](https://github.com/dbt-labs/dbt-core/pull/4214))
+- Add metrics nodes ([#4071](https://github.com/dbt-labs/dbt-core/issues/4071), [#4235](https://github.com/dbt-labs/dbt-core/pull/4235))
 
 ### Fixes
 - Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex` ([#4136](https://github.com/dbt-labs/dbt-core/issues/4132), [#4136](https://github.com/dbt-labs/dbt-core/pull/4136))

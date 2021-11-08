@@ -167,6 +167,8 @@ class NodeSelector(MethodManager):
             return source.config.enabled
         elif unique_id in self.manifest.exposures:
             return True
+        elif unique_id in self.manifest.metrics:
+            return True
         node = self.manifest.nodes[unique_id]
         return not node.empty and node.config.enabled
 
@@ -184,6 +186,8 @@ class NodeSelector(MethodManager):
             node = self.manifest.sources[unique_id]
         elif unique_id in self.manifest.exposures:
             node = self.manifest.exposures[unique_id]
+        elif unique_id in self.manifest.metrics:
+            node = self.manifest.metrics[unique_id]
         else:
             raise InternalException(
                 f'Node {unique_id} not found in the manifest!'

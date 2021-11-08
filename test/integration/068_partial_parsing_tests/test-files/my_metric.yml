@@ -1,0 +1,23 @@
+version: 2
+metrics:
+  - name: new_customers
+    label: New Customers
+    model: customers
+    description: "The number of paid customers who are using the product"
+    type: count
+    sql: user_id
+    timestamp: signup_date
+    time_grains: [day, week, month]
+    dimensions:
+      - plan
+      - country
+    filters:
+      - field: is_paying
+        value: True
+        operator: '='
+    +meta:
+        is_okr: True
+    tags:
+      - okrs
+
+  

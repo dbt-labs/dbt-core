@@ -405,6 +405,18 @@ class PartialParsing:
                     if exposure_element:
                         self.delete_schema_exposure(schema_file, exposure_element)
                         self.merge_patch(schema_file, 'exposures', exposure_element)
+            elif unique_id in self.saved_manifest.metrics:
+                metric = self.saved_manifest.metrics[unique_id]
+                file_id = metric.file_id
+                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                    schema_file = self.saved_files[file_id]
+                    metrics = []
+                    if 'metrics' in schema_file.dict_from_yaml:
+                        metrics = schema_file.dict_from_yaml['metrics']
+                    metric_element = self.get_schema_element(metrics, metric.name)
+                    if metric_element:
+                        self.delete_schema_metric(schema_file, metric_element)
+                        self.merge_patch(schema_file, 'metrics', metric_element)
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
@@ -679,6 +691,19 @@ class PartialParsing:
                     self.delete_schema_exposure(schema_file, exposure)
                     self.merge_patch(schema_file, dict_key, exposure)
 
+        # metrics
+        metric_diff = self.get_diff_for('metrics', saved_yaml_dict, new_yaml_dict)
+        if metric_diff['changed']:
+            for metric in metric_diff['changed']:
+                self.delete_schema_metric(schema_file, metric)
+                self.merge_patch(schema_file, 'metrics', metric)
+        if metric_diff['deleted']:
+            for metric in metric_diff['deleted']:
+                self.delete_schema_metric(schema_file, metric)
+        if metric_diff['added']:
+            for metric in metric_diff['added']:
+                self.merge_patch(schema_file, 'metrics', metric)
+
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
     def get_diff_for(self, key, saved_yaml_dict, new_yaml_dict):
@@ -827,6 +852,20 @@ class PartialParsing:
                         self.saved_manifest.exposures.pop(unique_id)
                     schema_file.exposures.remove(unique_id)
                     logger.debug(f"Partial parsing: deleted exposure {unique_id}")
+
+    # metric are created only from schema files, so just delete
+    # the metric.
+    def delete_schema_metric(self, schema_file, metric_dict):
+        metric_name = metric_dict['name']
+        metrics = schema_file.metrics.copy()
+        for unique_id in metrics:
+            metric = self.saved_manifest.metrics[unique_id]
+            if unique_id in self.saved_manifest.metrics:
+                if metric.name == metric_name:
+                    self.deleted_manifest.metrics[unique_id] = \
+                        self.saved_manifest.metrics.pop(unique_id)
+                    schema_file.metrics.remove(unique_id)
+                    logger.debug(f"Partial parsing: deleted metric {unique_id}")
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:

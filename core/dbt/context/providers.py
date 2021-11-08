@@ -32,6 +32,7 @@ from dbt.contracts.graph.compiled import (
 from dbt.contracts.graph.parsed import (
     ParsedMacro,
     ParsedExposure,
+    ParsedMetric,
     ParsedSeedNode,
     ParsedSourceDefinition,
 )
@@ -1383,6 +1384,31 @@ def generate_parse_exposure(
             project,
             manifest,
         )
+    }
+
+
+class MetricRefResolver(BaseResolver):
+    def __call__(self, *args) -> str:
+        if len(args) not in (1, 2):
+            ref_invalid_args(self.model, args)
+        self.model.refs.append(list(args))
+        return ''
+
+
+def generate_parse_metrics(
+    metric: ParsedMetric,
+    config: RuntimeConfig,
+    manifest: Manifest,
+    package_name: str,
+) -> Dict[str, Any]:
+    project = config.load_dependencies()[package_name]
+    return {
+        'ref': MetricRefResolver(
+            None,
+            metric,
+            project,
+            manifest,
+        ),
     }
 
 

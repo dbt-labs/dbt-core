@@ -7,7 +7,7 @@ from dbt.contracts.graph.unparsed import (
     FreshnessThreshold, Quoting, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedDocumentationFile, UnparsedColumn,
     UnparsedNodeUpdate, Docs, UnparsedExposure, MaturityType, ExposureOwner,
-    ExposureType
+    ExposureType, UnparsedMetric, MetricFilter
 )
 from dbt.contracts.results import FreshnessStatus
 from dbt.node_types import NodeType
@@ -653,6 +653,76 @@ class TestUnparsedExposure(ContractTestCase):
         self.assert_fails_validation(tst)
 
         del tst['owner']
+        self.assert_fails_validation(tst)
+
+    def test_bad_tags(self):
+        tst = self.get_ok_dict()
+        tst['tags'] = [123]
+        self.assert_fails_validation(tst)
+
+
+class TestUnparsedMetric(ContractTestCase):
+    ContractType = UnparsedMetric
+
+    def get_ok_dict(self):
+        return {
+            'name': 'new_customers',
+            'label': 'New Customers',
+            'model': 'ref("dim_customers")',
+            'description': 'New customers',
+            'type': 'count',
+            'sql': 'user_id',
+            'timestamp': 'signup_date',
+            'time_grains': ['day', 'week', 'month'],
+            'dimensions': ['plan', 'country'],
+            'filters': [
+                {
+                    "field": "is_paying",
+                    "value": "True",
+                    "operator": "=",
+                }
+            ],
+            'tags': [],
+            'meta': {
+                'is_okr': True
+            },
+        }
+
+    def test_ok(self):
+        metric = self.ContractType(
+            name='new_customers',
+            label='New Customers',
+            model='ref("dim_customers")',
+            description="New customers",
+            type='count',
+            sql="user_id",
+            timestamp="signup_date",
+            time_grains=['day', 'week', 'month'],
+            dimensions=['plan', 'country'],
+            filters=[MetricFilter(
+               field="is_paying",
+               value='True',
+               operator="=",
+            )],
+            meta={'is_okr': True},
+        )
+        dct = self.get_ok_dict()
+        self.assert_symmetric(metric, dct)
+        pickle.loads(pickle.dumps(metric))
+
+    def test_bad_metric_no_type(self):
+        tst = self.get_ok_dict()
+        del tst['type']
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_no_model(self):
+        tst = self.get_ok_dict()
+        tst['model'] = None
+        self.assert_fails_validation(tst)
+
+    def test_bad_filter_missing_things(self):
+        tst = self.get_ok_dict()
+        del tst['filters'][0]['operator']
         self.assert_fails_validation(tst)
 
     def test_bad_tags(self):

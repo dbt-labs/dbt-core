@@ -20,7 +20,7 @@ from .selector_spec import (
 
 INTERSECTION_DELIMITER = ','
 
-DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*']
+DEFAULT_INCLUDES: List[str] = ['fqn:*', 'source:*', 'exposure:*', 'metric:*']
 DEFAULT_EXCLUDES: List[str] = []
 
 

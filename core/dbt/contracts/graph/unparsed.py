@@ -446,3 +446,27 @@ class UnparsedExposure(dbtClassMixin, Replaceable):
     tags: List[str] = field(default_factory=list)
     url: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
+
+
+@dataclass
+class MetricFilter(dbtClassMixin, Replaceable):
+    field: str
+    operator: str
+    # TODO : Can we make this Any?
+    value: str
+
+
+@dataclass
+class UnparsedMetric(dbtClassMixin, Replaceable):
+    model: str
+    name: str
+    label: str
+    type: str
+    description: str = ''
+    sql: Optional[str] = None
+    timestamp: Optional[str] = None
+    time_grains: List[str] = field(default_factory=list)
+    dimensions: List[str] = field(default_factory=list)
+    filters: List[MetricFilter] = field(default_factory=list)
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)

@@ -1181,6 +1181,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': []
                 }
             },
+            'metrics': {},
             'selectors': {},
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
@@ -1599,6 +1600,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'url': 'http://example.com/notebook/1'
                 },
             },
+            'metrics': {},
             'selectors': {},
             'docs': {
                 'dbt.__overview__': ANY,
@@ -1802,7 +1804,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         manifest = _read_json('./target/manifest.json')
 
         manifest_keys = frozenset({
-            'nodes', 'sources', 'macros', 'parent_map', 'child_map',
+            'nodes', 'sources', 'macros', 'parent_map', 'child_map', 'metrics',
             'docs', 'metadata', 'docs', 'disabled', 'exposures', 'selectors',
         })
 
