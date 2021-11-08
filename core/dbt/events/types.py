@@ -242,6 +242,48 @@ class SystemReportReturnCode(DebugLevel, CliEventABC):
 
 
 @dataclass
+class SelectorAlertUpto3UnusedNodes(InfoLevel, CliEventABC):
+    node_names: List[str]
+
+    def cli_msg(self) -> str:
+        summary_nodes_str = ("\n  - ").join(self.node_names[:3])
+        and_more_str = (
+            f"\n  - and {len(self.node_names) - 3} more" if len(self.node_names) > 4 else ""
+        )
+        return (
+            f"\nSome tests were excluded because at least one parent is not selected. "
+            f"Use the --greedy flag to include them."
+            f"\n  - {summary_nodes_str}{and_more_str}"
+        )
+
+
+@dataclass
+class SelectorAlertAllUnusedNodes(DebugLevel, CliEventABC):
+    node_names: List[str]
+
+    def cli_msg(self) -> str:
+        debug_nodes_str = ("\n  - ").join(self.node_names)
+        return (
+            f"Full list of tests that were excluded:"
+            f"\n  - {debug_nodes_str}"
+        )
+
+
+@dataclass
+class SelectorReportInvalidSelector(InfoLevel, CliEventABC):
+    selector_methods: dict
+    spec_method: str
+    raw_spec: str
+
+    def cli_msg(self) -> str:
+        valid_selectors = ", ".join(self.selector_methods)
+        return (
+            f"The '{self.spec_method}' selector specified in {self.raw_spec} is "
+            f"invalid. Must be one of [{valid_selectors}]"
+        )
+
+
+@dataclass
 class MacroEventInfo(InfoLevel, CliEventABC):
     msg: str
 
@@ -287,5 +329,8 @@ if 1 == 0:
     SystemStdOutMsg(bmsg=b'')
     SystemStdErrMsg(bmsg=b'')
     SystemReportReturnCode(code=0)
+    SelectorAlertUpto3UnusedNodes(node_names=[])
+    SelectorAlertAllUnusedNodes(node_names=[])
+    SelectorReportInvalidSelector(selector_methods={'': ''}, spec_method='', raw_spec='')
     MacroEventInfo(msg='')
     MacroEventDebug(msg='')
