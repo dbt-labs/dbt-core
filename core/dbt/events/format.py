@@ -1,6 +1,7 @@
 import dbt.logger as logger  # type: ignore # TODO eventually remove dependency on this logger
 from dbt import ui
-from typing import Optional
+from typing import Optional, Union
+from dbt.node_types import NodeType
 
 
 def format_fancy_output_line(
@@ -33,3 +34,19 @@ def format_fancy_output_line(
         justified=justified, status=status, status_time=status_time)
 
     return output
+
+
+def _pluralize(string: Union[str, NodeType]) -> str:
+    try:
+        convert = NodeType(string)
+    except ValueError:
+        return f'{string}s'
+    else:
+        return convert.pluralize()
+
+
+def pluralize(count, string: Union[str, NodeType]):
+    pluralized: str = str(string)
+    if count != 1:
+        pluralized = _pluralize(string)
+    return f'{count} {pluralized}'
