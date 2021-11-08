@@ -1748,7 +1748,7 @@ class DisableTracking(WarnLevel, Cli, File):
 
 
 @dataclass
-class SendingEvent(DebugLevel, Cli, File):
+class SendingEvent(DebugLevel, Cli):
     kwargs: str
 
     def message(self) -> str:
@@ -1760,7 +1760,7 @@ class SendEventFailure(DebugLevel, Cli, File):
         return "An error was encountered while trying to send an event"
 
 
-class FlushEvents(DebugLevel, Cli, File):
+class FlushEvents(DebugLevel, Cli):
     def message(self) -> str:
         return "Flushing usage events"
 
