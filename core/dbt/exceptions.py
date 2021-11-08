@@ -246,7 +246,7 @@ class ParsingException(RuntimeException):
 
     @property
     def type(self):
-        return 'Parsing'
+        return "Parsing"
 
 
 class JSONValidationException(ValidationException):

@@ -1493,7 +1493,7 @@ class TestContext(ProviderContext):
                 # the "model" should only be test nodes, but just in case, check
                 if self.model.resource_type == NodeType.Test and self.model.file_key_name:
                     source_file = self.manifest.files[self.model.file_id]
-                    (yaml_key, name) = self.model.file_key_name.split('.')
+                    (yaml_key, name) = self.model.file_key_name.split(".")
                     source_file.add_env_var(var, yaml_key, name)
             return return_value
         else:

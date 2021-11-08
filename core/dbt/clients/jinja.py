@@ -18,7 +18,10 @@ import jinja2.sandbox
 
 from dbt.utils import (
     get_dbt_macro_name,
-    get_test_macro_name, deep_map_render
+    get_docs_macro_name,
+    get_materialization_macro_name,
+    get_test_macro_name,
+    deep_map_render,
 )
 
 from dbt.clients._jinja_blocks import BlockIterator, BlockData, BlockTag

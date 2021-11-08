@@ -48,7 +48,7 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import (
     warn_invalid_patch, validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException,
-    ParsingException, raise_duplicate_patch_name,
+    JSONValidationException,
     raise_duplicate_macro_patch_name, InternalException,
     raise_duplicate_source_patch_name, warn_or_error,
 )
@@ -261,7 +261,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             'test_metadata': test_metadata,
             'column_name': column_name,
             'checksum': FileHash.empty().to_dict(omit_none=True),
-            'file_key_name': file_key_name,
+            "file_key_name": file_key_name,
         }
         try:
             ParsedGenericTestNode.validate(dct)
@@ -358,8 +358,8 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             if isinstance(target, UnpatchedSourceDefinition):
                 search_name = target.source.name
                 yaml_key = target.source.yaml_key
-                if '.' in search_name:  # source file definitions
-                    (search_name, _) = search_name.split('.')
+                if "." in search_name:  # source file definitions
+                    (search_name, _) = search_name.split(".")
             else:
                 search_name = target.name
                 yaml_key = target.yaml_key
@@ -597,7 +597,7 @@ class YamlReader(metaclass=ABCMeta):
         self.render_ctx = generate_schema_yml_context(
             self.schema_parser.root_project,
             self.schema_parser.project.project_name,
-            self.schema_yaml_vars
+            self.schema_yaml_vars,
         )
         self.renderer = SchemaYamlRenderer(self.render_ctx, self.key)
 
@@ -640,7 +640,7 @@ class YamlReader(metaclass=ABCMeta):
                 )
                 raise ParsingException(msg)
 
-            if 'name' not in entry:
+            if "name" not in entry:
                 raise ParsingException("Entry did not contain a name")
 
             # Render the data (except for tests and descriptions).
@@ -651,7 +651,7 @@ class YamlReader(metaclass=ABCMeta):
                 schema_file = self.yaml.file
                 assert isinstance(schema_file, SchemaSourceFile)
                 for var in self.schema_yaml_vars.env_vars.keys():
-                    schema_file.add_env_var(var, self.key, entry['name'])
+                    schema_file.add_env_var(var, self.key, entry["name"])
                 self.schema_yaml_vars.env_vars = {}
 
             yield entry
@@ -662,8 +662,8 @@ class YamlReader(metaclass=ABCMeta):
             dct = self.renderer.render_data(dct)
         except ParsingException as exc:
             raise ParsingException(
-                f'Failed to render {self.yaml.file.path.original_file_path} from '
-                f'project {self.project.project_name}: {exc}'
+                f"Failed to render {self.yaml.file.path.original_file_path} from "
+                f"project {self.project.project_name}: {exc}"
             ) from exc
         return dct
 
@@ -823,7 +823,8 @@ class NonSourceParser(YamlDocsReader, Generic[NonSourceTarget, Parsed]):
     def normalize_meta_attribute(self, data, path):
         if 'meta' in data:
             if 'config' in data and 'meta' in data['config']:
-                raise ParsingException(f"""
+                raise ParsingException(
+                    f"""
                     In {path}: found meta dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
                 """.strip())

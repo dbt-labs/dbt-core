@@ -69,8 +69,10 @@ class PartialParsing:
         self.project_parser_files = {}
         self.deleted_manifest = Manifest()
         self.macro_child_map: Dict[str, List[str]] = {}
-        (self.env_vars_changed_source_files, self.env_vars_changed_schema_files) = \
-            self.build_env_vars_to_files()
+        (
+            self.env_vars_changed_source_files,
+            self.env_vars_changed_schema_files,
+        ) = self.build_env_vars_to_files()
         self.build_file_diff()
         self.processing_file = None
         self.deleted_special_override_macro = False
@@ -613,7 +615,7 @@ class PartialParsing:
             # Handle schema file updates due to env_var changes
             if dict_key in env_var_changes and dict_key in new_yaml_dict:
                 for name in env_var_changes[dict_key]:
-                    if name in key_diff['changed_or_deleted_names']:
+                    if name in key_diff["changed_or_deleted_names"]:
                         continue
                     elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                     if elem:
@@ -621,21 +623,21 @@ class PartialParsing:
                         self.merge_patch(schema_file, dict_key, elem)
 
         # sources
-        dict_key = 'sources'
+        dict_key = "sources"
         source_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if source_diff['changed']:
             for source in source_diff['changed']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, dict_key, source['name'])
+                self.remove_tests(schema_file, dict_key, source["name"])
                 self.merge_patch(schema_file, dict_key, source)
         if source_diff['deleted']:
             for source in source_diff['deleted']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, dict_key, source['name'])
+                self.remove_tests(schema_file, dict_key, source["name"])
         if source_diff['added']:
             for source in source_diff['added']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
@@ -644,18 +646,18 @@ class PartialParsing:
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
             for name in env_var_changes[dict_key]:
-                if name in source_diff['changed_or_deleted_names']:
+                if name in source_diff["changed_or_deleted_names"]:
                     continue
                 source = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if source:
-                    if 'overrides' in source:
+                    if "overrides" in source:
                         self.remove_source_override_target(source)
                     self.delete_schema_source(schema_file, source)
-                    self.remove_tests(schema_file, dict_key, source['name'])
+                    self.remove_tests(schema_file, dict_key, source["name"])
                     self.merge_patch(schema_file, dict_key, source)
 
         # macros
-        dict_key = 'macros'
+        dict_key = "macros"
         macro_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if macro_diff['changed']:
             for macro in macro_diff['changed']:
@@ -670,7 +672,7 @@ class PartialParsing:
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
             for name in env_var_changes[dict_key]:
-                if name in macro_diff['changed_or_deleted_names']:
+                if name in macro_diff["changed_or_deleted_names"]:
                     continue
                 elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if elem:
@@ -678,7 +680,7 @@ class PartialParsing:
                     self.merge_patch(schema_file, dict_key, elem)
 
         # exposures
-        dict_key = 'exposures'
+        dict_key = "exposures"
         exposure_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if exposure_diff['changed']:
             for exposure in exposure_diff['changed']:
@@ -693,7 +695,7 @@ class PartialParsing:
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
             for name in env_var_changes[dict_key]:
-                if name in exposure_diff['changed_or_deleted_names']:
+                if name in exposure_diff["changed_or_deleted_names"]:
                     continue
                 elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if elem:
@@ -779,7 +781,7 @@ class PartialParsing:
                     found = True
             if not found:
                 pp_dict[key].append(patch)
-        schema_file.delete_from_env_vars(key, patch['name'])
+        schema_file.delete_from_env_vars(key, patch["name"])
         self.add_to_pp_files(schema_file)
 
     # For model, seed, snapshot, analysis schema dictionary keys,
