@@ -10,7 +10,8 @@ from dbt.adapters.base import BaseConnectionManager
 from dbt.contracts.connection import (
     Connection, ConnectionState, AdapterResponse
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import ConnectionUsed, SQLQuery, SQLCommit, SQLQueryStatus
 
 
 class SQLConnectionManager(BaseConnectionManager):
@@ -58,9 +59,7 @@ class SQLConnectionManager(BaseConnectionManager):
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
-
-        logger.debug('Using {} connection "{}".'
-                     .format(self.TYPE, connection.name))
+        fire_event(ConnectionUsed(conn_type=self.TYPE, conn_name=connection.name))
 
         with self.exception_handler(sql):
             if abridge_sql_log:
@@ -68,19 +67,16 @@ class SQLConnectionManager(BaseConnectionManager):
             else:
                 log_sql = sql
 
-            logger.debug(
-                'On {connection_name}: {sql}',
-                connection_name=connection.name,
-                sql=log_sql,
-            )
+            fire_event(SQLQuery(conn_name=connection.name, sql=log_sql))
             pre = time.time()
 
             cursor = connection.handle.cursor()
             cursor.execute(sql, bindings)
-            logger.debug(
-                "SQL status: {status} in {elapsed:0.2f} seconds",
-                status=self.get_response(cursor),
-                elapsed=(time.time() - pre)
+
+            fire_event(
+                SQLQueryStatus(
+                    status=self.get_response(cursor), elapsed=round((time.time() - pre), 2)
+                )
             )
 
             return connection, cursor
@@ -160,7 +156,7 @@ class SQLConnectionManager(BaseConnectionManager):
                 'Tried to commit transaction on connection "{}", but '
                 'it does not have one open!'.format(connection.name))
 
-        logger.debug('On {}: COMMIT'.format(connection.name))
+        fire_event(SQLCommit(conn_name=connection.name))
         self.add_commit_query()
 
         connection.transaction_open = False

@@ -2,7 +2,8 @@ from abc import ABCMeta, abstractmethod
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, List, Optional, Dict
+from typing import Any, Callable, cast, Dict, List, Optional, Set, Union
+from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 from dbt import ui
 from dbt.node_types import NodeType
 from dbt.events.format import format_fancy_output_line, pluralize
@@ -372,6 +373,308 @@ class MacroEventDebug(DebugLevel, Cli, File):
 
     def message(self) -> str:
         return self.msg
+
+
+@dataclass
+class NewConnection(DebugLevel, Cli, File):
+    conn_type: str
+    conn_name: str
+
+    def message(self) -> str:
+        return f'Acquiring new {self.conn_type} connection "{self.conn_name}"'
+
+
+@dataclass
+class ConnectionReused(DebugLevel, Cli, File):
+    conn_name: str
+
+    def message(self) -> str:
+        return f"Re-using an available connection from the pool (formerly {self.conn_name})"
+
+
+@dataclass
+class ConnectionLeftOpen(DebugLevel, Cli, File):
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f"Connection '{self.conn_name}' was left open."
+
+
+@dataclass
+class ConnectionClosed(DebugLevel, Cli, File):
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f"Connection '{self.conn_name}' was properly closed."
+
+
+@dataclass
+class RollbackFailed(ShowException, DebugLevel, Cli, File):
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f"Failed to rollback '{self.conn_name}'"
+
+
+# TODO: can we combine this with ConnectionClosed?
+@dataclass
+class ConnectionClosed2(DebugLevel, Cli, File):
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: Close"
+
+
+# TODO: can we combine this with ConnectionLeftOpen?
+@dataclass
+class ConnectionLeftOpen2(DebugLevel, Cli, File):
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: No close available on handle"
+
+
+@dataclass
+class Rollback(DebugLevel, Cli, File):
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: ROLLBACK"
+
+
+@dataclass
+class CacheMiss(DebugLevel, Cli, File):
+    conn_name: Any  # TODO mypy says this is `Callable[[], str]`??  ¯\_(ツ)_/¯
+    database: Optional[str]
+    schema: str
+
+    def message(self) -> str:
+        return (
+            f'On "{self.conn_name}": cache miss for schema '
+            '"{self.database}.{self.schema}", this is inefficient'
+        )
+
+
+@dataclass
+class ListRelations(DebugLevel, Cli, File):
+    database: Optional[str]
+    schema: str
+    relations: List[BaseRelation]
+
+    def message(self) -> str:
+        return f"with database={self.database}, schema={self.schema}, relations={self.relations}"
+
+
+@dataclass
+class ConnectionUsed(DebugLevel, Cli, File):
+    conn_type: str
+    conn_name: Optional[str]
+
+    def message(self) -> str:
+        return f'Using {self.conn_type} connection "{self.conn_name}"'
+
+
+@dataclass
+class SQLQuery(DebugLevel, Cli, File):
+    conn_name: Optional[str]
+    sql: str
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: {self.sql}"
+
+
+@dataclass
+class SQLQueryStatus(DebugLevel, Cli, File):
+    status: Union[AdapterResponse, str]
+    elapsed: float
+
+    def message(self) -> str:
+        return f"SQL status: {self.status} in {self.elapsed} seconds"
+
+
+@dataclass
+class SQLCommit(DebugLevel, Cli, File):
+    conn_name: str
+
+    def message(self) -> str:
+        return f"On {self.conn_name}: COMMIT"
+
+
+@dataclass
+class ColTypeChange(DebugLevel, Cli, File):
+    orig_type: str
+    new_type: str
+    table: str
+
+    def message(self) -> str:
+        return f"Changing col type from {self.orig_type} to {self.new_type} in table {self.table}"
+
+
+@dataclass
+class SchemaCreation(DebugLevel, Cli, File):
+    relation: BaseRelation
+
+    def message(self) -> str:
+        return f'Creating schema "{self.relation}"'
+
+
+@dataclass
+class SchemaDrop(DebugLevel, Cli, File):
+    relation: BaseRelation
+
+    def message(self) -> str:
+        return f'Dropping schema "{self.relation}".'
+
+
+# TODO pretty sure this is only ever called in dead code
+# see: core/dbt/adapters/cache.py _add_link vs add_link
+@dataclass
+class UncachedRelation(DebugLevel, Cli, File):
+    dep_key: _ReferenceKey
+    ref_key: _ReferenceKey
+
+    def message(self) -> str:
+        return (
+            f"{self.dep_key} references {str(self.ref_key)} "
+            "but {self.ref_key.database}.{self.ref_key.schema}"
+            "is not in the cache, skipping assumed external relation"
+        )
+
+
+@dataclass
+class AddLink(DebugLevel, Cli, File):
+    dep_key: _ReferenceKey
+    ref_key: _ReferenceKey
+
+    def message(self) -> str:
+        return f"adding link, {self.dep_key} references {self.ref_key}"
+
+
+@dataclass
+class AddRelation(DebugLevel, Cli, File):
+    relation: _CachedRelation
+
+    def message(self) -> str:
+        return f"Adding relation: {str(self.relation)}"
+
+
+@dataclass
+class DropMissingRelation(DebugLevel, Cli, File):
+    relation: _ReferenceKey
+
+    def message(self) -> str:
+        return f"dropped a nonexistent relationship: {str(self.relation)}"
+
+
+@dataclass
+class DropCascade(DebugLevel, Cli, File):
+    dropped: _ReferenceKey
+    consequences: Set[_ReferenceKey]
+
+    def message(self) -> str:
+        return f"drop {self.dropped} is cascading to {self.consequences}"
+
+
+@dataclass
+class DropRelation(DebugLevel, Cli, File):
+    dropped: _ReferenceKey
+
+    def message(self) -> str:
+        return f"Dropping relation: {self.dropped}"
+
+
+@dataclass
+class UpdateReference(DebugLevel, Cli, File):
+    old_key: _ReferenceKey
+    new_key: _ReferenceKey
+    cached_key: _ReferenceKey
+
+    def message(self) -> str:
+        return f"updated reference from {self.old_key} -> {self.cached_key} to "\
+            "{self.new_key} -> {self.cached_key}"
+
+
+@dataclass
+class TemporaryRelation(DebugLevel, Cli, File):
+    key: _ReferenceKey
+
+    def message(self) -> str:
+        return f"old key {self.key} not found in self.relations, assuming temporary"
+
+
+@dataclass
+class RenameSchema(DebugLevel, Cli, File):
+    old_key: _ReferenceKey
+    new_key: _ReferenceKey
+
+    def message(self) -> str:
+        return f"Renaming relation {self.old_key} to {self.new_key}"
+
+
+@dataclass
+class DumpBeforeAddGraph(DebugLevel, Cli, File):
+    graph_func: Callable[[], Dict[str, List[str]]]
+
+    def message(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
+        # TODO remove when we've upgraded to a mypy version without that bug
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"before adding : {func_returns}"
+
+
+@dataclass
+class DumpAfterAddGraph(DebugLevel, Cli, File):
+    graph_func: Callable[[], Dict[str, List[str]]]
+
+    def message(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"after adding: {func_returns}"
+
+
+@dataclass
+class DumpBeforeRenameSchema(DebugLevel, Cli, File):
+    graph_func: Callable[[], Dict[str, List[str]]]
+
+    def message(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"before rename: {func_returns}"
+
+
+@dataclass
+class DumpAfterRenameSchema(DebugLevel, Cli, File):
+    graph_func: Callable[[], Dict[str, List[str]]]
+
+    def message(self) -> str:
+        # workaround for https://github.com/python/mypy/issues/6910
+        func_returns = cast(Callable[[], Dict[str, List[str]]], getattr(self, "graph_func"))
+        return f"after rename: {func_returns}"
+
+
+@dataclass
+class AdapterImportError(InfoLevel, Cli, File):
+    exc: ModuleNotFoundError
+
+    def message(self) -> str:
+        return f"Error importing adapter: {self.exc}"
+
+
+@dataclass
+class PluginLoadError(ShowException, DebugLevel, Cli, File):
+    def message(self):
+        pass
+
+
+# since mypy doesn't run on every file we need to suggest to mypy that every
+# class gets instantiated. But we don't actually want to run this code.
+# making the conditional `if False` causes mypy to skip it as dead code so
+# we need to skirt around that by computing something it doesn't check statically.
+#
+# TODO remove these lines once we run mypy everywhere.
+
+def dump_callable():
+    return {"": [""]}  # for instantiating `Dump...` methods which take callables.
 
 
 @dataclass
@@ -1828,6 +2131,72 @@ if 1 == 0:
     ManifestLoaded()
     ManifestChecked()
     ManifestFlatGraphBuilt()
+    ReportPerformancePath(path="")
+    GitSparseCheckoutSubdirectory(subdir="")
+    GitProgressCheckoutRevision(revision="")
+    GitProgressUpdatingExistingDependency(dir="")
+    GitProgressPullingNewDependency(dir="")
+    GitNothingToDo(sha="")
+    GitProgressUpdatedCheckoutRange(start_sha="", end_sha="")
+    GitProgressCheckedOutAt(end_sha="")
+    SystemErrorRetrievingModTime(path="")
+    SystemCouldNotWrite(path="", reason="", exc=Exception(""))
+    SystemExecutingCmd(cmd=[""])
+    SystemStdOutMsg(bmsg=b"")
+    SystemStdErrMsg(bmsg=b"")
+    SystemReportReturnCode(code=0)
+    SelectorReportInvalidSelector(
+        selector_methods={"": ""}, spec_method="", raw_spec=""
+    )
+    MacroEventInfo(msg="")
+    MacroEventDebug(msg="")
+    NewConnection(conn_type="", conn_name="")
+    ConnectionReused(conn_name="")
+    ConnectionLeftOpen(conn_name="")
+    ConnectionClosed(conn_name="")
+    RollbackFailed(conn_name="")
+    ConnectionClosed2(conn_name="")
+    ConnectionLeftOpen2(conn_name="")
+    Rollback(conn_name="")
+    CacheMiss(conn_name="", database="", schema="")
+    ListRelations(database="", schema="", relations=[])
+    ConnectionUsed(conn_type="", conn_name="")
+    SQLQuery(conn_name="", sql="")
+    SQLQueryStatus(status="", elapsed=0.1)
+    SQLCommit(conn_name="")
+    ColTypeChange(orig_type="", new_type="", table="")
+    SchemaCreation(relation=BaseRelation())
+    SchemaDrop(relation=BaseRelation())
+    UncachedRelation(
+        dep_key=_ReferenceKey(database="", schema="", identifier=""),
+        ref_key=_ReferenceKey(database="", schema="", identifier=""),
+    )
+    AddLink(
+        dep_key=_ReferenceKey(database="", schema="", identifier=""),
+        ref_key=_ReferenceKey(database="", schema="", identifier=""),
+    )
+    AddRelation(relation=_CachedRelation())
+    DropMissingRelation(relation=_ReferenceKey(database="", schema="", identifier=""))
+    DropCascade(
+        dropped=_ReferenceKey(database="", schema="", identifier=""),
+        consequences={_ReferenceKey(database="", schema="", identifier="")},
+    )
+    UpdateReference(
+        old_key=_ReferenceKey(database="", schema="", identifier=""),
+        new_key=_ReferenceKey(database="", schema="", identifier=""),
+        cached_key=_ReferenceKey(database="", schema="", identifier=""),
+    )
+    TemporaryRelation(key=_ReferenceKey(database="", schema="", identifier=""))
+    RenameSchema(
+        old_key=_ReferenceKey(database="", schema="", identifier=""),
+        new_key=_ReferenceKey(database="", schema="", identifier="")
+    )
+    DumpBeforeAddGraph(dump_callable)
+    DumpAfterAddGraph(dump_callable)
+    DumpBeforeRenameSchema(dump_callable)
+    DumpAfterRenameSchema(dump_callable)
+    AdapterImportError(ModuleNotFoundError())
+    PluginLoadError()
     ReportPerformancePath(path='')
     GitSparseCheckoutSubdirectory(subdir='')
     GitProgressCheckoutRevision(revision='')

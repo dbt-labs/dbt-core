@@ -1,11 +1,26 @@
+import threading
 from collections import namedtuple
 from copy import deepcopy
-from typing import List, Iterable, Optional, Dict, Set, Tuple, Any
-import threading
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from dbt.logger import CACHE_LOGGER as logger
-from dbt.utils import lowercase
 import dbt.exceptions
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    AddLink,
+    AddRelation,
+    DropCascade,
+    DropMissingRelation,
+    DropRelation,
+    DumpAfterAddGraph,
+    DumpAfterRenameSchema,
+    DumpBeforeAddGraph,
+    DumpBeforeRenameSchema,
+    RenameSchema,
+    TemporaryRelation,
+    UncachedRelation,
+    UpdateReference
+)
+from dbt.utils import lowercase
 
 _ReferenceKey = namedtuple('_ReferenceKey', 'database schema identifier')
 
@@ -157,12 +172,6 @@ class _CachedRelation:
         return [dot_separated(r) for r in self.referenced_by]
 
 
-def lazy_log(msg, func):
-    if logger.disabled:
-        return
-    logger.debug(msg.format(func()))
-
-
 class RelationsCache:
     """A cache of the relations known to dbt. Keeps track of relationships
     declared between tables and handles renames/drops as a real database would.
@@ -278,6 +287,7 @@ class RelationsCache:
 
         referenced.add_reference(dependent)
 
+    # TODO: Is this dead code?  I can't seem to find it grepping the codebase.
     def add_link(self, referenced, dependent):
         """Add a link between two relations to the database. If either relation
         does not exist, it will be added as an "external" relation.
@@ -297,11 +307,7 @@ class RelationsCache:
             # if we have not cached the referenced schema at all, we must be
             # referring to a table outside our control. There's no need to make
             # a link - we will never drop the referenced relation during a run.
-            logger.debug(
-                '{dep!s} references {ref!s} but {ref.database}.{ref.schema} '
-                'is not in the cache, skipping assumed external relation'
-                .format(dep=dependent, ref=ref_key)
-            )
+            fire_event(UncachedRelation(dep_key=dependent, ref_key=ref_key))
             return
         if ref_key not in self.relations:
             # Insert a dummy "external" relation.
@@ -317,9 +323,7 @@ class RelationsCache:
                 type=referenced.External
             )
             self.add(dependent)
-        logger.debug(
-            'adding link, {!s} references {!s}'.format(dep_key, ref_key)
-        )
+        fire_event(AddLink(dep_key=dep_key, ref_key=ref_key))
         with self.lock:
             self._add_link(ref_key, dep_key)
 
@@ -330,14 +334,12 @@ class RelationsCache:
         :param BaseRelation relation: The underlying relation.
         """
         cached = _CachedRelation(relation)
-        logger.debug('Adding relation: {!s}'.format(cached))
-
-        lazy_log('before adding: {!s}', self.dump_graph)
+        fire_event(AddRelation(relation=cached))
+        fire_event(DumpBeforeAddGraph(graph_func=self.dump_graph))
 
         with self.lock:
             self._setdefault(cached)
-
-        lazy_log('after adding: {!s}', self.dump_graph)
+        fire_event(DumpAfterAddGraph(graph_func=self.dump_graph))
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
@@ -359,13 +361,10 @@ class RelationsCache:
         :param _CachedRelation dropped: An existing _CachedRelation to drop.
         """
         if dropped not in self.relations:
-            logger.debug('dropped a nonexistent relationship: {!s}'
-                         .format(dropped))
+            fire_event(DropMissingRelation(relation=dropped))
             return
         consequences = self.relations[dropped].collect_consequences()
-        logger.debug(
-            'drop {} is cascading to {}'.format(dropped, consequences)
-        )
+        fire_event(DropCascade(dropped=dropped, consequences=consequences))
         self._remove_refs(consequences)
 
     def drop(self, relation):
@@ -380,7 +379,7 @@ class RelationsCache:
         :param str identifier: The identifier of the relation to drop.
         """
         dropped = _make_key(relation)
-        logger.debug('Dropping relation: {!s}'.format(dropped))
+        fire_event(DropRelation(dropped=dropped))
         with self.lock:
             self._drop_cascade_relation(dropped)
 
@@ -403,9 +402,8 @@ class RelationsCache:
         # update all the relations that refer to it
         for cached in self.relations.values():
             if cached.is_referenced_by(old_key):
-                logger.debug(
-                    'updated reference from {0} -> {2} to {1} -> {2}'
-                    .format(old_key, new_key, cached.key())
+                fire_event(
+                    UpdateReference(old_key=old_key, new_key=new_key, cached_key=cached.key())
                 )
                 cached.rename_key(old_key, new_key)
 
@@ -435,10 +433,7 @@ class RelationsCache:
             )
 
         if old_key not in self.relations:
-            logger.debug(
-                'old key {} not found in self.relations, assuming temporary'
-                .format(old_key)
-            )
+            fire_event(TemporaryRelation(key=old_key))
             return False
         return True
 
@@ -456,11 +451,9 @@ class RelationsCache:
         """
         old_key = _make_key(old)
         new_key = _make_key(new)
-        logger.debug('Renaming relation {!s} to {!s}'.format(
-            old_key, new_key
-        ))
+        fire_event(RenameSchema(old_key=old_key, new_key=new_key))
 
-        lazy_log('before rename: {!s}', self.dump_graph)
+        fire_event(DumpBeforeRenameSchema(graph_func=self.dump_graph))
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
@@ -468,7 +461,7 @@ class RelationsCache:
             else:
                 self._setdefault(_CachedRelation(new))
 
-        lazy_log('after rename: {!s}', self.dump_graph)
+        fire_event(DumpAfterRenameSchema(graph_func=self.dump_graph))
 
     def get_relations(
         self, database: Optional[str], schema: Optional[str]

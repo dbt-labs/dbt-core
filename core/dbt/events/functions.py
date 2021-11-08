@@ -1,6 +1,5 @@
 
 from colorama import Style
-from dbt.events.history import EVENT_HISTORY
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.types import Cli, Event, File, ShowException
 import dbt.flags as flags

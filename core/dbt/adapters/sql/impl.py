@@ -6,7 +6,9 @@ from dbt.contracts.connection import Connection
 import dbt.exceptions
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.sql import SQLConnectionManager
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
+
 
 from dbt.adapters.base.relation import BaseRelation
 
@@ -116,8 +118,13 @@ class SQLAdapter(BaseAdapter):
                target_column.can_expand_to(reference_column):
                 col_string_size = reference_column.string_size()
                 new_type = self.Column.string_type(col_string_size)
-                logger.debug("Changing col type from {} to {} in table {}",
-                             target_column.data_type, new_type, current)
+                fire_event(
+                    ColTypeChange(
+                        orig_type=target_column.data_type,
+                        new_type=new_type,
+                        table=current,
+                    )
+                )
 
                 self.alter_column_type(current, column_name, new_type)
 
@@ -175,7 +182,7 @@ class SQLAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        logger.debug('Creating schema "{}"', relation)
+        fire_event(SchemaCreation(relation=relation))
         kwargs = {
             'relation': relation,
         }
@@ -186,7 +193,7 @@ class SQLAdapter(BaseAdapter):
 
     def drop_schema(self, relation: BaseRelation) -> None:
         relation = relation.without_identifier()
-        logger.debug('Dropping schema "{}".', relation)
+        fire_event(SchemaDrop(relation=relation))
         kwargs = {
             'relation': relation,
         }

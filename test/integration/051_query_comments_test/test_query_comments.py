@@ -2,6 +2,7 @@ from test.integration.base import DBTIntegrationTest,  use_profile
 import io
 import json
 import os
+import re
 
 import dbt.exceptions
 from dbt.version import __version__ as dbt_version
@@ -70,10 +71,12 @@ class TestDefaultQueryComments(DBTIntegrationTest):
         return logs
 
     def query_comment(self, model_name, log):
+        # N.B: a temporary string replacement regex to strip the HH:MM:SS from the log line if present.
+        # TODO: make this go away when structured logging is stable 
+        log_msg = re.sub("(?:[01]\d|2[0123]):(?:[012345]\d):(?:[012345]\d \| )", "", log['message'])
         prefix = 'On {}: '.format(model_name)
-
-        if log['message'].startswith(prefix):
-            msg = log['message'][len(prefix):]
+        if log_msg.startswith(prefix):
+            msg = log_msg[len(prefix):]
             if msg in {'COMMIT', 'BEGIN', 'ROLLBACK'}:
                 return None
             return msg
