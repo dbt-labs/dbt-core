@@ -9,6 +9,7 @@ from dbt.contracts.project import (
     TarballPackage,
 )
 # from dbt.logger import GLOBAL_LOGGER as logger
+TARFILE_MAX_SIZE = 1 * 1e+6  # limit tarfiles to 1mb
 
 
 class TarballPackageMixin:
@@ -44,6 +45,8 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def get_tarfile(self):
         from tempfile import NamedTemporaryFile
         import tarfile
+        def get_tar_size(TarFile: tarfile.TarFile):
+            return sum(x.size for x in TarFile.getmembers())
 
         with NamedTemporaryFile(dir=get_downloads_path()) as named_temp_file:
             # NamedTemporaryFile on top of get_downloads_path
@@ -61,6 +64,9 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
 
             tar = tarfile.open(named_temp_file.name, "r:gz")
 
+            msg = (f"{named_temp_file.name} size is larger than limit "
+                   "of {TARFILE_MAX_SIZE}.")
+            assert get_tar_size(tar) <= TARFILE_MAX_SIZE, msg
         return tar
 
     def validate_tarfile(self):
