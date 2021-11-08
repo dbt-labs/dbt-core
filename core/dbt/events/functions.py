@@ -41,10 +41,17 @@ def setup_event_logger(log_path):
     # overwrite the global logger with the configured one
     LOG = logging.getLogger('configured_event_logger')
     LOG.setLevel(level)
+
+    FORMAT = "%(message)s"
+    passthrough_formatter = logging.Formatter(fmt=FORMAT)
+
     stdout_handler = logging.StreamHandler()
+    stdout_handler.setFormatter(passthrough_formatter)
     stdout_handler.setLevel(level)
     LOG.addHandler(stdout_handler)
+
     file_handler = WatchedFileHandler(filename=log_dest, encoding='utf8')
+    file_handler.setFormatter(passthrough_formatter)
     file_handler.setLevel(level)
     LOG.addHandler(file_handler)
 
@@ -80,7 +87,7 @@ def gen_msg(e: CliEventABC) -> Generator[str, None, None]:
         values['msg'] = scrub_secrets(e.cli_msg(), env_secrets())
         if this.format_json:
             values['ts'] = e.ts.isoformat()
-            final_msg = json.dumps(values, sort_keys=True, indent=0)
+            final_msg = json.dumps(values, sort_keys=True)
         else:
             color_tag = '' if this.format_color else Style.RESET_ALL
             values['ts'] = e.ts.strftime("%H:%M:%S")
