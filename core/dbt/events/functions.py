@@ -1,17 +1,41 @@
 
+from colorama import Style
 from dbt.events.history import EVENT_HISTORY
+import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.types import CliEventABC, Event, ShowException
 import dbt.flags as flags
-from dbt.logger import SECRET_ENV_PREFIX  # TODO this will need to move eventually
+# TODO this will need to move eventually
+from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing
+import json
 import logging
+from logging.handlers import WatchedFileHandler
 import os
 from typing import Generator, List
 
 
+# set up logger to go to stdout with defaults
+# setup_event_logger will be called once args have been parsed
 global LOG
-LOG = logging.getLogger()
+LOG = logging.getLogger('event_logger')
 stdout_handler = logging.StreamHandler()
 LOG.addHandler(stdout_handler)
+global color
+format_color = True
+global json
+format_json = False
+
+
+def setup_event_logger(log_path):
+    make_log_dir_if_missing(log_path)
+    this.format_json = flags.LOG_FORMAT == 'json'
+    # USE_COLORS can be None if the app just started and the cli flags
+    # havent been applied yet
+    this.format_color = True if flags.USE_COLORS else False
+    # TODO this default should live somewhere better
+    log_dest = os.path.join('logs', 'dbt.log')
+    # TODO log rotation is not handled by WatchedFileHandler
+    file_handler = WatchedFileHandler(filename=log_dest, encoding='utf8')
+    LOG.addHandler(file_handler)
 
 
 def env_secrets() -> List[str]:
@@ -30,16 +54,29 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
-# this exists because some log messages are actually expensive to build.
-# for example, many debug messages call `dump_graph()` and we don't want to
-# do that in the event that those messages are never going to be sent to
-# the user because we are only logging info-level events.
+# translates an Event to a completely formatted output string
+#
+# this returns a generator because some log messages are actually expensive
+# to build. For example, many debug messages call `dump_graph()` and we
+# don't want to do that in the event that those messages are never going to
+# be sent to the user because we are only logging info-level events.
 def gen_msg(e: CliEventABC) -> Generator[str, None, None]:
-    msg = None
-    if not msg:
-        msg = scrub_secrets(e.cli_msg(), env_secrets())
+    final_msg = None
+    values: dict = {
+        'pid': e.pid
+    }
+    color_tag = '' if this.format_color else Style.RESET_ALL
+    if not final_msg:
+        human_msg = scrub_secrets(e.cli_msg(), env_secrets())
+        values['msg'] = f"{human_msg}{color_tag}"
+        if this.format_json:
+            values['ts'] = e.ts.isoformat()
+            final_msg = json.dumps(values, sort_keys=True, indent=0)
+        else:
+            values['ts'] = e.ts.strftime("%H:%M:%S")
+            final_msg = f"{values['ts']} | {values['msg']}"
     while True:
-        yield msg
+        yield final_msg
 
 
 # top-level method for accessing the new eventing system
