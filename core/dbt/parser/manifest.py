@@ -89,8 +89,8 @@ class ReparseReason(StrEnum):
     project_config_changed = '06_project_config_changed'
     load_file_failure = '07_load_file_failure'
     exception = '08_exception'
-    proj_env_vars_changed = '09_project_env_vars_changed'
-    prof_env_vars_changed = '10_profile_env_vars_changed'
+    proj_env_vars_changed = "09_project_env_vars_changed"
+    prof_env_vars_changed = "10_profile_env_vars_changed"
 
 
 # Part of saved performance info
@@ -565,13 +565,17 @@ class ManifestLoader:
             fire_event(PartialParsingFailedBecauseProfileChange())
             valid = False
             reparse_reason = ReparseReason.profile_changed
-        if self.manifest.state_check.project_env_vars_hash != \
-                manifest.state_check.project_env_vars_hash:
+        if (
+            self.manifest.state_check.project_env_vars_hash
+            != manifest.state_check.project_env_vars_hash
+        ):
             fire_event(PartialParsingProjectEnvVarsChanged())
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
-        if self.manifest.state_check.profile_env_vars_hash != \
-                manifest.state_check.profile_env_vars_hash:
+        if (
+            self.manifest.state_check.profile_env_vars_hash
+            != manifest.state_check.profile_env_vars_hash
+        ):
             fire_event(PartialParsingProfileEnvVarsChanged())
             valid = False
             reparse_reason = ReparseReason.prof_env_vars_changed
@@ -690,7 +694,7 @@ class ManifestLoader:
         # Create a FileHash of the env_vars in the project
         key_list = list(config.project_env_vars.keys())
         key_list.sort()
-        env_var_str = ''
+        env_var_str = ""
         for key in key_list:
             env_var_str += f'{key}:{config.project_env_vars[key]}|'
         project_env_vars_hash = FileHash.from_contents(env_var_str)
@@ -698,7 +702,7 @@ class ManifestLoader:
         # Create a FileHash of the env_vars in the project
         key_list = list(config.profile_env_vars.keys())
         key_list.sort()
-        env_var_str = ''
+        env_var_str = ""
         for key in key_list:
             env_var_str += f'{key}:{config.profile_env_vars[key]}|'
         profile_env_vars_hash = FileHash.from_contents(env_var_str)

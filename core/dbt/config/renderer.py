@@ -95,8 +95,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
     _KEYPATH_HANDLERS = ProjectPostprocessor()
 
     def __init__(
-        self, profile: Optional[HasCredentials] = None,
-        cli_vars: Optional[Dict[str, Any]] = None
+        self, profile: Optional[HasCredentials] = None, cli_vars: Optional[Dict[str, Any]] = None
     ) -> None:
         # Generate contexts here because we want to save the context
         # object in order to retrieve the env_vars. This is almost always
@@ -176,9 +175,7 @@ class SelectorRenderer(BaseRenderer):
 
 
 class SecretRenderer(BaseRenderer):
-    def __init__(
-        self, cli_vars: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def __init__(self, cli_vars: Optional[Dict[str, Any]] = None) -> None:
         # Generate contexts here because we want to save the context
         # object in order to retrieve the env_vars.
         if cli_vars is None:
