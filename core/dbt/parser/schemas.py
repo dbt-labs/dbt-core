@@ -178,12 +178,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
 
         self.schema_yaml_vars = SchemaYamlVars()
         self.render_ctx = generate_schema_yml_context(
-            self.root_project,
-            self.project.project_name,
-            self.schema_yaml_vars
-        )
-        internal_package_names = get_adapter_package_names(
-            self.root_project.credentials.type
+            self.root_project, self.project.project_name, self.schema_yaml_vars
         )
         internal_package_names = get_adapter_package_names(self.root_project.credentials.type)
         self.macro_resolver = MacroResolver(
