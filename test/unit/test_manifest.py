@@ -108,7 +108,7 @@ class ManifestTest(unittest.TestCase):
                 dimensions=['plan', 'country'],
                 filters=[MetricFilter(
                    field="is_paying",
-                   value=True,
+                   value='True',
                    operator="=",
                 )],
                 meta={'is_okr': True},
@@ -276,7 +276,7 @@ class ManifestTest(unittest.TestCase):
         }
         for exposure in self.exposures.values():
             exposure.validate(exposure.to_dict(omit_none=True))
-        for metric in self.metric.values():
+        for metric in self.metrics.values():
             metric.validate(metric.to_dict(omit_none=True))
         for node in self.nested_nodes.values():
             node.validate(node.to_dict(omit_none=True))
@@ -400,7 +400,7 @@ class ManifestTest(unittest.TestCase):
         flat_metrics = flat_graph['metrics']
         flat_nodes = flat_graph['nodes']
         flat_sources = flat_graph['sources']
-        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources']))
+        self.assertEqual(set(flat_graph), set(['exposures', 'nodes', 'sources', 'metrics']))
         self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_metrics), set(self.metrics))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
@@ -452,6 +452,7 @@ class ManifestTest(unittest.TestCase):
                 'sources': {},
                 'macros': {},
                 'exposures': {},
+                'metrics': {},
                 'selectors': {},
                 'parent_map': {},
                 'child_map': {},

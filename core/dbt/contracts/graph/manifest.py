@@ -706,7 +706,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
-        all_resources = chain(self.exposures.values(), self.nodes.values(), self.sources.values(), self.metrics.values())
+        all_resources = chain(
+            self.exposures.values(),
+            self.nodes.values(),
+            self.sources.values(),
+            self.metrics.values()
+        )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
             if resource_type_plural not in resource_fqns:

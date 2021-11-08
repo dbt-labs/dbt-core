@@ -823,6 +823,7 @@ class ManifestLoader:
                 config.project_name,
             )
             _process_docs_for_metrics(ctx, metric)
+
     # Loops through all nodes and exposures, for each element in
     # 'sources' array finds the source node and updates the
     # 'depends_on.nodes' array with the unique id
@@ -1012,6 +1013,7 @@ def _process_docs_for_exposure(
     context: Dict[str, Any], exposure: ParsedExposure
 ) -> None:
     exposure.description = get_rendered(exposure.description, context)
+
 
 def _process_docs_for_metrics(
     context: Dict[str, Any], metric: ParsedMetric

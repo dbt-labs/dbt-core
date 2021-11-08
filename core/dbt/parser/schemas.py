@@ -514,14 +514,14 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
             # parse exposures
             if 'exposures' in dct:
                 exp_parser = ExposureParser(self, yaml_block)
-                for node in exp_parser.parse():
-                    self.manifest.add_exposure(yaml_block.file, node)
+                for exposure_node in exp_parser.parse():
+                    self.manifest.add_exposure(yaml_block.file, exposure_node)
 
             # parse metrics
             if 'metrics' in dct:
                 metric_parser = MetricParser(self, yaml_block)
-                for node in metric_parser.parse():
-                    self.manifest.add_metric(yaml_block.file, node)
+                for metric_node in metric_parser.parse():
+                    self.manifest.add_metric(yaml_block.file, metric_node)
 
 
 def check_format_version(
