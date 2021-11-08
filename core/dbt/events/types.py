@@ -104,7 +104,7 @@ class MainEncounteredError(ErrorLevel, Cli):
 
 
 @dataclass
-class MainStackTrace(DebugLevel, Cli, File):
+class MainStackTrace(DebugLevel, Cli):
     stack_trace: str
 
     def message(self) -> str:
