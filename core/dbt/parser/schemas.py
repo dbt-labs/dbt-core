@@ -1080,5 +1080,5 @@ class MetricParser(YamlReader):
                 unparsed = UnparsedMetric.from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
                 msg = error_context(self.yaml.path, self.key, data, exc)
-                raise CompilationException(msg) from exc
+                raise ParsingException(msg) from exc
             yield self.parse_metric(unparsed)
