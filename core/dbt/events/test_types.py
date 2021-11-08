@@ -5,7 +5,7 @@ from .types import (
     WarnLevel,
     ErrorLevel,
     ShowException,
-    CliEventABC
+    Cli
 )
 
 
@@ -13,42 +13,42 @@ from .types import (
 # Reuse the existing messages when adding logs to tests.
 
 @dataclass
-class IntegrationTestInfo(InfoLevel, CliEventABC):
+class IntegrationTestInfo(InfoLevel, Cli):
     msg: str
 
-    def cli_msg(self) -> str:
+    def message(self) -> str:
         return f"Integration Test: {self.msg}"
 
 
 @dataclass
-class IntegrationTestDebug(DebugLevel, CliEventABC):
+class IntegrationTestDebug(DebugLevel, Cli):
     msg: str
 
-    def cli_msg(self) -> str:
+    def message(self) -> str:
         return f"Integration Test: {self.msg}"
 
 
 @dataclass
-class IntegrationTestWarn(WarnLevel, CliEventABC):
+class IntegrationTestWarn(WarnLevel, Cli):
     msg: str
 
-    def cli_msg(self) -> str:
+    def message(self) -> str:
         return f"Integration Test: {self.msg}"
 
 
 @dataclass
-class IntegrationTestError(ErrorLevel, CliEventABC):
+class IntegrationTestError(ErrorLevel, Cli):
     msg: str
 
-    def cli_msg(self) -> str:
+    def message(self) -> str:
         return f"Integration Test: {self.msg}"
 
 
 @dataclass
-class IntegrationTestException(ShowException, ErrorLevel, CliEventABC):
+class IntegrationTestException(ShowException, ErrorLevel, Cli):
     msg: str
 
-    def cli_msg(self) -> str:
+    def message(self) -> str:
         return f"Integration Test: {self.msg}"
 
 

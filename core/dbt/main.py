@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import dbt.version
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, setup_event_logger
 from dbt.events.types import (
     MainEncounteredError, MainKeyboardInterrupt, MainReportVersion, MainReportArgs,
     MainTrackingUserState, MainStackTrace
@@ -237,6 +237,7 @@ def run_from_args(parsed):
         log_path = getattr(task.config, 'log_path', None)
     # we can finally set the file logger up
     log_manager.set_path(log_path)
+    setup_event_logger(log_path or 'logs')
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true
         fire_event(MainTrackingUserState(dbt.tracking.active_user.state()))
 
