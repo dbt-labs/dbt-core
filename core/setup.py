@@ -2,9 +2,9 @@
 import os
 import sys
 
-if sys.version_info < (3, 6):
+if sys.version_info < (3, 7):
     print('Error: dbt does not support this version of Python.')
-    print('Please upgrade to Python 3.6 or higher.')
+    print('Please upgrade to Python 3.7 or higher.')
     sys.exit(1)
 
 
@@ -55,7 +55,6 @@ setup(
         'agate>=1.6,<1.6.4',
         'click>=8,<9',
         'colorama>=0.3.9,<0.4.5',
-        'dataclasses>=0.6,<0.9;python_version<"3.7"',
         'hologram==0.0.14',
         'isodate>=0.6,<0.7',
         'logbook>=1.5,<1.6',
@@ -82,10 +81,9 @@ setup(
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: POSIX :: Linux',
 
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
-    python_requires=">=3.6.3",
+    python_requires=">=3.7",
 )
