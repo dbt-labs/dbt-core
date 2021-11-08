@@ -205,10 +205,7 @@ def _deep_map_render(
 
 
 def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], value: Any) -> Any:
-    func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
-    value: Any
-) -> Any:
-    """ This function renders a nested dictionary derived from a yaml
+    """This function renders a nested dictionary derived from a yaml
     file. It is used to render dbt_project.yml, profiles.yml, and
     schema files.
 
