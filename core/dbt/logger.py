@@ -576,6 +576,7 @@ def log_cache_events(flag):
     CACHE_LOGGER.disabled = not flag
 
 
+logger.disable()
 GLOBAL_LOGGER = logger
 
 
