@@ -5,7 +5,10 @@ from .queue import GraphQueue
 from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    SelectorAlertUpto3UnusedNodes, SelectorAlertAllUnusedNodes, SelectorReportInvalidSelector
+)
 from dbt.node_types import NodeType
 from dbt.exceptions import (
     InternalException,
@@ -85,11 +88,11 @@ class NodeSelector(MethodManager):
         try:
             collected = self.select_included(nodes, spec)
         except InvalidSelectorException:
-            valid_selectors = ", ".join(self.SELECTOR_METHODS)
-            logger.info(
-                f"The '{spec.method}' selector specified in {spec.raw} is "
-                f"invalid. Must be one of [{valid_selectors}]"
-            )
+            fire_event(SelectorReportInvalidSelector(
+                selector_methods=self.SELECTOR_METHODS,
+                spec_method=spec.method,
+                raw_spec=spec.raw
+            ))
             return set(), set()
 
         neighbors = self.collect_specified_neighbors(spec, collected)
