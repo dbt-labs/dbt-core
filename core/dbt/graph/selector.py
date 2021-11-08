@@ -84,11 +84,11 @@ class NodeSelector(MethodManager):
             collected = self.select_included(nodes, spec)
         except InvalidSelectorException:
             valid_selectors = ", ".join(self.SELECTOR_METHODS)
-            fire_event(SelectorReportInvalidSelector(
+            fire_event(
                 SelectorReportInvalidSelector(
-                spec_method=spec.method,
-                raw_spec=spec.raw
-            ))
+                    valid_selectors=valid_selectors, spec_method=spec.method, raw_spec=spec.raw
+                )
+            )
             return set(), set()
 
         neighbors = self.collect_specified_neighbors(spec, collected)
