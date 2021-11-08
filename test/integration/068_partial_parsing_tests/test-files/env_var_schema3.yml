@@ -1,0 +1,21 @@
+version: 2
+
+models:
+    - name: model_one
+      config:
+        materialized: "{{ env_var('TEST_SCHEMA_VAR') }}"
+      tests:
+        - check_color:
+            column_name: fun
+            color: "env_var('ENV_VAR_COLOR')"
+
+exposures:
+  - name: proxy_for_dashboard
+    description: "This is for the XXX dashboard"
+    type: "dashboard"
+    owner:
+      name: "{{ env_var('ENV_VAR_OWNER') }}"
+      email: "tester@dashboard.com"
+    depends_on:
+      - ref("model_color")
+      - source("seed_sources", "raw_customers")

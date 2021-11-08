@@ -41,7 +41,7 @@ class ErrorLevel():
 class ShowException():
     # N.B.:
     # As long as we stick with the current convention of setting the member vars in the
-    # `msg` method of subclasses, this is a safe operation.
+    # `message` method of subclasses, this is a safe operation.
     # If that ever changes we'll want to reassess.
     def __post_init__(self):
         self.exc_info: Any = True
@@ -463,7 +463,7 @@ class MessageHandleGenericException(ErrorLevel, Cli, File):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return f"{prefix}\n{error}".format(
+        return "{prefix}\n{error}".format(
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
@@ -528,6 +528,16 @@ class PartialParsingSkipParsing(DebugLevel, Cli, File):
 class PartialParsingMacroChangeStartFullParse(InfoLevel, Cli, File):
     def message(self) -> str:
         return "Change detected to override macro used during parsing. Starting full parse."
+
+
+class PartialParsingProjectEnvVarsChanged(InfoLevel, Cli, File):
+    def message(self) -> str:
+        return "Unable to do partial parsing because env vars used in dbt_project.yml have changed"
+
+
+class PartialParsingProfileEnvVarsChanged(InfoLevel, Cli, File):
+    def message(self) -> str:
+        return "Unable to do partial parsing because env vars used in profiles.yml have changed"
 
 
 @dataclass
@@ -881,7 +891,7 @@ class GenericExceptionOnRun(ErrorLevel, Cli, File):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return f"{prefix}\n{error}".format(
+        return "{prefix}\n{error}".format(
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
@@ -1154,6 +1164,14 @@ class SQLCompiledPath(InfoLevel, Cli, File):
 
     def message(self) -> str:
         return f"  compiled SQL at {self.path}"
+
+
+@dataclass
+class SQlRunnerException(ShowException, DebugLevel, Cli, File):
+    exc: Exception
+
+    def message(self) -> str:
+        return f"Got an exception: {self.exc}"
 
 
 @dataclass

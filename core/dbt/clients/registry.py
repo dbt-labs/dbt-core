@@ -33,6 +33,10 @@ def _get(path, registry_base_url=None):
     resp = requests.get(url, timeout=30)
     fire_event(RegistryProgressGETResponse(url=url, resp_code=resp.status_code))
     resp.raise_for_status()
+    if resp is None:
+        raise requests.exceptions.ContentDecodingError(
+            'Request error: The response is None', response=resp
+        )
     return resp.json()
 
 

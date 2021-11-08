@@ -547,6 +547,8 @@ class ParsingInfo:
 @dataclass
 class ManifestStateCheck(dbtClassMixin):
     vars_hash: FileHash = field(default_factory=FileHash.empty)
+    project_env_vars_hash: FileHash = field(default_factory=FileHash.empty)
+    profile_env_vars_hash: FileHash = field(default_factory=FileHash.empty)
     profile_hash: FileHash = field(default_factory=FileHash.empty)
     project_hashes: MutableMapping[str, FileHash] = field(default_factory=dict)
 
@@ -570,6 +572,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     state_check: ManifestStateCheck = field(default_factory=ManifestStateCheck)
     source_patches: MutableMapping[SourceKey, SourcePatch] = field(default_factory=dict)
     disabled: MutableMapping[str, List[CompileResultNode]] = field(default_factory=dict)
+    env_vars: MutableMapping[str, str] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={'serialize': lambda x: None, 'deserialize': lambda x: None}
@@ -1047,6 +1050,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.state_check,
             self.source_patches,
             self.disabled,
+            self.env_vars,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1069,7 +1073,7 @@ AnyManifest = Union[Manifest, MacroManifest]
 
 
 @dataclass
-@schema_version('manifest', 3)
+@schema_version('manifest', 4)
 class WritableManifest(ArtifactMixin):
     nodes: Mapping[UniqueID, ManifestNode] = field(
         metadata=dict(description=(

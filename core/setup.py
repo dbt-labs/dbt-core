@@ -19,21 +19,23 @@ except ImportError:
     sys.exit(1)
 
 
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, 'README.md')) as f:
+    long_description = f.read()
 
 
 package_name = "dbt-core"
 package_version = "1.0.0b2"
-description = """dbt (data build tool) is a command line tool that helps \
-analysts and engineers transform data in their warehouse more effectively"""
+description = """With dbt, data analysts and engineers can build analytics \
+the way engineers build applications."""
 
 
 setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description=description,
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author="dbt Labs",
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
@@ -50,14 +52,14 @@ setup(
     ],
     install_requires=[
         'Jinja2==2.11.3',
-        'agate>=1.6,<1.6.2',
+        'agate>=1.6,<1.6.4',
         'click>=8,<9',
         'colorama>=0.3.9,<0.4.5',
         'dataclasses>=0.6,<0.9;python_version<"3.7"',
         'hologram==0.0.14',
         'isodate>=0.6,<0.7',
         'logbook>=1.5,<1.6',
-        'mashumaro==2.5',
+        'mashumaro==2.9',
         'minimal-snowplow-tracker==0.0.2',
         'networkx>=2.3,<3',
         'packaging>=20.9,<22.0',

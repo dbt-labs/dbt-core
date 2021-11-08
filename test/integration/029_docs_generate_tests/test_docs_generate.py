@@ -556,8 +556,8 @@ class TestDocsGenerate(DBTIntegrationTest):
     def _verify_generic_macro_structure(self, manifest):
         # just test a known global macro to avoid having to update this every
         # time they change.
-        self.assertIn('macro.dbt.column_list', manifest['macros'])
-        macro = manifest['macros']['macro.dbt.column_list']
+        self.assertIn('macro.dbt.get_quoted_csv', manifest['macros'])
+        macro = manifest['macros']['macro.dbt.get_quoted_csv']
         self.assertEqual(
             set(macro),
             {
@@ -574,7 +574,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             if k not in {'macro_sql'}
         }
         # Windows means we can't hard-code these.
-        helpers_path = Normalized('macros/materializations/helpers.sql')
+        helpers_path = Normalized('macros/materializations/models/incremental/column_helpers.sql')
         root_path = Normalized(os.path.join(
             self.dbt_core_install_root, 'include', 'global_project'
         ))
@@ -584,8 +584,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'original_file_path': helpers_path,
                 'package_name': 'dbt',
                 'root_path': root_path,
-                'name': 'column_list',
-                'unique_id': 'macro.dbt.column_list',
+                'name': 'get_quoted_csv',
+                'unique_id': 'macro.dbt.get_quoted_csv',
                 'created_at': ANY,
                 'tags': [],
                 'resource_type': 'macro',
@@ -644,7 +644,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         return {
-            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v3.json',
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v4.json',
             'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.model': {
@@ -899,6 +899,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'deferred': False,
                     'description': '',
+                    'file_key_name': 'models.model',
                     'fqn': ['test', 'not_null_model_id'],
                     'name': 'not_null_model_id',
                     'original_file_path': model_schema_yml_path,
@@ -990,6 +991,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'deferred': False,
                     'description': '',
+                    'file_key_name': 'models.model',
                     'fqn': ['test', 'test_nothing_model_'],
                     'name': 'test_nothing_model_',
                     'original_file_path': model_schema_yml_path,
@@ -1036,6 +1038,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'deferred': False,
                     'description': '',
+                    'file_key_name': 'models.model',
                     'fqn': ['test', 'unique_model_id'],
                     'name': 'unique_model_id',
                     'original_file_path': model_schema_yml_path,
@@ -1094,7 +1097,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'description': 'My table',
                     'external': None,
-                    'freshness': {'error_after': None, 'warn_after': None, 'filter': None},
+                    'freshness': {'error_after': {'count': None, 'period': None}, 'warn_after': {'count': None, 'period': None}, 'filter': None},
                     'identifier': 'seed',
                     'loaded_at_field': None,
                     'loader': 'a_loader',
@@ -1231,7 +1234,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         snapshot_path = self.dir('snapshot/snapshot_seed.sql')
 
         return {
-            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v3.json',
+            'dbt_schema_version': 'https://schemas.getdbt.com/dbt/manifest/v4.json',
             'dbt_version': dbt.version.__version__,
             'nodes': {
                 'model.test.ephemeral_copy': {
@@ -1542,7 +1545,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'description': 'My table',
                     'external': None,
-                    'freshness': {'error_after': None, 'warn_after': None, 'filter': None},
+                    'freshness': {'error_after': {'count': None, 'period': None}, 'warn_after': {'count': None, 'period': None}, 'filter': None},
                     'identifier': 'seed',
                     'loaded_at_field': None,
                     'loader': 'a_loader',
@@ -1812,7 +1815,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             elif key == 'metadata':
                 metadata = manifest['metadata']
                 self.verify_metadata(
-                    metadata, 'https://schemas.getdbt.com/dbt/manifest/v3.json')
+                    metadata, 'https://schemas.getdbt.com/dbt/manifest/v4.json')
                 assert 'project_id' in metadata and metadata[
                     'project_id'] == '098f6bcd4621d373cade4e832627b4f6'
                 assert 'send_anonymous_usage_stats' in metadata and metadata[
@@ -1952,7 +1955,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         run_results = _read_json('./target/run_results.json')
         assert 'metadata' in run_results
         self.verify_metadata(
-            run_results['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v3.json')
+            run_results['metadata'], 'https://schemas.getdbt.com/dbt/run-results/v4.json')
         self.assertIn('elapsed_time', run_results)
         self.assertGreater(run_results['elapsed_time'], 0)
         self.assertTrue(

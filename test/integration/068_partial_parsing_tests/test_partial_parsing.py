@@ -1,4 +1,4 @@
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
@@ -25,7 +25,7 @@ class BasePPTest(DBTIntegrationTest):
     def project_config(self):
         return {
             'config-version': 2,
-            'data-paths': ['seeds'],
+            'seed-paths': ['seeds'],
             'test-paths': ['tests'],
             'macro-paths': ['macros'],
             'analysis-paths': ['analyses'],
@@ -41,7 +41,7 @@ class BasePPTest(DBTIntegrationTest):
         # delete files in this directory without tests interfering with each other.
         os.mkdir(os.path.join(self.test_root_dir, 'models'))
         os.mkdir(os.path.join(self.test_root_dir, 'tests'))
-        os.mkdir(os.path.join(self.test_root_dir, 'tests/generic'))
+        os.mkdir(os.path.join(self.test_root_dir, 'tests', 'generic'))
         os.mkdir(os.path.join(self.test_root_dir, 'seeds'))
         os.mkdir(os.path.join(self.test_root_dir, 'macros'))
         os.mkdir(os.path.join(self.test_root_dir, 'analyses'))
@@ -143,7 +143,7 @@ class ModelTest(BasePPTest):
         # referred to in schema file
         self.copy_file('test-files/models-schema2.yml', 'models/schema.yml')
         self.rm_file('models/model_three.sql')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(ParsingException):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put model back again
@@ -312,7 +312,7 @@ class TestSources(BasePPTest):
 
         # Change seed name to wrong name
         self.copy_file('test-files/schema-sources5.yml', 'models/sources.yml')
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(ParsingException):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put back seed name to right name

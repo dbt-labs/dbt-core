@@ -1,0 +1,8 @@
+version: 2
+models:
+  - name: model_color
+    columns:
+      - name: fun
+        tests:
+          - unique:
+              enabled: "{{ env_var('ENV_VAR_ENABLED', True) }}"

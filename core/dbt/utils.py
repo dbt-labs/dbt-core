@@ -164,7 +164,7 @@ def deep_merge_item(destination, key, value):
         destination[key] = value
 
 
-def _deep_map(
+def _deep_map_render(
     func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
     value: Any,
     keypath: Tuple[Union[str, int], ...],
@@ -175,12 +175,12 @@ def _deep_map(
 
     if isinstance(value, list):
         ret = [
-            _deep_map(func, v, (keypath + (idx,)))
+            _deep_map_render(func, v, (keypath + (idx,)))
             for idx, v in enumerate(value)
         ]
     elif isinstance(value, dict):
         ret = {
-            k: _deep_map(func, v, (keypath + (str(k),)))
+            k: _deep_map_render(func, v, (keypath + (str(k),)))
             for k, v in value.items()
         }
     elif isinstance(value, atomic_types):
@@ -189,20 +189,24 @@ def _deep_map(
         container_types: Tuple[Type[Any], ...] = (list, dict)
         ok_types = container_types + atomic_types
         raise dbt.exceptions.DbtConfigError(
-            'in _deep_map, expected one of {!r}, got {!r}'
+            'in _deep_map_render, expected one of {!r}, got {!r}'
             .format(ok_types, type(value))
         )
 
     return ret
 
 
-def deep_map(
+def deep_map_render(
     func: Callable[[Any, Tuple[Union[str, int], ...]], Any],
     value: Any
 ) -> Any:
-    """map the function func() onto each non-container value in 'value'
+    """ This function renders a nested dictionary derived from a yaml
+    file. It is used to render dbt_project.yml, profiles.yml, and
+    schema files.
+
+    It maps the function func() onto each non-container value in 'value'
     recursively, returning a new value. As long as func does not manipulate
-    value, then deep_map will also not manipulate it.
+    value, then deep_map_render will also not manipulate it.
 
     value should be a value returned by `yaml.safe_load` or `json.load` - the
     only expected types are list, dict, native python number, str, NoneType,
@@ -216,11 +220,11 @@ def deep_map(
         dbt.exceptions.RecursionException
     """
     try:
-        return _deep_map(func, value, ())
+        return _deep_map_render(func, value, ())
     except RuntimeError as exc:
         if 'maximum recursion depth exceeded' in str(exc):
             raise dbt.exceptions.RecursionException(
-                'Cycle detected in deep_map'
+                'Cycle detected in deep_map_render'
             )
         raise
 
@@ -598,7 +602,11 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
     """
     try:
         return fn()
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+    except (
+        requests.exceptions.ConnectionError,
+        requests.exceptions.Timeout,
+        requests.exceptions.ContentDecodingError,
+    ) as exc:
         if attempt <= max_attempts - 1:
             fire_event(RetryExternalCall(attempt=attempt, max=max_attempts))
             time.sleep(1)

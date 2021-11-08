@@ -15,7 +15,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate,
     UnparsedExposure,
 )
-from dbt.exceptions import raise_compiler_error
+from dbt.exceptions import raise_compiler_error, raise_parsing_error
 from dbt.parser.search import FileBlock
 
 
@@ -189,7 +189,7 @@ class TestBuilder(Generic[Testable]):
         r'((?P<test_namespace>([a-zA-Z_][0-9a-zA-Z_]*))\.)?'
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
-    # kwargs representing test configs
+    # args in the test entry representing test configs
     CONFIG_ARGS = (
         'severity', 'tags', 'enabled', 'where', 'limit', 'warn_if', 'error_if',
         'fail_calc', 'store_failures', 'meta', 'database', 'schema', 'alias',
@@ -226,6 +226,12 @@ class TestBuilder(Generic[Testable]):
         self.namespace: str = groups['test_namespace']
         self.config: Dict[str, Any] = {}
 
+        # This code removes keys identified as config args from the test entry
+        # dictionary. The keys remaining in the 'args' dictionary will be
+        # "kwargs", or keyword args that are passed to the test macro.
+        # The "kwargs" are not rendered into strings until compilation time.
+        # The "configs" are rendered here (since they were not rendered back
+        # in the 'get_key_dicts' methods in the schema parsers).
         for key in self.CONFIG_ARGS:
             value = self.args.pop(key, None)
             # 'modifier' config could be either top level arg or in config
@@ -260,7 +266,7 @@ class TestBuilder(Generic[Testable]):
     @staticmethod
     def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(test, dict):
-            raise_compiler_error(
+            raise_parsing_error(
                 'test must be dict or str, got {} (value {})'.format(
                     type(test), test
                 )
@@ -268,20 +274,20 @@ class TestBuilder(Generic[Testable]):
 
         test = list(test.items())
         if len(test) != 1:
-            raise_compiler_error(
+            raise_parsing_error(
                 'test definition dictionary must have exactly one key, got'
                 ' {} instead ({} keys)'.format(test, len(test))
             )
         test_name, test_args = test[0]
 
         if not isinstance(test_args, dict):
-            raise_compiler_error(
+            raise_parsing_error(
                 'test arguments must be dict, got {} (value {})'.format(
                     type(test_args), test_args
                 )
             )
         if not isinstance(test_name, str):
-            raise_compiler_error(
+            raise_parsing_error(
                 'test name must be a str, got {} (value {})'.format(
                     type(test_name), test_name
                 )

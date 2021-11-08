@@ -27,7 +27,8 @@ from dbt.events.types import (
     PartialParsingFailedBecauseConfigChange, PartialParsingFailedBecauseProfileChange,
     PartialParsingFailedBecauseNewProjectDependency, PartialParsingFailedBecauseHashChanged,
     PartialParsingNotEnabled, ParsedFileLoadFailed, PartialParseSaveFileNotFound,
-    InvalidDisabledSourceInTestNode, InvalidRefInTestNode
+    InvalidDisabledSourceInTestNode, InvalidRefInTestNode, PartialParsingProjectEnvVarsChanged,
+    PartialParsingProfileEnvVarsChanged
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
@@ -35,7 +36,7 @@ from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
-from dbt.context.docs import generate_runtime_docs
+from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider
@@ -88,6 +89,8 @@ class ReparseReason(StrEnum):
     project_config_changed = '06_project_config_changed'
     load_file_failure = '07_load_file_failure'
     exception = '08_exception'
+    proj_env_vars_changed = '09_project_env_vars_changed'
+    prof_env_vars_changed = '10_profile_env_vars_changed'
 
 
 # Part of saved performance info
@@ -146,7 +149,7 @@ class ManifestLoader:
         self.new_manifest = self.manifest
         self.manifest.metadata = root_project.get_metadata()
         self.macro_resolver = None  # built after macros are loaded
-        self.started_at = int(time.time())
+        self.started_at = time.time()
         # This is a MacroQueryStringSetter callable, which is called
         # later after we set the MacroManifest in the adapter. It sets
         # up the query headers.
@@ -274,7 +277,7 @@ class ManifestLoader:
                             file_dict = source_file.to_dict()
                             fire_event(PartialParsingFile(file_dict=file_dict))
                     exc_info['parse_file_type'] = parse_file_type
-                    fire_event(PartialParsingException())
+                    fire_event(PartialParsingException(exc_info=exc_info))
 
                     # Send event
                     if dbt.tracking.active_user is not None:
@@ -560,6 +563,16 @@ class ManifestLoader:
             fire_event(PartialParsingFailedBecauseProfileChange())
             valid = False
             reparse_reason = ReparseReason.profile_changed
+        if self.manifest.state_check.project_env_vars_hash != \
+                manifest.state_check.project_env_vars_hash:
+            fire_event(PartialParsingProjectEnvVarsChanged())
+            valid = False
+            reparse_reason = ReparseReason.proj_env_vars_changed
+        if self.manifest.state_check.profile_env_vars_hash != \
+                manifest.state_check.profile_env_vars_hash:
+            fire_event(PartialParsingProfileEnvVarsChanged())
+            valid = False
+            reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
             k for k in self.manifest.state_check.project_hashes
@@ -611,8 +624,8 @@ class ManifestLoader:
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
-                is_partial_parseable, reparse_reason = self.is_partial_parsable(manifest)
-                if is_partial_parseable:
+                is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
+                if is_partial_parsable:
                     # We don't want to have stale generated_at dates
                     manifest.metadata.generated_at = datetime.utcnow()
                     # or invocation_ids
@@ -657,6 +670,12 @@ class ManifestLoader:
         config = self.root_project
         all_projects = self.all_projects
         # if any of these change, we need to reject the parser
+
+        # Create a FileHash of vars string, profile name and target name
+        # This does not capture vars in dbt_project, just the command line
+        # arg vars, but since any changes to that file will cause state_check
+        # to not pass, it doesn't matter.  If we move to more granular checking
+        # of env_vars, that would need to change.
         vars_hash = FileHash.from_contents(
             '\x00'.join([
                 getattr(config.args, 'vars', '{}') or '{}',
@@ -666,17 +685,38 @@ class ManifestLoader:
             ])
         )
 
+        # Create a FileHash of the env_vars in the project
+        key_list = list(config.project_env_vars.keys())
+        key_list.sort()
+        env_var_str = ''
+        for key in key_list:
+            env_var_str = env_var_str + f'{key}:{config.project_env_vars[key]}|'
+        project_env_vars_hash = FileHash.from_contents(env_var_str)
+
+        # Create a FileHash of the env_vars in the project
+        key_list = list(config.profile_env_vars.keys())
+        key_list.sort()
+        env_var_str = ''
+        for key in key_list:
+            env_var_str = env_var_str + f'{key}:{config.profile_env_vars[key]}|'
+        profile_env_vars_hash = FileHash.from_contents(env_var_str)
+
+        # Create a FileHash of the profile file
         profile_path = os.path.join(flags.PROFILES_DIR, 'profiles.yml')
         with open(profile_path) as fp:
             profile_hash = FileHash.from_contents(fp.read())
 
+        # Create a FileHashes for dbt_project for all dependencies
         project_hashes = {}
         for name, project in all_projects.items():
             path = os.path.join(project.project_root, 'dbt_project.yml')
             with open(path) as fp:
                 project_hashes[name] = FileHash.from_contents(fp.read())
 
+        # Create the ManifestStateCheck object
         state_check = ManifestStateCheck(
+            project_env_vars_hash=project_env_vars_hash,
+            profile_env_vars_hash=profile_env_vars_hash,
             vars_hash=vars_hash,
             profile_hash=profile_hash,
             project_hashes=project_hashes,
@@ -774,7 +814,7 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if node.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 node,
                 self.manifest,
@@ -784,7 +824,7 @@ class ManifestLoader:
         for source in self.manifest.sources.values():
             if source.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 source,
                 self.manifest,
@@ -794,7 +834,7 @@ class ManifestLoader:
         for macro in self.manifest.macros.values():
             if macro.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 macro,
                 self.manifest,
@@ -804,7 +844,7 @@ class ManifestLoader:
         for exposure in self.manifest.exposures.values():
             if exposure.created_at < self.started_at:
                 continue
-            ctx = generate_runtime_docs(
+            ctx = generate_runtime_docs_context(
                 config,
                 exposure,
                 self.manifest,
@@ -923,20 +963,6 @@ def _warn_for_unused_resource_config_paths(
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-
-
-# This is just used in test cases
-def _load_projects(config, paths):
-    for path in paths:
-        try:
-            project = config.new_project(path)
-        except dbt.exceptions.DbtProjectError as e:
-            raise dbt.exceptions.DbtProjectError(
-                'Failed to read package at {}: {}'
-                .format(path, e)
-            )
-        else:
-            yield project.project_name, project
 
 
 def _get_node_column(node, column_name):
@@ -1146,7 +1172,7 @@ def _process_sources_for_node(
 def process_macro(
     config: RuntimeConfig, manifest: Manifest, macro: ParsedMacro
 ) -> None:
-    ctx = generate_runtime_docs(
+    ctx = generate_runtime_docs_context(
         config,
         macro,
         manifest,
@@ -1165,5 +1191,5 @@ def process_node(
         manifest, config.project_name, node
     )
     _process_refs_for_node(manifest, config.project_name, node)
-    ctx = generate_runtime_docs(config, node, manifest, config.project_name)
+    ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
     _process_docs_for_node(ctx, node)

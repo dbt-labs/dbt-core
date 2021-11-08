@@ -3,7 +3,6 @@ from typing import Dict, List, NoReturn, Union, Type, Iterator, Set
 
 from dbt.exceptions import raise_dependency_error, InternalException
 
-from dbt.context.target import generate_target_context
 from dbt.config import Project, RuntimeConfig
 from dbt.config.renderer import DbtProjectYamlRenderer
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
@@ -126,8 +125,7 @@ def resolve_packages(
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
 
-    ctx = generate_target_context(config, config.cli_vars)
-    renderer = DbtProjectYamlRenderer(ctx)
+    renderer = DbtProjectYamlRenderer(config, config.cli_vars)
 
     while pending:
         next_pending = PackageListing()

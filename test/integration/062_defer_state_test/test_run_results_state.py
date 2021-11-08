@@ -184,8 +184,8 @@ class TestRunResultsState(DBTIntegrationTest):
         assert nodes == {'table_model', 'unique_view_model_id'}
 
         results = self.run_dbt(['ls', '--select', 'result:fail+', '--state', './state'])
-        assert len(results) == 2
-        assert set(results) == {'test.table_model', 'test.unique_view_model_id'}
+        assert len(results) == 1
+        assert set(results) == {'test.unique_view_model_id'}
 
         # change the unique test severity from error to warn and reuse the same view_model.sql changes above
         f = open('models/schema.yml', 'r')
@@ -212,8 +212,8 @@ class TestRunResultsState(DBTIntegrationTest):
         assert nodes == {'table_model', 'unique_view_model_id'}
 
         results = self.run_dbt(['ls', '--select', 'result:warn+', '--state', './state'])
-        assert len(results) == 2
-        assert set(results) == {'test.table_model', 'test.unique_view_model_id'}
+        assert len(results) == 1
+        assert set(results) == {'test.unique_view_model_id'}
 
     @use_profile('postgres')
     def test_postgres_run_run_results_state(self):
