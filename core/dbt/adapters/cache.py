@@ -339,7 +339,7 @@ class RelationsCache:
 
         with self.lock:
             self._setdefault(cached)
-        fire_event(DumpAfterAddGraph(graph_func=self.dump_graph()))
+        fire_event(DumpAfterAddGraph(graph_func=self.dump_graph))
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
