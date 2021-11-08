@@ -615,7 +615,11 @@ def _connection_exception_retry(fn, max_attempts: int, attempt: int = 0):
     """
     try:
         return fn()
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+    except (
+        requests.exceptions.ConnectionError,
+        requests.exceptions.Timeout,
+        requests.exceptions.ContentDecodingError,
+    ) as exc:
         if attempt <= max_attempts - 1:
             logger.debug('Retrying external call. Attempt: ' +
                          f'{attempt} Max attempts: {max_attempts}')
