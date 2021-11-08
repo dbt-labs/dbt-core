@@ -5,10 +5,12 @@ import dbt.deps
 import dbt.exceptions
 from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.deps.resolver import resolve_packages
 from dbt.contracts.project import (
     LocalPackage,
+    TarballPackage,
     GitPackage,
     RegistryPackage,
 )
@@ -28,6 +30,39 @@ class TestLocalPackage(unittest.TestCase):
         a_pinned = a.resolved()
         self.assertEqual(a_pinned.local, '/path/to/package')
         self.assertEqual(str(a_pinned), '/path/to/package')
+
+
+class TestTarballPackage(unittest.TestCase):
+    def test_init(self):
+        a_contract = TarballPackage.from_dict({'tarball': '/path/to/package'})
+        self.assertEqual(a_contract.tarball, '/path/to/package')
+        a = TarballUnpinnedPackage.from_contract(a_contract)
+        self.assertEqual(a.tarball, '/path/to/package')
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.tarball, '/path/to/package')
+        self.assertEqual(str(a_pinned), '/path/to/package')
+
+        # test optional args
+        a_contract = TarballPackage.from_dict(
+            {'tarball': '/path/to/package', 'sha1': '123'
+             , 'subdirectory': 'subdir'}
+        )
+        self.assertEqual(a_contract.tarball, '/path/to/package')
+        self.assertEqual(a_contract.sha1, '123')
+        self.assertEqual(a_contract.subdirectory, 'subdir')
+
+        a = TarballUnpinnedPackage.from_contract(a_contract)
+        self.assertEqual(a.tarball, '/path/to/package')
+        self.assertEqual(a.sha1, '123')
+        self.assertEqual(a.subdirectory, 'subdir')
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.tarball, '/path/to/package')
+        self.assertEqual(a_pinned.sha1, '123')
+        self.assertEqual(a_pinned.subdirectory, 'subdir')
+        self.assertEqual(a_pinned.resolve_tar_dir(), 'subdir')
+        self.assertEqual(str(a_pinned), '/path/to/package')
+
+        # mock a tarinfo list?
 
 
 class TestGitPackage(unittest.TestCase):
