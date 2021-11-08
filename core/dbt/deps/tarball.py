@@ -1,5 +1,9 @@
 import os
 # import shutil
+import hashlib
+import tarfile
+from tempfile import NamedTemporaryFile
+from typing import Optional
 
 from dbt.clients import system
 from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
@@ -9,6 +13,8 @@ from dbt.contracts.project import (
     TarballPackage,
 )
 # from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger
+
 TARFILE_MAX_SIZE = 1 * 1e+6  # limit tarfiles to 1mb
 
 
