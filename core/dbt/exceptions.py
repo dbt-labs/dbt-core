@@ -456,8 +456,8 @@ def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 
 
-def raise_parsing_error(msg) -> NoReturn:
-    raise ParsingException(msg)
+def raise_parsing_error(msg, node=None) -> NoReturn:
+    raise ParsingException(msg, node)
 
 
 def raise_database_error(msg, node=None) -> NoReturn:

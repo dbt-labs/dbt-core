@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import yaml
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import ParsingException
 import dbt.tracking
 import dbt.version
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
@@ -523,7 +523,7 @@ class TestMalformedSources(BaseSourcesTest):
 
     @use_profile('postgres')
     def test_postgres_malformed_schema_will_break_run(self):
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(ParsingException):
             self.run_dbt_with_vars(['seed'])
 
 
