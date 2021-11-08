@@ -415,15 +415,15 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.metrics:
                 metric = self.saved_manifest.metrics[unique_id]
                 file_id = metric.file_id
-                if file_id in self.saved_files and file_id not in self.file_diff['deleted']:
+                if file_id in self.saved_files and file_id not in self.file_diff["deleted"]:
                     schema_file = self.saved_files[file_id]
                     metrics = []
-                    if 'metrics' in schema_file.dict_from_yaml:
-                        metrics = schema_file.dict_from_yaml['metrics']
+                    if "metrics" in schema_file.dict_from_yaml:
+                        metrics = schema_file.dict_from_yaml["metrics"]
                     metric_element = self.get_schema_element(metrics, metric.name)
                     if metric_element:
                         self.delete_schema_metric(schema_file, metric_element)
-                        self.merge_patch(schema_file, 'metrics', metric_element)
+                        self.merge_patch(schema_file, "metrics", metric_element)
             elif unique_id in self.saved_manifest.macros:
                 macro = self.saved_manifest.macros[unique_id]
                 file_id = macro.file_id
@@ -704,16 +704,16 @@ class PartialParsing:
 
         # metrics
         dict_key = 'metrics'
-        metric_diff = self.get_diff_for('metrics', saved_yaml_dict, new_yaml_dict)
-        if metric_diff['changed']:
-            for metric in metric_diff['changed']:
+        metric_diff = self.get_diff_for("metrics", saved_yaml_dict, new_yaml_dict)
+        if metric_diff["changed"]:
+            for metric in metric_diff["changed"]:
                 self.delete_schema_metric(schema_file, metric)
                 self.merge_patch(schema_file, dict_key, metric)
-        if metric_diff['deleted']:
-            for metric in metric_diff['deleted']:
+        if metric_diff["deleted"]:
+            for metric in metric_diff["deleted"]:
                 self.delete_schema_metric(schema_file, metric)
-        if metric_diff['added']:
-            for metric in metric_diff['added']:
+        if metric_diff["added"]:
+            for metric in metric_diff["added"]:
                 self.merge_patch(schema_file, dict_key, metric)
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
@@ -877,14 +877,15 @@ class PartialParsing:
     # metric are created only from schema files, so just delete
     # the metric.
     def delete_schema_metric(self, schema_file, metric_dict):
-        metric_name = metric_dict['name']
+        metric_name = metric_dict["name"]
         metrics = schema_file.metrics.copy()
         for unique_id in metrics:
             metric = self.saved_manifest.metrics[unique_id]
             if unique_id in self.saved_manifest.metrics:
                 if metric.name == metric_name:
-                    self.deleted_manifest.metrics[unique_id] = \
-                        self.saved_manifest.metrics.pop(unique_id)
+                    self.deleted_manifest.metrics[unique_id] = self.saved_manifest.metrics.pop(
+                        unique_id
+                    )
                     schema_file.metrics.remove(unique_id)
                     fire_event(PartialParsingDeletedMetric(id=unique_id))
 

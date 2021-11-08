@@ -46,7 +46,7 @@ class MethodName(StrEnum):
     ResourceType = 'resource_type'
     State = 'state'
     Exposure = 'exposure'
-    Metric = 'metric'
+    Metric = "metric"
     Result = 'result'
 
 
@@ -122,8 +122,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             yield unique_id, exposure
 
     def metric_nodes(
-        self,
-        included_nodes: Set[UniqueId]
+        self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, ParsedMetric]]:
 
         for key, metric in self.manifest.metrics.items():
@@ -138,8 +137,10 @@ class SelectorMethod(metaclass=abc.ABCMeta):
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
         yield from chain(self.parsed_nodes(included_nodes),
                          self.source_nodes(included_nodes),
-                         self.exposure_nodes(included_nodes),
-                         self.metric_nodes(included_nodes))
+            self.source_nodes(included_nodes),
+            self.exposure_nodes(included_nodes),
+            self.metric_nodes(included_nodes),
+        )
 
     def configurable_nodes(
         self,
@@ -153,8 +154,10 @@ class SelectorMethod(metaclass=abc.ABCMeta):
         included_nodes: Set[UniqueId],
     ) -> Iterator[Tuple[UniqueId, Union[ParsedExposure, ManifestNode, ParsedMetric]]]:
         yield from chain(self.parsed_nodes(included_nodes),
-                         self.exposure_nodes(included_nodes),
-                         self.metric_nodes(included_nodes))
+            self.parsed_nodes(included_nodes),
+            self.exposure_nodes(included_nodes),
+            self.metric_nodes(included_nodes),
+        )
 
     @abc.abstractmethod
     def search(
@@ -267,10 +270,8 @@ class ExposureSelectorMethod(SelectorMethod):
 
 
 class MetricSelectorMethod(SelectorMethod):
-    def search(
-        self, included_nodes: Set[UniqueId], selector: str
-    ) -> Iterator[UniqueId]:
-        parts = selector.split('.')
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
         target_package = SELECTOR_GLOB
         if len(parts) == 1:
             target_name = parts[0]
@@ -279,8 +280,8 @@ class MetricSelectorMethod(SelectorMethod):
         else:
             msg = (
                 'Invalid metric selector value "{}". Metrics must be of '
-                'the form ${{metric_name}} or '
-                '${{metric_package.metric_name}}'
+                "the form ${{metric_name}} or "
+                "${{metric_package.metric_name}}"
             ).format(selector)
             raise RuntimeException(msg)
 

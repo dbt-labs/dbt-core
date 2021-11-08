@@ -17,7 +17,7 @@ class NodeType(StrEnum):
     Source = 'source'
     Macro = "macro"
     Exposure = 'exposure'
-    Metric = 'metric'
+    Metric = "metric"
 
     @classmethod
     def executable(cls) -> List["NodeType"]:
@@ -51,7 +51,7 @@ class NodeType(StrEnum):
             cls.Macro,
             cls.Analysis,
             cls.Exposure,
-            cls.Metric
+            cls.Metric,
         ]
 
     def pluralize(self) -> str:

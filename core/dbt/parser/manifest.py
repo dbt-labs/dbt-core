@@ -48,7 +48,12 @@ from dbt.contracts.graph.manifest import (
     Manifest, Disabled, MacroManifest, ManifestStateCheck, ParsingInfo
 )
 from dbt.contracts.graph.parsed import (
-    ParsedSourceDefinition, ParsedNode, ParsedMacro, ColumnInfo, ParsedExposure, ParsedMetric
+    ParsedSourceDefinition,
+    ParsedNode,
+    ParsedMacro,
+    ColumnInfo,
+    ParsedExposure,
+    ParsedMetric,
 )
 from dbt.contracts.util import Writable
 from dbt.exceptions import (
@@ -1026,9 +1031,7 @@ def _process_docs_for_exposure(
     exposure.description = get_rendered(exposure.description, context)
 
 
-def _process_docs_for_metrics(
-    context: Dict[str, Any], metric: ParsedMetric
-) -> None:
+def _process_docs_for_metrics(context: Dict[str, Any], metric: ParsedMetric) -> None:
     metric.description = get_rendered(metric.description, context)
 
 
@@ -1073,9 +1076,7 @@ def _process_refs_for_exposure(
         manifest.update_exposure(exposure)
 
 
-def _process_refs_for_metric(
-    manifest: Manifest, current_project: str, metric: ParsedMetric
-):
+def _process_refs_for_metric(manifest: Manifest, current_project: str, metric: ParsedMetric):
     """Given a manifest and a metric in that manifest, process its refs"""
     for ref in metric.refs:
         target_model: Optional[Union[Disabled, ManifestNode]] = None
@@ -1088,7 +1089,7 @@ def _process_refs_for_metric(
             target_model_package, target_model_name = ref
         else:
             raise dbt.exceptions.InternalException(
-                f'Refs should always be 1 or 2 arguments - got {len(ref)}'
+                f"Refs should always be 1 or 2 arguments - got {len(ref)}"
             )
 
         target_model = manifest.resolve_ref(
@@ -1102,8 +1103,10 @@ def _process_refs_for_metric(
             # This may raise. Even if it doesn't, we don't want to add
             # this exposure to the graph b/c there is no destination exposure
             invalid_ref_fail_unless_test(
-                metric, target_model_name, target_model_package,
-                disabled=(isinstance(target_model, Disabled))
+                metric,
+                target_model_name,
+                target_model_package,
+                disabled=(isinstance(target_model, Disabled)),
             )
 
             continue
@@ -1186,9 +1189,7 @@ def _process_sources_for_exposure(
         manifest.update_exposure(exposure)
 
 
-def _process_sources_for_metric(
-    manifest: Manifest, current_project: str, metric: ParsedMetric
-):
+def _process_sources_for_metric(manifest: Manifest, current_project: str, metric: ParsedMetric):
     target_source: Optional[Union[Disabled, ParsedSourceDefinition]] = None
     for source_name, table_name in metric.sources:
         target_source = manifest.resolve_source(
@@ -1199,10 +1200,7 @@ def _process_sources_for_metric(
         )
         if target_source is None or isinstance(target_source, Disabled):
             invalid_source_fail_unless_test(
-                metric,
-                source_name,
-                table_name,
-                disabled=(isinstance(target_source, Disabled))
+                metric, source_name, table_name, disabled=(isinstance(target_source, Disabled))
             )
             continue
         target_source_id = target_source.unique_id

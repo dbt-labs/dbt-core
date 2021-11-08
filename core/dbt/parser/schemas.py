@@ -19,7 +19,9 @@ from dbt.context.context_config import (
 )
 from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
 from dbt.context.providers import (
-    generate_parse_exposure, generate_parse_metrics, generate_test_context
+    generate_parse_exposure,
+    generate_parse_metrics,
+    generate_test_context,
 )
 from dbt.context.macro_resolver import MacroResolver
 from dbt.contracts.files import FileHash, SchemaSourceFile
@@ -545,7 +547,7 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
                     self.manifest.add_exposure(yaml_block.file, exposure_node)
 
             # parse metrics
-            if 'metrics' in dct:
+            if "metrics" in dct:
                 metric_parser = MetricParser(self, yaml_block)
                 for metric_node in metric_parser.parse():
                     self.manifest.add_metric(yaml_block.file, metric_node)
@@ -1037,7 +1039,7 @@ class MetricParser(YamlReader):
 
     def parse_metric(self, unparsed: UnparsedMetric) -> ParsedMetric:
         package_name = self.project.project_name
-        unique_id = f'{NodeType.Metric}.{package_name}.{unparsed.name}'
+        unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
 
         fqn = self.schema_parser.get_fqn_prefix(path)
@@ -1070,10 +1072,8 @@ class MetricParser(YamlReader):
             self.schema_parser.manifest,
             package_name,
         )
-        model_ref = '{{ ' + unparsed.model + ' }}'
-        get_rendered(
-            model_ref, ctx, parsed, capture_macros=True
-        )
+        model_ref = "{{ " + unparsed.model + " }}"
+        get_rendered(model_ref, ctx, parsed, capture_macros=True)
         return parsed
 
     def parse(self) -> Iterable[ParsedMetric]:

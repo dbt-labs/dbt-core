@@ -15,8 +15,13 @@ from dbt.contracts.graph.compiled import (
 )
 from dbt.contracts.graph.parsed import (
     ParsedMacro, ParsedDocumentation,
-    ParsedSourceDefinition, ParsedExposure, ParsedMetric,
-    HasUniqueID, UnpatchedSourceDefinition, ManifestNodes
+    ParsedDocumentation,
+    ParsedSourceDefinition,
+    ParsedExposure,
+    ParsedMetric,
+    HasUniqueID,
+    UnpatchedSourceDefinition,
+    ManifestNodes,
 )
 from dbt.contracts.graph.unparsed import SourcePatch
 from dbt.contracts.files import SourceFile, SchemaSourceFile, FileHash, AnySourceFile
@@ -714,7 +719,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.exposures.values(),
             self.nodes.values(),
             self.sources.values(),
-            self.metrics.values()
+            self.metrics.values(),
         )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
@@ -756,7 +761,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.nodes.values(),
             self.sources.values(),
             self.exposures.values(),
-            self.metrics.values(),
+                self.exposures.values(),
         ))
         forward_edges, backward_edges = build_node_edges(edge_members)
         self.child_map = forward_edges
@@ -1126,9 +1131,7 @@ class WritableManifest(ArtifactMixin):
         ))
     )
     metrics: Mapping[UniqueID, ParsedMetric] = field(
-        metadata=dict(description=(
-            'The metrics defined in the dbt project and its dependencies'
-        ))
+        metadata=dict(description=("The metrics defined in the dbt project and its dependencies"))
     )
     selectors: Mapping[UniqueID, Any] = field(
         metadata=dict(description=(

@@ -24,7 +24,19 @@ from dbt.contracts.graph.unparsed import (
     UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
     UnparsedSourceTableDefinition, UnparsedColumn, TestDef,
-    ExposureOwner, ExposureType, MaturityType, MetricFilter
+    UnparsedBaseNode,
+    FreshnessThreshold,
+    ExternalTable,
+    HasYamlMetadata,
+    MacroArgument,
+    UnparsedSourceDefinition,
+    UnparsedSourceTableDefinition,
+    UnparsedColumn,
+    TestDef,
+    ExposureOwner,
+    ExposureType,
+    MaturityType,
+    MetricFilter,
 )
 from dbt.contracts.util import Replaceable, AdditionalPropertiesMixin
 from dbt.exceptions import warn_or_error
@@ -848,50 +860,50 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     def search_name(self):
         return self.name
 
-    def same_model(self, old: 'ParsedMetric') -> bool:
+    def same_model(self, old: "ParsedMetric") -> bool:
         return self.model == old.model
 
-    def same_dimensions(self, old: 'ParsedMetric') -> bool:
+    def same_dimensions(self, old: "ParsedMetric") -> bool:
         return self.dimensions == old.dimensions
 
-    def same_filters(self, old: 'ParsedMetric') -> bool:
+    def same_filters(self, old: "ParsedMetric") -> bool:
         return self.filters == old.filters
 
-    def same_description(self, old: 'ParsedMetric') -> bool:
+    def same_description(self, old: "ParsedMetric") -> bool:
         return self.description == old.description
 
-    def same_label(self, old: 'ParsedMetric') -> bool:
+    def same_label(self, old: "ParsedMetric") -> bool:
         return self.label == old.label
 
-    def same_type(self, old: 'ParsedMetric') -> bool:
+    def same_type(self, old: "ParsedMetric") -> bool:
         return self.type == old.type
 
-    def same_sql(self, old: 'ParsedMetric') -> bool:
+    def same_sql(self, old: "ParsedMetric") -> bool:
         return self.sql == old.sql
 
-    def same_timestamp(self, old: 'ParsedMetric') -> bool:
+    def same_timestamp(self, old: "ParsedMetric") -> bool:
         return self.timestamp == old.timestamp
 
-    def same_time_grains(self, old: 'ParsedMetric') -> bool:
+    def same_time_grains(self, old: "ParsedMetric") -> bool:
         return self.time_grains == old.time_grains
 
-    def same_contents(self, old: Optional['ParsedMetric']) -> bool:
+    def same_contents(self, old: Optional["ParsedMetric"]) -> bool:
         # existing when it didn't before is a change!
         # metadata/tags changes are not "changes"
         if old is None:
             return True
 
         return (
-            self.same_model(old) and
-            self.same_dimensions(old) and
-            self.same_filters(old) and
-            self.same_description(old) and
-            self.same_label(old) and
-            self.same_type(old) and
-            self.same_sql(old) and
-            self.same_timestamp(old) and
-            self.same_time_grains(old) and
-            True
+            self.same_model(old)
+            and self.same_dimensions(old)
+            and self.same_filters(old)
+            and self.same_description(old)
+            and self.same_label(old)
+            and self.same_type(old)
+            and self.same_sql(old)
+            and self.same_timestamp(old)
+            and self.same_time_grains(old)
+            and True
         )
 
 

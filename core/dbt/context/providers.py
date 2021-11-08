@@ -1366,7 +1366,7 @@ class MetricRefResolver(BaseResolver):
             ref_invalid_args(self.model, args)
         self.validate_args(name, package)
         self.model.refs.append(list(args))
-        return ''
+        return ""
 
     def validate_args(self, name, package):
         if not isinstance(name, str):
@@ -1384,7 +1384,7 @@ def generate_parse_metrics(
 ) -> Dict[str, Any]:
     project = config.load_dependencies()[package_name]
     return {
-        'ref': MetricRefResolver(
+        "ref": MetricRefResolver(
             None,
             metric,
             project,

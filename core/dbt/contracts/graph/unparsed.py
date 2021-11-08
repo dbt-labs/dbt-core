@@ -460,7 +460,7 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     name: str
     label: str
     type: str
-    description: str = ''
+    description: str = ""
     sql: Optional[str] = None
     timestamp: Optional[str] = None
     time_grains: List[str] = field(default_factory=list)

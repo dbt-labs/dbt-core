@@ -55,7 +55,7 @@ def print_compile_stats(stats):
         NodeType.Seed: "seed file",
         NodeType.Source: "source",
         NodeType.Exposure: "exposure",
-        NodeType.Metric: 'metric'
+        NodeType.Metric: "metric",
     }
 
     results = {k: 0 for k in names.keys()}
