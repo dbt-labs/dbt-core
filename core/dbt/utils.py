@@ -228,9 +228,7 @@ def deep_map_render(func: Callable[[Any, Tuple[Union[str, int], ...]], Any], val
         return _deep_map_render(func, value, ())
     except RuntimeError as exc:
         if "maximum recursion depth exceeded" in str(exc):
-            raise dbt.exceptions.RecursionException(
-                'Cycle detected in deep_map_render'
-            )
+            raise dbt.exceptions.RecursionException("Cycle detected in deep_map_render")
         raise
 
 
