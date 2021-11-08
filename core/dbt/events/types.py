@@ -96,7 +96,7 @@ class MainKeyboardInterrupt(InfoLevel, Cli):
 
 # will log to a file if the file logger is configured
 @dataclass
-class MainEncounteredError(ErrorLevel, Cli, File):
+class MainEncounteredError(ErrorLevel, Cli):
     e: BaseException
 
     def message(self) -> str:
