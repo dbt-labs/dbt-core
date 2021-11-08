@@ -143,7 +143,7 @@ class ModelTest(BasePPTest):
         # referred to in schema file
         self.copy_file('test-files/models-schema2.yml', 'models/schema.yml')
         self.rm_file('models/model_three.sql')
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(CompilationException):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put model back again
@@ -312,7 +312,7 @@ class TestSources(BasePPTest):
 
         # Change seed name to wrong name
         self.copy_file('test-files/schema-sources5.yml', 'models/sources.yml')
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(CompilationException):
             results = self.run_dbt(["--partial-parse", "--warn-error", "run"])
 
         # Put back seed name to right name

@@ -57,6 +57,7 @@ from dbt.parser.generic_test_builders import (
     TestBuilder, GenericTestBlock, TargetBlock, YamlBlock,
     TestBlock, Testable
 )
+from dbt.ui import warning_tag
 from dbt.utils import (
     get_pseudo_test_path, coerce_dict_str
 )
@@ -886,11 +887,13 @@ class NodePatchParser(
                     # re-application of the patch in partial parsing.
                     node.patch_path = source_file.file_id
             else:
-                raise ParsingException(
+                msg = (
                     f"Did not find matching node for patch with name '{patch.name}' "
                     f"in the '{patch.yaml_key}' section of "
                     f"file '{source_file.path.original_file_path}'"
                 )
+                warn_or_error(msg, log_fmt=warning_tag('{}'))
+                return
 
         # patches can't be overwritten
         node = self.manifest.nodes.get(unique_id)
