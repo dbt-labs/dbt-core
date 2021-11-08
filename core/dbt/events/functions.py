@@ -56,14 +56,14 @@ def setup_event_logger(log_path):
 
     # overwrite the FILE_LOG logger with the configured one
     this.FILE_LOG = logging.getLogger('configured_file')
-    this.FILE_LOG.setLevel(level)
+    this.FILE_LOG.setLevel(logging.DEBUG)  # always debug regardless of user input
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
     # TODO log rotation is not handled by WatchedFileHandler
     file_handler = WatchedFileHandler(filename=log_dest, encoding='utf8')
     file_handler.setFormatter(file_passthrough_formatter)
-    file_handler.setLevel(level)
+    file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
     this.FILE_LOG.addHandler(file_handler)
 
 
@@ -189,15 +189,16 @@ def fire_event(e: Event) -> None:
     EVENT_HISTORY.append(e)
     # explicitly checking the debug flag here so that potentially expensive-to-construct
     # log messages are not constructed if debug messages are never shown.
-    if e.level_tag() == 'debug' and not flags.DEBUG:
-        return  # eat the message in case it was one of the expensive ones
 
+    # always logs debug level regardless of user input
     if isinstance(e, File):
         log_line = create_log_line(e, json_fmt=this.format_json, cli_dest=False)
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
     if isinstance(e, Cli):
+        if e.level_tag() == 'debug' and not flags.DEBUG:
+            return  # eat the message in case it was one of the expensive ones
         log_line = create_log_line(e, json_fmt=False, cli_dest=True)
         if not isinstance(e, ShowException):
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
