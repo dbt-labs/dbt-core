@@ -31,7 +31,9 @@ def _get(path, registry_base_url=None):
                                                             resp.status_code))
     resp.raise_for_status()
     if resp is None:
-        raise requests.exceptions.InvalidJSONError('Request error: The response is None', response=resp)
+        raise requests.exceptions.ContentDecodingError(
+            'Request error: The response is None', response=resp
+        )
     return resp.json()
 
 
