@@ -678,10 +678,11 @@ class TestUnparsedMetric(ContractTestCase):
             'filters': [
                 {
                     "field": "is_paying",
-                    "value": "true",
+                    "value": "True",
                     "operator": "=",
                 }
             ],
+            'tags': [],
             'meta': {
                 'is_okr': True
             },
@@ -700,7 +701,7 @@ class TestUnparsedMetric(ContractTestCase):
             dimensions=['plan', 'country'],
             filters=[MetricFilter(
                field="is_paying",
-               value=True,
+               value='True',
                operator="=",
             )],
             meta={'is_okr': True},

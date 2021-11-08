@@ -344,10 +344,16 @@ def make_exposure(pkg, name, path=None, fqn_extras=None, owner=None):
     )
 
 
-def make_metric(pkg, name):
+def make_metric(pkg, name, path=None):
+    if path is None:
+        path = 'schema.yml'
+
     return ParsedMetric(
-        name='new_customers',
+        name=name,
         path='schema.yml',
+        package_name=pkg,
+        root_path='/usr/src/app',
+        original_file_path=path,
         unique_id=f'metric.{pkg}.{name}',
         fqn=[pkg, 'metrics', name],
         label='New Customers',
