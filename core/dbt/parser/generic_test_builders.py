@@ -15,7 +15,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNodeUpdate,
     UnparsedExposure,
 )
-from dbt.exceptions import raise_compiler_error
+from dbt.exceptions import raise_compiler_error, raise_parsing_error
 from dbt.parser.search import FileBlock
 
 
@@ -266,7 +266,7 @@ class TestBuilder(Generic[Testable]):
     @staticmethod
     def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(test, dict):
-            raise_compiler_error(
+            raise_parsing_error(
                 'test must be dict or str, got {} (value {})'.format(
                     type(test), test
                 )
@@ -274,20 +274,20 @@ class TestBuilder(Generic[Testable]):
 
         test = list(test.items())
         if len(test) != 1:
-            raise_compiler_error(
+            raise_parsing_error(
                 'test definition dictionary must have exactly one key, got'
                 ' {} instead ({} keys)'.format(test, len(test))
             )
         test_name, test_args = test[0]
 
         if not isinstance(test_args, dict):
-            raise_compiler_error(
+            raise_parsing_error(
                 'test arguments must be dict, got {} (value {})'.format(
                     type(test_args), test_args
                 )
             )
         if not isinstance(test_name, str):
-            raise_compiler_error(
+            raise_parsing_error(
                 'test name must be a str, got {} (value {})'.format(
                     type(test_name), test_name
                 )
