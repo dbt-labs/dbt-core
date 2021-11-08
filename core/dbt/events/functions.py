@@ -62,19 +62,18 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
 # be sent to the user because we are only logging info-level events.
 def gen_msg(e: CliEventABC) -> Generator[str, None, None]:
     final_msg = None
-    values: dict = {
-        'pid': e.pid
-    }
-    color_tag = '' if this.format_color else Style.RESET_ALL
     if not final_msg:
-        human_msg = scrub_secrets(e.cli_msg(), env_secrets())
-        values['msg'] = f"{human_msg}{color_tag}"
+        values: dict = {
+            'pid': e.pid
+        }
+        values['msg'] = scrub_secrets(e.cli_msg(), env_secrets())
         if this.format_json:
             values['ts'] = e.ts.isoformat()
             final_msg = json.dumps(values, sort_keys=True, indent=0)
         else:
+            color_tag = '' if this.format_color else Style.RESET_ALL
             values['ts'] = e.ts.strftime("%H:%M:%S")
-            final_msg = f"{values['ts']} | {values['msg']}"
+            final_msg = f"{color_tag}{values['ts']} | {values['msg']}"
     while True:
         yield final_msg
 
