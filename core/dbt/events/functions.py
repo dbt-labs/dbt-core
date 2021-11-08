@@ -40,28 +40,31 @@ def setup_event_logger(log_path):
     this.format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
     log_dest = os.path.join('logs', 'dbt.log')
-    # TODO log rotation is not handled by WatchedFileHandler
     level = logging.DEBUG if flags.DEBUG else logging.INFO
 
-    # overwrite the global logger with the configured one
-    STDOUT_LOG = logging.getLogger('configured_std_out')
-    STDOUT_LOG.setLevel(level)
+    # overwrite the STDOUT_LOG logger with the configured one
+    this.STDOUT_LOG = logging.getLogger('configured_std_out')
+    this.STDOUT_LOG.setLevel(level)
 
     FORMAT = "%(message)s"
-    passthrough_formatter = logging.Formatter(fmt=FORMAT)
+    stdout_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
     stdout_handler = logging.StreamHandler()
-    stdout_handler.setFormatter(passthrough_formatter)
+    stdout_handler.setFormatter(stdout_passthrough_formatter)
     stdout_handler.setLevel(level)
-    STDOUT_LOG.addHandler(stdout_handler)
+    this.STDOUT_LOG.addHandler(stdout_handler)
 
-    FILE_LOG = logging.getLogger('configured_std_out')
-    FILE_LOG.setLevel(level)
+    # overwrite the FILE_LOG logger with the configured one
+    this.FILE_LOG = logging.getLogger('configured_file')
+    this.FILE_LOG.setLevel(level)
 
+    file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
+
+    # TODO log rotation is not handled by WatchedFileHandler
     file_handler = WatchedFileHandler(filename=log_dest, encoding='utf8')
-    file_handler.setFormatter(passthrough_formatter)
+    file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(level)
-    FILE_LOG.addHandler(file_handler)
+    this.FILE_LOG.addHandler(file_handler)
 
 
 def env_secrets() -> List[str]:
@@ -191,6 +194,7 @@ def fire_event(e: Event) -> None:
         log_line = create_log_line(e, json_fmt=this.format_json, cli_dest=False)
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
+
     if isinstance(e, Cli):
         log_line = create_log_line(e, json_fmt=False, cli_dest=True)
         if not isinstance(e, ShowException):

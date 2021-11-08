@@ -430,7 +430,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
             return
 
         make_log_dir_if_missing(log_dir)
-        log_path = os.path.join(log_dir, 'dbt.log')
+        log_path = os.path.join(log_dir, 'dbt.log.old')  # TODO hack for now
         self._super_init(log_path)
         self._replay_buffered()
         self._log_path = log_path
