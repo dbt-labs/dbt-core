@@ -1,16 +1,23 @@
 
-import dbt.logger as logger  # type: ignore # TODO eventually remove dependency on this logger
 from dbt.events.history import EVENT_HISTORY
 from dbt.events.types import CliEventABC, Event, ShowException
 import dbt.flags as flags
+from dbt.logger import SECRET_ENV_PREFIX  # TODO this will need to move eventually
+import logging
 import os
 from typing import Generator, List
+
+
+global LOG
+LOG = logging.getLogger()
+stdout_handler = logging.StreamHandler()
+LOG.addHandler(stdout_handler)
 
 
 def env_secrets() -> List[str]:
     return [
         v for k, v in os.environ.items()
-        if k.startswith(logger.SECRET_ENV_PREFIX)
+        if k.startswith(SECRET_ENV_PREFIX)
     ]
 
 
@@ -50,15 +57,15 @@ def fire_event(e: Event) -> None:
         if not isinstance(e, ShowException):
             if e.level_tag() == 'test':
                 # TODO after implmenting #3977 send to new test level
-                logger.GLOBAL_LOGGER.debug(next(msg))
+                LOG.debug(next(msg))
             elif e.level_tag() == 'debug':
-                logger.GLOBAL_LOGGER.debug(next(msg))
+                LOG.debug(next(msg))
             elif e.level_tag() == 'info':
-                logger.GLOBAL_LOGGER.info(next(msg))
+                LOG.info(next(msg))
             elif e.level_tag() == 'warn':
-                logger.GLOBAL_LOGGER.warning(next(msg))
+                LOG.warning(next(msg))
             elif e.level_tag() == 'error':
-                logger.GLOBAL_LOGGER.error(next(msg))
+                LOG.error(next(msg))
             else:
                 raise AssertionError(
                     f"Event type {type(e).__name__} has unhandled level: {e.level_tag()}"
@@ -67,35 +74,35 @@ def fire_event(e: Event) -> None:
         else:
             if e.level_tag() == 'test':
                 # TODO after implmenting #3977 send to new test level
-                logger.GLOBAL_LOGGER.debug(
+                LOG.debug(
                     next(msg),
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
                     extra=e.extra
                 )
             elif e.level_tag() == 'debug':
-                logger.GLOBAL_LOGGER.debug(
+                LOG.debug(
                     next(msg),
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
                     extra=e.extra
                 )
             elif e.level_tag() == 'info':
-                logger.GLOBAL_LOGGER.info(
+                LOG.info(
                     next(msg),
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
                     extra=e.extra
                 )
             elif e.level_tag() == 'warn':
-                logger.GLOBAL_LOGGER.warning(
+                LOG.warning(
                     next(msg),
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
                     extra=e.extra
                 )
             elif e.level_tag() == 'error':
-                logger.GLOBAL_LOGGER.error(
+                LOG.error(
                     next(msg),
                     exc_info=e.exc_info,
                     stack_info=e.stack_info,
