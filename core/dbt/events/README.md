@@ -7,3 +7,16 @@ The event module provides types that represent what is happening in dbt in `even
 
 # Adding a New Event
 In `events.types` add a new class that represents the new event. This may be a simple class with no values, or it may be a dataclass with some values to construct downstream messaging. Only include the data necessary to construct this message within this class. You must extend all destinations (e.g. - if your log message belongs on the cli, extend `CliEventABC`) as well as the loglevel this event belongs to.
+
+# Adapter Maintainers
+To integrate existing log messages from adapters, you likely have a line of code like this in your adapter already:
+```python
+from dbt.logger import GLOBAL_LOGGER as logger
+```
+
+Simply change it to these two lines with your adapter's database name, and all your existing call sites will now use the new system for v1.0:
+```python
+from dbt.events import AdapterLogger
+logger = AdapterLogger("<database name>")
+# e.g. AdapterLogger("Snowflake")
+```
