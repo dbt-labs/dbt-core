@@ -296,34 +296,6 @@ class SystemReportReturnCode(DebugLevel, CliEventABC):
 
 
 @dataclass
-class SelectorAlertUpto3UnusedNodes(InfoLevel, CliEventABC):
-    node_names: List[str]
-
-    def cli_msg(self) -> str:
-        summary_nodes_str = ("\n  - ").join(self.node_names[:3])
-        and_more_str = (
-            f"\n  - and {len(self.node_names) - 3} more" if len(self.node_names) > 4 else ""
-        )
-        return (
-            f"\nSome tests were excluded because at least one parent is not selected. "
-            f"Use the --greedy flag to include them."
-            f"\n  - {summary_nodes_str}{and_more_str}"
-        )
-
-
-@dataclass
-class SelectorAlertAllUnusedNodes(DebugLevel, CliEventABC):
-    node_names: List[str]
-
-    def cli_msg(self) -> str:
-        debug_nodes_str = ("\n  - ").join(self.node_names)
-        return (
-            f"Full list of tests that were excluded:"
-            f"\n  - {debug_nodes_str}"
-        )
-
-
-@dataclass
 class SelectorReportInvalidSelector(InfoLevel, CliEventABC):
     selector_methods: dict
     spec_method: str
@@ -726,6 +698,16 @@ class PartialParsingDeletedExposure(DebugLevel, CliEventABC):
 
     def cli_msg(self) -> str:
         return f"Partial parsing: deleted exposure {self.unique_id}"
+
+
+class PartialParsingProjectEnvVarsChanged(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Unable to do partial parsing because env vars used in dbt_project.yml have changed"
+
+
+class PartialParsingProfileEnvVarsChanged(InfoLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Unable to do partial parsing because env vars used in profiles.yml have changed"
 
 
 @dataclass
@@ -1767,6 +1749,14 @@ class GeneralWarningException(WarnLevel, CliEventABC):
         return str(self.exc)
 
 
+@dataclass
+class SQlRunnerException(ShowException, DebugLevel, CliEventABC):
+    exc: Exception
+
+    def cli_msg(self) -> str:
+        return f"Got an exception: {self.exc}"
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1803,8 +1793,6 @@ if 1 == 0:
     SystemStdOutMsg(bmsg=b'')
     SystemStdErrMsg(bmsg=b'')
     SystemReportReturnCode(code=0)
-    SelectorAlertUpto3UnusedNodes(node_names=[])
-    SelectorAlertAllUnusedNodes(node_names=[])
     SelectorReportInvalidSelector(selector_methods={'': ''}, spec_method='', raw_spec='')
     MacroEventInfo(msg='')
     MacroEventDebug(msg='')
@@ -1849,6 +1837,8 @@ if 1 == 0:
     PartialParsingUpdateSchemaFile(file_id='')
     PartialParsingDeletedSource(unique_id='')
     PartialParsingDeletedExposure(unique_id='')
+    PartialParsingProjectEnvVarsChanged()
+    PartialParsingProfileEnvVarsChanged()
     InvalidDisabledSourceInTestNode(msg='')
     InvalidRefInTestNode(msg='')
     MessageHandleGenericException(build_path='', unique_id='', exc=Exception(''))
@@ -1959,3 +1949,4 @@ if 1 == 0:
     RetryExternalCall(attempt=0, max=0)
     GeneralWarningMsg(msg='', log_fmt='')
     GeneralWarningException(exc=Exception(''), log_fmt='')
+    SQlRunnerException(exc=Exception(''))
