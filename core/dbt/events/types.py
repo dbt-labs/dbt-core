@@ -666,17 +666,6 @@ class PluginLoadError(ShowException, DebugLevel, Cli, File):
         pass
 
 
-# since mypy doesn't run on every file we need to suggest to mypy that every
-# class gets instantiated. But we don't actually want to run this code.
-# making the conditional `if False` causes mypy to skip it as dead code so
-# we need to skirt around that by computing something it doesn't check statically.
-#
-# TODO remove these lines once we run mypy everywhere.
-
-def dump_callable():
-    return {"": [""]}  # for instantiating `Dump...` methods which take callables.
-
-
 @dataclass
 class NewConnectionOpening(DebugLevel, Cli, File):
     connection_state: str
@@ -2116,6 +2105,9 @@ class GeneralWarningException(WarnLevel, Cli, File):
 #
 # TODO remove these lines once we run mypy everywhere.
 if 1 == 0:
+    def dump_callable():
+        return {"": [""]}  # for instantiating `Dump...` methods which take callables.
+
     MainReportVersion('')
     MainKeyboardInterrupt()
     MainEncounteredError(BaseException(''))
