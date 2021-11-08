@@ -869,7 +869,7 @@ class NodePatchParser(NonSourceParser[NodeTarget, ParsedNodePatch], Generic[Node
                     f"in the '{patch.yaml_key}' section of "
                     f"file '{source_file.path.original_file_path}'"
                 )
-                warn_or_error(msg, log_fmt=warning_tag('{}'))
+                warn_or_error(msg, log_fmt=warning_tag("{}"))
                 return
 
         # patches can't be overwritten
