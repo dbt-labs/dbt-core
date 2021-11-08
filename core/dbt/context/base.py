@@ -12,7 +12,8 @@ from dbt.clients.yaml_helper import (  # noqa: F401
 )
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import raise_compiler_error, MacroReturn, raise_parsing_error
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import MacroEventInfo, MacroEventDebug
 from dbt.version import __version__ as dbt_version
 
 # These modules are added to the context. Consider alternative
@@ -481,9 +482,9 @@ class BaseContext(metaclass=ContextMeta):
             {% endmacro %}"
         """
         if info:
-            logger.info(msg)
+            fire_event(MacroEventInfo(msg))
         else:
-            logger.debug(msg)
+            fire_event(MacroEventDebug(msg))
         return ''
 
     @contextproperty
