@@ -301,5 +301,21 @@ class SchemaSourceFile(BaseSourceFile):
                 test_ids.extend(self.tests[key][name])
         return test_ids
 
+    def add_env_var(self, var, yaml_key, name):
+        if yaml_key not in self.env_vars:
+            self.env_vars[yaml_key] = {}
+        if name not in self.env_vars[yaml_key]:
+            self.env_vars[yaml_key][name] = []
+        if var not in self.env_vars[yaml_key][name]:
+            self.env_vars[yaml_key][name].append(var)
+
+    def delete_from_env_vars(self, yaml_key, name):
+        # We delete all vars for this yaml_key/name because the
+        # entry has been scheduled for reparsing.
+        if yaml_key in self.env_vars and name in self.env_vars[yaml_key]:
+            del self.env_vars[yaml_key][name]
+            if not self.env_vars[yaml_key]:
+                del self.env_vars[yaml_key]
+
 
 AnySourceFile = Union[SchemaSourceFile, SourceFile]

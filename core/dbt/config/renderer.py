@@ -5,8 +5,7 @@ from dbt.clients.jinja import get_rendered, catch_jinja
 from dbt.exceptions import (
     DbtProjectError, CompilationException, RecursionException
 )
-from dbt.node_types import NodeType
-from dbt.utils import deep_map
+from dbt.utils import deep_map_render
 
 
 Keypath = Tuple[Union[str, int], ...]
@@ -47,7 +46,7 @@ class BaseRenderer:
         self, data: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            return deep_map(self.render_entry, data)
+            return deep_map_render(self.render_entry, data)
         except RecursionException:
             raise DbtProjectError(
                 f'Cycle detected: {self.name} input has a reference to itself',
@@ -161,69 +160,6 @@ class ProfileRenderer(BaseRenderer):
     @property
     def name(self):
         'Profile'
-
-
-class SchemaYamlRenderer(BaseRenderer):
-    DOCUMENTABLE_NODES = frozenset(
-        n.pluralize() for n in NodeType.documentable()
-    )
-
-    @property
-    def name(self):
-        return 'Rendering yaml'
-
-    def _is_norender_key(self, keypath: Keypath) -> bool:
-        """
-        models:
-            - name: blah
-            - description: blah
-              tests: ...
-            - columns:
-                - name:
-                - description: blah
-                  tests: ...
-
-        Return True if it's tests or description - those aren't rendered
-        """
-        if len(keypath) >= 2 and keypath[1] in ('tests', 'description'):
-            return True
-
-        if (
-            len(keypath) >= 4 and
-            keypath[1] == 'columns' and
-            keypath[3] in ('tests', 'description')
-        ):
-            return True
-
-        return False
-
-    # don't render descriptions or test keyword arguments
-    def should_render_keypath(self, keypath: Keypath) -> bool:
-        if len(keypath) < 2:
-            return True
-
-        if keypath[0] not in self.DOCUMENTABLE_NODES:
-            return True
-
-        if len(keypath) < 3:
-            return True
-
-        if keypath[0] == NodeType.Source.pluralize():
-            if keypath[2] == 'description':
-                return False
-            if keypath[2] == 'tables':
-                if self._is_norender_key(keypath[3:]):
-                    return False
-        elif keypath[0] == NodeType.Macro.pluralize():
-            if keypath[2] == 'arguments':
-                if self._is_norender_key(keypath[3:]):
-                    return False
-            elif self._is_norender_key(keypath[1:]):
-                return False
-        else:  # keypath[0] in self.DOCUMENTABLE_NODES:
-            if self._is_norender_key(keypath[1:]):
-                return False
-        return True
 
 
 class PackageRenderer(BaseRenderer):

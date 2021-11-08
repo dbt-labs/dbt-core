@@ -1,7 +1,6 @@
 import os
 from copy import deepcopy
 from typing import MutableMapping, Dict, List
-from itertools import chain
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.files import (
     AnySourceFile, ParseFileType, parse_file_type_to_parser,
@@ -64,7 +63,8 @@ class PartialParsing:
         self.project_parser_files = {}
         self.deleted_manifest = Manifest()
         self.macro_child_map: Dict[str, List[str]] = {}
-        self.env_vars_to_source_files = self.build_env_vars_to_source_files()
+        (self.env_vars_changed_source_files, self.env_vars_changed_schema_files) = \
+            self.build_env_vars_to_files()
         self.build_file_diff()
         self.processing_file = None
         self.deleted_special_override_macro = False
@@ -117,11 +117,19 @@ class PartialParsing:
                     if self.saved_files[file_id].parse_file_type in mg_files:
                         changed_or_deleted_macro_file = True
                     changed.append(file_id)
-        # handled changed env_vars for non-schema-files
-        for file_id in list(chain.from_iterable(self.env_vars_to_source_files.values())):
+
+        # handle changed env_vars for non-schema-files
+        for file_id in self.env_vars_changed_source_files:
             if file_id in deleted or file_id in changed:
                 continue
             changed.append(file_id)
+
+        # handle changed env_vars for schema files
+        for file_id in self.env_vars_changed_schema_files.keys():
+            if file_id in deleted_schema_files or file_id in changed_schema_files:
+                continue
+            changed_schema_files.append(file_id)
+
         file_diff = {
             "deleted": deleted,
             "deleted_schema_files": deleted_schema_files,
@@ -564,6 +572,10 @@ class PartialParsing:
         # loop through comparing previous dict_from_yaml with current dict_from_yaml
         # Need to do the deleted/added/changed thing, just like the files lists
 
+        env_var_changes = {}
+        if schema_file.file_id in self.env_vars_changed_schema_files:
+            env_var_changes = self.env_vars_changed_schema_files[schema_file.file_id]
+
         # models, seeds, snapshots, analyses
         for dict_key in ['models', 'seeds', 'snapshots', 'analyses']:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
@@ -577,53 +589,95 @@ class PartialParsing:
             if key_diff['added']:
                 for elem in key_diff['added']:
                     self.merge_patch(schema_file, dict_key, elem)
+            # Handle schema file updates due to env_var changes
+            if dict_key in env_var_changes and dict_key in new_yaml_dict:
+                for name in env_var_changes[dict_key]:
+                    if name in key_diff['changed_or_deleted_names']:
+                        continue
+                    elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                    if elem:
+                        self.delete_schema_mssa_links(schema_file, dict_key, elem)
+                        self.merge_patch(schema_file, dict_key, elem)
 
         # sources
-        source_diff = self.get_diff_for('sources', saved_yaml_dict, new_yaml_dict)
+        dict_key = 'sources'
+        source_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if source_diff['changed']:
             for source in source_diff['changed']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, 'sources', source['name'])
-                self.merge_patch(schema_file, 'sources', source)
+                self.remove_tests(schema_file, dict_key, source['name'])
+                self.merge_patch(schema_file, dict_key, source)
         if source_diff['deleted']:
             for source in source_diff['deleted']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
                 self.delete_schema_source(schema_file, source)
-                self.remove_tests(schema_file, 'sources', source['name'])
+                self.remove_tests(schema_file, dict_key, source['name'])
         if source_diff['added']:
             for source in source_diff['added']:
                 if 'overrides' in source:  # This is a source patch; need to re-parse orig source
                     self.remove_source_override_target(source)
-                self.merge_patch(schema_file, 'sources', source)
+                self.merge_patch(schema_file, dict_key, source)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in source_diff['changed_or_deleted_names']:
+                    continue
+                source = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if source:
+                    if 'overrides' in source:
+                        self.remove_source_override_target(source)
+                    self.delete_schema_source(schema_file, source)
+                    self.remove_tests(schema_file, dict_key, source['name'])
+                    self.merge_patch(schema_file, dict_key, source)
 
         # macros
-        macro_diff = self.get_diff_for('macros', saved_yaml_dict, new_yaml_dict)
+        dict_key = 'macros'
+        macro_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if macro_diff['changed']:
             for macro in macro_diff['changed']:
                 self.delete_schema_macro_patch(schema_file, macro)
-                self.merge_patch(schema_file, 'macros', macro)
+                self.merge_patch(schema_file, dict_key, macro)
         if macro_diff['deleted']:
             for macro in macro_diff['deleted']:
                 self.delete_schema_macro_patch(schema_file, macro)
         if macro_diff['added']:
             for macro in macro_diff['added']:
-                self.merge_patch(schema_file, 'macros', macro)
+                self.merge_patch(schema_file, dict_key, macro)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in macro_diff['changed_or_deleted_names']:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_macro_patch(schema_file, macro)
+                    self.merge_patch(schema_file, dict_key, macro)
 
         # exposures
-        exposure_diff = self.get_diff_for('exposures', saved_yaml_dict, new_yaml_dict)
+        dict_key = 'exposures'
+        exposure_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
         if exposure_diff['changed']:
             for exposure in exposure_diff['changed']:
                 self.delete_schema_exposure(schema_file, exposure)
-                self.merge_patch(schema_file, 'exposures', exposure)
+                self.merge_patch(schema_file, dict_key, exposure)
         if exposure_diff['deleted']:
             for exposure in exposure_diff['deleted']:
                 self.delete_schema_exposure(schema_file, exposure)
         if exposure_diff['added']:
             for exposure in exposure_diff['added']:
-                self.merge_patch(schema_file, 'exposures', exposure)
+                self.merge_patch(schema_file, dict_key, exposure)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in exposure_diff['changed_or_deleted_names']:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_exposure(schema_file, exposure)
+                    self.merge_patch(schema_file, dict_key, exposure)
 
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
@@ -662,6 +716,7 @@ class PartialParsing:
             "deleted": deleted_elements,
             "added": added_elements,
             "changed": changed_elements,
+            "changed_or_deleted_names": list(changed) + list(deleted),
         }
         return diff
 
@@ -680,6 +735,7 @@ class PartialParsing:
                     found = True
             if not found:
                 pp_dict[key].append(patch)
+        schema_file.delete_from_env_vars(key, patch['name'])
         self.add_to_pp_files(schema_file)
 
     # For model, seed, snapshot, analysis schema dictionary keys,
@@ -806,36 +862,57 @@ class PartialParsing:
 
     # This builds a dictionary of files that need to be scheduled for parsing
     # because the env var has changed.
-    def build_env_vars_to_source_files(self):
-        env_vars_to_source_files = {}
+    # source_files
+    #   env_vars_changed_source_files: [file_id, file_id...]
+    # schema_files
+    #   env_vars_changed_schema_files: {file_id: {"yaml_key": [name, ..]}}
+    def build_env_vars_to_files(self):
+        unchanged_vars = []
+        changed_vars = []
+        delete_vars = []
+        # Check whether the env_var has changed and add it to
+        # an unchanged or changed list
+        for env_var in self.saved_manifest.env_vars:
+            prev_value = self.saved_manifest.env_vars[env_var]
+            current_value = os.getenv(env_var)
+            if current_value is None:
+                # env_var no longer set, remove from manifest
+                delete_vars.append(env_var)
+            if prev_value == current_value:
+                unchanged_vars.append(env_var)
+            else:  # prev_value != current_value
+                changed_vars.append(env_var)
+        for env_var in delete_vars:
+            del self.saved_manifest.env_vars[env_var]
+
+        env_vars_changed_source_files = []
+        env_vars_changed_schema_files = {}
         # The SourceFiles contain a list of env_vars that were used in the file.
-        # The SchemaSourceFiles contain a dictionary of env_vars to schema file blocks.
-        # Create a combined dictionary of env_vars to files that contain them.
+        # The SchemaSourceFiles contain a dictionary of yaml_key to schema entry names to
+        # a list of vars.
+        # Create a list of file_ids for source_files that need to be reparsed, and
+        # a dictionary of file_ids to yaml_keys to names.
         for source_file in self.saved_files.values():
-            if source_file.parse_file_type == ParseFileType.Schema:
+            file_id = source_file.file_id
+            if not source_file.env_vars:
                 continue
-            for env_var in source_file.env_vars:
-                if env_var not in env_vars_to_source_files:
-                    env_vars_to_source_files[env_var] = []
-                env_vars_to_source_files[env_var].append(source_file.file_id)
+            if source_file.parse_file_type == ParseFileType.Schema:
+                for yaml_key in source_file.env_vars.keys():
+                    for name in source_file.env_vars[yaml_key].keys():
+                        for env_var in source_file.env_vars[yaml_key][name]:
+                            if env_var in changed_vars:
+                                if file_id not in env_vars_changed_schema_files:
+                                    env_vars_changed_schema_files[file_id] = {}
+                                if yaml_key not in env_vars_changed_schema_files[file_id]:
+                                    env_vars_changed_schema_files[file_id][yaml_key] = []
+                                if name not in env_vars_changed_schema_files[file_id][yaml_key]:
+                                    env_vars_changed_schema_files[file_id][yaml_key].append(name)
+                                break  # if one env_var is changed we can stop
 
-        # Check whether the env_var has changed. If it hasn't, remove the env_var
-        # from env_vars_to_source_files so that we can use it as dictionary of
-        # which files need to be scheduled for parsing.
-        delete_unchanged_vars = []
-        for env_var in env_vars_to_source_files.keys():
-            prev_value = None
-            if env_var in self.saved_manifest.env_vars:
-                prev_value = self.saved_manifest.env_vars[env_var]
-                current_value = os.getenv(env_var)
-                if prev_value == current_value:
-                    delete_unchanged_vars.append(env_var)
-                if current_value is None:
-                    # env_var no longer set, remove from manifest
-                    del self.saved_manifest.env_vars[env_var]
+            else:
+                for env_var in source_file.env_vars:
+                    if env_var in changed_vars:
+                        env_vars_changed_source_files.append(file_id)
+                        break  # if one env_var is changed we can stop
 
-        # Actually remove the vars that haven't changed
-        for env_var in delete_unchanged_vars:
-            del env_vars_to_source_files[env_var]
-
-        return env_vars_to_source_files
+        return (env_vars_changed_source_files, env_vars_changed_schema_files)

@@ -87,10 +87,10 @@ class TestDeepMap(unittest.TestCase):
                 },
             ],
         }
-        actual = dbt.utils.deep_map(self.intify_all, self.input_value)
+        actual = dbt.utils.deep_map_render(self.intify_all, self.input_value)
         self.assertEqual(actual, expected)
 
-        actual = dbt.utils.deep_map(self.intify_all, expected)
+        actual = dbt.utils.deep_map_render(self.intify_all, expected)
         self.assertEqual(actual, expected)
 
     @staticmethod
@@ -119,24 +119,24 @@ class TestDeepMap(unittest.TestCase):
                 },
             ],
         }
-        actual = dbt.utils.deep_map(self.special_keypath, self.input_value)
+        actual = dbt.utils.deep_map_render(self.special_keypath, self.input_value)
         self.assertEqual(actual, expected)
 
-        actual = dbt.utils.deep_map(self.special_keypath, expected)
+        actual = dbt.utils.deep_map_render(self.special_keypath, expected)
         self.assertEqual(actual, expected)
 
     def test__noop(self):
-        actual = dbt.utils.deep_map(lambda x, _: x, self.input_value)
+        actual = dbt.utils.deep_map_render(lambda x, _: x, self.input_value)
         self.assertEqual(actual, self.input_value)
 
     def test_trivial(self):
         cases = [[], {}, 1, 'abc', None, True]
         for case in cases:
-            result = dbt.utils.deep_map(lambda x, _: x, case)
+            result = dbt.utils.deep_map_render(lambda x, _: x, case)
             self.assertEqual(result, case)
 
         with self.assertRaises(dbt.exceptions.DbtConfigError):
-            dbt.utils.deep_map(lambda x, _: x, {'foo': object()})
+            dbt.utils.deep_map_render(lambda x, _: x, {'foo': object()})
 
 
 class TestBytesFormatting(unittest.TestCase):

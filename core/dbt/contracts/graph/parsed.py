@@ -410,6 +410,9 @@ class ParsedSeedNode(ParsedNode):
 @dataclass
 class TestMetadata(dbtClassMixin, Replaceable):
     name: str
+    # kwargs are the args that are left in the test builder after
+    # removing configs. They are set from the test builder when
+    # the test node is created.
     kwargs: Dict[str, Any] = field(default_factory=dict)
     namespace: Optional[str] = None
 
@@ -432,6 +435,7 @@ class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
     # keep this in sync with CompiledGenericTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
+    file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type: ignore

@@ -189,7 +189,7 @@ class TestBuilder(Generic[Testable]):
         r'((?P<test_namespace>([a-zA-Z_][0-9a-zA-Z_]*))\.)?'
         r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
     )
-    # kwargs representing test configs
+    # args in the test entry representing test configs
     CONFIG_ARGS = (
         'severity', 'tags', 'enabled', 'where', 'limit', 'warn_if', 'error_if',
         'fail_calc', 'store_failures', 'meta', 'database', 'schema', 'alias',
@@ -226,6 +226,12 @@ class TestBuilder(Generic[Testable]):
         self.namespace: str = groups['test_namespace']
         self.config: Dict[str, Any] = {}
 
+        # This code removes keys identified as config args from the test entry
+        # dictionary. The keys remaining in the 'args' dictionary will be
+        # "kwargs", or keyword args that are passed to the test macro.
+        # The "kwargs" are not rendered into strings until compilation time.
+        # The "configs" are rendered here (since they were not rendered back
+        # in the 'get_key_dicts' methods in the schema parsers).
         for key in self.CONFIG_ARGS:
             value = self.args.pop(key, None)
             # 'modifier' config could be either top level arg or in config

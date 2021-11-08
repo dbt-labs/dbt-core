@@ -243,6 +243,15 @@ class ValidationException(RuntimeException):
     MESSAGE = "Validation Error"
 
 
+class ParsingException(RuntimeException):
+    CODE = 10015
+    MESSAGE = "Parsing Error"
+
+    @property
+    def type(self):
+        return 'Parsing'
+
+
 class JSONValidationException(ValidationException):
     def __init__(self, typename, errors):
         self.typename = typename
@@ -445,6 +454,10 @@ class InvalidSelectorException(RuntimeException):
 
 def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
+
+
+def raise_parsing_error(msg) -> NoReturn:
+    raise ParsingException(msg)
 
 
 def raise_database_error(msg, node=None) -> NoReturn:

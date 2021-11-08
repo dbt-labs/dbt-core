@@ -11,11 +11,12 @@ from dbt.adapters.factory import (
     get_adapter, get_adapter_package_names, get_adapter_type_names
 )
 from dbt.clients import agate_helper
-from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack, undefined_error
+from dbt.clients.jinja import get_rendered, MacroGenerator, MacroStack
 from dbt.config import RuntimeConfig, Project
 from .base import contextmember, contextproperty, Var
 from .configured import FQNLookup
 from .context_config import ContextConfig
+from dbt.logger import SECRET_ENV_PREFIX
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
 from .macros import MacroNamespaceBuilder, MacroNamespace
 from .manifest import ManifestContext
@@ -47,6 +48,7 @@ from dbt.exceptions import (
     ref_bad_context,
     source_target_not_found,
     wrapped_exports,
+    raise_parsing_error,
 )
 from dbt.config import IsFQNResource
 from dbt.logger import GLOBAL_LOGGER as logger, SECRET_ENV_PREFIX  # noqa
@@ -1176,15 +1178,19 @@ class ProviderContext(ManifestContext):
             return_value = default
 
         if return_value is not None:
-            # Save the env_var value in the manifest and the var name in the source_file
-            if not var.startswith(SECRET_ENV_PREFIX) and self.model:
+            # Save the env_var value in the manifest and the var name in the source_file.
+            # If this is compiling, do not save because it's irrelevant to parsing.
+            if (not var.startswith(SECRET_ENV_PREFIX) and self.model and
+                    not hasattr(self.model, 'compiled')):
                 self.manifest.env_vars[var] = return_value
                 source_file = self.manifest.files[self.model.file_id]
-                source_file.env_vars.append(var)
+                # Schema files should never get here
+                if source_file.parse_file_type != 'schema':
+                    source_file.env_vars.append(var)
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
-            undefined_error(msg)
+            raise_parsing_error(msg)
 
 
 class MacroContext(ProviderContext):
@@ -1432,6 +1438,28 @@ class TestContext(ProviderContext):
             depends_on_macros
         )
         self.namespace = macro_namespace
+
+    @contextmember
+    def env_var(self, var: str, default: Optional[str] = None) -> str:
+        return_value = None
+        if var in os.environ:
+            return_value = os.environ[var]
+        elif default is not None:
+            return_value = default
+
+        if return_value is not None:
+            # Save the env_var value in the manifest and the var name in the source_file
+            if not var.startswith(SECRET_ENV_PREFIX) and self.model:
+                self.manifest.env_vars[var] = return_value
+                # the "model" should only be test nodes, but just in case, check
+                if self.model.resource_type == NodeType.Test and self.model.file_key_name:
+                    source_file = self.manifest.files[self.model.file_id]
+                    (yaml_key, name) = self.model.file_key_name.split('.')
+                    source_file.add_env_var(var, yaml_key, name)
+            return return_value
+        else:
+            msg = f"Env var required but not provided: '{var}'"
+            raise_parsing_error(msg)
 
 
 def generate_test_context(

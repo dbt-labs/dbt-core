@@ -268,7 +268,8 @@ class SourcePatcher:
             target=target,
             test=test,
             tags=tags,
-            column_name=column_name
+            column_name=column_name,
+            schema_file_id=target.file_id,
         )
         return node
 

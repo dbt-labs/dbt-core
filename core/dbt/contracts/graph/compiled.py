@@ -126,6 +126,7 @@ class CompiledGenericTestNode(CompiledNode, HasTestMetadata):
     # keep this in sync with ParsedGenericTestNode!
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
+    file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
     # refactor the various configs.
     config: TestConfig = field(default_factory=TestConfig)  # type:ignore
