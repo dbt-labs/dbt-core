@@ -25,8 +25,19 @@ from dbt.events.types import (
     PartialParsingException,
     PartialParsingSkipParsing,
     PartialParsingMacroChangeStartFullParse,
-    InvalidDisabledSourceInTestNode, InvalidRefInTestNode, PartialParsingProjectEnvVarsChanged,
-    PartialParsingProfileEnvVarsChanged
+    ManifestWrongMetadataVersion,
+    PartialParsingVersionMismatch,
+    PartialParsingFailedBecauseConfigChange,
+    PartialParsingFailedBecauseProfileChange,
+    PartialParsingFailedBecauseNewProjectDependency,
+    PartialParsingFailedBecauseHashChanged,
+    PartialParsingNotEnabled,
+    ParsedFileLoadFailed,
+    PartialParseSaveFileNotFound,
+    InvalidDisabledSourceInTestNode,
+    InvalidRefInTestNode,
+    PartialParsingProjectEnvVarsChanged,
+    PartialParsingProfileEnvVarsChanged,
 )
 from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
