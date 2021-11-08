@@ -1,10 +1,12 @@
 from abc import ABCMeta, abstractmethod
 import argparse
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, List, Optional, Dict
 from dbt import ui
 from dbt.node_types import NodeType
 from dbt.events.format import format_fancy_output_line, pluralize
+import os
 
 
 # types to represent log levels
@@ -56,6 +58,11 @@ class ShowException():
 
 # top-level superclass for all events
 class Event(metaclass=ABCMeta):
+    # fields that should be on all events with their default implementations
+    ts: datetime = datetime.now()
+    pid: int = os.getpid()
+    # code: int
+
     # do not define this yourself. inherit it from one of the above level types.
     @abstractmethod
     def level_tag(self) -> str:
