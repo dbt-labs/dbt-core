@@ -51,7 +51,7 @@ from dbt.exceptions import (
     raise_parsing_error,
 )
 from dbt.config import IsFQNResource
-from dbt.logger import GLOBAL_LOGGER as logger, SECRET_ENV_PREFIX  # noqa
+from dbt.logger import SECRET_ENV_PREFIX  # noqa
 from dbt.node_types import NodeType
 
 from dbt.utils import (
