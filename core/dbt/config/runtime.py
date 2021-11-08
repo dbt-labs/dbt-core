@@ -16,8 +16,6 @@ from dbt import flags
 from dbt import tracking
 from dbt.adapters.factory import get_relation_class_by_name, get_include_paths
 from dbt.helper_types import FQNPath, PathSet
-from dbt.context.base import generate_base_context
-from dbt.context.target import generate_target_context
 from dbt.contracts.connection import AdapterRequiredConfig, Credentials
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.relation import ComponentName
@@ -60,6 +58,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     def __post_init__(self):
         self.validate()
 
+    # Called by 'new_project' and 'from_args'
     @classmethod
     def from_parts(
         cls,
@@ -116,6 +115,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
+            project_env_vars=project.project_env_vars,
+            profile_env_vars=profile.profile_env_vars,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             user_config=profile.user_config,
@@ -126,6 +127,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dependencies=dependencies,
         )
 
+    # Called by 'load_projects' in this class
     def new_project(self, project_root: str) -> 'RuntimeConfig':
         """Given a new project root, read in its project dictionary, supply the
         existing project's profile info, and create a new project file.
@@ -140,7 +142,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         profile.validate()
 
         # load the new project and its packages. Don't pass cli variables.
-        renderer = DbtProjectYamlRenderer(generate_target_context(profile, {}))
+        renderer = DbtProjectYamlRenderer(profile)
 
         project = Project.from_project_root(
             project_root,
@@ -148,14 +150,14 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             verify_version=bool(flags.VERSION_CHECK),
         )
 
-        cfg = self.from_parts(
+        runtime_config = self.from_parts(
             project=project,
             profile=profile,
             args=deepcopy(self.args),
         )
         # force our quoting back onto the new project.
-        cfg.quoting = deepcopy(self.quoting)
-        return cfg
+        runtime_config.quoting = deepcopy(self.quoting)
+        return runtime_config
 
     def serialize(self) -> Dict[str, Any]:
         """Serialize the full configuration to a single dictionary. For any
@@ -205,21 +207,26 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         )
 
         # build the profile using the base renderer and the one fact we know
+        # Note: only the named profile section is rendered. The rest of the
+        # profile is ignored.
         cli_vars: Dict[str, Any] = parse_cli_vars(getattr(args, 'vars', '{}'))
-        profile_renderer = ProfileRenderer(generate_base_context(cli_vars))
+        profile_renderer = ProfileRenderer(cli_vars)
         profile_name = partial.render_profile_name(profile_renderer)
-
         profile = cls._get_rendered_profile(
             args, profile_renderer, profile_name
         )
+        # Save env_vars encountered in rendering for partial parsing
+        profile.profile_env_vars = profile_renderer.ctx_obj.env_vars
 
         # get a new renderer using our target information and render the
         # project
-        ctx = generate_target_context(profile, cli_vars)
-        project_renderer = DbtProjectYamlRenderer(ctx)
+        project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
         project = partial.render(project_renderer)
+        # Save env_vars encountered in rendering for partial parsing
+        project.project_env_vars = project_renderer.ctx_obj.env_vars
         return (project, profile)
 
+    # Called in main.py, lib.py, task/base.py
     @classmethod
     def from_args(cls, args: Any) -> 'RuntimeConfig':
         """Given arguments, read in dbt_project.yml from the current directory,
@@ -360,6 +367,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     def clear_dependencies(self):
         self.dependencies = None
 
+    # Called by 'load_dependencies' in this class
     def load_projects(
         self, paths: Iterable[Path]
     ) -> Iterator[Tuple[str, 'RuntimeConfig']]:
@@ -512,6 +520,8 @@ class UnsetProfileConfig(RuntimeConfig):
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
+            project_env_vars=project.project_env_vars,
+            profile_env_vars=profile.profile_env_vars,
             profile_name='',
             target_name='',
             user_config=UnsetConfig(),

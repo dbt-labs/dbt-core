@@ -31,7 +31,6 @@ class GraphTest(unittest.TestCase):
 
     def tearDown(self):
         self.write_gpickle_patcher.stop()
-        self.load_projects_patcher.stop()
         self.file_system_patcher.stop()
         self.mock_filesystem_constructor.stop()
         self.mock_hook_constructor.stop()
@@ -97,19 +96,14 @@ class GraphTest(unittest.TestCase):
         self.mock_hook_constructor = self.hook_patcher.start()
         self.mock_hook_constructor.side_effect = create_hook_patcher
 
-        # Create load_projects patcher
-        self.load_projects_patcher = patch('dbt.parser.manifest._load_projects')
-        self.mock_load_projects = self.load_projects_patcher.start()
-        def _load_projects(config, paths):
-            yield config.project_name, config
-        self.mock_load_projects.side_effect = _load_projects
-
         # Create the Manifest.state_check patcher
         @patch('dbt.parser.manifest.ManifestLoader.build_manifest_state_check')
         def _mock_state_check(self):
             config = self.root_project
             all_projects = self.all_projects
             return ManifestStateCheck(
+                project_env_vars_hash=FileHash.from_contents(''),
+                profile_env_vars_hash=FileHash.from_contents(''),
                 vars_hash=FileHash.from_contents('vars'),
                 project_hashes={name: FileHash.from_contents(name) for name in all_projects},
                 profile_hash=FileHash.from_contents('profile'),

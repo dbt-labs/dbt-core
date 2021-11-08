@@ -1,7 +1,9 @@
 from typing import Dict, Any, Tuple, Optional, Union, Callable
 
 from dbt.clients.jinja import get_rendered, catch_jinja
-
+from dbt.context.target import TargetContext
+from dbt.context.base import BaseContext
+from dbt.contracts.connection import HasCredentials
 from dbt.exceptions import (
     DbtProjectError, CompilationException, RecursionException
 )
@@ -98,6 +100,23 @@ class ProjectPostprocessor(Dict[Keypath, Callable[[Any], Any]]):
 class DbtProjectYamlRenderer(BaseRenderer):
     _KEYPATH_HANDLERS = ProjectPostprocessor()
 
+    def __init__(
+        self, profile: Optional[HasCredentials] = None,
+        cli_vars: Optional[Dict[str, Any]] = None
+    ) -> None:
+        # Generate contexts here because we want to save the context
+        # object in order to retrieve the env_vars. This is almost always
+        # a TargetContext, but in the debug task we want a project
+        # even when we don't have a profile.
+        if cli_vars is None:
+            cli_vars = {}
+        if profile:
+            self.ctx_obj = TargetContext(profile, cli_vars)
+        else:
+            self.ctx_obj = BaseContext(cli_vars)  # type:ignore
+        context = self.ctx_obj.to_dict()
+        super().__init__(context)
+
     @property
     def name(self):
         'Project config'
@@ -157,6 +176,18 @@ class DbtProjectYamlRenderer(BaseRenderer):
 
 
 class ProfileRenderer(BaseRenderer):
+
+    def __init__(
+        self, cli_vars: Optional[Dict[str, Any]] = None
+    ) -> None:
+        # Generate contexts here because we want to save the context
+        # object in order to retrieve the env_vars.
+        if cli_vars is None:
+            cli_vars = {}
+        self.ctx_obj = BaseContext(cli_vars)
+        context = self.ctx_obj.to_dict()
+        super().__init__(context)
+
     @property
     def name(self):
         'Profile'

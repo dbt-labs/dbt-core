@@ -12,8 +12,6 @@ from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.config import Project, Profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.config.utils import parse_cli_vars
-from dbt.context.base import generate_base_context
-from dbt.context.target import generate_target_context
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.links import ProfileConfigDocs
 from dbt.ui import green, red
@@ -146,12 +144,7 @@ class DebugTask(BaseTask):
             self.project_fail_details = FILE_NOT_FOUND
             return red('ERROR not found')
 
-        if self.profile is None:
-            ctx = generate_base_context(self.cli_vars)
-        else:
-            ctx = generate_target_context(self.profile, self.cli_vars)
-
-        renderer = DbtProjectYamlRenderer(ctx)
+        renderer = DbtProjectYamlRenderer(self.profile, self.cli_vars)
 
         try:
             self.project = Project.from_project_root(
@@ -198,9 +191,7 @@ class DebugTask(BaseTask):
                     os.path.dirname(self.project_path),
                     verify_version=bool(flags.VERSION_CHECK),
                 )
-                renderer = DbtProjectYamlRenderer(
-                    generate_base_context(self.cli_vars)
-                )
+                renderer = DbtProjectYamlRenderer(None, self.cli_vars)
                 project_profile = partial.render_profile_name(renderer)
             except dbt.exceptions.DbtProjectError:
                 pass
@@ -241,7 +232,7 @@ class DebugTask(BaseTask):
         assert self.raw_profile_data is not None
         raw_profile = self.raw_profile_data[profile_name]
 
-        renderer = ProfileRenderer(generate_base_context(self.cli_vars))
+        renderer = ProfileRenderer(self.cli_vars)
 
         target_name, _ = Profile.render_profile(
             raw_profile=raw_profile,
@@ -272,7 +263,7 @@ class DebugTask(BaseTask):
 
         profile_errors = []
         profile_names = self._choose_profile_names()
-        renderer = ProfileRenderer(generate_base_context(self.cli_vars))
+        renderer = ProfileRenderer(self.cli_vars)
         for profile_name in profile_names:
             try:
                 profile: Profile = QueryCommentedProfile.render_from_args(
@@ -400,7 +391,7 @@ class DebugTask(BaseTask):
             raw_profile=profile_data,
             profile_name='',
             target_override=target_name,
-            renderer=ProfileRenderer(generate_base_context({})),
+            renderer=ProfileRenderer({}),
         )
         result = cls.attempt_connection(profile)
         if result is not None:

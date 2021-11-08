@@ -546,6 +546,8 @@ class ParsingInfo:
 @dataclass
 class ManifestStateCheck(dbtClassMixin):
     vars_hash: FileHash = field(default_factory=FileHash.empty)
+    project_env_vars_hash: FileHash = field(default_factory=FileHash.empty)
+    profile_env_vars_hash: FileHash = field(default_factory=FileHash.empty)
     profile_hash: FileHash = field(default_factory=FileHash.empty)
     project_hashes: MutableMapping[str, FileHash] = field(default_factory=dict)
 

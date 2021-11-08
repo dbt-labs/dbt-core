@@ -196,6 +196,7 @@ class BaseContext(metaclass=ContextMeta):
     def __init__(self, cli_vars):
         self._ctx = {}
         self.cli_vars = cli_vars
+        self.env_vars = {}
 
     def generate_builtins(self):
         builtins: Dict[str, Any] = {}
@@ -317,6 +318,7 @@ class BaseContext(metaclass=ContextMeta):
             return_value = default
 
         if return_value is not None:
+            self.env_vars[var] = return_value
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"

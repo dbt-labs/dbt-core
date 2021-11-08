@@ -78,6 +78,8 @@ class ReparseReason(StrEnum):
     project_config_changed = '06_project_config_changed'
     load_file_failure = '07_load_file_failure'
     exception = '08_exception'
+    proj_env_vars_changed = '09_project_env_vars_changed'
+    prof_env_vars_changed = '10_profile_env_vars_changed'
 
 
 # Part of saved performance info
@@ -553,6 +555,18 @@ class ManifestLoader:
             logger.info("Unable to do partial parsing because profile has changed")
             valid = False
             reparse_reason = ReparseReason.profile_changed
+        if self.manifest.state_check.project_env_vars_hash != \
+                manifest.state_check.project_env_vars_hash:
+            logger.info("Unable to do partial parsing because env vars "
+                        "used in dbt_project.yml have changed")
+            valid = False
+            reparse_reason = ReparseReason.proj_env_vars_changed
+        if self.manifest.state_check.profile_env_vars_hash != \
+                manifest.state_check.profile_env_vars_hash:
+            logger.info("Unable to do partial parsing because env vars "
+                        "used in profiles.yml have changed")
+            valid = False
+            reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
             k for k in self.manifest.state_check.project_hashes
@@ -605,8 +619,8 @@ class ManifestLoader:
                 # keep this check inside the try/except in case something about
                 # the file has changed in weird ways, perhaps due to being a
                 # different version of dbt
-                is_partial_parseable, reparse_reason = self.is_partial_parsable(manifest)
-                if is_partial_parseable:
+                is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
+                if is_partial_parsable:
                     # We don't want to have stale generated_at dates
                     manifest.metadata.generated_at = datetime.utcnow()
                     # or invocation_ids
@@ -655,6 +669,12 @@ class ManifestLoader:
         config = self.root_project
         all_projects = self.all_projects
         # if any of these change, we need to reject the parser
+
+        # Create a FileHash of vars string, profile name and target name
+        # This does not capture vars in dbt_project, just the command line
+        # arg vars, but since any changes to that file will cause state_check
+        # to not pass, it doesn't matter.  If we move to more granular checking
+        # of env_vars, that would need to change.
         vars_hash = FileHash.from_contents(
             '\x00'.join([
                 getattr(config.args, 'vars', '{}') or '{}',
@@ -664,17 +684,38 @@ class ManifestLoader:
             ])
         )
 
+        # Create a FileHash of the env_vars in the project
+        key_list = list(config.project_env_vars.keys())
+        key_list.sort()
+        env_var_str = ''
+        for key in key_list:
+            env_var_str = env_var_str + f'{key}:{config.project_env_vars[key]}|'
+        project_env_vars_hash = FileHash.from_contents(env_var_str)
+
+        # Create a FileHash of the env_vars in the project
+        key_list = list(config.profile_env_vars.keys())
+        key_list.sort()
+        env_var_str = ''
+        for key in key_list:
+            env_var_str = env_var_str + f'{key}:{config.profile_env_vars[key]}|'
+        profile_env_vars_hash = FileHash.from_contents(env_var_str)
+
+        # Create a FileHash of the profile file
         profile_path = os.path.join(flags.PROFILES_DIR, 'profiles.yml')
         with open(profile_path) as fp:
             profile_hash = FileHash.from_contents(fp.read())
 
+        # Create a FileHashes for dbt_project for all dependencies
         project_hashes = {}
         for name, project in all_projects.items():
             path = os.path.join(project.project_root, 'dbt_project.yml')
             with open(path) as fp:
                 project_hashes[name] = FileHash.from_contents(fp.read())
 
+        # Create the ManifestStateCheck object
         state_check = ManifestStateCheck(
+            project_env_vars_hash=project_env_vars_hash,
+            profile_env_vars_hash=profile_env_vars_hash,
             vars_hash=vars_hash,
             profile_hash=profile_hash,
             project_hashes=project_hashes,
@@ -921,20 +962,6 @@ def _warn_for_unused_resource_config_paths(
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-
-
-# This is just used in test cases
-def _load_projects(config, paths):
-    for path in paths:
-        try:
-            project = config.new_project(path)
-        except dbt.exceptions.DbtProjectError as e:
-            raise dbt.exceptions.DbtProjectError(
-                'Failed to read package at {}: {}'
-                .format(path, e)
-            )
-        else:
-            yield project.project_name, project
 
 
 def _get_node_column(node, column_name):
