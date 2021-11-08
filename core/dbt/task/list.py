@@ -1,10 +1,6 @@
 import json
 
-from dbt.contracts.graph.parsed import (
-    ParsedExposure,
-    ParsedSourceDefinition,
-    ParsedMetric
-)
+from dbt.contracts.graph.parsed import ParsedExposure, ParsedSourceDefinition, ParsedMetric
 from dbt.graph import ResourceTypeSelector
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.task.test import TestSelector
