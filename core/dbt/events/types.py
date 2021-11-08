@@ -2,9 +2,8 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional, Dict
 from dbt import ui
-from dbt import utils
 from dbt.node_types import NodeType
-from dbt.events.format import format_fancy_output_line
+from dbt.events.format import format_fancy_output_line, pluralize
 
 
 # types to represent log levels
@@ -1123,8 +1122,8 @@ class EndOfRunSummary(InfoLevel, CliEventABC):
     keyboard_interrupt: bool = False
 
     def cli_msg(self) -> str:
-        error_plural = utils.pluralize(self.num_errors, 'error')
-        warn_plural = utils.pluralize(self.num_warnings, 'warning')
+        error_plural = pluralize(self.num_errors, 'error')
+        warn_plural = pluralize(self.num_warnings, 'warning')
         if self.keyboard_interrupt:
             message = ui.yellow('Exited because of keyboard interrupt.')
         elif self.num_errors > 0:
@@ -1634,6 +1633,94 @@ class DepsSymlinkNotAvailable(DebugLevel, CliEventABC):
         return '  Symlinks are not available on this OS, copying dependency.'
 
 
+@dataclass
+class FoundStats(InfoLevel, CliEventABC):
+    stat_line: str
+
+    def cli_msg(self) -> str:
+        return f"Found {self.stat_line}"
+
+
+@dataclass
+class CompilingNode(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f"Compiling {self.unique_id}"
+
+
+@dataclass
+class WritingInjectedSQLForNode(DebugLevel, CliEventABC):
+    unique_id: str
+
+    def cli_msg(self) -> str:
+        return f'Writing injected SQL for node "{self.unique_id}"'
+
+
+class DisableTracking(WarnLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Error sending message, disabling tracking"
+
+
+@dataclass
+class SendingEvent(DebugLevel, CliEventABC):
+    kwargs: str
+
+    def cli_msg(self) -> str:
+        return f"Sending event: {self.kwargs}"
+
+
+class SendEventFailure(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "An error was encountered while trying to send an event"
+
+
+class FlushEvents(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Flushing usage events"
+
+
+class FlushEventsFailure(DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "An error was encountered while trying to flush usage events"
+
+
+class TrackingInitializeFailure(ShowException, DebugLevel, CliEventABC):
+    def cli_msg(self) -> str:
+        return "Got an exception trying to initialize tracking"
+
+
+@dataclass
+class RetryExternalCall(DebugLevel, CliEventABC):
+    attempt: int
+    max: int
+
+    def cli_msg(self) -> str:
+        return f"Retrying external call. Attempt: {self.attempt} Max attempts: {self.max}"
+
+
+@dataclass
+class GeneralWarningMsg(WarnLevel, CliEventABC):
+    msg: str
+    log_fmt: str
+
+    def cli_msg(self) -> str:
+        if self.log_fmt is not None:
+            return self.log_fmt.format(self.msg)
+        return self.msg
+
+
+@dataclass
+class GeneralWarningException(WarnLevel, CliEventABC):
+    exc: Exception
+    log_fmt: str
+
+    def cli_msg(self) -> str:
+        if self.log_fmt is not None:
+            return self.log_fmt.format(str(self.exc))
+        return str(self.exc)
+
+
 # since mypy doesn't run on every file we need to suggest to mypy that every
 # class gets instantiated. But we don't actually want to run this code.
 # making the conditional `if False` causes mypy to skip it as dead code so
@@ -1763,6 +1850,7 @@ if 1 == 0:
     CheckNodeTestFailure(relation_name='')
     FirstRunResultError(msg='')
     AfterFirstRunResultError(msg='')
+    EndOfRunSummary(num_errors=0, num_warnings=0, keyboard_interrupt=False)
     PrintStartLine(description='', index=0, total=0)
     PrintHookStartLine(statement='', index=0, total=0, truncate=False)
     PrintHookEndLine(statement='', status='', index=0, total=0, execution_time=0, truncate=False)
@@ -1807,3 +1895,15 @@ if 1 == 0:
     EnsureGitInstalled()
     DepsCreatingLocalSymlink()
     DepsSymlinkNotAvailable()
+    FoundStats(stat_line='')
+    CompilingNode(unique_id='')
+    WritingInjectedSQLForNode(unique_id='')
+    DisableTracking()
+    SendingEvent(kwargs='')
+    SendEventFailure()
+    FlushEvents()
+    FlushEventsFailure()
+    TrackingInitializeFailure()
+    RetryExternalCall(attempt=0, max=0)
+    GeneralWarningMsg(msg='', log_fmt='')
+    GeneralWarningException(exc=Exception(''), log_fmt='')
