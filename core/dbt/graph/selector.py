@@ -6,9 +6,7 @@ from .selector_methods import MethodManager
 from .selector_spec import SelectionCriteria, SelectionSpec
 
 from dbt.events.functions import fire_event
-from dbt.events.types import (
-    SelectorAlertUpto3UnusedNodes, SelectorAlertAllUnusedNodes, SelectorReportInvalidSelector
-)
+from dbt.events.types import SelectorReportInvalidSelector
 from dbt.node_types import NodeType
 from dbt.exceptions import (
     InternalException,

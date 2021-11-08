@@ -9,8 +9,9 @@ from dbt.contracts.sql import (
     RemoteRunResult,
     ResultTable,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.task.compile import CompileRunner
+from dbt.events.functions import fire_event
+from dbt.events.types import SQlRunnerException
 
 
 SQLResult = TypeVar('SQLResult', bound=RemoteCompileResultMixin)
@@ -23,7 +24,7 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
         )
 
     def handle_exception(self, e, ctx):
-        logger.debug('Got an exception: {}'.format(e), exc_info=True)
+        fire_event(SQlRunnerException(exc=e))
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt.exceptions.RuntimeException):
                 e.add_node(ctx.node)
