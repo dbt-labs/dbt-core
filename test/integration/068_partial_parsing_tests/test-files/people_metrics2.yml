@@ -2,7 +2,7 @@ version: 2
 
 metrics:
 
-  - model: people
+  - model: "ref('people')"
     name: number_of_people
     description: Total count of people
     label: "Number of people"
@@ -16,7 +16,7 @@ metrics:
     meta:
         my_meta: 'replaced'
 
-  - model: people
+  - model: "ref('people')"
     name: collective_tenure
     description: Total number of years of team experience
     label: "Collective tenure"

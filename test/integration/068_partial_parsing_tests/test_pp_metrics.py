@@ -72,6 +72,8 @@ class MetricsTest(BasePPTest):
         metric_tenure = manifest.metrics[metric_tenure_id]
         expected_meta = {'my_meta': 'testing'}
         self.assertEqual(metric_people.meta, expected_meta)
+        self.assertEqual(metric_people.refs, [['people']])
+        self.assertEqual(metric_tenure.refs, [['people']])
 
         # Change metrics yaml files
         self.copy_file('test-files/people_metrics2.yml', 'models/people_metrics.yml')
