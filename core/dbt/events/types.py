@@ -1210,7 +1210,7 @@ class PrintStartLine(InfoLevel, Cli, File):
     total: int
 
     def message(self) -> str:
-        msg = "START {self.description}"
+        msg = f"START {self.description}"
         return format_fancy_output_line(msg=msg, status='RUN', index=self.index, total=self.total)
 
 
@@ -1222,7 +1222,7 @@ class PrintHookStartLine(InfoLevel, Cli, File):
     truncate: bool
 
     def message(self) -> str:
-        msg = "START hook: {self.statement}"
+        msg = f"START hook: {self.statement}"
         return format_fancy_output_line(msg=msg,
                                         status='RUN',
                                         index=self.index,
