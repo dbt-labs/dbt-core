@@ -37,7 +37,7 @@ def _get(path, registry_base_url=None):
     # See https://github.com/dbt-labs/dbt-core/issues/4577
     if resp.json() is None:
         raise requests.exceptions.ContentDecodingError(
-            'Request error: The response is None', response=resp
+            "Request error: The response is None", response=resp
         )
     return resp.json()
 
