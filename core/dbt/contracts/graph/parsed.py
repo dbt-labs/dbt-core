@@ -793,6 +793,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     dimensions: List[str]
     resource_type: NodeType = NodeType.Metric
     meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
@@ -814,9 +815,6 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
 
     def same_filters(self, old: 'ParsedMetric') -> bool:
         return self.filters == old.filters
-
-    def same_meta(self, old: 'ParsedMetric') -> bool:
-        return self.meta == old.meta
 
     def same_description(self, old: 'ParsedMetric') -> bool:
         return self.description == old.description
@@ -846,7 +844,6 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
             self.same_model(old) and
             self.same_dimensions(old) and
             self.same_filters(old) and
-            self.same_meta(old) and
             self.same_description(old) and
             self.same_label(old) and
             self.same_type(old) and

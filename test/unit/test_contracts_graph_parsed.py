@@ -22,6 +22,7 @@ from dbt.contracts.graph.parsed import (
     ParsedNodePatch,
     ParsedMacro,
     ParsedExposure,
+    ParsedMetric,
     ParsedSeedNode,
     Docs,
     MacroDependsOn,
@@ -33,6 +34,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.contracts.graph.unparsed import (
     ExposureType,
+    MetricFilter,
     FreshnessThreshold,
     MaturityType,
     Quoting,
@@ -2183,3 +2185,79 @@ def test_compare_unchanged_parsed_exposure(func, basic_parsed_exposure_object):
 def test_compare_changed_exposure(func, basic_parsed_exposure_object):
     node, compare = func(basic_parsed_exposure_object)
     assert not node.same_contents(compare)
+
+
+# METRICS
+@pytest.fixture
+def minimal_parsed_metric_dict():
+    return {
+        'name': 'my_metric',
+        'type': 'count',
+        'timestamp': 'created_at',
+        'time_grains': ['day'],
+        'fqn': ['test', 'metrics', 'my_metric'],
+        'unique_id': 'metric.test.my_metric',
+        'package_name': 'test',
+        'meta': {},
+        'tags': [],
+        'path': 'models/something.yml',
+        'root_path': '/usr/src/app',
+        'original_file_path': 'models/something.yml',
+        'description': '',
+        'created_at': 1.0,
+    }
+
+
+@pytest.fixture
+def basic_parsed_metric_dict():
+    return {
+        'name': 'new_customers',
+        'label': 'New Customers',
+        'model': 'ref("dim_customers")',
+        'type': 'count',
+        'sql': 'user_id',
+        'timestamp': 'signup_date',
+        'time_grains': ['day', 'week', 'month'],
+        'dimensions': ['plan', 'country'],
+        'filters': [
+            {
+                "field": "is_paying",
+                "value": "true",
+                "operator": "=",
+            }
+        ],
+        'resource_type': 'metric',
+        'refs': [['dim_customers']],
+        'sources': [],
+        'fqn': ['test', 'metrics', 'my_metric'],
+        'unique_id': 'metric.test.my_metric',
+        'package_name': 'test',
+        'path': 'models/something.yml',
+        'root_path': '/usr/src/app',
+        'original_file_path': 'models/something.yml',
+        'description': '',
+        'meta': {},
+        'tags': [],
+        'created_at': 1.0,
+        'depends_on': {
+            'nodes': [],
+            'macros': [],
+        },
+    }
+
+
+@pytest.fixture
+def basic_parsed_metric_object():
+    return ParsedMetric(
+        name='my_metric',
+        type='count',
+        fqn=['test', 'metrics', 'my_metric'],
+        unique_id='metric.test.my_metric',
+        package_name='test',
+        path='models/something.yml',
+        root_path='/usr/src/app',
+        original_file_path='models/something.yml',
+        description='',
+        meta={},
+        tags=[]
+    )

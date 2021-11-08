@@ -469,3 +469,4 @@ class UnparsedMetric(dbtClassMixin, Replaceable):
     dimensions: List[str] = field(default_factory=list)
     filters: List[MetricFilter] = field(default_factory=list)
     meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)

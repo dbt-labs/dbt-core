@@ -995,7 +995,8 @@ class MetricParser(YamlReader):
             dimensions=unparsed.dimensions,
             time_grains=unparsed.time_grains,
             filters=unparsed.filters,
-            meta=unparsed.meta
+            meta=unparsed.meta,
+            tags=unparsed.tags,
         )
 
         ctx = generate_parse_metrics(
