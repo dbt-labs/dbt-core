@@ -68,12 +68,27 @@ class Event(metaclass=ABCMeta):
     def level_tag(self) -> str:
         raise Exception("level_tag not implemented for event")
 
+    # Solely the human readable message. Timestamps and formatting will be added by the logger.
+    # Must override yourself
+    @abstractmethod
+    def msg(self) -> str:
+        raise Exception("cli_msg not implemented for cli event")
+
+
+class FileEventABC(Event, metaclass=ABCMeta):
+    # Solely the human readable message. Timestamps and formatting will be added by the logger.
+    @abstractmethod
+    def file_msg(self) -> str:
+        # returns the event msg unless overriden in the concrete class
+        return self.msg()
+
 
 class CliEventABC(Event, metaclass=ABCMeta):
     # Solely the human readable message. Timestamps and formatting will be added by the logger.
     @abstractmethod
     def cli_msg(self) -> str:
-        raise Exception("cli_msg not implemented for cli event")
+        # returns the event msg unless overriden in the concrete class
+        return self.msg()
 
 
 class MainKeyboardInterrupt(InfoLevel, CliEventABC):
