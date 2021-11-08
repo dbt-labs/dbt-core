@@ -2,15 +2,16 @@
 from colorama import Style
 from dbt.events.history import EVENT_HISTORY
 import dbt.events.functions as this  # don't worry I hate it too.
-from dbt.events.types import CliEventABC, Event, ShowException
+from dbt.events.types import Cli, Event, File, ShowException
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing
 import json
 import logging
+from logging import Logger
 from logging.handlers import WatchedFileHandler
 import os
-from typing import Generator, List
+from typing import List
 
 
 # create the global file logger with no configuration
@@ -79,71 +80,57 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
-# this returns a generator because some log messages are actually expensive
-# to build. For example, many debug messages call `dump_graph()` and we
-# don't want to do that in the event that those messages are never going to
-# be sent to the user because we are only logging info-level events.
-def gen_human_msg(e: CliEventABC) -> Generator[str, None, None]:
-    msg = None
-    if not log_line:
-        msg = scrub_secrets(e.cli_msg(), env_secrets())
-    while True:
-        yield msg
+# translates an Event to a completely formatted output log_line
+# json=True -> json formatting
+# json=False -> text formatting
+# cli=True -> cli formatting
+# cli=False -> file formatting
+def create_log_line(e: Event, json_fmt: bool, cli_dest: bool) -> str:
+    values: dict = {
+        'pid': e.pid,
+        'msg': ''
+    }
+    if cli_dest and isinstance(e, Cli):
+        values['msg'] = scrub_secrets(e.cli_msg(), env_secrets())
+    elif not cli_dest and isinstance(e, File):
+        values['msg'] = scrub_secrets(e.file_msg(), env_secrets())
 
-
-# translates an Event to a completely formatted output string
-def gen_msg_text(e: CliEventABC) -> Generator[str, None, None]:
-    log_line = None
-    if not log_line:
-        values: dict = {
-            'ts': e.ts.strftime("%H:%M:%S"),
-            'pid': e.pid,
-            'msg': next(gen_human_msg(e))
-        }
+    if json_fmt:
+        values['ts'] = e.ts.isoformat()
+        log_line = json.dumps(values, sort_keys=True)
+    else:
+        values['ts'] = e.ts.strftime("%H:%M:%S")
         color_tag = '' if this.format_color else Style.RESET_ALL
         log_line = f"{color_tag}{values['ts']} | {values['msg']}"
-    while True:
-        yield log_line
 
-
-# translates an Event to a completely formatted json output string
-def gen_msg_json(e: CliEventABC) -> Generator[str, None, None]:
-    log_line = None
-    if not log_line:
-        values: dict = {
-            'ts': e.ts.isoformat()
-            'pid': e.pid
-            'msg': next(gen_human_msg(e))
-        }
-        log_line = json.dumps(values, sort_keys=True)
-    while True:
-        yield log_line
+    return log_line
 
 
 # allows for resuse of this obnoxious if else tree.
 # do not use for exceptions, it doesn't pass along exc_info, stack_info, or extra
 def send_to_logger(l: Logger, level_tag: str, log_line: str):
-    if e.level_tag == 'test':
+    if level_tag == 'test':
         # TODO after implmenting #3977 send to new test level
         l.debug(log_line)
-    elif e.level_tag == 'debug':
+    elif level_tag == 'debug':
         l.debug(log_line)
-    elif e.level_tag == 'info':
+    elif level_tag == 'info':
         l.info(log_line)
-    elif e.level_tag == 'warn':
+    elif level_tag == 'warn':
         l.warning(log_line)
-    elif e.level_tag == 'error':
+    elif level_tag == 'error':
         l.error(log_line)
     else:
         raise AssertionError(
-            f"Event type {type(e).__name__} has unhandled level: {e.level_tag()}"
+            f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
         )
+
 
 def send_exc_to_logger(
     l: Logger,
     level_tag: str,
     log_line: str,
-    exec_info=True,
+    exc_info=True,
     stack_info=False,
     extra=False
 ):
@@ -151,42 +138,43 @@ def send_exc_to_logger(
         # TODO after implmenting #3977 send to new test level
         l.debug(
             log_line,
-            exc_info=e.exc_info,
-            stack_info=e.stack_info,
-            extra=e.extra
+            exc_info=exc_info,
+            stack_info=stack_info,
+            extra=extra
         )
     elif level_tag == 'debug':
         l.debug(
             log_line,
-            exc_info=e.exc_info,
-            stack_info=e.stack_info,
-            extra=e.extra
+            exc_info=exc_info,
+            stack_info=stack_info,
+            extra=extra
         )
     elif level_tag == 'info':
         l.info(
             log_line,
-            exc_info=e.exc_info,
-            stack_info=e.stack_info,
-            extra=e.extra
+            exc_info=exc_info,
+            stack_info=stack_info,
+            extra=extra
         )
     elif level_tag == 'warn':
         l.warning(
             log_line,
-            exc_info=e.exc_info,
-            stack_info=e.stack_info,
-            extra=e.extra
+            exc_info=exc_info,
+            stack_info=stack_info,
+            extra=extra
         )
     elif level_tag == 'error':
         l.error(
             log_line,
-            exc_info=e.exc_info,
-            stack_info=e.stack_info,
-            extra=e.extra
+            exc_info=exc_info,
+            stack_info=stack_info,
+            extra=extra
         )
     else:
         raise AssertionError(
-            f"Event type {type(e).__name__} has unhandled level: {e.level_tag()}"
+            f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
         )
+
 
 # top-level method for accessing the new eventing system
 # this is where all the side effects happen branched by event type
@@ -199,12 +187,12 @@ def fire_event(e: Event) -> None:
     if e.level_tag() == 'debug' and not flags.DEBUG:
         return  # eat the message in case it was one of the expensive ones
 
-    if isinstance(e, FileEventABC):
-        log_line = next(gen_msg_json(e)) if this.format_json else next(gen_msg_text)
+    if isinstance(e, File):
+        log_line = create_log_line(e, json_fmt=this.format_json, cli_dest=False)
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
-    if isinstance(e, CliEventABC):
-        log_line = next(gen_msg_text(e))
+    if isinstance(e, Cli):
+        log_line = create_log_line(e, json_fmt=False, cli_dest=True)
         if not isinstance(e, ShowException):
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
         # CliEventABC and ShowException
@@ -212,8 +200,8 @@ def fire_event(e: Event) -> None:
             send_exc_to_logger(
                 STDOUT_LOG,
                 level_tag=e.level_tag(),
-                log_line: str,
-                exec_info=True,
-                stack_info=False,
-                extra=False
+                log_line=log_line,
+                exc_info=e.exc_info,
+                stack_info=e.stack_info,
+                extra=e.extra
             )
