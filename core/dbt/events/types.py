@@ -90,6 +90,31 @@ class Cli(Event, metaclass=ABCMeta):
         return self.message()
 
 
+@dataclass
+class AdapterEventBase():
+    name: str
+    raw_msg: str
+
+    def message(self) -> str:
+        return f"{self.name} adapter: {self.raw_msg}"
+
+
+class AdapterEventDebug(DebugLevel, AdapterEventBase, Cli, File, ShowException):
+    pass
+
+
+class AdapterEventInfo(InfoLevel, AdapterEventBase, Cli, File, ShowException):
+    pass
+
+
+class AdapterEventWarning(WarnLevel, AdapterEventBase, Cli, File, ShowException):
+    pass
+
+
+class AdapterEventError(ErrorLevel, AdapterEventBase, Cli, File, ShowException):
+    pass
+
+
 class MainKeyboardInterrupt(InfoLevel, Cli):
     def message(self) -> str:
         return "ctrl-c"

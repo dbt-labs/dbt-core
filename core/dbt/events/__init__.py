@@ -1,1 +1,1 @@
-from .adapter_endpoint import AdapterLogger # noqa: F401
+from .adapter_endpoint import AdapterLogger  # noqa: F401
