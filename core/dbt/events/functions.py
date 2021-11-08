@@ -91,7 +91,8 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
 def create_log_line(e: Event, json_fmt: bool, cli_dest: bool) -> str:
     values: dict = {
         'pid': e.pid,
-        'msg': ''
+        'msg': '',
+        'level': e.level_tag()
     }
     if cli_dest and isinstance(e, Cli):
         values['msg'] = scrub_secrets(e.cli_msg(), env_secrets())
@@ -104,7 +105,8 @@ def create_log_line(e: Event, json_fmt: bool, cli_dest: bool) -> str:
     else:
         values['ts'] = e.ts.strftime("%H:%M:%S")
         color_tag = '' if this.format_color else Style.RESET_ALL
-        log_line = f"{color_tag}{values['ts']} | {values['msg']}"
+        # TODO fix level length variance
+        log_line = f"{color_tag}{values['ts']} | [ {values['level']} ] | {values['msg']}"
 
     return log_line
 
