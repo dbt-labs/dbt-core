@@ -4,7 +4,7 @@ import sys
 
 if sys.version_info < (3, 7):
     print("Error: dbt does not support this version of Python.")
-    print('Please upgrade to Python 3.7 or higher.')
+    print("Please upgrade to Python 3.7 or higher.")
     sys.exit(1)
 
 
