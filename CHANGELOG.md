@@ -11,6 +11,7 @@
 
 ### Fixes
 - Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex` ([#4136](https://github.com/dbt-labs/dbt-core/issues/4132), [#4136](https://github.com/dbt-labs/dbt-core/pull/4136))
+- Allow retries when the answer from a `dbt deps` is `None` ([#4178](https://github.com/dbt-labs/dbt-core/issues/4178))
 
 ### Under the hood
 - Bump artifact schema versions for 1.0.0: manifest v4, run results v4, sources v3. Notable changes: schema test + data test nodes are renamed to generic test + singular test nodes; freshness threshold default values ([#4191](https://github.com/dbt-labs/dbt-core/pull/4191))
@@ -23,6 +24,7 @@ Contributors:
 - [@Kayrnt](https://github.com/Kayrnt) ([#4136](https://github.com/dbt-labs/dbt-core/pull/4170))
 - [@VersusFacit](https://github.com/VersusFacit) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
 - [@joellabes](https://github.com/joellabes) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
+- [@b-per](https://github.com/b-per) ([#4225](https://github.com/dbt-labs/dbt-core/pull/4225))
 
 
 ## dbt-core 1.0.0b2 (October 25, 2021)

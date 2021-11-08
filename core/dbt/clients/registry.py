@@ -30,6 +30,10 @@ def _get(path, registry_base_url=None):
     logger.debug('Response from registry: GET {} {}'.format(url,
                                                             resp.status_code))
     resp.raise_for_status()
+    if resp is None:
+        raise requests.exceptions.ContentDecodingError(
+            'Request error: The response is None', response=resp
+        )
     return resp.json()
 
 
