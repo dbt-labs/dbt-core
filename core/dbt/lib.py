@@ -21,6 +21,9 @@ def get_dbt_config(project_dir, single_threaded=False):
     config = RuntimeConfig.from_args(RuntimeArgs(
         project_dir, profiles_dir, single_threaded
     ))
+    # Clear previously registered adapters--
+    # this fixes cacheing behavior on the dbt-server
+    dbt.adapters.factory.reset_adapters()
     # Load the relevant adapter
     dbt.adapters.factory.register_adapter(config)
 

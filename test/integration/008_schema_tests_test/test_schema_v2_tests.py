@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 import os
 
 from dbt.task.test import TestTask
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, ParsingException
 from dbt.contracts.results import TestStatus
 
 
@@ -353,7 +353,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_malformed_schema_will_break_run(self):
-        with self.assertRaises(CompilationException):
+        with self.assertRaises(ParsingException):
             self.run_dbt()
 
 

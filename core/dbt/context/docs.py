@@ -23,7 +23,7 @@ class DocsRuntimeContext(SchemaYamlContext):
         manifest: Manifest,
         current_project: str,
     ) -> None:
-        super().__init__(config, current_project)
+        super().__init__(config, current_project, None)
         self.node = node
         self.manifest = manifest
 

@@ -1,0 +1,7 @@
+version: 2
+macros:
+    - name: do_something
+      description: "This is a test macro"
+      meta:
+          some_key: "{{ env_var('ENV_VAR_SOME_KEY') }}"
+

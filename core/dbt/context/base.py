@@ -6,12 +6,12 @@ from typing import (
 
 from dbt import flags
 from dbt import tracking
-from dbt.clients.jinja import undefined_error, get_rendered
+from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import (  # noqa: F401
     yaml, safe_load, SafeLoader, Loader, Dumper
 )
 from dbt.contracts.graph.compiled import CompiledResource
-from dbt.exceptions import raise_compiler_error, MacroReturn
+from dbt.exceptions import raise_compiler_error, MacroReturn, raise_parsing_error
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.version import __version__ as dbt_version
 
@@ -20,6 +20,38 @@ from dbt.version import __version__ as dbt_version
 import pytz
 import datetime
 import re
+
+# Contexts in dbt Core
+# Contexts are used for Jinja rendering. They include context methods,
+# executable macros, and various settings that are available in Jinja.
+#
+# Different contexts are used in different places because we allow access
+# to different methods and data in different places. Executable SQL, for
+# example, includes the available macros and the model, while Jinja in
+# yaml files is more limited.
+#
+# The context that is passed to Jinja is always in a dictionary format,
+# not an actual class, so a 'to_dict()' is executed on a context class
+# before it is used for rendering.
+#
+# Each context has a generate_<name>_context function to create the context.
+# ProviderContext subclasses have different generate functions for
+# parsing and for execution.
+#
+# Context class hierarchy
+#
+#   BaseContext -- core/dbt/context/base.py
+#     TargetContext -- core/dbt/context/target.py
+#       ConfiguredContext -- core/dbt/context/configured.py
+#         SchemaYamlContext -- core/dbt/context/configured.py
+#           DocsRuntimeContext -- core/dbt/context/configured.py
+#         MacroResolvingContext -- core/dbt/context/configured.py
+#         ManifestContext -- core/dbt/context/manifest.py
+#           QueryHeaderContext -- core/dbt/context/manifest.py
+#           ProviderContext -- core/dbt/context/provider.py
+#             MacroContext -- core/dbt/context/provider.py
+#             ModelContext -- core/dbt/context/provider.py
+#             TestContext -- core/dbt/context/provider.py
 
 
 def get_pytz_module_context() -> Dict[str, Any]:
@@ -164,8 +196,6 @@ class BaseContext(metaclass=ContextMeta):
     def __init__(self, cli_vars):
         self._ctx = {}
         self.cli_vars = cli_vars
-        # Save the env_vars encountered using this
-        self.env_vars = {}
 
     def generate_builtins(self):
         builtins: Dict[str, Any] = {}
@@ -287,11 +317,10 @@ class BaseContext(metaclass=ContextMeta):
             return_value = default
 
         if return_value is not None:
-            self.env_vars[var] = return_value
             return return_value
         else:
             msg = f"Env var required but not provided: '{var}'"
-            undefined_error(msg)
+            raise_parsing_error(msg)
 
     if os.environ.get('DBT_MACRO_DEBUGGING'):
         @contextmember

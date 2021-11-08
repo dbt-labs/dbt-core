@@ -1,0 +1,11 @@
+version: 2
+
+models:
+    - name: model_one
+      config:
+        materialized: "{{ env_var('TEST_SCHEMA_VAR') }}"
+      tests:
+        - check_color:
+            column_name: fun
+            color: "env_var('ENV_VAR_COLOR')"
+

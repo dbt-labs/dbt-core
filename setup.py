@@ -2,6 +2,18 @@
 import os
 import sys
 
+
+if 'sdist' not in sys.argv:
+    print('')
+    print('As of v1.0.0, `pip install dbt` is no longer supported.')
+    print('Instead, please use either:')
+    print('  - `pip install dbt-core`, for core functionality')
+    print('  - `pip install dbt-<adapter>`, to use dbt with your database, platform, or query engine')
+    print('See full list: https://docs.getdbt.com/docs/available-adapters')
+    print('')
+    sys.exit(1)
+
+
 if sys.version_info < (3, 6):
     print('Error: dbt does not support this version of Python.')
     print('Please upgrade to Python 3.6 or higher.')
@@ -40,14 +52,9 @@ setup(
     author="dbt Labs",
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
-    packages=[],
-    install_requires=[
-        'dbt-core=={}'.format(package_version),
-        'dbt-postgres=={}'.format(package_version),
-    ],
     zip_safe=False,
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
+        'Development Status :: 7 - Inactive',
 
         'License :: OSI Approved :: Apache Software License',
 
