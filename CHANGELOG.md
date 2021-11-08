@@ -24,7 +24,7 @@ Contributors:
 - [@Kayrnt](https://github.com/Kayrnt) ([#4136](https://github.com/dbt-labs/dbt-core/pull/4170))
 - [@VersusFacit](https://github.com/VersusFacit) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
 - [@joellabes](https://github.com/joellabes) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
-- [@b-per](https://github.com/b-per)
+- [@b-per](https://github.com/b-per) ([#4225](https://github.com/dbt-labs/dbt-core/pull/4225))
 
 
 ## dbt-core 1.0.0b2 (October 25, 2021)
