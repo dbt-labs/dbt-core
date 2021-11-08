@@ -128,7 +128,7 @@ class MainReportArgs(DebugLevel, Cli, File):
 
 
 @dataclass
-class MainTrackingUserState(DebugLevel, Cli, File):
+class MainTrackingUserState(DebugLevel, Cli):
     user_state: str
 
     def message(self):
@@ -1765,7 +1765,7 @@ class FlushEvents(DebugLevel, Cli):
         return "Flushing usage events"
 
 
-class FlushEventsFailure(DebugLevel, Cli, File):
+class FlushEventsFailure(DebugLevel, Cli):
     def message(self) -> str:
         return "An error was encountered while trying to flush usage events"
 
