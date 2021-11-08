@@ -189,23 +189,16 @@ def _deep_map_render(
     ret: Any
 
     if isinstance(value, list):
-        ret = [
-            _deep_map_render(func, v, (keypath + (idx,)))
-            for idx, v in enumerate(value)
-        ]
+        ret = [_deep_map_render(func, v, (keypath + (idx,))) for idx, v in enumerate(value)]
     elif isinstance(value, dict):
-        ret = {
-            k: _deep_map_render(func, v, (keypath + (str(k),)))
-            for k, v in value.items()
-        }
+        ret = {k: _deep_map_render(func, v, (keypath + (str(k),))) for k, v in value.items()}
     elif isinstance(value, atomic_types):
         ret = func(value, keypath)
     else:
         container_types: Tuple[Type[Any], ...] = (list, dict)
         ok_types = container_types + atomic_types
         raise dbt.exceptions.DbtConfigError(
-            'in _deep_map_render, expected one of {!r}, got {!r}'
-            .format(ok_types, type(value))
+            "in _deep_map_render, expected one of {!r}, got {!r}".format(ok_types, type(value))
         )
 
     return ret
