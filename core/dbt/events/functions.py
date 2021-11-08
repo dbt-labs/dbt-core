@@ -16,8 +16,10 @@ from typing import Generator, List
 # set up logger to go to stdout with defaults
 # setup_event_logger will be called once args have been parsed
 global LOG
-LOG = logging.getLogger('event_logger')
+LOG = logging.getLogger('default_event_logger')
+LOG.setLevel(logging.INFO)
 stdout_handler = logging.StreamHandler()
+stdout_handler.setLevel(logging.INFO)
 LOG.addHandler(stdout_handler)
 global color
 format_color = True
@@ -34,7 +36,16 @@ def setup_event_logger(log_path):
     # TODO this default should live somewhere better
     log_dest = os.path.join('logs', 'dbt.log')
     # TODO log rotation is not handled by WatchedFileHandler
+    level = logging.DEBUG if flags.DEBUG else logging.INFO
+
+    # overwrite the global logger with the configured one
+    LOG = logging.getLogger('configured_event_logger')
+    LOG.setLevel(level)
+    stdout_handler = logging.StreamHandler()
+    stdout_handler.setLevel(level)
+    LOG.addHandler(stdout_handler)
     file_handler = WatchedFileHandler(filename=log_dest, encoding='utf8')
+    file_handler.setLevel(level)
     LOG.addHandler(file_handler)
 
 
