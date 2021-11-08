@@ -463,7 +463,7 @@ class MessageHandleGenericException(ErrorLevel, Cli, File):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(
+        return f"{prefix}\n{error}".format(
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
@@ -881,7 +881,7 @@ class GenericExceptionOnRun(ErrorLevel, Cli, File):
         if node_description is None:
             node_description = self.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
-        return "{prefix}\n{error}".format(
+        return f"{prefix}\n{error}".format(
             prefix=ui.red(prefix),
             error=str(self.exc).strip()
         )
