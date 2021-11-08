@@ -38,7 +38,7 @@ def _pluralize(string: Union[str, NodeType]) -> str:
     try:
         convert = NodeType(string)
     except ValueError:
-        return f'{string}s'
+        return f"{string}s"
     else:
         return convert.pluralize()
 
@@ -47,4 +47,4 @@ def pluralize(count, string: Union[str, NodeType]):
     pluralized: str = str(string)
     if count != 1:
         pluralized = _pluralize(string)
-    return f'{count} {pluralized}'
+    return f"{count} {pluralized}"

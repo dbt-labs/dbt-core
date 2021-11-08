@@ -8,8 +8,12 @@ from dbt.clients.yaml_helper import (  # noqa:F401
 )
 from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
-    DisableTracking, SendingEvent, SendEventFailure, FlushEvents,
-    FlushEventsFailure, TrackingInitializeFailure
+    DisableTracking,
+    SendingEvent,
+    SendEventFailure,
+    FlushEvents,
+    FlushEventsFailure,
+    TrackingInitializeFailure,
 )
 from dbt import version as dbt_version
 from dbt import flags

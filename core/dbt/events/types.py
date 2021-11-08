@@ -1652,8 +1652,8 @@ class EndOfRunSummary(InfoLevel):
     code: str = "Z030"
 
     def message(self) -> str:
-        error_plural = pluralize(self.num_errors, 'error')
-        warn_plural = pluralize(self.num_warnings, 'warning')
+        error_plural = pluralize(self.num_errors, "error")
+        warn_plural = pluralize(self.num_warnings, "warning")
         if self.keyboard_interrupt:
             message = ui.yellow("Exited because of keyboard interrupt.")
         elif self.num_errors > 0:
@@ -2724,16 +2724,16 @@ if 1 == 0:
     EnsureGitInstalled()
     DepsCreatingLocalSymlink()
     DepsSymlinkNotAvailable()
-    FoundStats(stat_line='')
-    CompilingNode(unique_id='')
-    WritingInjectedSQLForNode(unique_id='')
+    FoundStats(stat_line="")
+    CompilingNode(unique_id="")
+    WritingInjectedSQLForNode(unique_id="")
     DisableTracking()
-    SendingEvent(kwargs='')
+    SendingEvent(kwargs="")
     SendEventFailure()
     FlushEvents()
     FlushEventsFailure()
     TrackingInitializeFailure()
     RetryExternalCall(attempt=0, max=0)
-    GeneralWarningMsg(msg='', log_fmt='')
-    GeneralWarningException(exc=Exception(''), log_fmt='')
+    GeneralWarningMsg(msg="", log_fmt="")
+    GeneralWarningException(exc=Exception(""), log_fmt="")
     EventBufferFull()

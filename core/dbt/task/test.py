@@ -176,7 +176,7 @@ class TestRunner(CompileRunner):
         test_result_dct: PrimitiveDict = dict(
             zip(
                 [column_name.lower() for column_name in table.column_names],
-                map(_coerce_decimal, table.rows[0])
+                map(_coerce_decimal, table.rows[0]),
             )
         )
         TestResultData.validate(test_result_dct)
@@ -187,7 +187,7 @@ class TestRunner(CompileRunner):
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
-        num_errors = pluralize(result.failures, 'result')
+        num_errors = pluralize(result.failures, "result")
         status = None
         message = None
         failures = 0
