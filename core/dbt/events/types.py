@@ -89,11 +89,12 @@ class Cli(Event, metaclass=ABCMeta):
         return self.message()
 
 
-class MainKeyboardInterrupt(InfoLevel, Cli, File):
+class MainKeyboardInterrupt(InfoLevel, Cli):
     def message(self) -> str:
         return "ctrl-c"
 
 
+# will log to a file if the file logger is configured
 @dataclass
 class MainEncounteredError(ErrorLevel, Cli, File):
     e: BaseException
