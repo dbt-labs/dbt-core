@@ -18,7 +18,7 @@ from dbt.events.types import (
     RenameSchema,
     TemporaryRelation,
     UncachedRelation,
-    UpdateReference
+    UpdateReference,
 )
 from dbt.utils import lowercase
 from dbt.helper_types import Lazy

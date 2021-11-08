@@ -30,7 +30,7 @@ from dbt.events.types import (
     ConnectionClosed,
     ConnectionClosed2,
     Rollback,
-    RollbackFailed
+    RollbackFailed,
 )
 from dbt import flags
 

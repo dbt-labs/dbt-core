@@ -637,8 +637,10 @@ class UpdateReference(DebugLevel, Cache):
     code: str = "E028"
 
     def message(self) -> str:
-        return f"updated reference from {self.old_key} -> {self.cached_key} to "\
+        return (
+            f"updated reference from {self.old_key} -> {self.cached_key} to "
             "{self.new_key} -> {self.cached_key}"
+        )
 
 
 @dataclass
@@ -2427,7 +2429,7 @@ if 1 == 0:
     TemporaryRelation(key=_ReferenceKey(database="", schema="", identifier=""))
     RenameSchema(
         old_key=_ReferenceKey(database="", schema="", identifier=""),
-        new_key=_ReferenceKey(database="", schema="", identifier="")
+        new_key=_ReferenceKey(database="", schema="", identifier=""),
     )
     DumpBeforeAddGraph(Lazy.defer(lambda: dict()))
     DumpAfterAddGraph(Lazy.defer(lambda: dict()))
