@@ -908,7 +908,7 @@ class NodeConnectionReleaseError(ShowException, DebugLevel, Cli, File):
 
 
 @dataclass
-class CheckCleanPath(InfoLevel, Cli, File):
+class CheckCleanPath(InfoLevel, Cli):
     path: str
 
     def message(self) -> str:
@@ -916,7 +916,7 @@ class CheckCleanPath(InfoLevel, Cli, File):
 
 
 @dataclass
-class ConfirmCleanPath(InfoLevel, Cli, File):
+class ConfirmCleanPath(InfoLevel, Cli):
     path: str
 
     def message(self) -> str:
@@ -924,14 +924,14 @@ class ConfirmCleanPath(InfoLevel, Cli, File):
 
 
 @dataclass
-class ProtectedCleanPath(InfoLevel, Cli, File):
+class ProtectedCleanPath(InfoLevel, Cli):
     path: str
 
     def message(self) -> str:
         return f"ERROR: not cleaning {self.path}/* because it is protected"
 
 
-class FinishedCleanPaths(InfoLevel, Cli, File):
+class FinishedCleanPaths(InfoLevel, Cli):
     def message(self) -> str:
         return "Finished cleaning all paths."
 
