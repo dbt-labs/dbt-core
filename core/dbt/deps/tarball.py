@@ -27,12 +27,11 @@ class TarballPackageMixin:
     def name(self):
         return self.tarball
 
-    def source_type(self):
+    def source_type(self) -> str:
         return 'tarball'
 
 
 class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
-    def __init__(self, tarball: str) -> None:
         super().__init__(tarball)
         self.tarfile = self.get_tarfile()
         # init tarfile in class, and use tarfile as cache
