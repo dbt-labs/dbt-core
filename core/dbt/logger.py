@@ -181,10 +181,6 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
             return True
 
 
-def _redirect_std_logging():
-    logbook.compat.redirect_logging()
-
-
 def _root_channel(record: logbook.LogRecord) -> str:
     return record.channel.split('.')[0]
 
@@ -378,8 +374,6 @@ class DebugWarnings(logbook.compat.redirected_warnings):
 # push Python warnings to debug level logs. This will suppress all import-time
 # warnings.
 DebugWarnings().__enter__()
-# redirect stdlib logging to logbook
-_redirect_std_logging()
 
 
 class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
