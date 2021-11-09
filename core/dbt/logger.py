@@ -576,7 +576,8 @@ def log_cache_events(flag):
     CACHE_LOGGER.disabled = not flag
 
 
-logger.disable()
+if not dbt.flags.USE_LEGACY_LOGGER:
+    logger.disable()
 GLOBAL_LOGGER = logger
 
 
