@@ -25,9 +25,8 @@ STDOUT_LOG.setLevel(logging.INFO)
 stdout_handler = logging.StreamHandler()
 stdout_handler.setLevel(logging.INFO)
 STDOUT_LOG.addHandler(stdout_handler)
-global color
+
 format_color = True
-global json
 format_json = False
 
 
@@ -38,7 +37,7 @@ def setup_event_logger(log_path):
     # havent been applied yet
     this.format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
-    log_dest = os.path.join('logs', 'dbt.log')
+    log_dest = os.path.join(log_path, 'dbt.log')
     level = logging.DEBUG if flags.DEBUG else logging.INFO
 
     # overwrite the STDOUT_LOG logger with the configured one
