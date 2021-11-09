@@ -207,7 +207,7 @@ def fire_event(e: Event) -> None:
     # log messages are not constructed if debug messages are never shown.
 
     # backwards compatibility for plugins that require old logger (dbt-rpc)
-    if flags.USE_LEGACY_LOGGER:
+    if flags.ENABLE_LEGACY_LOGGER:
         log_line = create_log_line(e, json_fmt=this.format_json, cli_dest=False)
         level_tag = e.level_tag()
         if level_tag == 'debug':
