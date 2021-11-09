@@ -185,7 +185,7 @@ def send_exc_to_logger(
 # (i.e. - mutating the event history, printing to stdout, logging
 # to files, etc.)
 def fire_event(e: Event) -> None:
-    # TODO manage history in phase 2: EVENT_HISTORY.append(e)
+    # TODO manage history in phase 2:  EVENT_HISTORY.append(e)
     # explicitly checking the debug flag here so that potentially expensive-to-construct
     # log messages are not constructed if debug messages are never shown.
 
