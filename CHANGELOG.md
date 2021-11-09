@@ -15,6 +15,13 @@
 - Changes unit tests using `assertRaisesRegexp` to `assertRaisesRegex` ([#4136](https://github.com/dbt-labs/dbt-core/issues/4132), [#4136](https://github.com/dbt-labs/dbt-core/pull/4136))
 - Allow retries when the answer from a `dbt deps` is `None` ([#4178](https://github.com/dbt-labs/dbt-core/issues/4178))
 
+### Docs
+
+- Fix non-alphabetical sort of Source Tables in source overview page ([docs#81](https://github.com/dbt-labs/dbt-docs/issues/81), [docs#218](https://github.com/dbt-labs/dbt-docs/pull/218))
+- Add title tag to node elements in tree ([docs#202](https://github.com/dbt-labs/dbt-docs/issues/202), [docs#203](https://github.com/dbt-labs/dbt-docs/pull/203))
+- Account for test rename: `schema` &rarr; `generic`, `data` &rarr;` singular`. Use `test_metadata` instead of `schema`/`data` tags to differentiate ([docs#216](https://github.com/dbt-labs/dbt-docs/issues/216), [docs#222](https://github.com/dbt-labs/dbt-docs/pull/222))
+- Add metrics ([core#216](https://github.com/dbt-labs/dbt-core/issues/4235), [docs#223](https://github.com/dbt-labs/dbt-docs/pull/223))
+
 ### Under the hood
 - Bump artifact schema versions for 1.0.0: manifest v4, run results v4, sources v3. Notable changes: schema test + data test nodes are renamed to generic test + singular test nodes; freshness threshold default values ([#4191](https://github.com/dbt-labs/dbt-core/pull/4191))
 - Speed up node selection by skipping `incorporate_indirect_nodes` if not needed ([#4213](https://github.com/dbt-labs/dbt-core/issues/4213), [#4214](https://github.com/dbt-labs/dbt-core/issues/4214))
@@ -29,6 +36,8 @@ Contributors:
 - [@VersusFacit](https://github.com/VersusFacit) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
 - [@joellabes](https://github.com/joellabes) ([#4104](https://github.com/dbt-labs/dbt-core/pull/4104))
 - [@b-per](https://github.com/b-per) ([#4225](https://github.com/dbt-labs/dbt-core/pull/4225))
+- [@salmonsd](https://github.com/salmonsd) ([docs#218](https://github.com/dbt-labs/dbt-docs/pull/218))
+- [@miike](https://github.com/miike) ([docs#203](https://github.com/dbt-labs/dbt-docs/pull/203))
 
 
 ## dbt-core 1.0.0b2 (October 25, 2021)
