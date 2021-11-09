@@ -129,8 +129,9 @@ def capture_stdout_logs() -> StringIO:
 # used for integration tests
 def stop_capture_stdout_logs() -> None:
     this.STDOUT_LOG.handlers = [
-        h for h in this.STDOUT_LOG.handlers
-        if not (hasattr(h, 'stream') and isinstance(h.stream, StringIO))  # type: ignore
+        h
+        for h in this.STDOUT_LOG.handlers
+        if not (hasattr(h, "stream") and isinstance(h.stream, StringIO))  # type: ignore
     ]
 
 
