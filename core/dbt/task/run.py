@@ -8,10 +8,6 @@ from dbt.dataclass_schema import dbtClassMixin
 from .compile import CompileRunner, CompileTask
 
 from .printer import (
-    print_start_line,
-    print_model_result_line,
-    print_hook_start_line,
-    print_hook_end_line,
     print_run_end_messages,
     get_counts,
 )
@@ -32,14 +28,18 @@ from dbt.exceptions import (
     RuntimeException,
     missing_materialization,
 )
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    DatabaseErrorRunning, EmptyLine, HooksRunning, HookFinished,
+    PrintModelErrorResultLine, PrintModelResultLine, PrintStartLine,
+    PrintHookEndLine, PrintHookStartLine
+)
 from dbt.logger import (
-    GLOBAL_LOGGER as logger,
     TextOnly,
     HookMetadata,
     UniqueID,
     TimestampNamed,
     DbtModelState,
-    print_timestamped_line,
 )
 from dbt.graph import ResourceTypeSelector
 from dbt.hooks import get_hook_dict
@@ -173,13 +173,36 @@ class ModelRunner(CompileRunner):
                                     self.get_node_representation())
 
     def print_start_line(self):
-        description = self.describe_node()
-        print_start_line(description, self.node_index, self.num_nodes)
+        fire_event(
+            PrintStartLine(
+                description=self.describe_node(),
+                index=self.node_index,
+                total=self.num_nodes
+            )
+        )
 
     def print_result_line(self, result):
         description = self.describe_node()
-        print_model_result_line(result, description, self.node_index,
-                                self.num_nodes)
+        if result.status == NodeStatus.Error:
+            fire_event(
+                PrintModelErrorResultLine(
+                    description=description,
+                    status=result.status,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        else:
+            fire_event(
+                PrintModelResultLine(
+                    description=description,
+                    status=result.message,
+                    index=self.node_index,
+                    total=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
 
     def before_execute(self):
         self.print_start_line()
@@ -308,12 +331,10 @@ class RunTask(CompileTask):
             return
         num_hooks = len(ordered_hooks)
 
-        plural = 'hook' if num_hooks == 1 else 'hooks'
         with TextOnly():
-            print_timestamped_line("")
-        print_timestamped_line(
-            'Running {} {} {}'.format(num_hooks, hook_type, plural)
-        )
+            fire_event(EmptyLine())
+        fire_event(HooksRunning(num_hooks=num_hooks, hook_type=hook_type))
+
         startctx = TimestampNamed('node_started_at')
         finishctx = TimestampNamed('node_finished_at')
 
@@ -326,7 +347,14 @@ class RunTask(CompileTask):
             hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
             with UniqueID(hook.unique_id):
                 with hook_meta_ctx, startctx:
-                    print_hook_start_line(hook_text, idx, num_hooks)
+                    fire_event(
+                        PrintHookStartLine(
+                            statement=hook_text,
+                            index=idx,
+                            total=num_hooks,
+                            truncate=True
+                        )
+                    )
 
                 status = 'OK'
 
@@ -337,14 +365,21 @@ class RunTask(CompileTask):
                 self.ran_hooks.append(hook)
 
                 with finishctx, DbtModelState({'node_status': 'passed'}):
-                    print_hook_end_line(
-                        hook_text, str(status), idx, num_hooks, timer.elapsed
+                    fire_event(
+                        PrintHookEndLine(
+                            statement=hook_text,
+                            status=str(status),
+                            index=idx,
+                            total=num_hooks,
+                            execution_time=timer.elapsed,
+                            truncate=True
+                        )
                     )
 
         self._total_executed += len(ordered_hooks)
 
         with TextOnly():
-            print_timestamped_line("")
+            fire_event(EmptyLine())
 
     def safe_run_hooks(
         self, adapter, hook_type: RunHookType, extra_context: Dict[str, Any]
@@ -352,7 +387,7 @@ class RunTask(CompileTask):
         try:
             self.run_hooks(adapter, hook_type, extra_context)
         except RuntimeException:
-            logger.info("Database error while running {}".format(hook_type))
+            fire_event(DatabaseErrorRunning(hook_type))
             raise
 
     def print_results_line(self, results, execution_time):
@@ -366,10 +401,8 @@ class RunTask(CompileTask):
                 execution_time=execution_time)
 
         with TextOnly():
-            print_timestamped_line("")
-        print_timestamped_line(
-            "Finished running {stat_line}{execution}."
-            .format(stat_line=stat_line, execution=execution))
+            fire_event(EmptyLine())
+        fire_event(HookFinished(stat_line=stat_line, execution=execution))
 
     def _get_deferred_manifest(self) -> Optional[WritableManifest]:
         if not self.args.defer:

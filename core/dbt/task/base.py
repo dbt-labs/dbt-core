@@ -1,12 +1,10 @@
 import os
 import threading
 import time
-import traceback
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union, Dict, Any, Optional
 
 from dbt import tracking
-from dbt import ui
 from dbt import flags
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
@@ -16,9 +14,15 @@ from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
     InternalException
 )
-from dbt.logger import GLOBAL_LOGGER as logger, log_manager
-from .printer import print_skip_caused_by_error, print_skip_line
-
+from dbt.logger import log_manager
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    DbtProjectError, DbtProjectErrorException, DbtProfileError, DbtProfileErrorException,
+    ProfileListTitle, ListSingleProfile, NoDefinedProfiles, ProfileHelpMessage,
+    CatchableExceptionOnRun, InternalExceptionOnRun, GenericExceptionOnRun,
+    NodeConnectionReleaseError, PrintDebugStackTrace, SkippingDetails, PrintSkipBecauseError
+)
+from .printer import print_run_result_error
 
 from dbt.adapters.factory import register_adapter
 from dbt.config import RuntimeConfig, Project
@@ -45,13 +49,6 @@ def read_profiles(profiles_dir=None):
         profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
 
     return profiles
-
-
-PROFILES_HELP_MESSAGE = """
-For more information on configuring profiles, please consult the dbt docs:
-
-https://docs.getdbt.com/docs/configure-your-profile
-"""
 
 
 class BaseTask(metaclass=ABCMeta):
@@ -84,28 +81,27 @@ class BaseTask(metaclass=ABCMeta):
             # for the clean or deps tasks
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
-            logger.error("Encountered an error while reading the project:")
-            logger.error("  ERROR: {}".format(str(exc)))
+            fire_event(DbtProjectError())
+            fire_event(DbtProjectErrorException(exc=exc))
 
             tracking.track_invalid_invocation(
                 args=args,
                 result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
         except dbt.exceptions.DbtProfileError as exc:
-            logger.error("Encountered an error while reading profiles:")
-            logger.error("  ERROR {}".format(str(exc)))
+            fire_event(DbtProfileError())
+            fire_event(DbtProfileErrorException(exc=exc))
 
             all_profiles = read_profiles(flags.PROFILES_DIR).keys()
 
             if len(all_profiles) > 0:
-                logger.info("Defined profiles:")
+                fire_event(ProfileListTitle())
                 for profile in all_profiles:
-                    logger.info(" - {}".format(profile))
+                    fire_event(ListSingleProfile(profile=profile))
             else:
-                logger.info("There are no profiles defined in your "
-                            "profiles.yml file")
+                fire_event(NoDefinedProfiles())
 
-            logger.info(PROFILES_HELP_MESSAGE)
+            fire_event(ProfileHelpMessage())
 
             tracking.track_invalid_invocation(
                 args=args,
@@ -165,11 +161,6 @@ class ConfiguredTask(BaseTask):
     def from_args(cls, args):
         move_to_nearest_project_dir(args)
         return super().from_args(args)
-
-
-INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
-the error persists, open an issue at https://github.com/dbt-labs/dbt-core
-""".strip()
 
 
 class ExecutionContext:
@@ -309,33 +300,23 @@ class BaseRunner(metaclass=ABCMeta):
         if e.node is None:
             e.add_node(ctx.node)
 
-        logger.debug(str(e), exc_info=True)
+        fire_event(CatchableExceptionOnRun(exc=e))
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
-        build_path = self.node.build_path
-        prefix = 'Internal error executing {}'.format(build_path)
-
-        error = "{prefix}\n{error}\n\n{note}".format(
-            prefix=ui.red(prefix),
-            error=str(e).strip(),
-            note=INTERNAL_ERROR_STRING
-        )
-        logger.debug(error, exc_info=True)
+        fire_event(InternalExceptionOnRun(build_path=self.node.build_path, exc=e))
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
-        node_description = self.node.build_path
-        if node_description is None:
-            node_description = self.node.unique_id
-        prefix = "Unhandled error while executing {}".format(node_description)
-        error = "{prefix}\n{error}".format(
-            prefix=ui.red(prefix),
-            error=str(e).strip()
+        fire_event(
+            GenericExceptionOnRun(
+                build_path=self.node.build_path,
+                unique_id=self.node.unique_id,
+                exc=e
+            )
         )
+        fire_event(PrintDebugStackTrace())
 
-        logger.error(error)
-        logger.debug('', exc_info=True)
         return str(e)
 
     def handle_exception(self, e, ctx):
@@ -385,10 +366,7 @@ class BaseRunner(metaclass=ABCMeta):
         try:
             self.adapter.release_connection()
         except Exception as exc:
-            logger.debug(
-                'Error releasing connection for node {}: {!s}\n{}'
-                .format(self.node.name, exc, traceback.format_exc())
-            )
+            fire_event(NodeConnectionReleaseError(node_name=self.node.name, exc=exc))
             return str(exc)
 
         return None
@@ -419,14 +397,15 @@ class BaseRunner(metaclass=ABCMeta):
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
             if self._skip_caused_by_ephemeral_failure():
-                print_skip_caused_by_error(
-                    self.node,
-                    schema_name,
-                    node_name,
-                    self.node_index,
-                    self.num_nodes,
-                    self.skip_cause
+                fire_event(
+                    PrintSkipBecauseError(
+                        schema=schema_name,
+                        relation=node_name,
+                        index=self.node_index,
+                        total=self.num_nodes
+                    )
                 )
+                print_run_result_error(result=self.skip_cause, newline=False)
                 if self.skip_cause is None:  # mypy appeasement
                     raise InternalException(
                         'Skip cause not set but skip was somehow caused by '
@@ -440,12 +419,14 @@ class BaseRunner(metaclass=ABCMeta):
                             self.skip_cause.node.unique_id)
                 )
             else:
-                print_skip_line(
-                    self.node,
-                    schema_name,
-                    node_name,
-                    self.node_index,
-                    self.num_nodes
+                fire_event(
+                    SkippingDetails(
+                        resource_type=self.node.resource_type,
+                        schema=schema_name,
+                        node_name=node_name,
+                        index=self.node_index,
+                        total=self.num_nodes
+                    )
                 )
 
         node_result = self.skip_result(self.node, error_message)

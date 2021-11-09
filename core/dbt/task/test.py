@@ -1,14 +1,14 @@
 from distutils.util import strtobool
 
 from dataclasses import dataclass
-from dbt import utils
+from dbt.utils import _coerce_decimal
+from dbt.events.format import pluralize
 from dbt.dataclass_schema import dbtClassMixin
 import threading
 from typing import Union
 
 from .compile import CompileRunner
 from .run import RunTask
-from .printer import print_start_line, print_test_result_line
 
 from dbt.contracts.graph.compiled import (
     CompiledSingularTestNode,
@@ -19,6 +19,11 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import TestStatus, PrimitiveDict, RunResult
 from dbt.context.providers import generate_runtime_model_context
 from dbt.clients.jinja import MacroGenerator
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    PrintErrorTestResult, PrintPassTestResult, PrintWarnTestResult,
+    PrintFailureTestResult, PrintStartLine
+)
 from dbt.exceptions import (
     InternalException,
     invalid_bool_error,
@@ -61,11 +66,57 @@ class TestRunner(CompileRunner):
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        print_test_result_line(result, self.node_index, self.num_nodes)
+        model = result.node
+
+        if result.status == TestStatus.Error:
+            fire_event(
+                PrintErrorTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        elif result.status == TestStatus.Pass:
+            fire_event(
+                PrintPassTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time
+                )
+            )
+        elif result.status == TestStatus.Warn:
+            fire_event(
+                PrintWarnTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time,
+                    failures=result.failures
+                )
+            )
+        elif result.status == TestStatus.Fail:
+            fire_event(
+                PrintFailureTestResult(
+                    name=model.name,
+                    index=self.node_index,
+                    num_models=self.num_nodes,
+                    execution_time=result.execution_time,
+                    failures=result.failures
+                )
+            )
+        else:
+            raise RuntimeError("unexpected status: {}".format(result.status))
 
     def print_start_line(self):
-        description = self.describe_node()
-        print_start_line(description, self.node_index, self.num_nodes)
+        fire_event(
+            PrintStartLine(
+                description=self.describe_node(),
+                index=self.node_index,
+                total=self.num_nodes
+            )
+        )
 
     def before_execute(self):
         self.print_start_line()
@@ -120,7 +171,7 @@ class TestRunner(CompileRunner):
         test_result_dct: PrimitiveDict = dict(
             zip(
                 [column_name.lower() for column_name in table.column_names],
-                map(utils._coerce_decimal, table.rows[0])
+                map(_coerce_decimal, table.rows[0])
             )
         )
         TestResultData.validate(test_result_dct)
@@ -131,7 +182,7 @@ class TestRunner(CompileRunner):
 
         severity = test.config.severity.upper()
         thread_id = threading.current_thread().name
-        num_errors = utils.pluralize(result.failures, 'result')
+        num_errors = pluralize(result.failures, 'result')
         status = None
         message = None
         failures = 0

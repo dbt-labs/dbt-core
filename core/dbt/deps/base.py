@@ -6,7 +6,8 @@ from typing import List, Optional, Generic, TypeVar
 
 from dbt.clients import system
 from dbt.contracts.project import ProjectPackageMetadata
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import DepsSetDownloadDirectory
 
 DOWNLOADS_PATH = None
 
@@ -31,7 +32,7 @@ def downloads_directory():
         remove_downloads = True
 
     system.make_directory(DOWNLOADS_PATH)
-    logger.debug("Set downloads directory='{}'".format(DOWNLOADS_PATH))
+    fire_event(DepsSetDownloadDirectory(path=DOWNLOADS_PATH))
 
     yield DOWNLOADS_PATH
 

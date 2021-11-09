@@ -3,7 +3,11 @@ from typing import Optional
 from dbt.clients.yaml_helper import (  # noqa:F401
     yaml, safe_load, Loader, Dumper,
 )
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    DisableTracking, SendingEvent, SendEventFailure, FlushEvents,
+    FlushEventsFailure, TrackingInitializeFailure
+)
 from dbt import version as dbt_version
 from dbt import flags
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
@@ -50,7 +54,7 @@ class TimeoutEmitter(Emitter):
     def handle_failure(num_ok, unsent):
         # num_ok will always be 0, unsent will always be 1 entry long, because
         # the buffer is length 1, so not much to talk about
-        logger.warning('Error sending message, disabling tracking')
+        fire_event(DisableTracking())
         disable_tracking()
 
     def _log_request(self, request, payload):
@@ -258,13 +262,11 @@ def track(user, *args, **kwargs):
     if user.do_not_track:
         return
     else:
-        logger.debug("Sending event: {}".format(kwargs))
+        fire_event(SendingEvent(kwargs=kwargs))
         try:
             tracker.track_struct_event(*args, **kwargs)
         except Exception:
-            logger.debug(
-                "An error was encountered while trying to send an event"
-            )
+            fire_event(SendEventFailure())
 
 
 def track_invocation_start(config=None, args=None):
@@ -459,13 +461,11 @@ def track_partial_parser(options):
 
 
 def flush():
-    logger.debug("Flushing usage events")
+    fire_event(FlushEvents())
     try:
         tracker.flush()
     except Exception:
-        logger.debug(
-            "An error was encountered while trying to flush usage events"
-        )
+        fire_event(FlushEventsFailure())
 
 
 def disable_tracking():
@@ -487,8 +487,7 @@ def initialize_tracking(cookie_dir):
     try:
         active_user.initialize()
     except Exception:
-        logger.debug('Got an exception trying to initialize tracking',
-                     exc_info=True)
+        fire_event(TrackingInitializeFailure())
         active_user = User(None)
 
 

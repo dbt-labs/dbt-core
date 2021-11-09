@@ -181,10 +181,6 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
             return True
 
 
-def _redirect_std_logging():
-    logbook.compat.redirect_logging()
-
-
 def _root_channel(record: logbook.LogRecord) -> str:
     return record.channel.split('.')[0]
 
@@ -378,8 +374,6 @@ class DebugWarnings(logbook.compat.redirected_warnings):
 # push Python warnings to debug level logs. This will suppress all import-time
 # warnings.
 DebugWarnings().__enter__()
-# redirect stdlib logging to logbook
-_redirect_std_logging()
 
 
 class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
@@ -430,7 +424,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
             return
 
         make_log_dir_if_missing(log_dir)
-        log_path = os.path.join(log_dir, 'dbt.log')
+        log_path = os.path.join(log_dir, 'dbt.log.old')  # TODO hack for now
         self._super_init(log_path)
         self._replay_buffered()
         self._log_path = log_path
@@ -582,6 +576,8 @@ def log_cache_events(flag):
     CACHE_LOGGER.disabled = not flag
 
 
+if not dbt.flags.ENABLE_LEGACY_LOGGER:
+    logger.disable()
 GLOBAL_LOGGER = logger
 
 
@@ -655,8 +651,12 @@ def get_timestamp():
     return time.strftime("%H:%M:%S")
 
 
+def timestamped_line(msg: str) -> str:
+    return "{} | {}".format(get_timestamp(), msg)
+
+
 def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
         msg = dbt.ui.color(msg, use_color)
 
-    GLOBAL_LOGGER.info("{} | {}".format(get_timestamp(), msg))
+    GLOBAL_LOGGER.info(timestamped_line(msg))

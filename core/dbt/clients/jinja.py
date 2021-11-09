@@ -33,7 +33,6 @@ from dbt.exceptions import (
     UndefinedMacroException
 )
 from dbt import flags
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 def _linecache_inject(source, write):

@@ -19,7 +19,18 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
 )
 from dbt.helper_types import PathSet
-from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
+from dbt.events.functions import fire_event
+from dbt.events.types import (
+    PartialParsingFullReparseBecauseOfError, PartialParsingExceptionFile, PartialParsingFile,
+    PartialParsingException, PartialParsingSkipParsing, PartialParsingMacroChangeStartFullParse,
+    ManifestWrongMetadataVersion, PartialParsingVersionMismatch,
+    PartialParsingFailedBecauseConfigChange, PartialParsingFailedBecauseProfileChange,
+    PartialParsingFailedBecauseNewProjectDependency, PartialParsingFailedBecauseHashChanged,
+    PartialParsingNotEnabled, ParsedFileLoadFailed, PartialParseSaveFileNotFound,
+    InvalidDisabledSourceInTestNode, InvalidRefInTestNode, PartialParsingProjectEnvVarsChanged,
+    PartialParsingProfileEnvVarsChanged
+)
+from dbt.logger import DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.jinja import get_rendered, MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
@@ -238,8 +249,7 @@ class ManifestLoader:
                 except Exception:
                     # pp_files should still be the full set and manifest is new manifest,
                     # since get_parsing_files failed
-                    logger.info("Partial parsing enabled but an error occurred. "
-                                "Switching to a full re-parse.")
+                    fire_event(PartialParsingFullReparseBecauseOfError())
 
                     # Get traceback info
                     tb_info = traceback.format_exc()
@@ -263,11 +273,11 @@ class ManifestLoader:
                             source_file = self.manifest.files[file_id]
                         if source_file:
                             parse_file_type = source_file.parse_file_type
-                            logger.debug(f"Partial parsing exception processing file {file_id}")
+                            fire_event(PartialParsingExceptionFile(file=file_id))
                             file_dict = source_file.to_dict()
-                            logger.debug(f"PP file: {file_dict}")
+                            fire_event(PartialParsingFile(file_dict=file_dict))
                     exc_info['parse_file_type'] = parse_file_type
-                    logger.debug(f"PP exception info: {exc_info}")
+                    fire_event(PartialParsingException(exc_info=exc_info))
 
                     # Send event
                     if dbt.tracking.active_user is not None:
@@ -278,7 +288,7 @@ class ManifestLoader:
             self.manifest._parsing_info = ParsingInfo()
 
         if skip_parsing:
-            logger.debug("Partial parsing enabled, no changes found, skipping parsing")
+            fire_event(PartialParsingSkipParsing())
         else:
             # Load Macros and tests
             # We need to parse the macros first, so they're resolvable when
@@ -289,9 +299,8 @@ class ManifestLoader:
 
             # If we're partially parsing check that certain macros have not been changed
             if self.partially_parsing and self.skip_partial_parsing_because_of_macros():
-                logger.info(
-                    "Change detected to override macro used during parsing. Starting full parse."
-                )
+                fire_event(PartialParsingMacroChangeStartFullParse())
+
                 # Get new Manifest with original file records and move over the macros
                 self.manifest = self.new_manifest  # contains newly read files
                 project_parser_files = orig_project_parser_files
@@ -520,8 +529,9 @@ class ManifestLoader:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
             if self.manifest.metadata.dbt_version != __version__:
-                logger.debug("Manifest metadata did not contain correct version. "
-                             f"Contained '{self.manifest.metadata.dbt_version}' instead.")
+                fire_event(ManifestWrongMetadataVersion(
+                    version=self.manifest.metadata.dbt_version)
+                )
                 self.manifest.metadata.dbt_version = __version__
             manifest_msgpack = self.manifest.to_msgpack()
             make_directory(os.path.dirname(path))
@@ -539,32 +549,28 @@ class ManifestLoader:
 
         if manifest.metadata.dbt_version != __version__:
             # #3757 log both versions because of reports of invalid cases of mismatch.
-            logger.info("Unable to do partial parsing because of a dbt version mismatch. "
-                        f"Saved manifest version: {manifest.metadata.dbt_version}. "
-                        f"Current version: {__version__}.")
+            fire_event(PartialParsingVersionMismatch(saved_version=manifest.metadata.dbt_version,
+                                                     current_version=__version__))
             # If the version is wrong, the other checks might not work
             return False, ReparseReason.version_mismatch
         if self.manifest.state_check.vars_hash != manifest.state_check.vars_hash:
-            logger.info("Unable to do partial parsing because config vars, "
-                        "config profile, or config target have changed")
+            fire_event(PartialParsingFailedBecauseConfigChange())
             valid = False
             reparse_reason = ReparseReason.vars_changed
         if self.manifest.state_check.profile_hash != manifest.state_check.profile_hash:
             # Note: This should be made more granular. We shouldn't need to invalidate
             # partial parsing if a non-used profile section has changed.
-            logger.info("Unable to do partial parsing because profile has changed")
+            fire_event(PartialParsingFailedBecauseProfileChange())
             valid = False
             reparse_reason = ReparseReason.profile_changed
         if self.manifest.state_check.project_env_vars_hash != \
                 manifest.state_check.project_env_vars_hash:
-            logger.info("Unable to do partial parsing because env vars "
-                        "used in dbt_project.yml have changed")
+            fire_event(PartialParsingProjectEnvVarsChanged())
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
         if self.manifest.state_check.profile_env_vars_hash != \
                 manifest.state_check.profile_env_vars_hash:
-            logger.info("Unable to do partial parsing because env vars "
-                        "used in profiles.yml have changed")
+            fire_event(PartialParsingProfileEnvVarsChanged())
             valid = False
             reparse_reason = ReparseReason.prof_env_vars_changed
 
@@ -573,7 +579,7 @@ class ManifestLoader:
             if k not in manifest.state_check.project_hashes
         }
         if missing_keys:
-            logger.info("Unable to do partial parsing because a project dependency has been added")
+            fire_event(PartialParsingFailedBecauseNewProjectDependency())
             valid = False
             reparse_reason = ReparseReason.deps_changed
 
@@ -581,8 +587,7 @@ class ManifestLoader:
             if key in manifest.state_check.project_hashes:
                 old_value = manifest.state_check.project_hashes[key]
                 if new_value != old_value:
-                    logger.info("Unable to do partial parsing because "
-                                "a project config has changed")
+                    fire_event(PartialParsingFailedBecauseHashChanged())
                     valid = False
                     reparse_reason = ReparseReason.project_config_changed
         return valid, reparse_reason
@@ -604,7 +609,7 @@ class ManifestLoader:
 
     def read_manifest_for_partial_parse(self) -> Optional[Manifest]:
         if not flags.PARTIAL_PARSE:
-            logger.debug('Partial parsing not enabled')
+            fire_event(PartialParsingNotEnabled())
             return None
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
@@ -630,14 +635,10 @@ class ManifestLoader:
                         manifest.metadata.invocation_id = None
                     return manifest
             except Exception as exc:
-                logger.debug(
-                    'Failed to load parsed file from disk at {}: {}'
-                    .format(path, exc),
-                    exc_info=True
-                )
+                fire_event(ParsedFileLoadFailed(path=path, exc=exc))
                 reparse_reason = ReparseReason.load_file_failure
         else:
-            logger.info("Partial parse save file not found. Starting full parse.")
+            fire_event(PartialParseSaveFileNotFound())
             reparse_reason = ReparseReason.file_not_found
 
         # this event is only fired if a full reparse is needed
@@ -890,7 +891,7 @@ def invalid_ref_fail_unless_test(node, target_model_name,
             node, target_model_name, target_model_package, disabled
         )
         if disabled:
-            logger.debug(warning_tag(msg))
+            fire_event(InvalidRefInTestNode(msg=msg))
         else:
             warn_or_error(
                 msg,
@@ -913,7 +914,7 @@ def invalid_source_fail_unless_test(
             node, target_name, target_table_name, disabled
         )
         if disabled:
-            logger.debug(warning_tag(msg))
+            fire_event(InvalidDisabledSourceInTestNode(msg=msg))
         else:
             warn_or_error(
                 msg,

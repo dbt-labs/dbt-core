@@ -1,5 +1,5 @@
 from typing import List
-from dbt.logger import GLOBAL_LOGGER as logger, log_cache_events, log_manager
+from dbt.logger import log_cache_events, log_manager
 
 import argparse
 import os.path
@@ -9,6 +9,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import dbt.version
+from dbt.events.functions import fire_event, setup_event_logger
+from dbt.events.types import (
+    MainEncounteredError, MainKeyboardInterrupt, MainReportVersion, MainReportArgs,
+    MainTrackingUserState, MainStackTrace
+)
 import dbt.flags as flags
 import dbt.task.build as build_task
 import dbt.task.clean as clean_task
@@ -34,7 +39,6 @@ import dbt.tracking
 from dbt.utils import ExitCodes
 from dbt.config.profile import DEFAULT_PROFILES_DIR, read_user_config
 from dbt.exceptions import (
-    RuntimeException,
     InternalException,
     NotImplementedException,
     FailedToConnectException
@@ -127,7 +131,8 @@ def main(args=None):
                 exit_code = ExitCodes.ModelError.value
 
         except KeyboardInterrupt:
-            logger.info("ctrl-c")
+            # if the logger isn't configured yet, it will use the default logger
+            fire_event(MainKeyboardInterrupt())
             exit_code = ExitCodes.UnhandledError.value
 
         # This can be thrown by eg. argparse
@@ -135,16 +140,8 @@ def main(args=None):
             exit_code = e.code
 
         except BaseException as e:
-            logger.warning("Encountered an error:")
-            logger.warning(str(e))
-
-            if log_manager.initialized:
-                logger.debug(traceback.format_exc())
-            elif not isinstance(e, RuntimeException):
-                # if it did not come from dbt proper and the logger is not
-                # initialized (so there's no safe path to log to), log the
-                # stack trace at error level.
-                logger.error(traceback.format_exc())
+            fire_event(MainEncounteredError(e=e))
+            fire_event(MainStackTrace(stack_trace=traceback.format_exc()))
             exit_code = ExitCodes.UnhandledError.value
 
     sys.exit(exit_code)
@@ -208,7 +205,7 @@ def track_run(task):
         )
     except (NotImplementedException,
             FailedToConnectException) as e:
-        logger.error('ERROR: {}'.format(e))
+        fire_event(MainEncounteredError(e=e))
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )
@@ -228,21 +225,21 @@ def run_from_args(parsed):
     # set log_format in the logger
     parsed.cls.pre_init_hook(parsed)
 
-    logger.info("Running with dbt{}".format(dbt.version.installed))
+    fire_event(MainReportVersion(v=dbt.version.installed))
 
     # this will convert DbtConfigErrors into RuntimeExceptions
     # task could be any one of the task objects
     task = parsed.cls.from_args(args=parsed)
-
-    logger.debug("running dbt with arguments {parsed}", parsed=str(parsed))
+    fire_event(MainReportArgs(args=parsed))
 
     log_path = None
     if task.config is not None:
         log_path = getattr(task.config, 'log_path', None)
     # we can finally set the file logger up
     log_manager.set_path(log_path)
+    setup_event_logger(log_path or 'logs')
     if dbt.tracking.active_user is not None:  # mypy appeasement, always true
-        logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
+        fire_event(MainTrackingUserState(dbt.tracking.active_user.state()))
 
     results = None
 
