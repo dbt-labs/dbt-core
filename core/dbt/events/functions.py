@@ -5,10 +5,12 @@ from dbt.events.types import Cli, Event, File, ShowException
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing
+import io
+from io import StringIO
 import json
 import logging
 from logging import Logger
-from logging.handlers import WatchedFileHandler
+from logging.handlers import RotatingFileHandler
 import os
 from typing import List
 
@@ -58,11 +60,27 @@ def setup_event_logger(log_path):
 
     file_passthrough_formatter = logging.Formatter(fmt=FORMAT)
 
-    # TODO log rotation is not handled by WatchedFileHandler
-    file_handler = WatchedFileHandler(filename=log_dest, encoding='utf8')
+    file_handler = RotatingFileHandler(filename=log_dest, encoding='utf8')
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
     this.FILE_LOG.addHandler(file_handler)
+
+
+# used for integration tests
+def capture_stdout_logs() -> StringIO:
+    capture_buf = io.StringIO()
+    stdout_capture_handler = logging.StreamHandler(capture_buf)
+    stdout_handler.setLevel(logging.DEBUG)
+    this.STDOUT_LOG.addHandler(stdout_capture_handler)
+    return capture_buf
+
+
+# used for integration tests
+def stop_capture_stdout_logs() -> None:
+    this.STDOUT_LOG.handlers = [
+        h for h in this.STDOUT_LOG.handlers
+        if not (hasattr(h, 'stream') and isinstance(h.stream, StringIO))  # type: ignore
+    ]
 
 
 def env_secrets() -> List[str]:
