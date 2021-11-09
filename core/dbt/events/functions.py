@@ -4,7 +4,7 @@ import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.types import Cli, Event, File, ShowException
 import dbt.flags as flags
 # TODO this will need to move eventually
-from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing
+from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
 import io
 from io import StringIO
 import json
@@ -205,6 +205,24 @@ def fire_event(e: Event) -> None:
     # TODO manage history in phase 2:  EVENT_HISTORY.append(e)
     # explicitly checking the debug flag here so that potentially expensive-to-construct
     # log messages are not constructed if debug messages are never shown.
+
+    # backwards compatibility for plugins that require old logger (dbt-rpc)
+    if flags.ENABLE_LEGACY_LOGGER:
+        log_line = create_log_line(e, json_fmt=this.format_json, cli_dest=False)
+        level_tag = e.level_tag()
+        if level_tag == 'debug':
+            GLOBAL_LOGGER.debug(log_line)
+        elif level_tag == 'info':
+            GLOBAL_LOGGER.info(log_line)
+        elif level_tag == 'warn':
+            GLOBAL_LOGGER.warn(log_line)
+        elif level_tag == 'error':
+            GLOBAL_LOGGER.error(log_line)
+        else:
+            raise AssertionError(
+                f"While attempting to log {log_line}, encountered the unhandled level: {level_tag}"
+            )
+        return
 
     # always logs debug level regardless of user input
     if isinstance(e, File):
