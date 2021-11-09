@@ -327,8 +327,8 @@ class ProfileEnvVarTest(BasePPTest):
         manifest = get_manifest()
         env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
-        # Change env_vars
-        os.environ['ENV_VAR_PASS'] = 'my_pass'
+        # Change env_vars, the user doesn't exist, this should fail
+        os.environ['ENV_VAR_USER'] = 'fake_user'
         (results, log_output) = self.run_dbt_and_capture(["run"], expect_pass=False)
         self.assertTrue('env vars used in profiles.yml have changed' in log_output)
         manifest = get_manifest()
