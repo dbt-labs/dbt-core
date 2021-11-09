@@ -81,7 +81,7 @@ def setup_event_logger(log_path, level_override=None):
     # havent been applied yet
     this.format_color = True if flags.USE_COLORS else False
     # TODO this default should live somewhere better
-    log_dest = os.path.join(log_path, 'dbt.log')
+    log_dest = os.path.join(log_path, "dbt.log")
     level = level_override or (logging.DEBUG if flags.DEBUG else logging.INFO)
 
     # overwrite the STDOUT_LOG logger with the configured one
