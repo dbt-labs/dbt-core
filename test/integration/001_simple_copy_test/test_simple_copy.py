@@ -91,20 +91,6 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         self.assertFalse("empty" in models.keys())
         self.assertFalse("disabled" in models.keys())
 
-    @use_profile("presto")
-    def test__presto__simple_copy(self):
-        self.use_default_project({"seed-paths": [self.dir("seed-initial")]})
-
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
-        results = self.run_dbt(expect_pass=False)
-        self.assertEqual(len(results),  7)
-        for result in results:
-            if 'incremental' in result.node.name:
-                self.assertIn('not implemented for presto', result.message)
-
-        self.assertManyTablesEqual(["seed", "view_model", "materialized"])
-
 
 class TestShouting(BaseTestSimpleCopy):
     @property
@@ -196,18 +182,20 @@ class TestQuotedDatabase(BaseTestSimpleCopy):
             except ValueError:
                 continue
 
-            if log['extra'].get('run_state') != 'internal':
-                continue
+            # TODO structured logging does not put out run_state yet
+            # if log['extra'].get('run_state') != 'internal':
+            #     continue
             logs.append(log)
 
-        self.assertGreater(len(logs), 0)
+        # empty lists evaluate as False
+        self.assertTrue(logs)
         return logs
 
     @use_profile('postgres')
     def test_postgres_no_create_schemas(self):
         logs = self.seed_get_json()
         for log in logs:
-            msg = log['message']
+            msg = log['msg']
             self.assertFalse(
                 'create schema if not exists' in msg,
                 f'did not expect schema creation: {msg}'
