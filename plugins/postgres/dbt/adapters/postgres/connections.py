@@ -6,11 +6,14 @@ import dbt.exceptions
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.contracts.connection import AdapterResponse
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.events import AdapterLogger
 
 from dbt.helper_types import Port
 from dataclasses import dataclass
 from typing import Optional
+
+
+logger = AdapterLogger("Postgres")
 
 
 @dataclass
