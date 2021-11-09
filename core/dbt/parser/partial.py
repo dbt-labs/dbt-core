@@ -12,7 +12,14 @@ from dbt.events.types import (
     PartialParsingEnabled,
     PartialParsingAddedFile,
     PartialParsingDeletedFile,
-    PartialParsingDeletedSource, PartialParsingDeletedExposure, PartialParsingDeletedMetric
+    PartialParsingUpdatedFile,
+    PartialParsingNodeMissingInSourceFile,
+    PartialParsingMissingNodes,
+    PartialParsingChildMapMissingUniqueID,
+    PartialParsingUpdateSchemaFile,
+    PartialParsingDeletedSource,
+    PartialParsingDeletedExposure,
+    PartialParsingDeletedMetric,
 )
 from dbt.node_types import NodeType
 
