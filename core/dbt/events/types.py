@@ -858,6 +858,14 @@ class PartialParsingProfileEnvVarsChanged(InfoLevel, Cli, File):
 
 
 @dataclass
+class PartialParsingDeletedMetric(DebugLevel, Cli, File):
+    id: str
+
+    def message(self) -> str:
+        return f"Partial parsing: deleted metric {self.id}"
+
+
+@dataclass
 class ManifestWrongMetadataVersion(DebugLevel, Cli, File):
     version: str
 
@@ -2253,6 +2261,7 @@ if 1 == 0:
     PartialParsingFailedBecauseProfileChange()
     PartialParsingFailedBecauseNewProjectDependency()
     PartialParsingFailedBecauseHashChanged()
+    PartialParsingDeletedMetric('')
     ParsedFileLoadFailed(path='', exc=Exception(''))
     PartialParseSaveFileNotFound()
     StaticParserCausedJinjaRendering(path='')

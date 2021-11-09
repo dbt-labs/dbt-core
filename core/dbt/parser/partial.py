@@ -10,7 +10,7 @@ from dbt.events.types import (
     PartialParsingEnabled, PartialParsingAddedFile, PartialParsingDeletedFile,
     PartialParsingUpdatedFile, PartialParsingNodeMissingInSourceFile, PartialParsingMissingNodes,
     PartialParsingChildMapMissingUniqueID, PartialParsingUpdateSchemaFile,
-    PartialParsingDeletedSource, PartialParsingDeletedExposure
+    PartialParsingDeletedSource, PartialParsingDeletedExposure, PartialParsingDeletedMetric
 )
 from dbt.node_types import NodeType
 
@@ -870,7 +870,7 @@ class PartialParsing:
                     self.deleted_manifest.metrics[unique_id] = \
                         self.saved_manifest.metrics.pop(unique_id)
                     schema_file.metrics.remove(unique_id)
-                    logger.debug(f"Partial parsing: deleted metric {unique_id}")
+                    fire_event(PartialParsingDeletedMetric(id=unique_id))
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
