@@ -340,6 +340,22 @@ def _build_init_subparser(subparsers, base_subparser):
         Initialize a new DBT project.
         '''
     )
+    sub.add_argument(
+        'project_name',
+        nargs='?',
+        help='''
+        Name of the new DBT project.
+        '''
+    )
+    sub.add_argument(
+        '-s',
+        '--skip-profile-setup',
+        dest='skip_profile_setup',
+        action='store_true',
+        help='''
+        Skip interative profile setup.
+        '''
+    )
     sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
     return sub
 
