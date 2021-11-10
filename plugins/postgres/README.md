@@ -14,7 +14,7 @@
 
 dbt is the T in ELT. Organize, cleanse, denormalize, filter, rename, and pre-aggregate the raw data in your warehouse so that it's ready for analysis.
 
-## dbt-redshift
+## dbt-postgres
 
 The `dbt-postgres` package contains all of the code enabling dbt to work with a Postgres database. For
 more information on using dbt with Postgres, consult [the docs](https://docs.getdbt.com/docs/profile-postgres).
@@ -31,7 +31,7 @@ more information on using dbt with Postgres, consult [the docs](https://docs.get
 
 ## Reporting bugs and contributing code
 
-- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt-redshift/issues/new)
+- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt-core/issues/new)
 - Want to help us build dbt? Check out the [Contributing Guide](https://github.com/dbt-labs/dbt/blob/HEAD/CONTRIBUTING.md)
 
 ## Code of Conduct
