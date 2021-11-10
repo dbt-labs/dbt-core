@@ -1,4 +1,4 @@
-agate==1.6.1
+agate==1.6.3
 attrs==21.2.0
 Babel==2.9.1
 certifi==2021.10.8
@@ -6,9 +6,10 @@ cffi==1.15.0
 charset-normalizer==2.0.7
 click==8.0.3
 colorama==0.4.4
-dbt-core==1.0.0b1
+dbt-core==1.0.0rc1
 dbt-extractor==0.4.0
-dbt-postgres==1.0.0b1
+dbt-postgres==1.0.0rc1
+future==0.18.2
 hologram==0.0.14
 idna==3.3
 importlib-metadata==4.8.1
@@ -18,14 +19,14 @@ jsonschema==3.1.1
 leather==0.3.4
 Logbook==1.5.3
 MarkupSafe==2.0.1
-mashumaro==2.5
+mashumaro==2.9
 minimal-snowplow-tracker==0.0.2
 msgpack==1.0.2
 networkx==2.6.3
-packaging==20.9
-parsedatetime==2.6
+packaging==21.2
+parsedatetime==2.4
 psycopg2-binary==2.9.1
-pycparser==2.20
+pycparser==2.21
 pyparsing==2.4.7
 pyrsistent==0.18.0
 python-dateutil==2.8.2
