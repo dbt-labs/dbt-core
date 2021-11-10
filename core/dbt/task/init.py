@@ -328,10 +328,7 @@ class InitTask(BaseTask):
         self.copy_starter_repo(project_name)
         os.chdir(project_name)
         with open("dbt_project.yml", "r+") as f:
-            content = f"{f.read()}".format(
-                project_name=project_name,
-                profile_name=project_name
-            )
+            content = f"{f.read()}".format(project_name=project_name, profile_name=project_name)
             f.seek(0)
             f.write(content)
             f.truncate()
