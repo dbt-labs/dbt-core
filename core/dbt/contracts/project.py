@@ -237,6 +237,7 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
     fail_fast: Optional[bool] = None
     use_experimental_parser: Optional[bool] = None
     static_parser: Optional[bool] = None
+    indirect_selection: Optional[str] = None
 
 
 @dataclass

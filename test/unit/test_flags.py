@@ -195,3 +195,24 @@ class TestFlags(TestCase):
         os.environ.pop('DBT_PRINTER_WIDTH')
         delattr(self.args, 'printer_width')
         self.user_config.printer_width = None
+
+        # indirect_selection
+        self.user_config.indirect_selection = 'eager'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, True)
+        self.user_config.indirect_selection = 'cautious'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, False)
+        self.user_config.indirect_selection = None
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, True)
+        os.environ['DBT_INDIRECT_SELECTION'] = 'cautious'
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, False)
+        setattr(self.args, 'indirect_selection', 'cautious')
+        flags.set_from_args(self.args, self.user_config)
+        self.assertEqual(flags.INDIRECT_SELECTION, False)
+        # cleanup
+        os.environ.pop('DBT_INDIRECT_SELECTION')
+        delattr(self.args, 'indirect_selection')
+        self.user_config.indirect_selection = None

@@ -68,7 +68,7 @@ def parse_difference(
     included = parse_union_from_default(
         include,
         DEFAULT_INCLUDES,
-        eagerly_expand=flags.EAGER_INDIRECT_SELECTION
+        eagerly_expand=flags.INDIRECT_SELECTION
     )
     excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, eagerly_expand=True)
     return SelectionDifference(components=[included, excluded])
