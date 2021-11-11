@@ -29,8 +29,7 @@ class GraphTest(unittest.TestCase):
 
     def tearDown(self):
         self.write_gpickle_patcher.stop()
-        self.file_system_patcher.stop()
-        self.mock_filesystem_constructor.stop()
+        self.mock_filesystem_search.stop()
         self.mock_hook_constructor.stop()
         self.load_state_check.stop()
         self.load_source_file_patcher.stop()
@@ -66,22 +65,16 @@ class GraphTest(unittest.TestCase):
         self.mock_write_gpickle = self.write_gpickle_patcher.start()
         self.mock_write_gpickle.side_effect = mock_write_gpickle
 
-        # Create file system patcher and filesystem searcher
-        self.file_system_patcher = patch.object(
-            dbt.parser.search.FilesystemSearcher, '__new__'
-        )
-        self.mock_filesystem_constructor = self.file_system_patcher.start()
-        def filesystem_iter(iter_self):
-            if 'sql' not in iter_self.extension:
+        # Create file filesystem searcher
+        self.filesystem_search = patch('dbt.parser.read_files.filesystem_search')
+        def mock_filesystem_search(project, relative_dirs, extension):
+            if 'sql' not in extension:
                 return []
-            if 'models' not in iter_self.relative_dirs:
+            if 'models' not in relative_dirs:
                 return []
             return [model.path for model in self.mock_models]
-        def create_filesystem_searcher(cls, project, relative_dirs, extension):
-            result = MagicMock(project=project, relative_dirs=relative_dirs, extension=extension)
-            result.__iter__.side_effect = lambda: iter(filesystem_iter(result))
-            return result
-        self.mock_filesystem_constructor.side_effect = create_filesystem_searcher
+        self.mock_filesystem_search = self.filesystem_search.start()
+        self.mock_filesystem_search.side_effect = mock_filesystem_search
 
         # Create HookParser patcher
         self.hook_patcher = patch.object(
