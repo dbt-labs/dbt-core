@@ -121,7 +121,7 @@ def set_from_args(args, user_config):
     FAIL_FAST = get_flag_value('FAIL_FAST', args, user_config)
     SEND_ANONYMOUS_USAGE_STATS = get_flag_value('SEND_ANONYMOUS_USAGE_STATS', args, user_config)
     PRINTER_WIDTH = get_flag_value('PRINTER_WIDTH', args, user_config)
-    INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config) != 'cautious'
+    INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config)
 
 
 def get_flag_value(flag, args, user_config):

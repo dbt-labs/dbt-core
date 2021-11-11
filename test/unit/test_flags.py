@@ -7,6 +7,7 @@ from dbt import flags
 from dbt.contracts.project import UserConfig
 from dbt.config.profile import DEFAULT_PROFILES_DIR
 
+from core.dbt.graph.selector_spec import IndirectSelection
 
 class TestFlags(TestCase):
 
@@ -199,19 +200,19 @@ class TestFlags(TestCase):
         # indirect_selection
         self.user_config.indirect_selection = 'eager'
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.INDIRECT_SELECTION, True)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Eager)
         self.user_config.indirect_selection = 'cautious'
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.INDIRECT_SELECTION, False)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Cautious)
         self.user_config.indirect_selection = None
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.INDIRECT_SELECTION, True)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Eager)
         os.environ['DBT_INDIRECT_SELECTION'] = 'cautious'
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.INDIRECT_SELECTION, False)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Cautious)
         setattr(self.args, 'indirect_selection', 'cautious')
         flags.set_from_args(self.args, self.user_config)
-        self.assertEqual(flags.INDIRECT_SELECTION, False)
+        self.assertEqual(flags.INDIRECT_SELECTION, IndirectSelection.Cautious)
         # cleanup
         os.environ.pop('DBT_INDIRECT_SELECTION')
         delattr(self.args, 'indirect_selection')
