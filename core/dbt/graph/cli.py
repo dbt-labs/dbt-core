@@ -26,7 +26,8 @@ DEFAULT_EXCLUDES: List[str] = []
 
 
 def parse_union(
-    components: List[str], expect_exists: bool, indirect_selection: IndirectSelection = IndirectSelection.Eager
+    components: List[str], expect_exists: bool,
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(
@@ -53,14 +54,21 @@ def parse_union(
 
 
 def parse_union_from_default(
-    raw: Optional[List[str]], default: List[str], indirect_selection: IndirectSelection = IndirectSelection.Eager
+    raw: Optional[List[str]], default: List[str],
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     components: List[str]
     expect_exists: bool
     if raw is None:
-        return parse_union(components=default, expect_exists=False, indirect_selection=indirect_selection)
+        return parse_union(
+            components=default,
+            expect_exists=False,
+            indirect_selection=indirect_selection)
     else:
-        return parse_union(components=raw, expect_exists=True, indirect_selection=indirect_selection)
+        return parse_union(
+            components=raw,
+            expect_exists=True,
+            indirect_selection=indirect_selection)
 
 
 def parse_difference(
@@ -72,7 +80,10 @@ def parse_difference(
         DEFAULT_INCLUDES,
         indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
-    excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection.Eager)
+    excluded = parse_union_from_default(
+        exclude,
+        DEFAULT_EXCLUDES,
+        indirect_selection=IndirectSelection.Eager)
     return SelectionDifference(components=[included, excluded])
 
 

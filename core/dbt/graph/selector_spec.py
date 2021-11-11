@@ -1,6 +1,5 @@
 import os
 import re
-import enum
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from dbt.dataclass_schema import StrEnum
@@ -23,9 +22,11 @@ RAW_SELECTOR_PATTERN = re.compile(
 )
 SELECTOR_METHOD_SEPARATOR = '.'
 
+
 class IndirectSelection(StrEnum):
     Eager = 'eager'
     Cautious = 'cautious'
+
 
 def _probably_path(value: str):
     """Decide if value is probably a path. Windows has two path separators, so
@@ -109,7 +110,8 @@ class SelectionCriteria:
 
     @classmethod
     def selection_criteria_from_dict(
-        cls, raw: Any, dct: Dict[str, Any], indirect_selection: IndirectSelection = IndirectSelection.Eager
+        cls, raw: Any, dct: Dict[str, Any],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager
     ) -> 'SelectionCriteria':
         if 'value' not in dct:
             raise RuntimeException(
@@ -159,7 +161,10 @@ class SelectionCriteria:
         return dct
 
     @classmethod
-    def from_single_spec(cls, raw: str, indirect_selection: IndirectSelection = IndirectSelection.Eager) -> 'SelectionCriteria':
+    def from_single_spec(
+        cls, raw: str,
+        indirect_selection: IndirectSelection = IndirectSelection.Eager
+    ) -> 'SelectionCriteria':
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
