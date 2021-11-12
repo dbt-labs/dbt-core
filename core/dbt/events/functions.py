@@ -6,7 +6,7 @@ import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
 import io
-from io import StringIO
+from io import StringIO, TextIOWrapper
 import json
 import logging
 from logging import Logger
@@ -52,6 +52,11 @@ def setup_event_logger(log_path):
     stdout_handler = logging.StreamHandler()
     stdout_handler.setFormatter(stdout_passthrough_formatter)
     stdout_handler.setLevel(level)
+    # clear existing stdout TextIOWrapper stream handlers
+    this.STDOUT_LOG.handlers = [
+        h for h in this.STDOUT_LOG.handlers
+        if not (hasattr(h, 'stream') and isinstance(h.stream, TextIOWrapper))  # type: ignore
+    ]
     this.STDOUT_LOG.addHandler(stdout_handler)
 
     # overwrite the FILE_LOG logger with the configured one
@@ -63,6 +68,7 @@ def setup_event_logger(log_path):
     file_handler = RotatingFileHandler(filename=log_dest, encoding='utf8')
     file_handler.setFormatter(file_passthrough_formatter)
     file_handler.setLevel(logging.DEBUG)  # always debug regardless of user input
+    this.FILE_LOG.handlers.clear()
     this.FILE_LOG.addHandler(file_handler)
 
 
