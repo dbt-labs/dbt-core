@@ -1,3 +1,8 @@
+## dbt-core 1.0.0rc2 (TBD)
+
+### Under the hood
+
+
 ## dbt-core 1.0.0rc1 (November 10, 2021)
 
 ### Breaking changes
