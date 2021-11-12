@@ -123,9 +123,9 @@ class SelectionCriteria:
         children_depth = _match_to_int(dct, 'children_depth')
 
         # If defined field in selector, override CLI flag
-        indirect_selection = dct.get('indirect_selection', None) or indirect_selection
-        if indirect_selection and indirect_selection not in ['eager', 'cautious']:
-            raise RuntimeException(f'indirect_selection value "{indirect_selection}" is invalid!')
+        indirect_selection = IndirectSelection(
+            dct.get('indirect_selection', None) or indirect_selection
+        )
 
         return cls(
             raw=raw,
