@@ -128,6 +128,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'schema': None,
                     'alias': None,
                     'meta': {},
+                    'unique_key': None
                 },
                 'unique_id': 'analysis.test.a',
                 'original_file_path': normalize('analyses/a.sql'),
