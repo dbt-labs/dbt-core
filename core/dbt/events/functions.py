@@ -96,8 +96,9 @@ def setup_event_logger(log_path, level_override=None):
     stdout_handler.setLevel(level)
     # clear existing stdout TextIOWrapper stream handlers
     this.STDOUT_LOG.handlers = [
-        h for h in this.STDOUT_LOG.handlers
-        if not (hasattr(h, 'stream') and isinstance(h.stream, TextIOWrapper))  # type: ignore
+        h
+        for h in this.STDOUT_LOG.handlers
+        if not (hasattr(h, "stream") and isinstance(h.stream, TextIOWrapper))  # type: ignore
     ]
     this.STDOUT_LOG.addHandler(stdout_handler)
 
