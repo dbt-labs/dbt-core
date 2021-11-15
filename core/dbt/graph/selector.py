@@ -93,8 +93,7 @@ class NodeSelector(MethodManager):
 
         neighbors = self.collect_specified_neighbors(spec, collected)
         direct_nodes, indirect_nodes = self.expand_selection(
-            selected=(collected | neighbors),
-            indirect_selection=spec.indirect_selection
+            selected=(collected | neighbors), indirect_selection=spec.indirect_selection
         )
         return direct_nodes, indirect_nodes
 
