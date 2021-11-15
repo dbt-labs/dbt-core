@@ -11,7 +11,7 @@ from dbt.events.functions import fire_event
 from dbt.events.types import MacroFileParse
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
-from dbt.parser.search import FileBlock, FilesystemSearcher
+from dbt.parser.search import FileBlock, filesystem_search
 from dbt.utils import MACRO_PREFIX
 
 
@@ -19,11 +19,11 @@ class MacroParser(BaseParser[ParsedMacro]):
     # This is only used when creating a MacroManifest separate
     # from the normal parsing flow.
     def get_paths(self) -> List[FilePath]:
-        return list(FilesystemSearcher(
+        return filesystem_search(
             project=self.project,
             relative_dirs=self.project.macro_paths,
             extension='.sql',
-        ))
+        )
 
     @property
     def resource_type(self) -> NodeType:

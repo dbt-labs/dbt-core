@@ -6,7 +6,7 @@ from dbt.contracts.files import (
 
 from dbt.parser.schemas import yaml_from_file, schema_file_keys, check_format_version
 from dbt.exceptions import CompilationException
-from dbt.parser.search import FilesystemSearcher
+from dbt.parser.search import filesystem_search
 from typing import Optional
 
 
@@ -86,9 +86,9 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
 # them into a bunch of FileSource objects
 def get_source_files(project, paths, extension, parse_file_type, saved_files):
     # file path list
-    fp_list = list(FilesystemSearcher(
+    fp_list = filesystem_search(
         project, paths, extension
-    ))
+    )
     # file block list
     fb_list = []
     for fp in fp_list:
