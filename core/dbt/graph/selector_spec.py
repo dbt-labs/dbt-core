@@ -24,8 +24,8 @@ SELECTOR_METHOD_SEPARATOR = '.'
 
 
 class IndirectSelection(StrEnum):
-    Eager = 'eager'
-    Cautious = 'cautious'
+    Eager = "eager"
+    Cautious = "cautious"
 
 
 def _probably_path(value: str):
@@ -107,8 +107,8 @@ class SelectionCriteria:
 
     @classmethod
     def selection_criteria_from_dict(
-        cls, raw: Any, dct: Dict[str, Any],
-        indirect_selection: IndirectSelection = IndirectSelection.Eager
+        cls,
+        raw: Any,
         dct: Dict[str, Any],
         indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> "SelectionCriteria":
@@ -121,7 +121,7 @@ class SelectionCriteria:
 
         # If defined field in selector, override CLI flag
         indirect_selection = IndirectSelection(
-            dct.get('indirect_selection', None) or indirect_selection
+            dct.get("indirect_selection", None) or indirect_selection
         )
 
         return cls(
@@ -134,7 +134,7 @@ class SelectionCriteria:
             parents_depth=parents_depth,
             children=bool(dct.get("children")),
             children_depth=children_depth,
-            indirect_selection=indirect_selection
+            indirect_selection=indirect_selection,
         )
 
     @classmethod
@@ -159,9 +159,8 @@ class SelectionCriteria:
 
     @classmethod
     def from_single_spec(
-        cls, raw: str,
-        indirect_selection: IndirectSelection = IndirectSelection.Eager
-    ) -> 'SelectionCriteria':
+        cls, raw: str, indirect_selection: IndirectSelection = IndirectSelection.Eager
+    ) -> "SelectionCriteria":
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!

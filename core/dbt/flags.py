@@ -99,7 +99,7 @@ MP_CONTEXT = _get_context()
 def set_from_args(args, user_config):
     # N.B. Multiple `globals` are purely for line length.
         USE_EXPERIMENTAL_PARSER, STATIC_PARSER, WRITE_JSON, PARTIAL_PARSE, \
-        USE_COLORS, STORE_FAILURES, PROFILES_DIR, DEBUG, LOG_FORMAT, INDIRECT_SELECTION, \
+    # black insists in putting them all on one line
         VERSION_CHECK, FAIL_FAST, SEND_ANONYMOUS_USAGE_STATS, PRINTER_WIDTH, \
         WHICH, LOG_CACHE_EVENTS, EVENT_BUFFER_SIZE
 
@@ -123,7 +123,7 @@ def set_from_args(args, user_config):
     FAIL_FAST = get_flag_value("FAIL_FAST", args, user_config)
     SEND_ANONYMOUS_USAGE_STATS = get_flag_value("SEND_ANONYMOUS_USAGE_STATS", args, user_config)
     PRINTER_WIDTH = get_flag_value("PRINTER_WIDTH", args, user_config)
-    INDIRECT_SELECTION = get_flag_value('INDIRECT_SELECTION', args, user_config)
+    INDIRECT_SELECTION = get_flag_value("INDIRECT_SELECTION", args, user_config)
     LOG_CACHE_EVENTS = get_flag_value("LOG_CACHE_EVENTS", args, user_config)
     EVENT_BUFFER_SIZE = get_flag_value('EVENT_BUFFER_SIZE', args, user_config)
 

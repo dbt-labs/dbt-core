@@ -203,8 +203,9 @@ class NodeSelector(MethodManager):
         return {unique_id for unique_id in selected if self._is_match(unique_id)}
 
     def expand_selection(
-        self, selected: Set[UniqueId],
-        indirect_selection: IndirectSelection = IndirectSelection.Eager
+        self,
+        selected: Set[UniqueId],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager,
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         # Test selection by default expands to include an implicitly/indirectly selected tests.
         # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
@@ -227,10 +228,9 @@ class NodeSelector(MethodManager):
                 node = self.manifest.nodes[unique_id]
                 if can_select_indirectly(node):
                     # should we add it in directly?
-                    if (
-                        indirect_selection == IndirectSelection.Eager or
-                        set(node.depends_on.nodes) <= set(selected)
-                    ):
+                    if indirect_selection == IndirectSelection.Eager or set(
+                        node.depends_on.nodes
+                    ) <= set(selected):
                         direct_nodes.add(unique_id)
                     # if not:
                     else:
