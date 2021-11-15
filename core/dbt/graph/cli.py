@@ -74,9 +74,7 @@ def parse_difference(
 ) -> SelectionDifference:
 
     included = parse_union_from_default(
-        include,
-        DEFAULT_INCLUDES,
-        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
+        include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
     excluded = parse_union_from_default(
         exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection.Eager

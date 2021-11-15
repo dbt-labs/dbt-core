@@ -167,9 +167,7 @@ class SelectionCriteria:
             raise RuntimeException(f'Invalid selector spec "{raw}"')
 
         return cls.selection_criteria_from_dict(
-            raw,
-            result.groupdict(),
-            indirect_selection=indirect_selection
+            raw, result.groupdict(), indirect_selection=indirect_selection
         )
 
 
