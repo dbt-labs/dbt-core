@@ -2,6 +2,7 @@ import os
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
+from dbt.dataclass_schema import StrEnum
 
 from typing import (
     Set, Iterator, List, Optional, Dict, Union, Any, Iterable, Tuple
@@ -20,6 +21,11 @@ RAW_SELECTOR_PATTERN = re.compile(
     r'\Z'
 )
 SELECTOR_METHOD_SEPARATOR = '.'
+
+
+class IndirectSelection(StrEnum):
+    Eager = 'eager'
+    Cautious = 'cautious'
 
 
 def _probably_path(value: str):
@@ -66,7 +72,7 @@ class SelectionCriteria:
     parents_depth: Optional[int]
     children: bool
     children_depth: Optional[int]
-    eagerly_expand: bool = True
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 
     def __post_init__(self):
         if self.children and self.childrens_parents:
@@ -104,7 +110,8 @@ class SelectionCriteria:
 
     @classmethod
     def selection_criteria_from_dict(
-        cls, raw: Any, dct: Dict[str, Any], eagerly_expand: bool = True
+        cls, raw: Any, dct: Dict[str, Any],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager
     ) -> 'SelectionCriteria':
         if 'value' not in dct:
             raise RuntimeException(
@@ -116,14 +123,9 @@ class SelectionCriteria:
         children_depth = _match_to_int(dct, 'children_depth')
 
         # If defined field in selector, override CLI flag
-        indirect_selection = dct.get('indirect_selection', None)
-        if indirect_selection:
-            if indirect_selection in ['eager', 'cautious']:
-                eagerly_expand = indirect_selection != 'cautious'
-            else:
-                raise RuntimeException(
-                    f'indirect_selection value "{indirect_selection}" is not valid!'
-                )
+        indirect_selection = IndirectSelection(
+            dct.get('indirect_selection', None) or indirect_selection
+        )
 
         return cls(
             raw=raw,
@@ -135,7 +137,7 @@ class SelectionCriteria:
             parents_depth=parents_depth,
             children=bool(dct.get('children')),
             children_depth=children_depth,
-            eagerly_expand=eagerly_expand
+            indirect_selection=indirect_selection
         )
 
     @classmethod
@@ -159,7 +161,10 @@ class SelectionCriteria:
         return dct
 
     @classmethod
-    def from_single_spec(cls, raw: str, eagerly_expand: bool = True) -> 'SelectionCriteria':
+    def from_single_spec(
+        cls, raw: str,
+        indirect_selection: IndirectSelection = IndirectSelection.Eager
+    ) -> 'SelectionCriteria':
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             # bad spec!
@@ -168,7 +173,7 @@ class SelectionCriteria:
         return cls.selection_criteria_from_dict(
             raw,
             result.groupdict(),
-            eagerly_expand=eagerly_expand
+            indirect_selection=indirect_selection
         )
 
 

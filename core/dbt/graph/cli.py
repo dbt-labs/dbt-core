@@ -16,6 +16,7 @@ from .selector_spec import (
     SelectionIntersection,
     SelectionDifference,
     SelectionCriteria,
+    IndirectSelection
 )
 
 INTERSECTION_DELIMITER = ','
@@ -25,7 +26,8 @@ DEFAULT_EXCLUDES: List[str] = []
 
 
 def parse_union(
-    components: List[str], expect_exists: bool, eagerly_expand: bool = True
+    components: List[str], expect_exists: bool,
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(
@@ -36,7 +38,7 @@ def parse_union(
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
         intersection_components: List[SelectionSpec] = [
-            SelectionCriteria.from_single_spec(part, eagerly_expand=eagerly_expand)
+            SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
         union_components.append(SelectionIntersection(
@@ -52,25 +54,36 @@ def parse_union(
 
 
 def parse_union_from_default(
-    raw: Optional[List[str]], default: List[str], eagerly_expand: bool = True
+    raw: Optional[List[str]], default: List[str],
+    indirect_selection: IndirectSelection = IndirectSelection.Eager
 ) -> SelectionUnion:
     components: List[str]
     expect_exists: bool
     if raw is None:
-        return parse_union(components=default, expect_exists=False, eagerly_expand=eagerly_expand)
+        return parse_union(
+            components=default,
+            expect_exists=False,
+            indirect_selection=indirect_selection)
     else:
-        return parse_union(components=raw, expect_exists=True, eagerly_expand=eagerly_expand)
+        return parse_union(
+            components=raw,
+            expect_exists=True,
+            indirect_selection=indirect_selection)
 
 
 def parse_difference(
     include: Optional[List[str]], exclude: Optional[List[str]]
 ) -> SelectionDifference:
+
     included = parse_union_from_default(
         include,
         DEFAULT_INCLUDES,
-        eagerly_expand=flags.EAGER_INDIRECT_SELECTION
+        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
     )
-    excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES, eagerly_expand=True)
+    excluded = parse_union_from_default(
+        exclude,
+        DEFAULT_EXCLUDES,
+        indirect_selection=IndirectSelection.Eager)
     return SelectionDifference(components=[included, excluded])
 
 

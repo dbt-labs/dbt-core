@@ -3,7 +3,7 @@ from typing import Set, List, Optional, Tuple
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
 from .selector_methods import MethodManager
-from .selector_spec import SelectionCriteria, SelectionSpec
+from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
 
 from dbt.events.functions import fire_event
 from dbt.events.types import SelectorReportInvalidSelector
@@ -96,7 +96,7 @@ class NodeSelector(MethodManager):
         neighbors = self.collect_specified_neighbors(spec, collected)
         direct_nodes, indirect_nodes = self.expand_selection(
             selected=(collected | neighbors),
-            eagerly_expand=spec.eagerly_expand
+            indirect_selection=spec.indirect_selection
         )
         return direct_nodes, indirect_nodes
 
@@ -204,7 +204,8 @@ class NodeSelector(MethodManager):
         }
 
     def expand_selection(
-        self, selected: Set[UniqueId], eagerly_expand: bool = True
+        self, selected: Set[UniqueId],
+        indirect_selection: IndirectSelection = IndirectSelection.Eager
     ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         # Test selection by default expands to include an implicitly/indirectly selected tests.
         # `dbt test -m model_a` also includes tests that directly depend on `model_a`.
@@ -217,7 +218,7 @@ class NodeSelector(MethodManager):
         #  - If ANY parent is missing, return it separately. We'll keep it around
         #    for later and see if its other parents show up.
         # Users can opt out of inclusive EAGER mode by passing --indirect-selection cautious
-        # CLI argument or by specifying `eagerly_expand: true` in a yaml selector
+        # CLI argument or by specifying `indirect_selection: true` in a yaml selector
 
         direct_nodes = set(selected)
         indirect_nodes = set()
@@ -227,7 +228,10 @@ class NodeSelector(MethodManager):
                 node = self.manifest.nodes[unique_id]
                 if can_select_indirectly(node):
                     # should we add it in directly?
-                    if eagerly_expand or set(node.depends_on.nodes) <= set(selected):
+                    if (
+                        indirect_selection == IndirectSelection.Eager or
+                        set(node.depends_on.nodes) <= set(selected)
+                    ):
                         direct_nodes.add(unique_id)
                     # if not:
                     else:
