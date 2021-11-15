@@ -109,9 +109,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
 # them into a bunch of FileSource objects
 def get_source_files(project, paths, extension, parse_file_type, saved_files):
     # file path list
-    fp_list = filesystem_search(
-        project, paths, extension
-    )
+    fp_list = filesystem_search(project, paths, extension)
     # file block list
     fb_list = []
     for fp in fp_list:
