@@ -3,6 +3,9 @@
 ### Features
 - Avoid error when missing column in YAML description ([#4151](https://github.com/dbt-labs/dbt-core/issues/4151), [#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
 
+### Fixes
+- Fix serialization error with missing quotes in metrics model ref ([#4252](https://github.com/dbt-labs/dbt-core/issues/4252), [#4287](https://github.com/dbt-labs/dbt-core/pull/4289))
+
 ### Under the hood
 Add --indirect-selection parameter to profiles.yml and builtin DBT_ env vars; stringified parameter to enable multi-modal use ([#3997](https://github.com/dbt-labs/dbt-core/issues/3997), [PR #4270](https://github.com/dbt-labs/dbt-core/pull/4270))
 - Fix filesystem searcher test failure on Python 3.9 ([#3689](https://github.com/dbt-labs/dbt-core/issues/3689), [#4271](https://github.com/dbt-labs/dbt-core/pull/4271))

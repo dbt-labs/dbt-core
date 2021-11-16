@@ -38,6 +38,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.exceptions import (
     CompilationException,
+    ParsingException,
     InternalException,
     ValidationException,
     RuntimeException,
@@ -1388,10 +1389,23 @@ def generate_parse_exposure(
 
 class MetricRefResolver(BaseResolver):
     def __call__(self, *args) -> str:
-        if len(args) not in (1, 2):
+        package = None
+        if len(args) == 1:
+            name = args[0]
+        elif len(args) == 2:
+            package, name = args
+        else:
             ref_invalid_args(self.model, args)
+        self.validate_args(name, package)
         self.model.refs.append(list(args))
         return ''
+
+    def validate_args(self, name, package):
+        if not isinstance(name, str):
+            raise ParsingException(
+                f'In a metrics section in {self.model.original_file_path} '
+                f'the name argument to ref() must be a string'
+            )
 
 
 def generate_parse_metrics(
