@@ -95,3 +95,32 @@ class TestPersistDocs(BasePersistDocsTest):
     def test_postgres_comments(self):
         self.run_has_comments_pglike()
 
+class TestPersistDocsColumnMissing(BasePersistDocsTest):
+    @property
+    def project_config(self):
+        return {
+            'config-version': 2,
+            'models': {
+                'test': {
+                    '+persist_docs': {
+                        "columns": True,
+                    },
+                }
+            }
+        }
+
+    @property
+    def models(self):
+        return 'models-column-missing'
+
+    @use_profile('postgres')
+    def test_postgres_missing_column(self):
+        self.run_dbt()
+        self.run_dbt(['docs', 'generate'])
+        with open('target/catalog.json') as fp:
+            catalog_data = json.load(fp)
+        assert 'nodes' in catalog_data
+
+        table_node = catalog_data['nodes']['model.test.missing_column']
+        table_id_comment = table_node['columns']['id']['comment']
+        assert table_id_comment.startswith('test id column description')
