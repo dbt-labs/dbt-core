@@ -124,7 +124,8 @@ def create_log_line(e: Event, json_fmt: bool, cli_dest: bool) -> str:
 
     if json_fmt:
         values['ts'] = e.ts.isoformat()
-        log_line = json.dumps(values, sort_keys=True)
+        values['data'] = vars(e)
+        log_line = json.dumps(values, default=vars, sort_keys=True)
     else:
         values['ts'] = e.ts.strftime("%H:%M:%S")
         color_tag = '' if this.format_color else Style.RESET_ALL

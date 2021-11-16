@@ -63,6 +63,7 @@ class Event(metaclass=ABCMeta):
     ts: datetime = datetime.now()
     pid: int = os.getpid()
     # code: int
+    data: Optional[Dict[str, Any]] = None
 
     # do not define this yourself. inherit it from one of the above level types.
     @abstractmethod
