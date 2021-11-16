@@ -7,8 +7,6 @@ from dbt.events.base_types import (
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
-from io import StringIO
-from logging import Formatter, getLogger, StreamHandler
 from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, Union
 
 
@@ -23,8 +21,8 @@ from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, Union
 @dataclass
 class AdapterEventBase(Cli, File):
     name: str
+    base_msg: str
     args: Tuple[Any, ...]
-    kwargs: dict
 
     # instead of having this inherit from one of the level classes
     def level_tag(self) -> str:
@@ -37,19 +35,7 @@ class AdapterEventBase(Cli, File):
                 'attempted to create a message for AdapterEventBase which cannot be created'
             )
 
-        # to be backwards compatable with the logbook interface our adapters are used to, we send
-        # the messages to a std lib logger and capture the output to a string buffer to render the
-        # very permissive `*args, **kwargs` interface.
-        capture_buf = StringIO()
-        tmp_logger = getLogger('tmp_logger')
-        passthrough_formatter = Formatter(fmt="%(message)s")
-        tmp_handler = StreamHandler(capture_buf)
-        tmp_handler.setFormatter(passthrough_formatter)
-        tmp_logger.addHandler(tmp_handler)
-
-        # logger level doesn't matter since the formatter is only outputting the message
-        tmp_logger.info(*self.args, **self.kwargs)
-        msg = capture_buf.getvalue()
+        msg = self.base_msg.format(*self.args)
         return f"{self.name} adapter: {msg}"
 
 

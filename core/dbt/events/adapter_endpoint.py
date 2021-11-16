@@ -9,49 +9,57 @@ from dbt.events.types import (
 class AdapterLogger():
     name: str
 
-    def debug(self, *args, **kwargs):
-        event = AdapterEventDebug(self.name, args, kwargs)
+    def debug(self, msg, *args, exc_info=None, extra=None, stack_info=False):
+        event = AdapterEventDebug(name=self.name, base_msg=msg, args=args)
 
-        event.exc_info = kwargs.get('exc_info')
-        event.stack_info = kwargs.get('stack_info')
-        event.extra = kwargs.get('extra')
-
-        fire_event(event)
-
-    def info(self, *args, **kwargs):
-        event = AdapterEventInfo(self.name, args, kwargs)
-
-        event.exc_info = kwargs.get('exc_info')
-        event.stack_info = kwargs.get('stack_info')
-        event.extra = kwargs.get('extra')
+        event.exc_info = exc_info
+        event.extra = extra
+        event.stack_info = stack_info
 
         fire_event(event)
 
-    def warning(self, *args, **kwargs):
-        event = AdapterEventWarning(self.name, args, kwargs)
+    def info(self, msg, *args, exc_info=None, extra=None, stack_info=False):
+        event = AdapterEventInfo(name=self.name, base_msg=msg, args=args)
 
-        event.exc_info = kwargs.get('exc_info')
-        event.stack_info = kwargs.get('stack_info')
-        event.extra = kwargs.get('extra')
-
-        fire_event(event)
-
-    def error(self, *args, **kwargs):
-        event = AdapterEventError(self.name, args, kwargs)
-
-        event.exc_info = kwargs.get('exc_info')
-        event.stack_info = kwargs.get('stack_info')
-        event.extra = kwargs.get('extra')
+        event.exc_info = exc_info
+        event.extra = extra
+        event.stack_info = stack_info
 
         fire_event(event)
 
-    def exception(self, *args, **kwargs):
-        event = AdapterEventError(self.name, args, kwargs)
+    def warning(self, msg, *args, exc_info=None, extra=None, stack_info=False):
+        event = AdapterEventWarning(name=self.name, base_msg=msg, args=args)
 
-        # defaulting exc_info=True if it is empty is what makes this method different
-        x = kwargs.get('exc_info')
-        event.exc_info = x if x else True
-        event.stack_info = kwargs.get('stack_info')
-        event.extra = kwargs.get('extra')
+        event.exc_info = exc_info
+        event.extra = extra
+        event.stack_info = stack_info
+
+        fire_event(event)
+
+    def error(self, msg, *args, exc_info=None, extra=None, stack_info=False):
+        event = AdapterEventError(name=self.name, base_msg=msg, args=args)
+
+        event.exc_info = exc_info
+        event.extra = extra
+        event.stack_info = stack_info
+
+        fire_event(event)
+
+    # The default exc_info=True is what makes this method different
+    def exception(self, msg, *args, exc_info=True, extra=None, stack_info=False):
+        event = AdapterEventError(name=self.name, base_msg=msg, args=args)
+
+        event.exc_info = exc_info
+        event.extra = extra
+        event.stack_info = stack_info
+
+        fire_event(event)
+
+    def critical(self, msg, *args, exc_info=False, extra=None, stack_info=False):
+        event = AdapterEventError(name=self.name, base_msg=msg, args=args)
+
+        event.exc_info = exc_info
+        event.extra = extra
+        event.stack_info = stack_info
 
         fire_event(event)
