@@ -133,6 +133,15 @@ def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     return log_line
 
 
+# calls create_text_log_line() or create_json_log_line() according to logger config
+def create_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+    return (
+        create_json_log_line(e, msg_fn)
+        if this.format_json else
+        create_text_log_line(e, msg_fn)
+    )
+
+
 # allows for resuse of this obnoxious if else tree.
 # do not use for exceptions, it doesn't pass along exc_info, stack_info, or extra
 def send_to_logger(l: Union[Logger, logbook.Logger], level_tag: str, log_line: str):
@@ -214,18 +223,14 @@ def fire_event(e: Event) -> None:
     if flags.ENABLE_LEGACY_LOGGER:
         # using Event::message because the legacy logger didn't differentiate messages by
         # destination
-        log_line = (
-            create_json_log_line(e, msg_fn=lambda x: x.message())
-            if this.format_json else
-            create_text_log_line(e, msg_fn=lambda x: x.message())
-        )
+        log_line = create_log_line(e, msg_fn=lambda x: x.message())
 
         send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
         return  # exit the function to avoid using the current logger as well
 
     # always logs debug level regardless of user input
     if isinstance(e, File):
-        log_line = create_json_log_line(e, msg_fn=lambda x: x.file_msg())
+        log_line = create_log_line(e, msg_fn=lambda x: x.file_msg())
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
@@ -235,7 +240,7 @@ def fire_event(e: Event) -> None:
         if e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
 
-        log_line = create_json_log_line(e, msg_fn=lambda x: x.cli_msg())
+        log_line = create_log_line(e, msg_fn=lambda x: x.cli_msg())
         if not isinstance(e, ShowException):
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
         # CliEventABC and ShowException
