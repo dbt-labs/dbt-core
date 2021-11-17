@@ -1335,8 +1335,8 @@ class MetricRefResolver(BaseResolver):
     def validate_args(self, name, package):
         if not isinstance(name, str):
             raise ParsingException(
-                f'In a metrics section in {self.model.original_file_path} '
-                f'the name argument to ref() must be a string'
+                f"In a metrics section in {self.model.original_file_path} "
+                f"the name argument to ref() must be a string"
             )
 
 
