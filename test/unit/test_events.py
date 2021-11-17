@@ -224,8 +224,6 @@ sample_values = [
     AdapterImportError(ModuleNotFoundError()),
     PluginLoadError(),
     SystemReportReturnCode(returncode=0),
-    SelectorAlertUpto3UnusedNodes(node_names=[]),
-    SelectorAlertAllUnusedNodes(node_names=[]),
     NewConnectionOpening(connection_state=''),
     TimingInfoCollected(),
     MergedFromState(nbr_merged=0, sample=[]),

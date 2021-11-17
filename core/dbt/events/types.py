@@ -379,40 +379,6 @@ class SystemReportReturnCode(DebugLevel, Cli, File):
     def message(self) -> str:
         return f"command return code={self.returncode}"
 
-# TODO remove?? Not called outside of this file
-
-
-@dataclass
-class SelectorAlertUpto3UnusedNodes(InfoLevel, Cli, File):
-    node_names: List[str]
-    code: str = "I_NEED_A_CODE_5"
-
-    def message(self) -> str:
-        summary_nodes_str = ("\n  - ").join(self.node_names[:3])
-        and_more_str = (
-            f"\n  - and {len(self.node_names) - 3} more" if len(self.node_names) > 4 else ""
-        )
-        return (
-            f"\nSome tests were excluded because at least one parent is not selected. "
-            f"Use the --greedy flag to include them."
-            f"\n  - {summary_nodes_str}{and_more_str}"
-        )
-
-# TODO remove?? Not called outside of this file
-
-
-@dataclass
-class SelectorAlertAllUnusedNodes(DebugLevel, Cli, File):
-    node_names: List[str]
-    code: str = "I_NEED_A_CODE_6"
-
-    def message(self) -> str:
-        debug_nodes_str = ("\n  - ").join(self.node_names)
-        return (
-            f"Full list of tests that were excluded:"
-            f"\n  - {debug_nodes_str}"
-        )
-
 
 @dataclass
 class SelectorReportInvalidSelector(InfoLevel, Cli, File):
@@ -2625,8 +2591,6 @@ if 1 == 0:
     AdapterImportError(ModuleNotFoundError())
     PluginLoadError()
     SystemReportReturnCode(returncode=0)
-    SelectorAlertUpto3UnusedNodes(node_names=[])
-    SelectorAlertAllUnusedNodes(node_names=[])
     NewConnectionOpening(connection_state='')
     TimingInfoCollected()
     MergedFromState(nbr_merged=0, sample=[])
