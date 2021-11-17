@@ -325,7 +325,7 @@ class ParseConfigObject(Config):
     def require(self, name, validator=None):
         return ''
 
-    def get(self, name, validator=None, default=None):
+    def get(self, name, default=None, validator=None):
         return ''
 
     def persist_relation_docs(self) -> bool:
@@ -369,7 +369,7 @@ class RuntimeConfigObject(Config):
 
         return to_return
 
-    def get(self, name, validator=None, default=None):
+    def get(self, name, default=None, validator=None):
         to_return = self._lookup(name, default)
 
         if validator is not None and default is not None:

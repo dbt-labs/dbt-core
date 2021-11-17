@@ -4,6 +4,9 @@
 - Avoid error when missing column in YAML description ([#4151](https://github.com/dbt-labs/dbt-core/issues/4151), [#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
 - Allow `--defer` flag to `dbt snapshot` ([#4110](https://github.com/dbt-labs/dbt-core/issues/4110), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
 
+### Fixes
+- Allow specifying default in Jinja config.get with default keyword ([#4273](https://github.com/dbt-labs/dbt-core/issues/4273), [#4297](https://github.com/dbt-labs/dbt-core/pull/4297))
+
 ### Under the hood
 - Add --indirect-selection parameter to profiles.yml and builtin DBT_ env vars; stringified parameter to enable multi-modal use ([#3997](https://github.com/dbt-labs/dbt-core/issues/3997), [#4270](https://github.com/dbt-labs/dbt-core/pull/4270))
 - Fix filesystem searcher test failure on Python 3.9 ([#3689](https://github.com/dbt-labs/dbt-core/issues/3689), [#4271](https://github.com/dbt-labs/dbt-core/pull/4271))
