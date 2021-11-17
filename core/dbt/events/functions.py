@@ -19,6 +19,8 @@ from typing import Callable, List, TypeVar, Union
 # create the global file logger with no configuration
 global FILE_LOG
 FILE_LOG = logging.getLogger('default_file')
+null_handler = logging.NullHandler()
+FILE_LOG.addHandler(null_handler)
 
 # set up logger to go to stdout with defaults
 # setup_event_logger will be called once args have been parsed
