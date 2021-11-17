@@ -5,6 +5,7 @@ import os
 import shutil
 
 import pytest
+import dbt.exceptions
 
 
 class TestDeferState(DBTIntegrationTest):
@@ -45,6 +46,29 @@ class TestDeferState(DBTIntegrationTest):
         assert not os.path.exists('state')
         os.makedirs('state')
         shutil.copyfile('target/manifest.json', 'state/manifest.json')
+
+    def run_and_snapshot_defer(self):
+        results = self.run_dbt(['seed'])
+        assert len(results) == 1
+        assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['run'])
+        assert len(results) == 2
+        assert not any(r.node.deferred for r in results)
+        results = self.run_dbt(['test'])
+        assert len(results) == 2
+
+        # snapshot succeeds without --defer
+        results = self.run_dbt(['snapshot'])
+
+        # no state, snapshot fails
+        with pytest.raises(dbt.exceptions.RuntimeException):
+            results = self.run_dbt(['snapshot', '--state', 'state', '--defer'])
+
+        # copy files
+        self.copy_state()
+
+        # defer test, it succeeds
+        results = self.run_dbt(['snapshot', '--state', 'state', '--defer'])
 
     def run_and_defer(self):
         results = self.run_dbt(['seed'])
@@ -151,14 +175,10 @@ class TestDeferState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_state_changetarget(self):
         self.run_and_defer()
-        # these should work without --defer!
-        self.run_dbt(['snapshot'])
+
         # make sure these commands don't work with --defer
         with pytest.raises(SystemExit):
             self.run_dbt(['seed', '--defer'])
-
-        with pytest.raises(SystemExit):
-            self.run_dbt(['snapshot', '--defer'])
 
     @use_profile('postgres')
     def test_postgres_state_changedir(self):
@@ -171,3 +191,7 @@ class TestDeferState(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_state_defer_deleted_upstream(self):
         self.run_defer_deleted_upstream()
+
+    @use_profile('postgres')
+    def test_postgres_state_snapshot_defer(self):
+        self.run_and_snapshot_defer()

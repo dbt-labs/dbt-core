@@ -2,13 +2,14 @@
 
 ### Features
 - Avoid error when missing column in YAML description ([#4151](https://github.com/dbt-labs/dbt-core/issues/4151), [#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
+- Allow `--defer` flag to `dbt snapshot` ([#4110](https://github.com/dbt-labs/dbt-core/issues/4110), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
 
 ### Under the hood
 Add --indirect-selection parameter to profiles.yml and builtin DBT_ env vars; stringified parameter to enable multi-modal use ([#3997](https://github.com/dbt-labs/dbt-core/issues/3997), [PR #4270](https://github.com/dbt-labs/dbt-core/pull/4270))
 - Fix filesystem searcher test failure on Python 3.9 ([#3689](https://github.com/dbt-labs/dbt-core/issues/3689), [#4271](https://github.com/dbt-labs/dbt-core/pull/4271))
 
 Contributors:
-- [@kadero](https://github.com/kadero) ([#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
+- [@kadero](https://github.com/kadero) ([#4285](https://github.com/dbt-labs/dbt-core/pull/4285), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
 
 ## dbt-core 1.0.0rc1 (November 10, 2021)
 
