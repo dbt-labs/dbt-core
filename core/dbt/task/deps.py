@@ -10,7 +10,7 @@ from dbt.deps.resolver import resolve_packages
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DepsNoPackagesFound, DepsStartPackageInstall, DepsUpdateAvailable, DepsUTD,
-    DepsInstallInfo, DepsListSubdirectory, DepsNotifyUpdatesAvailable
+    DepsInstallInfo, DepsListSubdirectory, DepsNotifyUpdatesAvailable, EmptyLine
 )
 from dbt.clients import system
 
@@ -81,6 +81,7 @@ class DepsTask(BaseTask):
                     source_type=source_type,
                     version=version)
             if packages_to_upgrade:
+                fire_event(EmptyLine())
                 fire_event(DepsNotifyUpdatesAvailable(packages=packages_to_upgrade))
 
     @classmethod

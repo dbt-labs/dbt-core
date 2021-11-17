@@ -65,6 +65,8 @@ def print_run_status_line(results) -> None:
         stats[result_type] += 1
         stats['total'] += 1
 
+    with TextOnly():
+        fire_event(EmptyLine())
     fire_event(StatsLine(stats=stats))
 
 

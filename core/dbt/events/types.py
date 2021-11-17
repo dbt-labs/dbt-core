@@ -826,7 +826,7 @@ class InvalidVarsYAML(ErrorLevel, Cli, File):
     code: str = "A008"
 
     def message(self) -> str:
-        return "The YAML provided in the --vars argument is not valid.\n"
+        return "The YAML provided in the --vars argument is not valid."
 
 
 # TODO: Remove? (appears to be uncalled)
@@ -1530,7 +1530,7 @@ class DepsNotifyUpdatesAvailable(InfoLevel, Cli, File):
     code: str = "M019"
 
     def message(self) -> str:
-        return ('\nUpdates available for packages: {} \
+        return ('Updates available for packages: {} \
                 \nUpdate your versions in packages.yml, then run dbt deps'.format(self.packages))
 
 
@@ -1647,7 +1647,7 @@ class ServingDocsExitInfo(InfoLevel, Cli, File):
     code: str = "Z020"
 
     def message(self) -> str:
-        return "Press Ctrl+C to exit.\n\n"
+        return "Press Ctrl+C to exit."
 
 
 @dataclass
@@ -1698,7 +1698,7 @@ class StatsLine(InfoLevel, Cli, File):
     code: str = "Z023"
 
     def message(self) -> str:
-        stats_line = ("\nDone. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}")
+        stats_line = ("Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}")
         return stats_line.format(**self.stats)
 
 
