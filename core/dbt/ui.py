@@ -60,7 +60,7 @@ def line_wrap_message(msg: str, subtract: int = 0, dedent: bool = True, prefix: 
     # (we'll turn it into a single line soon). Support windows, too.
     splitter = "\r\n\r\n" if "\r\n\r\n" in msg else "\n\n"
     chunks = msg.split(splitter)
-    return '\n'.join(textwrap.fill(chunk, width=width, break_on_hyphens=False) for chunk in chunks)
+    return "\n".join(textwrap.fill(chunk, width=width, break_on_hyphens=False) for chunk in chunks)
 
 
 def warning_tag(msg: str) -> str:

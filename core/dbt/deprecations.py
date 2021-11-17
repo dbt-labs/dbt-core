@@ -68,11 +68,11 @@ class ConfigPathDeprecation(DBTDeprecation):
 
 
 class ConfigSourcePathDeprecation(ConfigPathDeprecation):
-    _name = 'project-config-source-paths'
+    _name = "project-config-source-paths"
 
 
 class ConfigDataPathDeprecation(ConfigPathDeprecation):
-    _name = 'project-config-data-paths'
+    _name = "project-config-data-paths"
 
 
 _adapter_renamed_description = """\
