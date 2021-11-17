@@ -1,117 +1,57 @@
-from abc import ABCMeta, abstractmethod
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Callable, cast, Dict, List, Optional, Set, Union
 from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 from dbt import ui
-from dbt.node_types import NodeType
+from dbt.events.base_types import (
+    Cli, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
+)
 from dbt.events.format import format_fancy_output_line, pluralize
-import os
+from dbt.node_types import NodeType
+from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, Union
 
 
-# types to represent log levels
-
-# in preparation for #3977
-class TestLevel():
-    def level_tag(self) -> str:
-        return "test"
-
-
-class DebugLevel():
-    def level_tag(self) -> str:
-        return "debug"
-
-
-class InfoLevel():
-    def level_tag(self) -> str:
-        return "info"
-
-
-class WarnLevel():
-    def level_tag(self) -> str:
-        return "warn"
-
-
-class ErrorLevel():
-    def level_tag(self) -> str:
-        return "error"
-
-
-@dataclass
-class ShowException():
-    # N.B.:
-    # As long as we stick with the current convention of setting the member vars in the
-    # `message` method of subclasses, this is a safe operation.
-    # If that ever changes we'll want to reassess.
-    def __post_init__(self):
-        self.exc_info: Any = True
-        self.stack_info: Any = None
-        self.extra: Any = None
-
-
-# The following classes represent the data necessary to describe a
+# The classes in this file represent the data necessary to describe a
 # particular event to both human readable logs, and machine reliable
 # event streams. classes extend superclasses that indicate what
 # destinations they are intended for, which mypy uses to enforce
 # that the necessary methods are defined.
 
 
-# top-level superclass for all events
-class Event(metaclass=ABCMeta):
-    # fields that should be on all events with their default implementations
-    ts: datetime = datetime.now()
-    pid: int = os.getpid()
-    # code: int
-
-    # do not define this yourself. inherit it from one of the above level types.
-    @abstractmethod
-    def level_tag(self) -> str:
-        raise Exception("level_tag not implemented for event")
-
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    # Must override yourself
-    @abstractmethod
-    def message(self) -> str:
-        raise Exception("msg not implemented for cli event")
-
-
-class File(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def file_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
-
-
-class Cli(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def cli_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
-
-
+# can't use ABCs with @dataclass because of https://github.com/python/mypy/issues/5374
 @dataclass
-class AdapterEventBase():
+class AdapterEventBase(Cli, File):
     name: str
-    raw_msg: str
+    base_msg: str
+    args: Tuple[Any, ...]
+
+    # instead of having this inherit from one of the level classes
+    def level_tag(self) -> str:
+        raise Exception("level_tag should never be called on AdapterEventBase")
 
     def message(self) -> str:
-        return f"{self.name} adapter: {self.raw_msg}"
+        # this class shouldn't be createable, but we can't make it an ABC because of a mypy bug
+        if type(self).__name__ == 'AdapterEventBase':
+            raise Exception(
+                'attempted to create a message for AdapterEventBase which cannot be created'
+            )
+
+        msg = self.base_msg.format(*self.args)
+        return f"{self.name} adapter: {msg}"
 
 
-class AdapterEventDebug(DebugLevel, AdapterEventBase, Cli, File, ShowException):
+class AdapterEventDebug(DebugLevel, AdapterEventBase, ShowException):
     pass
 
 
-class AdapterEventInfo(InfoLevel, AdapterEventBase, Cli, File, ShowException):
+class AdapterEventInfo(InfoLevel, AdapterEventBase, ShowException):
     pass
 
 
-class AdapterEventWarning(WarnLevel, AdapterEventBase, Cli, File, ShowException):
+class AdapterEventWarning(WarnLevel, AdapterEventBase, ShowException):
     pass
 
 
-class AdapterEventError(ErrorLevel, AdapterEventBase, Cli, File, ShowException):
+class AdapterEventError(ErrorLevel, AdapterEventBase, ShowException):
     pass
 
 

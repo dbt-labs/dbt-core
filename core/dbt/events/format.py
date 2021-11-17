@@ -1,6 +1,6 @@
 from dbt import ui
-from typing import Optional, Union
 from dbt.node_types import NodeType
+from typing import Optional, Union
 
 
 def format_fancy_output_line(

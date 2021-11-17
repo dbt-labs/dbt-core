@@ -1,7 +1,7 @@
 from typing import (
     Any,
-    Optional,
     NamedTuple,
+    Optional,
 )
 
 # N.B.:

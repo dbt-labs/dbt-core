@@ -1,4 +1,4 @@
-from dbt.events.types import Event
+from dbt.events.base_types import Event
 from typing import List
 
 
