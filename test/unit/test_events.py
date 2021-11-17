@@ -353,7 +353,7 @@ sample_values = [
     NodeExecuting(unique_id='', report_node_data=MockNode()),
     NodeFinished(unique_id='', report_node_data=MockNode(), run_result=''),
     QueryCancelationUnsupported(type=''),
-    ConcurrencyLine(concurrency_line=''),
+    ConcurrencyLine(num_threads=0, target_name=''),
     StarterProjectPath(dir=''),
     ConfigFolderDirectory(dir=''),
     NoSampleProfileFound(adapter=''),

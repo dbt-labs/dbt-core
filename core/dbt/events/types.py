@@ -2226,11 +2226,12 @@ class QueryCancelationUnsupported(InfoLevel, Cli, File):
 
 @dataclass
 class ConcurrencyLine(InfoLevel, Cli, File):
-    concurrency_line: str
+    num_threads: int
+    target_name: str
     code: str = "Q026"
 
     def message(self) -> str:
-        return self.concurrency_line
+        return f"Concurrency: {self.num_threads} threads (target='{self.target_name}')"
 
 
 @dataclass
@@ -2833,7 +2834,7 @@ if 1 == 0:
     NodeStart(report_node_data=ParsedModelNode(), unique_id='')
     NodeFinished(report_node_data=ParsedModelNode(), unique_id='', run_result=RunResult())
     QueryCancelationUnsupported(type='')
-    ConcurrencyLine(concurrency_line='')
+    ConcurrencyLine(num_threads=0, target_name='')
     NodeCompiling(report_node_data=ParsedModelNode(), unique_id='')
     NodeExecuting(report_node_data=ParsedModelNode(), unique_id='')
     StarterProjectPath(dir='')

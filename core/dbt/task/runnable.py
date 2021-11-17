@@ -377,10 +377,8 @@ class GraphRunnableTask(ManifestTask):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
-        text = "Concurrency: {} threads (target='{}')"
-        concurrency_line = text.format(num_threads, target_name)
         with NodeCount(self.num_nodes):
-            fire_event(ConcurrencyLine(concurrency_line=concurrency_line))
+            fire_event(ConcurrencyLine(num_threads=num_threads, target_name=target_name))
         with TextOnly():
             fire_event(EmptyLine())
 
