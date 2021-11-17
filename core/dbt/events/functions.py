@@ -190,7 +190,7 @@ def event_to_serializable_dict(
 # translates an Event to a completely formatted text-based log line
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
 def create_info_text_log_line(e: T_Event) -> str:
-    color_tag: str = '' if this.format_color else Style.RESET_ALL
+    color_tag: str = "" if this.format_color else Style.RESET_ALL
     ts: str = get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(e.message(), env_secrets())
     log_line: str = f"{color_tag}{ts}  {scrubbed_msg}"

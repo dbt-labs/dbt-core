@@ -54,9 +54,9 @@ class AdapterEventBase(EventSerialization, Event):
 
     def message(self) -> str:
         # this class shouldn't be createable, but we can't make it an ABC because of a mypy bug
-        if type(self).__name__ == 'AdapterEventBase':
+        if type(self).__name__ == "AdapterEventBase":
             raise Exception(
-                'attempted to create a message for AdapterEventBase which cannot be created'
+                "attempted to create a message for AdapterEventBase which cannot be created"
             )
 
         # only apply formatting if there are arguments to format.

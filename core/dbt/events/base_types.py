@@ -18,7 +18,7 @@ class Cache:
 
 
 @dataclass
-class ShowException():
+class ShowException:
     # N.B.:
     # As long as we stick with the current convention of setting the member vars in the
     # `message` method of subclasses, this is a safe operation.
