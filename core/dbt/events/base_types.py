@@ -73,11 +73,10 @@ class Event(metaclass=ABCMeta):
     # used for constructing json formatted events. includes secrets which must be scrubbed at
     # the usage site.
     def to_dict(self, msg: str) -> dict:
-        level = self.level_tag()
         return {
             'pid': self.pid,
             'msg': msg,
-            'level': level if len(level) == 5 else f"{level} "
+            'level': self.level_tag()
         }
 
 
