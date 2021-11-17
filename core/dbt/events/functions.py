@@ -225,7 +225,11 @@ def fire_event(e: Event) -> None:
 
     # always logs debug level regardless of user input
     if isinstance(e, File):
-        log_line = create_json_log_line(e, msg_fn=lambda x: x.file_msg())
+        log_line = (
+            create_json_log_line(e, msg_fn=lambda x: x.file_msg())
+            if this.format_json else
+            create_text_log_line(e, msg_fn=lambda x: x.file_msg())
+        )
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
@@ -235,7 +239,11 @@ def fire_event(e: Event) -> None:
         if e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
 
-        log_line = create_json_log_line(e, msg_fn=lambda x: x.cli_msg())
+        log_line = (
+            create_json_log_line(e, msg_fn=lambda x: x.cli_msg())
+            if this.format_json else
+            create_text_log_line(e, msg_fn=lambda x: x.cli_msg())
+        )
         if not isinstance(e, ShowException):
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
         # CliEventABC and ShowException
