@@ -305,7 +305,7 @@ class PartialProject(RenderComponents):
                 )
                 raise DbtProjectError(msg.format(deprecated_path=deprecated_path,
                                                  exp_path=exp_path))
-            deprecations.warn('project_config_path',
+            deprecations.warn(f'project-config-{deprecated_path}',
                               deprecated_path=deprecated_path,
                               exp_path=exp_path)
 
