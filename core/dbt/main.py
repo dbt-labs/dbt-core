@@ -1109,7 +1109,7 @@ def parse_args(args, cls=DBTArgumentParser):
     _add_selection_arguments(
         run_sub, compile_sub, generate_sub, test_sub, snapshot_sub, seed_sub)
     # --defer
-    _add_defer_argument(run_sub, test_sub, build_sub)
+    _add_defer_argument(run_sub, test_sub, build_sub, snapshot_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub, build_sub)
 

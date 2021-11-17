@@ -62,8 +62,10 @@ def line_wrap_message(
     # (we'll turn it into a single line soon). Support windows, too.
     splitter = '\r\n\r\n' if '\r\n\r\n' in msg else '\n\n'
     chunks = msg.split(splitter)
-    return '\n'.join(textwrap.fill(chunk, width=width) for chunk in chunks)
+    return '\n'.join(textwrap.fill(chunk, width=width, break_on_hyphens=False) for chunk in chunks)
 
 
 def warning_tag(msg: str) -> str:
-    return f'[{yellow("WARNING")}]: {msg}'
+    # no longer needed, since new logging includes colorized log level
+    # return f'[{yellow("WARNING")}]: {msg}'
+    return msg
