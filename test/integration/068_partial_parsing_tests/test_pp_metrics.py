@@ -74,6 +74,8 @@ class MetricsTest(BasePPTest):
         self.assertEqual(metric_people.meta, expected_meta)
         self.assertEqual(metric_people.refs, [['people']])
         self.assertEqual(metric_tenure.refs, [['people']])
+        expected_depends_on_nodes = ['model.test.people']
+        self.assertEqual(metric_people.depends_on.nodes, expected_depends_on_nodes)
 
         # Change metrics yaml files
         self.copy_file('test-files/people_metrics2.yml', 'models/people_metrics.yml')
@@ -83,3 +85,6 @@ class MetricsTest(BasePPTest):
         metric_people = manifest.metrics[metric_people_id]
         expected_meta = {'my_meta': 'replaced'}
         self.assertEqual(metric_people.meta, expected_meta)
+        expected_depends_on_nodes = ['model.test.people']
+        self.assertEqual(metric_people.depends_on.nodes, expected_depends_on_nodes)
+

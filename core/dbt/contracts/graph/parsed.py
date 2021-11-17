@@ -800,7 +800,7 @@ class ParsedMetric(UnparsedBaseNode, HasUniqueID, HasFqn):
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[List[str]] = field(default_factory=list)
-    created_at: int = field(default_factory=lambda: int(time.time()))
+    created_at: float = field(default_factory=lambda: time.time())
 
     @property
     def depends_on_nodes(self):
