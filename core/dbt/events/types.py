@@ -69,11 +69,7 @@ class AdapterEventBase(EventSerialization, Event):
 
         # only apply formatting if there are arguments to format.
         # avoids issues like "dict: {k: v}".format() which results in `KeyError 'k'`
-        msg = (
-            self.base_msg
-            if len(self.args) == 0 else
-            self.base_msg.format(*self.args)
-        )
+        msg = self.base_msg if len(self.args) == 0 else self.base_msg.format(*self.args)
         return f"{self.name} adapter: {msg}"
 
 
