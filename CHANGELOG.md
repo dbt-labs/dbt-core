@@ -2,14 +2,22 @@
 
 ### Features
 - Avoid error when missing column in YAML description ([#4151](https://github.com/dbt-labs/dbt-core/issues/4151), [#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
+- Allow `--defer` flag to `dbt snapshot` ([#4110](https://github.com/dbt-labs/dbt-core/issues/4110), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
+
+### Fixes
+- Allow specifying default in Jinja config.get with default keyword ([#4273](https://github.com/dbt-labs/dbt-core/issues/4273), [#4297](https://github.com/dbt-labs/dbt-core/pull/4297))
+
+### Fixes
+- Fix serialization error with missing quotes in metrics model ref ([#4252](https://github.com/dbt-labs/dbt-core/issues/4252), [#4287](https://github.com/dbt-labs/dbt-core/pull/4289))
 
 ### Under the hood
-Add --indirect-selection parameter to profiles.yml and builtin DBT_ env vars; stringified parameter to enable multi-modal use ([#3997](https://github.com/dbt-labs/dbt-core/issues/3997), [PR #4270](https://github.com/dbt-labs/dbt-core/pull/4270))
+- Add --indirect-selection parameter to profiles.yml and builtin DBT_ env vars; stringified parameter to enable multi-modal use ([#3997](https://github.com/dbt-labs/dbt-core/issues/3997), [#4270](https://github.com/dbt-labs/dbt-core/pull/4270))
 - Fix filesystem searcher test failure on Python 3.9 ([#3689](https://github.com/dbt-labs/dbt-core/issues/3689), [#4271](https://github.com/dbt-labs/dbt-core/pull/4271))
+- Clean up deprecation warnings shown for `dbt_project.yml` config renames ([#4276](https://github.com/dbt-labs/dbt-core/issues/4276), [#4291](https://github.com/dbt-labs/dbt-core/pull/4291))
 - Fix metrics count in compiled project stats ([#4290](https://github.com/dbt-labs/dbt-core/issues/4290), [#4292](https://github.com/dbt-labs/dbt-core/pull/4292))
 
 Contributors:
-- [@kadero](https://github.com/kadero) ([#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
+- [@kadero](https://github.com/kadero) ([#4285](https://github.com/dbt-labs/dbt-core/pull/4285), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
 
 ## dbt-core 1.0.0rc1 (November 10, 2021)
 

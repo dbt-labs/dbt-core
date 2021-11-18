@@ -19,6 +19,8 @@ from typing import Callable, List, TypeVar, Union
 # create the global file logger with no configuration
 global FILE_LOG
 FILE_LOG = logging.getLogger('default_file')
+null_handler = logging.NullHandler()
+FILE_LOG.addHandler(null_handler)
 
 # set up logger to go to stdout with defaults
 # setup_event_logger will be called once args have been parsed
@@ -117,7 +119,7 @@ def create_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     color_tag: str = '' if this.format_color else Style.RESET_ALL
     ts: str = e.ts.strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
-    level: str = e.level_tag()
+    level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     log_line: str = f"{color_tag}{ts} | [ {level} ] | {scrubbed_msg}"
     return log_line
 
@@ -129,6 +131,15 @@ def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     values['ts'] = e.ts.isoformat()
     log_line = json.dumps(values, sort_keys=True)
     return log_line
+
+
+# calls create_text_log_line() or create_json_log_line() according to logger config
+def create_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
+    return (
+        create_json_log_line(e, msg_fn)
+        if this.format_json else
+        create_text_log_line(e, msg_fn)
+    )
 
 
 # allows for resuse of this obnoxious if else tree.
@@ -212,18 +223,14 @@ def fire_event(e: Event) -> None:
     if flags.ENABLE_LEGACY_LOGGER:
         # using Event::message because the legacy logger didn't differentiate messages by
         # destination
-        log_line = (
-            create_json_log_line(e, msg_fn=lambda x: x.message())
-            if this.format_json else
-            create_text_log_line(e, msg_fn=lambda x: x.message())
-        )
+        log_line = create_log_line(e, msg_fn=lambda x: x.message())
 
         send_to_logger(GLOBAL_LOGGER, e.level_tag(), log_line)
         return  # exit the function to avoid using the current logger as well
 
     # always logs debug level regardless of user input
     if isinstance(e, File):
-        log_line = create_json_log_line(e, msg_fn=lambda x: x.file_msg())
+        log_line = create_log_line(e, msg_fn=lambda x: x.file_msg())
         # doesn't send exceptions to exception logger
         send_to_logger(FILE_LOG, level_tag=e.level_tag(), log_line=log_line)
 
@@ -233,7 +240,7 @@ def fire_event(e: Event) -> None:
         if e.level_tag() == 'debug' and not flags.DEBUG:
             return  # eat the message in case it was one of the expensive ones
 
-        log_line = create_json_log_line(e, msg_fn=lambda x: x.cli_msg())
+        log_line = create_log_line(e, msg_fn=lambda x: x.cli_msg())
         if not isinstance(e, ShowException):
             send_to_logger(STDOUT_LOG, level_tag=e.level_tag(), log_line=log_line)
         # CliEventABC and ShowException

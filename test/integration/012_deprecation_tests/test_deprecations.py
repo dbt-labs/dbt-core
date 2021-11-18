@@ -34,7 +34,7 @@ class TestConfigPathDeprecation(BaseTestDeprecations):
     def test_postgres_data_path(self):
         self.assertEqual(deprecations.active_deprecations, set())
         self.run_dbt(['debug'])
-        expected = {'project_config_path'}
+        expected = {'project-config-data-paths'}
         self.assertEqual(expected, deprecations.active_deprecations)
 
     @use_profile('postgres')

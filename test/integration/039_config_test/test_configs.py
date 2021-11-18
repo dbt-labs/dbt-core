@@ -296,3 +296,23 @@ class TestConfigIndivTests(DBTIntegrationTest):
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].status, 'fail')
         self.assertEqual(results[1].status, 'fail')
+
+
+
+class TestConfigGetDefault(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    @property
+    def models(self):
+        return "models-get"
+
+    @use_profile('postgres')
+    def test_postgres_config_with_get_default(self):
+        # This test runs a model with a config.get(key, default)
+        # The default value is 'default_value' and causes an error
+        results = self.run_dbt(['run'], expect_pass=False)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(str(results[0].status), 'error')
+        self.assertIn('column "default_value" does not exist', results[0].message)
