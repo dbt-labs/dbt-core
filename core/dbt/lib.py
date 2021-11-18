@@ -1,7 +1,7 @@
 # TODO: this file is one big TODO
 import os
 from dbt.exceptions import RuntimeException
-import flags
+from dbt import flags
 from collections import namedtuple
 
 RuntimeArgs = namedtuple(
