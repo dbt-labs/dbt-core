@@ -91,6 +91,8 @@ def _generate_stats(manifest: Manifest):
         stats[source.resource_type] += 1
     for exposure in manifest.exposures.values():
         stats[exposure.resource_type] += 1
+    for metric in manifest.metrics.values():
+        stats[metric.resource_type] += 1
     for macro in manifest.macros.values():
         stats[macro.resource_type] += 1
     return stats
