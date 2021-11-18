@@ -7,11 +7,7 @@
 
 ### Fixes
 - Allow specifying default in Jinja config.get with default keyword ([#4273](https://github.com/dbt-labs/dbt-core/issues/4273), [#4297](https://github.com/dbt-labs/dbt-core/pull/4297))
-
-### Fixes
 - Fix serialization error with missing quotes in metrics model ref ([#4252](https://github.com/dbt-labs/dbt-core/issues/4252), [#4287](https://github.com/dbt-labs/dbt-core/pull/4289))
-
-### Fixes
 - Correct definition of 'created_at' in ParsedMetric nodes ([#4298](http://github.com/dbt-labs/dbt-core/issues/4298), [#4299](https://github.com/dbt-labs/dbt-core/pull/4299))
 
 ### Under the hood
@@ -19,6 +15,7 @@
 - Fix filesystem searcher test failure on Python 3.9 ([#3689](https://github.com/dbt-labs/dbt-core/issues/3689), [#4271](https://github.com/dbt-labs/dbt-core/pull/4271))
 - Clean up deprecation warnings shown for `dbt_project.yml` config renames ([#4276](https://github.com/dbt-labs/dbt-core/issues/4276), [#4291](https://github.com/dbt-labs/dbt-core/pull/4291))
 - Fix metrics count in compiled project stats ([#4290](https://github.com/dbt-labs/dbt-core/issues/4290), [#4292](https://github.com/dbt-labs/dbt-core/pull/4292))
+- First pass at supporting more dbt tasks via python lib ([#4200](https://github.com/dbt-labs/dbt-core/pull/4200))
 
 Contributors:
 - [@kadero](https://github.com/kadero) ([#4285](https://github.com/dbt-labs/dbt-core/pull/4285), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))

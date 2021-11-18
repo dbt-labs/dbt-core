@@ -1,10 +1,11 @@
 # TODO: this file is one big TODO
-from dbt.exceptions import RuntimeException
 import os
+from dbt.exceptions import RuntimeException
+import flags
 from collections import namedtuple
 
 RuntimeArgs = namedtuple(
-    'RuntimeArgs', 'project_dir profiles_dir single_threaded'
+    'RuntimeArgs', 'project_dir profiles_dir single_threaded profile_name'
 )
 
 
@@ -19,10 +20,11 @@ def get_dbt_config(project_dir, single_threaded=False):
 
     # Construct a phony config
     config = RuntimeConfig.from_args(RuntimeArgs(
-        project_dir, profiles_dir, single_threaded
+        project_dir, profiles_dir, single_threaded, 'user'
     ))
     # Clear previously registered adapters--
     # this fixes cacheing behavior on the dbt-server
+    flags.set_from_args('', config)
     dbt.adapters.factory.reset_adapters()
     # Load the relevant adapter
     dbt.adapters.factory.register_adapter(config)
@@ -34,11 +36,26 @@ def get_task_by_type(type):
     # TODO: we need to tell dbt-server what tasks are available
     from dbt.task.run import RunTask
     from dbt.task.list import ListTask
+    from dbt.task.seed import SeedTask
+    from dbt.task.test import TestTask
+    from dbt.task.build import BuildTask
+    from dbt.task.snapshot import SnapshotTask
+    from dbt.task.run_operation import RunOperationTask
 
     if type == 'run':
         return RunTask
+    elif type == 'test':
+        return TestTask
     elif type == 'list':
         return ListTask
+    elif type == 'seed':
+        return SeedTask
+    elif type == 'build':
+        return BuildTask
+    elif type == 'snapshot':
+        return SnapshotTask
+    elif type == 'run_operation':
+        return RunOperationTask
 
     raise RuntimeException('not a valid task')
 
