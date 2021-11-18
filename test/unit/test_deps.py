@@ -472,6 +472,36 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(c_pinned.get_version_latest(), '0.1.3')
         self.assertEqual(c_pinned.source_type(), 'hub')
 
+    def test_get_version_prerelease_explicitly_requested(self):
+        a_contract = RegistryPackage(
+            package='dbt-labs-test/a',
+            version='0.1.4a1',
+            install_prerelease=None
+        )
+
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+
+        self.assertEqual(a.package, 'dbt-labs-test/a')
+        self.assertEqual(
+            a.versions,
+            [
+                VersionSpecifier(
+                    build=None,
+                    major='0',
+                    matcher='=',
+                    minor='1',
+                    patch='4',
+                    prerelease='a1',
+                ),
+            ]
+        )
+
+        a_pinned = a.resolved()
+        self.assertEqual(a_pinned.package, 'dbt-labs-test/a')
+        self.assertEqual(a_pinned.version, '0.1.4a1')
+        self.assertEqual(a_pinned.get_version_latest(), '0.1.4a1')
+        self.assertEqual(a_pinned.source_type(), 'hub')
+
 class MockRegistry:
     def __init__(self, packages):
         self.packages = packages

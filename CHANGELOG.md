@@ -3,6 +3,7 @@
 ### Features
 - Avoid error when missing column in YAML description ([#4151](https://github.com/dbt-labs/dbt-core/issues/4151), [#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
 - Allow `--defer` flag to `dbt snapshot` ([#4110](https://github.com/dbt-labs/dbt-core/issues/4110), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
+- Install prerelease packages when `version` explicitly references a prerelease version, regardless of `install-prerelease` status ([#4243](https://github.com/dbt-labs/dbt-core/issues/4243), [#4295](https://github.com/dbt-labs/dbt-core/pull/4295))
 
 ### Fixes
 - Allow specifying default in Jinja config.get with default keyword ([#4273](https://github.com/dbt-labs/dbt-core/issues/4273), [#4297](https://github.com/dbt-labs/dbt-core/pull/4297))
@@ -17,6 +18,7 @@
 
 Contributors:
 - [@kadero](https://github.com/kadero) ([#4285](https://github.com/dbt-labs/dbt-core/pull/4285), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
+- [@joellabes](https://github.com/joellabes) ([#4295](https://github.com/dbt-labs/dbt-core/pull/4295))
 
 ## dbt-core 1.0.0rc1 (November 10, 2021)
 
