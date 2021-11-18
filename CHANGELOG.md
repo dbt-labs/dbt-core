@@ -11,6 +11,9 @@
 ### Fixes
 - Fix serialization error with missing quotes in metrics model ref ([#4252](https://github.com/dbt-labs/dbt-core/issues/4252), [#4287](https://github.com/dbt-labs/dbt-core/pull/4289))
 
+### Fixes
+- Correct definition of 'created_at' in ParsedMetric nodes ([#4298](http://github.com/dbt-labs/dbt-core/issues/4298), [#4299](https://github.com/dbt-labs/dbt-core/pull/4299))
+
 ### Under the hood
 - Add --indirect-selection parameter to profiles.yml and builtin DBT_ env vars; stringified parameter to enable multi-modal use ([#3997](https://github.com/dbt-labs/dbt-core/issues/3997), [#4270](https://github.com/dbt-labs/dbt-core/pull/4270))
 - Fix filesystem searcher test failure on Python 3.9 ([#3689](https://github.com/dbt-labs/dbt-core/issues/3689), [#4271](https://github.com/dbt-labs/dbt-core/pull/4271))
