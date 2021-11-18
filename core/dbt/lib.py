@@ -1,6 +1,7 @@
 # TODO: this file is one big TODO
-from dbt.exceptions import RuntimeException
 import os
+from dbt.exceptions import RuntimeException
+import flags
 from collections import namedtuple
 
 RuntimeArgs = namedtuple(
@@ -23,6 +24,7 @@ def get_dbt_config(project_dir, single_threaded=False):
     ))
     # Clear previously registered adapters--
     # this fixes cacheing behavior on the dbt-server
+    flags.set_from_args('', config)
     dbt.adapters.factory.reset_adapters()
     # Load the relevant adapter
     dbt.adapters.factory.register_adapter(config)
