@@ -48,17 +48,17 @@ def get_task_by_type(type):
 
     if type == "run":
         return RunTask
-    elif type == 'test':
+    elif type == "test":
         return TestTask
     elif type == "list":
         return ListTask
-    elif type == 'seed':
+    elif type == "seed":
         return SeedTask
-    elif type == 'build':
+    elif type == "build":
         return BuildTask
-    elif type == 'snapshot':
+    elif type == "snapshot":
         return SnapshotTask
-    elif type == 'run_operation':
+    elif type == "run_operation":
         return RunOperationTask
 
     raise RuntimeException("not a valid task")
