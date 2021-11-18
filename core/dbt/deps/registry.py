@@ -126,9 +126,7 @@ class RegistryUnpinnedPackage(RegistryPackageMixin, UnpinnedPackage[RegistryPinn
             raise DependencyException(new_msg) from e
 
         available = registry.get_available_versions(self.package)
-        prerelease_version_specified = any(
-            bool(version.prerelease) for version in self.versions
-        )
+        prerelease_version_specified = any(bool(version.prerelease) for version in self.versions)
         installable = semver.filter_installable(
             available,
             self.install_prerelease or prerelease_version_specified
