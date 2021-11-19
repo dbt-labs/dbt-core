@@ -11,7 +11,10 @@ from dbt.clients.yaml_helper import (  # noqa: F401
     yaml, safe_load, SafeLoader, Loader, Dumper
 )
 from dbt.contracts.graph.compiled import CompiledResource
-from dbt.exceptions import raise_compiler_error, MacroReturn, raise_parsing_error
+from dbt.exceptions import (
+    raise_compiler_error, MacroReturn, raise_parsing_error, disallow_secret_env_var
+)
+from dbt.logger import SECRET_ENV_PREFIX
 from dbt.events.functions import fire_event
 from dbt.events.types import MacroEventInfo, MacroEventDebug
 from dbt.version import __version__ as dbt_version
@@ -42,6 +45,7 @@ import re
 # Context class hierarchy
 #
 #   BaseContext -- core/dbt/context/base.py
+#     SecretContext -- core/dbt/context/secret.py
 #     TargetContext -- core/dbt/context/target.py
 #       ConfiguredContext -- core/dbt/context/configured.py
 #         SchemaYamlContext -- core/dbt/context/configured.py
@@ -313,6 +317,8 @@ class BaseContext(metaclass=ContextMeta):
         If the default is None, raise an exception for an undefined variable.
         """
         return_value = None
+        if var.startswith(SECRET_ENV_PREFIX):
+            disallow_secret_env_var(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:

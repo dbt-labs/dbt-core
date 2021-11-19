@@ -8,7 +8,7 @@ from dbt.utils import MultiDict
 
 from dbt.context.base import contextproperty, contextmember, Var
 from dbt.context.target import TargetContext
-from dbt.exceptions import raise_parsing_error
+from dbt.exceptions import raise_parsing_error, disallow_secret_env_var
 
 
 class ConfiguredContext(TargetContext):
@@ -89,13 +89,15 @@ class SchemaYamlContext(ConfiguredContext):
     @contextmember
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
+        if var.startswith(SECRET_ENV_PREFIX):
+            disallow_secret_env_var(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
             return_value = default
 
         if return_value is not None:
-            if not var.startswith(SECRET_ENV_PREFIX) and self.schema_yaml_vars:
+            if self.schema_yaml_vars:
                 self.schema_yaml_vars.env_vars[var] = return_value
             return return_value
         else:

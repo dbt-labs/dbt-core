@@ -1,12 +1,15 @@
 ## dbt-core 1.0.0rc2 (TBD)
 
+### Breaking changes
+- Restrict secret env vars (prefixed `DBT_ENV_SECRET_`) to `profiles.yml` + `packages.yml` _only_. Raise an exception if a secret env var is used elsewhere ([#4310](https://github.com/dbt-labs/dbt-core/issues/4310), [#4311](https://github.com/dbt-labs/dbt-core/pull/4311))
+- Reorder arguments to `config.get()` so that `default` is second ([#4273](https://github.com/dbt-labs/dbt-core/issues/4273), [#4297](https://github.com/dbt-labs/dbt-core/pull/4297))
+
 ### Features
 - Avoid error when missing column in YAML description ([#4151](https://github.com/dbt-labs/dbt-core/issues/4151), [#4285](https://github.com/dbt-labs/dbt-core/pull/4285))
 - Allow `--defer` flag to `dbt snapshot` ([#4110](https://github.com/dbt-labs/dbt-core/issues/4110), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
 - Install prerelease packages when `version` explicitly references a prerelease version, regardless of `install-prerelease` status ([#4243](https://github.com/dbt-labs/dbt-core/issues/4243), [#4295](https://github.com/dbt-labs/dbt-core/pull/4295))
 
 ### Fixes
-- Allow specifying default in Jinja config.get with default keyword ([#4273](https://github.com/dbt-labs/dbt-core/issues/4273), [#4297](https://github.com/dbt-labs/dbt-core/pull/4297))
 - Fix serialization error with missing quotes in metrics model ref ([#4252](https://github.com/dbt-labs/dbt-core/issues/4252), [#4287](https://github.com/dbt-labs/dbt-core/pull/4289))
 - Correct definition of 'created_at' in ParsedMetric nodes ([#4298](http://github.com/dbt-labs/dbt-core/issues/4298), [#4299](https://github.com/dbt-labs/dbt-core/pull/4299))
 

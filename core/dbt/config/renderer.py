@@ -2,6 +2,7 @@ from typing import Dict, Any, Tuple, Optional, Union, Callable
 
 from dbt.clients.jinja import get_rendered, catch_jinja
 from dbt.context.target import TargetContext
+from dbt.context.secret import SecretContext
 from dbt.context.base import BaseContext
 from dbt.contracts.connection import HasCredentials
 from dbt.exceptions import (
@@ -175,8 +176,13 @@ class DbtProjectYamlRenderer(BaseRenderer):
         return True
 
 
-class ProfileRenderer(BaseRenderer):
+class SelectorRenderer(BaseRenderer):
+    @property
+    def name(self):
+        return 'Selector config'
 
+
+class SecretRenderer(BaseRenderer):
     def __init__(
         self, cli_vars: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -184,22 +190,22 @@ class ProfileRenderer(BaseRenderer):
         # object in order to retrieve the env_vars.
         if cli_vars is None:
             cli_vars = {}
-        self.ctx_obj = BaseContext(cli_vars)
+        self.ctx_obj = SecretContext(cli_vars)
         context = self.ctx_obj.to_dict()
         super().__init__(context)
 
     @property
     def name(self):
-        'Profile'
+        return 'Secret'
 
 
-class PackageRenderer(BaseRenderer):
+class ProfileRenderer(SecretRenderer):
+    @property
+    def name(self):
+        return 'Profile'
+
+
+class PackageRenderer(SecretRenderer):
     @property
     def name(self):
         return 'Packages config'
-
-
-class SelectorRenderer(BaseRenderer):
-    @property
-    def name(self):
-        return 'Selector config'
