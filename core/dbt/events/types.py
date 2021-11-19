@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar
 
 
 # Type representing Event and all subclasses of Event
-T_Event = TypeVar('T_Event', bound=Event)
+T_Event = TypeVar("T_Event", bound=Event)
 
 
 # Event codes have prefixes which follow this table

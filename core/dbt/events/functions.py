@@ -172,7 +172,7 @@ def event_to_serializable_dict(
         "type": "log_line",
         "log_version": LOG_VERSION,
         "ts": get_ts_rfc3339(),
-        'pid': e.get_pid(),
+        "pid": e.get_pid(),
         "msg": e.message(),
         'level': e.level_tag(),
         "data": log_line,
