@@ -120,7 +120,7 @@ def event_to_dict(e: T_Event, msg_fn: Callable[[T_Event], str]) -> dict:
         'ts': e.get_ts(),
         'pid': e.get_pid(),
         'msg': msg_fn(e),
-        'level': level if len(level) == 5 else f"{level} "
+        'level': level
     }
 
 
