@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 from dbt import ui
 from dbt.events.base_types import (
-    Cli, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
+    Cli, Event, File, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, ShowException
 )
 from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
-from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, TypeVar, Union
 
 
 # The classes in this file represent the data necessary to describe a
@@ -15,6 +15,10 @@ from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, Union
 # event streams. classes extend superclasses that indicate what
 # destinations they are intended for, which mypy uses to enforce
 # that the necessary methods are defined.
+
+
+# Type representing Event and all subclasses of Event
+T_Event = TypeVar('T_Event', bound=Event)
 
 
 # can't use ABCs with @dataclass because of https://github.com/python/mypy/issues/5374

@@ -2,7 +2,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 import os
-from typing import Any
+from typing import Any, Optional
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -50,34 +50,36 @@ class ShowException():
 
 
 # TODO add exhaustiveness checking for subclasses
+# can't use ABCs with @dataclass because of https://github.com/python/mypy/issues/5374
 # top-level superclass for all events
 class Event(metaclass=ABCMeta):
     # fields that should be on all events with their default implementations
-    ts: datetime = datetime.now()
-    pid: int = os.getpid()
-    # code: int
+    log_version: int = 1
+    ts: Optional[datetime] = None  # use getter for non-optional
+    pid: Optional[int] = None  # use getter for non-optional
 
     # do not define this yourself. inherit it from one of the above level types.
     @abstractmethod
     def level_tag(self) -> str:
-        raise Exception("level_tag not implemented for event")
+        raise Exception("level_tag not implemented for Event")
 
     # Solely the human readable message. Timestamps and formatting will be added by the logger.
     # Must override yourself
     @abstractmethod
     def message(self) -> str:
-        raise Exception("msg not implemented for cli event")
+        raise Exception("msg not implemented for Event")
 
-    # returns a dictionary representation of the event fields. You must specify which of the
-    # available messages you would like to use (i.e. - e.message, e.cli_msg(), e.file_msg())
-    # used for constructing json formatted events. includes secrets which must be scrubbed at
-    # the usage site.
-    def to_dict(self, msg: str) -> dict:
-        return {
-            'pid': self.pid,
-            'msg': msg,
-            'level': self.level_tag()
-        }
+    # exactly one time stamp per concrete event
+    def get_ts(self) -> datetime:
+        if not self.ts:
+            self.ts = datetime.now()
+        return self.ts
+
+    # exactly one pid per concrete event
+    def get_pid(self) -> int:
+        if not self.pid:
+            self.pid = os.getpid()
+        return self.pid
 
 
 class File(Event, metaclass=ABCMeta):

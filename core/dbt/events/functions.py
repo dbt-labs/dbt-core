@@ -2,6 +2,7 @@
 from colorama import Style
 import dbt.events.functions as this  # don't worry I hate it too.
 from dbt.events.base_types import Cli, Event, File, ShowException
+from dbt.events.types import T_Event
 import dbt.flags as flags
 # TODO this will need to move eventually
 from dbt.logger import SECRET_ENV_PREFIX, make_log_dir_if_missing, GLOBAL_LOGGER
@@ -13,7 +14,7 @@ import logging
 from logging import Logger
 from logging.handlers import RotatingFileHandler
 import os
-from typing import Callable, List, TypeVar, Union
+from typing import Callable, List, Union
 
 
 # create the global file logger with no configuration
@@ -108,8 +109,19 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
-# Type representing Event and all subclasses of Event
-T_Event = TypeVar('T_Event', bound=Event)
+# returns a dictionary representation of the event fields. You must specify which of the
+# available messages you would like to use (i.e. - e.message, e.cli_msg(), e.file_msg())
+# used for constructing json formatted events. includes secrets which must be scrubbed at
+# the usage site.
+def event_to_dict(e: T_Event, msg_fn: Callable[[T_Event], str]) -> dict:
+    level = e.level_tag()
+    return {
+        'log_version': e.log_version,
+        'ts': e.get_ts(),
+        'pid': e.get_pid(),
+        'msg': msg_fn(e),
+        'level': level
+    }
 
 
 # translates an Event to a completely formatted text-based log line
@@ -117,7 +129,7 @@ T_Event = TypeVar('T_Event', bound=Event)
 # type hinting everything as strings so we don't get any unintentional string conversions via str()
 def create_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     color_tag: str = '' if this.format_color else Style.RESET_ALL
-    ts: str = e.ts.strftime("%H:%M:%S")
+    ts: str = e.get_ts().strftime("%H:%M:%S")
     scrubbed_msg: str = scrub_secrets(msg_fn(e), env_secrets())
     level: str = e.level_tag() if len(e.level_tag()) == 5 else f"{e.level_tag()} "
     log_line: str = f"{color_tag}{ts} | [ {level} ] | {scrubbed_msg}"
@@ -127,8 +139,8 @@ def create_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
 # translates an Event to a completely formatted json log line
 # you have to specify which message you want. (i.e. - e.message, e.cli_msg(), e.file_msg())
 def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
-    values = e.to_dict(scrub_secrets(msg_fn(e), env_secrets()))
-    values['ts'] = e.ts.isoformat()
+    values = event_to_dict(e, lambda x: scrub_secrets(msg_fn(x), env_secrets()))
+    values['ts'] = e.get_ts().isoformat()
     log_line = json.dumps(values, sort_keys=True)
     return log_line
 
