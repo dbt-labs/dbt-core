@@ -1178,7 +1178,7 @@ class ProviderContext(ManifestContext):
         if return_value is not None:
             # Save the env_var value in the manifest and the var name in the source_file.
             # If this is compiling, do not save because it's irrelevant to parsing.
-            if self.model and not hasattr(self.model, 'compiled'):
+            if self.model and not hasattr(self.model, "compiled"):
                 self.manifest.env_vars[var] = return_value
                 # hooks come from dbt_project.yml which doesn't have a real file_id
                 if self.model.file_id in self.manifest.files:

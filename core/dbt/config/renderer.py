@@ -168,7 +168,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
 class SelectorRenderer(BaseRenderer):
     @property
     def name(self):
-        return 'Selector config'
+        return "Selector config"
 
 
 class SecretRenderer(BaseRenderer):
@@ -183,16 +183,16 @@ class SecretRenderer(BaseRenderer):
 
     @property
     def name(self):
-        return 'Secret'
+        return "Secret"
 
 
 class ProfileRenderer(SecretRenderer):
     @property
     def name(self):
-        return 'Profile'
+        return "Profile"
 
 
 class PackageRenderer(SecretRenderer):
     @property
     def name(self):
-        return 'Packages config'
+        return "Packages config"

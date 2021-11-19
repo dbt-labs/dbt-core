@@ -10,7 +10,10 @@ from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import yaml, safe_load, SafeLoader, Loader, Dumper  # noqa: F401
 from dbt.contracts.graph.compiled import CompiledResource
 from dbt.exceptions import (
-    raise_compiler_error, MacroReturn, raise_parsing_error, disallow_secret_env_var
+    raise_compiler_error,
+    MacroReturn,
+    raise_parsing_error,
+    disallow_secret_env_var,
 )
 from dbt.logger import SECRET_ENV_PREFIX
 from dbt.events.functions import fire_event, get_invocation_id

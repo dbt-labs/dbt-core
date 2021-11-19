@@ -481,8 +481,10 @@ def raise_git_cloning_problem(repo) -> NoReturn:
 def disallow_secret_env_var(env_var_name) -> NoReturn:
     """Raise an error when a secret env var is referenced outside allowed
     rendering contexts"""
-    msg = ("Secret env vars are allowed only in profiles.yml or packages.yml. "
-           "Found '{env_var_name}' referenced elsewhere.")
+    msg = (
+        "Secret env vars are allowed only in profiles.yml or packages.yml. "
+        "Found '{env_var_name}' referenced elsewhere."
+    )
     raise_parsing_error(msg.format(env_var_name=env_var_name))
 
 
