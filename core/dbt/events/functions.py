@@ -14,7 +14,8 @@ import logging
 from logging import Logger
 from logging.handlers import RotatingFileHandler
 import os
-from typing import Callable, List, Union
+from typing import Any, Callable, Dict, List, Optional, Union
+from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
 
 
 # create the global file logger with no configuration
@@ -120,7 +121,9 @@ def event_to_dict(e: T_Event, msg_fn: Callable[[T_Event], str]) -> dict:
         'ts': e.get_ts(),
         'pid': e.get_pid(),
         'msg': msg_fn(e),
-        'level': level
+        'level': level,
+        'data': Optional[Dict[str, Any]],
+        'event_data_serialized': True
     }
 
 
@@ -141,7 +144,31 @@ def create_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
 def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     values = event_to_dict(e, lambda x: scrub_secrets(msg_fn(x), env_secrets()))
     values['ts'] = e.get_ts().isoformat()
-    log_line = json.dumps(values, sort_keys=True)
+    if hasattr(e, '__dataclass_fields__'):
+        values['data'] = {
+            x: getattr(e, x) for x, y
+            in e.__dataclass_fields__.items()  # type: ignore[attr-defined]
+            if type(y._field_type) == _FIELD_BASE
+        }
+    else:
+        values['data'] = None
+
+    # need to catch if any data is not serializable but still make sure as much of
+    # the logs go out as possible
+    try:
+        log_line = json.dumps(
+            {k: scrub_secrets(v, env_secrets()) for (k, v) in values.items()},
+            sort_keys=True
+        )
+    except TypeError:
+        # the only key currently throwing errors is 'data'.  Expand this list
+        # as needed if new issues pop up
+        values['data'] = None
+        values['event_data_serialized'] = False
+        log_line = json.dumps(
+            {k: scrub_secrets(v, env_secrets()) for (k, v) in values.items()},
+            sort_keys=True
+        )
     return log_line
 
 
