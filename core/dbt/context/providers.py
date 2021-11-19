@@ -51,6 +51,7 @@ from dbt.exceptions import (
     source_target_not_found,
     wrapped_exports,
     raise_parsing_error,
+    disallow_secret_env_var,
 )
 from dbt.config import IsFQNResource
 from dbt.node_types import NodeType
@@ -1172,10 +1173,9 @@ class ProviderContext(ManifestContext):
 
         If the default is None, raise an exception for an undefined variable.
         """
-        import ipdb; ipdb.set_trace()
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            raise_parsing_error("You can't do that here!")
+            disallow_secret_env_var(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -1184,8 +1184,7 @@ class ProviderContext(ManifestContext):
         if return_value is not None:
             # Save the env_var value in the manifest and the var name in the source_file.
             # If this is compiling, do not save because it's irrelevant to parsing.
-            if (not var.startswith(SECRET_ENV_PREFIX) and self.model and
-                    not hasattr(self.model, 'compiled')):
+            if self.model and not hasattr(self.model, 'compiled'):
                 self.manifest.env_vars[var] = return_value
                 source_file = self.manifest.files[self.model.file_id]
                 # Schema files should never get here
@@ -1485,7 +1484,7 @@ class TestContext(ProviderContext):
     def env_var(self, var: str, default: Optional[str] = None) -> str:
         return_value = None
         if var.startswith(SECRET_ENV_PREFIX):
-            raise_parsing_error("You can't do that here!")
+            disallow_secret_env_var(var)
         if var in os.environ:
             return_value = os.environ[var]
         elif default is not None:
@@ -1493,7 +1492,7 @@ class TestContext(ProviderContext):
 
         if return_value is not None:
             # Save the env_var value in the manifest and the var name in the source_file
-            if not var.startswith(SECRET_ENV_PREFIX) and self.model:
+            if self.model:
                 self.manifest.env_vars[var] = return_value
                 # the "model" should only be test nodes, but just in case, check
                 if self.model.resource_type == NodeType.Test and self.model.file_key_name:

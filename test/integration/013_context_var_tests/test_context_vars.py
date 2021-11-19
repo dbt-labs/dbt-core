@@ -153,6 +153,74 @@ class TestContextVars(DBTIntegrationTest):
         self.assertFalse("secret_variable" in log_output)
         self.assertTrue("regular_variable" in log_output)
 
+
+class TestDisallowSecretModel(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "context_vars_013"
+
+    @property
+    def models(self):
+        return "models-with-secret-bad"
+
+    @use_profile('postgres')
+    def test_postgres_disallow_secret(self):
+        with self.assertRaises(dbt.exceptions.ParsingException) as exc:
+            self.run_dbt(['compile'])
+
+        
+class TestAllowSecretProfilePackage(DBTIntegrationTest):
+
+    def setUp(self):
+        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "PASS"] = "password"
+        os.environ[SECRET_ENV_PREFIX + "PACKAGE"] = "first_dependency"
+        DBTIntegrationTest.setUp(self)
+    
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {"local": "{{ env_var('DBT_ENV_SECRET_PACKAGE') }}"},
+            ]
+        }
+        
+    @property
+    def profile_config(self):
+        return {
+            'test': {
+                'outputs': {
+                    'default': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'host': self.database_host,
+                        'port': 5432,
+                        # root/password
+                        'user': "{{ env_var('DBT_ENV_SECRET_USER') }}",
+                        'pass': "{{ env_var('DBT_ENV_SECRET_PASS') }}",
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                'target': 'default'
+            }
+        }
+    }
+            
+    @property
+    def schema(self):
+        return "context_vars_013"
+
+    @property
+    def models(self):
+        return "models"
+
+    @use_profile('postgres')
+    def test_postgres_allow_secrets(self):
+        _, log_output = self.run_dbt_and_capture(['deps'])
+
+        self.assertFalse("first_dependency" in log_output)
+
+
 class TestEmitWarning(DBTIntegrationTest):
     @property
     def schema(self):

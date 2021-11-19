@@ -176,6 +176,12 @@ class DbtProjectYamlRenderer(BaseRenderer):
         return True
 
 
+class SelectorRenderer(BaseRenderer):
+    @property
+    def name(self):
+        return 'Selector config'
+
+
 class SecretRenderer(BaseRenderer):
     def __init__(
         self, cli_vars: Optional[Dict[str, Any]] = None
@@ -187,25 +193,19 @@ class SecretRenderer(BaseRenderer):
         self.ctx_obj = SecretContext(cli_vars)
         context = self.ctx_obj.to_dict()
         super().__init__(context)
-        
+
     @property
     def name(self):
-        'Secret'
+        return 'Secret'
 
 
 class ProfileRenderer(SecretRenderer):
     @property
     def name(self):
-        'Profile'
+        return 'Profile'
 
 
 class PackageRenderer(SecretRenderer):
     @property
     def name(self):
         return 'Packages config'
-
-
-class SelectorRenderer(BaseRenderer):
-    @property
-    def name(self):
-        return 'Selector config'

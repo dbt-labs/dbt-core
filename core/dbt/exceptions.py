@@ -469,6 +469,14 @@ def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(msg)
 
 
+def disallow_secret_env_var(env_var_name) -> NoReturn:
+    """Raise an error when a secret env var is referenced outside allowed
+    rendering contexts"""
+    msg = ("Secret env vars are allowed only in profiles.yml or packages.yml. "
+           "Found '{env_var_name}' referenced elsewhere.")
+    raise_parsing_error(msg.format(env_var_name=env_var_name))
+
+
 def invalid_type_error(method_name, arg_name, got_value, expected_type,
                        version='0.13.0') -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros

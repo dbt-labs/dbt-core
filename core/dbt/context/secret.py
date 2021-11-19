@@ -1,17 +1,14 @@
 import os
 from typing import Any, Dict, Optional
 
-from dbt.contracts.connection import HasCredentials
-
-from .base import (
-    BaseContext, contextproperty, contextmember
-)
+from .base import BaseContext, contextmember
 
 from dbt.exceptions import raise_parsing_error
 
 
 class SecretContext(BaseContext):
-    # the only thing this does is reimplement env_var to return actual secret values
+    """This context is used in profiles.yml + packages.yml. It can render secret
+    env vars that aren't usable elsewhere"""
 
     @contextmember
     def env_var(self, var: str, default: Optional[str] = None) -> str:
@@ -19,6 +16,9 @@ class SecretContext(BaseContext):
         If there is no such environment variable set, return the default.
 
         If the default is None, raise an exception for an undefined variable.
+
+        In this context *only*, env_var will return the actual values of
+        env vars prefixed with DBT_ENV_SECRET_
         """
         return_value = None
         if var in os.environ:
