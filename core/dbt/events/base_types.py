@@ -92,7 +92,7 @@ class Event(metaclass=ABCMeta):
             self.pid = os.getpid()
         return self.pid
     
-    def node_info(self) -> Dict:
+    def node_info(self, state: str) -> Dict:
     #          Examples
     # "node_info": 
     #     {"node_path": "models/slow.sql", 
@@ -113,15 +113,15 @@ class Event(metaclass=ABCMeta):
     #     "node_status": "passed", 
     #     "run_state": "running"}}
         return {
-            "node_path": "models/slow.sql", 
-            "node_name": "slow", 
-            "resource_type": "model", 
-            "node_materialized": "table", 
-            "node_started_at": "2021-10-05T13:17:28.018613", 
-            "unique_id": "model.my_new_project.slow", 
-            "node_finished_at": "2021-10-05T13:17:29.134126", 
-            "node_status": "passed", 
-            "run_state": "running"
+            "node_path": self.path, 
+            "node_name": self.name, 
+            "resource_type": self.resource_type, 
+            "node_materialized": self.materialized, 
+            "node_started_at": "TODO", 
+            "unique_id": self.unique_id, 
+            "node_finished_at": "TODO", 
+            "node_status": "TODO", 
+            "run_state": state
         }
 
 

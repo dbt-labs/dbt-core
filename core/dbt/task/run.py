@@ -248,6 +248,9 @@ class ModelRunner(CompileRunner):
         raise CompilationException(msg, node=model)
 
     def execute(self, model, manifest):
+        # TODO:
+        # fire_event(StartModelNode())
+        breakpoint()
         context = generate_runtime_model_context(
             model, self.config, manifest
         )
