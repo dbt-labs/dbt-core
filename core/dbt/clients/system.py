@@ -441,7 +441,7 @@ def run_cmd(
     fire_event(SystemStdErrMsg(bmsg=err))
 
     if proc.returncode != 0:
-        fire_event(SystemReportReturnCode(code=proc.returncode))
+        fire_event(SystemReportReturnCode(returncode=proc.returncode))
         raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode,
                                                 out, err)
 
