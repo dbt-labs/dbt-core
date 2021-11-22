@@ -56,46 +56,6 @@ class AdapterEventBase(Cli, File):
             raise Exception(
                 'attempted to create a message for AdapterEventBase which cannot be created'
             )
-        raise Exception("msg not implemented for cli event")
-    
-    def node_info(self) -> Dict:
-    #          Examples
-    # "node_info": 
-    #     {"node_path": "models/slow.sql", 
-    #     "node_name": "slow", 
-    #     "resource_type": "model", 
-    #     "node_materialized": "table", 
-    #     "node_started_at": "2021-10-05T13:17:28.018613", 
-    #     "unique_id": "model.my_new_project.slow", 
-    #     "run_state": "running"}}
-    # "node_info": 
-    #     {"node_path": "models/slow.sql", 
-    #     "node_name": "slow", 
-    #     "resource_type": "model", 
-    #     "node_materialized": "table", 
-    #     "node_started_at": "2021-10-05T13:17:28.018613", 
-    #     "unique_id": "model.my_new_project.slow", 
-    #     "node_finished_at": "2021-10-05T13:17:29.134126", 
-    #     "node_status": "passed", 
-    #     "run_state": "running"}}
-        return {
-            "node_path": "models/slow.sql", 
-            "node_name": "slow", 
-            "resource_type": "model", 
-            "node_materialized": "table", 
-            "node_started_at": "2021-10-05T13:17:28.018613", 
-            "unique_id": "model.my_new_project.slow", 
-            "node_finished_at": "2021-10-05T13:17:29.134126", 
-            "node_status": "passed", 
-            "run_state": "running"
-        }
-
-
-class File(Event, metaclass=ABCMeta):
-    # Solely the human readable message. Timestamps and formatting will be added by the logger.
-    def file_msg(self) -> str:
-        # returns the event msg unless overriden in the concrete class
-        return self.message()
 
         # only apply formatting if there are arguments to format.
         # avoids issues like "dict: {k: v}".format() which results in `KeyError 'k'`
