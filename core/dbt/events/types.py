@@ -49,6 +49,7 @@ T_Event = TypeVar("T_Event", bound=Event)
 # TODO: remove ingore when this is fixed:
 # https://github.com/python/mypy/issues/5374
 
+
 @dataclass  # type: ignore
 class AdapterEventBase(EventSerialization, Event):
     name: str
