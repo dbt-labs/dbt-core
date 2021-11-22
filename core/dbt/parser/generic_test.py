@@ -2,7 +2,7 @@ from typing import Iterable, List
 
 import jinja2
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import ParsingException
 from dbt.clients import jinja
 from dbt.contracts.graph.parsed import ParsedGenericTestNode
 from dbt.contracts.graph.unparsed import UnparsedMacro
@@ -55,14 +55,14 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
                 )
                 if isinstance(t, jinja.BlockTag)
             ]
-        except CompilationException as exc:
+        except ParsingException as exc:
             exc.add_node(base_node)
             raise
 
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
-            except CompilationException as e:
+            except ParsingException as e:
                 e.add_node(base_node)
                 raise
 
@@ -72,7 +72,7 @@ class GenericTestParser(BaseParser[ParsedGenericTestNode]):
             if len(generic_test_nodes) != 1:
                 # things have gone disastrously wrong, we thought we only
                 # parsed one block!
-                raise CompilationException(
+                raise ParsingException(
                     f'Found multiple generic tests in {block.full_block}, expected 1',
                     node=base_node
                 )

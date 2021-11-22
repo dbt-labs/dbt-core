@@ -23,7 +23,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import HasUniqueID, ManifestNodes
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
-    CompilationException, validator_error_message, InternalException
+    ParsingException, validator_error_message, InternalException
 )
 from dbt import hooks
 from dbt.node_types import NodeType
@@ -247,7 +247,7 @@ class ConfiguredParser(
                 original_file_path=block.path.original_file_path,
                 raw_sql=block.contents,
             )
-            raise CompilationException(msg, node=node)
+            raise ParsingException(msg, node=node)
 
     def _context_for(
         self, parsed_node: IntermediateNode, config: ContextConfig
@@ -378,7 +378,7 @@ class ConfiguredParser(
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             msg = validator_error_message(exc)
-            raise CompilationException(msg, node=node) from exc
+            raise ParsingException(msg, node=node) from exc
 
     def add_result_node(self, block: FileBlock, node: ManifestNodes):
         if node.config.enabled:

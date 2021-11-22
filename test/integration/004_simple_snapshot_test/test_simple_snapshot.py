@@ -344,7 +344,7 @@ class TestBadSnapshot(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__invalid(self):
-        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+        with self.assertRaises(dbt.exceptions.ParsingException) as exc:
             self.run_dbt(['compile'], expect_pass=False)
 
         self.assertIn('Snapshots must be configured with a \'strategy\'', str(exc.exception))

@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 import os
 
 from dbt.task.test import TestTask
-from dbt.exceptions import CompilationException, ParsingException
+from dbt.exceptions import ParsingException
 from dbt.contracts.results import TestStatus
 
 
@@ -772,7 +772,7 @@ class TestInvalidSchema(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_invalid_schema_file(self):
-        with self.assertRaises(CompilationException) as exc:
+        with self.assertRaises(ParsingException) as exc:
             results = self.run_dbt()
         self.assertRegex(str(exc.exception), r"'models' is not a list")
 

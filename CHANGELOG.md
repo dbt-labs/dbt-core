@@ -1,5 +1,9 @@
 ## dbt-core 1.0.0 (Release TBD)
 
+### Under the hood
+
+- Change some CompilationExceptions to ParsingExceptions ([#4254](http://github.com/dbt-labs/dbt-core/issues/4254), [#4328](https://github.com/dbt-core/pull/4328))
+
 ## dbt-core 1.0.0rc2 (November 22, 2021)
 
 ### Breaking changes
