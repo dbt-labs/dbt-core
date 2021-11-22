@@ -15,6 +15,7 @@ from .types import (
 @dataclass
 class IntegrationTestInfo(InfoLevel, Cli):
     msg: str
+    code: str = "T001"
 
     def message(self) -> str:
         return f"Integration Test: {self.msg}"
@@ -23,6 +24,7 @@ class IntegrationTestInfo(InfoLevel, Cli):
 @dataclass
 class IntegrationTestDebug(DebugLevel, Cli):
     msg: str
+    code: str = "T002"
 
     def message(self) -> str:
         return f"Integration Test: {self.msg}"
@@ -31,6 +33,7 @@ class IntegrationTestDebug(DebugLevel, Cli):
 @dataclass
 class IntegrationTestWarn(WarnLevel, Cli):
     msg: str
+    code: str = "T003"
 
     def message(self) -> str:
         return f"Integration Test: {self.msg}"
@@ -39,6 +42,7 @@ class IntegrationTestWarn(WarnLevel, Cli):
 @dataclass
 class IntegrationTestError(ErrorLevel, Cli):
     msg: str
+    code: str = "T004"
 
     def message(self) -> str:
         return f"Integration Test: {self.msg}"
@@ -47,6 +51,7 @@ class IntegrationTestError(ErrorLevel, Cli):
 @dataclass
 class IntegrationTestException(ShowException, ErrorLevel, Cli):
     msg: str
+    code: str = "T005"
 
     def message(self) -> str:
         return f"Integration Test: {self.msg}"

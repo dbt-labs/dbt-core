@@ -9,6 +9,7 @@
 - Allow `--defer` flag to `dbt snapshot` ([#4110](https://github.com/dbt-labs/dbt-core/issues/4110), [#4296](https://github.com/dbt-labs/dbt-core/pull/4296))
 - Install prerelease packages when `version` explicitly references a prerelease version, regardless of `install-prerelease` status ([#4243](https://github.com/dbt-labs/dbt-core/issues/4243), [#4295](https://github.com/dbt-labs/dbt-core/pull/4295))
 - Add data attributes to json log messages[#4301](https://github.com/dbt-labs/dbt-core/pull/4301)
+- Add event codes to all log events([#4319](https://github.com/dbt-labs/dbt-core/pull/4319))
 
 ### Fixes
 - Fix serialization error with missing quotes in metrics model ref ([#4252](https://github.com/dbt-labs/dbt-core/issues/4252), [#4287](https://github.com/dbt-labs/dbt-core/pull/4289))

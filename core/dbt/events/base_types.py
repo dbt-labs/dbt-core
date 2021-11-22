@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from datetime import datetime
 import os
@@ -57,6 +57,13 @@ class Event(metaclass=ABCMeta):
     log_version: int = 1
     ts: Optional[datetime] = None  # use getter for non-optional
     pid: Optional[int] = None  # use getter for non-optional
+
+    # four digit string code that uniquely identifies this type of event
+    # uniqueness and valid characters are enforced by tests
+    @abstractproperty
+    @staticmethod
+    def code() -> str:
+        raise Exception("code() not implemented for event")
 
     # do not define this yourself. inherit it from one of the above level types.
     @abstractmethod
