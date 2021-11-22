@@ -13,8 +13,9 @@ import logbook
 import logging
 from logging import Logger
 from logging.handlers import RotatingFileHandler
+import numbers
 import os
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from dataclasses import _FIELD_BASE  # type: ignore[attr-defined]
 
 
@@ -110,6 +111,33 @@ def scrub_secrets(msg: str, secrets: List[str]) -> str:
     return scrubbed
 
 
+def scrub_collection_secrets(values: Union[List[Any], Tuple[Any, ...], Set[Any]]):
+    for val in values:
+        if isinstance(val, str):
+            val = scrub_secrets(val, env_secrets())
+        elif isinstance(val, numbers.Number):
+            continue
+        elif isinstance(val, (list, tuple, set)):
+            val = scrub_collection_secrets(val)
+        elif isinstance(val, dict):
+            val = scrub_dict_secrets(val)
+    return values
+
+
+def scrub_dict_secrets(values: Dict) -> Dict:
+    scrubbed_values = values
+    for key, val in values.items():
+        if isinstance(val, str):
+            scrubbed_values[key] = scrub_secrets(val, env_secrets())
+        elif isinstance(val, numbers.Number):
+            continue
+        elif isinstance(val, (list, tuple, set)):
+            scrubbed_values[key] = scrub_collection_secrets(val)
+        elif isinstance(val, dict):
+            scrubbed_values[key] = scrub_dict_secrets(val)
+    return scrubbed_values
+
+
 # returns a dictionary representation of the event fields. You must specify which of the
 # available messages you would like to use (i.e. - e.message, e.cli_msg(), e.file_msg())
 # used for constructing json formatted events. includes secrets which must be scrubbed at
@@ -142,7 +170,7 @@ def create_text_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
 # translates an Event to a completely formatted json log line
 # you have to specify which message you want. (i.e. - e.message, e.cli_msg(), e.file_msg())
 def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
-    values = event_to_dict(e, lambda x: scrub_secrets(msg_fn(x), env_secrets()))
+    values = event_to_dict(e, lambda x: msg_fn(x))
     values['ts'] = e.get_ts().isoformat()
     if hasattr(e, '__dataclass_fields__'):
         values['data'] = {
@@ -156,19 +184,13 @@ def create_json_log_line(e: T_Event, msg_fn: Callable[[T_Event], str]) -> str:
     # need to catch if any data is not serializable but still make sure as much of
     # the logs go out as possible
     try:
-        log_line = json.dumps(
-            {k: scrub_secrets(v, env_secrets()) for (k, v) in values.items()},
-            sort_keys=True
-        )
+        log_line = json.dumps(scrub_dict_secrets(values), sort_keys=True)
     except TypeError:
         # the only key currently throwing errors is 'data'.  Expand this list
         # as needed if new issues pop up
         values['data'] = None
         values['event_data_serialized'] = False
-        log_line = json.dumps(
-            {k: scrub_secrets(v, env_secrets()) for (k, v) in values.items()},
-            sort_keys=True
-        )
+        log_line = json.dumps(scrub_dict_secrets(values), sort_keys=True)
     return log_line
 
 
