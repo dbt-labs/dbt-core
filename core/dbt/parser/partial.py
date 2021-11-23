@@ -722,7 +722,7 @@ class PartialParsing:
                     self.merge_patch(schema_file, dict_key, elem)
 
         # metrics
-        dict_key = 'metrics'
+        dict_key = "metrics"
         metric_diff = self.get_diff_for("metrics", saved_yaml_dict, new_yaml_dict)
         if metric_diff["changed"]:
             for metric in metric_diff["changed"]:
@@ -737,7 +737,7 @@ class PartialParsing:
         # Handle schema file updates due to env_var changes
         if dict_key in env_var_changes and dict_key in new_yaml_dict:
             for name in env_var_changes[dict_key]:
-                if name in metric_diff['changed_or_deleted_names']:
+                if name in metric_diff["changed_or_deleted_names"]:
                     continue
                 elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if elem:
