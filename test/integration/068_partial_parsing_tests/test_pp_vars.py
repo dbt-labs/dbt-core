@@ -221,6 +221,23 @@ class EnvVarTest(BasePPTest):
         expected_env_vars = {'models': {'model_one': ['TEST_SCHEMA_VAR', 'ENV_VAR_COLOR'], 'model_color': ['ENV_VAR_ENABLED']}, 'exposures': {'proxy_for_dashboard': ['ENV_VAR_OWNER']}}
         self.assertEqual(expected_env_vars, schema_file.env_vars)
 
+        # Add a metrics file with env_vars
+        os.environ['ENV_VAR_METRICS'] = 'TeStInG'
+        self.copy_file('test-files/people.sql', 'models/people.sql')
+        self.copy_file('test-files/env_var_metrics.yml', 'models/metrics.yml')
+        results = self.run_dbt(["run"])
+        manifest = get_manifest()
+        self.assertIn('ENV_VAR_METRICS', manifest.env_vars)
+        self.assertEqual(manifest.env_vars['ENV_VAR_METRICS'], 'TeStInG')
+        metric_node = manifest.metrics['metric.test.number_of_people']
+        self.assertEqual(metric_node.meta, {'my_meta': 'TeStInG'})
+
+        # Change metrics env var
+        os.environ['ENV_VAR_METRICS'] = 'Changed!'
+        results = self.run_dbt(["run"])
+        manifest = get_manifest()
+        metric_node = manifest.metrics['metric.test.number_of_people']
+        self.assertEqual(metric_node.meta, {'my_meta': 'Changed!'})
 
         # delete the env vars to cleanup
         del os.environ['ENV_VAR_TEST']
@@ -230,6 +247,7 @@ class EnvVarTest(BasePPTest):
         del os.environ['ENV_VAR_COLOR']
         del os.environ['ENV_VAR_SOME_KEY']
         del os.environ['ENV_VAR_OWNER']
+        del os.environ['ENV_VAR_METRICS']
 
 
 class ProjectEnvVarTest(BasePPTest):

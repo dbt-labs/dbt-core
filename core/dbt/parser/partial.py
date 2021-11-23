@@ -693,21 +693,31 @@ class PartialParsing:
                     continue
                 elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                 if elem:
-                    self.delete_schema_exposure(schema_file, exposure)
-                    self.merge_patch(schema_file, dict_key, exposure)
+                    self.delete_schema_exposure(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
 
         # metrics
+        dict_key = 'metrics'
         metric_diff = self.get_diff_for('metrics', saved_yaml_dict, new_yaml_dict)
         if metric_diff['changed']:
             for metric in metric_diff['changed']:
                 self.delete_schema_metric(schema_file, metric)
-                self.merge_patch(schema_file, 'metrics', metric)
+                self.merge_patch(schema_file, dict_key, metric)
         if metric_diff['deleted']:
             for metric in metric_diff['deleted']:
                 self.delete_schema_metric(schema_file, metric)
         if metric_diff['added']:
             for metric in metric_diff['added']:
-                self.merge_patch(schema_file, 'metrics', metric)
+                self.merge_patch(schema_file, dict_key, metric)
+        # Handle schema file updates due to env_var changes
+        if dict_key in env_var_changes and dict_key in new_yaml_dict:
+            for name in env_var_changes[dict_key]:
+                if name in metric_diff['changed_or_deleted_names']:
+                    continue
+                elem = self.get_schema_element(new_yaml_dict[dict_key], name)
+                if elem:
+                    self.delete_schema_metric(schema_file, elem)
+                    self.merge_patch(schema_file, dict_key, elem)
 
     # Take a "section" of the schema file yaml dictionary from saved and new schema files
     # and determine which parts have changed
