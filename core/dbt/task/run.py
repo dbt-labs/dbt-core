@@ -31,8 +31,8 @@ from dbt.exceptions import (
 from dbt.events.functions import fire_event
 from dbt.events.types import (
     DatabaseErrorRunning, EmptyLine, HooksRunning, HookFinished,
-    PrintModelErrorResultLine, PrintModelResultLine, PrintStartLine,
-    PrintHookEndLine, PrintHookStartLine
+    NodeStartModel, PrintModelErrorResultLine, PrintModelResultLine,
+    PrintStartLine, PrintHookEndLine, PrintHookStartLine
 )
 from dbt.logger import (
     TextOnly,
@@ -248,9 +248,7 @@ class ModelRunner(CompileRunner):
         raise CompilationException(msg, node=model)
 
     def execute(self, model, manifest):
-        # TODO:
-        # fire_event(StartModelNode())
-        breakpoint()
+        fire_event(NodeStartModel(report_node_data=model))
         context = generate_runtime_model_context(
             model, self.config, manifest
         )
