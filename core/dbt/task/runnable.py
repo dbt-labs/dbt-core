@@ -216,7 +216,7 @@ class GraphRunnableTask(ManifestTask):
             finally:
                 finishctx = TimestampNamed('node_finished_at')
                 with finishctx, DbtModelState(status):
-                    fire_event(NodeFinished(unique_id=runner.node.unique_id))
+                    fire_event(NodeFinished(report_node_data=runner.node))
 
         fail_fast = flags.FAIL_FAST
 

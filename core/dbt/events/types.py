@@ -2183,12 +2183,13 @@ class NodeStart(DebugLevel, Cli, File):
 
 @dataclass
 class NodeFinished(DebugLevel, Cli, File):
-    # TODO: add node_info
-    unique_id: str
+    report_node_data: ParsedModelNode
+    status: str = node_status['pass']
+    state: str = node_state['success']
     code: str = "Q024"
 
     def message(self) -> str:
-        return f"Finished running node {self.unique_id}"
+        return f"Finished running node {self.report_node_data.unique_id}"
 
 
 @dataclass
@@ -2454,7 +2455,7 @@ class GeneralWarningException(WarnLevel, Cli, File):
         return str(self.exc)
 
 
-# TODO: remove from Cli
+# TODO: new event
 @dataclass
 class NodeStartModel(InfoLevel, Cli, File):
     report_node_data: CompiledModelNode
