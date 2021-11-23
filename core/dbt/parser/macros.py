@@ -6,7 +6,7 @@ from dbt.clients import jinja
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.contracts.files import FilePath, SourceFile
-from dbt.exceptions import CompilationException
+from dbt.exceptions import ParsingException
 from dbt.events.functions import fire_event
 from dbt.events.types import MacroFileParse
 from dbt.node_types import NodeType
@@ -62,14 +62,14 @@ class MacroParser(BaseParser[ParsedMacro]):
                 )
                 if isinstance(t, jinja.BlockTag)
             ]
-        except CompilationException as exc:
+        except ParsingException as exc:
             exc.add_node(base_node)
             raise
 
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
-            except CompilationException as e:
+            except ParsingException as e:
                 e.add_node(base_node)
                 raise
 
@@ -78,7 +78,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             if len(macro_nodes) != 1:
                 # things have gone disastrously wrong, we thought we only
                 # parsed one block!
-                raise CompilationException(
+                raise ParsingException(
                     f'Found multiple macros in {block.full_block}, expected 1',
                     node=base_node
                 )

@@ -8,7 +8,7 @@ from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
 from dbt.config import Project
 from dbt.contracts.files import FilePath, AnySourceFile
-from dbt.exceptions import CompilationException, InternalException
+from dbt.exceptions import ParsingException, InternalException
 
 
 # What's the point of wrapping a SourceFile with this class?
@@ -113,7 +113,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
                 assert isinstance(block, BlockTag)
                 yield block
 
-        except CompilationException as exc:
+        except ParsingException as exc:
             if exc.node is None:
                 exc.add_node(source_file)
             raise

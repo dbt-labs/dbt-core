@@ -7,7 +7,7 @@ from dbt.contracts.graph.parsed import (
     IntermediateSnapshotNode, ParsedSnapshotNode
 )
 from dbt.exceptions import (
-    CompilationException, validator_error_message
+    ParsingException, validator_error_message
 )
 from dbt.node_types import NodeType
 from dbt.parser.base import SQLParser
@@ -68,7 +68,7 @@ class SnapshotParser(
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
         except ValidationError as exc:
-            raise CompilationException(validator_error_message(exc), node)
+            raise ParsingException(validator_error_message(exc), node)
 
     def parse_file(self, file_block: FileBlock) -> None:
         blocks = BlockSearcher(
