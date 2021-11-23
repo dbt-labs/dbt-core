@@ -45,3 +45,5 @@ class TestAdapterLogger(TestCase):
         # were no args passed after the initial message
         event = AdapterEventDebug(name="dbt_tests", base_msg="boop{x}boop", args=())
         self.assertTrue("boop{x}boop" in event.message())
+
+

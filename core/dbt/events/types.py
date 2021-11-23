@@ -1,4 +1,6 @@
 import argparse
+import inspect
+from unittest import TestCase
 from dataclasses import dataclass
 from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 from dbt import ui
@@ -9,7 +11,26 @@ from dbt.events.format import format_fancy_output_line, pluralize
 from dbt.node_types import NodeType
 from typing import Any, Callable, cast, Dict, List, Optional, Set, Tuple, TypeVar, Union
 
+class TestEventCodes(TestCase):
 
+    def setUp(self):
+        pass
+
+    # this interface is documented for adapter maintainers to plug into
+    # so we should test that it at the very least doesn't explode.
+    def test_event_codes(self):
+        all_concrete = set(Cli.__subclasses__()) \
+            .union(set(File.__subclasses__()))
+        all_codes = {}
+
+        for event in all_concrete:
+            if not inspect.isabstract(event):
+                # must be in the form 1 capital letter, 3 digits
+                self.assertTrue('^[A-Z][0-9]{3}', event.code())
+                # cannot have been used already
+                self.assertFalse(event.code() in all_codes)
+                all_codes.add(event.code())
+                
 # The classes in this file represent the data necessary to describe a
 # particular event to both human readable logs, and machine reliable
 # event streams. classes extend superclasses that indicate what
@@ -39,6 +60,10 @@ T_Event = TypeVar('T_Event', bound=Event)
 
 # TODO: remove ingore when this is fixed:
 # https://github.com/python/mypy/issues/5374
+
+
+
+
 
 @dataclass  # type: ignore
 class AdapterEventBase(Cli, File):
@@ -2700,3 +2725,5 @@ if 1 == 0:
     RetryExternalCall(attempt=0, max=0)
     GeneralWarningMsg(msg='', log_fmt='')
     GeneralWarningException(exc=Exception(''), log_fmt='')
+
+
