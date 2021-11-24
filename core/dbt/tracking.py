@@ -3,7 +3,7 @@ from typing import Optional
 from dbt.clients.yaml_helper import (  # noqa:F401
     yaml, safe_load, Loader, Dumper,
 )
-from dbt.events.functions import fire_event
+from dbt.events.functions import fire_event, get_invocation_id
 from dbt.events.types import (
     DisableTracking, SendingEvent, SendEventFailure, FlushEvents,
     FlushEventsFailure, TrackingInitializeFailure
@@ -103,7 +103,7 @@ class User:
         self.cookie_dir = cookie_dir
 
         self.id = None
-        self.invocation_id = str(uuid.uuid4())
+        self.invocation_id = get_invocation_id()
         self.run_started_at = datetime.now(tz=pytz.utc)
 
     def state(self):
@@ -184,7 +184,7 @@ def get_invocation_context(user, config, args):
     return {
         "project_id": None if config is None else config.hashed_name(),
         "user_id": user.id,
-        "invocation_id": user.invocation_id,
+        "invocation_id": get_invocation_id(),
 
         "command": args.which,
         "options": None,
@@ -294,7 +294,7 @@ def track_project_load(options):
         active_user,
         category='dbt',
         action='load_project',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         context=context
     )
 
@@ -308,7 +308,7 @@ def track_resource_counts(resource_counts):
         active_user,
         category='dbt',
         action='resource_counts',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         context=context
     )
 
@@ -322,7 +322,7 @@ def track_model_run(options):
         active_user,
         category="dbt",
         action='run_model',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         context=context
     )
 
@@ -336,7 +336,7 @@ def track_rpc_request(options):
         active_user,
         category="dbt",
         action='rpc_request',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         context=context
     )
 
@@ -356,7 +356,7 @@ def track_package_install(config, args, options):
         active_user,
         category="dbt",
         action='package',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         property_='install',
         context=context
     )
@@ -375,7 +375,7 @@ def track_deprecation_warn(options):
         active_user,
         category="dbt",
         action='deprecation',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         property_='warn',
         context=context
     )
@@ -441,7 +441,7 @@ def track_experimental_parser_sample(options):
         active_user,
         category='dbt',
         action='experimental_parser',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         context=context
     )
 
@@ -455,7 +455,7 @@ def track_partial_parser(options):
         active_user,
         category='dbt',
         action='partial_parser',
-        label=active_user.invocation_id,
+        label=get_invocation_id(),
         context=context
     )
 
@@ -491,13 +491,6 @@ def initialize_tracking(cookie_dir):
         active_user = User(None)
 
 
-def get_invocation_id() -> Optional[str]:
-    if active_user is None:
-        return None
-    else:
-        return active_user.invocation_id
-
-
 class InvocationProcessor(logbook.Processor):
     def __init__(self):
         super().__init__()
@@ -506,7 +499,7 @@ class InvocationProcessor(logbook.Processor):
         if active_user is not None:
             record.extra.update({
                 "run_started_at": active_user.run_started_at.isoformat(),
-                "invocation_id": active_user.invocation_id,
+                "invocation_id": get_invocation_id(),
             })
 
 
