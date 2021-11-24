@@ -2,6 +2,7 @@
 
 ### Under the hood
 - Fix intermittent errors in partial parsing tests ([#4060](https://github.com/dbt-labs/dbt-core/issues/4060), [#4068](https://github.com/dbt-labs/dbt-core/pull/4068))
+- Adjust logic when finding approximate matches for models and tests ([#4076](https://github.com/dbt-labs/dbt-core/pull/4076))
 
 ## dbt-core 1.0.0b1 (October 11, 2021)
 
