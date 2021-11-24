@@ -1,5 +1,4 @@
 import argparse
-
 from dataclasses import dataclass
 from dbt.events.stubs import _CachedRelation, AdapterResponse, BaseRelation, _ReferenceKey
 from dbt import ui
@@ -40,10 +39,6 @@ T_Event = TypeVar('T_Event', bound=Event)
 
 # TODO: remove ingore when this is fixed:
 # https://github.com/python/mypy/issues/5374
-
-
-
-
 
 @dataclass  # type: ignore
 class AdapterEventBase(Cli, File):
@@ -2705,5 +2700,3 @@ if 1 == 0:
     RetryExternalCall(attempt=0, max=0)
     GeneralWarningMsg(msg='', log_fmt='')
     GeneralWarningException(exc=Exception(''), log_fmt='')
-
-

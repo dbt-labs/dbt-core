@@ -57,14 +57,15 @@ class TestEventCodes(TestCase):
     def test_event_codes(self):
         all_concrete = set(Cli.__subclasses__()) \
             .union(set(File.__subclasses__()))
-        all_codes = {}
+        all_codes = set()
 
         for event in all_concrete:
             if not inspect.isabstract(event):
                 # must be in the form 1 capital letter, 3 digits
-                self.assertTrue('^[A-Z][0-9]{3}', event.code())
+                self.assertTrue('^[A-Z][0-9]{3}', event.code)
                 # cannot have been used already
-                self.assertFalse(event.code() in all_codes)
-                all_codes.add(event.code())
+                self.assertFalse(event.code in all_codes)
+                all_codes.add(event.code)
+                
 
-
+        
