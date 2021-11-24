@@ -307,11 +307,7 @@ def track_model_run(options):
     assert active_user is not None, "Cannot track model runs when active user is None"
 
     track(
-        active_user,
-        category="dbt",
-        action='run_model',
-        label=get_invocation_id(),
-        context=context
+        active_user, category="dbt", action="run_model", label=get_invocation_id(), context=context
     )
 
 
